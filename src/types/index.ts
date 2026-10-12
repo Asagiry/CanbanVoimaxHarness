@@ -105,3 +105,11 @@ export interface CompactionReport {
   evaporated_count: number;
   saved_tokens: number;
 }
+
+export interface LlmSettings {
+  provider: string;
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  temperature?: number;
+}

@@ -1,7 +1,9 @@
 use crate::agent::{run_agent_loop, AgentEvent, AgentSessionConfig};
 use crate::config::{
-    atomic_write_file, load_pipeline_config, load_project_config, load_project_registry,
-    save_pipeline_config, save_project_config, PipelineConfig, ProjectConfig, ProjectRegistry,
+    atomic_write_file, load_llm_settings, load_pipeline_config, load_project_config,
+    load_project_registry, register_or_update_project, save_llm_settings_to_disk,
+    save_pipeline_config, scaffold_cvh_project, LlmSettings, PipelineConfig, ProjectConfig,
+    ProjectEntry, ProjectRegistry,
 };
 use crate::git::{create_worktree, remove_worktree};
 use crate::hooks::{execute_hook, execute_sensor_command, HookContext};
@@ -11,7 +13,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
@@ -63,6 +65,15 @@ impl AppState {
             .read()
             .map(|r| r.clone())
             .unwrap_or_else(|_| PathBuf::from("."))
+    }
+
+    pub fn set_root(&self, new_root: PathBuf) -> Result<(), String> {
+        let mut guard = self
+            .repo_root
+            .write()
+            .map_err(|e| format!("Failed to acquire write lock on repo_root: {}", e))?;
+        *guard = new_root;
+        Ok(())
     }
 }
 
@@ -450,16 +461,38 @@ pub async fn run_agent(
             providers: HashMap::new(),
         });
 
+    let llm_settings = load_llm_settings(&root)
+        .await
+        .unwrap_or_default();
+
     let model = col
         .model_override
         .clone()
-        .or_else(|| proj_cfg.default_model.clone())
+        .or_else(|| {
+            if !llm_settings.model.trim().is_empty() {
+                Some(llm_settings.model.clone())
+            } else {
+                proj_cfg.default_model.clone()
+            }
+        })
         .unwrap_or_else(|| "gemini-3.8-flash-high".to_string());
 
-    let base_url = proj_cfg
-        .api_base_url
-        .clone()
-        .unwrap_or_else(|| "http://127.0.0.1:19387/api/ai".to_string());
+    let base_url = if !llm_settings.base_url.trim().is_empty() {
+        llm_settings.base_url.clone()
+    } else {
+        proj_cfg
+            .api_base_url
+            .clone()
+            .unwrap_or_else(|| "http://127.0.0.1:19387/api/ai".to_string())
+    };
+
+    let api_key = if !llm_settings.api_key.trim().is_empty() {
+        Some(llm_settings.api_key.trim().to_string())
+    } else {
+        None
+    };
+
+    let temperature = col.temperature.or(llm_settings.temperature);
 
     let worktree_dir = task
         .worktree_path
@@ -487,9 +520,9 @@ pub async fn run_agent(
         task_title: task.title.clone(),
         task_description: task.description.clone(),
         base_url,
-        api_key: None,
+        api_key,
         model,
-        temperature: col.temperature,
+        temperature,
         reasoning_effort: col.reasoning_effort.clone(),
         max_turns: 25,
     };
@@ -594,6 +627,13 @@ pub async fn run_agent(
                 "agent:error",
                 serde_json::json!({ "taskId": tid, "error": err.to_string() }),
             );
+        }
+
+        // Clean up from active_agents registry upon agent completion
+        if let Some(state_ref) = app.try_state::<AppState>() {
+            if let Ok(mut map) = state_ref.active_agents.lock() {
+                map.remove(&tid);
+            }
         }
     });
 
@@ -765,15 +805,16 @@ pub async fn steer_agent(
     run_agent(task_id, app_handle, state).await
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LlmSettings {
-    pub provider: String,
-    #[serde(rename = "gatewayUrl", alias = "gateway_url", alias = "apiBaseUrl")]
-    pub gateway_url: String,
-    #[serde(rename = "apiKey", alias = "api_key", default)]
-    pub api_key: Option<String>,
-    #[serde(default)]
-    pub model: String,
+// ============================================================================
+// LLM Connection & Settings IPC Commands
+// ============================================================================
+
+#[tauri::command]
+pub async fn get_llm_settings(state: State<'_, AppState>) -> Result<LlmSettings, String> {
+    let root = state.get_root();
+    load_llm_settings(&root)
+        .await
+        .map_err(|e| format!("Failed to load LLM settings: {}", e))
 }
 
 #[tauri::command]
@@ -782,95 +823,135 @@ pub async fn save_llm_settings(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let root = state.get_root();
-    let mut config = load_project_config(&root).await.unwrap_or_else(|_| ProjectConfig {
-        name: "CanbanVoimaxHarness".to_string(),
-        version: "0.1.0".to_string(),
-        description: None,
-        active_pipeline: None,
-        default_model: Some("gemini-3.8-flash-high".to_string()),
-        api_base_url: Some("http://127.0.0.1:19387/api/ai".to_string()),
-        tool_permissions: None,
-        providers: HashMap::new(),
-    });
-
-    config.default_model = Some(settings.model.clone());
-    config.api_base_url = Some(settings.gateway_url.clone());
-    config.providers.insert(
-        settings.provider.clone(),
-        crate::config::ProviderConfig {
-            provider_type: settings.provider.clone(),
-            base_url: settings.gateway_url.clone(),
-            default_model: Some(settings.model.clone()),
-            api_key: settings.api_key.clone(),
-        },
-    );
-
-    save_project_config(&root, &config)
+    save_llm_settings_to_disk(&root, &settings)
         .await
-        .map_err(|e| format!("Failed to save LLM settings: {}", e))?;
-
-    Ok(())
+        .map_err(|e| format!("Failed to save LLM settings: {}", e))
 }
 
-#[tauri::command]
-pub async fn get_llm_settings(state: State<'_, AppState>) -> Result<LlmSettings, String> {
-    let root = state.get_root();
-    if let Ok(config) = load_project_config(&root).await {
-        let (prov, key) = if let Some((name, prov_cfg)) = config.providers.iter().next() {
-            (name.clone(), prov_cfg.api_key.clone())
-        } else {
-            ("Antigravity Proxy".to_string(), None)
-        };
-        Ok(LlmSettings {
-            provider: prov,
-            gateway_url: config.api_base_url.unwrap_or_else(|| "http://127.0.0.1:19387/api/ai".to_string()),
-            api_key: key,
-            model: config.default_model.unwrap_or_else(|| "gemini-3.8-flash-high".to_string()),
-        })
-    } else {
-        Ok(LlmSettings {
-            provider: "Antigravity Proxy".to_string(),
-            gateway_url: "http://127.0.0.1:19387/api/ai".to_string(),
-            api_key: None,
-            model: "gemini-3.8-flash-high".to_string(),
-        })
-    }
-}
+// ============================================================================
+// Workspace & Project Management IPC Commands
+// ============================================================================
 
 #[tauri::command]
-pub async fn set_project_root(path: String, state: State<'_, AppState>) -> Result<String, String> {
-    let p = PathBuf::from(&path);
-    if !p.exists() {
-        return Err(format!("Directory does not exist: {}", path));
-    }
-    if let Ok(mut root) = state.repo_root.write() {
-        *root = p.clone();
-    }
-    Ok(p.to_string_lossy().to_string())
-}
-
-#[tauri::command]
-pub async fn choose_project_folder() -> Result<Option<String>, String> {
-    #[cfg(target_os = "windows")]
-    {
-        let output = tokio::process::Command::new("powershell")
-            .args(&[
-                "-NoProfile",
-                "-Command",
-                r#"Add-Type -AssemblyName System.Windows.Forms; $dialog = New-Object System.Windows.Forms.FolderBrowserDialog; $dialog.Description = 'Выберите папку проекта'; if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $dialog.SelectedPath }"#,
-            ])
-            .output()
-            .await
-            .map_err(|e| format!("Failed to open folder picker: {}", e))?;
-        let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if s.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(s))
+pub async fn select_project_folder(path: Option<String>) -> Result<Option<String>, String> {
+    if let Some(p) = path {
+        if !p.trim().is_empty() {
+            let path_buf = PathBuf::from(p.trim());
+            if path_buf.exists() && path_buf.is_dir() {
+                let _ = scaffold_cvh_project(&path_buf).await;
+                return Ok(Some(path_buf.to_string_lossy().to_string()));
+            }
         }
     }
-    #[cfg(not(target_os = "windows"))]
-    {
-        Ok(None)
+
+    let selected = tokio::task::spawn_blocking(|| {
+        rfd::FileDialog::new()
+            .set_title("Select Project Folder")
+            .pick_folder()
+    })
+    .await
+    .map_err(|e| format!("Folder dialog task failed: {}", e))?;
+
+    if let Some(ref folder) = selected {
+        let _ = scaffold_cvh_project(folder).await;
     }
+
+    Ok(selected.map(|p| p.to_string_lossy().to_string()))
 }
+
+#[tauri::command]
+pub async fn set_active_project(
+    path: String,
+    state: State<'_, AppState>,
+    app_handle: AppHandle,
+) -> Result<ProjectConfig, String> {
+    let new_path = PathBuf::from(path.trim());
+    if !new_path.exists() {
+        return Err(format!("Specified project directory does not exist: {:?}", new_path));
+    }
+    if !new_path.is_dir() {
+        return Err(format!("Specified path is not a directory: {:?}", new_path));
+    }
+
+    // Scaffold empty .cvh structure (agents/, worktrees/, skills/, settings/) if missing
+    scaffold_cvh_project(&new_path)
+        .await
+        .map_err(|e| format!("Failed to scaffold .cvh structure: {}", e))?;
+
+    // Update AppState repo_root using write lock
+    state.set_root(new_path.clone())?;
+
+    // Register or update project in global registry
+    let _ = register_or_update_project(None, &new_path).await;
+
+    // Reload or default project configuration
+    let proj_cfg = match load_project_config(&new_path).await {
+        Ok(cfg) => cfg,
+        Err(_) => ProjectConfig {
+            name: new_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("CanbanProject")
+                .to_string(),
+            version: "0.1.0".to_string(),
+            description: None,
+            active_pipeline: None,
+            default_model: Some("gemini-3.8-flash-high".to_string()),
+            api_base_url: Some("http://127.0.0.1:19387/api/ai".to_string()),
+            tool_permissions: None,
+            providers: HashMap::new(),
+        },
+    };
+
+    // Emit event to notify frontend of project switch
+    let _ = app_handle.emit(
+        "project:changed",
+        serde_json::json!({
+            "rootPath": new_path.to_string_lossy().to_string(),
+            "name": proj_cfg.name
+        }),
+    );
+
+    Ok(proj_cfg)
+}
+
+#[tauri::command]
+pub async fn list_projects(state: State<'_, AppState>) -> Result<Vec<ProjectEntry>, String> {
+    let root = state.get_root();
+    let registry = load_project_registry(None)
+        .await
+        .unwrap_or_default();
+
+    let mut projects = registry.projects;
+
+    // Ensure active project is represented in the list
+    let root_str = root.to_string_lossy().to_string();
+    let contains_current = projects
+        .iter()
+        .any(|p| p.path == root_str || p.root_path.as_deref() == Some(&root_str));
+
+    if !contains_current && root.exists() {
+        let entry = ProjectEntry::from_path(&root);
+        projects.insert(0, entry);
+    }
+
+    Ok(projects)
+}
+
+// Backward-compatible alias for choose_project_folder
+#[tauri::command]
+pub async fn choose_project_folder() -> Result<Option<String>, String> {
+    select_project_folder(None).await
+}
+
+// Backward-compatible alias for set_project_root
+#[tauri::command]
+pub async fn set_project_root(
+    path: String,
+    state: State<'_, AppState>,
+    app_handle: AppHandle,
+) -> Result<String, String> {
+    let cfg = set_active_project(path.clone(), state, app_handle).await?;
+    Ok(path)
+}
+

@@ -621,10 +621,41 @@ pub async fn execute_tool(
     maybe_spill_output(repo_root, normalized_tool_name, raw_result).await
 }
 
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut components = Vec::new();
+    for comp in path.components() {
+        match comp {
+            std::path::Component::Prefix(p) => components.push(std::path::Component::Prefix(p)),
+            std::path::Component::RootDir => components.push(std::path::Component::RootDir),
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                components.pop();
+            }
+            std::path::Component::Normal(c) => components.push(std::path::Component::Normal(c)),
+        }
+    }
+    components.into_iter().collect()
+}
+
 fn resolve_safe_path(worktree_dir: &Path, rel_path: &str) -> Result<PathBuf> {
     let cleaned = rel_path.trim_start_matches(['/', '\\']);
+    if cleaned.contains(':') {
+        bail!("Absolute path with drive letter denied: {:?}", rel_path);
+    }
+
     let candidate = worktree_dir.join(cleaned);
-    Ok(candidate)
+    let norm_worktree = normalize_path(worktree_dir);
+    let norm_candidate = normalize_path(&candidate);
+
+    if !norm_candidate.starts_with(&norm_worktree) {
+        bail!(
+            "Path traversal denied: {:?} attempts to escape worktree boundary {:?}",
+            rel_path,
+            worktree_dir
+        );
+    }
+
+    Ok(norm_candidate)
 }
 
 async fn run_scoped_command(

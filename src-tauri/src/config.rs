@@ -161,13 +161,278 @@ pub fn resolve_allowed_tools(
     None
 }
 
+// ============================================================================
+// LLM Connection & Model Settings
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmSettings {
+    #[serde(default = "default_llm_provider")]
+    pub provider: String,
+    #[serde(rename = "apiKey", alias = "api_key", default)]
+    pub api_key: String,
+    #[serde(rename = "baseUrl", alias = "base_url", default = "default_llm_base_url")]
+    pub base_url: String,
+    #[serde(default = "default_llm_model")]
+    pub model: String,
+    #[serde(default)]
+    pub temperature: Option<f32>,
+}
+
+fn default_llm_provider() -> String {
+    "antigravity".to_string()
+}
+
+fn default_llm_base_url() -> String {
+    "http://127.0.0.1:19387/api/ai".to_string()
+}
+
+fn default_llm_model() -> String {
+    "gemini-3.8-flash-high".to_string()
+}
+
+impl Default for LlmSettings {
+    fn default() -> Self {
+        Self {
+            provider: default_llm_provider(),
+            api_key: String::new(),
+            base_url: default_llm_base_url(),
+            model: default_llm_model(),
+            temperature: Some(0.2),
+        }
+    }
+}
+
+pub fn get_app_config_dir() -> PathBuf {
+    if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+        PathBuf::from(local_app_data).join("com.voimax.cvh")
+    } else if let Ok(app_data) = std::env::var("APPDATA") {
+        PathBuf::from(app_data).join("com.voimax.cvh")
+    } else if let Ok(home) = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")) {
+        PathBuf::from(home).join(".cvh")
+    } else {
+        PathBuf::from(".cvh")
+    }
+}
+
+pub fn get_app_llm_settings_path() -> PathBuf {
+    get_app_config_dir().join("llm.json")
+}
+
+pub async fn load_llm_settings(repo_root: &Path) -> Result<LlmSettings> {
+    // 1. Project-local .cvh/llm.json (if present)
+    let local_path = repo_root.join(".cvh").join("llm.json");
+    if local_path.exists() {
+        if let Ok(content) = tokio::fs::read_to_string(&local_path).await {
+            if let Ok(settings) = serde_json::from_str::<LlmSettings>(&content) {
+                return Ok(settings);
+            }
+        }
+    }
+
+    // 2. Global app config (%LOCALAPPDATA%\com.voimax.cvh\llm.json)
+    let global_path = get_app_llm_settings_path();
+    if global_path.exists() {
+        if let Ok(content) = tokio::fs::read_to_string(&global_path).await {
+            if let Ok(settings) = serde_json::from_str::<LlmSettings>(&content) {
+                return Ok(settings);
+            }
+        }
+    }
+
+    // 3. Fallback to default
+    Ok(LlmSettings::default())
+}
+
+pub async fn save_llm_settings_to_disk(repo_root: &Path, settings: &LlmSettings) -> Result<()> {
+    let serialized = serde_json::to_string_pretty(settings)
+        .context("Failed to serialize LlmSettings to JSON")?;
+
+    // Always persist to global app config directory (%LOCALAPPDATA%\com.voimax.cvh\llm.json)
+    let global_path = get_app_llm_settings_path();
+    atomic_write_file(&global_path, &serialized)
+        .await
+        .with_context(|| format!("Failed to write global LLM settings to {:?}", global_path))?;
+
+    // If repo has .cvh directory, also mirror to .cvh/llm.json
+    let repo_cvh = repo_root.join(".cvh");
+    if repo_cvh.exists() {
+        let local_path = repo_cvh.join("llm.json");
+        let _ = atomic_write_file(&local_path, &serialized).await;
+    }
+
+    Ok(())
+}
+
+/// Automatically scaffold the complete .cvh workspace structure if missing.
+/// Creates: .cvh/agents/, .cvh/worktrees/, .cvh/skills/, .cvh/settings/, and default config/pipeline files.
+pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
+    let cvh_dir = repo_root.join(".cvh");
+    let agents_dir = cvh_dir.join("agents");
+    let worktrees_dir = cvh_dir.join("worktrees");
+    let skills_dir = cvh_dir.join("skills");
+    let settings_dir = cvh_dir.join("settings");
+    let hooks_dir = cvh_dir.join("hooks");
+
+    // Initialize pure directory structure without any default agent role files
+    tokio::fs::create_dir_all(&cvh_dir).await?;
+    tokio::fs::create_dir_all(&agents_dir).await?;
+    tokio::fs::create_dir_all(&worktrees_dir).await?;
+    tokio::fs::create_dir_all(&skills_dir).await?;
+    tokio::fs::create_dir_all(&settings_dir).await?;
+    tokio::fs::create_dir_all(&hooks_dir).await?;
+
+    // 1. config.json if not present
+    let config_path = cvh_dir.join("config.json");
+    if !config_path.exists() {
+        let project_name = repo_root
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("CanbanProject");
+        let default_config = serde_json::json!({
+            "name": project_name,
+            "version": "0.1.0",
+            "description": format!("CanbanVoimaxHarness Workspace for {}", project_name),
+            "activePipeline": "default-engineering",
+            "defaultModel": "gemini-3.8-flash-high",
+            "apiBaseUrl": "http://127.0.0.1:19387/api/ai"
+        });
+        atomic_write_file(&config_path, &serde_json::to_string_pretty(&default_config)?).await?;
+    }
+
+    // 2. pipeline.json if not present
+    let pipeline_path = cvh_dir.join("pipeline.json");
+    if !pipeline_path.exists() {
+        let default_pipeline = serde_json::json!({
+            "id": "default-engineering",
+            "title": "Engineering Pipeline",
+            "columns": [
+                {
+                    "id": "backlog",
+                    "title": "Backlog",
+                    "color": "#64748b",
+                    "icon": "Inbox",
+                    "persona": null,
+                    "contextWindow": 128000,
+                    "modelOverride": null,
+                    "allowedTools": ["read_file", "glob", "grep", "web_search", "web_fetch"],
+                    "hooks": {}
+                },
+                {
+                    "id": "todo",
+                    "title": "Todo Queue",
+                    "color": "#3b82f6",
+                    "icon": "ListTodo",
+                    "persona": null,
+                    "contextWindow": 128000,
+                    "modelOverride": null,
+                    "allowedTools": ["read_file", "glob", "grep"],
+                    "hooks": {}
+                },
+                {
+                    "id": "dev",
+                    "title": "In Development",
+                    "color": "#f59e0b",
+                    "icon": "Code2",
+                    "persona": null,
+                    "contextWindow": 400000,
+                    "modelOverride": "gemini-3.8-flash-high",
+                    "temperature": 0.2,
+                    "allowedTools": ["execute_command", "read_file", "edit_file", "write_file", "glob", "grep", "subagent"],
+                    "hooks": {},
+                    "gatekeeperSensor": null
+                },
+                {
+                    "id": "ready",
+                    "title": "Done / Production",
+                    "color": "#10b981",
+                    "icon": "CheckCircle2",
+                    "persona": null,
+                    "contextWindow": 64000,
+                    "modelOverride": null,
+                    "allowedTools": ["read_file", "glob", "grep"],
+                    "hooks": {}
+                }
+            ]
+        });
+        atomic_write_file(&pipeline_path, &serde_json::to_string_pretty(&default_pipeline)?).await?;
+    }
+
+    // Note: agents/ directory is kept intentionally empty. Users create custom personas manually.
+
+    // 3. Default tasks.json if not present
+    let tasks_path = cvh_dir.join("tasks.json");
+    if !tasks_path.exists() {
+        atomic_write_file(&tasks_path, "[]").await?;
+    }
+
+    // 4. Default tool policy in settings/ if not present
+    let tool_policy_path = settings_dir.join("tool-policy.json");
+    if !tool_policy_path.exists() {
+        let default_tp = ToolPolicyConfig::default();
+        atomic_write_file(&tool_policy_path, &serde_json::to_string_pretty(&default_tp)?).await?;
+    }
+
+    // 6. Ensure .gitignore excludes .cvh/llm.json, llm.json, and .cvh/worktrees/
+    let gitignore_path = repo_root.join(".gitignore");
+    if gitignore_path.exists() {
+        if let Ok(mut gi_content) = tokio::fs::read_to_string(&gitignore_path).await {
+            let mut modified = false;
+            if !gi_content.contains(".cvh/llm.json") {
+                gi_content.push_str("\n.cvh/llm.json\nllm.json\n");
+                modified = true;
+            }
+            if !gi_content.contains(".cvh/worktrees") {
+                gi_content.push_str(".cvh/worktrees/\n");
+                modified = true;
+            }
+            if modified {
+                let _ = tokio::fs::write(&gitignore_path, gi_content).await;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+// ============================================================================
+// Project Registry & Workspace Management
+// ============================================================================
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectEntry {
     pub id: String,
     pub name: String,
     pub path: String,
-    #[serde(rename = "lastOpened")]
+    #[serde(rename = "rootPath", default)]
+    pub root_path: Option<String>,
+    #[serde(rename = "lastOpened", default = "chrono::Utc::now")]
     pub last_opened: DateTime<Utc>,
+    #[serde(rename = "activeBranch", default)]
+    pub active_branch: Option<String>,
+    #[serde(rename = "worktreesCount", default)]
+    pub worktrees_count: Option<usize>,
+}
+
+impl ProjectEntry {
+    pub fn from_path(path: &Path) -> Self {
+        let path_str = path.to_string_lossy().to_string();
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("Unnamed Project")
+            .to_string();
+        let id = name.to_lowercase().replace(' ', "-");
+        Self {
+            id,
+            name,
+            path: path_str.clone(),
+            root_path: Some(path_str),
+            last_opened: Utc::now(),
+            active_branch: Some("main".to_string()),
+            worktrees_count: Some(0),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -263,6 +528,35 @@ pub async fn save_project_registry(registry_path: Option<PathBuf>, registry: &Pr
     let serialized = serde_json::to_string_pretty(registry)
         .context("Failed to serialize ProjectRegistry to JSON")?;
     atomic_write_file(&path, &serialized).await
+}
+
+pub async fn register_or_update_project(
+    registry_path: Option<PathBuf>,
+    project_path: &Path,
+) -> Result<ProjectRegistry> {
+    let mut registry = load_project_registry(registry_path.clone()).await.unwrap_or_default();
+    let norm_path = project_path.to_string_lossy().to_string();
+
+    let mut found = false;
+    for entry in &mut registry.projects {
+        if entry.path == norm_path || entry.root_path.as_deref() == Some(&norm_path) {
+            entry.last_opened = Utc::now();
+            entry.root_path = Some(norm_path.clone());
+            registry.active_project_id = Some(entry.id.clone());
+            found = true;
+            break;
+        }
+    }
+
+    if !found {
+        let new_entry = ProjectEntry::from_path(project_path);
+        let id = new_entry.id.clone();
+        registry.projects.push(new_entry);
+        registry.active_project_id = Some(id);
+    }
+
+    let _ = save_project_registry(registry_path, &registry).await;
+    Ok(registry)
 }
 
 // ============================================================================
@@ -366,4 +660,63 @@ pub async fn save_tool_policies(root_path: impl AsRef<Path>, config: &ToolPolicy
     let serialized = serde_json::to_string_pretty(config)
         .context("Failed to serialize ToolPolicyConfig to JSON")?;
     atomic_write_file(&policy_path, &serialized).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_llm_settings_serde_camel_and_snake_case() {
+        // Test snake_case deserialization
+        let json_snake = r#"{
+            "provider": "open-router",
+            "api_key": "sk-secret-123",
+            "base_url": "https://openrouter.ai/api/v1",
+            "model": "anthropic/claude-3-7-sonnet",
+            "temperature": 0.5
+        }"#;
+        let s1: LlmSettings = serde_json::from_str(json_snake).expect("Failed to deserialize snake_case");
+        assert_eq!(s1.provider, "open-router");
+        assert_eq!(s1.api_key, "sk-secret-123");
+        assert_eq!(s1.base_url, "https://openrouter.ai/api/v1");
+        assert_eq!(s1.model, "anthropic/claude-3-7-sonnet");
+        assert_eq!(s1.temperature, Some(0.5));
+
+        // Test camelCase deserialization
+        let json_camel = r#"{
+            "provider": "antigravity",
+            "apiKey": "sk-local-abc",
+            "baseUrl": "http://127.0.0.1:19387/api/ai",
+            "model": "gemini-3.8-flash-high"
+        }"#;
+        let s2: LlmSettings = serde_json::from_str(json_camel).expect("Failed to deserialize camelCase");
+        assert_eq!(s2.provider, "antigravity");
+        assert_eq!(s2.api_key, "sk-local-abc");
+        assert_eq!(s2.base_url, "http://127.0.0.1:19387/api/ai");
+        assert_eq!(s2.model, "gemini-3.8-flash-high");
+        assert_eq!(s2.temperature, None);
+    }
+
+    #[tokio::test]
+    async fn test_scaffold_cvh_project_pure_empty_structure() {
+        let base_dir = std::path::PathBuf::from("target").join(format!("cvh_test_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base_dir).await.expect("Failed to create test dir in target");
+
+        scaffold_cvh_project(&base_dir).await.expect("Scaffold failed");
+
+        let cvh = base_dir.join(".cvh");
+        assert!(cvh.exists());
+        assert!(cvh.join("agents").is_dir());
+        assert!(cvh.join("worktrees").is_dir());
+        assert!(cvh.join("skills").is_dir());
+        assert!(cvh.join("settings").is_dir());
+
+        // Verify agents folder is strictly empty (no auto-generated persona files)
+        let mut read_agents = tokio::fs::read_dir(cvh.join("agents")).await.expect("Read dir failed");
+        let first_entry = read_agents.next_entry().await.expect("Next entry failed");
+        assert!(first_entry.is_none(), "Expected agents/ to be completely empty per user mandate");
+
+        let _ = tokio::fs::remove_dir_all(&base_dir).await;
+    }
 }
