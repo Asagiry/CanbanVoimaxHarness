@@ -27,7 +27,7 @@ export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnP
   const isAtWipLimit = column.wipLimit ? tasks.length >= column.wipLimit : false;
 
   const getColumnIcon = (iconName: string, color: string) => {
-    const props = { className: 'h-4 w-4', style: { color } };
+    const props = { className: 'h-3.5 w-3.5 shrink-0', style: { color } };
     switch (iconName) {
       case 'Inbox':
         return <Inbox {...props} />;
@@ -48,40 +48,40 @@ export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnP
 
   return (
     <div
-      className={`flex flex-col w-80 shrink-0 h-full rounded-xl bg-obsidian-900 border transition-all duration-200 select-none overflow-hidden ${
+      className={`flex flex-col w-76 shrink-0 h-full rounded-lg bg-obsidian-900 border transition-all duration-150 select-none overflow-hidden ${
         isFocused
-          ? 'border-cyber-cyan ring-1 ring-cyber-cyan/50 shadow-lg shadow-cyan-950/30'
-          : 'border-slate-800/90 shadow-md shadow-black/20'
+          ? 'border-cyber-cyan shadow-sm shadow-cyan-950/50'
+          : 'border-obsidian-800 hover:border-obsidian-750'
       }`}
     >
-      {/* Top Accent Color Bar */}
+      {/* Top Hairline Accent Bar */}
       <div
-        className="h-1 w-full"
+        className="h-[2px] w-full shrink-0"
         style={{ backgroundColor: column.color }}
       />
 
-      {/* Column Header */}
+      {/* Column Header - Tight Developer Ergonomics */}
       <div
         onClick={() => focusStage(column.id)}
-        className="px-3.5 py-2.5 border-b border-slate-800 bg-obsidian-850 hover:bg-obsidian-800/80 transition cursor-pointer group"
+        className="px-3 py-2 border-b border-obsidian-800 bg-obsidian-850 hover:bg-obsidian-800/70 transition cursor-pointer group"
         title="Click to inspect Agent Mind in Cortex Explorer"
       >
         {/* Title, Icon and WIP Counter */}
-        <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center justify-between mb-1">
           <div className="flex items-center space-x-2 min-w-0">
             {getColumnIcon(column.icon, column.color)}
-            <h3 className="text-xs font-bold text-slate-100 group-hover:text-white truncate">
+            <h3 className="text-xs font-semibold text-slate-100 group-hover:text-white truncate">
               {column.title}
             </h3>
           </div>
 
-          <div className="flex items-center space-x-1.5">
+          <div className="flex items-center space-x-1">
             {/* WIP Counter Pill */}
             <span
-              className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-bold tabular-nums border ${
+              className={`px-1.5 py-0.2 rounded font-mono text-[10px] font-bold tabular-nums border ${
                 isAtWipLimit
-                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 animate-pulse'
-                  : 'bg-obsidian-800 text-slate-400 border-slate-750'
+                  ? 'bg-rose-950/40 text-rose-300 border-rose-500/50 animate-pulse'
+                  : 'bg-obsidian-950 text-slate-400 border-obsidian-750'
               }`}
               title={column.wipLimit ? `WIP Limit: ${tasks.length} / ${column.wipLimit}` : `${tasks.length} tasks`}
             >
@@ -96,10 +96,10 @@ export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnP
                   e.stopPropagation();
                   onAddTask(column.id);
                 }}
-                className="p-1 rounded text-slate-400 hover:text-white hover:bg-obsidian-750 transition"
+                className="p-1 rounded text-slate-400 hover:text-white hover:bg-obsidian-750 transition cursor-pointer"
                 title="Add Task to this stage"
               >
-                <Plus className="h-3.5 w-3.5" />
+                <Plus className="h-3 w-3" />
               </button>
             )}
           </div>
@@ -111,24 +111,24 @@ export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnP
           <div className="flex items-center space-x-1 min-w-0 truncate">
             {column.gatekeeperSensor ? (
               <span
-                className="flex items-center space-x-1 px-1.5 py-0.5 rounded bg-obsidian-800 border border-slate-750 text-slate-300 truncate"
+                className="flex items-center space-x-1 px-1.5 py-0.2 rounded bg-obsidian-950 border border-obsidian-800 text-slate-300 truncate"
                 title={`Sensor Gatekeeper: ${column.gatekeeperSensor}`}
               >
                 <ShieldCheck className="h-2.5 w-2.5 text-cyber-emerald shrink-0" />
                 <span className="truncate">{column.gatekeeperSensor}</span>
               </span>
             ) : (
-              <span className="text-slate-500">Unrestricted</span>
+              <span className="text-slate-600">Unrestricted</span>
             )}
           </div>
 
           {/* Context Limit Pill */}
           <div
-            className="flex items-center space-x-1 px-1.5 py-0.5 rounded bg-obsidian-800 border border-slate-750 text-slate-400 shrink-0"
+            className="flex items-center space-x-1 px-1.5 py-0.2 rounded bg-obsidian-950 border border-obsidian-800 text-slate-400 shrink-0"
             title={`Context Window: ${column.contextWindow.toLocaleString()} tokens`}
           >
             <Cpu className="h-2.5 w-2.5 text-cyber-cyan" />
-            <span className="tabular-nums font-semibold text-slate-300">
+            <span className="tabular-nums font-medium text-slate-300">
               {formatTokens(column.contextWindow)}
             </span>
           </div>
@@ -141,10 +141,10 @@ export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnP
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className={`flex-1 p-2.5 overflow-y-auto min-h-[140px] transition-colors ${
+            className={`flex-1 p-2 overflow-y-auto min-h-[140px] transition-colors ${
               snapshot.isDraggingOver
-                ? 'bg-obsidian-800/80 ring-1 ring-dashed ring-cyan-500/50'
-                : 'bg-obsidian-950/50'
+                ? 'bg-obsidian-850/80 border-2 border-dashed border-cyan-500/40 rounded-b-lg'
+                : 'bg-obsidian-950/30'
             }`}
           >
             {tasks.map((task, index) => (
@@ -153,9 +153,9 @@ export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnP
             {provided.placeholder}
 
             {tasks.length === 0 && !snapshot.isDraggingOver && (
-              <div className="h-28 flex flex-col items-center justify-center border border-dashed border-slate-800 rounded-lg text-slate-600 text-xs font-mono p-4 text-center">
+              <div className="h-24 flex flex-col items-center justify-center border border-dashed border-obsidian-800 rounded-md text-slate-600 text-[11px] font-mono p-3 text-center">
                 <span>No active agents</span>
-                <span className="text-[10px] text-slate-600 mt-1">Drag task here to trigger</span>
+                <span className="text-[10px] text-slate-600 mt-0.5">Drop task to dispatch</span>
               </div>
             )}
           </div>

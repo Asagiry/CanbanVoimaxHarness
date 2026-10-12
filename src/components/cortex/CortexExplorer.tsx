@@ -35,7 +35,7 @@ export default function CortexExplorer() {
   };
 
   const getStageIcon = (iconName: string, color: string) => {
-    const props = { className: 'h-3.5 w-3.5', style: { color } };
+    const props = { className: 'h-3.5 w-3.5 shrink-0', style: { color } };
     switch (iconName) {
       case 'Inbox':
         return <Inbox {...props} />;
@@ -68,46 +68,46 @@ export default function CortexExplorer() {
   }).filter(Boolean) as CortexAgentStage[];
 
   return (
-    <aside className="w-72 h-full flex flex-col bg-obsidian-900 border-r border-slate-800/90 select-none text-slate-300">
-      {/* Sidebar Header */}
-      <div className="flex items-center justify-between px-3.5 py-3 border-b border-slate-800 bg-obsidian-850">
-        <div className="flex items-center space-x-2">
-          <BrainCircuit className="h-4 w-4 text-cyber-cyan" />
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+    <aside className="w-68 shrink-0 h-full flex flex-col bg-obsidian-900 border-r border-obsidian-800 select-none text-slate-300">
+      {/* Sidebar Header - VS Code Activity Style */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-obsidian-800 bg-obsidian-850">
+        <div className="flex items-center space-x-1.5">
+          <BrainCircuit className="h-3.5 w-3.5 text-cyber-cyan shrink-0" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-200 font-sans">
             Cortex Explorer
           </span>
         </div>
-        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-obsidian-800 text-slate-400 border border-slate-750">
+        <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-obsidian-950 text-slate-400 border border-obsidian-750 tabular-nums">
           {stages.length} MINDS
         </span>
       </div>
 
-      {/* Subtitle / Mind descriptor */}
-      <div className="px-3.5 pt-2 pb-1 text-[11px] text-slate-400 flex items-center justify-between">
-        <span className="uppercase tracking-wider font-semibold text-[10px] text-slate-500">
+      {/* Mind Subtitle Descriptor */}
+      <div className="px-3 pt-1.5 pb-1 text-[10px] font-mono text-slate-500 flex items-center justify-between">
+        <span className="uppercase tracking-wider font-semibold text-[9px] text-slate-500">
           Agent Mind Trees
         </span>
-        <span className="text-[10px] text-cyber-cyan/80 font-mono">Zero-Turn Primed</span>
+        <span className="text-[9px] text-cyber-cyan/90 font-mono">Zero-Turn Primed</span>
       </div>
 
-      {/* Filter / Search input */}
-      <div className="px-3 py-1.5">
+      {/* VS Code Filter Search Input */}
+      <div className="px-2 py-1">
         <div className="relative flex items-center">
-          <Search className="absolute left-2.5 h-3.5 w-3.5 text-slate-500 pointer-events-none" />
+          <Search className="absolute left-2 h-3 w-3 text-slate-500 pointer-events-none" />
           <input
             id={searchInputId}
             name="cortexMindSearch"
             type="text"
             value={filterQuery}
             onChange={(e) => setFilterQuery(e.target.value)}
-            placeholder="Search rules, personas, settings..."
-            className="w-full pl-8 pr-2.5 py-1 text-xs rounded bg-obsidian-950/80 border border-slate-800 text-slate-200 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500/50 transition font-mono"
+            placeholder="Search rules, personas..."
+            className="w-full pl-6.5 pr-2 py-0.5 text-xs rounded-sm bg-obsidian-950 border border-obsidian-800 text-slate-200 placeholder-slate-600 focus:outline-hidden focus:border-cyan-500/60 transition font-mono"
           />
         </div>
       </div>
 
-      {/* Stage folders tree */}
-      <div className="flex-1 overflow-y-auto px-1.5 py-1 space-y-1 font-mono text-xs">
+      {/* Stage Folders Tree - 12px Font & 16px VS Code Indentation */}
+      <div className="flex-1 overflow-y-auto px-1 py-1 space-y-0.5 font-mono text-xs">
         {filteredStages.map((stage) => {
           const isFocused = focusedStageId === stage.stageId;
           const personaFile = stage.files.find((f) => f.type === 'persona');
@@ -119,41 +119,38 @@ export default function CortexExplorer() {
             <div
               key={stage.stageId}
               id={`cortex-stage-${stage.stageId}`}
-              className={`rounded transition-all duration-300 ${
+              className={`rounded-sm transition-colors duration-150 ${
                 isFocused
-                  ? 'ring-1 ring-cyber-cyan bg-cyan-950/25 shadow-sm shadow-cyan-500/10'
-                  : 'hover:bg-obsidian-850/50'
+                  ? 'bg-obsidian-800/90 border-l-2 border-cyber-cyan pl-0.5'
+                  : 'hover:bg-obsidian-850/60'
               }`}
             >
               {/* Stage Root Folder Header */}
               <button
                 onClick={() => toggleStageExpand(stage.stageId)}
-                className="w-full flex items-center justify-between px-2 py-1.5 rounded text-left group hover:bg-obsidian-800/80 transition"
-                style={{
-                  borderLeft: `3px solid ${stage.color}`,
-                }}
+                className="w-full flex items-center justify-between px-1.5 py-1 rounded-sm text-left group hover:bg-obsidian-800 transition cursor-pointer"
               >
                 <div className="flex items-center space-x-1.5 min-w-0">
                   {stage.isExpanded ? (
-                    <ChevronDown className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                    <ChevronDown className="h-3 w-3 text-slate-400 shrink-0" />
                   ) : (
-                    <ChevronRight className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                    <ChevronRight className="h-3 w-3 text-slate-400 shrink-0" />
                   )}
 
                   <div className="shrink-0">{getStageIcon(stage.icon, stage.color)}</div>
 
-                  <span className="font-sans text-xs font-semibold text-slate-200 truncate group-hover:text-white">
+                  <span className="font-sans text-xs font-medium text-slate-200 truncate group-hover:text-white">
                     {stage.stageTitle}
                   </span>
                 </div>
 
                 <div className="flex items-center space-x-1 shrink-0 ml-1">
                   <span
-                    className="text-[10px] font-mono px-1 rounded truncate max-w-[80px]"
+                    className="text-[9px] font-mono px-1 py-0.2 rounded truncate max-w-[76px]"
                     style={{
                       backgroundColor: `${stage.color}15`,
                       color: stage.color,
-                      border: `1px solid ${stage.color}30`,
+                      border: `1px solid ${stage.color}35`,
                     }}
                   >
                     {stage.personaName}
@@ -161,15 +158,16 @@ export default function CortexExplorer() {
                 </div>
               </button>
 
-              {/* Children (Stage Mind Tree) */}
+              {/* Children (Stage Mind Tree - 16px Indentation) */}
               {stage.isExpanded && (
-                <div className="pl-4 pr-1 py-1 space-y-0.5 border-l border-slate-800/80 ml-2.5 my-0.5">
+                <div className="pl-4 pr-1 py-0.5 space-y-0.5 border-l border-obsidian-800 ml-2.5 my-0.5">
                   {/* 1. Persona File (persona.md) */}
                   {personaFile && (
                     <FileTreeItem
                       file={personaFile}
                       isActive={activeFile?.id === personaFile.id}
-                      icon={<Sparkles className="h-3.5 w-3.5 text-cyber-purple shrink-0" />}
+                      icon={<Sparkles className="h-3 w-3 text-cyber-purple shrink-0" />}
+                      badge=".md"
                       onSelect={() => openFile(personaFile.id)}
                     />
                   )}
@@ -179,25 +177,26 @@ export default function CortexExplorer() {
                     <div className="space-y-0.5">
                       <button
                         onClick={() => toggleRulesFolder(stage.stageId)}
-                        className="w-full flex items-center space-x-1 px-2 py-1 rounded text-left text-slate-400 hover:text-slate-200 hover:bg-obsidian-800/60 transition"
+                        className="w-full flex items-center space-x-1.5 px-1.5 py-0.5 rounded-sm text-left text-slate-400 hover:text-slate-200 hover:bg-obsidian-800/70 transition cursor-pointer"
                       >
                         {areRulesOpen ? (
-                          <FolderOpen className="h-3.5 w-3.5 text-cyber-amber shrink-0" />
+                          <FolderOpen className="h-3 w-3 text-cyber-amber shrink-0" />
                         ) : (
-                          <Folder className="h-3.5 w-3.5 text-cyber-amber shrink-0" />
+                          <Folder className="h-3 w-3 text-cyber-amber shrink-0" />
                         )}
-                        <span className="text-[11px] font-mono">rules/</span>
-                        <span className="text-[10px] text-slate-500 tabular-nums">({ruleFiles.length})</span>
+                        <span className="text-xs font-mono">rules/</span>
+                        <span className="text-[10px] text-slate-500 tabular-nums font-mono">({ruleFiles.length})</span>
                       </button>
 
                       {areRulesOpen && (
-                        <div className="pl-4 space-y-0.5 border-l border-slate-800/60 ml-2">
+                        <div className="pl-4 space-y-0.5 border-l border-obsidian-800 ml-2">
                           {ruleFiles.map((ruleFile) => (
                             <FileTreeItem
                               key={ruleFile.id}
                               file={ruleFile}
                               isActive={activeFile?.id === ruleFile.id}
-                              icon={<FileText className="h-3.5 w-3.5 text-cyber-cyan shrink-0" />}
+                              icon={<FileText className="h-3 w-3 text-cyber-cyan shrink-0" />}
+                              badge=".md"
                               onSelect={() => openFile(ruleFile.id)}
                             />
                           ))}
@@ -211,7 +210,8 @@ export default function CortexExplorer() {
                     <FileTreeItem
                       file={settingsFile}
                       isActive={activeFile?.id === settingsFile.id}
-                      icon={<Settings className="h-3.5 w-3.5 text-cyber-amber shrink-0" />}
+                      icon={<Settings className="h-3 w-3 text-cyber-amber shrink-0" />}
+                      badge=".json"
                       onSelect={() => openFile(settingsFile.id)}
                     />
                   )}
@@ -223,12 +223,12 @@ export default function CortexExplorer() {
       </div>
 
       {/* Footer Info Pill */}
-      <div className="p-2.5 border-t border-slate-800/90 bg-obsidian-850/60 text-[11px] text-slate-500 font-mono flex items-center justify-between">
+      <div className="p-2 border-t border-obsidian-800 bg-obsidian-850/80 text-[10px] text-slate-400 font-mono flex items-center justify-between">
         <span className="flex items-center space-x-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-cyber-emerald animate-pulse" />
-          <span>Sync: Git Worktrees</span>
+          <span>Worktree Sync</span>
         </span>
-        <span className="text-[10px] text-slate-400">Tauri v2 IPC</span>
+        <span className="text-slate-500">Tauri v2 IPC</span>
       </div>
     </aside>
   );
@@ -238,31 +238,42 @@ function FileTreeItem({
   file,
   isActive,
   icon,
+  badge,
   onSelect,
 }: {
   file: CortexAgentFile;
   isActive: boolean;
   icon: React.ReactNode;
+  badge: string;
   onSelect: () => void;
 }) {
   return (
     <button
       onClick={onSelect}
-      className={`w-full flex items-center justify-between px-2 py-1 rounded text-left transition group ${
+      className={`w-full flex items-center justify-between px-1.5 py-0.5 rounded-sm text-left transition cursor-pointer group ${
         isActive
-          ? 'bg-cyber-cyan/15 text-cyber-cyan font-medium border border-cyber-cyan/30'
-          : 'text-slate-300 hover:text-white hover:bg-obsidian-800/70'
+          ? 'bg-cyber-cyan/15 text-cyber-cyan font-medium border-l-2 border-cyber-cyan'
+          : 'text-slate-300 hover:text-white hover:bg-obsidian-800'
       }`}
       title={file.path}
     >
       <div className="flex items-center space-x-1.5 min-w-0">
         {icon}
-        <span className="text-[11px] font-mono truncate">{file.name}</span>
+        <span className="text-xs font-mono truncate">{file.name}</span>
       </div>
 
       <div className="flex items-center space-x-1 shrink-0">
+        <span
+          className={`px-1 py-0.2 rounded text-[9px] font-mono font-bold uppercase tracking-tight tabular-nums ${
+            badge === '.json'
+              ? 'bg-amber-950/40 text-cyber-amber border border-amber-500/30'
+              : 'bg-obsidian-950 text-slate-400 border border-obsidian-800'
+          }`}
+        >
+          {badge}
+        </span>
         {file.isDirty && (
-          <span className="h-1.5 w-1.5 rounded-full bg-cyber-amber" title="Unsaved" />
+          <span className="h-1.5 w-1.5 rounded-full bg-cyber-amber" title="Unsaved changes" />
         )}
       </div>
     </button>
