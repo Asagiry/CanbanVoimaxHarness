@@ -117,5 +117,22 @@
       "src/types/index.ts"
     ],
     "timestamp": 1740009000000
+  },
+  "CVH-004": {
+    "taskId": "CVH-004",
+    "title": "Remove CI push trigger, configure static vc runtime, and restrict bundle to nsis",
+    "author": "agent-developer",
+    "verdict": "APPROVED",
+    "commitHash": "34ee7ec",
+    "mergeCommitHash": "66cea7d",
+    "commitMessage": "fix(ci): remove push trigger, configure static vc runtime, and restrict bundle to nsis (CVH-004-CI-BUNDLE-FIX)",
+    "summary": "Removed push triggers from .github/workflows/ci.yml to avoid costly automatic runs on every push (only workflow_dispatch and pull_request remain). Configured tauri_build::WindowsAttributes::new().static_vc_runtime(true) in src-tauri/build.rs to eliminate STATIC_VCRUNTIME deprecation warning. Changed bundle.targets to ['nsis'] in src-tauri/tauri.conf.json to completely eliminate WiX 3 downloads and light.exe MSI packaging hangs. Achieved 100% first-pass FTR score.",
+    "files": [
+      ".github/workflows/ci.yml",
+      "src-tauri/build.rs",
+      "src-tauri/tauri.conf.json"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1791824555382
   }
 }

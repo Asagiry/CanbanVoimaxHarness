@@ -93,6 +93,16 @@
         "Features tri-color thresholds (Emerald <50%, Amber 50-75%, Crimson >75% with pulse), tactile Web Audio mechanical click, and flame toast feedback.",
         "Triggers Zero-Cost Log Evaporation via compact_context IPC command and listens to agent:compacted events."
       ]
+    },
+    {
+      "name": "CiDesktopBundlePipeline",
+      "entityType": "Infrastructure",
+      "observations": [
+        "GitHub Actions desktop CI workflow (.github/workflows/ci.yml) optimized for Windows release builds.",
+        "Trigger policy restricted to pull_request and workflow_dispatch, eliminating duplicate and expensive push trigger runs on main.",
+        "Eliminates STATIC_VCRUNTIME warning by configuring tauri_build::WindowsAttributes::new().static_vc_runtime(true) in src-tauri/build.rs.",
+        "Restricts bundle.targets to ['nsis'] in src-tauri/tauri.conf.json, preventing WiX 3 download hangs and light.exe packaging failures."
+      ]
     }
   ],
   "relations": [
@@ -160,6 +170,16 @@
       "from": "ContextGauge",
       "to": "StatePreservingContextCompactor",
       "relationType": "triggers"
+    },
+    {
+      "from": "CiDesktopBundlePipeline",
+      "to": "TauriDesktopCoreEngine",
+      "relationType": "bundles"
+    },
+    {
+      "from": "CiDesktopBundlePipeline",
+      "to": "CanbanVoimaxHarness",
+      "relationType": "verifies"
     }
   ]
 }
