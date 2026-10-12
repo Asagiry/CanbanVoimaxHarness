@@ -951,7 +951,7 @@ pub async fn set_project_root(
     state: State<'_, AppState>,
     app_handle: AppHandle,
 ) -> Result<String, String> {
-    let cfg = set_active_project(path.clone(), state, app_handle).await?;
+    let _cfg = set_active_project(path.clone(), state, app_handle).await?;
     Ok(path)
 }
 
