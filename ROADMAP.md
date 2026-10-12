@@ -159,10 +159,18 @@
   - Official Verdict badges: `✔ APPROVED` (emerald), `✔ APPROVED WITH CAVEATS` (amber), `✖ CHANGES REQUESTED` (crimson).
   - *Lead Role:* `react-tailwind-artisan` (Level 1)
 
-- **Task CVH-011**: Real-Time Slide-Out Drawer (Agent Execution Console)
-  - Split view drawer: Live thinking stream (`<thinking>` tokens in dim slate) and final text stream.
-  - Interactive tool execution accordions: input args, stdout/stderr logs, execution duration, and diff highlights.
-  - Live control panel: Pause, Force Kill, Promote to Ready, Retry.
+- **Task CVH-011**: Card-as-a-Chat (Изолированный Чат-Поток Задачи в Drawer)
+  - Каждая карточка задачи на доске является полноценным изолированным чат-потоком (`Card-as-a-Chat`).
+  - При клике на карточку открывается нативный диалог задачи:
+    - **Live Thinking Stream**: живой стриминг мыслей (`<thinking>`) с неоновой подсветкой и таймером генерации.
+    - **Rich Markdown Viewer**: чистый рендеринг ответов агента с подсветкой синтаксиса и блоками кода.
+    - **Интерактивные плашки инструментов**:
+      - Terminal outputs с кодами возврата и временем исполнения.
+      - Встроенный визуальный Diff-просмотрщик для `edit_file` (подсветка удалений красным и добавлений зелёным).
+      - Карточки для `read_file`, `write_file`, `glob`, `grep`.
+    - **Статус выполнения**: Running, Paused, Awaiting Feedback, Completed, Blocked.
+    - **Интерактивная строка ввода (Steer / Chat Input)**: прямое управление, дообучение и уточнение инструкций агенту прямо внутри карточки во время выполнения задачи.
+  - Quick action controls: Пауза, Убить процесс, Перевести в Done, Перезапустить.
   - Audio feedback cues on transitions, approvals, and returns.
   - *Lead Role:* `react-tailwind-artisan` (Level 1)
 
