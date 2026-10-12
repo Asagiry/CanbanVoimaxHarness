@@ -17,3 +17,11 @@ description: Specialized UI/UX engineering skill for CanbanVoimaxHarness. Covers
    - Live stream of agent thoughts (`<thinking>` tokens) and assistant text.
    - Collapsible tool execution cards with syntax-highlighted code diffs and terminal outputs.
    - Direct control actions: Pause, Force Kill, Promote to Ready, Retry.
+4. **Cortex Explorer («Проводник разума агентов»)**:
+   - Tree view of agent mind files (`.cvh/agents/*.md`, project rules, skill catalog) organized by pipeline stage.
+   - Zero-turn memory inspection and in-app modal rule editor with instant disk persistence.
+5. **Frontend State & Sensor Invariants**:
+   - Zero-GC / Re-Render Loop Guard: Do not instantiate unmemoized objects/callbacks in drag-and-drop contexts or 1-second timer ticker intervals.
+   - Zustand Interface Completeness: Every action declared in a state interface MUST be fully implemented with synchronized state transitions (e.g., coupling `status` and `isTimerRunning`).
+   - Ground Truth Build Verification: Always verify frontend builds via `npm run build` (`tsc && vite build`) with zero TypeScript errors or linter warnings.
+   - Accessibility & Unique IDs: Use React 19's `useId()` for all modal and form inputs to prevent duplicate DOM element ID warnings.

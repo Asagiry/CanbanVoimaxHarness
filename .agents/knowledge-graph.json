@@ -32,6 +32,23 @@
         "Native Rust process execution manages worktrees/ directories per task.",
         "Guarantees clean branch isolation and automated merges upon APPROVED."
       ]
+    },
+    {
+      "name": "FrontendControlPlane",
+      "entityType": "Subsystem",
+      "observations": [
+        "React 19 + TypeScript + Tailwind CSS v4 desktop control plane.",
+        "Interactive Kanban board with live stage duration timers, rework return tracking, and fast-track routing.",
+        "Slide-out Agent Console Drawer for live thought streaming, tool execution cards, and interactive controls."
+      ]
+    },
+    {
+      "name": "CortexExplorer",
+      "entityType": "Subsystem",
+      "observations": [
+        "Visual tree explorer representing agent minds across all pipeline stages.",
+        "Enables zero-turn memory inspection and in-app modal rule editing."
+      ]
     }
   ],
   "relations": [
@@ -49,6 +66,16 @@
       "from": "CanbanVoimaxHarness",
       "to": "GitWorktreeIsolationManager",
       "relationType": "orchestrates"
+    },
+    {
+      "from": "CanbanVoimaxHarness",
+      "to": "FrontendControlPlane",
+      "relationType": "renders"
+    },
+    {
+      "from": "FrontendControlPlane",
+      "to": "CortexExplorer",
+      "relationType": "hosts"
     }
   ]
 }
