@@ -93,11 +93,35 @@
   - Native token emitter to Tauri webview via `app_handle.emit("agent:token", ...)`.
   - *Lead Role:* `llm-streaming-expert` (Level 1)
 
+- **Task CVH-006B**: Deterministic Prefix Caching in LLM Client (`llm/caching.rs`)
+  - Tool definitions sorted alphabetically by name (`tools.sort_by(...)`) before serialization.
+  - Strictly static System Prompt without dynamic timestamps or floating random IDs.
+  - Append-only conversation history guaranteeing immutable prefix blocks.
+  - Automatic `cache_control: {"type": "ephemeral"}` insertion for Anthropic API (up to 4 cache breakpoints).
+  - Target: >= 90% Cache Hit Rate with `cache_read_input_tokens` vs `cache_creation_input_tokens` telemetry.
+  - *Lead Role:* `llm-streaming-expert` (Level 1)
+
 - **Task CVH-007**: Zero-Turn Memory Priming & Native ReAct Agent Loop (`agent.rs`)
   - Turn 0 prompt compiler: `Persona + Project Guidelines (AGENTS.md) + Active Skills + Task Description`.
-  - Native tools: `read_file`, `write_file`, `edit_file`, `glob`, `grep`, `execute_command`, `spawn_subagent`.
   - Tool execution dispatch with streaming feedback to UI.
   - *Lead Role:* `agent-developer` (Level 1)
+
+- **Task CVH-007B**: Industrial Tool Suite & Tool Policy Matrix (`tools/`)
+  - Industry-standard SWE-bench / Claude Code signatures:
+    - `execute_command` (with `bash` alias)
+    - `read_file`
+    - `edit_file` (`str_replace` with rich context diff on mismatch for rapid self-correction)
+    - `write_file`
+    - `glob`
+    - `grep`
+    - `subagent`
+  - Tool Aliasing layer for zero friction across model formats.
+  - **Tool Policy Matrix (Матрица управления инструментами)**:
+    - Global toggles (Settings ➔ Tools): enable/disable any tool project-wide.
+    - Per-stage permissions (Колонка РЕВЬЮ: `read_file`, `glob`, `grep`, read-only `bash` ENABLED; `edit_file`, `write_file` DISABLED DEAD. Колонка ДЕВ: `read_file`, `edit_file`, `write_file`, `bash` ENABLED; `web_search` DISABLED).
+    - Excluded from LLM request schemas (saves 200–400 tokens per tool per turn; ~2000+ tokens per step).
+    - Zero-Trust Iron Barrier in Rust: intercept disabled calls with `PermissionDenied`.
+  - *Lead Role:* `tauri-rust-engineer` (Level 1)
 
 - **Task CVH-008**: Tauri v2 IPC Command Layer & State Management (`commands.rs`)
   - Register IPC commands: `get_projects`, `get_pipeline`, `list_tasks`, `create_task`, `move_task_stage`, `run_agent`, `abort_agent`, `get_task_logs`.
