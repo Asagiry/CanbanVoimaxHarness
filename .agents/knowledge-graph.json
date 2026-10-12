@@ -78,52 +78,11 @@
       ]
     },
     {
-      "name": "ToolPolicyMatrix",
-      "entityType": "Subsystem",
-      "observations": [
-        "Zero-Trust Iron Barrier enforcing Allow/Ask/Deny policies per pipeline stage.",
-        "Frontend modal configuration persisted in .cvh/pipeline.json and verified at backend tool invocation."
-      ]
-    },
-    {
       "name": "StatePreservingContextCompactor",
       "entityType": "Subsystem",
       "observations": [
         "Evaporates bulky tool execution stdout/stderr logs while strictly preserving Immutable Anchors.",
         "Injects dynamic Markdown execution state snapshots detailing modified files and sensor verdicts."
-      ]
-    },
-    {
-      "name": "TactileVisualDiffViewer",
-      "entityType": "Subsystem",
-      "observations": [
-        "Color-coded red/green line-by-line diff inspector in ToolExecutionCard for edit_file and str_replace.",
-        "Features Split and JSON view modes with clean line numbers and zero DOM overflow."
-      ]
-    },
-    {
-      "name": "ToolOutputSpiller",
-      "entityType": "Subsystem",
-      "observations": [
-        "Automatically spills oversized tool outputs (> 12 KB) to .cvh/spill/<timestamp>-<tool>.log.",
-        "Prevents LLM context exhaustion while maintaining full on-disk auditability."
-      ]
-    },
-    {
-      "name": "DeterministicPrefixCaching",
-      "entityType": "Optimization",
-      "observations": [
-        "Alphabetically sorts tools in LLM requests to maximize provider prompt cache hits.",
-        "Annotates static System messages and tools with Anthropic ephemeral cache_control breakpoints."
-      ]
-    },
-    {
-      "name": "CardAsAChat",
-      "entityType": "Subsystem",
-      "observations": [
-        "Unifies Kanban card inspection with an interactive chat console inside AgentConsoleDrawer.",
-        "Allows human operators to dynamically steer running agents via Tauri IPC 'steer_agent' command without breaking worktree context.",
-        "Renders real-time thinking/output streams, tactile tool execution cards, visual diffs, and live context token gauges."
       ]
     },
     {
@@ -188,54 +147,9 @@
       "relationType": "consumes"
     },
     {
-      "from": "FrontendControlPlane",
-      "to": "ToolPolicyMatrix",
-      "relationType": "configures"
-    },
-    {
-      "from": "ReActAgentLoop",
-      "to": "ToolPolicyMatrix",
-      "relationType": "enforces"
-    },
-    {
       "from": "ReActAgentLoop",
       "to": "StatePreservingContextCompactor",
       "relationType": "triggers"
-    },
-    {
-      "from": "FrontendControlPlane",
-      "to": "TactileVisualDiffViewer",
-      "relationType": "displays"
-    },
-    {
-      "from": "ReActAgentLoop",
-      "to": "ToolOutputSpiller",
-      "relationType": "archives_large_outputs_to"
-    },
-    {
-      "from": "UniversalLlmStreamer",
-      "to": "DeterministicPrefixCaching",
-      "relationType": "applies"
-    },
-    {
-      "from": "FrontendControlPlane",
-      "to": "CardAsAChat",
-      "relationType": "hosts"
-    },
-    {
-      "from": "CardAsAChat",
-      "to": "ReActAgentLoop",
-      "relationType": "steers"
-    },
-    {
-      "from": "CardAsAChat",
-      "to": "TactileVisualDiffViewer",
-      "relationType": "embeds"
-    },
-    {
-      "from": "CardAsAChat",
-      "to": "StatePreservingContextCompactor",
-      "relationType": "monitors"
     },
     {
       "from": "FrontendControlPlane",

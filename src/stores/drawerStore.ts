@@ -20,6 +20,7 @@ interface DrawerState {
   toolExecutions: Record<string, ToolExecution[]>;
   taskTelemetry: Record<string, TaskTelemetry>;
   thinkingStartTime: Record<string, number | null>;
+  tokenOverrides: Record<string, number>;
 
   // Actions
   openDrawer: (taskId: string, initialTab?: DrawerTab) => void;
@@ -37,6 +38,8 @@ interface DrawerState {
   sendSteerMessage: (taskId: string, message: string) => Promise<void>;
   compactTaskContext: (taskId: string) => Promise<{ savedTokens: number; evaporatedCount: number }>;
   clearTaskLogs: (taskId: string) => void;
+  setTaskTokens: (taskId: string, tokens: number) => void;
+  evaporateClientToolLogs: (taskId: string) => { evaporatedCount: number; savedTokens: number };
 }
 
 export const useDrawerStore = create<DrawerState>((set, get) => ({
@@ -47,6 +50,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
   toolExecutions: INITIAL_TOOL_EXECUTIONS,
   taskTelemetry: {},
   thinkingStartTime: {},
+  tokenOverrides: {},
 
   openDrawer: (taskId, initialTab = 'thoughts') => {
     set({
@@ -202,12 +206,21 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
 
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const res = await invoke<{ estimated_saved_tokens?: number; evaporated_tools_count?: number }>(
-        'compact_task_context',
-        { taskId }
-      );
-      if (res?.estimated_saved_tokens) savedTokens = res.estimated_saved_tokens;
-      if (res?.evaporated_tools_count) evaporatedCount = Math.max(evaporatedCount, res.evaporated_tools_count);
+      try {
+        const res = await invoke<{ saved_tokens?: number; evaporated_count?: number }>(
+          'compact_context',
+          { taskId }
+        );
+        if (res?.saved_tokens) savedTokens = res.saved_tokens;
+        if (res?.evaporated_count) evaporatedCount = Math.max(evaporatedCount, res.evaporated_count);
+      } catch {
+        const res = await invoke<{ estimated_saved_tokens?: number; evaporated_tools_count?: number }>(
+          'compact_task_context',
+          { taskId }
+        );
+        if (res?.estimated_saved_tokens) savedTokens = res.estimated_saved_tokens;
+        if (res?.evaporated_tools_count) evaporatedCount = Math.max(evaporatedCount, res.evaporated_tools_count);
+      }
     } catch {
       // Keep local values
     }
@@ -232,5 +245,68 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         [taskId]: [],
       },
     }));
+  },
+
+  setTaskTokens: (taskId, tokens) => {
+    set((state) => ({
+      tokenOverrides: {
+        ...state.tokenOverrides,
+        [taskId]: tokens,
+      },
+    }));
+  },
+
+  evaporateClientToolLogs: (taskId) => {
+    const tools = get().toolExecutions[taskId] || [];
+    let evaporatedCount = 0;
+    let savedChars = 0;
+
+    const updatedTools = tools.map((tool, idx) => {
+      // Keep 2 most recent tool executions intact
+      if (idx < 2) return tool;
+
+      let newStdout = tool.stdout;
+      let newStderr = tool.stderr;
+
+      if (tool.stdout && tool.stdout.length > 500) {
+        const origLen = tool.stdout.length;
+        const placeholder = `[Output evaporated: ${origLen} chars truncated. Exit code: ${tool.exitCode ?? 0}. Tool: ${tool.toolName}]`;
+        savedChars += Math.max(0, origLen - placeholder.length);
+        newStdout = placeholder;
+        evaporatedCount += 1;
+      }
+
+      if (tool.stderr && tool.stderr.length > 500) {
+        const origLen = tool.stderr.length;
+        const placeholder = `[Output evaporated: ${origLen} chars truncated. Exit code: ${tool.exitCode ?? 1}. Tool: ${tool.toolName}]`;
+        savedChars += Math.max(0, origLen - placeholder.length);
+        newStderr = placeholder;
+        evaporatedCount += 1;
+      }
+
+      return {
+        ...tool,
+        stdout: newStdout,
+        stderr: newStderr,
+      };
+    });
+
+    const savedTokens = Math.max(0, Math.round(savedChars / 4));
+
+    set((state) => {
+      const currentOverride = state.tokenOverrides[taskId];
+      const newTokens = currentOverride ? Math.max(1000, currentOverride - savedTokens) : undefined;
+      return {
+        toolExecutions: {
+          ...state.toolExecutions,
+          [taskId]: updatedTools,
+        },
+        tokenOverrides: newTokens !== undefined
+          ? { ...state.tokenOverrides, [taskId]: newTokens }
+          : state.tokenOverrides,
+      };
+    });
+
+    return { evaporatedCount, savedTokens };
   },
 }));

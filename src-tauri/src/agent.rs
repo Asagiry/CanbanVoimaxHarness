@@ -1,4 +1,5 @@
 pub mod compactor;
+pub use compactor::*;
 
 use crate::config::{is_tool_allowed, load_tool_policies, ToolPolicyConfig};
 use crate::hooks::kill_process_tree;

@@ -46,6 +46,7 @@ pub struct CortexNode {
 pub struct AppState {
     pub repo_root: RwLock<PathBuf>,
     pub active_agents: Mutex<HashMap<String, Arc<AtomicBool>>>,
+    pub agent_contexts: Mutex<HashMap<String, Arc<Mutex<crate::agent::compactor::AgentContextState>>>>,
 }
 
 impl AppState {
@@ -53,6 +54,7 @@ impl AppState {
         Self {
             repo_root: RwLock::new(root),
             active_agents: Mutex::new(HashMap::new()),
+            agent_contexts: Mutex::new(HashMap::new()),
         }
     }
 
@@ -672,6 +674,70 @@ pub async fn compact_task_context(
 
     let result = crate::agent::compactor::compact_conversation(&mut sample_messages, Some(snapshot));
     Ok(result)
+}
+
+#[tauri::command]
+pub async fn compact_context(
+    task_id: String,
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<crate::agent::compactor::CompactionReport, String> {
+    let root = state.get_root();
+
+    let context_state_opt = {
+        let map = state
+            .agent_contexts
+            .lock()
+            .map_err(|_| "Failed to lock agent contexts".to_string())?;
+        map.get(&task_id).cloned()
+    };
+
+    let report = if let Some(cs) = context_state_opt {
+        let mut guard = cs
+            .lock()
+            .map_err(|_| "Failed to lock agent context state".to_string())?;
+        let current_turn = guard.current_turn;
+        crate::agent::compactor::compact_context_messages(&mut guard.messages, current_turn)
+    } else {
+        let tasks = load_tasks_from_disk(&root).await;
+        let task = tasks.into_iter().find(|t| t.id == task_id);
+
+        let mut messages = if let Some(t) = task {
+            vec![
+                crate::llm::ChatMessage::system(format!(
+                    "# Role Persona: developer\nYou are an expert AI agent working on {}.",
+                    t.id
+                )),
+                crate::llm::ChatMessage::user(format!(
+                    "Execute task {}: {}\nDetails:\n{}",
+                    t.id, t.title, t.description
+                )),
+            ]
+        } else {
+            vec![
+                crate::llm::ChatMessage::system("Agent session context".to_string()),
+                crate::llm::ChatMessage::user(format!("Execute task {}", task_id)),
+            ]
+        };
+
+        let current_turn = 0;
+        let r = crate::agent::compactor::compact_context_messages(&mut messages, current_turn);
+
+        let new_state = Arc::new(Mutex::new(crate::agent::compactor::AgentContextState {
+            current_turn,
+            messages,
+        }));
+        if let Ok(mut map) = state.agent_contexts.lock() {
+            map.insert(task_id.clone(), new_state);
+        }
+
+        r
+    };
+
+    // Emit Tauri event agent:compacted with CompactionReport payload
+    let _ = app_handle.emit("agent:compacted", &report);
+
+    Ok(report)
 }
 
 #[tauri::command]
