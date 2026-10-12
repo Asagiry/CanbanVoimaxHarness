@@ -444,6 +444,7 @@ pub async fn run_agent(
             active_pipeline: None,
             default_model: Some("gemini-3.8-flash-high".to_string()),
             api_base_url: Some("http://127.0.0.1:19387/api/ai".to_string()),
+            tool_permissions: None,
             providers: HashMap::new(),
         });
 
