@@ -106,6 +106,13 @@
   - Tool execution dispatch with streaming feedback to UI.
   - *Lead Role:* `agent-developer` (Level 1)
 
+- **Task CVH-007C**: State-Preserving Context Compactor (`agent/compactor.rs`)
+  - **Zero-LLM Log Evaporation**: automatically evaporates heavy stdout logs and bulky file dumps (>500 chars) older than 3 turns without making LLM calls (saves up to 80% tokens).
+  - **Immutable Anchors**: System Prompt, initial Task Specification (ТЗ), and the 2 most recent turns are strictly preserved.
+  - **Structured State Snapshot**: compresses middle turns into a rigorous structured block (`Modified Files`, `Build Status`, `Exact Next Step`, `Active Verdict`) rather than vague conversational prose.
+  - **UI Context Gauge & Trigger**: visual token progress bar in the Agent Drawer with a one-click manual `⚡ Compact Context` button.
+  - *Lead Role:* `tauri-rust-engineer` (Level 1)
+
 - **Task CVH-007B**: Industrial Tool Suite & Tool Policy Matrix (`tools/`)
   - Industry-standard SWE-bench / Claude Code signatures:
     - `execute_command` (with `bash` alias)
