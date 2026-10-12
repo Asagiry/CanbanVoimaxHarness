@@ -1,6 +1,5 @@
 pub mod agent;
 pub mod commands;
-pub mod compactor;
 pub mod config;
 pub mod git;
 pub mod hooks;

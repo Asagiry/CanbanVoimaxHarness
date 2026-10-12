@@ -22,3 +22,5 @@ description: Specialized Tauri v2 and Rust systems engineering skill for CanbanV
    - When building on Windows, ensure the active toolchain (`x86_64-pc-windows-gnu` with LLVM-MinGW or `x86_64-pc-windows-msvc`) is configured with matching linkers. Ensure Cargo and toolchain bin directories are reachable in subshells.
 6. **Reqwest Header Name Type Invariant**:
    - In `reqwest::header::HeaderMap::insert(K, V)`, the key `K` MUST implement `IntoHeaderName`. Use `HeaderName::from_static(...)` or `&'static str` literals. Never pass `HeaderValue` as the key.
+7. **Closure Borrow & Move Invariant**:
+   - When passing data collections (such as `HashSet` or `Vec`) to fallback closures (`unwrap_or_else`), avoid moving the binding if it is queried or reused in downstream logic. Explicitly clone (`.iter().cloned().collect()` or `.clone()`) to maintain zero-compiler-error hygiene.

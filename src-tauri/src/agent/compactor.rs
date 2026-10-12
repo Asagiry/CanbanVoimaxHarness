@@ -120,7 +120,7 @@ pub fn compact_conversation(
 
     // Build state snapshot
     let mut snapshot = current_snapshot.unwrap_or_else(|| ExecutionStateSnapshot {
-        modified_files: modified_files.into_iter().collect(),
+        modified_files: modified_files.iter().cloned().collect(),
         sensor_status: "Verified (cargo check & npm run build)".to_string(),
         next_step: "Continuing autonomous implementation loop".to_string(),
         verdict: "IN_PROGRESS".to_string(),

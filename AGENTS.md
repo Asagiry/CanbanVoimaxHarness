@@ -85,7 +85,10 @@
 ### 2.2 Ponytail Minimalism & Anti-Slop Code Standards
 - **Zero-Dead-Code Invariant**: No placeholder functions, no unused imports, no unreachable branches.
 - **Strict Error Handling in Rust**: Zero naked `.unwrap()` calls in production paths; use `Result<T, AppError>`, `anyhow`, or `thiserror`.
+- **Rust HTTP Header Typing**: When constructing `HeaderMap`, header keys MUST implement `IntoHeaderName`. Use `HeaderName::from_static(...)` or `&'static str` literals; never pass `HeaderValue` as a key.
+- **Rust Closure Move & Borrow Invariant**: When passing collections (e.g., `modified_files`) to fallback closures like `unwrap_or_else`, clone or borrow to avoid premature move errors (`E0382`) if the collection is queried later in the same scope.
 - **Zero-GC / Re-Render Loop Guard**: In React, no object allocations inside animation loops or unmemoized DND callbacks.
+- **JSX Tag Hierarchy Cleanliness**: Strictly verify balanced JSX opening/closing tags and run `npm run build` (`tsc && vite build`) before marking UI tasks complete.
 - **Anti-Slop UI Standard**: Tactile, modern cyber-slate/obsidian dark theme with neon accent indicators, clean monospace numerals for timers, and zero cartoonish bloat.
 
 ### 2.3 Pre-Scaffolded Worktree Invariant (§ 1.6)

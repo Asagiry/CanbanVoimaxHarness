@@ -76,6 +76,46 @@
         "Pre-compiles Turn 0 memory from personas, project rules, and active skills without runtime file-reading overhead.",
         "Emits live telemetry events (agent:token, agent:thought, agent:tool_start, agent:tool_end) to the frontend."
       ]
+    },
+    {
+      "name": "ToolPolicyMatrix",
+      "entityType": "Subsystem",
+      "observations": [
+        "Zero-Trust Iron Barrier enforcing Allow/Ask/Deny policies per pipeline stage.",
+        "Frontend modal configuration persisted in .cvh/pipeline.json and verified at backend tool invocation."
+      ]
+    },
+    {
+      "name": "StatePreservingContextCompactor",
+      "entityType": "Subsystem",
+      "observations": [
+        "Evaporates bulky tool execution stdout/stderr logs while strictly preserving Immutable Anchors.",
+        "Injects dynamic Markdown execution state snapshots detailing modified files and sensor verdicts."
+      ]
+    },
+    {
+      "name": "TactileVisualDiffViewer",
+      "entityType": "Subsystem",
+      "observations": [
+        "Color-coded red/green line-by-line diff inspector in ToolExecutionCard for edit_file and str_replace.",
+        "Features Split and JSON view modes with clean line numbers and zero DOM overflow."
+      ]
+    },
+    {
+      "name": "ToolOutputSpiller",
+      "entityType": "Subsystem",
+      "observations": [
+        "Automatically spills oversized tool outputs (> 12 KB) to .cvh/spill/<timestamp>-<tool>.log.",
+        "Prevents LLM context exhaustion while maintaining full on-disk auditability."
+      ]
+    },
+    {
+      "name": "DeterministicPrefixCaching",
+      "entityType": "Optimization",
+      "observations": [
+        "Alphabetically sorts tools in LLM requests to maximize provider prompt cache hits.",
+        "Annotates static System messages and tools with Anthropic ephemeral cache_control breakpoints."
+      ]
     }
   ],
   "relations": [
@@ -128,6 +168,36 @@
       "from": "ReActAgentLoop",
       "to": "ZeroTurnMemoryPriming",
       "relationType": "consumes"
+    },
+    {
+      "from": "FrontendControlPlane",
+      "to": "ToolPolicyMatrix",
+      "relationType": "configures"
+    },
+    {
+      "from": "ReActAgentLoop",
+      "to": "ToolPolicyMatrix",
+      "relationType": "enforces"
+    },
+    {
+      "from": "ReActAgentLoop",
+      "to": "StatePreservingContextCompactor",
+      "relationType": "triggers"
+    },
+    {
+      "from": "FrontendControlPlane",
+      "to": "TactileVisualDiffViewer",
+      "relationType": "displays"
+    },
+    {
+      "from": "ReActAgentLoop",
+      "to": "ToolOutputSpiller",
+      "relationType": "archives_large_outputs_to"
+    },
+    {
+      "from": "UniversalLlmStreamer",
+      "to": "DeterministicPrefixCaching",
+      "relationType": "applies"
     }
   ]
 }

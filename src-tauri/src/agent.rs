@@ -308,9 +308,9 @@ pub async fn maybe_spill_output(
         tokio::fs::write(&spill_file, &output).await?;
 
         let all_lines: Vec<&str> = output.lines().collect();
-        let head = all_lines.iter().take(20).copied().collect::<Vec<_>>().join("\n");
+        let head = all_lines[..20.min(all_lines.len())].join("\n");
         let tail = if all_lines.len() > 40 {
-            all_lines[all_lines.len() - 20..].iter().copied().collect::<Vec<_>>().join("\n")
+            all_lines[all_lines.len() - 20..].join("\n")
         } else {
             String::new()
         };
