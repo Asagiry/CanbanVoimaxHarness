@@ -30,3 +30,8 @@ Thumbs.db
 *.tmp
 *.log
 .xwin-cache/
+# LLM Settings & Secrets (API Keys)
+.cvh/llm.json
+**/.cvh/llm.json
+llm.json
+*.secret

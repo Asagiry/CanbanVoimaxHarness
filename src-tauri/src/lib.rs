@@ -56,6 +56,11 @@ pub fn run() {
             compact_task_context,
             compact_context,
             steer_agent,
+            get_llm_settings,
+            save_llm_settings,
+            select_project_folder,
+            set_active_project,
+            list_projects,
         ])
         .run(tauri::generate_context!())
         .expect("error while running CanbanVoimaxHarness desktop application");

@@ -380,7 +380,7 @@ pub fn compact_conversation(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::llm::FunctionCall;
+    use crate::llm::{FunctionCall, ToolCall};
 
     #[test]
     fn test_immutable_anchors_and_log_evaporation() {
