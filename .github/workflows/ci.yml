@@ -1,8 +1,6 @@
 name: "CanbanVoimaxHarness CI & Desktop Release"
 
 on:
-  push:
-    branches: ["main"]
   pull_request:
     branches: ["main"]
   workflow_dispatch:
@@ -63,5 +61,4 @@ jobs:
           path: |
             src-tauri/target/release/canban-voimax-harness.exe
             src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/bundle/msi/*.msi
           if-no-files-found: warn
