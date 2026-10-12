@@ -2,18 +2,7 @@ import { Droppable } from '@hello-pangea/dnd';
 import { PipelineColumn, KanbanTask } from '../../types';
 import KanbanCard from '../card/KanbanCard';
 import { useCortexStore } from '../../stores/cortexStore';
-import { formatTokens } from '../../lib/utils';
-import {
-  Inbox,
-  ListTodo,
-  Code2,
-  ShieldCheck,
-  Sparkles,
-  CheckCircle2,
-  Cpu,
-  Layers,
-  Plus,
-} from 'lucide-react';
+import { Plus } from 'lucide-react';
 
 interface KanbanColumnProps {
   column: PipelineColumn;
@@ -24,127 +13,54 @@ interface KanbanColumnProps {
 export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnProps) {
   const { focusStage, focusedStageId } = useCortexStore();
   const isFocused = focusedStageId === column.id;
-  const isAtWipLimit = column.wipLimit ? tasks.length >= column.wipLimit : false;
-
-  const getColumnIcon = (iconName: string, color: string) => {
-    const props = { className: 'h-3.5 w-3.5 shrink-0', style: { color } };
-    switch (iconName) {
-      case 'Inbox':
-        return <Inbox {...props} />;
-      case 'ListTodo':
-        return <ListTodo {...props} />;
-      case 'Code2':
-        return <Code2 {...props} />;
-      case 'ShieldCheck':
-        return <ShieldCheck {...props} />;
-      case 'Sparkles':
-        return <Sparkles {...props} />;
-      case 'CheckCircle2':
-        return <CheckCircle2 {...props} />;
-      default:
-        return <Layers {...props} />;
-    }
-  };
 
   return (
     <div
-      className={`flex flex-col w-76 shrink-0 h-full rounded-lg bg-obsidian-900 border transition-all duration-150 select-none overflow-hidden ${
-        isFocused
-          ? 'border-cyber-cyan shadow-sm shadow-cyan-950/50'
-          : 'border-obsidian-800 hover:border-obsidian-750'
+      className={`flex flex-col w-72 shrink-0 h-full rounded border bg-obsidian-900 transition-colors select-none ${
+        isFocused ? 'border-slate-500' : 'border-obsidian-800'
       }`}
     >
-      {/* Top Hairline Accent Bar */}
-      <div
-        className="h-[2px] w-full shrink-0"
-        style={{ backgroundColor: column.color }}
-      />
-
-      {/* Column Header - Tight Developer Ergonomics */}
+      {/* Column Header */}
       <div
         onClick={() => focusStage(column.id)}
-        className="px-3 py-2 border-b border-obsidian-800 bg-obsidian-850 hover:bg-obsidian-800/70 transition cursor-pointer group"
-        title="Click to inspect Agent Mind in Cortex Explorer"
+        className="px-3 py-2 border-b border-obsidian-800 bg-obsidian-850 flex items-center justify-between cursor-pointer"
+        title="Инструкции роли в проводнике"
       >
-        {/* Title, Icon and WIP Counter */}
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center space-x-2 min-w-0">
-            {getColumnIcon(column.icon, column.color)}
-            <h3 className="text-xs font-semibold text-slate-100 group-hover:text-white truncate">
-              {column.title}
-            </h3>
-          </div>
-
-          <div className="flex items-center space-x-1">
-            {/* WIP Counter Pill */}
-            <span
-              className={`px-1.5 py-0.2 rounded font-mono text-[10px] font-bold tabular-nums border ${
-                isAtWipLimit
-                  ? 'bg-rose-950/40 text-rose-300 border-rose-500/50 animate-pulse'
-                  : 'bg-obsidian-950 text-slate-400 border-obsidian-750'
-              }`}
-              title={column.wipLimit ? `WIP Limit: ${tasks.length} / ${column.wipLimit}` : `${tasks.length} tasks`}
-            >
-              {tasks.length}
-              {column.wipLimit ? ` / ${column.wipLimit}` : ''}
-            </span>
-
-            {/* Quick Add Card */}
-            {onAddTask && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAddTask(column.id);
-                }}
-                className="p-1 rounded text-slate-400 hover:text-white hover:bg-obsidian-750 transition cursor-pointer"
-                title="Add Task to this stage"
-              >
-                <Plus className="h-3 w-3" />
-              </button>
-            )}
-          </div>
+        <div className="flex items-center space-x-2 min-w-0">
+          <span
+            className="w-2 h-2 rounded-full shrink-0"
+            style={{ backgroundColor: column.color }}
+          />
+          <h3 className="text-xs font-semibold text-slate-200 truncate">
+            {column.title}
+          </h3>
+          <span className="text-[11px] font-mono text-slate-500 tabular-nums">
+            {tasks.length}
+          </span>
         </div>
 
-        {/* Sub-Header: Gatekeeper Sensor & Context Limit Pill */}
-        <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
-          {/* Gatekeeper Sensor Indicator */}
-          <div className="flex items-center space-x-1 min-w-0 truncate">
-            {column.gatekeeperSensor ? (
-              <span
-                className="flex items-center space-x-1 px-1.5 py-0.2 rounded bg-obsidian-950 border border-obsidian-800 text-slate-300 truncate"
-                title={`Sensor Gatekeeper: ${column.gatekeeperSensor}`}
-              >
-                <ShieldCheck className="h-2.5 w-2.5 text-cyber-emerald shrink-0" />
-                <span className="truncate">{column.gatekeeperSensor}</span>
-              </span>
-            ) : (
-              <span className="text-slate-600">Unrestricted</span>
-            )}
-          </div>
-
-          {/* Context Limit Pill */}
-          <div
-            className="flex items-center space-x-1 px-1.5 py-0.2 rounded bg-obsidian-950 border border-obsidian-800 text-slate-400 shrink-0"
-            title={`Context Window: ${column.contextWindow.toLocaleString()} tokens`}
+        {onAddTask && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onAddTask(column.id);
+            }}
+            className="p-1 rounded text-slate-500 hover:text-slate-200 hover:bg-obsidian-800 transition cursor-pointer"
+            title="Создать задачу"
           >
-            <Cpu className="h-2.5 w-2.5 text-cyber-cyan" />
-            <span className="tabular-nums font-medium text-slate-300">
-              {formatTokens(column.contextWindow)}
-            </span>
-          </div>
-        </div>
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
-      {/* Cards Drop Area (Droppable) */}
+      {/* Cards Area */}
       <Droppable droppableId={column.id}>
         {(provided, snapshot) => (
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
             className={`flex-1 p-2 overflow-y-auto min-h-[140px] transition-colors ${
-              snapshot.isDraggingOver
-                ? 'bg-obsidian-850/80 border-2 border-dashed border-cyan-500/40 rounded-b-lg'
-                : 'bg-obsidian-950/30'
+              snapshot.isDraggingOver ? 'bg-obsidian-850/60' : 'bg-transparent'
             }`}
           >
             {tasks.map((task, index) => (
@@ -153,9 +69,8 @@ export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnP
             {provided.placeholder}
 
             {tasks.length === 0 && !snapshot.isDraggingOver && (
-              <div className="h-24 flex flex-col items-center justify-center border border-dashed border-obsidian-800 rounded-md text-slate-600 text-[11px] font-mono p-3 text-center">
-                <span>No active agents</span>
-                <span className="text-[10px] text-slate-600 mt-0.5">Drop task to dispatch</span>
+              <div className="h-20 flex items-center justify-center border border-dashed border-obsidian-800/80 rounded text-slate-600 text-[11px] font-mono">
+                Нет задач
               </div>
             )}
           </div>

@@ -172,7 +172,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       setTimeout(() => {
         get().appendThought(
           taskId,
-          `Received steering instruction: "${message}". Re-planning execution path.`
+          `Получена команда: "${message}". Корректировка плана.`
         );
       }, 500);
     }
@@ -227,7 +227,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
 
     get().appendOutput(
       taskId,
-      `[COMPACTOR] State-preserving compaction completed. Evaporated prior tool outputs, saved ~${savedTokens} tokens.`,
+      `[СЖАТИЕ] Оптимизация контекста завершена. Сэкономлено ~${savedTokens} токенов.`,
       'system'
     );
 

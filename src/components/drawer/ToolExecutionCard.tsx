@@ -4,8 +4,6 @@ import {
   ChevronDown,
   ChevronRight,
   Terminal,
-  CheckCircle2,
-  XCircle,
   Clock,
   Code2,
   Copy,
@@ -13,8 +11,6 @@ import {
   FileEdit,
   Globe,
   FileText,
-  FileCode,
-  GitCompare,
 } from 'lucide-react';
 
 interface ToolExecutionCardProps {
@@ -28,19 +24,19 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   const getToolIcon = (name: string) => {
     switch (name) {
       case 'execute_command':
-        return <Terminal className="h-3.5 w-3.5 text-cyber-cyan" />;
+        return <Terminal className="h-3 w-3 text-slate-400" />;
       case 'edit_file':
       case 'str_replace':
       case 'write':
       case 'write_file':
-        return <FileEdit className="h-3.5 w-3.5 text-cyber-amber" />;
+        return <FileEdit className="h-3 w-3 text-slate-400" />;
       case 'read':
       case 'read_file':
-        return <FileText className="h-3.5 w-3.5 text-slate-300" />;
+        return <FileText className="h-3 w-3 text-slate-400" />;
       case 'web_search':
-        return <Globe className="h-3.5 w-3.5 text-cyber-purple" />;
+        return <Globe className="h-3 w-3 text-slate-400" />;
       default:
-        return <Code2 className="h-3.5 w-3.5 text-slate-400" />;
+        return <Code2 className="h-3 w-3 text-slate-400" />;
     }
   };
 
@@ -52,8 +48,8 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   const handleCopyLogs = (e: React.MouseEvent) => {
     e.stopPropagation();
     const content = [
-      `Tool: ${tool.toolName}`,
-      `Status: ${tool.status} (exit ${tool.exitCode ?? 0})`,
+      `Инструмент: ${tool.toolName}`,
+      `Статус: ${tool.status} (код ${tool.exitCode ?? 0})`,
       tool.stdout ? `STDOUT:\n${tool.stdout}` : '',
       tool.stderr ? `STDERR:\n${tool.stderr}` : '',
     ]
@@ -67,9 +63,9 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
   const formatDurationMs = (ms: number) => {
     if (ms >= 1000) {
-      return `${(ms / 1000).toFixed(2)}s`;
+      return `${(ms / 1000).toFixed(2)}с`;
     }
-    return `${ms}ms`;
+    return `${ms}мс`;
   };
 
   const renderUnifiedDiff = () => {
@@ -78,30 +74,23 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       const newLines = newString ? newString.split('\n') : [];
 
       return (
-        <div className="rounded-md border border-obsidian-800 bg-obsidian-950 overflow-hidden font-mono text-[11px]">
+        <div className="rounded border border-obsidian-800 bg-obsidian-950 overflow-hidden font-mono text-[11px]">
           {filePath && (
             <div className="flex items-center justify-between px-2.5 py-1 bg-obsidian-900 border-b border-obsidian-800 text-slate-400 text-[10px]">
-              <span className="flex items-center space-x-1.5 text-cyber-cyan font-semibold truncate max-w-[320px]">
-                <FileCode className="h-3 w-3 shrink-0" />
-                <span className="truncate">{filePath}</span>
+              <span className="truncate max-w-[340px] text-slate-300">
+                {filePath}
               </span>
-              <span className="flex items-center space-x-1 text-slate-500 shrink-0">
-                <GitCompare className="h-3 w-3 text-cyber-amber shrink-0" />
-                <span>Unified Diff</span>
-              </span>
+              <span className="text-slate-500">Различия</span>
             </div>
           )}
 
           <div className="divide-y divide-obsidian-850 select-text overflow-x-auto max-h-64 font-mono">
-            {/* Removed lines (-) with gutter */}
             {oldLines.map((line, idx) => (
               <div
                 key={`old-${idx}`}
-                className="flex items-start bg-rose-950/25 hover:bg-rose-950/40 text-rose-300 border-l-2 border-rose-500/80 px-2 py-0.5 leading-relaxed"
+                className="flex items-start bg-rose-950/20 text-rose-300 px-2 py-0.5 leading-relaxed"
               >
-                <span className="w-4 shrink-0 text-rose-500/80 select-none text-center font-bold">
-                  -
-                </span>
+                <span className="w-4 shrink-0 text-rose-500 select-none text-center">-</span>
                 <span className="w-8 shrink-0 text-slate-600 select-none text-right pr-2 tabular-nums">
                   {idx + 1}
                 </span>
@@ -109,15 +98,12 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
               </div>
             ))}
 
-            {/* Added lines (+) with gutter */}
             {newLines.map((line, idx) => (
               <div
                 key={`new-${idx}`}
-                className="flex items-start bg-emerald-950/25 hover:bg-emerald-950/40 text-emerald-300 border-l-2 border-emerald-500/80 px-2 py-0.5 leading-relaxed"
+                className="flex items-start bg-emerald-950/20 text-emerald-300 px-2 py-0.5 leading-relaxed"
               >
-                <span className="w-4 shrink-0 text-emerald-500/80 select-none text-center font-bold">
-                  +
-                </span>
+                <span className="w-4 shrink-0 text-emerald-500 select-none text-center">+</span>
                 <span className="w-8 shrink-0 text-slate-600 select-none text-right pr-2 tabular-nums">
                   {idx + 1}
                 </span>
@@ -133,11 +119,11 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   };
 
   return (
-    <div className="rounded-md border border-obsidian-800 bg-obsidian-900/95 overflow-hidden shadow-xs">
+    <div className="rounded border border-obsidian-800 bg-obsidian-900 overflow-hidden text-xs">
       {/* Tool Header */}
       <div
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center justify-between px-3 py-1.5 bg-obsidian-850 hover:bg-obsidian-800 cursor-pointer transition select-none text-xs"
+        className="flex items-center justify-between px-3 py-1.5 bg-obsidian-850 hover:bg-obsidian-800 cursor-pointer transition select-none"
       >
         <div className="flex items-center space-x-2 min-w-0">
           {isExpanded ? (
@@ -146,99 +132,90 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             <ChevronRight className="h-3 w-3 text-slate-400 shrink-0" />
           )}
 
-          <div className="p-1 rounded-sm bg-obsidian-800 border border-obsidian-750 shrink-0">
+          <div className="p-0.5 shrink-0">
             {getToolIcon(tool.toolName)}
           </div>
 
-          <span className="font-mono font-semibold text-slate-200 truncate">
+          <span className="font-mono font-medium text-slate-300 truncate">
             {tool.toolName}
           </span>
         </div>
 
-        <div className="flex items-center space-x-2 shrink-0">
-          {/* Duration */}
-          <span className="flex items-center space-x-1 font-mono text-[10px] tabular-nums text-slate-400">
-            <Clock className="h-2.5 w-2.5 text-slate-500" />
+        <div className="flex items-center space-x-2 shrink-0 text-[10px] font-mono">
+          <span className="flex items-center space-x-1 text-slate-500 tabular-nums">
+            <Clock className="h-2.5 w-2.5" />
             <span>{formatDurationMs(tool.durationMs)}</span>
           </span>
 
-          {/* Exit code / status badge */}
           {tool.status === 'success' && (
-            <span className="flex items-center space-x-1 px-1.5 py-0.2 rounded font-mono text-[10px] font-bold bg-emerald-950/30 border border-emerald-500/40 text-cyber-emerald tabular-nums">
-              <CheckCircle2 className="h-2.5 w-2.5" />
-              <span>exit: {tool.exitCode ?? 0}</span>
+            <span className="text-emerald-400 tabular-nums">
+              код: {tool.exitCode ?? 0}
             </span>
           )}
 
           {tool.status === 'failed' && (
-            <span className="flex items-center space-x-1 px-1.5 py-0.2 rounded font-mono text-[10px] font-bold bg-rose-950/30 border border-rose-500/40 text-cyber-crimson tabular-nums">
-              <XCircle className="h-2.5 w-2.5" />
-              <span>exit: {tool.exitCode ?? 1}</span>
+            <span className="text-rose-400 tabular-nums">
+              код: {tool.exitCode ?? 1}
             </span>
           )}
 
           {tool.status === 'running' && (
-            <span className="flex items-center space-x-1 px-1.5 py-0.2 rounded font-mono text-[10px] font-bold bg-amber-950/30 border border-amber-500/40 text-cyber-amber animate-pulse">
-              <span>executing...</span>
+            <span className="text-amber-400">
+              выполняется...
             </span>
           )}
 
-          {/* Copy Button */}
           <button
             onClick={handleCopyLogs}
-            className="p-1 rounded-sm text-slate-400 hover:text-white hover:bg-obsidian-750 transition cursor-pointer"
-            title="Copy logs"
+            className="p-1 rounded text-slate-500 hover:text-white transition cursor-pointer"
+            title="Скопировать вывод"
           >
-            {copied ? <Check className="h-3 w-3 text-cyber-emerald" /> : <Copy className="h-3 w-3" />}
+            {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
           </button>
         </div>
       </div>
 
       {/* Expanded Body */}
       {isExpanded && (
-        <div className="p-2.5 border-t border-obsidian-800 space-y-2 font-mono text-xs">
-          {/* Visual Diff Viewer for edit_file / str_replace */}
+        <div className="p-2.5 border-t border-obsidian-800 space-y-2 font-mono text-xs bg-obsidian-950">
           {isDiffTool && (oldString !== undefined || newString !== undefined) ? (
             <div>
-              <span className="text-[10px] font-mono font-bold text-cyber-cyan block mb-1">
-                Visual Diff Inspector
+              <span className="text-[10px] text-slate-500 block mb-1">
+                Изменения файлов (Diff)
               </span>
               {renderUnifiedDiff()}
             </div>
           ) : (
-            /* Standard Tool Parameters */
             tool.params &&
             Object.keys(tool.params).length > 0 && (
               <div>
-                <span className="text-[10px] font-mono font-bold text-slate-500 block mb-1">
-                  Input Parameters
+                <span className="text-[10px] text-slate-500 block mb-1">
+                  Параметры вызова
                 </span>
-                <pre className="p-2 rounded bg-obsidian-950 border border-obsidian-800 text-[11px] text-slate-300 overflow-x-auto leading-relaxed">
+                <pre className="p-2 rounded bg-obsidian-900 border border-obsidian-800 text-[11px] text-slate-300 overflow-x-auto leading-relaxed">
                   {JSON.stringify(tool.params, null, 2)}
                 </pre>
               </div>
             )
           )}
 
-          {/* Terminal STDOUT */}
           {tool.stdout && (
             <div>
-              <span className="text-[10px] font-mono font-bold text-slate-500 block mb-1">
-                Stdout
+              <span className="text-[10px] text-slate-500 block mb-1">
+                Стандартный вывод (stdout)
               </span>
-              <pre className="p-2 rounded bg-obsidian-950 border border-obsidian-800 text-[11px] text-slate-200 overflow-x-auto leading-relaxed max-h-40 whitespace-pre-wrap select-text">
+              <pre className="p-2 rounded bg-obsidian-900 border border-obsidian-800 text-[11px] text-slate-300 overflow-x-auto leading-relaxed max-h-40 whitespace-pre-wrap select-text">
                 {tool.stdout}
               </pre>
             </div>
           )}
 
-          {/* Terminal STDERR */}
           {tool.stderr && (
             <div>
-              <span className="text-[10px] font-mono font-bold text-rose-400 block mb-1">
-                Stderr Trace
+              <span className="text-[10px] text-rose-400 block mb-1">
+                Трассировка ошибок (stderr)
               </span>
-              <pre className="p-2 rounded bg-rose-950/20 border border-rose-900/50 text-[11px] text-rose-300 overflow-x-auto leading-relaxed max-h-40 whitespace-pre-wrap select-text">
+              <pre className="p-2 rounded bg-rose-950/20 border border-rose-900/40 text-[11px] text-rose-300 overflow-x-auto leading-relaxed max-h-40 whitespace-pre-wrap select-text">
                 {tool.stderr}
               </pre>
             </div>

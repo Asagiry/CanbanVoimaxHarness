@@ -1,10 +1,10 @@
 {
   "id": "default-engineering",
-  "title": "3-Tier Engineering & Architecture Pipeline",
+  "title": "Инженерный пайплайн разработки",
   "columns": [
     {
       "id": "backlog",
-      "title": "Backlog",
+      "title": "Бэклог",
       "color": "#64748b",
       "icon": "Inbox",
       "persona": null,
@@ -21,7 +21,7 @@
     },
     {
       "id": "todo",
-      "title": "Todo Queue",
+      "title": "Очередь",
       "color": "#3b82f6",
       "icon": "ListTodo",
       "persona": null,
@@ -36,7 +36,7 @@
     },
     {
       "id": "dev",
-      "title": "In Development",
+      "title": "В разработке",
       "color": "#f59e0b",
       "icon": "Code2",
       "persona": "developer",
@@ -59,7 +59,7 @@
     },
     {
       "id": "review",
-      "title": "Review Gate",
+      "title": "Ревью / Контроль",
       "color": "#a855f7",
       "icon": "ShieldCheck",
       "persona": "reviewer",
@@ -83,7 +83,7 @@
     },
     {
       "id": "retro",
-      "title": "Retrospective",
+      "title": "Ретроспектива",
       "color": "#06b6d4",
       "icon": "Sparkles",
       "persona": "retro",
@@ -103,7 +103,7 @@
     },
     {
       "id": "ready",
-      "title": "Done / Production",
+      "title": "Готово",
       "color": "#10b981",
       "icon": "CheckCircle2",
       "persona": null,

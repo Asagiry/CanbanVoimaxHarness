@@ -6,79 +6,79 @@ export interface ToolMeta {
   label: string;
   description: string;
   category: 'system' | 'fs' | 'web' | 'agent';
-  tokenWeight: number; // Tokens saved when excluded from LLM request schema
+  tokenWeight: number;
 }
 
 export const AVAILABLE_TOOLS: ToolMeta[] = [
   {
     id: 'execute_command',
-    name: 'execute_command (bash)',
-    label: 'Terminal Commands (Bash)',
-    description: 'Execute shell commands inside isolated worktree with piped stdout/stderr.',
+    name: 'execute_command',
+    label: 'Команды терминала',
+    description: 'Выполнение команд в изолированном каталоге worktree.',
     category: 'system',
     tokenWeight: 320,
   },
   {
     id: 'read_file',
     name: 'read_file',
-    label: 'Read File',
-    description: 'Inspect UTF-8 file contents with line offsets and window limits.',
+    label: 'Чтение файла',
+    description: 'Просмотр содержимого файлов UTF-8 со смещением строк.',
     category: 'fs',
     tokenWeight: 260,
   },
   {
     id: 'edit_file',
-    name: 'edit_file (str_replace)',
-    label: 'Targeted Edit (Diff)',
-    description: 'Perform targeted string replacement with diff preview in isolated worktree.',
+    name: 'edit_file',
+    label: 'Целевое редактирование',
+    description: 'Точечная замена строк в файлах с фиксацией различий.',
     category: 'fs',
     tokenWeight: 310,
   },
   {
     id: 'write_file',
     name: 'write_file',
-    label: 'Write File',
-    description: 'Write complete atomic file contents into worktree.',
+    label: 'Запись файла',
+    description: 'Атомарная запись полного содержимого файла в worktree.',
     category: 'fs',
     tokenWeight: 260,
   },
   {
     id: 'glob',
     name: 'glob',
-    label: 'Glob Pattern Search',
-    description: 'Discover files matching wildcard patterns within worktree.',
+    label: 'Поиск файлов (Glob)',
+    description: 'Поиск файлов по маске внутри каталога проекта.',
     category: 'fs',
     tokenWeight: 240,
   },
   {
     id: 'grep',
     name: 'grep',
-    label: 'Regular Expression Grep',
-    description: 'Search text and code patterns with line number references.',
+    label: 'Поиск по тексту (Grep)',
+    description: 'Поиск регулярных выражений с номерами строк.',
     category: 'fs',
     tokenWeight: 250,
   },
   {
     id: 'web_search',
     name: 'web_search',
-    label: 'DuckDuckGo Web Search',
-    description: 'Live internet search for external documentation and solutions.',
+    label: 'Поиск в сети',
+    description: 'Поиск документации и внешних решений в интернете.',
     category: 'web',
     tokenWeight: 290,
   },
   {
     id: 'web_fetch',
     name: 'web_fetch',
-    label: 'Web Page Markdown Fetch',
-    description: 'Fetch external documentation URLs and convert HTML to clean Markdown.',
+    label: 'Загрузка веб-страниц',
+    description: 'Загрузка внешних веб-страниц с преобразованием в Markdown.',
     category: 'web',
     tokenWeight: 280,
   },
   {
     id: 'subagent',
     name: 'subagent',
-    label: 'Subagent Delegation',
-    description: 'Spawn scoped specialized subagents (Reviewer, Retro, Developer).',
+    label: 'Делегирование подагентам',
+    description: 'Запуск специализированных изолированных подагентов.',
     category: 'agent',
     tokenWeight: 310,
   },
@@ -195,7 +195,6 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
         saved += tool.tokenWeight;
       }
     }
-    // Baseline bonus if multiple stages disable write tools
     return saved > 0 ? saved : 2400;
   },
 
