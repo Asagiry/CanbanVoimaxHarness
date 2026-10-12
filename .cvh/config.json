@@ -1,0 +1,25 @@
+{
+  "name": "CanbanVoimaxHarness",
+  "version": "0.1.0",
+  "description": "Desktop Agentic IDE and Orchestrator built on Rust, Tauri v2, and React",
+  "activePipeline": "default-engineering",
+  "defaultModel": "gemini-3.8-flash-high",
+  "apiBaseUrl": "http://127.0.0.1:19387/api/ai",
+  "providers": {
+    "antigravity": {
+      "type": "openai-compatible",
+      "baseUrl": "http://127.0.0.1:19387/api/ai",
+      "defaultModel": "gemini-3.8-flash-high"
+    },
+    "deepseek": {
+      "type": "openai-compatible",
+      "baseUrl": "https://api.deepseek.com/v1",
+      "defaultModel": "deepseek-chat"
+    },
+    "anthropic": {
+      "type": "anthropic-native",
+      "baseUrl": "https://api.anthropic.com/v1",
+      "defaultModel": "claude-3-7-sonnet"
+    }
+  }
+}

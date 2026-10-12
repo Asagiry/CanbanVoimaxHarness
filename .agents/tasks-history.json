@@ -1,0 +1,33 @@
+{
+  "CVH-INIT": {
+    "taskId": "CVH-INIT",
+    "title": "Initialize CanbanVoimaxHarness architecture, AGENTS.md, .cvh/ pipeline, and skills",
+    "author": "Root Orchestrator",
+    "verdict": "APPROVED",
+    "commitHash": "INIT",
+    "commitMessage": "chore(init): initialize CanbanVoimaxHarness repository, architecture, and core skills",
+    "summary": "Scaffolded initial repository structure, AGENTS.md governance, .cvh/ configuration, dogfooding pipeline, transition hooks, and 7 core development skills.",
+    "files": [
+      ".gitignore",
+      "README.md",
+      "AGENTS.md",
+      ".cvh/config.json",
+      ".cvh/pipeline.json",
+      ".cvh/agents/developer.md",
+      ".cvh/agents/reviewer.md",
+      ".cvh/agents/retro.md",
+      ".cvh/hooks/on_enter_dev.bat",
+      ".cvh/hooks/on_finish_done.bat",
+      ".agents/skills/development/SKILL.md",
+      ".agents/skills/agent-developer/SKILL.md",
+      ".agents/skills/agent-developer-reviewer/SKILL.md",
+      ".agents/skills/agent-retro-verifier/SKILL.md",
+      ".agents/skills/tauri-rust-engineer/SKILL.md",
+      ".agents/skills/react-tailwind-artisan/SKILL.md",
+      ".agents/skills/llm-streaming-expert/SKILL.md",
+      ".agents/tasks-history.json",
+      ".agents/knowledge-graph.json"
+    ],
+    "timestamp": 1740000000000
+  }
+}

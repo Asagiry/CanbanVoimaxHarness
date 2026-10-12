@@ -1,0 +1,54 @@
+{
+  "entities": [
+    {
+      "name": "CanbanVoimaxHarness",
+      "entityType": "Architecture",
+      "observations": [
+        "Lightweight (~40MB RAM) desktop agentic IDE and orchestrator built with Rust, Tauri v2, and React 19.",
+        "Kanban board is the first-class application control plane.",
+        "Zero-turn in-memory persona priming eliminates token waste on reading rule files."
+      ]
+    },
+    {
+      "name": "ZeroTurnMemoryPriming",
+      "entityType": "Invariant",
+      "observations": [
+        "Constructs SystemMessage at turn 0 from persona + project rules + active skills + card prompt.",
+        "Agents start Turn 1 with 100% context in memory."
+      ]
+    },
+    {
+      "name": "DynamicPipelineEngine",
+      "entityType": "Subsystem",
+      "observations": [
+        "Permits arbitrary graph pipelines (A -> B -> C -> D -> E) configured in .cvh/pipeline.json.",
+        "Custom lifecycle transition hooks (.bat/.ps1) run on enter/leave/finish."
+      ]
+    },
+    {
+      "name": "GitWorktreeIsolationManager",
+      "entityType": "Subsystem",
+      "observations": [
+        "Native Rust process execution manages worktrees/ directories per task.",
+        "Guarantees clean branch isolation and automated merges upon APPROVED."
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "from": "CanbanVoimaxHarness",
+      "to": "ZeroTurnMemoryPriming",
+      "relationType": "enforces"
+    },
+    {
+      "from": "CanbanVoimaxHarness",
+      "to": "DynamicPipelineEngine",
+      "relationType": "contains"
+    },
+    {
+      "from": "CanbanVoimaxHarness",
+      "to": "GitWorktreeIsolationManager",
+      "relationType": "orchestrates"
+    }
+  ]
+}
