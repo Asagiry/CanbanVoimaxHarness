@@ -125,6 +125,15 @@
         "Allows human operators to dynamically steer running agents via Tauri IPC 'steer_agent' command without breaking worktree context.",
         "Renders real-time thinking/output streams, tactile tool execution cards, visual diffs, and live context token gauges."
       ]
+    },
+    {
+      "name": "ContextGauge",
+      "entityType": "Subsystem",
+      "observations": [
+        "Interactive UI token gauge in AgentConsoleDrawer tracking active context consumption against window limits.",
+        "Features tri-color thresholds (Emerald <50%, Amber 50-75%, Crimson >75% with pulse), tactile Web Audio mechanical click, and flame toast feedback.",
+        "Triggers Zero-Cost Log Evaporation via compact_context IPC command and listens to agent:compacted events."
+      ]
     }
   ],
   "relations": [
@@ -227,6 +236,16 @@
       "from": "CardAsAChat",
       "to": "StatePreservingContextCompactor",
       "relationType": "monitors"
+    },
+    {
+      "from": "FrontendControlPlane",
+      "to": "ContextGauge",
+      "relationType": "renders"
+    },
+    {
+      "from": "ContextGauge",
+      "to": "StatePreservingContextCompactor",
+      "relationType": "triggers"
     }
   ]
 }
