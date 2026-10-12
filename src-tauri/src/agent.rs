@@ -52,15 +52,12 @@ pub enum AgentEvent {
     Error(String),
 }
 
-/// Zero-Turn Memory Priming: compiles strictly static SystemMessage from Persona, AGENTS.md, Skills, and Task prompt.
-/// Note: No dynamic timestamps or random IDs are injected to maximize deterministic prefix caching hit rate.
+/// Zero-Turn Memory Priming: compiles strictly static SystemMessage from Persona, AGENTS.md, Skills, and Tool Instructions.
+/// Strictly static System Prompt: Zero dynamic timestamps, zero random UUIDs in the System prompt to prevent cache invalidation.
+/// Dynamic context (task ID, title, description, worktree path) belongs exclusively in the user message.
 pub async fn compile_primed_system_prompt(
     repo_root: &Path,
-    worktree_path: &Path,
     role: &str,
-    task_id: &str,
-    task_title: &str,
-    task_description: &str,
 ) -> Result<String> {
     let mut sections = Vec::new();
 
@@ -111,14 +108,7 @@ pub async fn compile_primed_system_prompt(
         }
     }
 
-    // 4. Task Context & Primed Memory
-    let task_context = format!(
-        "# Assigned Task Ground Truth\n- Task ID: {}\n- Title: {}\n- Working Directory: {:?}\n\n## Objective & Description\n{}",
-        task_id, task_title, worktree_path, task_description.trim()
-    );
-    sections.push(task_context);
-
-    // 5. Tool Instructions
+    // 4. Tool Instructions (SWE-bench Industrial Suite)
     sections.push(
         "# Scoped Tool Execution Mandate\n\
         You have direct tool access scoped to your isolated worktree. \
@@ -326,6 +316,81 @@ pub async fn maybe_spill_output(
     }
 }
 
+/// Calculates informative error message when `old_string` is not found in file content.
+pub fn build_edit_mismatch_error(content: &str, file_path: &str, old_string: &str) -> String {
+    let lines: Vec<&str> = content.lines().collect();
+    let total_lines = lines.len();
+
+    if lines.is_empty() {
+        return format!("Edit failed: File '{}' is empty (0 lines). Cannot locate 'old_string'.", file_path);
+    }
+
+    let search_trimmed = old_string.trim();
+    let search_first_line = search_trimmed.lines().next().unwrap_or("").trim();
+
+    let mut best_score = 0.0f32;
+    let mut best_idx = 0;
+
+    for (idx, line) in lines.iter().enumerate() {
+        let line_trimmed = line.trim();
+        if line_trimmed.is_empty() {
+            continue;
+        }
+        let score = string_similarity(line_trimmed, search_first_line);
+        if score > best_score {
+            best_score = score;
+            best_idx = idx;
+        }
+    }
+
+    let mut msg = format!(
+        "Target 'old_string' not found in '{}' (total {} lines).\n",
+        file_path, total_lines
+    );
+
+    if best_score >= 0.25 {
+        let start = best_idx.saturating_sub(4);
+        let end = (best_idx + 5).min(total_lines);
+        msg.push_str(&format!(
+            "Closest matching candidate line identified at line {} (similarity: {:.0}%):\n",
+            best_idx + 1,
+            best_score * 100.0
+        ));
+        msg.push_str("--- Surrounding Context (use exact line content) ---\n");
+        for (i, line) in lines[start..end].iter().enumerate() {
+            let line_no = start + i + 1;
+            let marker = if line_no == best_idx + 1 { ">>" } else { "  " };
+            msg.push_str(&format!("{} {:4} | {}\n", marker, line_no, line));
+        }
+    } else {
+        msg.push_str("No close match found. First 10 lines of file for context:\n");
+        let end = 10.min(total_lines);
+        for (i, line) in lines[..end].iter().enumerate() {
+            msg.push_str(&format!("   {:4} | {}\n", i + 1, line));
+        }
+    }
+
+    msg.push_str("Recommendation: Use read_file to inspect exact lines and retry edit_file with precise context.");
+    msg
+}
+
+fn string_similarity(a: &str, b: &str) -> f32 {
+    if a == b {
+        return 1.0;
+    }
+    if a.contains(b) || b.contains(a) {
+        return 0.85;
+    }
+    let a_words: std::collections::HashSet<&str> = a.split_whitespace().collect();
+    let b_words: std::collections::HashSet<&str> = b.split_whitespace().collect();
+    if a_words.is_empty() || b_words.is_empty() {
+        return 0.0;
+    }
+    let inter = a_words.intersection(&b_words).count();
+    let union = a_words.union(&b_words).count();
+    inter as f32 / union as f32
+}
+
 /// Executes a tool within the safe boundary of `worktree_dir` with zero-trust policy checks.
 pub async fn execute_tool(
     repo_root: &Path,
@@ -432,28 +497,8 @@ pub async fn execute_tool(
                 .with_context(|| format!("Failed to read file for edit: {:?}", rel_path))?;
 
             if !current.contains(old_string) {
-                // Detailed error on edit_file mismatch with surrounding lines for instant agent self-correction
-                let old_lines: Vec<&str> = old_string.lines().collect();
-                let first_old_line = old_lines.first().map(|s| s.trim()).unwrap_or("");
-                let mut candidates = Vec::new();
-
-                for (idx, line) in current.lines().enumerate() {
-                    if !first_old_line.is_empty() && line.contains(first_old_line) {
-                        candidates.push(format!("Line {}: {}", idx + 1, line.trim()));
-                    }
-                }
-                if candidates.is_empty() {
-                    for (idx, line) in current.lines().take(6).enumerate() {
-                        candidates.push(format!("Line {}: {}", idx + 1, line.trim()));
-                    }
-                }
-
-                bail!(
-                    "Failed to edit: 'old_string' not found in file {:?}. Candidate near matches in file:\n{}\nTotal lines in file: {}. Please verify line numbers and supply exact matching context.",
-                    rel_path,
-                    candidates.join("\n"),
-                    current.lines().count()
-                );
+                let informative_err = build_edit_mismatch_error(&current, rel_path, old_string);
+                bail!(informative_err);
             }
 
             let updated = if replace_all {
@@ -1034,22 +1079,16 @@ where
     F: Fn(AgentEvent) + Send + Sync + 'static,
 {
     // Deterministic static system prompt
-    let system_prompt = compile_primed_system_prompt(
-        &config.repo_root,
-        &config.worktree_path,
-        &config.role,
-        &config.task_id,
-        &config.task_title,
-        &config.task_description,
-    )
-    .await?;
+    let system_prompt = compile_primed_system_prompt(&config.repo_root, &config.role).await?;
+
+    let initial_user_prompt = format!(
+        "# Assigned Task Ground Truth\n- Task ID: {}\n- Stage: {}\n- Title: {}\n- Working Directory: {:?}\n\n## Objective & Description\n{}",
+        config.task_id, config.stage_id, config.task_title, config.worktree_path, config.task_description.trim()
+    );
 
     let mut messages = vec![
-        ChatMessage::system(system_prompt),
-        ChatMessage::user(format!(
-            "Execute task {}: {}\nDetails:\n{}",
-            config.task_id, config.task_title, config.task_description
-        )),
+        ChatMessage::system(system_prompt).with_cache_control(crate::llm::CacheControl::ephemeral()),
+        ChatMessage::user(initial_user_prompt).with_cache_control(crate::llm::CacheControl::ephemeral()),
     ];
 
     // Tool Policy Matrix: filter out disabled tools when building schema array (saving tokens!)
@@ -1087,6 +1126,12 @@ where
                     evaporated_count: compaction_res.evaporated_tools_count,
                 });
             }
+        }
+
+        // Anthropic Prompt Caching: Maintain ephemeral cache_control breakpoint on the last stable turn
+        if turn > 1 && messages.len() >= 2 {
+            let last_idx = messages.len() - 1;
+            messages[last_idx].cache_control = Some(crate::llm::CacheControl::ephemeral());
         }
 
         let req = OpenAIChatRequest {

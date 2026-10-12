@@ -16,6 +16,66 @@ pub struct ProviderConfig {
     pub api_key: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct ToolPermissions {
+    #[serde(rename = "globalAllowedTools", default)]
+    pub global_allowed_tools: Vec<String>,
+    #[serde(rename = "stageAllowedTools", default)]
+    pub stage_allowed_tools: HashMap<String, Vec<String>>,
+}
+
+pub fn normalize_tool_name(name: &str) -> &str {
+    match name {
+        "bash" => "execute_command",
+        "str_replace" => "edit_file",
+        other => other,
+    }
+}
+
+impl ToolPermissions {
+    pub fn new(
+        global_allowed_tools: Vec<String>,
+        stage_allowed_tools: HashMap<String, Vec<String>>,
+    ) -> Self {
+        Self {
+            global_allowed_tools,
+            stage_allowed_tools,
+        }
+    }
+
+    /// Check if tool (or its SWE-bench alias) is permitted for the given stage_id.
+    pub fn is_tool_allowed(&self, stage_id: &str, tool_name: &str) -> bool {
+        let canonical = normalize_tool_name(tool_name);
+
+        if let Some(stage_tools) = self.stage_allowed_tools.get(stage_id) {
+            return stage_tools.iter().any(|t| {
+                let ct = normalize_tool_name(t);
+                ct == canonical || t == tool_name
+            });
+        }
+
+        if !self.global_allowed_tools.is_empty() {
+            return self.global_allowed_tools.iter().any(|t| {
+                let ct = normalize_tool_name(t);
+                ct == canonical || t == tool_name
+            });
+        }
+
+        // Default: permitted if no restrictions defined
+        true
+    }
+
+    pub fn get_allowed_tools_for_stage(&self, stage_id: &str) -> Option<Vec<String>> {
+        if let Some(tools) = self.stage_allowed_tools.get(stage_id) {
+            Some(tools.clone())
+        } else if !self.global_allowed_tools.is_empty() {
+            Some(self.global_allowed_tools.clone())
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectConfig {
     pub name: String,
@@ -28,6 +88,8 @@ pub struct ProjectConfig {
     pub default_model: Option<String>,
     #[serde(rename = "apiBaseUrl", default)]
     pub api_base_url: Option<String>,
+    #[serde(rename = "toolPermissions", default)]
+    pub tool_permissions: Option<ToolPermissions>,
     #[serde(default)]
     pub providers: HashMap<String, ProviderConfig>,
 }
@@ -52,6 +114,8 @@ pub struct PipelineColumn {
     pub temperature: Option<f32>,
     #[serde(rename = "gatekeeperSensor", default)]
     pub gatekeeper_sensor: Option<String>,
+    #[serde(rename = "allowedTools", default)]
+    pub allowed_tools: Option<Vec<String>>,
     #[serde(default)]
     pub hooks: HashMap<String, String>,
     #[serde(default)]
@@ -62,7 +126,39 @@ pub struct PipelineColumn {
 pub struct PipelineConfig {
     pub id: String,
     pub title: String,
+    #[serde(rename = "toolPermissions", default)]
+    pub tool_permissions: Option<ToolPermissions>,
     pub columns: Vec<PipelineColumn>,
+}
+
+pub fn resolve_allowed_tools(
+    pipeline: Option<&PipelineConfig>,
+    project: Option<&ProjectConfig>,
+    stage_id: &str,
+) -> Option<Vec<String>> {
+    // 1. Column-specific allowedTools
+    if let Some(pipe) = pipeline {
+        if let Some(col) = pipe.columns.iter().find(|c| c.id == stage_id) {
+            if let Some(ref tools) = col.allowed_tools {
+                return Some(tools.clone());
+            }
+        }
+        // 2. Pipeline-level stageAllowedTools / globalAllowedTools
+        if let Some(ref tp) = pipe.tool_permissions {
+            if let Some(tools) = tp.get_allowed_tools_for_stage(stage_id) {
+                return Some(tools);
+            }
+        }
+    }
+    // 3. Project-level stageAllowedTools / globalAllowedTools
+    if let Some(proj) = project {
+        if let Some(ref tp) = proj.tool_permissions {
+            if let Some(tools) = tp.get_allowed_tools_for_stage(stage_id) {
+                return Some(tools);
+            }
+        }
+    }
+    None
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

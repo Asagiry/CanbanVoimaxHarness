@@ -2,9 +2,12 @@ pub mod agent;
 pub mod commands;
 pub mod compactor;
 pub mod config;
+pub mod error;
 pub mod git;
 pub mod hooks;
 pub mod llm;
+
+pub use error::AppError;
 
 use commands::*;
 use std::path::PathBuf;
