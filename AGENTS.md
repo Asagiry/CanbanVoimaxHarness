@@ -121,3 +121,9 @@
 ### 2.8 Deterministic Prefix Caching Invariant
 - System messages and tool schemas MUST maintain deterministic ordering (tools sorted alphabetically by name) with zero dynamic timestamp or session ID injections.
 - For Anthropic API, apply `cache_control: {"type": "ephemeral"}` to maximize provider prompt cache hit rates (>90%).
+
+### 2.9 Tauri IPC Contract Parity Invariant
+- When introducing or refactoring Tauri IPC commands (e.g., `compact_context`), frontend callers (Zustand stores, React hooks, components) MUST synchronously bind to the new command name and typed return schema (`CompactionReport`).
+- Never leave front-end stores invoking deprecated stub command names (e.g., `compact_task_context`) while the backend exposes a new unified handler.
+- If backward-compatible coexistence is required during migration, wrap the primary invocation in a typed fallback ladder (`try { invoke('new_cmd') } catch { invoke('legacy_cmd') }`).
+
