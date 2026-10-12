@@ -206,12 +206,21 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
 
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const res = await invoke<{ estimated_saved_tokens?: number; evaporated_tools_count?: number }>(
-        'compact_task_context',
-        { taskId }
-      );
-      if (res?.estimated_saved_tokens) savedTokens = res.estimated_saved_tokens;
-      if (res?.evaporated_tools_count) evaporatedCount = Math.max(evaporatedCount, res.evaporated_tools_count);
+      try {
+        const res = await invoke<{ saved_tokens?: number; evaporated_count?: number }>(
+          'compact_context',
+          { taskId }
+        );
+        if (res?.saved_tokens) savedTokens = res.saved_tokens;
+        if (res?.evaporated_count) evaporatedCount = Math.max(evaporatedCount, res.evaporated_count);
+      } catch {
+        const res = await invoke<{ estimated_saved_tokens?: number; evaporated_tools_count?: number }>(
+          'compact_task_context',
+          { taskId }
+        );
+        if (res?.estimated_saved_tokens) savedTokens = res.estimated_saved_tokens;
+        if (res?.evaporated_tools_count) evaporatedCount = Math.max(evaporatedCount, res.evaporated_tools_count);
+      }
     } catch {
       // Keep local values
     }
