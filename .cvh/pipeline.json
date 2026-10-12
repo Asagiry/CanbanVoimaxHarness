@@ -10,6 +10,13 @@
       "persona": null,
       "contextWindow": 128000,
       "modelOverride": null,
+      "toolPermissions": [
+        "read_file",
+        "glob",
+        "grep",
+        "web_search",
+        "web_fetch"
+      ],
       "hooks": {}
     },
     {
@@ -20,6 +27,11 @@
       "persona": null,
       "contextWindow": 128000,
       "modelOverride": null,
+      "toolPermissions": [
+        "read_file",
+        "glob",
+        "grep"
+      ],
       "hooks": {}
     },
     {
@@ -31,6 +43,15 @@
       "contextWindow": 400000,
       "modelOverride": "gemini-3.8-flash-high",
       "temperature": 0.2,
+      "toolPermissions": [
+        "execute_command",
+        "read_file",
+        "edit_file",
+        "write_file",
+        "glob",
+        "grep",
+        "subagent"
+      ],
       "hooks": {
         "on_enter": ".cvh/hooks/on_enter_dev.bat"
       },
@@ -46,6 +67,13 @@
       "modelOverride": "gemini-3.8-flash-high",
       "reasoningEffort": "high",
       "temperature": 0.1,
+      "toolPermissions": [
+        "execute_command",
+        "read_file",
+        "glob",
+        "grep",
+        "subagent"
+      ],
       "routes": {
         "on_approved": "retro",
         "on_approved_with_caveats": "retro",
@@ -62,6 +90,12 @@
       "contextWindow": 150000,
       "modelOverride": "gemini-3.8-flash-high",
       "temperature": 0.2,
+      "toolPermissions": [
+        "read_file",
+        "edit_file",
+        "glob",
+        "grep"
+      ],
       "routes": {
         "on_finished": "ready"
       },
@@ -75,6 +109,11 @@
       "persona": null,
       "contextWindow": 64000,
       "modelOverride": null,
+      "toolPermissions": [
+        "read_file",
+        "glob",
+        "grep"
+      ],
       "hooks": {
         "on_enter": ".cvh/hooks/on_finish_done.bat"
       },
