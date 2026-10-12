@@ -12,13 +12,15 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "CanbanVoimaxHarness",
         "width": 1400,
         "height": 900,
         "minWidth": 1024,
         "minHeight": 700,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "additionalBrowserArgs": "--no-sandbox --disable-gpu"
       }
     ],
     "security": {
