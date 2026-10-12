@@ -76,6 +76,23 @@
         "Pre-compiles Turn 0 memory from personas, project rules, and active skills without runtime file-reading overhead.",
         "Emits live telemetry events (agent:token, agent:thought, agent:tool_start, agent:tool_end) to the frontend."
       ]
+    },
+    {
+      "name": "StatePreservingContextCompactor",
+      "entityType": "Subsystem",
+      "observations": [
+        "Evaporates bulky tool execution stdout/stderr logs while strictly preserving Immutable Anchors.",
+        "Injects dynamic Markdown execution state snapshots detailing modified files and sensor verdicts."
+      ]
+    },
+    {
+      "name": "ContextGauge",
+      "entityType": "Subsystem",
+      "observations": [
+        "Interactive UI token gauge in AgentConsoleDrawer tracking active context consumption against window limits.",
+        "Features tri-color thresholds (Emerald <50%, Amber 50-75%, Crimson >75% with pulse), tactile Web Audio mechanical click, and flame toast feedback.",
+        "Triggers Zero-Cost Log Evaporation via compact_context IPC command and listens to agent:compacted events."
+      ]
     }
   ],
   "relations": [
@@ -128,6 +145,21 @@
       "from": "ReActAgentLoop",
       "to": "ZeroTurnMemoryPriming",
       "relationType": "consumes"
+    },
+    {
+      "from": "ReActAgentLoop",
+      "to": "StatePreservingContextCompactor",
+      "relationType": "triggers"
+    },
+    {
+      "from": "FrontendControlPlane",
+      "to": "ContextGauge",
+      "relationType": "renders"
+    },
+    {
+      "from": "ContextGauge",
+      "to": "StatePreservingContextCompactor",
+      "relationType": "triggers"
     }
   ]
 }

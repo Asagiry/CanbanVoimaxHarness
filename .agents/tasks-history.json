@@ -95,5 +95,27 @@
       "src-tauri/icons/icon.png"
     ],
     "timestamp": 1740007200000
+  },
+  "CVH-003": {
+    "taskId": "CVH-003",
+    "title": "State-Preserving Context Compactor & UI Token Gauge",
+    "author": "agent-developer (tauri-rust-engineer & react-tailwind-artisan)",
+    "verdict": "APPROVED_WITH_CAVEATS",
+    "commitHash": "af2e1ca",
+    "commitMessage": "refactor(drawer): unify IPC callpath to compact_context in drawerStore",
+    "summary": "Implemented State-Preserving Context Compactor and UI Token Gauge for CanbanVoimaxHarness. Rust backend features 4 Immutable Anchors (System prompt, Task prompt, Execution state Markdown snapshot, and last 2 working turns), Zero-Cost Log Evaporation (replacing tool logs >500 chars older than 3 turns with deterministic metadata placeholders without LLM calls), and Structured State Snapshots. Added `compact_context` IPC command returning CompactionReport and emitting `agent:compacted` event. Frontend features tactile ContextGauge with Emerald/Amber/Crimson thresholds, Web Audio API mechanical click synthesis, flame toast notification, ripple animation, and client/backend compaction trigger. Level 2 review caveat regarding IPC callpath desynchronization in drawerStore was fully resolved in af2e1ca with unified primary call to compact_context and backward-compatible fallback. Verified with 0 errors via cargo check and npm run build.",
+    "files": [
+      ".gitignore",
+      "src-tauri/src/agent.rs",
+      "src-tauri/src/agent/compactor.rs",
+      "src-tauri/src/commands.rs",
+      "src-tauri/src/compactor.rs",
+      "src-tauri/src/lib.rs",
+      "src-tauri/src/llm/client.rs",
+      "src/components/drawer/ContextGauge.tsx",
+      "src/stores/drawerStore.ts",
+      "src/types/index.ts"
+    ],
+    "timestamp": 1740009000000
   }
 }
