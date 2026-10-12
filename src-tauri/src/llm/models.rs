@@ -178,6 +178,20 @@ pub struct OpenAIChatChunk {
 // ============================================================================
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnthropicCacheControl {
+    #[serde(rename = "type")]
+    pub control_type: String, // "ephemeral"
+}
+
+impl Default for AnthropicCacheControl {
+    fn default() -> Self {
+        Self {
+            control_type: "ephemeral".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnthropicMessage {
     pub role: String,
     pub content: serde_json::Value,
@@ -188,6 +202,8 @@ pub struct AnthropicTool {
     pub name: String,
     pub description: String,
     pub input_schema: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_control: Option<AnthropicCacheControl>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -195,7 +211,7 @@ pub struct AnthropicMessageRequest {
     pub model: String,
     pub max_tokens: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub system: Option<String>,
+    pub system: Option<serde_json::Value>,
     pub messages: Vec<AnthropicMessage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<AnthropicTool>>,

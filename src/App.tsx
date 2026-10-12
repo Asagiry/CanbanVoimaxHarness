@@ -3,6 +3,7 @@ import CortexExplorer from './components/cortex/CortexExplorer';
 import KanbanBoard from './components/board/KanbanBoard';
 import AgentConsoleDrawer from './components/drawer/AgentConsoleDrawer';
 import RuleEditorModal from './components/cortex/RuleEditorModal';
+import ToolPolicyModal from './components/settings/ToolPolicyModal';
 
 export default function App() {
   return (
@@ -26,6 +27,9 @@ export default function App() {
 
       {/* In-App Mind / Rule Editor Modal */}
       <RuleEditorModal />
+
+      {/* Global Tool Policy Matrix Modal */}
+      <ToolPolicyModal />
     </div>
   );
 }

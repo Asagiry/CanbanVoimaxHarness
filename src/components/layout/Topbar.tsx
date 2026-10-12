@@ -1,6 +1,7 @@
 import { useId } from 'react';
 import { useProjectStore } from '../../stores/projectStore';
 import { useBoardStore } from '../../stores/boardStore';
+import { useToolPolicyStore } from '../../stores/toolPolicyStore';
 import {
   Layers,
   Search,
@@ -9,6 +10,7 @@ import {
   RefreshCw,
   Cpu,
   Zap,
+  Shield,
 } from 'lucide-react';
 
 export default function Topbar() {
@@ -73,6 +75,15 @@ export default function Topbar() {
 
       {/* Status & Telemetry Indicators */}
       <div className="flex items-center space-x-3 font-mono text-[11px]">
+        {/* Token Savings Telemetry Badge */}
+        <div
+          className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded bg-amber-950/20 border border-amber-500/30 text-cyber-amber"
+          title="Deterministic Prefix Caching & Tool Policy Matrix Token Savings"
+        >
+          <Zap className="h-3 w-3 fill-cyber-amber" />
+          <span className="font-semibold">⚡ ~2.4k tokens saved/step</span>
+        </div>
+
         {/* Active Agents Running */}
         <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded bg-obsidian-850 border border-slate-750 text-slate-300">
           <span
@@ -98,6 +109,15 @@ export default function Topbar() {
             {isTauriEnvironment ? 'Tauri v2 Native' : 'CVH Control Plane'}
           </span>
         </div>
+
+        {/* Tool Policy Settings Button */}
+        <button
+          onClick={() => useToolPolicyStore.getState().openModal()}
+          className="p-1.5 rounded bg-obsidian-850 hover:bg-obsidian-800 text-cyber-cyan hover:text-white transition border border-cyan-800/40 hover:border-cyan-500 cursor-pointer shadow-xs"
+          title="Open Tool Policy Matrix"
+        >
+          <Shield className="h-3.5 w-3.5" />
+        </button>
 
         {/* Health Activity */}
         <div

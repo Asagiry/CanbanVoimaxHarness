@@ -478,6 +478,7 @@ pub async fn run_agent(
     let agent_cfg = AgentSessionConfig {
         repo_root: root,
         worktree_path: worktree_dir,
+        stage_id: task.stage_id.clone(),
         role: persona_role,
         task_id: task.id.clone(),
         task_title: task.title.clone(),

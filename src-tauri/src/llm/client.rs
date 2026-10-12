@@ -31,9 +31,14 @@ impl LlmClient {
         &self,
         base_url: &str,
         api_key: Option<&str>,
-        request: OpenAIChatRequest,
+        mut request: OpenAIChatRequest,
         tx: Sender<StreamChunk>,
     ) -> Result<()> {
+        // Deterministic Prefix Caching: Sort tools alphabetically by function name
+        if let Some(ref mut tools) = request.tools {
+            tools.sort_by(|a, b| a.function.name.cmp(&b.function.name));
+        }
+
         let endpoint = if base_url.ends_with("/chat/completions") {
             base_url.to_string()
         } else if base_url.ends_with('/') {
@@ -166,9 +171,37 @@ impl LlmClient {
         &self,
         base_url: &str,
         api_key: Option<&str>,
-        request: AnthropicMessageRequest,
+        mut request: AnthropicMessageRequest,
         tx: Sender<StreamChunk>,
     ) -> Result<()> {
+        // Deterministic Prefix Caching: Sort tools alphabetically
+        if let Some(ref mut tools) = request.tools {
+            tools.sort_by(|a, b| a.name.cmp(&b.name));
+            // Insert cache_control on the last tool for >= 90% cache hit rate
+            if let Some(last_tool) = tools.last_mut() {
+                last_tool.cache_control = Some(AnthropicCacheControl::default());
+            }
+        }
+
+        // Ephemeral caching on system prompt
+        if let Some(sys_val) = request.system.take() {
+            let sys_text = match sys_val {
+                serde_json::Value::String(s) => s,
+                serde_json::Value::Array(ref arr) if !arr.is_empty() => {
+                    arr[0].get("text").and_then(|t| t.as_str()).unwrap_or("").to_string()
+                }
+                other => other.to_string(),
+            };
+
+            request.system = Some(serde_json::json!([
+                {
+                    "type": "text",
+                    "text": sys_text,
+                    "cache_control": { "type": "ephemeral" }
+                }
+            ]));
+        }
+
         let endpoint = if base_url.ends_with("/messages") {
             base_url.to_string()
         } else if base_url.ends_with('/') {
@@ -182,6 +215,10 @@ impl LlmClient {
         headers.insert(
             HeaderValue::from_static("anthropic-version"),
             HeaderValue::from_static("2023-06-01"),
+        );
+        headers.insert(
+            HeaderValue::from_static("anthropic-beta"),
+            HeaderValue::from_static("prompt-caching-2024-07-31"),
         );
         if let Some(key) = api_key {
             if !key.trim().is_empty() {

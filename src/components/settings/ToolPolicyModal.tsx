@@ -13,7 +13,6 @@ import {
   GitFork,
   Cpu,
   Layers,
-  Sparkles,
 } from 'lucide-react';
 
 export default function ToolPolicyModal() {

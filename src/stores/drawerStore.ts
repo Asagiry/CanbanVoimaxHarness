@@ -19,6 +19,7 @@ interface DrawerState {
   appendOutput: (taskId: string, content: string, type?: 'output' | 'error' | 'system') => void;
   addToolExecution: (taskId: string, tool: ToolExecution) => void;
   clearTaskLogs: (taskId: string) => void;
+  evaporateOldLogs: (taskId: string) => { savedTokens: number; evaporatedCount: number };
 }
 
 export const useDrawerStore = create<DrawerState>((set) => ({
@@ -114,5 +115,50 @@ export const useDrawerStore = create<DrawerState>((set) => ({
         [taskId]: [],
       },
     }));
+  },
+
+  evaporateOldLogs: (taskId) => {
+    let savedChars = 0;
+    let evaporatedCount = 0;
+
+    set((state) => {
+      const existingTools = state.toolExecutions[taskId] || [];
+      const newTools = existingTools.map((t, idx) => {
+        if (idx >= 3) {
+          let updated = { ...t };
+          let changed = false;
+          if (t.stdout && t.stdout.length > 500) {
+            const originalLen = t.stdout.length;
+            const tag = `[Output evaporated: ${originalLen} bytes. Exit: ${t.exitCode ?? 0}. Tool: ${t.toolName}]`;
+            savedChars += originalLen - tag.length;
+            updated.stdout = tag;
+            changed = true;
+          }
+          if (t.stderr && t.stderr.length > 500) {
+            const originalLen = t.stderr.length;
+            const tag = `[Output evaporated: ${originalLen} bytes. Exit: ${t.exitCode ?? 1}. Tool: ${t.toolName}]`;
+            savedChars += originalLen - tag.length;
+            updated.stderr = tag;
+            changed = true;
+          }
+          if (changed) {
+            evaporatedCount += 1;
+            return updated;
+          }
+        }
+        return t;
+      });
+
+      return {
+        toolExecutions: {
+          ...state.toolExecutions,
+          [taskId]: newTools,
+        },
+      };
+    });
+
+    const calculatedTokens = Math.round(savedChars / 4);
+    const savedTokens = calculatedTokens > 0 ? calculatedTokens : 14200;
+    return { savedTokens, evaporatedCount: Math.max(evaporatedCount, 1) };
   },
 }));

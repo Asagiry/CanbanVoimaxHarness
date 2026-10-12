@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useId } from 'react';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import ToolExecutionCard from './ToolExecutionCard';
+import ContextGauge from './ContextGauge';
 import {
   X,
   Play,
@@ -151,18 +152,58 @@ export default function AgentConsoleDrawer() {
             >
               {column?.title || task.columnId}
             </div>
+            {/* Status badge: Running, Paused, Awaiting Input, Completed */}
             <span
-              className={`px-2 py-0.5 rounded text-[11px] font-mono uppercase font-bold ${
+              className={`px-2 py-0.5 rounded text-[11px] font-mono uppercase font-bold flex items-center space-x-1 ${
                 task.status === 'running'
                   ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
                   : task.status === 'paused'
                   ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                  : task.status === 'waiting_review'
+                  ? 'bg-cyan-500/15 text-cyber-cyan border border-cyan-500/30'
+                  : task.status === 'done'
+                  ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
                   : task.status === 'blocked'
                   ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
                   : 'bg-slate-700/30 text-slate-300'
               }`}
             >
-              ● {task.status}
+              {task.status === 'running' && (
+                <>
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Running</span>
+                </>
+              )}
+              {task.status === 'paused' && (
+                <>
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                  <span>Paused</span>
+                </>
+              )}
+              {task.status === 'waiting_review' && (
+                <>
+                  <span className="h-1.5 w-1.5 rounded-full bg-cyber-cyan animate-pulse" />
+                  <span>Awaiting Input</span>
+                </>
+              )}
+              {task.status === 'done' && (
+                <>
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  <span>Completed</span>
+                </>
+              )}
+              {task.status === 'blocked' && (
+                <>
+                  <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
+                  <span>Blocked</span>
+                </>
+              )}
+              {task.status === 'idle' && (
+                <>
+                  <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                  <span>Idle</span>
+                </>
+              )}
             </span>
           </div>
 
@@ -189,6 +230,11 @@ export default function AgentConsoleDrawer() {
             <GitBranch className="h-3 w-3 text-slate-500" />
             <span className="text-slate-300">{task.branch}</span>
           </div>
+        </div>
+
+        {/* Embedded Context Window Gauge */}
+        <div className="mt-3">
+          <ContextGauge taskId={task.id} />
         </div>
       </div>
 
@@ -382,7 +428,43 @@ export default function AgentConsoleDrawer() {
       </div>
 
       {/* Interactive Input Prompt Bar */}
-      <div className="border-t border-slate-800 bg-obsidian-900 p-3">
+      <div className="border-t border-slate-800 bg-obsidian-900 p-3 space-y-2">
+        {/* Quick Prompt Suggestions Bar */}
+        <div className="flex items-center space-x-1.5 overflow-x-auto pb-0.5 text-[11px] font-mono select-none">
+          <span className="text-slate-500 text-[10px] uppercase font-semibold shrink-0">Подсказки:</span>
+          <button
+            type="button"
+            onClick={() => setInteractiveInput('▶ Продолжай выполнение задачи')}
+            className="px-2 py-0.5 rounded bg-obsidian-800 hover:bg-obsidian-750 border border-slate-750 hover:border-cyan-500/50 text-slate-300 hover:text-white transition active:scale-95 shrink-0 cursor-pointer"
+          >
+            [▶ Продолжай]
+          </button>
+          <button
+            type="button"
+            onClick={() => setInteractiveInput('🔍 Проверь тесты и сенсоры: cargo check / npm run build')}
+            className="px-2 py-0.5 rounded bg-obsidian-800 hover:bg-obsidian-750 border border-slate-750 hover:border-cyan-500/50 text-slate-300 hover:text-white transition active:scale-95 shrink-0 cursor-pointer"
+          >
+            [🔍 Проверь тесты]
+          </button>
+          <button
+            type="button"
+            onClick={() => setInteractiveInput('🛑 Откати изменения через git restore')}
+            className="px-2 py-0.5 rounded bg-obsidian-800 hover:bg-obsidian-750 border border-slate-750 hover:border-rose-500/50 text-slate-300 hover:text-rose-200 transition active:scale-95 shrink-0 cursor-pointer"
+          >
+            [🛑 Откати изменения]
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const { savedTokens } = useDrawerStore.getState().evaporateOldLogs(task.id);
+              showCue(`🔥 Испарено ~${savedTokens.toLocaleString()} токенов логов!`);
+            }}
+            className="px-2 py-0.5 rounded bg-obsidian-800 hover:bg-obsidian-750 border border-amber-500/30 hover:border-amber-400 text-cyber-amber hover:text-amber-300 transition active:scale-95 shrink-0 font-semibold cursor-pointer"
+          >
+            [⚡ Сжать контекст]
+          </button>
+        </div>
+
         <form onSubmit={handleSendPrompt} className="flex items-center space-x-2">
           <input
             id={promptInputId}

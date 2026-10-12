@@ -13,6 +13,8 @@ import {
   FileEdit,
   Globe,
   FileText,
+  FileCode,
+  GitCompare,
 } from 'lucide-react';
 
 interface ToolExecutionCardProps {
@@ -28,9 +30,12 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       case 'execute_command':
         return <Terminal className="h-3.5 w-3.5 text-cyber-cyan" />;
       case 'edit_file':
+      case 'str_replace':
       case 'write':
+      case 'write_file':
         return <FileEdit className="h-3.5 w-3.5 text-cyber-amber" />;
       case 'read':
+      case 'read_file':
         return <FileText className="h-3.5 w-3.5 text-slate-300" />;
       case 'web_search':
         return <Globe className="h-3.5 w-3.5 text-cyber-purple" />;
@@ -38,6 +43,11 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
         return <Code2 className="h-3.5 w-3.5 text-slate-400" />;
     }
   };
+
+  const isDiffTool = tool.toolName === 'edit_file' || tool.toolName === 'str_replace';
+  const filePath = (tool.params?.file_path as string) || (tool.params?.path as string);
+  const oldString = tool.params?.old_string as string | undefined;
+  const newString = tool.params?.new_string as string | undefined;
 
   const handleCopyLogs = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -60,6 +70,66 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       return `${(ms / 1000).toFixed(2)}s`;
     }
     return `${ms}ms`;
+  };
+
+  const renderUnifiedDiff = () => {
+    if (oldString !== undefined || newString !== undefined) {
+      const oldLines = oldString ? oldString.split('\n') : [];
+      const newLines = newString ? newString.split('\n') : [];
+
+      return (
+        <div className="rounded border border-slate-800 bg-obsidian-950 overflow-hidden font-mono text-[11px]">
+          {filePath && (
+            <div className="flex items-center justify-between px-3 py-1.5 bg-obsidian-900 border-b border-slate-800 text-slate-400 text-[10px]">
+              <span className="flex items-center space-x-1.5 text-cyber-cyan font-semibold">
+                <FileCode className="h-3 w-3" />
+                <span>{filePath}</span>
+              </span>
+              <span className="flex items-center space-x-1 text-slate-500">
+                <GitCompare className="h-3 w-3 text-cyber-amber" />
+                <span>Unified Diff</span>
+              </span>
+            </div>
+          )}
+
+          <div className="divide-y divide-slate-850/40 select-text overflow-x-auto max-h-72">
+            {/* Removed lines (-) */}
+            {oldLines.map((line, idx) => (
+              <div
+                key={`old-${idx}`}
+                className="flex items-start bg-rose-950/25 hover:bg-rose-950/35 text-rose-300 border-l-2 border-rose-500/80 px-2 py-0.5 leading-relaxed"
+              >
+                <span className="w-5 shrink-0 text-rose-500/70 select-none text-center font-bold">
+                  -
+                </span>
+                <span className="w-7 shrink-0 text-slate-500 select-none text-right pr-2 tabular-nums">
+                  {idx + 1}
+                </span>
+                <span className="whitespace-pre-wrap break-all">{line || ' '}</span>
+              </div>
+            ))}
+
+            {/* Added lines (+) */}
+            {newLines.map((line, idx) => (
+              <div
+                key={`new-${idx}`}
+                className="flex items-start bg-emerald-950/25 hover:bg-emerald-950/35 text-emerald-300 border-l-2 border-emerald-500/80 px-2 py-0.5 leading-relaxed"
+              >
+                <span className="w-5 shrink-0 text-emerald-500/70 select-none text-center font-bold">
+                  +
+                </span>
+                <span className="w-7 shrink-0 text-slate-500 select-none text-right pr-2 tabular-nums">
+                  {idx + 1}
+                </span>
+                <span className="whitespace-pre-wrap break-all">{line || ' '}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    return null;
   };
 
   return (
@@ -127,16 +197,27 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       {/* Expanded Body */}
       {isExpanded && (
         <div className="p-3 border-t border-slate-800/80 space-y-2.5 font-mono text-xs">
-          {/* Tool Parameters */}
-          {tool.params && Object.keys(tool.params).length > 0 && (
+          {/* Visual Diff Viewer for edit_file / str_replace */}
+          {isDiffTool && (oldString !== undefined || newString !== undefined) ? (
             <div>
-              <span className="text-[10px] uppercase font-bold text-slate-500 block mb-1">
-                Input Parameters
+              <span className="text-[10px] uppercase font-bold text-cyber-cyan block mb-1">
+                Visual Diff Inspector
               </span>
-              <pre className="p-2 rounded bg-obsidian-950 border border-slate-800 text-[11px] text-slate-300 overflow-x-auto leading-relaxed">
-                {JSON.stringify(tool.params, null, 2)}
-              </pre>
+              {renderUnifiedDiff()}
             </div>
+          ) : (
+            /* Standard Tool Parameters */
+            tool.params &&
+            Object.keys(tool.params).length > 0 && (
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-500 block mb-1">
+                  Input Parameters
+                </span>
+                <pre className="p-2 rounded bg-obsidian-950 border border-slate-800 text-[11px] text-slate-300 overflow-x-auto leading-relaxed">
+                  {JSON.stringify(tool.params, null, 2)}
+                </pre>
+              </div>
+            )
           )}
 
           {/* Terminal STDOUT */}
