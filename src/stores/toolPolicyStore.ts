@@ -1,128 +1,85 @@
 import { create } from 'zustand';
+import { StandardToolName, ToolPolicyMatrix } from '../types';
 
-export interface ToolDefinition {
-  id: string;
-  name: string;
-  aliases: string[];
-  description: string;
-  category: 'core' | 'filesystem' | 'execution' | 'web' | 'orchestration';
-  tokenWeight: number; // estimated tokens per schema
-}
-
-export const ALL_TOOLS: ToolDefinition[] = [
+export const ALL_TOOLS: { name: StandardToolName; label: string; description: string; tokens: number }[] = [
   {
-    id: 'execute_command',
     name: 'execute_command',
-    aliases: ['bash', 'terminal', 'sh'],
-    description: 'Execute shell or powershell commands with streaming output',
-    category: 'execution',
-    tokenWeight: 380,
+    label: 'execute_command (bash / cmd)',
+    description: 'Execute shell commands with piped stdout/stderr and process-tree supervision.',
+    tokens: 380,
   },
   {
-    id: 'read_file',
     name: 'read_file',
-    aliases: ['read'],
-    description: 'Read file contents with line offset and limit',
-    category: 'filesystem',
-    tokenWeight: 260,
+    label: 'read_file',
+    description: 'Inspect UTF-8 source files with 1-based line numbers and range offsets.',
+    tokens: 280,
   },
   {
-    id: 'edit_file',
     name: 'edit_file',
-    aliases: ['edit', 'str_replace'],
-    description: 'Targeted string replacement in files with match verification',
-    category: 'filesystem',
-    tokenWeight: 340,
+    label: 'edit_file (str_replace)',
+    description: 'Targeted string replacement with context diffing and ambiguity checks.',
+    tokens: 340,
   },
   {
-    id: 'write_file',
     name: 'write_file',
-    aliases: ['write'],
-    description: 'Create or replace complete file contents',
-    category: 'filesystem',
-    tokenWeight: 280,
+    label: 'write_file',
+    description: 'Write complete UTF-8 content to file via atomic staging files.',
+    tokens: 260,
   },
   {
-    id: 'glob',
     name: 'glob',
-    aliases: ['find_files'],
-    description: 'Find files matching pattern in workspace',
-    category: 'filesystem',
-    tokenWeight: 240,
+    label: 'glob',
+    description: 'Fast file path pattern matching within isolated worktree.',
+    tokens: 220,
   },
   {
-    id: 'grep',
     name: 'grep',
-    aliases: ['search_content'],
-    description: 'Fast regex search within file contents',
-    category: 'filesystem',
-    tokenWeight: 270,
+    label: 'grep',
+    description: 'Regex content search across files with line number traces.',
+    tokens: 270,
   },
   {
-    id: 'web_search',
     name: 'web_search',
-    aliases: ['search'],
-    description: 'Search web via DuckDuckGo (free, zero API key required) or Google/Bing',
-    category: 'web',
-    tokenWeight: 360,
+    label: 'web_search (DuckDuckGo)',
+    description: 'Free DuckDuckGo web search engine with query sanitization.',
+    tokens: 310,
   },
   {
-    id: 'web_fetch',
     name: 'web_fetch',
-    aliases: ['fetch_url'],
-    description: 'Fetch URL and extract clean Markdown text',
-    category: 'web',
-    tokenWeight: 310,
+    label: 'web_fetch',
+    description: 'HTTP request fetching HTML and converting to clean Markdown.',
+    tokens: 290,
   },
   {
-    id: 'subagent',
     name: 'subagent',
-    aliases: ['spawn_subagent'],
-    description: 'Spawn child subagent in isolated git worktree',
-    category: 'orchestration',
-    tokenWeight: 420,
+    label: 'subagent (delegation)',
+    description: 'Spawn isolated child subagent with dedicated worktree and memory.',
+    tokens: 350,
   },
 ];
 
-interface ToolPolicyState {
-  isModalOpen: boolean;
-  globalEnabled: Record<string, boolean>;
-  stagePermissions: Record<string, Record<string, boolean>>; // stageId -> toolId -> boolean
-  openModal: () => void;
-  closeModal: () => void;
-  toggleGlobalTool: (toolId: string) => void;
-  toggleStageTool: (stageId: string, toolId: string) => void;
-  getEnabledToolsForStage: (stageId: string) => string[];
-  calculateSavedTokensForStage: (stageId: string) => number;
-}
-
-export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
-  isModalOpen: false,
-
-  // Default global toggles
-  globalEnabled: {
+export const DEFAULT_TOOL_POLICIES: ToolPolicyMatrix = {
+  global: {
     execute_command: true,
     read_file: true,
     edit_file: true,
     write_file: true,
     glob: true,
     grep: true,
-    web_search: false, // OFF by default to save tokens and prevent external leak
-    web_fetch: false,  // OFF by default
+    web_search: true,
+    web_fetch: true,
     subagent: true,
   },
-
-  // Per-stage permissions
-  stagePermissions: {
+  stages: {
     backlog: {
-      read_file: true,
-      glob: true,
-      grep: true,
       execute_command: false,
+      read_file: true,
       edit_file: false,
       write_file: false,
-      web_search: true,
-      web_fetch: true,
+      glob: true,
+      grep: true,
+      web_search: false,
+      web_fetch: false,
       subagent: false,
     },
     dev: {
@@ -133,94 +90,133 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
       glob: true,
       grep: true,
       web_search: false,
-      web_fetch: false,
+      web_fetch: true,
       subagent: true,
     },
     review: {
+      execute_command: true, // read-only verification
       read_file: true,
+      edit_file: false,      // write disabled
+      write_file: false,     // write disabled
       glob: true,
       grep: true,
-      execute_command: true, // read-only auditing
-      edit_file: false,      // DEAD OFF - reviewer cannot touch code!
-      write_file: false,     // DEAD OFF
       web_search: false,
-      web_fetch: false,
+      web_fetch: true,
       subagent: false,
     },
     retro: {
+      execute_command: true,
       read_file: true,
+      edit_file: false,
+      write_file: false,
       glob: true,
       grep: true,
-      execute_command: false,
-      edit_file: true,       // allowed to update rule files / ledger
-      write_file: false,
       web_search: false,
       web_fetch: false,
       subagent: false,
     },
-    ready: {
-      read_file: true,
-      glob: true,
-      grep: true,
+    done: {
       execute_command: false,
+      read_file: false,
       edit_file: false,
       write_file: false,
+      glob: false,
+      grep: false,
       web_search: false,
       web_fetch: false,
       subagent: false,
     },
   },
+};
+
+interface ToolPolicyState {
+  isModalOpen: boolean;
+  policies: ToolPolicyMatrix;
+  openModal: () => void;
+  closeModal: () => void;
+  setGlobalTool: (tool: StandardToolName | string, enabled: boolean) => void;
+  setStageTool: (stageId: string, tool: StandardToolName | string, enabled: boolean) => void;
+  resetToDefaults: () => void;
+  isToolAllowed: (stageId: string, tool: string) => boolean;
+  calculateTokenSavings: (stageId?: string) => number;
+}
+
+export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
+  isModalOpen: false,
+  policies: DEFAULT_TOOL_POLICIES,
 
   openModal: () => set({ isModalOpen: true }),
   closeModal: () => set({ isModalOpen: false }),
 
-  toggleGlobalTool: (toolId: string) =>
+  setGlobalTool: (tool, enabled) => {
     set((state) => ({
-      globalEnabled: {
-        ...state.globalEnabled,
-        [toolId]: !state.globalEnabled[toolId],
+      policies: {
+        ...state.policies,
+        global: {
+          ...state.policies.global,
+          [tool]: enabled,
+        },
       },
-    })),
+    }));
+  },
 
-  toggleStageTool: (stageId: string, toolId: string) =>
+  setStageTool: (stageId, tool, enabled) => {
     set((state) => {
-      const stageMap = state.stagePermissions[stageId] || {};
-      const current = stageMap[toolId] ?? state.globalEnabled[toolId] ?? false;
+      const stageConfig = state.policies.stages[stageId] || {};
       return {
-        stagePermissions: {
-          ...state.stagePermissions,
-          [stageId]: {
-            ...stageMap,
-            [toolId]: !current,
+        policies: {
+          ...state.policies,
+          stages: {
+            ...state.policies.stages,
+            [stageId]: {
+              ...stageConfig,
+              [tool]: enabled,
+            },
           },
         },
       };
-    }),
-
-  getEnabledToolsForStage: (stageId: string) => {
-    const { globalEnabled, stagePermissions } = get();
-    const stageMap = stagePermissions[stageId] || {};
-
-    return ALL_TOOLS.filter((tool) => {
-      // Must be globally enabled
-      if (!globalEnabled[tool.id]) return false;
-      // If stage has explicit permission set, respect it
-      if (stageMap[tool.id] !== undefined) return stageMap[tool.id];
-      // Default to true if globally enabled
-      return true;
-    }).map((t) => t.id);
+    });
   },
 
-  calculateSavedTokensForStage: (stageId: string) => {
-    const { getEnabledToolsForStage } = get();
-    const enabled = new Set(getEnabledToolsForStage(stageId));
+  resetToDefaults: () => set({ policies: DEFAULT_TOOL_POLICIES }),
 
-    let savedTokens = 0;
-    for (const tool of ALL_TOOLS) {
-      if (!enabled.has(tool.id)) {
-        savedTokens += tool.tokenWeight;
+  isToolAllowed: (stageId, tool) => {
+    const { policies } = get();
+    // Level A: Global check
+    if (policies.global[tool] === false) return false;
+    // Level B: Stage check
+    const stagePolicy = policies.stages[stageId];
+    if (stagePolicy && stagePolicy[tool] !== undefined) {
+      return stagePolicy[tool];
+    }
+    return true;
+  },
+
+  calculateTokenSavings: (stageId?: string) => {
+    const { policies } = get();
+    if (stageId) {
+      // Calculate savings for a specific stage
+      return ALL_TOOLS.reduce((acc, t) => {
+        const globallyDisabled = policies.global[t.name] === false;
+        const stageDisabled = policies.stages[stageId]?.[t.name] === false;
+        if (globallyDisabled || stageDisabled) {
+          return acc + t.tokens;
+        }
+        return acc;
+      }, 0);
+    }
+
+    // Default global + average stage savings estimate (~2,400 tokens)
+    let totalDisabledSlots = 0;
+    const stages = Object.keys(policies.stages);
+    for (const s of stages) {
+      for (const t of ALL_TOOLS) {
+        if (policies.global[t.name] === false || policies.stages[s]?.[t.name] === false) {
+          totalDisabledSlots++;
+        }
       }
     }
-    return savedTokens;
+    const avgDisabledPerStage = stages.length > 0 ? totalDisabledSlots / stages.length : 8;
+    return Math.round(avgDisabledPerStage * 300);
   },
 }));

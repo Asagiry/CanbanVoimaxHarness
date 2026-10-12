@@ -115,6 +115,11 @@ pub enum StreamChunk {
         name: String,
         arguments: String,
     },
+    CacheTelemetry {
+        cache_read_tokens: u32,
+        cache_creation_tokens: u32,
+        hit_rate: f32,
+    },
     Done,
     Error(String),
 }
@@ -171,25 +176,13 @@ pub struct OpenAIChoiceDelta {
 pub struct OpenAIChatChunk {
     pub id: Option<String>,
     pub choices: Option<Vec<OpenAIChoiceDelta>>,
+    #[serde(default)]
+    pub usage: Option<serde_json::Value>,
 }
 
 // ============================================================================
 // Anthropic Native Schemas
 // ============================================================================
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AnthropicCacheControl {
-    #[serde(rename = "type")]
-    pub control_type: String, // "ephemeral"
-}
-
-impl Default for AnthropicCacheControl {
-    fn default() -> Self {
-        Self {
-            control_type: "ephemeral".to_string(),
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnthropicMessage {
@@ -203,7 +196,7 @@ pub struct AnthropicTool {
     pub description: String,
     pub input_schema: serde_json::Value,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache_control: Option<AnthropicCacheControl>,
+    pub cache_control: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

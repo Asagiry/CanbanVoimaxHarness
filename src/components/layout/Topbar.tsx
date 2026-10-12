@@ -123,7 +123,6 @@ export default function Topbar() {
             ⚡ ~2.4k saved
           </span>
         </button>
-        </button>
 
         {/* Health Activity */}
         <div

@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod commands;
+pub mod compactor;
 pub mod config;
 pub mod git;
 pub mod hooks;
@@ -29,6 +30,10 @@ pub fn run() {
             run_agent,
             abort_agent,
             cleanup_task_worktree,
+            get_tool_policies,
+            save_tool_policies,
+            compact_task_context,
+            steer_agent,
         ])
         .run(tauri::generate_context!())
         .expect("error while running CanbanVoimaxHarness desktop application");

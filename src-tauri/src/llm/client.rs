@@ -34,7 +34,7 @@ impl LlmClient {
         mut request: OpenAIChatRequest,
         tx: Sender<StreamChunk>,
     ) -> Result<()> {
-        // Deterministic Prefix Caching: Sort tools alphabetically by function name
+        // Deterministic Prefix Caching: Sort tool definitions alphabetically by name
         if let Some(ref mut tools) = request.tools {
             tools.sort_by(|a, b| a.function.name.cmp(&b.function.name));
         }
@@ -86,6 +86,26 @@ impl LlmClient {
                     let data = event.data.trim();
                     if data == "[DONE]" {
                         break;
+                    }
+
+                    // Parse usage & cache telemetry if available in OpenAI stream
+                    if let Ok(raw_val) = serde_json::from_str::<serde_json::Value>(data) {
+                        if let Some(usage) = raw_val.get("usage") {
+                            let cached = usage
+                                .get("prompt_tokens_details")
+                                .and_then(|d| d.get("cached_tokens"))
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0) as u32;
+                            let prompt = usage.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+                            if prompt > 0 {
+                                let hit_rate = cached as f32 / prompt as f32;
+                                let _ = tx.send(StreamChunk::CacheTelemetry {
+                                    cache_read_tokens: cached,
+                                    cache_creation_tokens: prompt.saturating_sub(cached),
+                                    hit_rate,
+                                }).await;
+                            }
+                        }
                     }
 
                     if let Ok(chunk) = serde_json::from_str::<OpenAIChatChunk>(data) {
@@ -174,33 +194,8 @@ impl LlmClient {
         mut request: AnthropicMessageRequest,
         tx: Sender<StreamChunk>,
     ) -> Result<()> {
-        // Deterministic Prefix Caching: Sort tools alphabetically
-        if let Some(ref mut tools) = request.tools {
-            tools.sort_by(|a, b| a.name.cmp(&b.name));
-            // Insert cache_control on the last tool for >= 90% cache hit rate
-            if let Some(last_tool) = tools.last_mut() {
-                last_tool.cache_control = Some(AnthropicCacheControl::default());
-            }
-        }
-
-        // Ephemeral caching on system prompt
-        if let Some(sys_val) = request.system.take() {
-            let sys_text = match sys_val {
-                serde_json::Value::String(s) => s,
-                serde_json::Value::Array(ref arr) if !arr.is_empty() => {
-                    arr[0].get("text").and_then(|t| t.as_str()).unwrap_or("").to_string()
-                }
-                other => other.to_string(),
-            };
-
-            request.system = Some(serde_json::json!([
-                {
-                    "type": "text",
-                    "text": sys_text,
-                    "cache_control": { "type": "ephemeral" }
-                }
-            ]));
-        }
+        // Deterministic Prefix Caching: inject ephemeral cache_control breakpoints (max 4)
+        apply_anthropic_prefix_caching(&mut request);
 
         let endpoint = if base_url.ends_with("/messages") {
             base_url.to_string()
@@ -215,10 +210,6 @@ impl LlmClient {
         headers.insert(
             HeaderValue::from_static("anthropic-version"),
             HeaderValue::from_static("2023-06-01"),
-        );
-        headers.insert(
-            HeaderValue::from_static("anthropic-beta"),
-            HeaderValue::from_static("prompt-caching-2024-07-31"),
         );
         if let Some(key) = api_key {
             if !key.trim().is_empty() {
@@ -257,6 +248,35 @@ impl LlmClient {
                     let data = event.data.trim();
                     if let Ok(event_obj) = serde_json::from_str::<AnthropicStreamEvent>(data) {
                         match event_obj {
+                            AnthropicStreamEvent::MessageStart { message } => {
+                                if let Some(usage) = message.get("usage") {
+                                    let read_tokens = usage
+                                        .get("cache_read_input_tokens")
+                                        .and_then(|v| v.as_u64())
+                                        .unwrap_or(0) as u32;
+                                    let creation_tokens = usage
+                                        .get("cache_creation_input_tokens")
+                                        .and_then(|v| v.as_u64())
+                                        .unwrap_or(0) as u32;
+                                    let input_tokens = usage
+                                        .get("input_tokens")
+                                        .and_then(|v| v.as_u64())
+                                        .unwrap_or(0) as u32;
+                                    let total = read_tokens + creation_tokens + input_tokens;
+                                    let hit_rate = if total > 0 {
+                                        read_tokens as f32 / total as f32
+                                    } else {
+                                        0.0
+                                    };
+                                    let _ = tx
+                                        .send(StreamChunk::CacheTelemetry {
+                                            cache_read_tokens: read_tokens,
+                                            cache_creation_tokens: creation_tokens,
+                                            hit_rate,
+                                        })
+                                        .await;
+                                }
+                            }
                             AnthropicStreamEvent::ContentBlockStart {
                                 index,
                                 content_block,
@@ -334,3 +354,65 @@ impl LlmClient {
         Ok(())
     }
 }
+
+/// Deterministic Prefix Caching: injects ephemeral cache_control breakpoints for Anthropic (up to 4 breakpoints).
+pub fn apply_anthropic_prefix_caching(request: &mut AnthropicMessageRequest) {
+    // 1. Sort tools alphabetically for deterministic schema hashing
+    if let Some(ref mut tools) = request.tools {
+        tools.sort_by(|a, b| a.name.cmp(&b.name));
+    }
+
+    // 2. Breakpoint 1: System prompt
+    if let Some(ref sys_val) = request.system {
+        if let Some(sys_str) = sys_val.as_str() {
+            request.system = Some(serde_json::json!([
+                {
+                    "type": "text",
+                    "text": sys_str,
+                    "cache_control": { "type": "ephemeral" }
+                }
+            ]));
+        } else if let Some(arr) = sys_val.as_array() {
+            let mut new_arr = arr.clone();
+            if let Some(last_elem) = new_arr.last_mut() {
+                if let Some(obj) = last_elem.as_object_mut() {
+                    obj.insert("cache_control".to_string(), serde_json::json!({ "type": "ephemeral" }));
+                }
+            }
+            request.system = Some(serde_json::Value::Array(new_arr));
+        }
+    }
+
+    // 3. Breakpoint 2: Last tool definition
+    if let Some(ref mut tools) = request.tools {
+        if let Some(last_tool) = tools.last_mut() {
+            last_tool.cache_control = Some(serde_json::json!({ "type": "ephemeral" }));
+        }
+    }
+
+    // 4. Breakpoint 3 & 4: Up to 2 recent turns in message history
+    let msg_count = request.messages.len();
+    if msg_count >= 2 {
+        let target_idx = msg_count - 1;
+        inject_cache_control_into_message(&mut request.messages[target_idx]);
+    }
+}
+
+fn inject_cache_control_into_message(msg: &mut AnthropicMessage) {
+    if let Some(text) = msg.content.as_str() {
+        msg.content = serde_json::json!([
+            {
+                "type": "text",
+                "text": text,
+                "cache_control": { "type": "ephemeral" }
+            }
+        ]);
+    } else if let Some(arr) = msg.content.as_array_mut() {
+        if let Some(last) = arr.last_mut() {
+            if let Some(obj) = last.as_object_mut() {
+                obj.insert("cache_control".to_string(), serde_json::json!({ "type": "ephemeral" }));
+            }
+        }
+    }
+}
+

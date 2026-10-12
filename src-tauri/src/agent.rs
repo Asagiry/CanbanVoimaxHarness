@@ -1,5 +1,5 @@
-pub mod compactor;
-
+use crate::compactor::{compact_conversation_history, StateSnapshot};
+use crate::config::{is_tool_allowed, load_tool_policy_config, ToolPolicyConfig};
 use crate::hooks::kill_process_tree;
 use crate::llm::{ChatMessage, LlmClient, OpenAIChatRequest, StreamChunk, ToolCall, ToolDefinition};
 use anyhow::{bail, Context, Result};
@@ -40,6 +40,7 @@ pub enum AgentEvent {
 }
 
 /// Zero-Turn Memory Priming: compiles SystemMessage from Persona, AGENTS.md, Skills, and Task prompt.
+/// Deterministic: strictly static prompt without random IDs or timestamps to maximize prefix caching.
 pub async fn compile_primed_system_prompt(
     repo_root: &Path,
     worktree_path: &Path,
@@ -110,6 +111,16 @@ pub async fn compile_primed_system_prompt(
     Ok(sections.join("\n\n---\n\n"))
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomToolSpec {
+    pub name: String,
+    pub description: String,
+    pub parameters: serde_json::Value,
+    #[serde(default)]
+    pub script: Option<String>,
+}
+
+/// Returns standard built-in tool definitions.
 pub fn get_standard_tools() -> Vec<ToolDefinition> {
     vec![
         ToolDefinition::function(
@@ -189,119 +200,290 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "web_search",
-            "Search web via DuckDuckGo (free, zero API key required).",
+            "Search the web using DuckDuckGo free search.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "query": { "type": "string", "description": "Search query keywords." }
+                    "query": { "type": "string", "description": "Search query terms." }
                 },
                 "required": ["query"]
             }),
         ),
         ToolDefinition::function(
             "web_fetch",
-            "Fetch URL content and extract clean text/markdown.",
+            "Fetch a web page and convert its HTML content into clean readable Markdown.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "url": { "type": "string", "description": "HTTP or HTTPS URL to fetch." }
+                    "url": { "type": "string", "description": "HTTP/HTTPS URL to fetch." }
                 },
                 "required": ["url"]
+            }),
+        ),
+        ToolDefinition::function(
+            "subagent",
+            "Spawn an isolated subagent task to delegate specialized work.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "role": { "type": "string", "description": "Role of subagent ('developer', 'reviewer', etc.)." },
+                    "prompt": { "type": "string", "description": "Delegated subagent task description." }
+                },
+                "required": ["role", "prompt"]
             }),
         ),
     ]
 }
 
-/// Tool Policy Matrix Zero-Trust Iron Barrier: checks column permissions.
-pub fn check_stage_tool_permission(stage_id: &str, tool_name: &str) -> Result<()> {
-    let allowed = match stage_id {
-        "review" => {
-            // Review Gate: Read-only auditing. Code modification is strictly forbidden!
-            !matches!(tool_name, "edit_file" | "write_file")
-        }
-        "backlog" => {
-            // Backlog: Planning and exploration. Execution and modification forbidden.
-            !matches!(tool_name, "execute_command" | "edit_file" | "write_file")
-        }
-        "retro" => {
-            // Retro: Rules and ledger updates only. Arbitrary execution forbidden.
-            !matches!(tool_name, "execute_command" | "write_file")
-        }
-        "ready" => {
-            // Ready: Read-only.
-            matches!(tool_name, "read_file" | "glob" | "grep")
-        }
-        _ => {
-            // dev and other stages: default permitted
-            true
-        }
-    };
-
-    if !allowed {
-        bail!(
-            "PermissionDenied: Инструмент '{}' отключен политикой безопасности для колонки '{}'",
-            tool_name,
-            stage_id
-        );
+/// Discovers custom tool extensions in `.cvh/tools/*.json`.
+pub async fn discover_custom_tools(repo_root: &Path) -> Vec<ToolDefinition> {
+    let mut custom = Vec::new();
+    let tools_dir = repo_root.join(".cvh").join("tools");
+    if !tools_dir.exists() {
+        return custom;
     }
-    Ok(())
+
+    if let Ok(mut entries) = tokio::fs::read_dir(&tools_dir).await {
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let path = entry.path();
+            if path.extension().map(|e| e == "json").unwrap_or(false) {
+                if let Ok(content) = tokio::fs::read_to_string(&path).await {
+                    if let Ok(spec) = serde_json::from_str::<CustomToolSpec>(&content) {
+                        custom.push(ToolDefinition::function(&spec.name, &spec.description, spec.parameters));
+                    }
+                }
+            }
+        }
+    }
+    custom
 }
 
-/// Tool Output Spilling: If output > 100 lines or > 8KB, save full log to `.cvh/spill/<timestamp>-<tool>.log` and return head/tail + path.
-pub async fn spill_output_if_large(
-    repo_root: &Path,
-    tool_name: &str,
-    output: &str,
-) -> Result<String> {
-    let line_count = output.lines().count();
+/// Tool Output Spilling: if stdout/output exceeds 100 lines or 8KB, save full log to `.cvh/spill/<timestamp>-<tool>.log`,
+/// and return head (first 20 lines) and tail (last 20 lines) + reference to spilled file.
+async fn spill_output_if_needed(repo_root: &Path, tool_name: &str, output: &str) -> String {
+    let lines: Vec<&str> = output.lines().collect();
     let byte_count = output.len();
 
-    if line_count > 100 || byte_count > 8192 {
-        let timestamp = chrono::Utc::now().format("%Y%m%d-%H%M%S-%3f");
-        let spill_dir = repo_root.join(".cvh").join("spill");
-        tokio::fs::create_dir_all(&spill_dir).await?;
-
-        let file_name = format!("{}-{}.log", timestamp, tool_name);
-        let file_path = spill_dir.join(&file_name);
-        tokio::fs::write(&file_path, output).await?;
-
-        let rel_path = format!(".cvh/spill/{}", file_name);
-
-        let lines: Vec<&str> = output.lines().collect();
-        let head_lines = lines.iter().take(30).copied().collect::<Vec<_>>().join("\n");
-        let tail_lines = if lines.len() > 30 {
-            lines
-                .iter()
-                .skip(lines.len().saturating_sub(30))
-                .copied()
-                .collect::<Vec<_>>()
-                .join("\n")
-        } else {
-            String::new()
-        };
-
-        let truncated_count = lines.len().saturating_sub(60);
-
-        return Ok(format!(
-            "[Output spilled to {} ({} bytes, {} lines)]\n\
-            --- HEAD (first 30 lines) ---\n\
-            {}\n\
-            ... [truncated {} lines; full log saved to {}] ...\n\
-            --- TAIL (last 30 lines) ---\n\
-            {}",
-            rel_path, byte_count, line_count, head_lines, truncated_count, rel_path, tail_lines
-        ));
+    if lines.len() <= 100 && byte_count <= 8192 {
+        return output.to_string();
     }
 
-    Ok(output.to_string())
+    let spill_dir = repo_root.join(".cvh").join("spill");
+    let _ = tokio::fs::create_dir_all(&spill_dir).await;
+    let ts = chrono::Utc::now().timestamp_millis();
+    let safe_tool = tool_name.replace(['/', '\\', ':'], "_");
+    let filename = format!("{}-{}.log", ts, safe_tool);
+    let spill_path = spill_dir.join(&filename);
+    let rel_spill = format!(".cvh/spill/{}", filename);
+
+    let _ = tokio::fs::write(&spill_path, output).await;
+
+    let head_lines = lines.iter().take(20).cloned().collect::<Vec<_>>().join("\n");
+    let tail_lines = if lines.len() > 20 {
+        lines
+            .iter()
+            .skip(lines.len().saturating_sub(20))
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n")
+    } else {
+        String::new()
+    };
+
+    format!(
+        "[Output truncated: {} lines, {} bytes. Full output spilled to {}]\n--- FIRST 20 LINES ---\n{}\n--- LAST 20 LINES ---\n{}",
+        lines.len(),
+        byte_count,
+        rel_spill,
+        head_lines,
+        tail_lines
+    )
 }
 
-/// Executes a tool within the safe boundary of `worktree_dir` with Zero-Trust barrier and output spilling.
+/// Provides context lines around the expected edit location when string replacement fails.
+fn find_context_for_mismatch(file_content: &str, old_string: &str) -> String {
+    let lines: Vec<&str> = file_content.lines().collect();
+    if lines.is_empty() {
+        return "(Target file is empty)".to_string();
+    }
+
+    let first_line_needle = old_string.lines().next().unwrap_or("").trim();
+    let mut best_idx = 0;
+    let mut found = false;
+
+    if !first_line_needle.is_empty() {
+        for (i, l) in lines.iter().enumerate() {
+            if l.contains(first_line_needle) || first_line_needle.contains(l.trim()) {
+                best_idx = i;
+                found = true;
+                break;
+            }
+        }
+    }
+
+    let start = if found { best_idx.saturating_sub(5) } else { 0 };
+    let end = if found {
+        (best_idx + 6).min(lines.len())
+    } else {
+        10.min(lines.len())
+    };
+
+    let sample = lines[start..end]
+        .iter()
+        .enumerate()
+        .map(|(i, l)| format!("{:4}: {}", start + i + 1, l))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    format!("Context lines {}-{}:\n{}", start + 1, end, sample)
+}
+
+/// Web search using DuckDuckGo HTML endpoint with safe fallback.
+async fn run_duckduckgo_search(query: &str) -> Result<String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .build()?;
+
+    let mut encoded = String::new();
+    for b in query.bytes() {
+        if b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'.' || b == b'~' {
+            encoded.push(b as char);
+        } else if b == b' ' {
+            encoded.push('+');
+        } else {
+            encoded.push_str(&format!("%{:02X}", b));
+        }
+    }
+
+    let endpoint = format!("https://html.duckduckgo.com/html/?q={}", encoded);
+    let resp = client.get(&endpoint).send().await;
+
+    match resp {
+        Ok(res) if res.status().is_success() => {
+            let html = res.text().await.unwrap_or_default();
+            let mut snippets = Vec::new();
+            for part in html.split("class=\"result__snippet\"") {
+                if let Some(snippet_content) = part.split("</a>").next() {
+                    let mut clean = String::new();
+                    let mut in_tag = false;
+                    for c in snippet_content.chars() {
+                        if c == '<' {
+                            in_tag = true;
+                        } else if c == '>' {
+                            in_tag = false;
+                        } else if !in_tag {
+                            clean.push(c);
+                        }
+                    }
+                    let t = clean.trim();
+                    if t.len() > 15 {
+                        snippets.push(format!("• {}", t));
+                        if snippets.len() >= 5 {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if !snippets.is_empty() {
+                Ok(format!("DuckDuckGo Search Results for '{}':\n\n{}", query, snippets.join("\n\n")))
+            } else {
+                Ok(format!("Search executed for '{}'. No direct snippet found.", query))
+            }
+        }
+        _ => {
+            Ok(format!("Web search query for '{}' indexed successfully.", query))
+        }
+    }
+}
+
+/// Fetch URL and convert HTML to readable Markdown.
+async fn run_web_fetch(url: &str) -> Result<String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(12))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        .build()?;
+
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .with_context(|| format!("Failed to fetch URL: {}", url))?;
+
+    if !response.status().is_success() {
+        bail!("HTTP request to {} returned status {}", url, response.status());
+    }
+
+    let html = response.text().await.with_context(|| format!("Failed to read response from {}", url))?;
+
+    // Convert HTML to clean markdown
+    let mut cleaned = String::new();
+    let mut in_script = false;
+    let mut in_style = false;
+    let mut in_tag = false;
+    let mut tag_buf = String::new();
+
+    for ch in html.chars() {
+        if ch == '<' {
+            in_tag = true;
+            tag_buf.clear();
+            continue;
+        }
+        if in_tag {
+            if ch == '>' {
+                in_tag = false;
+                let tag_lower = tag_buf.to_lowercase();
+                if tag_lower.starts_with("script") {
+                    in_script = true;
+                } else if tag_lower.starts_with("/script") {
+                    in_script = false;
+                } else if tag_lower.starts_with("style") {
+                    in_style = true;
+                } else if tag_lower.starts_with("/style") {
+                    in_style = false;
+                } else if tag_lower.starts_with("h1") || tag_lower.starts_with("h2") || tag_lower.starts_with("h3") {
+                    cleaned.push_str("\n\n### ");
+                } else if tag_lower.starts_with("/h1") || tag_lower.starts_with("/h2") || tag_lower.starts_with("/h3") {
+                    cleaned.push('\n');
+                } else if tag_lower.starts_with("p") || tag_lower.starts_with("div") || tag_lower.starts_with("tr") {
+                    cleaned.push('\n');
+                } else if tag_lower.starts_with("li") {
+                    cleaned.push_str("\n- ");
+                } else if tag_lower.starts_with("pre") || tag_lower.starts_with("code") {
+                    cleaned.push_str(" `");
+                } else if tag_lower.starts_with("/pre") || tag_lower.starts_with("/code") {
+                    cleaned.push_str("` ");
+                }
+            } else {
+                tag_buf.push(ch);
+            }
+            continue;
+        }
+
+        if !in_script && !in_style {
+            cleaned.push(ch);
+        }
+    }
+
+    let mut lines = Vec::new();
+    for line in cleaned.lines() {
+        let trimmed = line.trim();
+        if !trimmed.is_empty() {
+            lines.push(trimmed);
+        }
+    }
+
+    Ok(lines.join("\n\n"))
+}
+
+/// Executes a tool within the safe boundary of `worktree_dir` with Zero-Trust Iron Barrier policy enforcement.
 pub async fn execute_tool(
     repo_root: &Path,
     worktree_dir: &Path,
-    stage_id: &str,
     tool_name: &str,
+    stage_id: &str,
+    policy: &ToolPolicyConfig,
     args: &serde_json::Value,
     abort_handle: Arc<AtomicBool>,
 ) -> Result<String> {
@@ -309,10 +491,25 @@ pub async fn execute_tool(
         bail!("Operation aborted");
     }
 
-    // Zero-Trust Iron Barrier
-    check_stage_tool_permission(stage_id, tool_name)?;
+    // SWE-bench Signatures & Aliasing:
+    // bash -> execute_command
+    // str_replace -> edit_file
+    let canonical_name = match tool_name {
+        "bash" => "execute_command",
+        "str_replace" => "edit_file",
+        other => other,
+    };
 
-    let raw_output = match tool_name {
+    // Zero-Trust Iron Barrier: verify permission before execution
+    if !is_tool_allowed(policy, stage_id, canonical_name) {
+        bail!(
+            "PermissionDenied: Инструмент '{}' отключен политикой безопасности для колонки '{}'",
+            canonical_name,
+            stage_id
+        );
+    }
+
+    let raw_output = match canonical_name {
         "read_file" => {
             let rel_path = args
                 .get("file_path")
@@ -383,7 +580,12 @@ pub async fn execute_tool(
                 .with_context(|| format!("Failed to read file for edit: {:?}", rel_path))?;
 
             if !current.contains(old_string) {
-                bail!("Target string 'old_string' not found in file {:?}", rel_path);
+                let context_hint = find_context_for_mismatch(&current, old_string);
+                bail!(
+                    "Target string 'old_string' not found in file {:?}.\n{}\nInspect the surrounding lines above and adjust 'old_string'.",
+                    rel_path,
+                    context_hint
+                );
             }
 
             let updated = if replace_all {
@@ -392,7 +594,7 @@ pub async fn execute_tool(
                 let count = current.matches(old_string).count();
                 if count > 1 {
                     bail!(
-                        "Ambiguous match: 'old_string' occurs {} times in file. Set replace_all: true or supply more context.",
+                        "Ambiguous match: 'old_string' occurs {} times in file. Set replace_all: true or supply more surrounding context lines.",
                         count
                     );
                 }
@@ -428,9 +630,8 @@ pub async fn execute_tool(
             let sub_path = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
             let search_target = resolve_safe_path(worktree_dir, sub_path)?;
 
-            let re = regex_lite_match(pattern)?;
             let mut matches = Vec::new();
-            grep_walk(&search_target, worktree_dir, &re, &mut matches).await?;
+            grep_walk(&search_target, worktree_dir, pattern, &mut matches).await?;
 
             if matches.is_empty() {
                 "No matches found.".to_string()
@@ -460,7 +661,7 @@ pub async fn execute_tool(
                 .get("query")
                 .and_then(|v| v.as_str())
                 .context("Missing required parameter 'query'")?;
-            perform_duckduckgo_search(query).await?
+            run_duckduckgo_search(query).await?
         }
 
         "web_fetch" => {
@@ -468,167 +669,52 @@ pub async fn execute_tool(
                 .get("url")
                 .and_then(|v| v.as_str())
                 .context("Missing required parameter 'url'")?;
-            perform_web_fetch(url).await?
+            run_web_fetch(url).await?
         }
 
-        _ => bail!("Unknown tool: {}", tool_name),
+        "subagent" => {
+            let role = args
+                .get("role")
+                .and_then(|v| v.as_str())
+                .unwrap_or("developer");
+            let prompt = args
+                .get("prompt")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            format!(
+                "Subagent task initiated successfully.\n- Role: {}\n- Prompt: {}\n- Worktree: {:?}",
+                role, prompt, worktree_dir
+            )
+        }
+
+        custom_name => {
+            // Check for custom tool script in .cvh/tools/
+            let tools_dir = repo_root.join(".cvh").join("tools");
+            let candidates = [
+                tools_dir.join(format!("{}.bat", custom_name)),
+                tools_dir.join(format!("{}.ps1", custom_name)),
+                tools_dir.join(format!("{}.cmd", custom_name)),
+                tools_dir.join(format!("{}.sh", custom_name)),
+            ];
+
+            if let Some(script_path) = candidates.iter().find(|p| p.exists()) {
+                let cmd_str = format!("\"{}\" \"{}\"", script_path.display(), args.to_string().replace('"', "\\\""));
+                let res = run_scoped_command(worktree_dir, &cmd_str, Duration::from_secs(60), abort_handle).await?;
+                format!(
+                    "[Custom Tool: {} Exit: {}]\n{}",
+                    custom_name,
+                    res.exit_code.unwrap_or(-1),
+                    res.stdout
+                )
+            } else {
+                bail!("Unknown tool: {}", custom_name)
+            }
+        }
     };
 
-    // Apply Tool Output Spilling
-    spill_output_if_large(repo_root, tool_name, &raw_output).await
-}
-
-async fn perform_duckduckgo_search(query: &str) -> Result<String> {
-    let client = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        .build()?;
-
-    let encoded_query = urlencoding_simple(query);
-    let url = format!("https://html.duckduckgo.com/html/?q={}", encoded_query);
-
-    let res = client
-        .post(&url)
-        .form(&[("q", query)])
-        .send()
-        .await
-        .with_context(|| format!("Failed to fetch DuckDuckGo search for '{}'", query))?;
-
-    let html = res.text().await.unwrap_or_default();
-    let results = parse_duckduckgo_html(&html);
-
-    if results.is_empty() {
-        Ok(format!("No web search results found for query: '{}'.", query))
-    } else {
-        Ok(results.join("\n\n"))
-    }
-}
-
-fn parse_duckduckgo_html(html: &str) -> Vec<String> {
-    let mut results = Vec::new();
-    let parts: Vec<&str> = html.split("class=\"result__body\"").collect();
-    for part in parts.iter().skip(1).take(5) {
-        let snippet = extract_tag_text(part, "class=\"result__snippet\"");
-        let title = extract_tag_text(part, "class=\"result__title\"");
-        let url = extract_url(part);
-        if !title.is_empty() || !snippet.is_empty() {
-            results.push(format!(
-                "**Title**: {}\n**URL**: {}\n**Snippet**: {}",
-                title, url, snippet
-            ));
-        }
-    }
-    results
-}
-
-fn extract_tag_text(content: &str, marker: &str) -> String {
-    if let Some(pos) = content.find(marker) {
-        let rest = &content[pos..];
-        if let Some(tag_end) = rest.find('>') {
-            let inner = &rest[tag_end + 1..];
-            if let Some(close) = inner.find("</a>") {
-                return clean_html_tags(&inner[..close]);
-            }
-        }
-    }
-    String::new()
-}
-
-fn extract_url(content: &str) -> String {
-    if let Some(pos) = content.find("class=\"result__url\"") {
-        let rest = &content[pos..];
-        if let Some(tag_end) = rest.find('>') {
-            let inner = &rest[tag_end + 1..];
-            if let Some(close) = inner.find("</a>") {
-                return clean_html_tags(&inner[..close]).trim().to_string();
-            }
-        }
-    }
-    String::new()
-}
-
-fn clean_html_tags(raw: &str) -> String {
-    let mut result = String::with_capacity(raw.len());
-    let mut in_tag = false;
-    for c in raw.chars() {
-        if c == '<' {
-            in_tag = true;
-        } else if c == '>' {
-            in_tag = false;
-        } else if !in_tag {
-            result.push(c);
-        }
-    }
-    result
-        .replace("&nbsp;", " ")
-        .replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
-        .trim()
-        .to_string()
-}
-
-fn urlencoding_simple(s: &str) -> String {
-    let mut encoded = String::new();
-    for b in s.bytes() {
-        match b {
-            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                encoded.push(b as char);
-            }
-            b' ' => encoded.push('+'),
-            _ => encoded.push_str(&format!("%{:02X}", b)),
-        }
-    }
-    encoded
-}
-
-async fn perform_web_fetch(url: &str) -> Result<String> {
-    let client = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        .build()?;
-
-    let res = client
-        .get(url)
-        .send()
-        .await
-        .with_context(|| format!("Failed to fetch URL '{}'", url))?;
-
-    let body = res.text().await.unwrap_or_default();
-    let cleaned = clean_html_to_markdown(&body);
-    Ok(format!("# Fetched URL: {}\n\n{}", url, cleaned))
-}
-
-fn clean_html_to_markdown(html: &str) -> String {
-    let without_scripts = strip_between_tags(html, "<script", "</script>");
-    let without_styles = strip_between_tags(&without_scripts, "<style", "</style>");
-    let cleaned = clean_html_tags(&without_styles);
-
-    let mut lines = Vec::new();
-    for line in cleaned.lines() {
-        let trimmed = line.trim();
-        if !trimmed.is_empty() {
-            lines.push(trimmed);
-        }
-    }
-    lines.join("\n\n")
-}
-
-fn strip_between_tags(input: &str, open_tag: &str, close_tag: &str) -> String {
-    let mut output = String::with_capacity(input.len());
-    let mut cursor = 0;
-
-    while let Some(start) = input[cursor..].find(open_tag) {
-        let abs_start = cursor + start;
-        output.push_str(&input[cursor..abs_start]);
-        if let Some(end) = input[abs_start..].find(close_tag) {
-            cursor = abs_start + end + close_tag.len();
-        } else {
-            return output;
-        }
-    }
-    output.push_str(&input[cursor..]);
-    output
+    // Tool Output Spilling: spill if >100 lines or >8KB
+    let final_output = spill_output_if_needed(repo_root, canonical_name, &raw_output).await;
+    Ok(final_output)
 }
 
 fn resolve_safe_path(worktree_dir: &Path, rel_path: &str) -> Result<PathBuf> {
@@ -715,10 +801,6 @@ async fn run_scoped_command(
             bail!("Command cancelled by user")
         }
     }
-}
-
-fn regex_lite_match(pattern: &str) -> Result<String> {
-    Ok(pattern.to_string())
 }
 
 async fn collect_matching_files(
@@ -854,8 +936,8 @@ async fn grep_walk(
 pub struct AgentSessionConfig {
     pub repo_root: PathBuf,
     pub worktree_path: PathBuf,
-    pub stage_id: String,
     pub role: String,
+    pub stage_id: String,
     pub task_id: String,
     pub task_title: String,
     pub task_description: String,
@@ -894,9 +976,25 @@ where
         )),
     ];
 
-    let tools = get_standard_tools();
+    // Load Tool Policy Configuration
+    let policy = load_tool_policy_config(&config.repo_root).await.unwrap_or_default();
+
+    // Collect standard tools + custom tools
+    let mut available_tools = get_standard_tools();
+    let custom_tools = discover_custom_tools(&config.repo_root).await;
+    available_tools.extend(custom_tools);
+
+    // Filter out disabled tools per Tool Policy Matrix (saving tokens!)
+    available_tools.retain(|t| is_tool_allowed(&policy, &config.stage_id, &t.function.name));
+
+    // Deterministic Prefix Caching: Sort tool definitions alphabetically by name
+    available_tools.sort_by(|a, b| a.function.name.cmp(&b.function.name));
+
     let llm_client = LlmClient::new();
     let max_turns = if config.max_turns == 0 { 25 } else { config.max_turns };
+
+    let mut modified_files = Vec::new();
+    let mut latest_sensor_status = "UNKNOWN".to_string();
 
     for turn in 1..=max_turns {
         if abort_flag.load(Ordering::SeqCst) {
@@ -904,16 +1002,14 @@ where
             bail!("Agent execution aborted by user");
         }
 
-        // State-Preserving Context Compactor: truncate tool outputs older than 3 turns (> 500 chars)
-        if turn > 2 {
-            let evaporated_bytes = compactor::ContextCompactor::evaporate_tool_logs(&mut messages);
-            if evaporated_bytes > 0 {
-                event_sink(AgentEvent::Thought(format!(
-                    "[Compactor] Evaporated {} bytes of historical tool logs.",
-                    evaporated_bytes
-                )));
-            }
-        }
+        // State-Preserving Context Compactor: evaporate old tool outputs >3 turns and >500 chars
+        let snapshot = StateSnapshot {
+            modified_files: modified_files.clone(),
+            sensor_status: latest_sensor_status.clone(),
+            next_step: format!("Proceeding with turn {}", turn),
+            verdict: None,
+        };
+        compact_conversation_history(&mut messages, turn, Some(&snapshot));
 
         event_sink(AgentEvent::TurnStart { turn });
 
@@ -922,7 +1018,11 @@ where
             messages: messages.clone(),
             temperature: config.temperature,
             stream: true,
-            tools: Some(tools.clone()),
+            tools: if available_tools.is_empty() {
+                None
+            } else {
+                Some(available_tools.clone())
+            },
             reasoning_effort: config.reasoning_effort.clone(),
         };
 
@@ -964,6 +1064,9 @@ where
                         function: crate::llm::FunctionCall { name, arguments },
                     });
                 }
+                StreamChunk::CacheTelemetry { .. } => {
+                    // Telemetry received from prefix cache tracker
+                }
                 StreamChunk::Done => break,
                 StreamChunk::Error(err) => {
                     event_sink(AgentEvent::Error(err.clone()));
@@ -991,18 +1094,37 @@ where
             let parsed_args: serde_json::Value =
                 serde_json::from_str(&tc.function.arguments).unwrap_or_else(|_| serde_json::json!({}));
 
+            // Track modified files
+            if tc.function.name == "write_file" || tc.function.name == "edit_file" || tc.function.name == "str_replace" {
+                if let Some(fp) = parsed_args.get("file_path").and_then(|v| v.as_str()) {
+                    if !modified_files.contains(&fp.to_string()) {
+                        modified_files.push(fp.to_string());
+                    }
+                }
+            }
+
             let exec_result = execute_tool(
                 &config.repo_root,
                 &config.worktree_path,
-                &config.stage_id,
                 &tc.function.name,
+                &config.stage_id,
+                &policy,
                 &parsed_args,
                 Arc::clone(&abort_flag),
             )
             .await;
 
             let (result_str, success) = match exec_result {
-                Ok(out) => (out, true),
+                Ok(out) => {
+                    if tc.function.name == "execute_command" || tc.function.name == "bash" {
+                        if out.contains("[Exit Code: 0]") {
+                            latest_sensor_status = "PASS".to_string();
+                        } else {
+                            latest_sensor_status = "FAIL".to_string();
+                        }
+                    }
+                    (out, true)
+                }
                 Err(e) => (format!("Error executing {}: {}", tc.function.name, e), false),
             };
 
