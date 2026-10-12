@@ -9,6 +9,20 @@ pub enum Role {
     Tool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CacheControl {
+    #[serde(rename = "type")]
+    pub cache_type: String,
+}
+
+impl CacheControl {
+    pub fn ephemeral() -> Self {
+        Self {
+            cache_type: "ephemeral".to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FunctionCall {
     pub name: String,
@@ -34,6 +48,8 @@ pub struct ChatMessage {
     pub tool_call_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "tool_calls")]
     pub tool_calls: Option<Vec<ToolCall>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "cache_control")]
+    pub cache_control: Option<CacheControl>,
 }
 
 impl ChatMessage {
@@ -44,6 +60,7 @@ impl ChatMessage {
             name: None,
             tool_call_id: None,
             tool_calls: None,
+            cache_control: None,
         }
     }
 
@@ -54,6 +71,7 @@ impl ChatMessage {
             name: None,
             tool_call_id: None,
             tool_calls: None,
+            cache_control: None,
         }
     }
 
@@ -64,6 +82,7 @@ impl ChatMessage {
             name: None,
             tool_call_id: None,
             tool_calls,
+            cache_control: None,
         }
     }
 
@@ -74,7 +93,13 @@ impl ChatMessage {
             name: None,
             tool_call_id: Some(tool_call_id.into()),
             tool_calls: None,
+            cache_control: None,
         }
+    }
+
+    pub fn with_cache_control(mut self, cc: CacheControl) -> Self {
+        self.cache_control = Some(cc);
+        self
     }
 }
 
@@ -101,6 +126,36 @@ impl ToolDefinition {
                 description: description.to_string(),
                 parameters,
             },
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.function.name
+    }
+}
+
+/// Token & cache telemetry statistics
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TokenUsageStats {
+    #[serde(rename = "inputTokens", default)]
+    pub input_tokens: u64,
+    #[serde(rename = "outputTokens", default)]
+    pub output_tokens: u64,
+    #[serde(rename = "cacheReadInputTokens", default)]
+    pub cache_read_input_tokens: u64,
+    #[serde(rename = "cacheCreationInputTokens", default)]
+    pub cache_creation_input_tokens: u64,
+    #[serde(rename = "cacheHitRate", default)]
+    pub cache_hit_rate: f64,
+}
+
+impl TokenUsageStats {
+    pub fn compute_hit_rate(&mut self) {
+        let total = self.input_tokens + self.cache_read_input_tokens;
+        if total > 0 {
+            self.cache_hit_rate = (self.cache_read_input_tokens as f64) / (total as f64);
+        } else {
+            self.cache_hit_rate = 0.0;
         }
     }
 }
