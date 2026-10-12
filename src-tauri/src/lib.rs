@@ -33,6 +33,7 @@ pub fn run() {
             get_tool_policies,
             save_tool_policies,
             compact_task_context,
+            compact_context,
             steer_agent,
         ])
         .run(tauri::generate_context!())

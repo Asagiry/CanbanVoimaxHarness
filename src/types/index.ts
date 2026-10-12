@@ -98,3 +98,10 @@ export interface ProjectInfo {
   activeBranch: string;
   worktreesCount: number;
 }
+
+export interface CompactionReport {
+  tokens_before: number;
+  tokens_after: number;
+  evaporated_count: number;
+  saved_tokens: number;
+}

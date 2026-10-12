@@ -109,7 +109,7 @@ pub fn compact_conversation_history(
 
 /// Estimate tokens from character count (~4 chars per token)
 pub fn estimate_tokens(text: &str) -> usize {
-    (text.len() + 3) / 4
+    text.len().div_ceil(4)
 }
 
 /// Calculate total estimated tokens across all messages

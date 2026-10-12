@@ -1,4 +1,5 @@
 pub mod compactor;
+pub use compactor::*;
 
 use crate::config::{is_tool_allowed, load_tool_policies, ToolPolicyConfig};
 use crate::hooks::kill_process_tree;
@@ -310,7 +311,7 @@ pub async fn maybe_spill_output(
         let all_lines: Vec<&str> = output.lines().collect();
         let head = all_lines.iter().take(20).copied().collect::<Vec<_>>().join("\n");
         let tail = if all_lines.len() > 40 {
-            all_lines[all_lines.len() - 20..].iter().copied().collect::<Vec<_>>().join("\n")
+            all_lines[all_lines.len() - 20..].join("\n")
         } else {
             String::new()
         };
