@@ -28,7 +28,7 @@ export default function App() {
       {/* In-App Mind / Rule Editor Modal */}
       <RuleEditorModal />
 
-      {/* Global Tool Policy Matrix Modal */}
+      {/* Tool Policy Matrix Modal */}
       <ToolPolicyModal />
     </div>
   );

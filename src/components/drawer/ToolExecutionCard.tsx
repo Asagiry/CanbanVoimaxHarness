@@ -14,9 +14,9 @@ import {
   Globe,
   FileText,
   Search,
-  FolderTree,
-  Bot,
   ExternalLink,
+  Archive,
+  Bot,
 } from 'lucide-react';
 
 interface ToolExecutionCardProps {
@@ -26,7 +26,11 @@ interface ToolExecutionCardProps {
 export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [activeDiffTab, setActiveDiffTab] = useState<'visual' | 'raw'>('visual');
+
+  const isEditFile =
+    tool.toolName === 'edit_file' ||
+    tool.toolName === 'str_replace' ||
+    Boolean(tool.params?.old_string && tool.params?.new_string);
 
   const getToolIcon = (name: string) => {
     switch (name) {
@@ -36,18 +40,19 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       case 'edit_file':
       case 'str_replace':
       case 'write_file':
+      case 'write':
         return <FileEdit className="h-3.5 w-3.5 text-cyber-amber" />;
       case 'read_file':
+      case 'read':
         return <FileText className="h-3.5 w-3.5 text-slate-300" />;
       case 'glob':
-        return <FolderTree className="h-3.5 w-3.5 text-sky-400" />;
       case 'grep':
-        return <Search className="h-3.5 w-3.5 text-emerald-400" />;
+        return <Search className="h-3.5 w-3.5 text-sky-400" />;
       case 'web_search':
       case 'web_fetch':
         return <Globe className="h-3.5 w-3.5 text-cyber-purple" />;
       case 'subagent':
-        return <Bot className="h-3.5 w-3.5 text-pink-400" />;
+        return <Bot className="h-3.5 w-3.5 text-cyber-emerald" />;
       default:
         return <Code2 className="h-3.5 w-3.5 text-slate-400" />;
     }
@@ -58,7 +63,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
     const content = [
       `Tool: ${tool.toolName}`,
       `Status: ${tool.status} (exit ${tool.exitCode ?? 0})`,
-      tool.params ? `Parameters:\n${JSON.stringify(tool.params, null, 2)}` : '',
+      tool.params ? `PARAMS:\n${JSON.stringify(tool.params, null, 2)}` : '',
       tool.stdout ? `STDOUT:\n${tool.stdout}` : '',
       tool.stderr ? `STDERR:\n${tool.stderr}` : '',
     ]
@@ -77,20 +82,12 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
     return `${ms}ms`;
   };
 
-  // Diff comparison for edit_file
-  const isEditFile = tool.toolName === 'edit_file' || tool.toolName === 'str_replace';
-  const oldString =
-    (tool.params?.old_string as string) ||
-    tool.diff?.oldString ||
-    '';
-  const newString =
-    (tool.params?.new_string as string) ||
-    tool.diff?.newString ||
-    '';
-  const filePath = (tool.params?.file_path as string) || '';
+  const oldString = (tool.params?.old_string as string) || (tool.params?.old_str as string) || '';
+  const newString = (tool.params?.new_string as string) || (tool.params?.new_str as string) || '';
+  const filePath = (tool.params?.file_path as string) || (tool.params?.path as string) || '';
 
-  const oldLines = oldString ? oldString.split('\n') : [];
-  const newLines = newString ? newString.split('\n') : [];
+  // Check if output was spilled to disk
+  const isSpilled = tool.stdout?.includes('[Output truncated:') || tool.stderr?.includes('[Output truncated:');
 
   return (
     <div className="rounded-lg border border-slate-800 bg-obsidian-900/90 overflow-hidden shadow-xs">
@@ -115,17 +112,15 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
           </span>
 
           {filePath && (
-            <span className="font-mono text-[11px] text-cyber-cyan truncate max-w-[200px]" title={filePath}>
-              {filePath}
+            <span className="font-mono text-[11px] text-slate-400 truncate max-w-[180px]">
+              ({filePath})
             </span>
           )}
 
-          {Boolean(tool.params?.command) && (
-            <span
-              className="font-mono text-[11px] text-slate-400 truncate max-w-[240px]"
-              title={String(tool.params?.command)}
-            >
-              $ {String(tool.params?.command)}
+          {isSpilled && (
+            <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-amber-500/15 border border-amber-500/30 text-amber-300">
+              <Archive className="h-2.5 w-2.5" />
+              <span>Spilled to Disk</span>
             </span>
           )}
         </div>
@@ -158,11 +153,11 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             </span>
           )}
 
-          {/* Copy Logs Button */}
+          {/* Copy Button */}
           <button
             onClick={handleCopyLogs}
             className="p-1 rounded text-slate-400 hover:text-white hover:bg-obsidian-750 transition"
-            title="Copy tool logs"
+            title="Copy logs"
           >
             {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
           </button>
@@ -171,93 +166,42 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
       {/* Expanded Accordion Body */}
       {isExpanded && (
-        <div className="p-3 border-t border-slate-800/80 space-y-3 font-mono text-xs">
-          {/* 1. Specialized Diff Viewer for edit_file */}
-          {Boolean(isEditFile && (oldString || newString)) && (
-            <div className="rounded-lg border border-slate-800 bg-obsidian-950 overflow-hidden">
-              <div className="flex items-center justify-between px-3 py-1.5 bg-obsidian-900 border-b border-slate-800 text-[11px]">
-                <div className="flex items-center space-x-2">
-                  <span className="font-bold text-cyber-amber uppercase text-[10px]">
-                    Visual Diff Viewer
-                  </span>
-                  <span className="text-slate-400">•</span>
-                  <span className="text-cyber-cyan truncate">{filePath}</span>
-                </div>
+        <div className="p-3 border-t border-slate-800/80 space-y-2.5 font-mono text-xs">
+          {/* Diff Viewer for edit_file / str_replace */}
+          {isEditFile && (oldString || newString) && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-[10px] font-bold uppercase text-slate-400">
+                <span>Visual Line Diff ({filePath || 'File Edit'})</span>
+                <span className="text-slate-500 font-normal">red = removed, green = added</span>
+              </div>
 
-                <div className="flex items-center space-x-2">
-                  <span className="text-[10px] text-rose-400">-{oldLines.length}</span>
-                  <span className="text-[10px] text-emerald-400">+{newLines.length}</span>
-                  <div className="flex rounded bg-obsidian-800 p-0.5 border border-slate-750 text-[10px]">
-                    <button
-                      onClick={() => setActiveDiffTab('visual')}
-                      className={`px-1.5 py-0.5 rounded transition ${
-                        activeDiffTab === 'visual'
-                          ? 'bg-cyber-cyan text-obsidian-950 font-bold'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      Split
-                    </button>
-                    <button
-                      onClick={() => setActiveDiffTab('raw')}
-                      className={`px-1.5 py-0.5 rounded transition ${
-                        activeDiffTab === 'raw'
-                          ? 'bg-cyber-cyan text-obsidian-950 font-bold'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      JSON
-                    </button>
+              <div className="rounded-lg border border-slate-800 bg-obsidian-950 overflow-hidden text-[11px] leading-relaxed">
+                {/* Old Lines (Red) */}
+                {oldString.split('\n').map((line, idx) => (
+                  <div
+                    key={`old-${idx}`}
+                    className="flex items-start bg-rose-950/30 text-rose-300 border-l-2 border-rose-500 px-2 py-0.5 font-mono select-text"
+                  >
+                    <span className="select-none text-rose-500/60 w-6 shrink-0">-</span>
+                    <span className="whitespace-pre-wrap">{line}</span>
                   </div>
-                </div>
-              </div>
+                ))}
 
-              {activeDiffTab === 'visual' ? (
-                <div className="divide-y divide-slate-850 max-h-64 overflow-y-auto text-[11px] leading-relaxed">
-                  {/* Removed lines (red) */}
-                  {oldLines.map((line, idx) => (
-                    <div
-                      key={`del-${idx}`}
-                      className="flex items-start bg-rose-950/25 text-rose-300 border-l-2 border-rose-500/80 px-2.5 py-0.5 font-mono select-text"
-                    >
-                      <span className="w-5 text-rose-500/70 select-none shrink-0 font-bold">-</span>
-                      <pre className="whitespace-pre-wrap break-all">{line || ' '}</pre>
-                    </div>
-                  ))}
-
-                  {/* Added lines (green) */}
-                  {newLines.map((line, idx) => (
-                    <div
-                      key={`add-${idx}`}
-                      className="flex items-start bg-emerald-950/25 text-emerald-300 border-l-2 border-emerald-500/80 px-2.5 py-0.5 font-mono select-text"
-                    >
-                      <span className="w-5 text-emerald-500/70 select-none shrink-0 font-bold">+</span>
-                      <pre className="whitespace-pre-wrap break-all">{line || ' '}</pre>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <pre className="p-2.5 text-[11px] text-slate-300 overflow-x-auto">
-                  {JSON.stringify({ file_path: filePath, old_string: oldString, new_string: newString }, null, 2)}
-                </pre>
-              )}
-            </div>
-          )}
-
-          {/* 2. Command Shell Execution Card */}
-          {(tool.toolName === 'execute_command' || tool.toolName === 'bash') && Boolean(tool.params?.command) && (
-            <div>
-              <span className="text-[10px] uppercase font-bold text-slate-500 block mb-1">
-                Executed Command
-              </span>
-              <div className="p-2.5 rounded bg-obsidian-950 border border-slate-800 flex items-center space-x-2 text-cyber-cyan text-[11px]">
-                <span className="text-slate-500 select-none font-bold">$</span>
-                <span className="select-text font-bold">{String(tool.params.command)}</span>
+                {/* New Lines (Green) */}
+                {newString.split('\n').map((line, idx) => (
+                  <div
+                    key={`new-${idx}`}
+                    className="flex items-start bg-emerald-950/30 text-emerald-300 border-l-2 border-emerald-500 px-2 py-0.5 font-mono select-text"
+                  >
+                    <span className="select-none text-emerald-500/60 w-6 shrink-0">+</span>
+                    <span className="whitespace-pre-wrap">{line}</span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
-          {/* 3. General Input Parameters (for non-edit tools) */}
+          {/* Tool Parameters (when not already rendered in diff viewer) */}
           {!isEditFile && tool.params && Object.keys(tool.params).length > 0 && (
             <div>
               <span className="text-[10px] uppercase font-bold text-slate-500 block mb-1">
@@ -269,33 +213,33 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             </div>
           )}
 
-          {/* 4. Terminal STDOUT / Output */}
+          {/* Terminal / Tool STDOUT */}
           {tool.stdout && (
             <div>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[10px] uppercase font-bold text-slate-500">
-                  Stdout / Tool Result
+                  Tool Output (Stdout)
                 </span>
-                {tool.stdout.includes('spilled to') && (
-                  <span className="flex items-center space-x-1 text-[10px] font-mono text-cyber-amber">
+                {tool.stdout.includes('spilled to .cvh/spill') && (
+                  <span className="text-[10px] text-amber-400 font-mono flex items-center space-x-1">
                     <ExternalLink className="h-2.5 w-2.5" />
-                    <span>Spilled Log Archive</span>
+                    <span>Log file saved to disk</span>
                   </span>
                 )}
               </div>
-              <pre className="p-2.5 rounded bg-obsidian-950 border border-slate-800 text-[11px] text-slate-200 overflow-x-auto leading-relaxed max-h-48 whitespace-pre-wrap select-text">
+              <pre className="p-2.5 rounded bg-obsidian-950 border border-slate-800 text-[11px] text-slate-200 overflow-x-auto leading-relaxed max-h-56 whitespace-pre-wrap select-text">
                 {tool.stdout}
               </pre>
             </div>
           )}
 
-          {/* 5. Terminal STDERR */}
+          {/* Terminal / Tool STDERR */}
           {tool.stderr && (
             <div>
               <span className="text-[10px] uppercase font-bold text-rose-400 block mb-1">
                 Stderr Trace
               </span>
-              <pre className="p-2.5 rounded bg-rose-950/20 border border-rose-900/50 text-[11px] text-rose-300 overflow-x-auto leading-relaxed max-h-48 whitespace-pre-wrap select-text">
+              <pre className="p-2.5 rounded bg-rose-950/20 border border-rose-900/50 text-[11px] text-rose-300 overflow-x-auto leading-relaxed max-h-56 whitespace-pre-wrap select-text">
                 {tool.stderr}
               </pre>
             </div>

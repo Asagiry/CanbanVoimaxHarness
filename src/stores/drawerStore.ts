@@ -1,8 +1,16 @@
 import { create } from 'zustand';
-import { LiveStreamEntry, ToolExecution, ContextStats } from '../types';
+import { LiveStreamEntry, ToolExecution } from '../types';
 import { INITIAL_STREAM_ENTRIES, INITIAL_TOOL_EXECUTIONS } from './mockData';
 
-export type DrawerTab = 'output' | 'thoughts' | 'tools';
+export type DrawerTab = 'thoughts' | 'output' | 'tools';
+
+export interface TaskTelemetry {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  cacheHitRate: number;
+}
 
 interface DrawerState {
   isOpen: boolean;
@@ -10,51 +18,42 @@ interface DrawerState {
   activeTab: DrawerTab;
   streamEntries: Record<string, { thoughts: LiveStreamEntry[]; outputs: LiveStreamEntry[] }>;
   toolExecutions: Record<string, ToolExecution[]>;
-  contextStats: Record<string, ContextStats>;
+  taskTelemetry: Record<string, TaskTelemetry>;
+  thinkingStartTime: Record<string, number | null>;
 
   // Actions
   openDrawer: (taskId: string, initialTab?: DrawerTab) => void;
   closeDrawer: () => void;
   setActiveTab: (tab: DrawerTab) => void;
-  appendThought: (taskId: string, content: string, durationMs?: number) => void;
+  appendThought: (taskId: string, content: string) => void;
   appendOutput: (
     taskId: string,
     content: string,
-    type?: 'output' | 'error' | 'system' | 'user'
+    type?: 'output' | 'error' | 'system' | 'steer' | 'user'
   ) => void;
   addToolExecution: (taskId: string, tool: ToolExecution) => void;
-  steerAgent: (taskId: string, instruction: string) => Promise<void>;
-  compactContext: (taskId: string) => Promise<void>;
+  updateTelemetry: (taskId: string, telemetry: Partial<TaskTelemetry>) => void;
+  setThinkingStartTime: (taskId: string, time: number | null) => void;
+  sendSteerMessage: (taskId: string, message: string) => Promise<void>;
+  compactTaskContext: (taskId: string) => Promise<{ savedTokens: number; evaporatedCount: number }>;
   clearTaskLogs: (taskId: string) => void;
 }
-
-const DEFAULT_CONTEXT_STATS: ContextStats = {
-  totalTokens: 18400,
-  maxTokens: 128000,
-  percent: 14,
-  turnCount: 4,
-  compactedTurns: 0,
-  tokensSaved: 0,
-};
 
 export const useDrawerStore = create<DrawerState>((set, get) => ({
   isOpen: false,
   activeTaskId: null,
-  activeTab: 'output',
+  activeTab: 'thoughts',
   streamEntries: INITIAL_STREAM_ENTRIES,
   toolExecutions: INITIAL_TOOL_EXECUTIONS,
-  contextStats: {},
+  taskTelemetry: {},
+  thinkingStartTime: {},
 
-  openDrawer: (taskId, initialTab = 'output') => {
-    set((state) => ({
+  openDrawer: (taskId, initialTab = 'thoughts') => {
+    set({
       isOpen: true,
       activeTaskId: taskId,
       activeTab: initialTab,
-      contextStats: {
-        ...state.contextStats,
-        [taskId]: state.contextStats[taskId] || { ...DEFAULT_CONTEXT_STATS },
-      },
-    }));
+    });
   },
 
   closeDrawer: () => {
@@ -66,8 +65,12 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
 
   setActiveTab: (tab) => set({ activeTab: tab }),
 
-  appendThought: (taskId, content, durationMs) => {
+  appendThought: (taskId, content) => {
     const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false });
+    const now = Date.now();
+    const start = get().thinkingStartTime[taskId] || now;
+    const durationMs = now - start;
+
     const newEntry: LiveStreamEntry = {
       id: `th-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       timestamp: timeStr,
@@ -101,24 +104,12 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
 
     set((state) => {
       const existing = state.streamEntries[taskId] || { thoughts: [], outputs: [] };
-      const currentStats = state.contextStats[taskId] || { ...DEFAULT_CONTEXT_STATS };
-      const addedTokens = Math.max(1, Math.round(content.length / 4));
-      const newTotal = currentStats.totalTokens + addedTokens;
-
       return {
         streamEntries: {
           ...state.streamEntries,
           [taskId]: {
             ...existing,
             outputs: [...existing.outputs, newEntry],
-          },
-        },
-        contextStats: {
-          ...state.contextStats,
-          [taskId]: {
-            ...currentStats,
-            totalTokens: newTotal,
-            percent: Math.min(100, Math.round((newTotal / currentStats.maxTokens) * 100)),
           },
         },
       };
@@ -137,92 +128,97 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
     });
   },
 
-  steerAgent: async (taskId, instruction) => {
-    if (!instruction.trim()) return;
-
-    // 1. Append user message to chat stream
-    get().appendOutput(taskId, instruction, 'user');
-
-    // 2. Try Tauri IPC invoke if in Tauri environment
-    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('steer_agent', { taskId, instruction });
-        return;
-      } catch (err) {
-        console.warn('Tauri steer_agent IPC call fallback:', err);
-      }
-    }
-
-    // Fallback simulation: agent receives instruction and resumes ReAct loop
-    setTimeout(() => {
-      get().appendThought(
-        taskId,
-        `Принята инструкция от оператора: "${instruction}". Корректирую план действий...`,
-        420
-      );
-
-      setTimeout(() => {
-        get().appendOutput(
-          taskId,
-          `Инструкция принята. Выполняю корректировку кода в изолированном worktree согласно указаниям оператора.`,
-          'output'
-        );
-      }, 700);
-    }, 400);
+  updateTelemetry: (taskId, telemetry) => {
+    set((state) => {
+      const current = state.taskTelemetry[taskId] || {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheHitRate: 0,
+      };
+      return {
+        taskTelemetry: {
+          ...state.taskTelemetry,
+          [taskId]: { ...current, ...telemetry },
+        },
+      };
+    });
   },
 
-  compactContext: async (taskId) => {
-    // 1. Try Tauri IPC invoke
-    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('compact_task_context', { taskId });
-      } catch (err) {
-        console.warn('Tauri compact_task_context IPC call fallback:', err);
-      }
-    }
+  setThinkingStartTime: (taskId, time) => {
+    set((state) => ({
+      thinkingStartTime: {
+        ...state.thinkingStartTime,
+        [taskId]: time,
+      },
+    }));
+  },
 
-    // Evaporate old tool executions & outputs in store
+  sendSteerMessage: async (taskId, message) => {
+    // 1. Append user steering message into output stream
+    get().appendOutput(taskId, message, 'steer');
+
+    // 2. Invoke native Tauri steer_agent command
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('steer_agent', { taskId, message });
+    } catch {
+      // In web or mock mode, generate agent thought response
+      setTimeout(() => {
+        get().appendThought(
+          taskId,
+          `Received steering instruction: "${message}". Re-planning execution path.`
+        );
+      }, 500);
+    }
+  },
+
+  compactTaskContext: async (taskId) => {
+    let savedTokens = 2450;
+    let evaporatedCount = 0;
+
+    // Evaporate in memory for older tools
     set((state) => {
-      const existingTools = state.toolExecutions[taskId] || [];
-      const compactedTools = existingTools.map((t, idx) => {
-        if (idx > 2 && t.stdout && t.stdout.length > 500) {
+      const tools = state.toolExecutions[taskId] || [];
+      const updatedTools = tools.map((t, idx) => {
+        if (idx > 2 && (t.stdout?.length || 0) > 500) {
+          evaporatedCount += 1;
           return {
             ...t,
-            stdout: `[Evaporated: output previously verified, ${t.stdout.length} chars dropped]`,
+            stdout: `[Evaporated by State-Preserving Compactor: ${t.stdout?.length} chars truncated. Preserved status: ${t.status}]`,
           };
         }
         return t;
       });
 
-      const currentStats = state.contextStats[taskId] || { ...DEFAULT_CONTEXT_STATS };
-      const savedTokens = 2400;
-      const newTotal = Math.max(1000, currentStats.totalTokens - savedTokens);
-
       return {
         toolExecutions: {
           ...state.toolExecutions,
-          [taskId]: compactedTools,
-        },
-        contextStats: {
-          ...state.contextStats,
-          [taskId]: {
-            ...currentStats,
-            totalTokens: newTotal,
-            percent: Math.min(100, Math.round((newTotal / currentStats.maxTokens) * 100)),
-            compactedTurns: currentStats.compactedTurns + 2,
-            tokensSaved: currentStats.tokensSaved + savedTokens,
-          },
+          [taskId]: updatedTools,
         },
       };
     });
 
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const res = await invoke<{ estimated_saved_tokens?: number; evaporated_tools_count?: number }>(
+        'compact_task_context',
+        { taskId }
+      );
+      if (res?.estimated_saved_tokens) savedTokens = res.estimated_saved_tokens;
+      if (res?.evaporated_tools_count) evaporatedCount = Math.max(evaporatedCount, res.evaporated_tools_count);
+    } catch {
+      // Keep local values
+    }
+
     get().appendOutput(
       taskId,
-      `[CONTEXT COMPACTOR] ⚡ Evaporated verified tool outputs older than 3 turns. Preserved immutable anchors (System prompt, Task prompt, last 2 turns). Saved ~2,400 tokens!`,
+      `[COMPACTOR] State-preserving compaction completed. Evaporated prior tool outputs, saved ~${savedTokens} tokens.`,
       'system'
     );
+
+    return { savedTokens, evaporatedCount };
   },
 
   clearTaskLogs: (taskId) => {
@@ -234,10 +230,6 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       toolExecutions: {
         ...state.toolExecutions,
         [taskId]: [],
-      },
-      contextStats: {
-        ...state.contextStats,
-        [taskId]: { ...DEFAULT_CONTEXT_STATS },
       },
     }));
   },

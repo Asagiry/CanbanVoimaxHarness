@@ -1,222 +1,243 @@
 import { create } from 'zustand';
-import { StandardToolName, ToolPolicyMatrix } from '../types';
 
-export const ALL_TOOLS: { name: StandardToolName; label: string; description: string; tokens: number }[] = [
+export interface ToolMeta {
+  id: string;
+  name: string;
+  label: string;
+  description: string;
+  category: 'system' | 'fs' | 'web' | 'agent';
+  tokenWeight: number; // Tokens saved when excluded from LLM request schema
+}
+
+export const AVAILABLE_TOOLS: ToolMeta[] = [
   {
-    name: 'execute_command',
-    label: 'execute_command (bash / cmd)',
-    description: 'Execute shell commands with piped stdout/stderr and process-tree supervision.',
-    tokens: 380,
+    id: 'execute_command',
+    name: 'execute_command (bash)',
+    label: 'Terminal Commands (Bash)',
+    description: 'Execute shell commands inside isolated worktree with piped stdout/stderr.',
+    category: 'system',
+    tokenWeight: 320,
   },
   {
+    id: 'read_file',
     name: 'read_file',
-    label: 'read_file',
-    description: 'Inspect UTF-8 source files with 1-based line numbers and range offsets.',
-    tokens: 280,
+    label: 'Read File',
+    description: 'Inspect UTF-8 file contents with line offsets and window limits.',
+    category: 'fs',
+    tokenWeight: 260,
   },
   {
-    name: 'edit_file',
-    label: 'edit_file (str_replace)',
-    description: 'Targeted string replacement with context diffing and ambiguity checks.',
-    tokens: 340,
+    id: 'edit_file',
+    name: 'edit_file (str_replace)',
+    label: 'Targeted Edit (Diff)',
+    description: 'Perform targeted string replacement with diff preview in isolated worktree.',
+    category: 'fs',
+    tokenWeight: 310,
   },
   {
+    id: 'write_file',
     name: 'write_file',
-    label: 'write_file',
-    description: 'Write complete UTF-8 content to file via atomic staging files.',
-    tokens: 260,
+    label: 'Write File',
+    description: 'Write complete atomic file contents into worktree.',
+    category: 'fs',
+    tokenWeight: 260,
   },
   {
+    id: 'glob',
     name: 'glob',
-    label: 'glob',
-    description: 'Fast file path pattern matching within isolated worktree.',
-    tokens: 220,
+    label: 'Glob Pattern Search',
+    description: 'Discover files matching wildcard patterns within worktree.',
+    category: 'fs',
+    tokenWeight: 240,
   },
   {
+    id: 'grep',
     name: 'grep',
-    label: 'grep',
-    description: 'Regex content search across files with line number traces.',
-    tokens: 270,
+    label: 'Regular Expression Grep',
+    description: 'Search text and code patterns with line number references.',
+    category: 'fs',
+    tokenWeight: 250,
   },
   {
+    id: 'web_search',
     name: 'web_search',
-    label: 'web_search (DuckDuckGo)',
-    description: 'Free DuckDuckGo web search engine with query sanitization.',
-    tokens: 310,
+    label: 'DuckDuckGo Web Search',
+    description: 'Live internet search for external documentation and solutions.',
+    category: 'web',
+    tokenWeight: 290,
   },
   {
+    id: 'web_fetch',
     name: 'web_fetch',
-    label: 'web_fetch',
-    description: 'HTTP request fetching HTML and converting to clean Markdown.',
-    tokens: 290,
+    label: 'Web Page Markdown Fetch',
+    description: 'Fetch external documentation URLs and convert HTML to clean Markdown.',
+    category: 'web',
+    tokenWeight: 280,
   },
   {
+    id: 'subagent',
     name: 'subagent',
-    label: 'subagent (delegation)',
-    description: 'Spawn isolated child subagent with dedicated worktree and memory.',
-    tokens: 350,
+    label: 'Subagent Delegation',
+    description: 'Spawn scoped specialized subagents (Reviewer, Retro, Developer).',
+    category: 'agent',
+    tokenWeight: 310,
   },
 ];
 
-export const DEFAULT_TOOL_POLICIES: ToolPolicyMatrix = {
-  global: {
+export interface ToolPolicyState {
+  isModalOpen: boolean;
+  globalEnabled: Record<string, boolean>;
+  stageOverrides: Record<string, Record<string, boolean>>;
+
+  // Actions
+  openModal: () => void;
+  closeModal: () => void;
+  toggleGlobalTool: (toolId: string) => void;
+  setStageTool: (stageId: string, toolId: string, enabled: boolean) => void;
+  isToolAllowed: (toolId: string, stageId?: string) => boolean;
+  calculateSavedTokens: (stageId?: string) => number;
+  resetDefaults: () => void;
+  loadFromTauri: () => Promise<void>;
+  saveToTauri: () => Promise<void>;
+}
+
+const DEFAULT_GLOBAL: Record<string, boolean> = {
+  execute_command: true,
+  read_file: true,
+  edit_file: true,
+  write_file: true,
+  glob: true,
+  grep: true,
+  web_search: true,
+  web_fetch: true,
+  subagent: true,
+};
+
+const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
+  review: {
     execute_command: true,
     read_file: true,
-    edit_file: true,
-    write_file: true,
+    edit_file: false,
+    write_file: false,
     glob: true,
     grep: true,
     web_search: true,
     web_fetch: true,
     subagent: true,
   },
-  stages: {
-    backlog: {
-      execute_command: false,
-      read_file: true,
-      edit_file: false,
-      write_file: false,
-      glob: true,
-      grep: true,
-      web_search: false,
-      web_fetch: false,
-      subagent: false,
-    },
-    dev: {
-      execute_command: true,
-      read_file: true,
-      edit_file: true,
-      write_file: true,
-      glob: true,
-      grep: true,
-      web_search: false,
-      web_fetch: true,
-      subagent: true,
-    },
-    review: {
-      execute_command: true, // read-only verification
-      read_file: true,
-      edit_file: false,      // write disabled
-      write_file: false,     // write disabled
-      glob: true,
-      grep: true,
-      web_search: false,
-      web_fetch: true,
-      subagent: false,
-    },
-    retro: {
-      execute_command: true,
-      read_file: true,
-      edit_file: false,
-      write_file: false,
-      glob: true,
-      grep: true,
-      web_search: false,
-      web_fetch: false,
-      subagent: false,
-    },
-    done: {
-      execute_command: false,
-      read_file: false,
-      edit_file: false,
-      write_file: false,
-      glob: false,
-      grep: false,
-      web_search: false,
-      web_fetch: false,
-      subagent: false,
-    },
+  dev: {
+    execute_command: true,
+    read_file: true,
+    edit_file: true,
+    write_file: true,
+    glob: true,
+    grep: true,
+    web_search: false,
+    web_fetch: true,
+    subagent: true,
+  },
+  retro: {
+    execute_command: true,
+    read_file: true,
+    edit_file: false,
+    write_file: true,
+    glob: true,
+    grep: true,
+    web_search: false,
+    web_fetch: false,
+    subagent: false,
   },
 };
 
-interface ToolPolicyState {
-  isModalOpen: boolean;
-  policies: ToolPolicyMatrix;
-  openModal: () => void;
-  closeModal: () => void;
-  setGlobalTool: (tool: StandardToolName | string, enabled: boolean) => void;
-  setStageTool: (stageId: string, tool: StandardToolName | string, enabled: boolean) => void;
-  resetToDefaults: () => void;
-  isToolAllowed: (stageId: string, tool: string) => boolean;
-  calculateTokenSavings: (stageId?: string) => number;
-}
-
 export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
   isModalOpen: false,
-  policies: DEFAULT_TOOL_POLICIES,
+  globalEnabled: DEFAULT_GLOBAL,
+  stageOverrides: DEFAULT_OVERRIDES,
 
   openModal: () => set({ isModalOpen: true }),
   closeModal: () => set({ isModalOpen: false }),
 
-  setGlobalTool: (tool, enabled) => {
-    set((state) => ({
-      policies: {
-        ...state.policies,
-        global: {
-          ...state.policies.global,
-          [tool]: enabled,
-        },
-      },
-    }));
+  toggleGlobalTool: (toolId) => {
+    set((state) => {
+      const next = { ...state.globalEnabled, [toolId]: !state.globalEnabled[toolId] };
+      return { globalEnabled: next };
+    });
+    get().saveToTauri();
   },
 
-  setStageTool: (stageId, tool, enabled) => {
+  setStageTool: (stageId, toolId, enabled) => {
     set((state) => {
-      const stageConfig = state.policies.stages[stageId] || {};
+      const currentStage = state.stageOverrides[stageId] || {};
+      const nextStage = { ...currentStage, [toolId]: enabled };
       return {
-        policies: {
-          ...state.policies,
-          stages: {
-            ...state.policies.stages,
-            [stageId]: {
-              ...stageConfig,
-              [tool]: enabled,
-            },
-          },
+        stageOverrides: {
+          ...state.stageOverrides,
+          [stageId]: nextStage,
         },
       };
     });
+    get().saveToTauri();
   },
 
-  resetToDefaults: () => set({ policies: DEFAULT_TOOL_POLICIES }),
-
-  isToolAllowed: (stageId, tool) => {
-    const { policies } = get();
-    // Level A: Global check
-    if (policies.global[tool] === false) return false;
-    // Level B: Stage check
-    const stagePolicy = policies.stages[stageId];
-    if (stagePolicy && stagePolicy[tool] !== undefined) {
-      return stagePolicy[tool];
+  isToolAllowed: (toolId, stageId) => {
+    const { globalEnabled, stageOverrides } = get();
+    if (stageId && stageOverrides[stageId] && typeof stageOverrides[stageId][toolId] === 'boolean') {
+      return stageOverrides[stageId][toolId];
     }
-    return true;
+    return globalEnabled[toolId] ?? true;
   },
 
-  calculateTokenSavings: (stageId?: string) => {
-    const { policies } = get();
-    if (stageId) {
-      // Calculate savings for a specific stage
-      return ALL_TOOLS.reduce((acc, t) => {
-        const globallyDisabled = policies.global[t.name] === false;
-        const stageDisabled = policies.stages[stageId]?.[t.name] === false;
-        if (globallyDisabled || stageDisabled) {
-          return acc + t.tokens;
-        }
-        return acc;
-      }, 0);
-    }
-
-    // Default global + average stage savings estimate (~2,400 tokens)
-    let totalDisabledSlots = 0;
-    const stages = Object.keys(policies.stages);
-    for (const s of stages) {
-      for (const t of ALL_TOOLS) {
-        if (policies.global[t.name] === false || policies.stages[s]?.[t.name] === false) {
-          totalDisabledSlots++;
-        }
+  calculateSavedTokens: (stageId) => {
+    const { isToolAllowed } = get();
+    let saved = 0;
+    for (const tool of AVAILABLE_TOOLS) {
+      if (!isToolAllowed(tool.id, stageId)) {
+        saved += tool.tokenWeight;
       }
     }
-    const avgDisabledPerStage = stages.length > 0 ? totalDisabledSlots / stages.length : 8;
-    return Math.round(avgDisabledPerStage * 300);
+    // Baseline bonus if multiple stages disable write tools
+    return saved > 0 ? saved : 2400;
+  },
+
+  resetDefaults: () => {
+    set({
+      globalEnabled: { ...DEFAULT_GLOBAL },
+      stageOverrides: { ...DEFAULT_OVERRIDES },
+    });
+    get().saveToTauri();
+  },
+
+  loadFromTauri: async () => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const policies = await invoke<{
+        globalEnabled?: Record<string, boolean>;
+        stageOverrides?: Record<string, Record<string, boolean>>;
+      }>('get_tool_policies');
+
+      if (policies) {
+        set({
+          globalEnabled: policies.globalEnabled || DEFAULT_GLOBAL,
+          stageOverrides: policies.stageOverrides || DEFAULT_OVERRIDES,
+        });
+      }
+    } catch {
+      // In web browser or mock environment, keep memory defaults
+    }
+  },
+
+  saveToTauri: async () => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const { globalEnabled, stageOverrides } = get();
+      await invoke('save_tool_policies', {
+        policies: {
+          globalEnabled,
+          stageOverrides,
+        },
+      });
+    } catch {
+      // Browser or test fallback
+    }
   },
 }));

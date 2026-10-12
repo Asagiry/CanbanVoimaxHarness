@@ -10,12 +10,12 @@ import {
   AlertTriangle,
   XCircle,
   GitBranch,
-  Terminal,
   Code2,
   ShieldCheck,
   Sparkles,
   Palette,
   Bot,
+  MessageSquare,
 } from 'lucide-react';
 
 interface KanbanCardProps {
@@ -24,7 +24,9 @@ interface KanbanCardProps {
 }
 
 export default function KanbanCard({ task, index }: KanbanCardProps) {
-  const { openDrawer } = useDrawerStore();
+  const { openDrawer, streamEntries } = useDrawerStore();
+  const chatEntries = streamEntries[task.id];
+  const chatCount = (chatEntries?.thoughts.length || 0) + (chatEntries?.outputs.length || 0);
 
   const getPriorityBadge = (priority: TaskPriority) => {
     switch (priority) {
@@ -216,10 +218,22 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
             </div>
           </div>
 
-          {/* Quick Drawer Open Indicator on Hover */}
-          <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <span className="p-1 rounded bg-obsidian-750 text-slate-300 hover:text-white" title="Open Agent Console">
-              <Terminal className="h-3 w-3" />
+          {/* Quick Chat Stream Open Indicator on Hover */}
+          <div className="absolute right-2 top-2 flex items-center space-x-1">
+            {chatCount > 0 && (
+              <span
+                className="flex items-center space-x-1 px-1.5 py-0.5 rounded font-mono text-[9px] bg-cyan-950/80 text-cyber-cyan border border-cyan-800/40"
+                title={`${chatCount} chat messages & thoughts`}
+              >
+                <MessageSquare className="h-2.5 w-2.5" />
+                <span>{chatCount}</span>
+              </span>
+            )}
+            <span
+              className="p-1 rounded bg-obsidian-750 text-slate-300 hover:text-cyber-cyan opacity-0 group-hover:opacity-100 transition"
+              title="Open Task Chat Stream"
+            >
+              <MessageSquare className="h-3 w-3" />
             </span>
           </div>
         </div>

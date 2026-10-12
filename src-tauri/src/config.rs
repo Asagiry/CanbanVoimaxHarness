@@ -168,3 +168,106 @@ pub async fn save_project_registry(registry_path: Option<PathBuf>, registry: &Pr
         .context("Failed to serialize ProjectRegistry to JSON")?;
     atomic_write_file(&path, &serialized).await
 }
+
+// ============================================================================
+// Tool Policy Matrix Configuration
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolPolicyConfig {
+    #[serde(default = "default_global_tools", rename = "globalEnabled")]
+    pub global_enabled: HashMap<String, bool>,
+    #[serde(default, rename = "stageOverrides")]
+    pub stage_overrides: HashMap<String, HashMap<String, bool>>,
+}
+
+pub fn default_global_tools() -> HashMap<String, bool> {
+    let mut map = HashMap::new();
+    map.insert("execute_command".to_string(), true);
+    map.insert("read_file".to_string(), true);
+    map.insert("edit_file".to_string(), true);
+    map.insert("write_file".to_string(), true);
+    map.insert("glob".to_string(), true);
+    map.insert("grep".to_string(), true);
+    map.insert("web_search".to_string(), true);
+    map.insert("web_fetch".to_string(), true);
+    map.insert("subagent".to_string(), true);
+    map
+}
+
+impl Default for ToolPolicyConfig {
+    fn default() -> Self {
+        let mut stage_overrides = HashMap::new();
+
+        // Review stage: read_file, grep, glob, bash read-only enabled; edit_file, write_file disabled
+        let mut review_map = HashMap::new();
+        review_map.insert("read_file".to_string(), true);
+        review_map.insert("grep".to_string(), true);
+        review_map.insert("glob".to_string(), true);
+        review_map.insert("execute_command".to_string(), true);
+        review_map.insert("edit_file".to_string(), false);
+        review_map.insert("write_file".to_string(), false);
+        review_map.insert("web_search".to_string(), true);
+        review_map.insert("web_fetch".to_string(), true);
+        review_map.insert("subagent".to_string(), true);
+        stage_overrides.insert("review".to_string(), review_map);
+
+        // Dev stage: write enabled, web_search disabled
+        let mut dev_map = HashMap::new();
+        dev_map.insert("execute_command".to_string(), true);
+        dev_map.insert("read_file".to_string(), true);
+        dev_map.insert("edit_file".to_string(), true);
+        dev_map.insert("write_file".to_string(), true);
+        dev_map.insert("glob".to_string(), true);
+        dev_map.insert("grep".to_string(), true);
+        dev_map.insert("web_search".to_string(), false);
+        dev_map.insert("web_fetch".to_string(), true);
+        dev_map.insert("subagent".to_string(), true);
+        stage_overrides.insert("dev".to_string(), dev_map);
+
+        Self {
+            global_enabled: default_global_tools(),
+            stage_overrides,
+        }
+    }
+}
+
+pub fn is_tool_allowed(
+    policy: &ToolPolicyConfig,
+    stage_id: Option<&str>,
+    tool_name: &str,
+) -> bool {
+    // Stage-level override takes precedence
+    if let Some(stage) = stage_id {
+        if let Some(stage_map) = policy.stage_overrides.get(stage) {
+            if let Some(&allowed) = stage_map.get(tool_name) {
+                return allowed;
+            }
+        }
+    }
+    // Global switch fallback
+    policy.global_enabled.get(tool_name).copied().unwrap_or(true)
+}
+
+pub async fn load_tool_policies(root_path: impl AsRef<Path>) -> Result<ToolPolicyConfig> {
+    let policy_path = root_path.as_ref().join(".cvh").join("tool_policy.json");
+    if !policy_path.exists() {
+        return Ok(ToolPolicyConfig::default());
+    }
+
+    let content = tokio::fs::read_to_string(&policy_path)
+        .await
+        .with_context(|| format!("Failed to read tool policy at {:?}", policy_path))?;
+
+    let config: ToolPolicyConfig = serde_json::from_str(&content)
+        .with_context(|| format!("Failed to parse tool policy JSON at {:?}", policy_path))?;
+
+    Ok(config)
+}
+
+pub async fn save_tool_policies(root_path: impl AsRef<Path>, config: &ToolPolicyConfig) -> Result<()> {
+    let policy_path = root_path.as_ref().join(".cvh").join("tool_policy.json");
+    let serialized = serde_json::to_string_pretty(config)
+        .context("Failed to serialize ToolPolicyConfig to JSON")?;
+    atomic_write_file(&policy_path, &serialized).await
+}

@@ -16,7 +16,7 @@ import {
 export default function Topbar() {
   const { activeProject, availableProjects, switchProject, isTauriEnvironment } = useProjectStore();
   const { searchQuery, setSearchQuery, tasks } = useBoardStore();
-  const { openModal } = useToolPolicyStore();
+  const { openModal: openToolPolicyModal } = useToolPolicyStore();
   const searchInputId = useId();
 
   const runningCount = tasks.filter((t) => t.status === 'running').length;
@@ -76,15 +76,6 @@ export default function Topbar() {
 
       {/* Status & Telemetry Indicators */}
       <div className="flex items-center space-x-3 font-mono text-[11px]">
-        {/* Token Savings Telemetry Badge */}
-        <div
-          className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded bg-amber-950/20 border border-amber-500/30 text-cyber-amber"
-          title="Deterministic Prefix Caching & Tool Policy Matrix Token Savings"
-        >
-          <Zap className="h-3 w-3 fill-cyber-amber" />
-          <span className="font-semibold">⚡ ~2.4k tokens saved/step</span>
-        </div>
-
         {/* Active Agents Running */}
         <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded bg-obsidian-850 border border-slate-750 text-slate-300">
           <span
@@ -113,15 +104,12 @@ export default function Topbar() {
 
         {/* Tool Policy Matrix Button */}
         <button
-          onClick={openModal}
-          className="flex items-center space-x-1.5 px-2.5 py-1 rounded bg-obsidian-850 hover:bg-obsidian-800 border border-cyan-800/50 text-cyber-cyan transition cursor-pointer shadow-xs"
-          title="Настройка матрицы инструментов (Tool Policy Matrix)"
+          onClick={openToolPolicyModal}
+          className="flex items-center space-x-1.5 px-2.5 py-1 rounded bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-850/60 text-cyber-cyan transition cursor-pointer"
+          title="Open Tool Policy Matrix & Security Controls"
         >
           <Shield className="h-3.5 w-3.5" />
-          <span className="font-semibold hidden lg:inline">Tools</span>
-          <span className="px-1.5 py-0.2 rounded text-[9px] bg-cyan-950 border border-cyan-800/60 text-cyan-300">
-            ⚡ ~2.4k saved
-          </span>
+          <span className="font-semibold">Tool Matrix</span>
         </button>
 
         {/* Health Activity */}

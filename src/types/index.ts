@@ -81,45 +81,14 @@ export interface ToolExecution {
   params: Record<string, unknown>;
   stdout?: string;
   stderr?: string;
-  diff?: {
-    oldString?: string;
-    newString?: string;
-    linesChanged?: number;
-  };
-}
-
-export type StandardToolName =
-  | 'execute_command'
-  | 'read_file'
-  | 'edit_file'
-  | 'write_file'
-  | 'glob'
-  | 'grep'
-  | 'web_search'
-  | 'web_fetch'
-  | 'subagent';
-
-export interface ToolPolicyMatrix {
-  global: Record<StandardToolName | string, boolean>;
-  stages: Record<string, Record<StandardToolName | string, boolean>>;
-}
-
-export interface ContextStats {
-  totalTokens: number;
-  maxTokens: number;
-  percent: number;
-  turnCount: number;
-  compactedTurns: number;
-  tokensSaved: number;
 }
 
 export interface LiveStreamEntry {
   id: string;
   timestamp: string;
-  type: 'thought' | 'output' | 'system' | 'error' | 'user' | 'tool';
+  type: 'thought' | 'output' | 'system' | 'error' | 'steer' | 'user';
   content: string;
   durationMs?: number;
-  toolCallId?: string;
 }
 
 export interface ProjectInfo {
