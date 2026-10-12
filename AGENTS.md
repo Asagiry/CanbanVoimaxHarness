@@ -97,3 +97,30 @@
 - Personas are defined in `.cvh/agents/<role>.md`.
 - When spawning an agent, Rust pre-compiles `SystemMessage = Role Persona + Project Rules + Skills + Task Prompt`.
 - The agent starts Turn 1 with 100% memory primed. Never ask agents to read rule files during their turn.
+
+### 2.5 Two-Level Tool Policy Matrix & Zero-Trust Iron Barrier
+- Two-tier security control: Level A (global switches) and Level B (per-column permissions configured in `.cvh/pipeline.json`).
+- **Zero-Trust Schema Exclusion**: When a tool is disabled for the active column, its JSON schema definition MUST be completely stripped from the LLM request payload.
+- Never rely on post-hoc prompt warnings to disallow tools. Stripping schemas guarantees zero hallucinations and saves ~2,400+ tokens per step.
+
+### 2.6 State-Preserving Context Compactor & Immutable Anchors
+- **Zero-LLM Fast Evaporation**: Tool outputs older than the last 2 turns exceeding 500 characters are automatically trimmed to head summaries.
+- **Four Immutable Anchors**:
+  1. System Prompt (`messages[0]`): Immutable.
+  2. Initial Task Prompt (`messages[1]`): Immutable.
+  3. Preserved Execution State (`messages[2]`): Dynamic Markdown snapshot tracking modified files, sensor status, next steps, and verdict.
+  4. Working Window: The most recent 2 turns remain uncompacted for full reasoning continuity.
+
+### 2.7 Tool Output Spilling Invariant
+- Tool outputs exceeding 100 lines or 8 KB MUST be automatically spilled to `.cvh/spill/<timestamp>-<tool>.log`.
+- Injected context preserves the first 20 lines (HEAD), last 20 lines (TAIL), and the spilled file path for auditability.
+
+### 2.8 Deterministic Prefix Caching Invariant
+- System messages and tool schemas MUST maintain deterministic ordering (tools sorted alphabetically by name) with zero dynamic timestamp or session ID injections.
+- For Anthropic API, apply `cache_control: {"type": "ephemeral"}` to maximize provider prompt cache hit rates (>90%).
+
+### 2.9 Tauri IPC Contract Parity Invariant
+- When introducing or refactoring Tauri IPC commands (e.g., `compact_context`), frontend callers (Zustand stores, React hooks, components) MUST synchronously bind to the new command name and typed return schema (`CompactionReport`).
+- Never leave front-end stores invoking deprecated stub command names (e.g., `compact_task_context`) while the backend exposes a new unified handler.
+- If backward-compatible coexistence is required during migration, wrap the primary invocation in a typed fallback ladder (`try { invoke('new_cmd') } catch { invoke('legacy_cmd') }`).
+
