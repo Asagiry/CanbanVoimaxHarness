@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { KanbanTask, PipelineColumn, TaskStatus, TaskVerdict } from '../types';
-import { INITIAL_COLUMNS, INITIAL_TASKS } from './mockData';
+import { KanbanTask, PipelineColumn, TaskStatus, TaskVerdict, TaskPriority } from '../types';
+import { INITIAL_COLUMNS } from './mockData';
 
 interface BoardState {
   columns: PipelineColumn[];
@@ -8,6 +8,7 @@ interface BoardState {
   selectedTaskId: string | null;
   searchQuery: string;
   isTauriConnected: boolean;
+  isLoadingTasks: boolean;
 
   // Actions
   setColumns: (columns: PipelineColumn[]) => void;
@@ -15,6 +16,7 @@ interface BoardState {
   setSelectedTaskId: (id: string | null) => void;
   setSearchQuery: (query: string) => void;
 
+  loadTasks: () => Promise<void>;
   moveTask: (taskId: string, targetColumnId: string) => void;
   updateTask: (taskId: string, partial: Partial<KanbanTask>) => void;
   addTask: (task: KanbanTask) => void;
@@ -35,17 +37,57 @@ const STAGE_ORDER: Record<string, number> = {
   ready: 5,
 };
 
+function mapBackendTaskToKanban(t: any): KanbanTask {
+  return {
+    id: t.id,
+    title: t.title,
+    description: t.description || undefined,
+    priority: (t.priority as TaskPriority) || 'high',
+    columnId: t.stageId || t.stage_id || 'backlog',
+    persona: t.persona || (t.stageId === 'dev' ? 'developer' : t.stageId === 'review' ? 'reviewer' : 'artisan'),
+    branch: t.branch || `feat/${t.id.toLowerCase()}`,
+    worktreePath: t.worktreePath || t.worktree_path || `worktrees/${t.id.toLowerCase()}`,
+    status: (t.status as TaskStatus) || (t.stageId === 'dev' ? 'running' : 'idle'),
+    activeStageDuration: t.activeStageDuration || 0,
+    stageDurations: t.stageDurations || {},
+    totalElapsed: t.totalElapsed || 0,
+    isTimerRunning: t.isTimerRunning ?? (t.stageId === 'dev'),
+    returnsCount: t.returnsCount || 0,
+    fastTrack: t.fastTrack,
+    verdict: (t.verdict as TaskVerdict) || 'NONE',
+    verdictNote: t.verdictNote,
+  };
+}
+
 export const useBoardStore = create<BoardState>((set, get) => ({
   columns: INITIAL_COLUMNS,
-  tasks: INITIAL_TASKS,
+  tasks: [], // Initialized with empty array - NO mock tasks!
   selectedTaskId: null,
   searchQuery: '',
   isTauriConnected: false,
+  isLoadingTasks: false,
 
   setColumns: (columns) => set({ columns }),
   setTasks: (tasks) => set({ tasks }),
   setSelectedTaskId: (id) => set({ selectedTaskId: id }),
   setSearchQuery: (query) => set({ searchQuery: query }),
+
+  loadTasks: async () => {
+    set({ isLoadingTasks: true });
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const rawTasks = await invoke<any[]>('list_tasks');
+      if (Array.isArray(rawTasks)) {
+        const mapped = rawTasks.map(mapBackendTaskToKanban);
+        set({ tasks: mapped, isTauriConnected: true, isLoadingTasks: false });
+        return;
+      }
+    } catch (err) {
+      // In web mode or when invoke fails, keep board clean without mock tasks
+      console.info('Tauri list_tasks not available or returned empty:', err);
+    }
+    set({ tasks: [], isLoadingTasks: false });
+  },
 
   moveTask: (taskId, targetColumnId) => {
     const { tasks, columns } = get();

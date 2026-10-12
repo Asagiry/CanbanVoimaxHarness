@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { LiveStreamEntry, ToolExecution } from '../types';
-import { INITIAL_STREAM_ENTRIES, INITIAL_TOOL_EXECUTIONS } from './mockData';
+// Clean start without mock streams
 
 export type DrawerTab = 'thoughts' | 'output' | 'tools';
 
@@ -46,8 +46,8 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
   isOpen: false,
   activeTaskId: null,
   activeTab: 'thoughts',
-  streamEntries: INITIAL_STREAM_ENTRIES,
-  toolExecutions: INITIAL_TOOL_EXECUTIONS,
+  streamEntries: {},
+  toolExecutions: {},
   taskTelemetry: {},
   thinkingStartTime: {},
   tokenOverrides: {},

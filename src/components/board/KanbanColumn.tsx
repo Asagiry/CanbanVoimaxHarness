@@ -2,7 +2,6 @@ import { Droppable } from '@hello-pangea/dnd';
 import { PipelineColumn, KanbanTask } from '../../types';
 import KanbanCard from '../card/KanbanCard';
 import { useCortexStore } from '../../stores/cortexStore';
-import { formatTokens } from '../../lib/utils';
 import {
   Inbox,
   ListTodo,
@@ -10,7 +9,6 @@ import {
   ShieldCheck,
   Sparkles,
   CheckCircle2,
-  Cpu,
   Layers,
   Plus,
 } from 'lucide-react';
@@ -48,9 +46,9 @@ export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnP
 
   return (
     <div
-      className={`flex flex-col w-76 shrink-0 h-full rounded-lg bg-obsidian-900 border transition-all duration-150 select-none overflow-hidden ${
+      className={`flex flex-col w-72 shrink-0 h-full rounded-lg bg-obsidian-900 border transition-all duration-150 select-none overflow-hidden ${
         isFocused
-          ? 'border-cyber-cyan shadow-sm shadow-cyan-950/50'
+          ? 'border-cyan-500 shadow-sm shadow-cyan-950/40'
           : 'border-obsidian-800 hover:border-obsidian-750'
       }`}
     >
@@ -60,14 +58,12 @@ export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnP
         style={{ backgroundColor: column.color }}
       />
 
-      {/* Column Header - Tight Developer Ergonomics */}
+      {/* Column Header */}
       <div
         onClick={() => focusStage(column.id)}
         className="px-3 py-2 border-b border-obsidian-800 bg-obsidian-850 hover:bg-obsidian-800/70 transition cursor-pointer group"
-        title="Click to inspect Agent Mind in Cortex Explorer"
       >
-        {/* Title, Icon and WIP Counter */}
-        <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2 min-w-0">
             {getColumnIcon(column.icon, column.color)}
             <h3 className="text-xs font-semibold text-slate-100 group-hover:text-white truncate">
@@ -75,21 +71,19 @@ export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnP
             </h3>
           </div>
 
-          <div className="flex items-center space-x-1">
-            {/* WIP Counter Pill */}
+          <div className="flex items-center space-x-1.5">
+            {/* Task Counter */}
             <span
-              className={`px-1.5 py-0.2 rounded font-mono text-[10px] font-bold tabular-nums border ${
+              className={`px-1.5 py-0.2 rounded font-mono text-[10px] tabular-nums border ${
                 isAtWipLimit
-                  ? 'bg-rose-950/40 text-rose-300 border-rose-500/50 animate-pulse'
+                  ? 'bg-rose-950/40 text-rose-300 border-rose-500/50'
                   : 'bg-obsidian-950 text-slate-400 border-obsidian-750'
               }`}
-              title={column.wipLimit ? `WIP Limit: ${tasks.length} / ${column.wipLimit}` : `${tasks.length} tasks`}
             >
               {tasks.length}
-              {column.wipLimit ? ` / ${column.wipLimit}` : ''}
             </span>
 
-            {/* Quick Add Card */}
+            {/* Quick Add Button */}
             {onAddTask && (
               <button
                 onClick={(e) => {
@@ -97,40 +91,11 @@ export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnP
                   onAddTask(column.id);
                 }}
                 className="p-1 rounded text-slate-400 hover:text-white hover:bg-obsidian-750 transition cursor-pointer"
-                title="Add Task to this stage"
+                title="Добавить задачу"
               >
                 <Plus className="h-3 w-3" />
               </button>
             )}
-          </div>
-        </div>
-
-        {/* Sub-Header: Gatekeeper Sensor & Context Limit Pill */}
-        <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
-          {/* Gatekeeper Sensor Indicator */}
-          <div className="flex items-center space-x-1 min-w-0 truncate">
-            {column.gatekeeperSensor ? (
-              <span
-                className="flex items-center space-x-1 px-1.5 py-0.2 rounded bg-obsidian-950 border border-obsidian-800 text-slate-300 truncate"
-                title={`Sensor Gatekeeper: ${column.gatekeeperSensor}`}
-              >
-                <ShieldCheck className="h-2.5 w-2.5 text-cyber-emerald shrink-0" />
-                <span className="truncate">{column.gatekeeperSensor}</span>
-              </span>
-            ) : (
-              <span className="text-slate-600">Unrestricted</span>
-            )}
-          </div>
-
-          {/* Context Limit Pill */}
-          <div
-            className="flex items-center space-x-1 px-1.5 py-0.2 rounded bg-obsidian-950 border border-obsidian-800 text-slate-400 shrink-0"
-            title={`Context Window: ${column.contextWindow.toLocaleString()} tokens`}
-          >
-            <Cpu className="h-2.5 w-2.5 text-cyber-cyan" />
-            <span className="tabular-nums font-medium text-slate-300">
-              {formatTokens(column.contextWindow)}
-            </span>
           </div>
         </div>
       </div>
@@ -151,13 +116,6 @@ export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnP
               <KanbanCard key={task.id} task={task} index={index} />
             ))}
             {provided.placeholder}
-
-            {tasks.length === 0 && !snapshot.isDraggingOver && (
-              <div className="h-24 flex flex-col items-center justify-center border border-dashed border-obsidian-800 rounded-md text-slate-600 text-[11px] font-mono p-3 text-center">
-                <span>No active agents</span>
-                <span className="text-[10px] text-slate-600 mt-0.5">Drop task to dispatch</span>
-              </div>
-            )}
           </div>
         )}
       </Droppable>

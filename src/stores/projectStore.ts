@@ -9,30 +9,20 @@ interface ProjectState {
   // Actions
   switchProject: (projectId: string) => void;
   updateActiveProject: (partial: Partial<ProjectInfo>) => void;
+  openFolder: (path: string) => Promise<void>;
 }
 
 const DEFAULT_PROJECT: ProjectInfo = {
-  id: 'cvh-dogfooding',
+  id: 'current-workspace',
   name: 'CanbanVoimaxHarness',
-  rootPath: 'C:\\Users\\Voimax\\Projects\\CanbanVoimaxHarness',
-  activeBranch: 'feat/cvh-001-frontend',
-  worktreesCount: 2,
+  rootPath: typeof window !== 'undefined' ? window.location.pathname : '.',
+  activeBranch: 'main',
+  worktreesCount: 0,
 };
-
-const SAMPLE_PROJECTS: ProjectInfo[] = [
-  DEFAULT_PROJECT,
-  {
-    id: 'carsmash-sim',
-    name: 'CarSmash Destruction Engine',
-    rootPath: 'C:\\Users\\Voimax\\Projects\\CarSmash',
-    activeBranch: 'main',
-    worktreesCount: 1,
-  },
-];
 
 export const useProjectStore = create<ProjectState>((set) => ({
   activeProject: DEFAULT_PROJECT,
-  availableProjects: SAMPLE_PROJECTS,
+  availableProjects: [DEFAULT_PROJECT],
   isTauriEnvironment: typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window,
 
   switchProject: (projectId) => {
@@ -49,5 +39,41 @@ export const useProjectStore = create<ProjectState>((set) => ({
     set((state) => ({
       activeProject: { ...state.activeProject, ...partial },
     }));
+  },
+
+  openFolder: async (folderPath: string) => {
+    if (!folderPath || !folderPath.trim()) return;
+    const cleanPath = folderPath.trim();
+    const folderName = cleanPath.split(/[\\/]/).filter(Boolean).pop() || 'Project';
+    const slug = folderName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+    const newProject: ProjectInfo = {
+      id: `proj-${Date.now()}-${slug}`,
+      name: folderName,
+      rootPath: cleanPath,
+      activeBranch: 'main',
+      worktreesCount: 0,
+    };
+
+    // Update backend if in Tauri
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('set_project_root', { path: cleanPath });
+    } catch {
+      // Ignore if web environment
+    }
+
+    set((state) => {
+      const exists = state.availableProjects.find(
+        (p) => p.rootPath.toLowerCase() === cleanPath.toLowerCase()
+      );
+      if (exists) {
+        return { activeProject: exists };
+      }
+      return {
+        activeProject: newProject,
+        availableProjects: [...state.availableProjects, newProject],
+      };
+    });
   },
 }));

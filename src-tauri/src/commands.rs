@@ -1,7 +1,7 @@
 use crate::agent::{run_agent_loop, AgentEvent, AgentSessionConfig};
 use crate::config::{
     atomic_write_file, load_pipeline_config, load_project_config, load_project_registry,
-    save_pipeline_config, PipelineConfig, ProjectConfig, ProjectRegistry,
+    save_pipeline_config, save_project_config, PipelineConfig, ProjectConfig, ProjectRegistry,
 };
 use crate::git::{create_worktree, remove_worktree};
 use crate::hooks::{execute_hook, execute_sensor_command, HookContext};
@@ -763,4 +763,114 @@ pub async fn steer_agent(
 
     // Re-invoke agent loop with steering message
     run_agent(task_id, app_handle, state).await
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmSettings {
+    pub provider: String,
+    #[serde(rename = "gatewayUrl", alias = "gateway_url", alias = "apiBaseUrl")]
+    pub gateway_url: String,
+    #[serde(rename = "apiKey", alias = "api_key", default)]
+    pub api_key: Option<String>,
+    #[serde(default)]
+    pub model: String,
+}
+
+#[tauri::command]
+pub async fn save_llm_settings(
+    settings: LlmSettings,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let root = state.get_root();
+    let mut config = load_project_config(&root).await.unwrap_or_else(|_| ProjectConfig {
+        name: "CanbanVoimaxHarness".to_string(),
+        version: "0.1.0".to_string(),
+        description: None,
+        active_pipeline: None,
+        default_model: Some("gemini-3.8-flash-high".to_string()),
+        api_base_url: Some("http://127.0.0.1:19387/api/ai".to_string()),
+        tool_permissions: None,
+        providers: HashMap::new(),
+    });
+
+    config.default_model = Some(settings.model.clone());
+    config.api_base_url = Some(settings.gateway_url.clone());
+    config.providers.insert(
+        settings.provider.clone(),
+        crate::config::ProviderConfig {
+            provider_type: settings.provider.clone(),
+            base_url: settings.gateway_url.clone(),
+            default_model: Some(settings.model.clone()),
+            api_key: settings.api_key.clone(),
+        },
+    );
+
+    save_project_config(&root, &config)
+        .await
+        .map_err(|e| format!("Failed to save LLM settings: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_llm_settings(state: State<'_, AppState>) -> Result<LlmSettings, String> {
+    let root = state.get_root();
+    if let Ok(config) = load_project_config(&root).await {
+        let (prov, key) = if let Some((name, prov_cfg)) = config.providers.iter().next() {
+            (name.clone(), prov_cfg.api_key.clone())
+        } else {
+            ("Antigravity Proxy".to_string(), None)
+        };
+        Ok(LlmSettings {
+            provider: prov,
+            gateway_url: config.api_base_url.unwrap_or_else(|| "http://127.0.0.1:19387/api/ai".to_string()),
+            api_key: key,
+            model: config.default_model.unwrap_or_else(|| "gemini-3.8-flash-high".to_string()),
+        })
+    } else {
+        Ok(LlmSettings {
+            provider: "Antigravity Proxy".to_string(),
+            gateway_url: "http://127.0.0.1:19387/api/ai".to_string(),
+            api_key: None,
+            model: "gemini-3.8-flash-high".to_string(),
+        })
+    }
+}
+
+#[tauri::command]
+pub async fn set_project_root(path: String, state: State<'_, AppState>) -> Result<String, String> {
+    let p = PathBuf::from(&path);
+    if !p.exists() {
+        return Err(format!("Directory does not exist: {}", path));
+    }
+    if let Ok(mut root) = state.repo_root.write() {
+        *root = p.clone();
+    }
+    Ok(p.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub async fn choose_project_folder() -> Result<Option<String>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let output = tokio::process::Command::new("powershell")
+            .args(&[
+                "-NoProfile",
+                "-Command",
+                r#"Add-Type -AssemblyName System.Windows.Forms; $dialog = New-Object System.Windows.Forms.FolderBrowserDialog; $dialog.Description = 'Выберите папку проекта'; if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $dialog.SelectedPath }"#,
+            ])
+            .output()
+            .await
+            .map_err(|e| format!("Failed to open folder picker: {}", e))?;
+        let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if s.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(s))
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(None)
+    }
 }

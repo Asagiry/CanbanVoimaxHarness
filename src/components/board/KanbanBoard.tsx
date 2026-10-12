@@ -2,20 +2,17 @@ import { useEffect, useState } from 'react';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { useBoardStore } from '../../stores/boardStore';
 import KanbanColumn from './KanbanColumn';
-import { KanbanTask, TaskPriority } from '../../types';
-import { Plus, X, Sparkles } from 'lucide-react';
+import { KanbanTask } from '../../types';
+import { Plus, X, Inbox } from 'lucide-react';
 
 export default function KanbanBoard() {
   const { columns, tasks, searchQuery, moveTask, addTask, tickTimers } = useBoardStore();
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
   const [targetColumnForNew, setTargetColumnForNew] = useState<string>('backlog');
 
-  // New task form fields
+  // New task form fields - no priority!
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
-  const [newPriority, setNewPriority] = useState<TaskPriority>('high');
-  const [newFastTrackReview, setNewFastTrackReview] = useState(false);
-  const [newFastTrackRetro, setNewFastTrackRetro] = useState(false);
 
   // 1-second timer ticker interval for live cards
   useEffect(() => {
@@ -40,9 +37,6 @@ export default function KanbanBoard() {
     setTargetColumnForNew(columnId);
     setNewTitle('');
     setNewDescription('');
-    setNewPriority('high');
-    setNewFastTrackReview(false);
-    setNewFastTrackRetro(false);
     setIsNewTaskModalOpen(true);
   };
 
@@ -59,7 +53,7 @@ export default function KanbanBoard() {
       id: taskId,
       title: newTitle.trim(),
       description: newDescription.trim() || undefined,
-      priority: newPriority,
+      priority: 'high',
       columnId: targetColumnForNew,
       persona: targetColumnForNew === 'dev' ? 'developer' : targetColumnForNew === 'review' ? 'reviewer' : 'artisan',
       branch: `feat/${slug}`,
@@ -70,10 +64,6 @@ export default function KanbanBoard() {
       totalElapsed: 0,
       isTimerRunning: targetColumnForNew === 'dev',
       returnsCount: 0,
-      fastTrack: {
-        noReview: newFastTrackReview,
-        noRetro: newFastTrackRetro,
-      },
       verdict: 'NONE',
     };
 
@@ -95,37 +85,49 @@ export default function KanbanBoard() {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-obsidian-950">
-      {/* Board Top Toolbar - High Density Ergonomics */}
-      <div className="flex items-center justify-between px-3.5 py-1.5 border-b border-obsidian-800 bg-obsidian-900/95 text-[11px] font-mono select-none">
-        <div className="flex items-center space-x-2.5">
-          <span className="text-slate-400">
-            Tasks: <strong className="text-cyber-cyan tabular-nums font-mono">{tasks.length}</strong>
-          </span>
-          <span className="text-obsidian-750 font-sans">|</span>
-          <span className="text-slate-400">
-            Agents: <strong className="text-cyber-emerald tabular-nums font-mono">{tasks.filter((t) => t.status === 'running').length}</strong>
-          </span>
-          <span className="text-obsidian-750 font-sans">|</span>
-          <span className="text-slate-400">
-            Review: <strong className="text-cyber-purple tabular-nums font-mono">{tasks.filter((t) => t.columnId === 'review').length}</strong>
-          </span>
+      {/* Board Top Toolbar */}
+      <div className="flex items-center justify-between px-3.5 py-1.5 border-b border-obsidian-800 bg-obsidian-900/95 text-xs font-mono select-none">
+        <div className="flex items-center space-x-2 text-slate-400">
+          <span>Задач:</span>
+          <strong className="text-slate-100 tabular-nums">{tasks.length}</strong>
         </div>
 
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => handleOpenAddTask('backlog')}
-            className="flex items-center space-x-1 px-2.5 py-1 rounded-md bg-cyber-indigo hover:bg-indigo-500 text-white font-sans text-xs font-semibold transition active:scale-[0.98] shadow-xs cursor-pointer"
-            title="Create new task card"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>New Task</span>
-          </button>
-        </div>
+        <button
+          onClick={() => handleOpenAddTask('backlog')}
+          className="flex items-center space-x-1.5 px-3 py-1 rounded bg-cyan-400 hover:bg-cyan-300 text-obsidian-950 font-sans font-semibold text-xs transition cursor-pointer"
+          title="Создать новую задачу"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          <span>Создать задачу</span>
+        </button>
       </div>
 
-      {/* Kanban Columns Horizontal Container */}
+      {/* Empty State Banner if no tasks */}
+      {tasks.length === 0 && (
+        <div className="mx-4 my-2.5 px-4 py-3 rounded-lg border border-obsidian-800 bg-obsidian-900/70 flex items-center justify-between text-xs text-slate-300">
+          <div className="flex items-center space-x-2.5">
+            <Inbox className="h-4 w-4 text-slate-500" />
+            <span>Доска пуста. Начните работу, создав первую задачу.</span>
+          </div>
+          <button
+            onClick={() => handleOpenAddTask('backlog')}
+            className="px-2.5 py-1 rounded bg-obsidian-800 hover:bg-obsidian-750 border border-obsidian-700 text-slate-200 hover:text-white transition cursor-pointer font-sans"
+          >
+            + Создать задачу
+          </button>
+        </div>
+      )}
+
+      {/* Kanban Columns Horizontal Container with Mouse Wheel Scroll */}
       <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="flex-1 overflow-x-auto overflow-y-hidden p-3">
+        <div
+          onWheel={(e) => {
+            if (e.deltaY !== 0) {
+              e.currentTarget.scrollLeft += e.deltaY;
+            }
+          }}
+          className="flex-1 overflow-x-auto overflow-y-hidden p-3"
+        >
           <div className="flex items-start space-x-3 h-full min-w-max pb-1">
             {columns.map((column) => {
               const columnTasks = filteredTasks.filter((t) => t.columnId === column.id);
@@ -142,127 +144,81 @@ export default function KanbanBoard() {
         </div>
       </DragDropContext>
 
-      {/* Quick Add Task Modal - Linear / VS Code Dialogue */}
+      {/* Clean Add Task Modal without priority field */}
       {isNewTaskModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 animate-in fade-in duration-100">
-          <div className="relative flex flex-col w-[500px] max-w-full rounded-lg border border-obsidian-750 bg-obsidian-900 shadow-xl p-4 text-slate-200">
+          <div className="relative flex flex-col w-[440px] max-w-full rounded-lg border border-obsidian-750 bg-obsidian-900 shadow-xl p-4 text-slate-200">
             <div className="flex items-center justify-between pb-2.5 border-b border-obsidian-800">
-              <h3 className="text-sm font-semibold text-white flex items-center space-x-2">
-                <Sparkles className="h-3.5 w-3.5 text-cyber-cyan" />
-                <span>Create Engineering Task</span>
+              <h3 className="text-sm font-semibold text-white">
+                Новая задача
               </h3>
               <button
                 onClick={() => setIsNewTaskModalOpen(false)}
                 className="p-1 rounded text-slate-400 hover:text-white hover:bg-obsidian-800 transition cursor-pointer"
-                title="Close"
+                title="Закрыть"
               >
-                <X className="h-3.5 w-3.5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
             <form onSubmit={handleCreateTask} className="mt-3.5 space-y-3 text-xs">
               <div>
-                <label className="block text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                  Task Title
+                <label className="block font-sans text-slate-400 mb-1">
+                  Название
                 </label>
                 <input
                   type="text"
                   required
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="e.g. Implement Tokio Event Broadcaster"
-                  className="w-full px-2.5 py-1.5 rounded-md bg-obsidian-950 border border-obsidian-750 text-slate-100 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500 font-sans"
+                  placeholder="Краткое описание задачи..."
+                  className="w-full px-2.5 py-1.5 rounded bg-obsidian-950 border border-obsidian-750 text-slate-100 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500 font-sans"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                  Description / Invariants
+                <label className="block font-sans text-slate-400 mb-1">
+                  Описание
                 </label>
                 <textarea
                   rows={3}
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
-                  placeholder="Detailed architectural scope and Ground Truth Sensor requirements..."
-                  className="w-full px-2.5 py-1.5 rounded-md bg-obsidian-950 border border-obsidian-750 text-slate-100 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500 font-sans resize-none"
+                  placeholder="Детали и требования к задаче..."
+                  className="w-full px-2.5 py-1.5 rounded bg-obsidian-950 border border-obsidian-750 text-slate-100 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500 font-sans resize-none"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                    Initial Stage
-                  </label>
-                  <select
-                    value={targetColumnForNew}
-                    onChange={(e) => setTargetColumnForNew(e.target.value)}
-                    className="w-full px-2 py-1.5 rounded-md bg-obsidian-950 border border-obsidian-750 text-slate-200 focus:outline-hidden focus:border-cyan-500 font-mono text-xs cursor-pointer"
-                  >
-                    {columns.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                    Priority
-                  </label>
-                  <select
-                    value={newPriority}
-                    onChange={(e) => setNewPriority(e.target.value as TaskPriority)}
-                    className="w-full px-2 py-1.5 rounded-md bg-obsidian-950 border border-obsidian-750 text-slate-200 focus:outline-hidden focus:border-cyan-500 font-mono text-xs cursor-pointer"
-                  >
-                    <option value="critical">Critical (Crimson)</option>
-                    <option value="high">High (Amber)</option>
-                    <option value="medium">Medium (Sky)</option>
-                    <option value="low">Low (Slate)</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Fast-Track Options */}
-              <div className="p-2 rounded-md bg-obsidian-950 border border-obsidian-800 space-y-1.5">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">
-                  ⚡ Fast-Track Pipeline Overrides
-                </span>
-                <div className="flex items-center space-x-4 text-xs font-mono">
-                  <label className="flex items-center space-x-1.5 cursor-pointer text-slate-300">
-                    <input
-                      type="checkbox"
-                      checked={newFastTrackReview}
-                      onChange={(e) => setNewFastTrackReview(e.target.checked)}
-                      className="rounded border-obsidian-750 text-cyan-500 focus:ring-0"
-                    />
-                    <span className="text-[11px]">Skip Review Gate</span>
-                  </label>
-                  <label className="flex items-center space-x-1.5 cursor-pointer text-slate-300">
-                    <input
-                      type="checkbox"
-                      checked={newFastTrackRetro}
-                      onChange={(e) => setNewFastTrackRetro(e.target.checked)}
-                      className="rounded border-obsidian-750 text-cyan-500 focus:ring-0"
-                    />
-                    <span className="text-[11px]">Skip Retrospective</span>
-                  </label>
-                </div>
+              <div>
+                <label className="block font-sans text-slate-400 mb-1">
+                  Колонка
+                </label>
+                <select
+                  value={targetColumnForNew}
+                  onChange={(e) => setTargetColumnForNew(e.target.value)}
+                  className="w-full px-2 py-1.5 rounded bg-obsidian-950 border border-obsidian-750 text-slate-200 focus:outline-hidden focus:border-cyan-500 font-mono text-xs cursor-pointer"
+                >
+                  {columns.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="flex items-center justify-end space-x-2 pt-2.5 border-t border-obsidian-800">
                 <button
                   type="button"
                   onClick={() => setIsNewTaskModalOpen(false)}
-                  className="px-2.5 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-obsidian-800 transition cursor-pointer text-xs font-mono"
+                  className="px-3 py-1.5 rounded text-slate-400 hover:text-white hover:bg-obsidian-800 transition cursor-pointer font-sans"
                 >
-                  Cancel
+                  Отмена
                 </button>
                 <button
                   type="submit"
-                  className="px-3.5 py-1.5 rounded-md bg-cyber-cyan hover:bg-cyan-400 text-obsidian-950 font-bold transition active:scale-[0.98] shadow-xs cursor-pointer text-xs"
+                  className="px-3.5 py-1.5 rounded bg-cyan-400 hover:bg-cyan-300 text-obsidian-950 font-semibold transition cursor-pointer font-sans"
                 >
-                  Create Task
+                  Создать
                 </button>
               </div>
             </form>
