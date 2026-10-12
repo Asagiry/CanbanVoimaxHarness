@@ -18,6 +18,16 @@ pub fn run() {
     let state = AppState::new(current_dir);
 
     tauri::Builder::default()
+        // Single-instance MUST stay the first registered plugin: a second launch
+        // forwards its args to the running instance and exits before WebView2
+        // grabs the shared user-data folder (fixes 0x800700AA ERROR_BUSY).
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
+        .plugin(tauri_plugin_dialog::init())
         .manage(state)
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
