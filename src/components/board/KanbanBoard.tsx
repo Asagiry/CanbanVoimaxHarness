@@ -95,31 +95,38 @@ export default function KanbanBoard() {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-obsidian-950">
-      {/* Board Top Toolbar */}
-      <div className="flex items-center justify-between px-5 py-2.5 border-b border-slate-800 bg-obsidian-900/90 text-xs font-mono">
-        <div className="flex items-center space-x-3">
-          <span className="text-slate-400">Total Active Tasks: <strong className="text-cyber-cyan tabular-nums">{tasks.length}</strong></span>
-          <span className="text-slate-600">|</span>
-          <span className="text-slate-400">In-Flight Agents: <strong className="text-cyber-emerald tabular-nums">{tasks.filter((t) => t.status === 'running').length}</strong></span>
-          <span className="text-slate-600">|</span>
-          <span className="text-slate-400">Review Queue: <strong className="text-cyber-purple tabular-nums">{tasks.filter((t) => t.columnId === 'review').length}</strong></span>
+      {/* Board Top Toolbar - High Density Ergonomics */}
+      <div className="flex items-center justify-between px-3.5 py-1.5 border-b border-obsidian-800 bg-obsidian-900/95 text-[11px] font-mono select-none">
+        <div className="flex items-center space-x-2.5">
+          <span className="text-slate-400">
+            Tasks: <strong className="text-cyber-cyan tabular-nums font-mono">{tasks.length}</strong>
+          </span>
+          <span className="text-obsidian-750 font-sans">|</span>
+          <span className="text-slate-400">
+            Agents: <strong className="text-cyber-emerald tabular-nums font-mono">{tasks.filter((t) => t.status === 'running').length}</strong>
+          </span>
+          <span className="text-obsidian-750 font-sans">|</span>
+          <span className="text-slate-400">
+            Review: <strong className="text-cyber-purple tabular-nums font-mono">{tasks.filter((t) => t.columnId === 'review').length}</strong>
+          </span>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2">
           <button
             onClick={() => handleOpenAddTask('backlog')}
-            className="flex items-center space-x-1.5 px-3 py-1 rounded bg-cyber-indigo hover:bg-indigo-500 text-white font-sans text-xs font-semibold transition active:scale-95 shadow-sm shadow-indigo-900/40"
+            className="flex items-center space-x-1 px-2.5 py-1 rounded-md bg-cyber-indigo hover:bg-indigo-500 text-white font-sans text-xs font-semibold transition active:scale-[0.98] shadow-xs cursor-pointer"
+            title="Create new task card"
           >
             <Plus className="h-3.5 w-3.5" />
-            <span>New Task Card</span>
+            <span>New Task</span>
           </button>
         </div>
       </div>
 
       {/* Kanban Columns Horizontal Container */}
       <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="flex-1 overflow-x-auto overflow-y-hidden p-4">
-          <div className="flex items-start space-x-4 h-full min-w-max pb-2">
+        <div className="flex-1 overflow-x-auto overflow-y-hidden p-3">
+          <div className="flex items-start space-x-3 h-full min-w-max pb-1">
             {columns.map((column) => {
               const columnTasks = filteredTasks.filter((t) => t.columnId === column.id);
               return (
@@ -135,26 +142,27 @@ export default function KanbanBoard() {
         </div>
       </DragDropContext>
 
-      {/* Quick Add Task Modal */}
+      {/* Quick Add Task Modal - Linear / VS Code Dialogue */}
       {isNewTaskModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="relative flex flex-col w-[540px] max-w-full rounded-xl border border-slate-750 bg-obsidian-900 shadow-2xl p-5 text-slate-200">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="text-sm font-bold text-white flex items-center space-x-2">
-                <Sparkles className="h-4 w-4 text-cyber-cyan" />
-                <span>Create New Engineering Task</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 animate-in fade-in duration-100">
+          <div className="relative flex flex-col w-[500px] max-w-full rounded-lg border border-obsidian-750 bg-obsidian-900 shadow-xl p-4 text-slate-200">
+            <div className="flex items-center justify-between pb-2.5 border-b border-obsidian-800">
+              <h3 className="text-sm font-semibold text-white flex items-center space-x-2">
+                <Sparkles className="h-3.5 w-3.5 text-cyber-cyan" />
+                <span>Create Engineering Task</span>
               </h3>
               <button
                 onClick={() => setIsNewTaskModalOpen(false)}
-                className="p-1 rounded text-slate-400 hover:text-white hover:bg-obsidian-800 transition"
+                className="p-1 rounded text-slate-400 hover:text-white hover:bg-obsidian-800 transition cursor-pointer"
+                title="Close"
               >
-                <X className="h-4 w-4" />
+                <X className="h-3.5 w-3.5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateTask} className="mt-4 space-y-3.5 text-xs">
+            <form onSubmit={handleCreateTask} className="mt-3.5 space-y-3 text-xs">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider mb-1">
                   Task Title
                 </label>
                 <input
@@ -163,32 +171,32 @@ export default function KanbanBoard() {
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   placeholder="e.g. Implement Tokio Event Broadcaster"
-                  className="w-full px-3 py-1.5 rounded bg-obsidian-950 border border-slate-750 text-slate-100 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500 font-sans"
+                  className="w-full px-2.5 py-1.5 rounded-md bg-obsidian-950 border border-obsidian-750 text-slate-100 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500 font-sans"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">
-                  Description / Specification Snippet
+                <label className="block text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                  Description / Invariants
                 </label>
                 <textarea
                   rows={3}
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
                   placeholder="Detailed architectural scope and Ground Truth Sensor requirements..."
-                  className="w-full px-3 py-1.5 rounded bg-obsidian-950 border border-slate-750 text-slate-100 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500 font-sans resize-none"
+                  className="w-full px-2.5 py-1.5 rounded-md bg-obsidian-950 border border-obsidian-750 text-slate-100 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500 font-sans resize-none"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2.5">
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                  <label className="block text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider mb-1">
                     Initial Stage
                   </label>
                   <select
                     value={targetColumnForNew}
                     onChange={(e) => setTargetColumnForNew(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded bg-obsidian-950 border border-slate-750 text-slate-200 focus:outline-hidden focus:border-cyan-500 font-mono"
+                    className="w-full px-2 py-1.5 rounded-md bg-obsidian-950 border border-obsidian-750 text-slate-200 focus:outline-hidden focus:border-cyan-500 font-mono text-xs cursor-pointer"
                   >
                     {columns.map((c) => (
                       <option key={c.id} value={c.id}>
@@ -199,13 +207,13 @@ export default function KanbanBoard() {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                  <label className="block text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider mb-1">
                     Priority
                   </label>
                   <select
                     value={newPriority}
                     onChange={(e) => setNewPriority(e.target.value as TaskPriority)}
-                    className="w-full px-2.5 py-1.5 rounded bg-obsidian-950 border border-slate-750 text-slate-200 focus:outline-hidden focus:border-cyan-500 font-mono"
+                    className="w-full px-2 py-1.5 rounded-md bg-obsidian-950 border border-obsidian-750 text-slate-200 focus:outline-hidden focus:border-cyan-500 font-mono text-xs cursor-pointer"
                   >
                     <option value="critical">Critical (Crimson)</option>
                     <option value="high">High (Amber)</option>
@@ -216,43 +224,43 @@ export default function KanbanBoard() {
               </div>
 
               {/* Fast-Track Options */}
-              <div className="p-2.5 rounded bg-obsidian-950 border border-slate-800 space-y-2">
+              <div className="p-2 rounded-md bg-obsidian-950 border border-obsidian-800 space-y-1.5">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">
                   ⚡ Fast-Track Pipeline Overrides
                 </span>
-                <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-4 text-xs font-mono">
                   <label className="flex items-center space-x-1.5 cursor-pointer text-slate-300">
                     <input
                       type="checkbox"
                       checked={newFastTrackReview}
                       onChange={(e) => setNewFastTrackReview(e.target.checked)}
-                      className="rounded border-slate-750 text-cyan-500 focus:ring-0"
+                      className="rounded border-obsidian-750 text-cyan-500 focus:ring-0"
                     />
-                    <span>Skip Review Gate</span>
+                    <span className="text-[11px]">Skip Review Gate</span>
                   </label>
                   <label className="flex items-center space-x-1.5 cursor-pointer text-slate-300">
                     <input
                       type="checkbox"
                       checked={newFastTrackRetro}
                       onChange={(e) => setNewFastTrackRetro(e.target.checked)}
-                      className="rounded border-slate-750 text-cyan-500 focus:ring-0"
+                      className="rounded border-obsidian-750 text-cyan-500 focus:ring-0"
                     />
-                    <span>Skip Retrospective</span>
+                    <span className="text-[11px]">Skip Retrospective</span>
                   </label>
                 </div>
               </div>
 
-              <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-800">
+              <div className="flex items-center justify-end space-x-2 pt-2.5 border-t border-obsidian-800">
                 <button
                   type="button"
                   onClick={() => setIsNewTaskModalOpen(false)}
-                  className="px-3 py-1.5 rounded text-slate-400 hover:text-white hover:bg-obsidian-800 transition"
+                  className="px-2.5 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-obsidian-800 transition cursor-pointer text-xs font-mono"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded bg-cyber-cyan hover:bg-cyan-400 text-obsidian-950 font-bold transition active:scale-95 shadow-md shadow-cyan-900/30"
+                  className="px-3.5 py-1.5 rounded-md bg-cyber-cyan hover:bg-cyan-400 text-obsidian-950 font-bold transition active:scale-[0.98] shadow-xs cursor-pointer text-xs"
                 >
                   Create Task
                 </button>

@@ -1,114 +1,99 @@
 import { useState } from 'react';
-import { CheckCircle2, Minimize2 } from 'lucide-react';
+import { useDrawerStore } from '../../stores/drawerStore';
+import { useBoardStore } from '../../stores/boardStore';
+import { Zap, Flame, Cpu } from 'lucide-react';
 
 interface ContextGaugeProps {
   taskId: string;
-  contextWindow?: number;
-  currentEstimatedTokens?: number;
-  onCompact?: () => Promise<{ savedTokens: number; evaporatedCount: number } | void>;
 }
 
-export default function ContextGauge({
-  taskId,
-  contextWindow = 128000,
-  currentEstimatedTokens = 14200,
-  onCompact,
-}: ContextGaugeProps) {
-  const [isCompacting, setIsCompacting] = useState(false);
-  const [compactionCue, setCompactionCue] = useState<string | null>(null);
+export default function ContextGauge({ taskId }: ContextGaugeProps) {
+  const { streamEntries, toolExecutions, compactTaskContext } = useDrawerStore();
+  const { tasks, columns } = useBoardStore();
+  const [evaporatedBadge, setEvaporatedBadge] = useState<string | null>(null);
 
-  const percentage = Math.min(100, Math.round((currentEstimatedTokens / contextWindow) * 100));
+  const task = tasks.find((t) => t.id === taskId);
+  const column = columns.find((c) => c.id === task?.columnId);
+  const maxTokens = column?.contextWindow || 128000;
 
-  const getBarColor = () => {
-    if (percentage > 80) return 'bg-rose-500 shadow-rose-500/50';
-    if (percentage > 50) return 'bg-amber-500 shadow-amber-500/50';
-    return 'bg-cyber-cyan shadow-cyan-500/50';
+  const currentStream = streamEntries[taskId] || { thoughts: [], outputs: [] };
+  const currentTools = toolExecutions[taskId] || [];
+
+  // Calculate dynamic token usage
+  const thoughtsLen = currentStream.thoughts.reduce((acc, t) => acc + t.content.length, 0);
+  const outputsLen = currentStream.outputs.reduce((acc, o) => acc + o.content.length, 0);
+  const toolsLen = currentTools.reduce((acc, tool) => {
+    const stdoutLen = tool.stdout?.length || 0;
+    const stderrLen = tool.stderr?.length || 0;
+    const paramsLen = JSON.stringify(tool.params || {}).length;
+    return acc + stdoutLen + stderrLen + paramsLen;
+  }, 0);
+
+  const estimatedTokens = Math.min(
+    maxTokens,
+    Math.round(8500 + (thoughtsLen + outputsLen + toolsLen) / 3.8)
+  );
+
+  const fillPercentage = Math.min(100, Math.round((estimatedTokens / maxTokens) * 100));
+
+  const getFillColor = (pct: number) => {
+    if (pct < 50) return 'bg-cyber-cyan';
+    if (pct <= 75) return 'bg-cyber-amber';
+    return 'bg-cyber-crimson';
   };
 
-  const handleCompactClick = async () => {
-    setIsCompacting(true);
-    try {
-      if (onCompact) {
-        const res = await onCompact();
-        if (res) {
-          setCompactionCue(`⚡ Saved ~${res.savedTokens} tokens (${res.evaporatedCount} tools evaporated)`);
-        } else {
-          setCompactionCue('⚡ Context Compacted: Prior tool outputs evaporated');
-        }
-      } else {
-        // Fallback simulation / native IPC call
-        try {
-          const { invoke } = await import('@tauri-apps/api/core');
-          const result = await invoke<{ estimated_saved_tokens?: number; evaporated_tools_count?: number }>(
-            'compact_task_context',
-            { taskId }
-          );
-          const saved = result?.estimated_saved_tokens ?? 2450;
-          const count = result?.evaporated_tools_count ?? 3;
-          setCompactionCue(`⚡ Saved ~${saved} tokens (${count} tools evaporated)`);
-        } catch {
-          setCompactionCue('⚡ Context Compacted: Saved ~2,450 tokens');
-        }
-      }
-    } finally {
-      setIsCompacting(false);
-      setTimeout(() => setCompactionCue(null), 3500);
-    }
+  const getTextColor = (pct: number) => {
+    if (pct < 50) return 'text-cyber-cyan';
+    if (pct <= 75) return 'text-cyber-amber';
+    return 'text-cyber-crimson';
+  };
+
+  const handleCompact = async () => {
+    const { savedTokens } = await compactTaskContext(taskId);
+    setEvaporatedBadge(`🔥 ~${savedTokens.toLocaleString()} tokens saved!`);
+    setTimeout(() => {
+      setEvaporatedBadge(null);
+    }, 3000);
   };
 
   return (
-    <div className="flex flex-col space-y-1.5 px-4 py-2 bg-obsidian-900 border-b border-slate-800 text-xs font-mono">
+    <div className="flex flex-col space-y-1.5 p-2 rounded-md bg-obsidian-950 border border-obsidian-800 text-xs font-mono">
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <span className="text-slate-400 font-semibold">Context Window:</span>
-          <span className="text-slate-200 tabular-nums font-bold">
-            {(currentEstimatedTokens / 1000).toFixed(1)}k / {(contextWindow / 1000).toFixed(0)}k tokens
-          </span>
-          <span
-            className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
-              percentage > 80
-                ? 'bg-rose-500/20 text-rose-400'
-                : percentage > 50
-                ? 'bg-amber-500/20 text-amber-400'
-                : 'bg-cyan-950 text-cyber-cyan'
-            }`}
-          >
-            {percentage}%
+        <div className="flex items-center space-x-1.5 text-slate-300">
+          <Cpu className="h-3.5 w-3.5 text-cyber-cyan shrink-0" />
+          <span className="font-semibold text-[11px] text-slate-300">Context Window:</span>
+          <span className={`text-[11px] font-bold tabular-nums ${getTextColor(fillPercentage)}`}>
+            {estimatedTokens.toLocaleString()} / {maxTokens.toLocaleString()} tokens ({fillPercentage}%)
           </span>
         </div>
 
-        <button
-          onClick={handleCompactClick}
-          disabled={isCompacting}
-          className="flex items-center space-x-1 px-2.5 py-0.5 rounded bg-cyan-950/60 hover:bg-cyan-900/80 border border-cyan-800/60 text-cyber-cyan font-bold text-[11px] transition active:scale-95 disabled:opacity-50 cursor-pointer shadow-xs"
-          title="Evaporate prior tool outputs >3 turns old while preserving immutable anchors and execution state"
-        >
-          {isCompacting ? (
-            <span>Compacting...</span>
-          ) : (
-            <>
-              <Minimize2 className="h-3 w-3" />
-              <span>⚡ Compact Context</span>
-            </>
+        {/* Compact Button & Temporary Badge */}
+        <div className="flex items-center space-x-1.5">
+          {evaporatedBadge && (
+            <span className="flex items-center space-x-1 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-amber-950/40 text-cyber-amber border border-amber-500/40 animate-in fade-in tabular-nums">
+              <Flame className="h-2.5 w-2.5 text-cyber-amber animate-pulse shrink-0" />
+              <span>{evaporatedBadge}</span>
+            </span>
           )}
-        </button>
+
+          <button
+            onClick={handleCompact}
+            className="flex items-center space-x-1 px-2 py-0.5 rounded-sm bg-obsidian-900 hover:bg-obsidian-850 text-cyber-amber hover:text-amber-300 border border-amber-500/30 hover:border-amber-400 text-[10px] font-mono font-bold transition active:scale-[0.98] cursor-pointer select-none"
+            title="Evaporate old tool logs (>500 chars) older than 3 turns to conserve LLM context"
+          >
+            <Zap className="h-2.5 w-2.5 fill-cyber-amber shrink-0" />
+            <span>⚡ Compact Context</span>
+          </button>
+        </div>
       </div>
 
-      {/* Progress Gauge Bar */}
-      <div className="w-full h-1.5 rounded-full bg-obsidian-950 border border-slate-800 overflow-hidden">
+      {/* Sleek Progress Bar */}
+      <div className="h-1 w-full rounded-full bg-obsidian-800 overflow-hidden">
         <div
-          className={`h-full transition-all duration-300 rounded-full shadow-xs ${getBarColor()}`}
-          style={{ width: `${Math.max(4, percentage)}%` }}
+          className={`h-full transition-all duration-300 ${getFillColor(fillPercentage)}`}
+          style={{ width: `${Math.max(2, fillPercentage)}%` }}
         />
       </div>
-
-      {/* Success / Compact Notification Banner */}
-      {compactionCue && (
-        <div className="flex items-center space-x-1.5 py-1 text-[11px] text-cyber-emerald animate-in fade-in duration-200">
-          <CheckCircle2 className="h-3 w-3" />
-          <span>{compactionCue}</span>
-        </div>
-      )}
     </div>
   );
 }
