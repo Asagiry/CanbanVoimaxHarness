@@ -111,6 +111,14 @@
   - Dynamic columns rendered from `.cvh/pipeline.json`.
   - Drag-and-drop reordering & stage transition triggers.
   - Fast-track indicators, column gatekeeper status, and stage WIP counters.
+  - Clicking a column on the board focuses the corresponding folder in Cortex Explorer.
+  - *Lead Role:* `react-tailwind-artisan` (Level 1)
+
+- **Task CVH-009B**: Cortex Explorer («Проводник разума агентов») in Left Sidebar
+  - Replaces traditional project file tree with an agent-centric mind explorer in VS Code style.
+  - 1-to-1 color connection with Kanban columns (e.g. Blue column = Blue folder with agent rules).
+  - Inside each agent folder: `persona.md`, modular rules `rules/*.md`, and stage settings.
+  - Clicking a column focuses its Cortex folder with instant on-the-fly markdown editing.
   - *Lead Role:* `react-tailwind-artisan` (Level 1)
 
 - **Task CVH-010**: Tactile Kanban Card & Status Badges
