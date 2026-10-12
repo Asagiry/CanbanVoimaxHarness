@@ -24,4 +24,5 @@ description: Specialized UI/UX engineering skill for CanbanVoimaxHarness. Covers
    - Zero-GC / Re-Render Loop Guard: Do not instantiate unmemoized objects/callbacks in drag-and-drop contexts or 1-second timer ticker intervals.
    - Zustand Interface Completeness: Every action declared in a state interface MUST be fully implemented with synchronized state transitions (e.g., coupling `status` and `isTimerRunning`).
    - Ground Truth Build Verification: Always verify frontend builds via `npm run build` (`tsc && vite build`) with zero TypeScript errors or linter warnings.
+   - JSX Tag Hierarchy & Cleanliness: Maintain strict balanced opening/closing tag pairs (prevent accidental duplicate closing tags like `</button></button>`) and prune unused Lucide icon imports before submission.
    - Accessibility & Unique IDs: Use React 19's `useId()` for all modal and form inputs to prevent duplicate DOM element ID warnings.
