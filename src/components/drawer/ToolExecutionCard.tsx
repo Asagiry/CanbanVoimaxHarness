@@ -127,6 +127,41 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       {/* Expanded Body */}
       {isExpanded && (
         <div className="p-3 border-t border-slate-800/80 space-y-2.5 font-mono text-xs">
+          {/* Dedicated Visual Diff Viewer for edit_file / str_replace */}
+          {(tool.toolName === 'edit_file' || tool.toolName === 'str_replace') && tool.params && (
+            <div className="rounded border border-slate-800 bg-obsidian-950 overflow-hidden">
+              <div className="flex items-center justify-between px-2.5 py-1.5 bg-obsidian-900 border-b border-slate-800 text-[10px] text-slate-400">
+                <span className="font-bold text-cyber-amber flex items-center space-x-1.5">
+                  <FileEdit className="h-3 w-3" />
+                  <span>File Modification Diff</span>
+                </span>
+                <span className="text-slate-300 font-mono">
+                  {(tool.params as Record<string, string>).file_path || 'target file'}
+                </span>
+              </div>
+              <div className="p-2 space-y-1 text-[11px] font-mono leading-relaxed max-h-56 overflow-y-auto">
+                {/* Deletion (old_string) */}
+                {Boolean((tool.params as Record<string, string>).old_string) && (
+                  <div className="rounded bg-rose-950/30 border-l-2 border-rose-500 p-2 text-rose-300 whitespace-pre-wrap select-text">
+                    <div className="text-[10px] uppercase font-bold text-rose-400 pb-0.5">
+                      - Original Text (Deleted)
+                    </div>
+                    {(tool.params as Record<string, string>).old_string}
+                  </div>
+                )}
+                {/* Addition (new_string) */}
+                {Boolean((tool.params as Record<string, string>).new_string) && (
+                  <div className="rounded bg-emerald-950/30 border-l-2 border-emerald-500 p-2 text-emerald-300 whitespace-pre-wrap select-text">
+                    <div className="text-[10px] uppercase font-bold text-emerald-400 pb-0.5">
+                      + Replacement Text (Inserted)
+                    </div>
+                    {(tool.params as Record<string, string>).new_string}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Tool Parameters */}
           {tool.params && Object.keys(tool.params).length > 0 && (
             <div>
