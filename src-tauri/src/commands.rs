@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_dialog::DialogExt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
@@ -833,7 +834,10 @@ pub async fn save_llm_settings(
 // ============================================================================
 
 #[tauri::command]
-pub async fn select_project_folder(path: Option<String>) -> Result<Option<String>, String> {
+pub async fn select_project_folder(
+    path: Option<String>,
+    app_handle: AppHandle,
+) -> Result<Option<String>, String> {
     if let Some(p) = path {
         if !p.trim().is_empty() {
             let path_buf = PathBuf::from(p.trim());
@@ -844,13 +848,19 @@ pub async fn select_project_folder(path: Option<String>) -> Result<Option<String
         }
     }
 
-    let selected = tokio::task::spawn_blocking(|| {
-        rfd::FileDialog::new()
+    // tauri-plugin-dialog replaces the direct rfd dependency to avoid its
+    // COM/OLE STA initialization conflicting with WebView2. The blocking call
+    // runs on the blocking-pool thread so the event loop is never stalled.
+    let selected = tokio::task::spawn_blocking(move || {
+        app_handle
+            .dialog()
+            .file()
             .set_title("Select Project Folder")
-            .pick_folder()
+            .blocking_pick_folder()
     })
     .await
-    .map_err(|e| format!("Folder dialog task failed: {}", e))?;
+    .map_err(|e| format!("Folder dialog task failed: {}", e))?
+    .and_then(|folder| folder.simplified().into_path().ok());
 
     if let Some(ref folder) = selected {
         let _ = scaffold_cvh_project(folder).await;
@@ -940,8 +950,8 @@ pub async fn list_projects(state: State<'_, AppState>) -> Result<Vec<ProjectEntr
 
 // Backward-compatible alias for choose_project_folder
 #[tauri::command]
-pub async fn choose_project_folder() -> Result<Option<String>, String> {
-    select_project_folder(None).await
+pub async fn choose_project_folder(app_handle: AppHandle) -> Result<Option<String>, String> {
+    select_project_folder(None, app_handle).await
 }
 
 // Backward-compatible alias for set_project_root
