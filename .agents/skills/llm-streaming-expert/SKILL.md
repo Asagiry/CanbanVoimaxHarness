@@ -17,3 +17,6 @@ description: Specialized LLM API integration and SSE streaming skill for CanbanV
    - Execute tool in Rust (`read_file`, `write_file`, `edit_file`, `execute_command`, `spawn_subagent`).
    - Append tool results with role `tool` or `user` and continue turn until final text response.
    - Stream individual tokens directly to UI via Tauri event: `app_handle.emit("agent:token", payload)`.
+4. **HTTP Header Construction Invariants**:
+   - In `reqwest::header::HeaderMap`, header keys must implement `IntoHeaderName`. Use `HeaderName::from_static("anthropic-version")` and `HeaderName::from_static("x-api-key")` or string literals. Never pass `HeaderValue` as the header key.
+   - For Anthropic native streaming, include `anthropic-version: 2023-06-01` and `anthropic-beta: prompt-caching-2024-07-31` when ephemeral prompt caching is enabled.

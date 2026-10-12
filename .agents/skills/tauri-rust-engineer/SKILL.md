@@ -16,3 +16,9 @@ description: Specialized Tauri v2 and Rust systems engineering skill for CanbanV
 3. **Async File I/O**:
    - Use `tokio::fs` for non-blocking disk reads/writes.
    - Atomic writes via temporary files and rename to prevent corrupted configurations.
+4. **Tauri v2 Bundle & Resource Invariant**:
+   - `tauri-build` in `build.rs` compiles Windows application resources (`.rc`). Icon assets defined in `tauri.conf.json` (`bundle.icon`) MUST exist on disk (`icons/32x32.png`, `icons/128x128.png`, `icons/icon.ico`). Never leave empty icon arrays or missing files during Tauri scaffolding.
+5. **Windows Toolchain & Linker Invariant**:
+   - When building on Windows, ensure the active toolchain (`x86_64-pc-windows-gnu` with LLVM-MinGW or `x86_64-pc-windows-msvc`) is configured with matching linkers. Ensure Cargo and toolchain bin directories are reachable in subshells.
+6. **Reqwest Header Name Type Invariant**:
+   - In `reqwest::header::HeaderMap::insert(K, V)`, the key `K` MUST implement `IntoHeaderName`. Use `HeaderName::from_static(...)` or `&'static str` literals. Never pass `HeaderValue` as the key.

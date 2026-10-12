@@ -1,3 +1,5 @@
+pub mod compactor;
+
 use crate::compactor::{compact_conversation_history, StateSnapshot};
 use crate::config::{is_tool_allowed, load_tool_policy_config, ToolPolicyConfig};
 use crate::hooks::kill_process_tree;

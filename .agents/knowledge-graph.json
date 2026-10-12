@@ -49,6 +49,33 @@
         "Visual tree explorer representing agent minds across all pipeline stages.",
         "Enables zero-turn memory inspection and in-app modal rule editing."
       ]
+    },
+    {
+      "name": "TauriDesktopCoreEngine",
+      "entityType": "Subsystem",
+      "observations": [
+        "Tauri v2 + Tokio async runtime providing 13 IPC commands and native event emitters.",
+        "Executes process trees with graceful termination and non-blocking stdio drain on Windows.",
+        "Ensures atomic configuration persistence and worktree path scoping."
+      ]
+    },
+    {
+      "name": "UniversalLlmStreamer",
+      "entityType": "Subsystem",
+      "observations": [
+        "Universal SSE streaming client supporting OpenAI-compatible endpoints and native Anthropic Claude API.",
+        "Streams token deltas, reasoning/thinking thoughts, and structured tool calls in real time.",
+        "Applies typed HTTP headers and Anthropic ephemeral prompt caching."
+      ]
+    },
+    {
+      "name": "ReActAgentLoop",
+      "entityType": "Subsystem",
+      "observations": [
+        "Multi-turn autonomous ReAct agent loop executing scoped tools (read, write, edit, execute_command).",
+        "Pre-compiles Turn 0 memory from personas, project rules, and active skills without runtime file-reading overhead.",
+        "Emits live telemetry events (agent:token, agent:thought, agent:tool_start, agent:tool_end) to the frontend."
+      ]
     }
   ],
   "relations": [
@@ -76,6 +103,31 @@
       "from": "FrontendControlPlane",
       "to": "CortexExplorer",
       "relationType": "hosts"
+    },
+    {
+      "from": "CanbanVoimaxHarness",
+      "to": "TauriDesktopCoreEngine",
+      "relationType": "powers"
+    },
+    {
+      "from": "TauriDesktopCoreEngine",
+      "to": "UniversalLlmStreamer",
+      "relationType": "integrates"
+    },
+    {
+      "from": "TauriDesktopCoreEngine",
+      "to": "ReActAgentLoop",
+      "relationType": "executes"
+    },
+    {
+      "from": "ReActAgentLoop",
+      "to": "GitWorktreeIsolationManager",
+      "relationType": "operates_inside"
+    },
+    {
+      "from": "ReActAgentLoop",
+      "to": "ZeroTurnMemoryPriming",
+      "relationType": "consumes"
     }
   ]
 }

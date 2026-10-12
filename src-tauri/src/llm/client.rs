@@ -2,7 +2,7 @@ use super::models::*;
 use anyhow::{bail, Context, Result};
 use eventsource_stream::Eventsource;
 use futures_util::StreamExt;
-use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
 
@@ -208,13 +208,13 @@ impl LlmClient {
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         headers.insert(
-            HeaderValue::from_static("anthropic-version"),
+            HeaderName::from_static("anthropic-version"),
             HeaderValue::from_static("2023-06-01"),
         );
         if let Some(key) = api_key {
             if !key.trim().is_empty() {
                 if let Ok(val) = HeaderValue::from_str(key.trim()) {
-                    headers.insert(HeaderValue::from_static("x-api-key"), val);
+                    headers.insert(HeaderName::from_static("x-api-key"), val);
                 }
             }
         }
