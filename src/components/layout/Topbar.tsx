@@ -1,6 +1,7 @@
 import { useId } from 'react';
 import { useProjectStore } from '../../stores/projectStore';
 import { useBoardStore } from '../../stores/boardStore';
+import { useToolPolicyStore } from '../../stores/toolPolicyStore';
 import {
   Layers,
   Search,
@@ -9,11 +10,13 @@ import {
   RefreshCw,
   Cpu,
   Zap,
+  Shield,
 } from 'lucide-react';
 
 export default function Topbar() {
   const { activeProject, availableProjects, switchProject, isTauriEnvironment } = useProjectStore();
   const { searchQuery, setSearchQuery, tasks } = useBoardStore();
+  const { openModal: openToolPolicyModal } = useToolPolicyStore();
   const searchInputId = useId();
 
   const runningCount = tasks.filter((t) => t.status === 'running').length;
@@ -98,6 +101,16 @@ export default function Topbar() {
             {isTauriEnvironment ? 'Tauri v2 Native' : 'CVH Control Plane'}
           </span>
         </div>
+
+        {/* Tool Policy Matrix Button */}
+        <button
+          onClick={openToolPolicyModal}
+          className="flex items-center space-x-1.5 px-2.5 py-1 rounded bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-850/60 text-cyber-cyan transition cursor-pointer"
+          title="Open Tool Policy Matrix & Security Controls"
+        >
+          <Shield className="h-3.5 w-3.5" />
+          <span className="font-semibold">Tool Matrix</span>
+        </button>
 
         {/* Health Activity */}
         <div

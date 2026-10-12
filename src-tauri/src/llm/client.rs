@@ -31,9 +31,14 @@ impl LlmClient {
         &self,
         base_url: &str,
         api_key: Option<&str>,
-        request: OpenAIChatRequest,
+        mut request: OpenAIChatRequest,
         tx: Sender<StreamChunk>,
     ) -> Result<()> {
+        // Deterministic Prefix Caching: alphabetically sort tools by name
+        if let Some(tools) = &mut request.tools {
+            tools.sort_by(|a, b| a.function.name.cmp(&b.function.name));
+        }
+
         let endpoint = if base_url.ends_with("/chat/completions") {
             base_url.to_string()
         } else if base_url.ends_with('/') {
@@ -84,6 +89,23 @@ impl LlmClient {
                     }
 
                     if let Ok(chunk) = serde_json::from_str::<OpenAIChatChunk>(data) {
+                        // Telemetry / Usage delta if available (e.g. DeepSeek / OpenAI prompt cache hit)
+                        if let Some(usage) = chunk.usage {
+                            let input_tokens = usage.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                            let output_tokens = usage.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                            let cache_read = usage
+                                .get("prompt_tokens_details")
+                                .and_then(|d| d.get("cached_tokens"))
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
+                            let _ = tx.send(StreamChunk::Usage {
+                                input_tokens,
+                                output_tokens,
+                                cache_read_tokens: cache_read,
+                                cache_creation_tokens: 0,
+                            }).await;
+                        }
+
                         if let Some(choices) = chunk.choices {
                             for choice in choices {
                                 // Content delta
@@ -166,9 +188,46 @@ impl LlmClient {
         &self,
         base_url: &str,
         api_key: Option<&str>,
-        request: AnthropicMessageRequest,
+        mut request: AnthropicMessageRequest,
         tx: Sender<StreamChunk>,
     ) -> Result<()> {
+        // Deterministic Prefix Caching: alphabetically sort tools by name
+        if let Some(tools) = &mut request.tools {
+            tools.sort_by(|a, b| a.name.cmp(&b.name));
+            // Breakpoint: Inject ephemeral cache_control on the last tool
+            if let Some(last_tool) = tools.last_mut() {
+                last_tool.cache_control = Some(serde_json::json!({ "type": "ephemeral" }));
+            }
+        }
+
+        // Breakpoint: Inject ephemeral cache_control on static System prompt
+        if let Some(sys_val) = request.system.take() {
+            if let Some(sys_str) = sys_val.as_str() {
+                request.system = Some(serde_json::json!([
+                    {
+                        "type": "text",
+                        "text": sys_str,
+                        "cache_control": { "type": "ephemeral" }
+                    }
+                ]));
+            } else {
+                request.system = Some(sys_val);
+            }
+        }
+
+        // Breakpoint: Inject ephemeral cache_control on initial task prompt (Anchor message)
+        if let Some(first_msg) = request.messages.first_mut() {
+            if let Some(text) = first_msg.content.as_str() {
+                first_msg.content = serde_json::json!([
+                    {
+                        "type": "text",
+                        "text": text,
+                        "cache_control": { "type": "ephemeral" }
+                    }
+                ]);
+            }
+        }
+
         let endpoint = if base_url.ends_with("/messages") {
             base_url.to_string()
         } else if base_url.ends_with('/') {
@@ -220,6 +279,20 @@ impl LlmClient {
                     let data = event.data.trim();
                     if let Ok(event_obj) = serde_json::from_str::<AnthropicStreamEvent>(data) {
                         match event_obj {
+                            AnthropicStreamEvent::MessageStart { message } => {
+                                if let Some(usage) = message.get("usage") {
+                                    let input_tokens = usage.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                                    let cache_read = usage.get("cache_read_input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                                    let cache_creation = usage.get("cache_creation_input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                                    let output_tokens = usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                                    let _ = tx.send(StreamChunk::Usage {
+                                        input_tokens,
+                                        output_tokens,
+                                        cache_read_tokens: cache_read,
+                                        cache_creation_tokens: cache_creation,
+                                    }).await;
+                                }
+                            }
                             AnthropicStreamEvent::ContentBlockStart {
                                 index,
                                 content_block,

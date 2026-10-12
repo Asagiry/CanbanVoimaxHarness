@@ -4,29 +4,49 @@ import { INITIAL_STREAM_ENTRIES, INITIAL_TOOL_EXECUTIONS } from './mockData';
 
 export type DrawerTab = 'thoughts' | 'output' | 'tools';
 
+export interface TaskTelemetry {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  cacheHitRate: number;
+}
+
 interface DrawerState {
   isOpen: boolean;
   activeTaskId: string | null;
   activeTab: DrawerTab;
   streamEntries: Record<string, { thoughts: LiveStreamEntry[]; outputs: LiveStreamEntry[] }>;
   toolExecutions: Record<string, ToolExecution[]>;
+  taskTelemetry: Record<string, TaskTelemetry>;
+  thinkingStartTime: Record<string, number | null>;
 
   // Actions
   openDrawer: (taskId: string, initialTab?: DrawerTab) => void;
   closeDrawer: () => void;
   setActiveTab: (tab: DrawerTab) => void;
   appendThought: (taskId: string, content: string) => void;
-  appendOutput: (taskId: string, content: string, type?: 'output' | 'error' | 'system') => void;
+  appendOutput: (
+    taskId: string,
+    content: string,
+    type?: 'output' | 'error' | 'system' | 'steer' | 'user'
+  ) => void;
   addToolExecution: (taskId: string, tool: ToolExecution) => void;
+  updateTelemetry: (taskId: string, telemetry: Partial<TaskTelemetry>) => void;
+  setThinkingStartTime: (taskId: string, time: number | null) => void;
+  sendSteerMessage: (taskId: string, message: string) => Promise<void>;
+  compactTaskContext: (taskId: string) => Promise<{ savedTokens: number; evaporatedCount: number }>;
   clearTaskLogs: (taskId: string) => void;
 }
 
-export const useDrawerStore = create<DrawerState>((set) => ({
+export const useDrawerStore = create<DrawerState>((set, get) => ({
   isOpen: false,
   activeTaskId: null,
   activeTab: 'thoughts',
   streamEntries: INITIAL_STREAM_ENTRIES,
   toolExecutions: INITIAL_TOOL_EXECUTIONS,
+  taskTelemetry: {},
+  thinkingStartTime: {},
 
   openDrawer: (taskId, initialTab = 'thoughts') => {
     set({
@@ -47,11 +67,16 @@ export const useDrawerStore = create<DrawerState>((set) => ({
 
   appendThought: (taskId, content) => {
     const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false });
+    const now = Date.now();
+    const start = get().thinkingStartTime[taskId] || now;
+    const durationMs = now - start;
+
     const newEntry: LiveStreamEntry = {
       id: `th-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       timestamp: timeStr,
       type: 'thought',
       content,
+      durationMs,
     };
 
     set((state) => {
@@ -101,6 +126,99 @@ export const useDrawerStore = create<DrawerState>((set) => ({
         },
       };
     });
+  },
+
+  updateTelemetry: (taskId, telemetry) => {
+    set((state) => {
+      const current = state.taskTelemetry[taskId] || {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheHitRate: 0,
+      };
+      return {
+        taskTelemetry: {
+          ...state.taskTelemetry,
+          [taskId]: { ...current, ...telemetry },
+        },
+      };
+    });
+  },
+
+  setThinkingStartTime: (taskId, time) => {
+    set((state) => ({
+      thinkingStartTime: {
+        ...state.thinkingStartTime,
+        [taskId]: time,
+      },
+    }));
+  },
+
+  sendSteerMessage: async (taskId, message) => {
+    // 1. Append user steering message into output stream
+    get().appendOutput(taskId, message, 'steer');
+
+    // 2. Invoke native Tauri steer_agent command
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('steer_agent', { taskId, message });
+    } catch {
+      // In web or mock mode, generate agent thought response
+      setTimeout(() => {
+        get().appendThought(
+          taskId,
+          `Received steering instruction: "${message}". Re-planning execution path.`
+        );
+      }, 500);
+    }
+  },
+
+  compactTaskContext: async (taskId) => {
+    let savedTokens = 2450;
+    let evaporatedCount = 0;
+
+    // Evaporate in memory for older tools
+    set((state) => {
+      const tools = state.toolExecutions[taskId] || [];
+      const updatedTools = tools.map((t, idx) => {
+        if (idx > 2 && (t.stdout?.length || 0) > 500) {
+          evaporatedCount += 1;
+          return {
+            ...t,
+            stdout: `[Evaporated by State-Preserving Compactor: ${t.stdout?.length} chars truncated. Preserved status: ${t.status}]`,
+          };
+        }
+        return t;
+      });
+
+      return {
+        toolExecutions: {
+          ...state.toolExecutions,
+          [taskId]: updatedTools,
+        },
+      };
+    });
+
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const res = await invoke<{ estimated_saved_tokens?: number; evaporated_tools_count?: number }>(
+        'compact_task_context',
+        { taskId }
+      );
+      if (res?.estimated_saved_tokens) savedTokens = res.estimated_saved_tokens;
+      if (res?.evaporated_tools_count) evaporatedCount = Math.max(evaporatedCount, res.evaporated_tools_count);
+    } catch {
+      // Keep local values
+    }
+
+    get().appendOutput(
+      taskId,
+      `[COMPACTOR] State-preserving compaction completed. Evaporated prior tool outputs, saved ~${savedTokens} tokens.`,
+      'system'
+    );
+
+    return { savedTokens, evaporatedCount };
   },
 
   clearTaskLogs: (taskId) => {

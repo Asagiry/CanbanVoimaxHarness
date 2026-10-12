@@ -86,8 +86,9 @@ export interface ToolExecution {
 export interface LiveStreamEntry {
   id: string;
   timestamp: string;
-  type: 'thought' | 'output' | 'system' | 'error';
+  type: 'thought' | 'output' | 'system' | 'error' | 'steer' | 'user';
   content: string;
+  durationMs?: number;
 }
 
 export interface ProjectInfo {

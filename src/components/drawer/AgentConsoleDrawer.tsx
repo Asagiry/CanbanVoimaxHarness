@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useId } from 'react';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import ToolExecutionCard from './ToolExecutionCard';
+import MarkdownViewer from './MarkdownViewer';
+import ContextGauge from './ContextGauge';
 import {
   X,
   Play,
@@ -17,6 +19,8 @@ import {
   Cpu,
   Send,
   Zap,
+  Sparkles,
+  UserCheck,
 } from 'lucide-react';
 
 export default function AgentConsoleDrawer() {
@@ -26,11 +30,11 @@ export default function AgentConsoleDrawer() {
     activeTab,
     streamEntries,
     toolExecutions,
+    taskTelemetry,
     closeDrawer,
     setActiveTab,
-    appendThought,
-    appendOutput,
-    addToolExecution,
+    sendSteerMessage,
+    compactTaskContext,
   } = useDrawerStore();
 
   const { tasks, columns, updateTask, promoteTaskToNextStage } = useBoardStore();
@@ -53,6 +57,7 @@ export default function AgentConsoleDrawer() {
 
   const currentStream = streamEntries[task.id] || { thoughts: [], outputs: [] };
   const currentTools = toolExecutions[task.id] || [];
+  const telemetry = taskTelemetry[task.id];
 
   const showCue = (message: string) => {
     setFeedbackCue(message);
@@ -67,11 +72,6 @@ export default function AgentConsoleDrawer() {
       isTimerRunning: nextStatus === 'running',
     });
     showCue(isPaused ? 'Agent Resumed' : 'Agent Paused');
-    appendOutput(
-      task.id,
-      `[SYSTEM] Agent state changed: ${nextStatus.toUpperCase()}`,
-      'system'
-    );
   };
 
   const handleForceKill = () => {
@@ -80,11 +80,6 @@ export default function AgentConsoleDrawer() {
       isTimerRunning: false,
     });
     showCue('Agent Force Terminated');
-    appendOutput(
-      task.id,
-      '[CRITICAL] Agent process terminated via Force Kill signal (SIGKILL). Worktree preserved.',
-      'error'
-    );
   };
 
   const handlePromote = () => {
@@ -99,33 +94,20 @@ export default function AgentConsoleDrawer() {
       verdict: 'NONE',
     });
     showCue('Re-running Agent Sensors');
-    appendThought(task.id, 'Initiating clean retry cycle in isolated worktree.');
-    addToolExecution(task.id, {
-      id: `tool-retry-${Date.now()}`,
-      toolName: 'execute_command',
-      timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
-      durationMs: 420,
-      status: 'success',
-      exitCode: 0,
-      params: { command: 'git status --porcelain', workdir: task.worktreePath },
-      stdout: 'Working tree clean. Re-triggering sensors.',
-    });
   };
 
-  const handleSendPrompt = (e: React.FormEvent) => {
+  const handleSendPrompt = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!interactiveInput.trim()) return;
+    const trimmed = interactiveInput.trim();
+    if (!trimmed) return;
 
-    if (activeTab === 'thoughts') {
-      appendThought(task.id, interactiveInput.trim());
-    } else {
-      appendOutput(task.id, interactiveInput.trim(), 'output');
-    }
     setInteractiveInput('');
+    await sendSteerMessage(task.id, trimmed);
+    showCue('Инструкция отправлена агенту');
   };
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 flex w-[640px] max-w-full flex-col bg-obsidian-900 border-l border-slate-750 shadow-2xl animate-in slide-in-from-right duration-200">
+    <div className="fixed inset-y-0 right-0 z-50 flex w-[680px] max-w-full flex-col bg-obsidian-900 border-l border-slate-750 shadow-2xl animate-in slide-in-from-right duration-200">
       {/* Visual Feedback Cue Toast */}
       {feedbackCue && (
         <div className="absolute top-14 left-1/2 -translate-x-1/2 z-50 flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-cyber-cyan text-obsidian-950 font-bold text-xs shadow-lg shadow-cyan-500/20 animate-in fade-in zoom-in-95">
@@ -189,8 +171,22 @@ export default function AgentConsoleDrawer() {
             <GitBranch className="h-3 w-3 text-slate-500" />
             <span className="text-slate-300">{task.branch}</span>
           </div>
+          {telemetry && telemetry.cacheHitRate > 0 && (
+            <div className="flex items-center space-x-1 px-2 py-0.5 rounded bg-cyan-950/40 border border-cyan-800/40 text-cyber-cyan font-bold">
+              <Zap className="h-3 w-3" />
+              <span>Prefix Cache: {telemetry.cacheHitRate.toFixed(1)}%</span>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* State-Preserving Context Compactor Gauge */}
+      <ContextGauge
+        taskId={task.id}
+        contextWindow={column?.contextWindow || 128000}
+        currentEstimatedTokens={telemetry?.inputTokens || 14200}
+        onCompact={() => compactTaskContext(task.id)}
+      />
 
       {/* Action Controls Toolbar */}
       <div className="flex items-center justify-between border-b border-slate-800 bg-obsidian-850/80 px-4 py-2">
@@ -275,7 +271,7 @@ export default function AgentConsoleDrawer() {
           }`}
         >
           <MessageSquare className="h-3.5 w-3.5" />
-          <span>Assistant Output</span>
+          <span>Chat / Assistant Stream</span>
           <span className="font-mono text-[10px] tabular-nums px-1 rounded bg-obsidian-800 text-slate-400">
             {currentStream.outputs.length}
           </span>
@@ -299,63 +295,92 @@ export default function AgentConsoleDrawer() {
 
       {/* Tab Content Stream Area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-obsidian-950 font-mono text-xs">
-        {/* Tab 1: Thoughts Stream (<thinking> tokens) */}
+        {/* Tab 1: Live Thinking Stream (<thinking> tokens with distinct monospace & glowing amber/neon accent border) */}
         {activeTab === 'thoughts' && (
           <div className="space-y-3">
-            <div className="p-2 rounded bg-obsidian-900/80 border border-slate-800/80 text-[11px] text-slate-400 flex items-center justify-between">
+            <div className="p-2 rounded bg-amber-950/30 border border-amber-500/40 text-[11px] text-amber-300 flex items-center justify-between shadow-[0_0_12px_rgba(245,158,11,0.15)]">
               <span className="flex items-center space-x-1.5">
-                <Cpu className="h-3.5 w-3.5 text-cyber-cyan" />
-                <span>Streaming &lt;thinking&gt; tokens from {task.persona}</span>
+                <Cpu className="h-3.5 w-3.5 text-cyber-amber animate-pulse" />
+                <span className="font-bold">Live Thinking Stream (&lt;thinking&gt; tokens)</span>
               </span>
-              <span className="text-[10px] text-cyber-emerald font-semibold animate-pulse">● LIVE</span>
+              <span className="text-[10px] text-cyber-amber font-mono font-bold animate-pulse">
+                ● LIVE REASONING
+              </span>
             </div>
 
             {currentStream.thoughts.map((entry) => (
               <div
                 key={entry.id}
-                className="rounded-lg border border-slate-800/90 bg-obsidian-900/70 p-3 text-slate-300 leading-relaxed shadow-xs"
+                className="rounded-lg border border-amber-500/40 bg-obsidian-900/90 p-3.5 text-slate-200 leading-relaxed shadow-[0_0_14px_rgba(245,158,11,0.15)] transition-all"
               >
-                <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-800/60 text-[10px] text-slate-400">
-                  <span className="font-semibold text-cyber-cyan">&lt;thinking&gt;</span>
-                  <span className="tabular-nums">{entry.timestamp}</span>
+                <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-amber-500/30 text-[10px]">
+                  <span className="font-mono font-bold text-cyber-amber flex items-center space-x-1">
+                    <Sparkles className="h-3 w-3" />
+                    <span>&lt;thinking&gt;</span>
+                  </span>
+                  <div className="flex items-center space-x-2 text-slate-400 font-mono">
+                    {entry.durationMs && (
+                      <span className="text-amber-400 tabular-nums">
+                        +{(entry.durationMs / 1000).toFixed(2)}s
+                      </span>
+                    )}
+                    <span className="tabular-nums">{entry.timestamp}</span>
+                  </div>
                 </div>
-                <p className="whitespace-pre-wrap select-text text-slate-300 text-xs">
+                <div className="whitespace-pre-wrap select-text font-mono text-xs text-slate-200 leading-relaxed font-normal">
                   {entry.content}
-                </p>
+                </div>
               </div>
             ))}
 
             {currentStream.thoughts.length === 0 && (
-              <div className="h-40 flex flex-col items-center justify-center text-slate-600">
-                <span>No thoughts recorded yet</span>
+              <div className="h-40 flex flex-col items-center justify-center text-slate-600 font-mono">
+                <span>No thoughts recorded yet for this task</span>
               </div>
             )}
           </div>
         )}
 
-        {/* Tab 2: Assistant Output Stream */}
+        {/* Tab 2: Rich Markdown Assistant / Chat Stream */}
         {activeTab === 'output' && (
           <div className="space-y-3 font-sans">
-            {currentStream.outputs.map((entry) => (
-              <div
-                key={entry.id}
-                className={`rounded-lg border p-3 leading-relaxed shadow-xs ${
-                  entry.type === 'error'
-                    ? 'border-rose-900/60 bg-rose-950/20 text-rose-200'
-                    : entry.type === 'system'
-                    ? 'border-cyan-900/50 bg-cyan-950/20 text-cyan-200'
-                    : 'border-slate-800 bg-obsidian-900 text-slate-200'
-                }`}
-              >
-                <div className="flex items-center justify-between pb-1 mb-1.5 border-b border-slate-800/60 font-mono text-[10px] text-slate-400">
-                  <span className="font-semibold uppercase">{entry.type}</span>
-                  <span className="tabular-nums">{entry.timestamp}</span>
+            {currentStream.outputs.map((entry) => {
+              const isSteer = entry.type === 'steer' || entry.type === 'user';
+              return (
+                <div
+                  key={entry.id}
+                  className={`rounded-lg border p-3.5 leading-relaxed shadow-sm transition ${
+                    isSteer
+                      ? 'border-cyan-500/60 bg-cyan-950/20 text-cyan-100'
+                      : entry.type === 'error'
+                      ? 'border-rose-900/60 bg-rose-950/20 text-rose-200'
+                      : entry.type === 'system'
+                      ? 'border-amber-900/50 bg-amber-950/20 text-amber-200 font-mono text-xs'
+                      : 'border-slate-800 bg-obsidian-900 text-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-slate-800/60 font-mono text-[10px] text-slate-400">
+                    <span className="font-semibold uppercase flex items-center space-x-1">
+                      {isSteer ? (
+                        <>
+                          <UserCheck className="h-3 w-3 text-cyber-cyan" />
+                          <span className="text-cyber-cyan font-bold">User Steering</span>
+                        </>
+                      ) : (
+                        <span>{entry.type}</span>
+                      )}
+                    </span>
+                    <span className="tabular-nums">{entry.timestamp}</span>
+                  </div>
+
+                  {isSteer || entry.type === 'system' ? (
+                    <p className="whitespace-pre-wrap select-text text-xs">{entry.content}</p>
+                  ) : (
+                    <MarkdownViewer content={entry.content} />
+                  )}
                 </div>
-                <p className="whitespace-pre-wrap select-text text-xs">
-                  {entry.content}
-                </p>
-              </div>
-            ))}
+              );
+            })}
 
             {currentStream.outputs.length === 0 && (
               <div className="h-40 flex flex-col items-center justify-center font-mono text-slate-600">
@@ -365,7 +390,7 @@ export default function AgentConsoleDrawer() {
           </div>
         )}
 
-        {/* Tab 3: Tool Execution Cards */}
+        {/* Tab 3: Interactive Tool Execution Accordions */}
         {activeTab === 'tools' && (
           <div className="space-y-2.5">
             {currentTools.map((tool) => (
@@ -381,7 +406,7 @@ export default function AgentConsoleDrawer() {
         )}
       </div>
 
-      {/* Interactive Input Prompt Bar */}
+      {/* Interactive Sticky Bottom Input Bar (Steer / Chat Input) */}
       <div className="border-t border-slate-800 bg-obsidian-900 p-3">
         <form onSubmit={handleSendPrompt} className="flex items-center space-x-2">
           <input
@@ -390,17 +415,13 @@ export default function AgentConsoleDrawer() {
             type="text"
             value={interactiveInput}
             onChange={(e) => setInteractiveInput(e.target.value)}
-            placeholder={
-              activeTab === 'thoughts'
-                ? 'Inject human observation / thought into agent mind...'
-                : 'Send instruction to assistant stream...'
-            }
-            className="flex-1 rounded bg-obsidian-950 border border-slate-750 px-3 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500 font-mono"
+            placeholder="Отправить инструкцию / дообучить агента прямо в карточке..."
+            className="flex-1 rounded-lg bg-obsidian-950 border border-slate-750 px-3.5 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500 font-sans transition"
           />
           <button
             type="submit"
-            className="p-1.5 rounded bg-cyber-cyan hover:bg-cyan-400 text-obsidian-950 transition active:scale-95 shrink-0"
-            title="Inject message"
+            className="p-2 rounded-lg bg-cyber-cyan hover:bg-cyan-400 text-obsidian-950 font-bold transition active:scale-95 shrink-0 cursor-pointer shadow-sm shadow-cyan-900/40"
+            title="Отправить инструкцию / запустить следующий шаг"
           >
             <Send className="h-4 w-4" />
           </button>

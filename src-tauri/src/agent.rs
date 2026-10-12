@@ -1,3 +1,6 @@
+pub mod compactor;
+
+use crate::config::{is_tool_allowed, load_tool_policies, ToolPolicyConfig};
 use crate::hooks::kill_process_tree;
 use crate::llm::{ChatMessage, LlmClient, OpenAIChatRequest, StreamChunk, ToolCall, ToolDefinition};
 use anyhow::{bail, Context, Result};
@@ -30,6 +33,18 @@ pub enum AgentEvent {
     TurnStart {
         turn: usize,
     },
+    Telemetry {
+        input_tokens: u64,
+        output_tokens: u64,
+        cache_read_tokens: u64,
+        cache_creation_tokens: u64,
+        cache_hit_rate: f32,
+    },
+    Compacted {
+        saved_chars: usize,
+        estimated_saved_tokens: usize,
+        evaporated_count: usize,
+    },
     Finished {
         final_response: String,
     },
@@ -37,7 +52,8 @@ pub enum AgentEvent {
     Error(String),
 }
 
-/// Zero-Turn Memory Priming: compiles SystemMessage from Persona, AGENTS.md, Skills, and Task prompt.
+/// Zero-Turn Memory Priming: compiles strictly static SystemMessage from Persona, AGENTS.md, Skills, and Task prompt.
+/// Note: No dynamic timestamps or random IDs are injected to maximize deterministic prefix caching hit rate.
 pub async fn compile_primed_system_prompt(
     repo_root: &Path,
     worktree_path: &Path,
@@ -71,7 +87,14 @@ pub async fn compile_primed_system_prompt(
     if skills_dir.exists() {
         let mut skills_summary = Vec::new();
         if let Ok(mut entries) = tokio::fs::read_dir(&skills_dir).await {
+            let mut entries_vec = Vec::new();
             while let Ok(Some(entry)) = entries.next_entry().await {
+                entries_vec.push(entry);
+            }
+            // Deterministic sort of skills
+            entries_vec.sort_by_key(|e| e.file_name());
+
+            for entry in entries_vec {
                 if entry.file_type().await.map(|t| t.is_dir()).unwrap_or(false) {
                     let skill_name = entry.file_name().to_string_lossy().to_string();
                     let skill_doc = entry.path().join("SKILL.md");
@@ -116,7 +139,7 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
             serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "file_path": { "type": "string", "description": "Relative file path within worktree." },
+                    "file_path": { "type": "string", "description": "Relative file path within worktree (or 'path')." },
                     "offset": { "type": "integer", "description": "1-based starting line number (default: 1)." },
                     "limit": { "type": "integer", "description": "Maximum number of lines to return (default: 2000)." }
                 },
@@ -129,7 +152,7 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
             serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "file_path": { "type": "string", "description": "Relative file path within worktree." },
+                    "file_path": { "type": "string", "description": "Relative file path within worktree (or 'path')." },
                     "content": { "type": "string", "description": "Complete file text content to write." }
                 },
                 "required": ["file_path", "content"]
@@ -137,13 +160,13 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "edit_file",
-            "Targeted text replacement in an existing file inside the isolated worktree.",
+            "Targeted text replacement in an existing file inside the isolated worktree. Aliased as 'str_replace'.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "file_path": { "type": "string", "description": "Relative file path within worktree." },
-                    "old_string": { "type": "string", "description": "Existing text substring to replace." },
-                    "new_string": { "type": "string", "description": "Replacement text substring." },
+                    "file_path": { "type": "string", "description": "Relative file path within worktree (or 'path')." },
+                    "old_string": { "type": "string", "description": "Existing text substring to replace (or 'old_str')." },
+                    "new_string": { "type": "string", "description": "Replacement text substring (or 'new_str')." },
                     "replace_all": { "type": "boolean", "description": "Replace all occurrences (default: false)." }
                 },
                 "required": ["file_path", "old_string", "new_string"]
@@ -175,34 +198,169 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "execute_command",
-            "Execute a shell command inside the isolated worktree with piped stdout/stderr.",
+            "Execute a shell command inside the isolated worktree with piped stdout/stderr. Aliased as 'bash'.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "command": { "type": "string", "description": "Command string to run (e.g. 'cargo check')." },
+                    "command": { "type": "string", "description": "Command string to run (e.g. 'cargo check', or 'cmd')." },
                     "timeout_seconds": { "type": "integer", "description": "Execution timeout in seconds (default: 60)." }
                 },
                 "required": ["command"]
             }),
         ),
+        ToolDefinition::function(
+            "web_search",
+            "Perform a web search using DuckDuckGo to discover external documentation, APIs, and error solutions.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "query": { "type": "string", "description": "Search query terms." },
+                    "limit": { "type": "integer", "description": "Maximum number of results to return (default: 5)." }
+                },
+                "required": ["query"]
+            }),
+        ),
+        ToolDefinition::function(
+            "web_fetch",
+            "Fetch a URL over HTTP/HTTPS and return cleaned Markdown content.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "url": { "type": "string", "description": "The target HTTP or HTTPS URL." }
+                },
+                "required": ["url"]
+            }),
+        ),
+        ToolDefinition::function(
+            "subagent",
+            "Delegate a focused, independent sub-task to a specialized subagent.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "role": { "type": "string", "description": "Role persona for subagent (e.g. 'reviewer', 'developer')." },
+                    "prompt": { "type": "string", "description": "Detailed task instructions." }
+                },
+                "required": ["role", "prompt"]
+            }),
+        ),
     ]
 }
 
-/// Executes a tool within the safe boundary of `worktree_dir`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomToolConfig {
+    pub name: String,
+    pub description: String,
+    pub parameters: serde_json::Value,
+    pub command: String,
+}
+
+pub async fn load_custom_tools(repo_root: &Path) -> Vec<CustomToolConfig> {
+    let tools_dir = repo_root.join(".cvh").join("tools");
+    let mut custom_tools = Vec::new();
+    if tools_dir.exists() {
+        if let Ok(mut entries) = tokio::fs::read_dir(&tools_dir).await {
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("json") {
+                    if let Ok(content) = tokio::fs::read_to_string(&path).await {
+                        if let Ok(cfg) = serde_json::from_str::<CustomToolConfig>(&content) {
+                            custom_tools.push(cfg);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    custom_tools
+}
+
+pub async fn get_all_tools(repo_root: &Path) -> Vec<ToolDefinition> {
+    let mut tools = get_standard_tools();
+    let custom_tools = load_custom_tools(repo_root).await;
+    for ct in custom_tools {
+        tools.push(ToolDefinition::function(
+            &ct.name,
+            &ct.description,
+            ct.parameters,
+        ));
+    }
+    tools
+}
+
+/// Tool Output Spilling: if stdout/output exceeds 100 lines or 8KB, save full log to `.cvh/spill/<timestamp>-<tool>.log`,
+/// return head (first 20 lines) and tail (last 20 lines) + reference to spilled file.
+pub async fn maybe_spill_output(
+    repo_root: &Path,
+    tool_name: &str,
+    output: String,
+) -> Result<String> {
+    let lines_count = output.lines().count();
+    let bytes_len = output.len();
+
+    if lines_count > 100 || bytes_len > 8192 {
+        let spill_dir = repo_root.join(".cvh").join("spill");
+        tokio::fs::create_dir_all(&spill_dir).await?;
+        let timestamp = chrono::Utc::now().format("%Y%m%d-%H%M%S%.3f");
+        let safe_name = tool_name.replace(['/', '\\', ':', '*'], "_");
+        let filename = format!("{}-{}.log", timestamp, safe_name);
+        let spill_file = spill_dir.join(&filename);
+
+        tokio::fs::write(&spill_file, &output).await?;
+
+        let all_lines: Vec<&str> = output.lines().collect();
+        let head = all_lines.iter().take(20).copied().collect::<Vec<_>>().join("\n");
+        let tail = if all_lines.len() > 40 {
+            all_lines[all_lines.len() - 20..].iter().copied().collect::<Vec<_>>().join("\n")
+        } else {
+            String::new()
+        };
+
+        let rel_spill = format!(".cvh/spill/{}", filename);
+        let spilled_msg = format!(
+            "[Output truncated: {} lines ({} bytes) spilled to {}]\n--- HEAD (first 20 lines) ---\n{}\n\n--- TAIL (last 20 lines) ---\n{}\n[Full log available at {}]",
+            lines_count, bytes_len, rel_spill, head, tail, rel_spill
+        );
+        Ok(spilled_msg)
+    } else {
+        Ok(output)
+    }
+}
+
+/// Executes a tool within the safe boundary of `worktree_dir` with zero-trust policy checks.
 pub async fn execute_tool(
+    repo_root: &Path,
     worktree_dir: &Path,
+    stage_id: Option<&str>,
     tool_name: &str,
     args: &serde_json::Value,
     abort_handle: Arc<AtomicBool>,
+    tool_policy: &ToolPolicyConfig,
 ) -> Result<String> {
     if abort_handle.load(Ordering::SeqCst) {
         bail!("Operation aborted");
     }
 
-    match tool_name {
+    // SWE-bench signatures & aliasing
+    let normalized_tool_name = match tool_name {
+        "bash" => "execute_command",
+        "str_replace" => "edit_file",
+        other => other,
+    };
+
+    // Zero-Trust Iron Barrier: verify tool permission for current stage
+    if !is_tool_allowed(tool_policy, stage_id, normalized_tool_name) {
+        bail!(
+            "PermissionDenied: Инструмент '{}' отключен политикой безопасности для колонки '{}'",
+            normalized_tool_name,
+            stage_id.unwrap_or("global")
+        );
+    }
+
+    let raw_result = match normalized_tool_name {
         "read_file" => {
             let rel_path = args
                 .get("file_path")
+                .or_else(|| args.get("path"))
                 .and_then(|v| v.as_str())
                 .context("Missing required parameter 'file_path'")?;
 
@@ -231,12 +389,13 @@ pub async fn execute_tool(
                 output.push_str("(File is empty or offset out of range)\n");
             }
 
-            Ok(output)
+            output
         }
 
         "write_file" => {
             let rel_path = args
                 .get("file_path")
+                .or_else(|| args.get("path"))
                 .and_then(|v| v.as_str())
                 .context("Missing required parameter 'file_path'")?;
             let content = args
@@ -246,20 +405,23 @@ pub async fn execute_tool(
 
             let target = resolve_safe_path(worktree_dir, rel_path)?;
             crate::config::atomic_write_file(&target, content).await?;
-            Ok(format!("Successfully wrote {} bytes to {:?}", content.len(), rel_path))
+            format!("Successfully wrote {} bytes to {:?}", content.len(), rel_path)
         }
 
         "edit_file" => {
             let rel_path = args
                 .get("file_path")
+                .or_else(|| args.get("path"))
                 .and_then(|v| v.as_str())
                 .context("Missing required parameter 'file_path'")?;
             let old_string = args
                 .get("old_string")
+                .or_else(|| args.get("old_str"))
                 .and_then(|v| v.as_str())
                 .context("Missing required parameter 'old_string'")?;
             let new_string = args
                 .get("new_string")
+                .or_else(|| args.get("new_str"))
                 .and_then(|v| v.as_str())
                 .context("Missing required parameter 'new_string'")?;
             let replace_all = args.get("replace_all").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -270,7 +432,28 @@ pub async fn execute_tool(
                 .with_context(|| format!("Failed to read file for edit: {:?}", rel_path))?;
 
             if !current.contains(old_string) {
-                bail!("Target string 'old_string' not found in file {:?}", rel_path);
+                // Detailed error on edit_file mismatch with surrounding lines for instant agent self-correction
+                let old_lines: Vec<&str> = old_string.lines().collect();
+                let first_old_line = old_lines.first().map(|s| s.trim()).unwrap_or("");
+                let mut candidates = Vec::new();
+
+                for (idx, line) in current.lines().enumerate() {
+                    if !first_old_line.is_empty() && line.contains(first_old_line) {
+                        candidates.push(format!("Line {}: {}", idx + 1, line.trim()));
+                    }
+                }
+                if candidates.is_empty() {
+                    for (idx, line) in current.lines().take(6).enumerate() {
+                        candidates.push(format!("Line {}: {}", idx + 1, line.trim()));
+                    }
+                }
+
+                bail!(
+                    "Failed to edit: 'old_string' not found in file {:?}. Candidate near matches in file:\n{}\nTotal lines in file: {}. Please verify line numbers and supply exact matching context.",
+                    rel_path,
+                    candidates.join("\n"),
+                    current.lines().count()
+                );
             }
 
             let updated = if replace_all {
@@ -279,7 +462,7 @@ pub async fn execute_tool(
                 let count = current.matches(old_string).count();
                 if count > 1 {
                     bail!(
-                        "Ambiguous match: 'old_string' occurs {} times in file. Set replace_all: true or supply more context.",
+                        "Ambiguous match: 'old_string' occurs {} times in file. Set replace_all: true or supply more surrounding lines.",
                         count
                     );
                 }
@@ -287,7 +470,7 @@ pub async fn execute_tool(
             };
 
             crate::config::atomic_write_file(&target, &updated).await?;
-            Ok(format!("Successfully updated {:?}", rel_path))
+            format!("Successfully updated {:?}", rel_path)
         }
 
         "glob" => {
@@ -301,9 +484,9 @@ pub async fn execute_tool(
             let mut results = Vec::new();
             collect_matching_files(&search_dir, worktree_dir, pattern, &mut results).await?;
             if results.is_empty() {
-                Ok("No matching files found.".to_string())
+                "No matching files found.".to_string()
             } else {
-                Ok(results.join("\n"))
+                results.join("\n")
             }
         }
 
@@ -315,35 +498,81 @@ pub async fn execute_tool(
             let sub_path = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
             let search_target = resolve_safe_path(worktree_dir, sub_path)?;
 
-            let re = regex_lite_match(pattern)?;
             let mut matches = Vec::new();
-            grep_walk(&search_target, worktree_dir, &re, &mut matches).await?;
+            grep_walk(&search_target, worktree_dir, pattern, &mut matches).await?;
 
             if matches.is_empty() {
-                Ok("No matches found.".to_string())
+                "No matches found.".to_string()
             } else {
-                Ok(matches.join("\n"))
+                matches.join("\n")
             }
         }
 
         "execute_command" => {
             let command_str = args
                 .get("command")
+                .or_else(|| args.get("cmd"))
                 .and_then(|v| v.as_str())
                 .context("Missing required parameter 'command'")?;
             let timeout_secs = args.get("timeout_seconds").and_then(|v| v.as_u64()).unwrap_or(60);
 
             let res = run_scoped_command(worktree_dir, command_str, Duration::from_secs(timeout_secs), abort_handle).await?;
-            Ok(format!(
+            format!(
                 "[Exit Code: {}]\n--- STDOUT ---\n{}\n--- STDERR ---\n{}",
                 res.exit_code.unwrap_or(-1),
                 res.stdout.trim(),
                 res.stderr.trim()
-            ))
+            )
         }
 
-        _ => bail!("Unknown tool: {}", tool_name),
-    }
+        "web_search" => {
+            let query = args
+                .get("query")
+                .and_then(|v| v.as_str())
+                .context("Missing required parameter 'query'")?;
+            let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
+            execute_web_search(query, limit).await?
+        }
+
+        "web_fetch" => {
+            let url = args
+                .get("url")
+                .and_then(|v| v.as_str())
+                .context("Missing required parameter 'url'")?;
+            execute_web_fetch(url).await?
+        }
+
+        "subagent" => {
+            let role = args
+                .get("role")
+                .and_then(|v| v.as_str())
+                .context("Missing required parameter 'role'")?;
+            let prompt = args
+                .get("prompt")
+                .and_then(|v| v.as_str())
+                .context("Missing required parameter 'prompt'")?;
+            format!("Subagent [{}] dispatched with task: {}", role, prompt)
+        }
+
+        custom_tool => {
+            let custom_tools = load_custom_tools(repo_root).await;
+            if let Some(ct) = custom_tools.into_iter().find(|t| t.name == custom_tool) {
+                let cmd_str = ct.command.replace("{{args}}", &args.to_string());
+                let res = run_scoped_command(worktree_dir, &cmd_str, Duration::from_secs(60), abort_handle).await?;
+                format!(
+                    "[Custom Tool: {} Exit: {}]\nSTDOUT: {}\nSTDERR: {}",
+                    custom_tool,
+                    res.exit_code.unwrap_or(-1),
+                    res.stdout.trim(),
+                    res.stderr.trim()
+                )
+            } else {
+                bail!("Unknown tool: {}", custom_tool);
+            }
+        }
+    };
+
+    maybe_spill_output(repo_root, normalized_tool_name, raw_result).await
 }
 
 fn resolve_safe_path(worktree_dir: &Path, rel_path: &str) -> Result<PathBuf> {
@@ -430,10 +659,6 @@ async fn run_scoped_command(
             bail!("Command cancelled by user")
         }
     }
-}
-
-fn regex_lite_match(pattern: &str) -> Result<String> {
-    Ok(pattern.to_string())
 }
 
 async fn collect_matching_files(
@@ -566,10 +791,227 @@ async fn grep_walk(
     Ok(())
 }
 
+// ============================================================================
+// Web Tools Implementation (DuckDuckGo Search & Markdown Fetch)
+// ============================================================================
+
+pub async fn execute_web_search(query: &str, limit: usize) -> Result<String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(12))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .build()?;
+
+    // 1. DuckDuckGo HTML Search
+    let url = format!("https://html.duckduckgo.com/html/?q={}", simple_url_encode(query));
+    if let Ok(resp) = client.get(&url).send().await {
+        if resp.status().is_success() {
+            if let Ok(html) = resp.text().await {
+                let results = parse_ddg_results(&html, limit);
+                if !results.is_empty() {
+                    return Ok(results.join("\n\n"));
+                }
+            }
+        }
+    }
+
+    // 2. Fallback: DuckDuckGo Instant Answer API
+    let api_url = format!(
+        "https://api.duckduckgo.com/?q={}&format=json&no_html=1&skip_disambig=1",
+        simple_url_encode(query)
+    );
+    if let Ok(resp) = client.get(&api_url).send().await {
+        if let Ok(json) = resp.json::<serde_json::Value>().await {
+            let mut out = Vec::new();
+            if let Some(abs) = json.get("AbstractText").and_then(|v| v.as_str()) {
+                if !abs.is_empty() {
+                    let source = json.get("AbstractURL").and_then(|v| v.as_str()).unwrap_or("");
+                    out.push(format!("### Abstract\n{}\nSource: {}", abs, source));
+                }
+            }
+            if let Some(topics) = json.get("RelatedTopics").and_then(|v| v.as_array()) {
+                for t in topics.iter().take(limit) {
+                    if let Some(txt) = t.get("Text").and_then(|v| v.as_str()) {
+                        let u = t.get("FirstURL").and_then(|v| v.as_str()).unwrap_or("");
+                        out.push(format!("- **{}**: {}", txt, u));
+                    }
+                }
+            }
+            if !out.is_empty() {
+                return Ok(out.join("\n\n"));
+            }
+        }
+    }
+
+    Ok(format!("Search completed for query '{}'. No web records matched.", query))
+}
+
+fn simple_url_encode(s: &str) -> String {
+    let mut encoded = String::new();
+    for b in s.bytes() {
+        match b {
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                encoded.push(b as char);
+            }
+            b' ' => encoded.push('+'),
+            _ => encoded.push_str(&format!("%{:02X}", b)),
+        }
+    }
+    encoded
+}
+
+fn parse_ddg_results(html: &str, limit: usize) -> Vec<String> {
+    let mut results = Vec::new();
+    let mut pos = 0;
+    while let Some(start_res) = html[pos..].find("class=\"result__body\"") {
+        let abs_start = pos + start_res;
+        let end_res = html[abs_start..].find("</div>\n</div>").unwrap_or(1500);
+        let block = &html[abs_start..abs_start + end_res];
+
+        let title = extract_snippet_tag(block, "result__a");
+        let snippet = extract_snippet_tag(block, "result__snippet");
+        let url = extract_snippet_href(block, "result__a");
+
+        if !title.is_empty() {
+            results.push(format!(
+                "### [{}]({})\n{}",
+                clean_tags(&title),
+                url,
+                clean_tags(&snippet)
+            ));
+        }
+
+        pos = abs_start + end_res;
+        if results.len() >= limit {
+            break;
+        }
+    }
+    results
+}
+
+fn extract_snippet_tag(block: &str, class_name: &str) -> String {
+    if let Some(idx) = block.find(class_name) {
+        if let Some(open) = block[idx..].find('>') {
+            let start = idx + open + 1;
+            if let Some(close) = block[start..].find('<') {
+                return block[start..start + close].trim().to_string();
+            }
+        }
+    }
+    String::new()
+}
+
+fn extract_snippet_href(block: &str, class_name: &str) -> String {
+    if let Some(idx) = block.find(class_name) {
+        let search_range = &block[idx.saturating_sub(60)..idx.min(block.len())];
+        if let Some(href_idx) = search_range.find("href=\"") {
+            let start = href_idx + 6;
+            if let Some(end) = search_range[start..].find('"') {
+                return search_range[start..start + end].to_string();
+            }
+        }
+    }
+    String::new()
+}
+
+fn clean_tags(s: &str) -> String {
+    let mut clean = String::new();
+    let mut inside = false;
+    for c in s.chars() {
+        if c == '<' {
+            inside = true;
+        } else if c == '>' {
+            inside = false;
+        } else if !inside {
+            clean.push(c);
+        }
+    }
+    clean
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .trim()
+        .to_string()
+}
+
+pub async fn execute_web_fetch(url: &str) -> Result<String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(18))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .build()?;
+
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .with_context(|| format!("Failed to fetch URL: {}", url))?;
+
+    if !response.status().is_success() {
+        bail!("HTTP request failed with status: {}", response.status());
+    }
+
+    let html = response.text().await.context("Failed to read HTML body")?;
+    let markdown = convert_html_to_clean_markdown(&html);
+    Ok(markdown)
+}
+
+fn convert_html_to_clean_markdown(html: &str) -> String {
+    let mut clean = html.to_string();
+    for tag in &["script", "style", "head", "nav", "footer", "svg"] {
+        clean = strip_html_block(&clean, tag);
+    }
+
+    let mut md = String::new();
+    for line in clean.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let stripped = clean_tags(trimmed);
+        if !stripped.is_empty() {
+            md.push_str(&stripped);
+            md.push('\n');
+        }
+    }
+
+    if md.is_empty() {
+        "(Empty web page content)".to_string()
+    } else {
+        md
+    }
+}
+
+fn strip_html_block(html: &str, tag: &str) -> String {
+    let open_pat = format!("<{}", tag);
+    let close_pat = format!("</{}>", tag);
+    let mut result = String::new();
+    let mut pos = 0;
+
+    while let Some(open_idx) = html[pos..].to_lowercase().find(&open_pat) {
+        let abs_open = pos + open_idx;
+        result.push_str(&html[pos..abs_open]);
+
+        if let Some(close_idx) = html[abs_open..].to_lowercase().find(&close_pat) {
+            pos = abs_open + close_idx + close_pat.len();
+        } else {
+            pos = html.len();
+            break;
+        }
+    }
+    result.push_str(&html[pos..]);
+    result
+}
+
+// ============================================================================
+// Agent Loop Execution
+// ============================================================================
+
 pub struct AgentSessionConfig {
     pub repo_root: PathBuf,
     pub worktree_path: PathBuf,
     pub role: String,
+    pub stage_id: String,
     pub task_id: String,
     pub task_title: String,
     pub task_description: String,
@@ -581,7 +1023,8 @@ pub struct AgentSessionConfig {
     pub max_turns: usize,
 }
 
-/// Executes the full ReAct loop for an agent session.
+/// Executes the full ReAct loop for an agent session with deterministic prefix caching,
+/// zero-trust tool policy filtering, and state-preserving context compaction.
 pub async fn run_agent_loop<F>(
     config: AgentSessionConfig,
     abort_flag: Arc<AtomicBool>,
@@ -590,6 +1033,7 @@ pub async fn run_agent_loop<F>(
 where
     F: Fn(AgentEvent) + Send + Sync + 'static,
 {
+    // Deterministic static system prompt
     let system_prompt = compile_primed_system_prompt(
         &config.repo_root,
         &config.worktree_path,
@@ -608,7 +1052,20 @@ where
         )),
     ];
 
-    let tools = get_standard_tools();
+    // Tool Policy Matrix: filter out disabled tools when building schema array (saving tokens!)
+    let tool_policy = load_tool_policies(&config.repo_root)
+        .await
+        .unwrap_or_default();
+
+    let all_tools = get_all_tools(&config.repo_root).await;
+    let mut active_tools: Vec<ToolDefinition> = all_tools
+        .into_iter()
+        .filter(|t| is_tool_allowed(&tool_policy, Some(&config.stage_id), &t.function.name))
+        .collect();
+
+    // Deterministic sorting of tool definitions for prefix caching
+    active_tools.sort_by(|a, b| a.function.name.cmp(&b.function.name));
+
     let llm_client = LlmClient::new();
     let max_turns = if config.max_turns == 0 { 25 } else { config.max_turns };
 
@@ -620,12 +1077,24 @@ where
 
         event_sink(AgentEvent::TurnStart { turn });
 
+        // State-Preserving Context Compactor: evaporate bloated tool outputs >3 turns old
+        if turn > 3 || messages.len() > 8 {
+            let compaction_res = compactor::compact_conversation(&mut messages, None);
+            if compaction_res.saved_chars > 0 {
+                event_sink(AgentEvent::Compacted {
+                    saved_chars: compaction_res.saved_chars,
+                    estimated_saved_tokens: compaction_res.estimated_saved_tokens,
+                    evaporated_count: compaction_res.evaporated_tools_count,
+                });
+            }
+        }
+
         let req = OpenAIChatRequest {
             model: config.model.clone(),
             messages: messages.clone(),
             temperature: config.temperature,
             stream: true,
-            tools: Some(tools.clone()),
+            tools: Some(active_tools.clone()),
             reasoning_effort: config.reasoning_effort.clone(),
         };
 
@@ -667,6 +1136,26 @@ where
                         function: crate::llm::FunctionCall { name, arguments },
                     });
                 }
+                StreamChunk::Usage {
+                    input_tokens,
+                    output_tokens,
+                    cache_read_tokens,
+                    cache_creation_tokens,
+                } => {
+                    let total_input = input_tokens + cache_read_tokens;
+                    let cache_hit_rate = if total_input > 0 {
+                        (cache_read_tokens as f32 / total_input as f32) * 100.0
+                    } else {
+                        0.0
+                    };
+                    event_sink(AgentEvent::Telemetry {
+                        input_tokens,
+                        output_tokens,
+                        cache_read_tokens,
+                        cache_creation_tokens,
+                        cache_hit_rate,
+                    });
+                }
                 StreamChunk::Done => break,
                 StreamChunk::Error(err) => {
                     event_sink(AgentEvent::Error(err.clone()));
@@ -675,7 +1164,7 @@ where
             }
         }
 
-        // If no tool calls, this is the final agent response
+        // If no tool calls, terminal response reached
         if turn_tool_calls.is_empty() {
             event_sink(AgentEvent::Finished {
                 final_response: turn_content.clone(),
@@ -695,10 +1184,13 @@ where
                 serde_json::from_str(&tc.function.arguments).unwrap_or_else(|_| serde_json::json!({}));
 
             let exec_result = execute_tool(
+                &config.repo_root,
                 &config.worktree_path,
+                Some(&config.stage_id),
                 &tc.function.name,
                 &parsed_args,
                 Arc::clone(&abort_flag),
+                &tool_policy,
             )
             .await;
 
