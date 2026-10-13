@@ -42,7 +42,7 @@ function MarkdownContent({ content }: { content: string }) {
           return (
             <code
               key={i}
-              className="px-1.5 py-0.5 rounded bg-[#f4f4f5] border border-[#ebebeb] text-[#171717] font-mono text-[11px]"
+              className="px-1.5 py-0.5 rounded bg-[#f4f4f5] border border-[#ebebeb] text-[#171717] font-mono text-[13px]"
             >
               {part.slice(1, -1)}
             </code>
@@ -96,14 +96,14 @@ function MarkdownContent({ content }: { content: string }) {
           result.push(
             <div
               key={`code-${index}`}
-              className="my-2.5 rounded-md border border-[#ebebeb] bg-[#fafafa] overflow-hidden font-mono text-[11px]"
+              className="my-2.5 rounded-md border border-[#ebebeb] bg-[#fafafa] overflow-hidden font-mono text-[13px]"
             >
               {codeLanguage && (
-                <div className="px-3 py-1 bg-[#f4f4f5] border-b border-[#ebebeb] text-[10px] text-[#666666] font-medium flex justify-between">
+                <div className="px-3 py-1 bg-[#f4f4f5] border-b border-[#ebebeb] text-xs text-[#666666] font-medium flex justify-between">
                   <span>{codeLanguage}</span>
                 </div>
               )}
-              <pre className="p-3 text-[#171717] overflow-x-auto leading-relaxed select-text">
+              <pre className="p-3 text-[#171717] overflow-x-auto leading-relaxed select-text font-mono text-[13px]">
                 {codeBuffer.join('\n')}
               </pre>
             </div>
@@ -143,7 +143,7 @@ function MarkdownContent({ content }: { content: string }) {
               key={`table-${index}`}
               className="my-2 overflow-x-auto rounded-md border border-[#ebebeb]"
             >
-              <table className="w-full border-collapse text-[11px] font-mono tabular-nums">
+              <table className="w-full border-collapse text-[13px] font-mono tabular-nums">
                 <thead>
                   <tr>
                     {normHeader.map((cell, k) => (
@@ -189,31 +189,31 @@ function MarkdownContent({ content }: { content: string }) {
       // Headings
       if (line.startsWith('#### ')) {
         result.push(
-          <h5 key={index} className="text-[11px] font-semibold text-[#171717] mt-3 mb-1">
+          <h5 key={index} className="text-[13px] md:text-sm font-semibold text-[#171717] mt-2 mb-1">
             {formatInline(line.slice(5))}
           </h5>
         );
       } else if (line.startsWith('### ')) {
         result.push(
-          <h4 key={index} className="text-xs font-semibold text-[#171717] mt-3 mb-1">
+          <h4 key={index} className="text-sm font-semibold text-[#171717] mt-2.5 mb-1">
             {formatInline(line.slice(4))}
           </h4>
         );
       } else if (line.startsWith('## ')) {
         result.push(
-          <h3 key={index} className="text-sm font-semibold text-[#171717] mt-3 mb-1">
+          <h3 key={index} className="text-sm md:text-base font-semibold text-[#171717] mt-3 mb-1">
             {formatInline(line.slice(3))}
           </h3>
         );
       } else if (line.startsWith('# ')) {
         result.push(
-          <h2 key={index} className="text-sm font-bold text-[#171717] mt-3 mb-1.5">
+          <h2 key={index} className="text-base md:text-lg font-bold text-[#171717] mt-3.5 mb-1.5">
             {formatInline(line.slice(2))}
           </h2>
         );
       } else if (line.startsWith('- ') || line.startsWith('* ')) {
         result.push(
-          <li key={index} className="ml-4 list-disc text-xs leading-relaxed text-[#171717]">
+          <li key={index} className="ml-4 list-disc text-sm leading-relaxed text-[#171717]">
             {formatInline(line.slice(2))}
           </li>
         );
@@ -221,7 +221,7 @@ function MarkdownContent({ content }: { content: string }) {
         result.push(<div key={index} className="h-1.5" />);
       } else {
         result.push(
-          <p key={index} className="text-xs leading-relaxed text-[#171717]">
+          <p key={index} className="text-sm leading-relaxed text-[#171717]">
             {formatInline(line)}
           </p>
         );
@@ -232,9 +232,9 @@ function MarkdownContent({ content }: { content: string }) {
       result.push(
         <div
           key="code-unfinished"
-          className="my-2.5 rounded-md border border-[#ebebeb] bg-[#fafafa] overflow-hidden font-mono text-[11px]"
+          className="my-2.5 rounded-md border border-[#ebebeb] bg-[#fafafa] overflow-hidden font-mono text-[13px]"
         >
-          <pre className="p-3 text-[#171717] overflow-x-auto leading-relaxed select-text">
+          <pre className="p-3 text-[#171717] overflow-x-auto leading-relaxed select-text font-mono text-[13px]">
             {codeBuffer.join('\n')}
           </pre>
         </div>
@@ -299,7 +299,7 @@ function ThinkingCard({
       </div>
 
       {isExpanded && (
-        <div className="p-3 border-t border-[#ebebeb] bg-[#ffffff] font-mono text-xs leading-relaxed text-[#333333] whitespace-pre-wrap select-text max-h-96 overflow-y-auto">
+        <div className="p-3 border-t border-[#ebebeb] bg-[#ffffff] font-mono text-[13px] leading-relaxed text-[#333333] whitespace-pre-wrap select-text max-h-96 overflow-y-auto">
           {thought.content}
         </div>
       )}
@@ -719,7 +719,7 @@ export default function AgentConsoleDrawer() {
                 Постановка задачи
               </span>
             </div>
-            <div className="text-xs text-[#171717] leading-relaxed whitespace-pre-wrap select-text font-sans">
+            <div className="text-sm text-[#171717] leading-relaxed whitespace-pre-wrap select-text font-sans">
               {task.description || task.title}
             </div>
           </div>
@@ -762,7 +762,7 @@ export default function AgentConsoleDrawer() {
                     </div>
                     <span className="tabular-nums">{activity.timestamp}</span>
                   </div>
-                  <p className="text-xs text-[#171717] whitespace-pre-wrap select-text leading-relaxed font-sans">
+                  <p className="text-sm text-[#171717] whitespace-pre-wrap select-text leading-relaxed font-sans">
                     {activity.content}
                   </p>
                 </div>
@@ -870,7 +870,7 @@ export default function AgentConsoleDrawer() {
                   ? 'Направить агента (steer_agent): скорректировать ход решения...'
                   : 'Запустить агента с указанием или задать уточняющий вопрос...'
               }
-              className="flex-1 rounded-md bg-[#f9f9f9] border border-[#ebebeb] px-3.5 py-2 text-xs text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-sans transition"
+              className="flex-1 rounded-md bg-[#f9f9f9] border border-[#ebebeb] px-3.5 py-2 text-sm text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-sans transition"
             />
             <button
               type="submit"

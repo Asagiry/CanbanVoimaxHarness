@@ -9,8 +9,10 @@ import SettingsModal from './components/settings/SettingsModal';
 import { useBoardStore } from './stores/boardStore';
 import { useProjectStore } from './stores/projectStore';
 import { useDrawerStore } from './stores/drawerStore';
+import { useUiZoom } from './hooks/useUiZoom';
 
 export default function App() {
+  const { rootStyle, zoomPercent, showIndicator, resetZoom } = useUiZoom();
   const { loadColumns, loadTasks } = useBoardStore();
   const { loadProjects } = useProjectStore();
   const { appendThought, appendOutput, addToolExecution, updateToolExecution, updateTelemetry, setThinkingStartTime } = useDrawerStore();
@@ -170,7 +172,10 @@ export default function App() {
   }, [loadColumns, loadTasks, appendThought, appendOutput, addToolExecution, updateToolExecution, updateTelemetry, setThinkingStartTime]);
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#fafafa] text-[#171717] select-none">
+    <div
+      style={rootStyle}
+      className="flex flex-col overflow-hidden bg-[#fafafa] text-[#171717] select-none relative"
+    >
       {/* Top Navigation Bar */}
       <Topbar />
 
@@ -196,6 +201,21 @@ export default function App() {
 
       {/* LLM Settings Modal */}
       <SettingsModal />
+
+      {/* Zoom Indicator Toast */}
+      {showIndicator && (
+        <div className="fixed bottom-4 right-4 z-50 flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-[#171717]/90 text-white font-mono text-xs shadow-lg backdrop-blur-xs transition-opacity duration-150 animate-in fade-in select-none">
+          <span>Масштаб: {zoomPercent}%</span>
+          {zoomPercent !== 100 && (
+            <button
+              onClick={resetZoom}
+              className="text-[#a1a1aa] hover:text-white underline text-[11px] ml-1 cursor-pointer"
+            >
+              Сброс
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
