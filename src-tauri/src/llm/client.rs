@@ -247,9 +247,8 @@ impl LlmClient {
 
         let mut attempt = 0;
         let max_reconnects = 10;
-        let mut response = None;
 
-        loop {
+        let response = loop {
             let req = self
                 .client
                 .post(&endpoint)
@@ -259,8 +258,7 @@ impl LlmClient {
             match req.send().await {
                 Ok(resp) => {
                     if resp.status().is_success() {
-                        response = Some(resp);
-                        break;
+                        break resp;
                     }
 
                     let status = resp.status();
@@ -322,15 +320,6 @@ impl LlmClient {
                         bail!(final_err);
                     }
                 }
-            }
-        }
-
-        let response = match response {
-            Some(r) => r,
-            None => {
-                let final_err = format!("Failed to connect to OpenAI endpoint {} after {} attempts", endpoint, max_reconnects);
-                let _ = tx.send(StreamChunk::Error(final_err.clone())).await;
-                bail!(final_err);
             }
         };
 
@@ -513,9 +502,8 @@ impl LlmClient {
 
         let mut attempt = 0;
         let max_reconnects = 10;
-        let mut response = None;
 
-        loop {
+        let response = loop {
             let req = self
                 .client
                 .post(&endpoint)
@@ -525,8 +513,7 @@ impl LlmClient {
             match req.send().await {
                 Ok(resp) => {
                     if resp.status().is_success() {
-                        response = Some(resp);
-                        break;
+                        break resp;
                     }
 
                     let status = resp.status();
@@ -588,15 +575,6 @@ impl LlmClient {
                         bail!(final_err);
                     }
                 }
-            }
-        }
-
-        let response = match response {
-            Some(r) => r,
-            None => {
-                let final_err = format!("Failed to connect to Anthropic endpoint {} after {} attempts", endpoint, max_reconnects);
-                let _ = tx.send(StreamChunk::Error(final_err.clone())).await;
-                bail!(final_err);
             }
         };
 
