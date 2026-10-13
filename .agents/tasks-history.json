@@ -195,5 +195,27 @@
     ],
     "ftrScore": "100%",
     "timestamp": 1791885299000
+  },
+  "CVH-016": {
+    "taskId": "CVH-016",
+    "title": "Backend Agent Runner, Task Model Selection, save_tasks IPC, and Robust Execution",
+    "author": "tauri-rust-engineer",
+    "verdict": "APPROVED_WITH_CAVEATS",
+    "commitHash": "a1e15a2",
+    "mergeCommitHash": "9a1e452",
+    "resolutionCommitHash": "24949cc",
+    "commitMessage": "feat(agent): implement task model selection, save_tasks IPC, and robust agent runner execution",
+    "summary": "Implemented backend agent runner execution in run_agent with 4-level model selection precedence (task.model -> llm_settings.model -> col.model_override -> proj_cfg.default_model), robust worktree scaffolding via create_worktree(&root, &task.id.to_lowercase(), 'main'), full event emitting parity (agent:thought, agent:token, agent:output, agent:tool_call, agent:tool_result, agent:turn_start, agent:finished, agent:status, and task:moved), save_tasks IPC command for atomic task state persistence to .cvh/tasks.json, and interactive steer_agent execution. Resolved Level 2 review caveats in commit 24949cc on main: eliminated duplicate save_tasks registration in src-tauri/src/lib.rs tauri::generate_handler! and refactored guarded worktree_path unwrap to safe idiomatic pattern matching.",
+    "files": [
+      "src-tauri/src/agent.rs",
+      "src-tauri/src/commands.rs",
+      "src-tauri/src/lib.rs"
+    ],
+    "ftrScore": "85%",
+    "caveatsResolved": [
+      "Removed duplicate save_tasks registration in src-tauri/src/lib.rs tauri::generate_handler! macro.",
+      "Eliminated guarded .unwrap() on task.worktree_path in src-tauri/src/commands.rs run_agent in favor of idiomatic pattern matching per AGENTS.md § 2.2 Ponytail Minimalism."
+    ],
+    "timestamp": 1791889400000
   }
 }

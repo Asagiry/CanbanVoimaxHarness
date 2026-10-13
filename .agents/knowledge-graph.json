@@ -170,6 +170,22 @@
         "Synchronous disk persistence via Tauri save_tasks IPC command maintaining atomic write integrity in .cvh/tasks.json.",
         "Autonomous run_agent invocation triggered upon transitioning tasks into dev ('В РАЗРАБОТКЕ') column."
       ]
+    },
+    {
+      "name": "BackendAgentRunner",
+      "entityType": "Subsystem",
+      "observations": [
+        "Robust agent execution loop in run_agent with hierarchical model selection precedence (task.model -> llm_settings.model -> col.model_override -> proj_cfg.default_model).",
+        "Autonomous worktree scaffolding via create_worktree(&root, &task.id.to_lowercase(), \"main\") and persistence to disk.",
+        "Full desktop event parity across Tauri IPC: agent:thought, agent:token, agent:output, agent:tool_call, agent:tool_result, agent:turn_start, agent:finished, agent:status, and task:moved."
+      ]
+    },
+    {
+      "name": "SteerAgentExecution",
+      "entityType": "Subsystem",
+      "observations": [
+        "Interactive mid-flight steering mechanism: aborts active task execution, appends steering directive to task description and compaction context on disk, emits agent:steer, and re-invokes run_agent."
+      ]
     }
   ],
   "relations": [
@@ -302,6 +318,26 @@
       "from": "TaskModelPersistence",
       "to": "TauriDesktopCoreEngine",
       "relationType": "persisted_by"
+    },
+    {
+      "from": "TauriDesktopCoreEngine",
+      "to": "BackendAgentRunner",
+      "relationType": "executes"
+    },
+    {
+      "from": "BackendAgentRunner",
+      "to": "GitWorktreeIsolationManager",
+      "relationType": "scaffolds"
+    },
+    {
+      "from": "TauriDesktopCoreEngine",
+      "to": "SteerAgentExecution",
+      "relationType": "handles"
+    },
+    {
+      "from": "SteerAgentExecution",
+      "to": "BackendAgentRunner",
+      "relationType": "triggers"
     }
   ]
 }

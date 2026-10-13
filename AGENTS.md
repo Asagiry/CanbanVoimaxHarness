@@ -139,5 +139,11 @@
 - **Unified Chronological Activity Stream**: The agent console drawer MUST NOT segregate execution logs into disjointed, empty tabs. It MUST render a unified, single-pane chronological feed interleaving initial prompt goals, collapsible `<thinking>` blocks with live pulsing indicators, formatted Markdown responses, inline tool execution cards, user steering messages, and system/error notices.
 - **Interactive Steering & Status Lifecycle**: The drawer input bar MUST dispatch `steer_agent` when the task agent is actively running, or initialize/resume via `run_agent` when idle. Drawer header controls MUST provide explicit `abort_agent` and `run_agent` lifecycle actions.
 
+### 2.12 Rust Macro Hygiene, Toolchain Isolation & Guarded Unwrap Ban
+- **Duplicate Tauri Command Handler Ban**: When merging or adding IPC commands, strictly verify that identifiers registered in `tauri::generate_handler![...]` inside `src-tauri/src/lib.rs` are unique. Never duplicate macro handler entries across concurrent feature branches.
+- **Zero-Unwrap Invariant Absolute Enforcement**: Pattern matching (`match`, `if let Some(...)`) or fallible chaining (`?`, `ok_or_else()`, `unwrap_or_else()`) MUST be used exclusively. Guarded `.unwrap()` calls (e.g. `if opt.is_some() { opt.unwrap() }` or boolean flags) are strictly forbidden in production code paths.
+- **Hermetic Toolchain & Lock-Free Sensor Precedence**: When building or checking in environments with repository-local toolchains (`.toolchain/cargo/bin`), environment variables (`$env:PATH`, `$env:CARGO_HOME`, `$env:RUSTUP_HOME`) MUST be explicitly configured. Sensor checks must favor `cargo check` to prevent MSVC `link.exe` temp file locking and sandbox I/O contention on Windows.
+
+
 
 
