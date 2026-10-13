@@ -20,10 +20,11 @@ use tauri_plugin_dialog::DialogExt;
 pub struct Task {
     pub id: String,
     pub title: String,
+    #[serde(default)]
     pub description: String,
-    #[serde(rename = "stageId")]
+    #[serde(rename = "stageId", alias = "columnId")]
     pub stage_id: String,
-    #[serde(rename = "worktreePath", default)]
+    #[serde(rename = "worktreePath", alias = "worktree_path", default)]
     pub worktree_path: Option<String>,
     #[serde(default)]
     pub branch: Option<String>,
@@ -33,9 +34,11 @@ pub struct Task {
     pub custom_flow: Option<Vec<String>>,
     #[serde(default)]
     pub status: Option<String>,
-    #[serde(rename = "createdAt")]
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(rename = "createdAt", alias = "created_at", default)]
     pub created_at: i64,
-    #[serde(rename = "updatedAt")]
+    #[serde(rename = "updatedAt", alias = "updated_at", default)]
     pub updated_at: i64,
 }
 
@@ -280,6 +283,12 @@ pub async fn list_tasks(state: State<'_, AppState>) -> Result<Vec<Task>, String>
 }
 
 #[tauri::command]
+pub async fn save_tasks(tasks: Vec<Task>, state: State<'_, AppState>) -> Result<(), String> {
+    let root = state.get_root();
+    save_tasks_to_disk(&root, &tasks).await
+}
+
+#[tauri::command]
 pub async fn create_task(
     title: String,
     description: String,
@@ -313,6 +322,7 @@ pub async fn create_task(
         verdict: None,
         custom_flow: None,
         status: None,
+        model: None,
         created_at: now,
         updated_at: now,
     };
@@ -472,8 +482,22 @@ pub async fn run_agent(
         .await
         .unwrap_or_default();
 
-    // LLM settings take absolute precedence
-    let model = if !llm_settings.model.trim().is_empty() {
+    // Task model takes first precedence, then LLM settings, then column override, then default
+    let model = if let Some(ref tm) = task.model {
+        if !tm.trim().is_empty() {
+            tm.trim().to_string()
+        } else if !llm_settings.model.trim().is_empty() {
+            llm_settings.model.trim().to_string()
+        } else if let Some(ref m) = col.model_override {
+            if !m.trim().is_empty() {
+                m.trim().to_string()
+            } else {
+                proj_cfg.default_model.clone().unwrap_or_else(|| "gemini-3.8-flash-high".to_string())
+            }
+        } else {
+            proj_cfg.default_model.clone().unwrap_or_else(|| "gemini-3.8-flash-high".to_string())
+        }
+    } else if !llm_settings.model.trim().is_empty() {
         llm_settings.model.trim().to_string()
     } else if let Some(ref m) = col.model_override {
         if !m.trim().is_empty() {
@@ -508,8 +532,19 @@ pub async fn run_agent(
     let worktree_dir = task
         .worktree_path
         .as_deref()
-        .map(PathBuf::from)
+        .map(|p| {
+            let pb = PathBuf::from(p);
+            if pb.is_absolute() {
+                pb
+            } else {
+                root.join(pb)
+            }
+        })
         .unwrap_or_else(|| root.clone());
+
+    if !worktree_dir.exists() {
+        let _ = tokio::fs::create_dir_all(&worktree_dir).await;
+    }
 
     let abort_flag = Arc::new(AtomicBool::new(false));
 
