@@ -233,5 +233,28 @@
     ],
     "ftrScore": "100%",
     "timestamp": 1791898170000
+  },
+  "CVH-017": {
+    "taskId": "CVH-017",
+    "title": "Smart Workspace Root Discovery, Fallback Pipeline, Dual Task Persistence, and LLM Runner Error Dispatching",
+    "author": "tauri-rust-engineer",
+    "verdict": "APPROVED_WITH_CAVEATS",
+    "commitHash": "f98dac0",
+    "resolutionCommitHash": "a4d225f",
+    "commitMessage": "feat(backend): smart root discovery, fallback pipeline, and proxy connection fix",
+    "summary": "Resolved executable double-click root resolution failures and silent LLM runner stalls: implemented multi-tier discover_project_root (current_dir check, current_dir.ancestors() traversal, persistent %LOCALAPPDATA% active_project.txt lookup, and deterministic default fallback), 5-stage default_pipeline_config fail-safe fallback, dual-layer task persistence writing atomically to both .cvh/tasks.json and global app data with empty list preservation, and fortified async LLM runner error dispatching in Tokio background tasks with StreamChunk::Error propagation, zero-chunk channel closure detection, and multi-channel UI error surfacing (agent:error, agent:status, and formatted agent:output).",
+    "files": [
+      "src-tauri/src/agent.rs",
+      "src-tauri/src/commands.rs",
+      "src-tauri/src/config.rs",
+      "src-tauri/src/lib.rs",
+      "src-tauri/src/llm/client.rs"
+    ],
+    "ftrScore": "88%",
+    "caveatsResolved": [
+      "Ensured empty task array in local .cvh/tasks.json is honored without falling back to global backup, preventing resurrection of deleted tasks.",
+      "Verified default_pipeline_config schema matches canonical 5-stage pipeline specification."
+    ],
+    "timestamp": 1791898200000
   }
 }

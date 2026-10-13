@@ -146,6 +146,25 @@
 - **Zero-Unwrap Invariant Absolute Enforcement**: Pattern matching (`match`, `if let Some(...)`) or fallible chaining (`?`, `ok_or_else()`, `unwrap_or_else()`) MUST be used exclusively. Guarded `.unwrap()` calls (e.g. `if opt.is_some() { opt.unwrap() }` or boolean flags) are strictly forbidden in production code paths.
 - **Hermetic Toolchain & Lock-Free Sensor Precedence**: When building or checking in environments with repository-local toolchains (`.toolchain/cargo/bin`), environment variables (`$env:PATH`, `$env:CARGO_HOME`, `$env:RUSTUP_HOME`) MUST be explicitly configured. Sensor checks must favor `cargo check` to prevent MSVC `link.exe` temp file locking and sandbox I/O contention on Windows.
 
+### 2.13 Multi-Tier Workspace Root Discovery, Fallback Pipeline & Dual-Layer Disk Persistence
+- **Workspace Root Discovery Ladder**: In desktop GUI runtimes, binaries launched via Explorer double-click from `target/release`, shortcuts, or taskbars evaluate working directories differently from terminal shells. Root discovery MUST follow a robust traversal ladder:
+  1. Inspect `std::env::current_dir()` for `.cvh` or `.git`.
+  2. Climb `current_dir.ancestors()` to detect the project root when launched from target/release or debug subdirectories.
+  3. Inspect `%LOCALAPPDATA%\com.voimax.cvh\active_project.txt` for the user's last active project folder.
+  4. Fall back to canonical workspace default before defaulting to `.`.
+  5. Automatically persist the active workspace path to `active_project.txt` upon folder selection, project opening, or root updates.
+- **Fail-Safe Pipeline Fallback**: `load_pipeline_config` and `run_agent` MUST NEVER fail or crash on missing or unparseable pipeline configurations. When `pipeline.json` is missing or corrupted, smoothly fall back to `default_pipeline_config()` providing the full 5 canonical stages (backlog, dev, review, retro, ready).
+- **Dual-Layer Persistence Reliability & Empty List Invariant**: Persist task state atomically to both local `<repo_root>/.cvh/tasks.json` and `%LOCALAPPDATA%\com.voimax.cvh\tasks.json`. When restoring state on startup, if local `<repo_root>/.cvh/tasks.json` exists on disk and parses as valid JSON—even if it is an empty list `[]`—it MUST be honored directly without falling back to global backup to prevent resurrecting deleted tasks.
+
+### 2.14 Zero-Silent-Drop Streaming & Multi-Channel Error Dispatching
+- **Zero-Silent-Drop Invariant**: In async Tokio streaming tasks, network errors in request dispatch (`send().await` failure, connection refused, port closed) or non-200 HTTP responses MUST explicitly forward `StreamChunk::Error(err_msg)` into the mpsc channel sender before exiting. Discarding dispatch errors with `let _ = ...` or premature `bail!` without notifying the receiver channel is strictly forbidden.
+- **Zero-Chunk Channel Closure Guard**: The streaming consumer loop MUST track whether any chunk was received (`received_any_chunk`). If the mpsc channel closes with 0 chunks received and no user abort was signaled, it MUST emit `AgentEvent::Error` detailing the endpoint and port diagnostics, rather than silently exiting.
+- **Multi-Channel UI Error Transparency**: Agent execution errors in `run_agent` MUST simultaneously dispatch across all control channels:
+  1. `agent:error` desktop event.
+  2. `agent:status` desktop event with `{ status: "error", error: err_str }`.
+  3. `agent:output` desktop event formatting `\n[LLM Error: <msg>]\n` into the chronological activity feed.
+  4. Atomically persist `{ status: "error" }` in `.cvh/tasks.json` to reflect error state in card badges and prevent orphaned running states.
+
 
 
 
