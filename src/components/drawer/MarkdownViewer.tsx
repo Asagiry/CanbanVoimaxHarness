@@ -48,19 +48,19 @@ export default function MarkdownViewer({ content }: MarkdownViewerProps) {
       // Headings
       if (line.startsWith('# ')) {
         elements.push(
-          <h1 key={`h1-${i}`} className="text-base font-bold text-slate-100 mt-3 mb-1 border-b border-slate-800 pb-1">
+          <h1 key={`h1-${i}`} className="text-base font-bold text-[#171717] mt-3 mb-1 border-b border-[#ebebeb] pb-1">
             {formatInline(line.replace(/^#\s+/, ''))}
           </h1>
         );
       } else if (line.startsWith('## ')) {
         elements.push(
-          <h2 key={`h2-${i}`} className="text-sm font-bold text-cyber-cyan mt-2.5 mb-1">
+          <h2 key={`h2-${i}`} className="text-sm font-bold text-[#171717] mt-2.5 mb-1">
             {formatInline(line.replace(/^##\s+/, ''))}
           </h2>
         );
       } else if (line.startsWith('### ')) {
         elements.push(
-          <h3 key={`h3-${i}`} className="text-xs font-bold text-slate-200 mt-2 mb-0.5">
+          <h3 key={`h3-${i}`} className="text-xs font-bold text-[#171717] mt-2 mb-0.5">
             {formatInline(line.replace(/^###\s+/, ''))}
           </h3>
         );
@@ -69,7 +69,7 @@ export default function MarkdownViewer({ content }: MarkdownViewerProps) {
         elements.push(
           <blockquote
             key={`quote-${i}`}
-            className="border-l-2 border-cyan-500/60 bg-cyan-950/20 px-3 py-1 text-slate-300 italic text-xs my-1 rounded-r"
+            className="border-l-2 border-[#171717] bg-[#f9f9f9] px-3 py-1 text-[#4d4d4d] italic text-xs my-1 rounded-r"
           >
             {formatInline(line.replace(/^>\s+/, ''))}
           </blockquote>
@@ -77,14 +77,14 @@ export default function MarkdownViewer({ content }: MarkdownViewerProps) {
       } else if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
         // Unordered list
         elements.push(
-          <li key={`li-${i}`} className="ml-4 list-disc text-slate-300 text-xs my-0.5">
+          <li key={`li-${i}`} className="ml-4 list-disc text-[#171717] text-xs my-0.5">
             {formatInline(line.trim().replace(/^[-*]\s+/, ''))}
           </li>
         );
       } else if (/^\d+\.\s+/.test(line.trim())) {
         // Ordered list
         elements.push(
-          <li key={`oli-${i}`} className="ml-4 list-decimal text-slate-300 text-xs my-0.5">
+          <li key={`oli-${i}`} className="ml-4 list-decimal text-[#171717] text-xs my-0.5">
             {formatInline(line.trim().replace(/^\d+\.\s+/, ''))}
           </li>
         );
@@ -93,7 +93,7 @@ export default function MarkdownViewer({ content }: MarkdownViewerProps) {
       } else {
         // Normal paragraph
         elements.push(
-          <p key={`p-${i}`} className="text-xs text-slate-200 leading-relaxed my-0.5">
+          <p key={`p-${i}`} className="text-xs text-[#171717] leading-relaxed my-0.5">
             {formatInline(line)}
           </p>
         );
@@ -122,7 +122,7 @@ export default function MarkdownViewer({ content }: MarkdownViewerProps) {
         return (
           <code
             key={idx}
-            className="px-1 py-0.5 mx-0.5 rounded bg-obsidian-800 border border-slate-750 font-mono text-[11px] text-cyber-cyan font-medium"
+            className="px-1.5 py-0.5 mx-0.5 rounded-md bg-[#f4f4f5] border border-[#ebebeb] font-mono text-[11px] text-[#171717] font-medium"
           >
             {part.slice(1, -1)}
           </code>
@@ -134,7 +134,7 @@ export default function MarkdownViewer({ content }: MarkdownViewerProps) {
       return boldParts.map((bPart, bIdx) => {
         if (bPart.startsWith('**') && bPart.endsWith('**') && bPart.length > 3) {
           return (
-            <strong key={`${idx}-${bIdx}`} className="font-bold text-white">
+            <strong key={`${idx}-${bIdx}`} className="font-semibold text-[#171717]">
               {bPart.slice(2, -2)}
             </strong>
           );
@@ -162,31 +162,31 @@ function CodeSnippetCard({ language, code }: CodeSnippetCardProps) {
   };
 
   return (
-    <div className="my-2 rounded-lg border border-slate-800 bg-obsidian-950 overflow-hidden shadow-sm">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-obsidian-900 border-b border-slate-800 text-[11px] font-mono text-slate-400">
+    <div className="my-2.5 rounded-lg border border-[#ebebeb] bg-[#fafafa] overflow-hidden shadow-xs">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-[#f4f4f5] border-b border-[#ebebeb] text-[11px] font-mono text-[#666666]">
         <div className="flex items-center space-x-1.5">
-          <Terminal className="h-3 w-3 text-cyber-cyan" />
-          <span className="font-semibold text-slate-300">{language || 'code'}</span>
+          <Terminal className="h-3.5 w-3.5 text-[#171717]" />
+          <span className="font-medium text-[#171717]">{language || 'code'}</span>
         </div>
         <button
           onClick={handleCopy}
-          className="flex items-center space-x-1 text-[10px] text-slate-400 hover:text-white transition cursor-pointer px-1.5 py-0.5 rounded hover:bg-obsidian-800"
-          title="Copy code snippet"
+          className="flex items-center space-x-1 text-[10px] text-[#666666] hover:text-[#171717] transition cursor-pointer px-1.5 py-0.5 rounded-md hover:bg-white"
+          title="Скопировать фрагмент"
         >
           {copied ? (
             <>
-              <Check className="h-3 w-3 text-cyber-emerald" />
-              <span className="text-cyber-emerald">Copied</span>
+              <Check className="h-3 w-3 text-[#15803d]" />
+              <span className="text-[#15803d]">Скопировано</span>
             </>
           ) : (
             <>
               <Copy className="h-3 w-3" />
-              <span>Copy</span>
+              <span>Копировать</span>
             </>
           )}
         </button>
       </div>
-      <pre className="p-3 overflow-x-auto font-mono text-xs text-slate-200 leading-relaxed selection:bg-cyan-900/40">
+      <pre className="p-3 overflow-x-auto font-mono text-xs text-[#171717] leading-relaxed selection:bg-[#e5e5e5]">
         <code>{code}</code>
       </pre>
     </div>

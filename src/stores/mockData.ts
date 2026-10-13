@@ -49,7 +49,7 @@ export const INITIAL_COLUMNS: PipelineColumn[] = [
   {
     id: 'retro',
     title: 'Ретроспектива',
-    color: '#06b6d4',
+    color: '#0284c7',
     icon: 'Sparkles',
     persona: 'retro',
     contextWindow: 150000,
@@ -340,7 +340,7 @@ export const INITIAL_CORTEX_STAGES: CortexAgentStage[] = [
   {
     stageId: 'retro',
     stageTitle: 'Ретроспектива',
-    color: '#06b6d4',
+    color: '#0284c7',
     icon: 'Sparkles',
     personaName: 'Ретро-инженер',
     isExpanded: false,

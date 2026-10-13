@@ -44,18 +44,18 @@ export default function CortexExplorer() {
   }).filter(Boolean) as CortexAgentStage[];
 
   return (
-    <aside className="w-64 shrink-0 h-full flex flex-col bg-obsidian-900 border-r border-obsidian-800 select-none text-slate-300">
+    <aside className="w-64 shrink-0 h-full flex flex-col bg-[#f9f9f9] border-r border-[#ebebeb] select-none text-[#171717]">
       {/* Sidebar Header */}
-      <div className="px-3 py-2 border-b border-obsidian-800 bg-obsidian-850 flex items-center justify-between">
-        <span className="text-xs font-semibold text-slate-200">
+      <div className="px-3.5 py-2.5 border-b border-[#ebebeb] bg-white flex items-center justify-between">
+        <span className="text-xs font-semibold text-[#171717]">
           Проводник разума агента
         </span>
       </div>
 
       {/* Filter Search Input */}
-      <div className="p-2 border-b border-obsidian-800/80">
+      <div className="p-2.5 border-b border-[#ebebeb] bg-[#f9f9f9]">
         <div className="relative flex items-center">
-          <Search className="absolute left-2 h-3 w-3 text-slate-500 pointer-events-none" />
+          <Search className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] pointer-events-none" />
           <input
             id={searchInputId}
             name="cortexMindSearch"
@@ -63,13 +63,13 @@ export default function CortexExplorer() {
             value={filterQuery}
             onChange={(e) => setFilterQuery(e.target.value)}
             placeholder="Поиск ролей, инструкций..."
-            className="w-full pl-6 pr-2 py-1 text-xs rounded bg-obsidian-950 border border-obsidian-800 text-slate-200 placeholder-slate-600 focus:outline-hidden focus:border-slate-600 font-mono"
+            className="w-full pl-8 pr-2.5 py-1 text-xs rounded-md bg-white border border-[#ebebeb] text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] font-sans transition"
           />
         </div>
       </div>
 
       {/* Stage Folders Tree */}
-      <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5 font-mono text-xs">
+      <div className="flex-1 overflow-y-auto p-2 space-y-1 font-mono text-xs">
         {filteredStages.map((stage) => {
           const isFocused = focusedStageId === stage.stageId;
           const personaFile = stage.files.find((f) => f.type === 'persona');
@@ -81,49 +81,49 @@ export default function CortexExplorer() {
             <div
               key={stage.stageId}
               id={`cortex-stage-${stage.stageId}`}
-              className={`rounded transition-colors ${
+              className={`rounded-md transition-colors ${
                 isFocused
-                  ? 'bg-obsidian-800'
-                  : 'hover:bg-obsidian-850/60'
+                  ? 'bg-white border border-[#ebebeb] shadow-xs'
+                  : 'hover:bg-[#f4f4f5]'
               }`}
             >
               {/* Stage Root Folder Header */}
               <button
                 onClick={() => toggleStageExpand(stage.stageId)}
-                className="w-full flex items-center justify-between px-1.5 py-1 rounded text-left hover:bg-obsidian-800 transition cursor-pointer"
+                className="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-left transition cursor-pointer"
               >
-                <div className="flex items-center space-x-1.5 min-w-0">
+                <div className="flex items-center space-x-2 min-w-0">
                   {stage.isExpanded ? (
-                    <ChevronDown className="h-3 w-3 text-slate-500 shrink-0" />
+                    <ChevronDown className="h-3.5 w-3.5 text-[#666666] shrink-0" />
                   ) : (
-                    <ChevronRight className="h-3 w-3 text-slate-500 shrink-0" />
+                    <ChevronRight className="h-3.5 w-3.5 text-[#666666] shrink-0" />
                   )}
 
                   <span
                     className="w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: stage.color }}
+                    style={{ backgroundColor: stage.color || '#171717' }}
                   />
 
-                  <span className="font-sans text-xs font-medium text-slate-200 truncate">
+                  <span className="font-sans text-xs font-semibold text-[#171717] truncate">
                     {stage.stageTitle}
                   </span>
                 </div>
 
-                <span className="text-[10px] font-mono text-slate-500 truncate ml-1">
+                <span className="text-[10px] font-mono text-[#666666] truncate ml-1">
                   {stage.personaName}
                 </span>
               </button>
 
               {/* Children */}
               {stage.isExpanded && (
-                <div className="pl-4 pr-1 py-0.5 space-y-0.5 border-l border-obsidian-800/80 ml-2.5 my-0.5">
+                <div className="pl-4 pr-1 py-0.5 space-y-0.5 border-l border-[#ebebeb] ml-3 my-0.5">
                   {/* 1. Роли */}
                   {personaFile && (
                     <FileTreeItem
                       file={personaFile}
                       displayName="Роли"
                       isActive={activeFile?.id === personaFile.id}
-                      icon={<User className="h-3 w-3 text-slate-400 shrink-0" />}
+                      icon={<User className="h-3.5 w-3.5 text-[#666666] shrink-0" />}
                       onSelect={() => openFile(personaFile.id)}
                     />
                   )}
@@ -133,26 +133,26 @@ export default function CortexExplorer() {
                     <div className="space-y-0.5">
                       <button
                         onClick={() => toggleRulesFolder(stage.stageId)}
-                        className="w-full flex items-center space-x-1.5 px-1.5 py-0.5 rounded text-left text-slate-400 hover:text-slate-200 hover:bg-obsidian-800 transition cursor-pointer"
+                        className="w-full flex items-center space-x-1.5 px-2 py-1 rounded-md text-left text-[#666666] hover:text-[#171717] hover:bg-[#ebebeb]/60 transition cursor-pointer"
                       >
                         {areRulesOpen ? (
-                          <FolderOpen className="h-3 w-3 text-slate-500 shrink-0" />
+                          <FolderOpen className="h-3.5 w-3.5 text-[#666666] shrink-0" />
                         ) : (
-                          <Folder className="h-3 w-3 text-slate-500 shrink-0" />
+                          <Folder className="h-3.5 w-3.5 text-[#666666] shrink-0" />
                         )}
                         <span className="text-xs font-mono">Правила пайплайна</span>
-                        <span className="text-[10px] text-slate-500 tabular-nums">({ruleFiles.length})</span>
+                        <span className="text-[10px] text-[#8f8f8f] tabular-nums">({ruleFiles.length})</span>
                       </button>
 
                       {areRulesOpen && (
-                        <div className="pl-4 space-y-0.5 border-l border-obsidian-800/80 ml-2">
+                        <div className="pl-4 space-y-0.5 border-l border-[#ebebeb] ml-2">
                           {ruleFiles.map((ruleFile) => (
                             <FileTreeItem
                               key={ruleFile.id}
                               file={ruleFile}
                               displayName={ruleFile.name}
                               isActive={activeFile?.id === ruleFile.id}
-                              icon={<FileText className="h-3 w-3 text-slate-500 shrink-0" />}
+                              icon={<FileText className="h-3.5 w-3.5 text-[#666666] shrink-0" />}
                               onSelect={() => openFile(ruleFile.id)}
                             />
                           ))}
@@ -167,7 +167,7 @@ export default function CortexExplorer() {
                       file={settingsFile}
                       displayName="Системные инструкции"
                       isActive={activeFile?.id === settingsFile.id}
-                      icon={<Settings className="h-3 w-3 text-slate-400 shrink-0" />}
+                      icon={<Settings className="h-3.5 w-3.5 text-[#666666] shrink-0" />}
                       onSelect={() => openFile(settingsFile.id)}
                     />
                   )}
@@ -197,10 +197,10 @@ function FileTreeItem({
   return (
     <button
       onClick={onSelect}
-      className={`w-full flex items-center justify-between px-1.5 py-0.5 rounded text-left transition cursor-pointer ${
+      className={`w-full flex items-center justify-between px-2 py-1 rounded-md text-left transition cursor-pointer ${
         isActive
-          ? 'bg-obsidian-800 text-slate-100 font-medium'
-          : 'text-slate-400 hover:text-slate-200 hover:bg-obsidian-800/60'
+          ? 'bg-white border border-[#ebebeb] text-[#171717] font-semibold shadow-xs'
+          : 'text-[#4d4d4d] hover:text-[#171717] hover:bg-[#ebebeb]/60'
       }`}
       title={file.path}
     >
@@ -210,7 +210,7 @@ function FileTreeItem({
       </div>
 
       {file.isDirty && (
-        <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" title="Несохраненные изменения" />
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" title="Несохраненные изменения" />
       )}
     </button>
   );

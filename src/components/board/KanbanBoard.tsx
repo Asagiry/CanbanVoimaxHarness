@@ -5,11 +5,11 @@ import KanbanColumn from './KanbanColumn';
 import { KanbanTask } from '../../types';
 import { Plus, X, Check, ArrowRight } from 'lucide-react';
 
-const STAGE_LABELS: Record<string, { label: string; color: string }> = {
-  dev: { label: 'Разработка', color: '#f59e0b' },
-  review: { label: 'Ревью', color: '#a855f7' },
-  retro: { label: 'Ретро', color: '#06b6d4' },
-  ready: { label: 'Готово', color: '#10b981' },
+const STAGE_LABELS: Record<string, { label: string }> = {
+  dev: { label: 'Разработка' },
+  review: { label: 'Ревью' },
+  retro: { label: 'Ретро' },
+  ready: { label: 'Готово' },
 };
 
 export default function KanbanBoard() {
@@ -111,20 +111,20 @@ export default function KanbanBoard() {
   });
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden bg-obsidian-950">
+    <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#fafafa]">
       {/* Board Top Toolbar */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-obsidian-800/80 bg-obsidian-900/40 text-xs font-mono select-none">
-        <div className="flex items-center space-x-1.5 text-slate-400 text-[11px]">
-          <span>Задач:</span>
-          <span className="text-slate-200 font-semibold tabular-nums">{tasks.length}</span>
+      <div className="flex items-center justify-between px-3.5 py-2 border-b border-[#ebebeb] bg-white text-xs select-none">
+        <div className="flex items-center space-x-1.5 text-[#666666] text-xs">
+          <span>Всего задач:</span>
+          <span className="text-[#171717] font-semibold tabular-nums font-mono">{tasks.length}</span>
         </div>
 
         <button
           onClick={() => handleOpenAddTask('backlog')}
-          className="flex items-center space-x-1 px-2.5 py-1 rounded bg-obsidian-850 hover:bg-obsidian-800 border border-obsidian-750 hover:border-obsidian-700 text-slate-200 hover:text-white font-sans text-xs transition cursor-pointer"
+          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-[#171717] hover:bg-[#262626] text-white font-sans text-xs font-medium transition cursor-pointer shadow-xs active:scale-[0.99]"
           title="Создать новую задачу"
         >
-          <Plus className="h-3.5 w-3.5 text-cyan-400" />
+          <Plus className="h-3.5 w-3.5 text-white" />
           <span>Создать задачу</span>
         </button>
       </div>
@@ -137,9 +137,9 @@ export default function KanbanBoard() {
               e.currentTarget.scrollLeft += e.deltaY;
             }
           }}
-          className="flex-1 overflow-x-auto overflow-y-hidden p-3"
+          className="flex-1 overflow-x-auto overflow-y-hidden p-3.5"
         >
-          <div className="flex items-start space-x-3 h-full min-w-max pb-1">
+          <div className="flex items-start space-x-3.5 h-full min-w-max pb-1">
             {columns.map((column) => {
               const columnTasks = filteredTasks.filter((t) => t.columnId === column.id);
               return (
@@ -157,24 +157,24 @@ export default function KanbanBoard() {
 
       {/* Add Task Modal with Custom Flow Selector */}
       {isNewTaskModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 animate-in fade-in duration-100">
-          <div className="relative flex flex-col w-[480px] max-w-full rounded-lg border border-obsidian-750 bg-obsidian-900 shadow-xl p-4 text-slate-200">
-            <div className="flex items-center justify-between pb-2.5 border-b border-obsidian-800">
-              <h3 className="text-sm font-semibold text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-3 animate-in fade-in duration-100">
+          <div className="relative flex flex-col w-[480px] max-w-full rounded-lg border border-[#ebebeb] bg-white shadow-xl p-5 text-[#171717]">
+            <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb]">
+              <h3 className="text-sm font-semibold text-[#171717]">
                 Новая задача
               </h3>
               <button
                 onClick={() => setIsNewTaskModalOpen(false)}
-                className="p-1 rounded text-slate-400 hover:text-white hover:bg-obsidian-800 transition cursor-pointer"
+                className="p-1 rounded-md text-[#666666] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
                 title="Закрыть"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateTask} className="mt-3.5 space-y-3 text-xs">
+            <form onSubmit={handleCreateTask} className="mt-4 space-y-3.5 text-xs">
               <div>
-                <label className="block font-sans text-slate-400 mb-1">
+                <label className="block font-sans text-[#4d4d4d] font-medium mb-1">
                   Название
                 </label>
                 <input
@@ -183,12 +183,12 @@ export default function KanbanBoard() {
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   placeholder="Краткое описание задачи..."
-                  className="w-full px-2.5 py-1.5 rounded bg-obsidian-950 border border-obsidian-750 text-slate-100 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500 font-sans"
+                  className="w-full px-3 py-1.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-sans transition"
                 />
               </div>
 
               <div>
-                <label className="block font-sans text-slate-400 mb-1">
+                <label className="block font-sans text-[#4d4d4d] font-medium mb-1">
                   Описание
                 </label>
                 <textarea
@@ -196,18 +196,18 @@ export default function KanbanBoard() {
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
                   placeholder="Детали и требования к задаче..."
-                  className="w-full px-2.5 py-1.5 rounded bg-obsidian-950 border border-obsidian-750 text-slate-100 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500 font-sans resize-none"
+                  className="w-full px-3 py-1.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-sans resize-none transition"
                 />
               </div>
 
               <div>
-                <label className="block font-sans text-slate-400 mb-1">
+                <label className="block font-sans text-[#4d4d4d] font-medium mb-1">
                   Колонка размещения
                 </label>
                 <select
                   value={targetColumnForNew}
                   onChange={(e) => setTargetColumnForNew(e.target.value)}
-                  className="w-full px-2 py-1.5 rounded bg-obsidian-950 border border-obsidian-750 text-slate-200 focus:outline-hidden focus:border-cyan-500 font-mono text-xs cursor-pointer"
+                  className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[#171717] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono text-xs cursor-pointer transition"
                 >
                   {columns.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -218,12 +218,12 @@ export default function KanbanBoard() {
               </div>
 
               {/* Custom Pipeline Flow Selector */}
-              <div className="space-y-2 pt-2 border-t border-obsidian-800">
+              <div className="space-y-2 pt-2 border-t border-[#ebebeb]">
                 <div className="flex items-center justify-between">
-                  <label className="block font-sans text-slate-400 font-medium">
+                  <label className="block font-sans text-[#4d4d4d] font-medium">
                     Кастомная цепочка (Custom Pipeline Flow)
                   </label>
-                  <span className="text-[10px] text-cyan-400 font-mono">
+                  <span className="text-[11px] text-[#666666] font-mono">
                     {enableReview && enableRetro
                       ? 'Полный цикл'
                       : !enableReview && !enableRetro
@@ -236,10 +236,10 @@ export default function KanbanBoard() {
                 <div className="flex items-center gap-1.5">
                   {/* Dev: always on */}
                   <div
-                    className="flex items-center space-x-1 px-2.5 py-1 rounded bg-amber-950/40 border border-amber-600/40 text-amber-300 font-mono text-[11px] cursor-not-allowed select-none"
+                    className="flex items-center space-x-1 px-2.5 py-1 rounded-md bg-[#f4f4f5] border border-[#ebebeb] text-[#171717] font-mono text-[11px] cursor-not-allowed select-none"
                     title="Разработка обязательна"
                   >
-                    <Check className="h-3 w-3 text-amber-400" />
+                    <Check className="h-3 w-3 text-[#171717]" />
                     <span>Разработка</span>
                   </div>
 
@@ -247,16 +247,16 @@ export default function KanbanBoard() {
                   <button
                     type="button"
                     onClick={() => setEnableReview(!enableReview)}
-                    className={`flex items-center space-x-1 px-2.5 py-1 rounded border font-mono text-[11px] transition cursor-pointer select-none ${
+                    className={`flex items-center space-x-1 px-2.5 py-1 rounded-md border font-mono text-[11px] transition cursor-pointer select-none ${
                       enableReview
-                        ? 'bg-purple-950/40 border-purple-500/50 text-purple-300 hover:bg-purple-900/40'
-                        : 'bg-obsidian-950 border-obsidian-800 text-slate-500 hover:text-slate-300 hover:border-obsidian-700'
+                        ? 'bg-[#171717] border-[#171717] text-white'
+                        : 'bg-white border-[#ebebeb] text-[#666666] hover:text-[#171717] hover:border-[#d4d4d8]'
                     }`}
                   >
                     {enableReview ? (
-                      <Check className="h-3 w-3 text-purple-400" />
+                      <Check className="h-3 w-3 text-white" />
                     ) : (
-                      <X className="h-3 w-3 text-slate-500" />
+                      <X className="h-3 w-3 text-[#666666]" />
                     )}
                     <span>Ревью</span>
                   </button>
@@ -265,63 +265,56 @@ export default function KanbanBoard() {
                   <button
                     type="button"
                     onClick={() => setEnableRetro(!enableRetro)}
-                    className={`flex items-center space-x-1 px-2.5 py-1 rounded border font-mono text-[11px] transition cursor-pointer select-none ${
+                    className={`flex items-center space-x-1 px-2.5 py-1 rounded-md border font-mono text-[11px] transition cursor-pointer select-none ${
                       enableRetro
-                        ? 'bg-cyan-950/40 border-cyan-500/50 text-cyan-300 hover:bg-cyan-900/40'
-                        : 'bg-obsidian-950 border-obsidian-800 text-slate-500 hover:text-slate-300 hover:border-obsidian-700'
+                        ? 'bg-[#171717] border-[#171717] text-white'
+                        : 'bg-white border-[#ebebeb] text-[#666666] hover:text-[#171717] hover:border-[#d4d4d8]'
                     }`}
                   >
                     {enableRetro ? (
-                      <Check className="h-3 w-3 text-cyan-400" />
+                      <Check className="h-3 w-3 text-white" />
                     ) : (
-                      <X className="h-3 w-3 text-slate-500" />
+                      <X className="h-3 w-3 text-[#666666]" />
                     )}
                     <span>Ретро</span>
                   </button>
 
                   {/* Ready: always destination */}
                   <div
-                    className="flex items-center space-x-1 px-2.5 py-1 rounded bg-emerald-950/40 border border-emerald-600/40 text-emerald-300 font-mono text-[11px] cursor-not-allowed select-none"
+                    className="flex items-center space-x-1 px-2.5 py-1 rounded-md bg-[#f4f4f5] border border-[#ebebeb] text-[#171717] font-mono text-[11px] cursor-not-allowed select-none"
                     title="Готово (финал)"
                   >
-                    <Check className="h-3 w-3 text-emerald-400" />
+                    <Check className="h-3 w-3 text-[#171717]" />
                     <span>Готово</span>
                   </div>
                 </div>
 
                 {/* Live Visual Arrow Chain */}
-                <div className="flex items-center space-x-1.5 p-2 rounded bg-obsidian-950 border border-obsidian-800 text-[11px] font-mono overflow-x-auto">
+                <div className="flex items-center space-x-1.5 p-2 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[11px] font-mono overflow-x-auto">
                   {activeFlow.map((stageId, idx) => (
                     <div key={stageId} className="flex items-center space-x-1.5 shrink-0">
-                      <span
-                        className="px-2 py-0.5 rounded font-semibold text-[10px]"
-                        style={{
-                          color: STAGE_LABELS[stageId].color,
-                          backgroundColor: `${STAGE_LABELS[stageId].color}15`,
-                          border: `1px solid ${STAGE_LABELS[stageId].color}40`,
-                        }}
-                      >
+                      <span className="px-2 py-0.5 rounded-md bg-white border border-[#ebebeb] text-[#171717] font-medium text-[10px]">
                         {STAGE_LABELS[stageId].label}
                       </span>
                       {idx < activeFlow.length - 1 && (
-                        <ArrowRight className="h-3 w-3 text-slate-500 shrink-0" />
+                        <ArrowRight className="h-3 w-3 text-[#8f8f8f] shrink-0" />
                       )}
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="flex items-center justify-end space-x-2 pt-2.5 border-t border-obsidian-800">
+              <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#ebebeb]">
                 <button
                   type="button"
                   onClick={() => setIsNewTaskModalOpen(false)}
-                  className="px-3 py-1.5 rounded text-slate-400 hover:text-white hover:bg-obsidian-800 transition cursor-pointer font-sans"
+                  className="px-3 py-1.5 rounded-md bg-white border border-[#ebebeb] text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer font-sans"
                 >
                   Отмена
                 </button>
                 <button
                   type="submit"
-                  className="px-3.5 py-1.5 rounded bg-cyan-400 hover:bg-cyan-300 text-obsidian-950 font-semibold transition cursor-pointer font-sans"
+                  className="px-3.5 py-1.5 rounded-md bg-[#171717] hover:bg-[#262626] text-white font-medium transition cursor-pointer font-sans shadow-xs"
                 >
                   Создать
                 </button>
