@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
 import { useBoardStore } from '../../stores/boardStore';
+import { useDrawerStore } from '../../stores/drawerStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import KanbanColumn from './KanbanColumn';
 import { KanbanTask, PipelineColumn, PipelineConfig, TaskStatus } from '../../types';
@@ -52,9 +53,171 @@ interface AgentPersonaOption {
 
 const NEW_AGENT_OPTION = '__new__';
 
+interface ThreadLine {
+  key: string;
+  parentId: string;
+  subtaskId: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  cx1: number;
+  cy1: number;
+  cx2: number;
+  cy2: number;
+  mx: number;
+  my: number;
+  pathData: string;
+  isHighlighted: boolean;
+  parentColor: string;
+  subtaskColor: string;
+}
+
 export default function KanbanBoard() {
-  const { columns, tasks, searchQuery, moveTask, addTask, tickTimers, setColumns } = useBoardStore();
+  const {
+    columns,
+    tasks,
+    searchQuery,
+    moveTask,
+    addTask,
+    tickTimers,
+    setColumns,
+    hoveredTaskId,
+    setHoveredTaskId,
+  } = useBoardStore();
+  const { openDrawer } = useDrawerStore();
   const { availableModels, settings } = useSettingsStore();
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const [threads, setThreads] = useState<ThreadLine[]>([]);
+  const [svgDimensions, setSvgDimensions] = useState({ width: 0, height: 0 });
+
+  const computeThreads = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const cRect = container.getBoundingClientRect();
+    const scrollLeft = container.scrollLeft;
+    const scrollTop = container.scrollTop;
+
+    setSvgDimensions({
+      width: Math.max(container.scrollWidth, container.clientWidth),
+      height: Math.max(container.scrollHeight, container.clientHeight),
+    });
+
+    const lines: ThreadLine[] = [];
+
+    for (const subtask of tasks) {
+      if (!subtask.parentId) continue;
+      const parent = tasks.find((t) => t.id === subtask.parentId);
+      if (!parent) continue;
+
+      const parentCol = columns.find((c) => c.id === parent.columnId);
+      const subtaskCol = columns.find((c) => c.id === subtask.columnId);
+
+      const isParentDone = Boolean(
+        parentCol?.terminal ||
+        parent.columnId === 'ready' ||
+        parent.status === 'done' ||
+        parentCol?.title.toLowerCase().includes('готов') ||
+        parentCol?.title.toLowerCase().includes('done')
+      );
+      const isSubtaskDone = Boolean(
+        subtaskCol?.terminal ||
+        subtask.columnId === 'ready' ||
+        subtask.status === 'done' ||
+        subtaskCol?.title.toLowerCase().includes('готов') ||
+        subtaskCol?.title.toLowerCase().includes('done')
+      );
+
+      // In Done column, subtasks are aggregated inside root card
+      if (isParentDone && isSubtaskDone) continue;
+
+      const elP = document.getElementById(`task-card-${parent.id}`);
+      const elS = document.getElementById(`task-card-${subtask.id}`);
+      if (!elP || !elS) continue;
+
+      const pRect = elP.getBoundingClientRect();
+      const sRect = elS.getBoundingClientRect();
+
+      const isForward = pRect.left <= sRect.left;
+      const x1 = isForward
+        ? pRect.right - cRect.left + scrollLeft
+        : pRect.left - cRect.left + scrollLeft;
+      const y1 = pRect.top + pRect.height / 2 - cRect.top + scrollTop;
+
+      const x2 = isForward
+        ? sRect.left - cRect.left + scrollLeft
+        : sRect.right - cRect.left + scrollLeft;
+      const y2 = sRect.top + sRect.height / 2 - cRect.top + scrollTop;
+
+      const dx = Math.max(36, Math.abs(x2 - x1) * 0.45);
+      const cx1 = isForward ? x1 + dx : x1 - dx;
+      const cy1 = y1;
+      const cx2 = isForward ? x2 - dx : x2 + dx;
+      const cy2 = y2;
+
+      const pathData = `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
+
+      // Midpoint on cubic Bezier at t = 0.5
+      const mx = 0.125 * x1 + 0.375 * cx1 + 0.375 * cx2 + 0.125 * x2;
+      const my = 0.125 * y1 + 0.375 * cy1 + 0.375 * cy2 + 0.125 * y2;
+
+      const isHighlighted = Boolean(
+        hoveredTaskId &&
+          (hoveredTaskId === parent.id ||
+            hoveredTaskId === subtask.id ||
+            (parent.waitingForSubtaskId && hoveredTaskId === parent.waitingForSubtaskId))
+      );
+
+      lines.push({
+        key: `${parent.id}->${subtask.id}`,
+        parentId: parent.id,
+        subtaskId: subtask.id,
+        x1,
+        y1,
+        x2,
+        y2,
+        cx1,
+        cy1,
+        cx2,
+        cy2,
+        mx,
+        my,
+        pathData,
+        isHighlighted,
+        parentColor: parentCol?.color || '#f59e0b',
+        subtaskColor: subtaskCol?.color || '#8b5cf6',
+      });
+    }
+
+    setThreads(lines);
+  }, [tasks, columns, hoveredTaskId]);
+
+  useEffect(() => {
+    let animId = requestAnimationFrame(computeThreads);
+    const handleResize = () => {
+      cancelAnimationFrame(animId);
+      animId = requestAnimationFrame(computeThreads);
+    };
+    window.addEventListener('resize', handleResize);
+
+    const container = scrollContainerRef.current;
+    let resizeObserver: ResizeObserver | null = null;
+    if (container && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        cancelAnimationFrame(animId);
+        animId = requestAnimationFrame(computeThreads);
+      });
+      resizeObserver.observe(container);
+    }
+
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener('resize', handleResize);
+      if (resizeObserver) resizeObserver.disconnect();
+    };
+  }, [computeThreads]);
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
   const [targetColumnForNew, setTargetColumnForNew] = useState<string>('backlog');
   const [selectedModel, setSelectedModel] = useState<string>(settings.model || 'gemini-3.8-flash-high');
@@ -464,15 +627,138 @@ export default function KanbanBoard() {
         <Droppable droppableId="board-columns" direction="horizontal" type="COLUMN">
           {(provided) => (
         <div
-          ref={provided.innerRef}
+          ref={(el) => {
+            provided.innerRef(el);
+            scrollContainerRef.current = el;
+          }}
           {...provided.droppableProps}
           onWheel={(e) => {
             if (e.deltaY !== 0) {
               e.currentTarget.scrollLeft += e.deltaY;
             }
           }}
-          className="flex-1 overflow-x-auto overflow-y-hidden p-3.5"
+          onScroll={computeThreads}
+          className="flex-1 overflow-x-auto overflow-y-hidden p-3.5 relative"
         >
+          {/* Visual Threads SVG Overlay */}
+          {threads.length > 0 && (
+            <svg
+              className="pointer-events-none absolute top-0 left-0 z-20 overflow-visible"
+              style={{
+                width: svgDimensions.width || '100%',
+                height: svgDimensions.height || '100%',
+              }}
+            >
+              <defs>
+                <filter id="thread-glow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="0" stdDeviation="3.5" floodColor="#8b5cf6" floodOpacity="0.75" />
+                </filter>
+              </defs>
+
+              {threads.map((thread) => (
+                <g key={thread.key} className="transition-all duration-150">
+                  {/* Glowing halo behind active or hovered thread */}
+                  {thread.isHighlighted && (
+                    <path
+                      d={thread.pathData}
+                      stroke={thread.subtaskColor}
+                      strokeWidth={6}
+                      strokeOpacity={0.4}
+                      fill="none"
+                      filter="url(#thread-glow)"
+                    />
+                  )}
+
+                  {/* Main connector Bezier line */}
+                  <path
+                    d={thread.pathData}
+                    stroke={thread.subtaskColor}
+                    strokeWidth={thread.isHighlighted ? 2.5 : 1.5}
+                    strokeDasharray={thread.isHighlighted ? 'none' : '4 3'}
+                    strokeOpacity={thread.isHighlighted ? 1 : 0.65}
+                    fill="none"
+                  />
+
+                  {/* Invisible wide interactive stroke for hover and click */}
+                  <path
+                    d={thread.pathData}
+                    stroke="transparent"
+                    strokeWidth={16}
+                    fill="none"
+                    className="cursor-pointer pointer-events-auto"
+                    onClick={() => openDrawer(thread.subtaskId)}
+                    onMouseEnter={() => setHoveredTaskId(thread.subtaskId)}
+                    onMouseLeave={() => setHoveredTaskId(null)}
+                  >
+                    <title>{`Нить: ${thread.parentId} ➔ ${thread.subtaskId} (нажмите для открытия консоли подзадачи)`}</title>
+                  </path>
+
+                  {/* Node at parent */}
+                  <circle
+                    cx={thread.x1}
+                    cy={thread.y1}
+                    r={thread.isHighlighted ? 4.5 : 3.5}
+                    fill={thread.parentColor}
+                    stroke="#ffffff"
+                    strokeWidth={1.5}
+                  />
+
+                  {/* Node at subtask */}
+                  <circle
+                    cx={thread.x2}
+                    cy={thread.y2}
+                    r={thread.isHighlighted ? 4.5 : 3.5}
+                    fill={thread.subtaskColor}
+                    stroke="#ffffff"
+                    strokeWidth={1.5}
+                  />
+                  {thread.isHighlighted && (
+                    <circle
+                      cx={thread.x2}
+                      cy={thread.y2}
+                      r={7}
+                      fill="none"
+                      stroke={thread.subtaskColor}
+                      strokeWidth={1.5}
+                      opacity={0.8}
+                      className="animate-ping"
+                    />
+                  )}
+
+                  {/* Midpoint badge displaying subtask ID */}
+                  <g
+                    transform={`translate(${thread.mx - 27}, ${thread.my - 10})`}
+                    className="cursor-pointer pointer-events-auto select-none"
+                    onClick={() => openDrawer(thread.subtaskId)}
+                    onMouseEnter={() => setHoveredTaskId(thread.subtaskId)}
+                    onMouseLeave={() => setHoveredTaskId(null)}
+                  >
+                    <rect
+                      width={54}
+                      height={20}
+                      rx={10}
+                      fill={thread.isHighlighted ? '#171717' : '#ffffff'}
+                      stroke={thread.isHighlighted ? thread.subtaskColor : '#e5e7eb'}
+                      strokeWidth={1.5}
+                      className="shadow-xs transition-colors duration-150"
+                    />
+                    <text
+                      x={27}
+                      y={13.5}
+                      textAnchor="middle"
+                      fill={thread.isHighlighted ? '#ffffff' : '#374151'}
+                      fontSize={9}
+                      fontFamily="monospace"
+                      fontWeight={600}
+                    >
+                      {thread.subtaskId}
+                    </text>
+                  </g>
+                </g>
+              ))}
+            </svg>
+          )}
+
           <div className="flex items-start space-x-3.5 h-full min-w-max pb-1">
             {columns.map((column, index) => {
               const columnTasks = filteredTasks.filter((t) => t.columnId === column.id);

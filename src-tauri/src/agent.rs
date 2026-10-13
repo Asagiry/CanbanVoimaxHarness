@@ -35,6 +35,12 @@ pub struct Task {
     pub status: Option<String>,
     #[serde(default)]
     pub model: Option<String>,
+    #[serde(rename = "parentId", alias = "parent_id", default)]
+    pub parent_id: Option<String>,
+    #[serde(rename = "subtaskIndex", alias = "subtask_index", default)]
+    pub subtask_index: Option<u32>,
+    #[serde(rename = "waitingForSubtaskId", alias = "waiting_for_subtask_id", default)]
+    pub waiting_for_subtask_id: Option<String>,
     #[serde(rename = "createdAt", alias = "created_at", default)]
     pub created_at: i64,
     #[serde(rename = "updatedAt", alias = "updated_at", default)]

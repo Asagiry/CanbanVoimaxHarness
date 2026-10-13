@@ -11,7 +11,7 @@ import { useProjectStore } from './stores/projectStore';
 import { useDrawerStore } from './stores/drawerStore';
 
 export default function App() {
-  const { loadColumns, loadTasks } = useBoardStore();
+  const { loadColumns, loadTasks, runTaskAgent } = useBoardStore();
   const { loadProjects } = useProjectStore();
   const { appendThought, appendOutput, addToolExecution, updateToolExecution, updateTelemetry, setThinkingStartTime } = useDrawerStore();
 
@@ -151,6 +151,29 @@ export default function App() {
           loadTasks();
         });
         unlisteners.push(u6);
+
+        const uTaskCreated = await listen<any>('task:created', () => {
+          loadTasks();
+        });
+        unlisteners.push(uTaskCreated);
+
+        const uTaskMoved = await listen<any>('task:moved', () => {
+          loadTasks();
+        });
+        unlisteners.push(uTaskMoved);
+
+        const uTasksUpdated = await listen<any>('tasks:updated', () => {
+          loadTasks();
+        });
+        unlisteners.push(uTasksUpdated);
+
+        const uAutoRun = await listen<{ taskId?: string }>('agent:autorun', (event) => {
+          const tid = event.payload?.taskId;
+          if (tid) {
+            void runTaskAgent(tid);
+          }
+        });
+        unlisteners.push(uAutoRun);
 
         const uProj = await listen<any>('project:changed', async () => {
           await loadColumns();

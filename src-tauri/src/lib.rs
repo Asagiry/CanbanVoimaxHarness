@@ -44,6 +44,7 @@ pub fn run() {
             list_tasks,
             save_tasks,
             create_task,
+            create_subtask,
             move_task_stage,
             run_agent,
             abort_agent,
