@@ -1,5 +1,5 @@
 use super::models::*;
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use eventsource_stream::Eventsource;
 use futures_util::StreamExt;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
@@ -135,14 +135,22 @@ impl LlmClient {
             }
         }
 
-        let response = self
+        let response = match self
             .client
             .post(&endpoint)
             .headers(headers)
             .json(&request)
             .send()
             .await
-            .with_context(|| format!("Failed to send request to OpenAI endpoint: {}", endpoint))?;
+        {
+            Ok(resp) => resp,
+            Err(e) => {
+                let err_msg = format!("Failed to connect to OpenAI endpoint {}: {}", endpoint, e);
+                eprintln!("CVH [llm_client]: {}", err_msg);
+                let _ = tx.send(StreamChunk::Error(err_msg.clone())).await;
+                bail!(err_msg);
+            }
+        };
 
         if !response.status().is_success() {
             let status = response.status();
@@ -151,6 +159,7 @@ impl LlmClient {
                 .await
                 .unwrap_or_else(|_| "Failed to read error body".to_string());
             let err_msg = format!("OpenAI API error [{}]: {}", status, text);
+            eprintln!("CVH [llm_client]: {}", err_msg);
             let _ = tx.send(StreamChunk::Error(err_msg.clone())).await;
             bail!(err_msg);
         }
@@ -329,14 +338,22 @@ impl LlmClient {
             }
         }
 
-        let response = self
+        let response = match self
             .client
             .post(&endpoint)
             .headers(headers)
             .json(&request)
             .send()
             .await
-            .with_context(|| format!("Failed to send request to Anthropic endpoint: {}", endpoint))?;
+        {
+            Ok(resp) => resp,
+            Err(e) => {
+                let err_msg = format!("Failed to connect to Anthropic endpoint {}: {}", endpoint, e);
+                eprintln!("CVH [llm_client]: {}", err_msg);
+                let _ = tx.send(StreamChunk::Error(err_msg.clone())).await;
+                bail!(err_msg);
+            }
+        };
 
         if !response.status().is_success() {
             let status = response.status();
@@ -345,6 +362,7 @@ impl LlmClient {
                 .await
                 .unwrap_or_else(|_| "Failed to read error body".to_string());
             let err_msg = format!("Anthropic API error [{}]: {}", status, text);
+            eprintln!("CVH [llm_client]: {}", err_msg);
             let _ = tx.send(StreamChunk::Error(err_msg.clone())).await;
             bail!(err_msg);
         }

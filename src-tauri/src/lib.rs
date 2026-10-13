@@ -9,13 +9,12 @@ pub mod llm;
 pub use error::AppError;
 
 use commands::*;
-use std::path::PathBuf;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let state = AppState::new(current_dir);
+    let project_root = config::discover_project_root();
+    let state = AppState::new(project_root);
 
     tauri::Builder::default()
         // Single-instance MUST stay the first registered plugin: a second launch

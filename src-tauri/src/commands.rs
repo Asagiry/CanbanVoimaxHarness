@@ -1,9 +1,10 @@
 use crate::agent::{run_agent_loop, AgentEvent, AgentSessionConfig};
+pub use crate::config::{discover_project_root, persist_active_project};
 use crate::config::{
-    atomic_write_file, load_llm_settings, load_pipeline_config, load_project_config,
-    load_project_registry, register_or_update_project, save_llm_settings_to_disk,
-    save_pipeline_config, scaffold_cvh_project, LlmSettings, PipelineConfig, ProjectConfig,
-    ProjectEntry, ProjectRegistry,
+    atomic_write_file, get_app_config_dir, load_llm_settings, load_pipeline_config,
+    load_project_config, load_project_registry, register_or_update_project,
+    save_llm_settings_to_disk, save_pipeline_config, scaffold_cvh_project, LlmSettings,
+    PipelineConfig, ProjectConfig, ProjectEntry, ProjectRegistry,
 };
 use crate::git::{create_worktree, remove_worktree};
 use crate::hooks::{execute_hook, execute_sensor_command, HookContext};
@@ -61,8 +62,13 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(root: PathBuf) -> Self {
+        let actual_root = if root.join(".cvh").exists() || root.join(".git").exists() {
+            root
+        } else {
+            discover_project_root()
+        };
         Self {
-            repo_root: RwLock::new(root),
+            repo_root: RwLock::new(actual_root),
             active_agents: Mutex::new(HashMap::new()),
             agent_contexts: Mutex::new(HashMap::new()),
         }
@@ -72,7 +78,7 @@ impl AppState {
         self.repo_root
             .read()
             .map(|r| r.clone())
-            .unwrap_or_else(|_| PathBuf::from("."))
+            .unwrap_or_else(|_| discover_project_root())
     }
 
     pub fn set_root(&self, new_root: PathBuf) -> Result<(), String> {
@@ -86,23 +92,63 @@ impl AppState {
 }
 
 async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
-    let tasks_file = repo_root.join(".cvh").join("tasks.json");
-    if !tasks_file.exists() {
-        return Vec::new();
+    let local_tasks_file = repo_root.join(".cvh").join("tasks.json");
+    if local_tasks_file.exists() {
+        if let Ok(content) = tokio::fs::read_to_string(&local_tasks_file).await {
+            if let Ok(tasks) = serde_json::from_str::<Vec<Task>>(&content) {
+                if !tasks.is_empty() {
+                    return tasks;
+                }
+            }
+        }
     }
-    match tokio::fs::read_to_string(&tasks_file).await {
-        Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
-        Err(_) => Vec::new(),
+
+    // Try global fallback: %LOCALAPPDATA%\com.voimax.cvh\tasks.json
+    let global_tasks_file = get_app_config_dir().join("tasks.json");
+    if global_tasks_file.exists() {
+        if let Ok(content) = tokio::fs::read_to_string(&global_tasks_file).await {
+            if let Ok(tasks) = serde_json::from_str::<Vec<Task>>(&content) {
+                if !tasks.is_empty() {
+                    eprintln!(
+                        "CVH [load_tasks_from_disk]: Restored {} tasks from global fallback {:?}",
+                        tasks.len(),
+                        global_tasks_file
+                    );
+                    return tasks;
+                }
+            }
+        }
     }
+
+    Vec::new()
 }
 
 async fn save_tasks_to_disk(repo_root: &Path, tasks: &[Task]) -> Result<(), String> {
-    let tasks_file = repo_root.join(".cvh").join("tasks.json");
     let serialized = serde_json::to_string_pretty(tasks)
         .map_err(|e| format!("Failed to serialize tasks: {}", e))?;
-    atomic_write_file(&tasks_file, &serialized)
-        .await
-        .map_err(|e| format!("Failed to save tasks: {}", e))
+
+    // 1. Save to repo_root/.cvh/tasks.json
+    let local_tasks_file = repo_root.join(".cvh").join("tasks.json");
+    let local_res = atomic_write_file(&local_tasks_file, &serialized).await;
+
+    // 2. ALSO save a copy to %LOCALAPPDATA%\com.voimax.cvh\tasks.json as a global fallback!
+    let global_tasks_file = get_app_config_dir().join("tasks.json");
+    let global_res = atomic_write_file(&global_tasks_file, &serialized).await;
+
+    match (local_res, global_res) {
+        (Ok(_), _) => Ok(()),
+        (Err(e), Ok(_)) => {
+            eprintln!(
+                "CVH: Warning - Failed to save tasks to local repo {:?}: {}, but persisted to global fallback {:?}",
+                local_tasks_file, e, global_tasks_file
+            );
+            Ok(())
+        }
+        (Err(e1), Err(e2)) => Err(format!(
+            "Failed to save tasks to both local ({}) and global ({})",
+            e1, e2
+        )),
+    }
 }
 
 // ============================================================================
@@ -455,13 +501,34 @@ pub async fn run_agent(
 
     let pipeline = load_pipeline_config(&root)
         .await
-        .map_err(|e| format!("Failed to load pipeline: {}", e))?;
+        .unwrap_or_else(|_| crate::config::default_pipeline_config());
 
     let col = pipeline
         .columns
         .iter()
         .find(|c| c.id == task.stage_id)
-        .ok_or_else(|| format!("Column {} not found in pipeline", task.stage_id))?;
+        .cloned()
+        .unwrap_or_else(|| {
+            eprintln!(
+                "CVH [run_agent]: Column '{}' not found in pipeline, falling back to default column",
+                task.stage_id
+            );
+            pipeline.columns.first().cloned().unwrap_or_else(|| crate::config::PipelineColumn {
+                id: task.stage_id.clone(),
+                title: task.stage_id.clone(),
+                color: None,
+                icon: None,
+                persona: Some("developer".to_string()),
+                context_window: Some(400000),
+                model_override: None,
+                reasoning_effort: None,
+                temperature: Some(0.2),
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+            })
+        });
 
     let persona_role = col.persona.clone().unwrap_or_else(|| "developer".to_string());
 
@@ -516,7 +583,7 @@ pub async fn run_agent(
             .unwrap_or_else(|| "gemini-3.8-flash-high".to_string())
     };
 
-    let base_url = if !llm_settings.base_url.trim().is_empty() {
+    let mut base_url = if !llm_settings.base_url.trim().is_empty() {
         llm_settings.base_url.trim().to_string()
     } else {
         proj_cfg
@@ -525,11 +592,23 @@ pub async fn run_agent(
             .unwrap_or_else(|| "http://127.0.0.1:8045/v1".to_string())
     };
 
+    if base_url.trim().is_empty() {
+        base_url = "http://127.0.0.1:8045/v1".to_string();
+    }
+
     let api_key = if !llm_settings.api_key.trim().is_empty() {
         Some(llm_settings.api_key.trim().to_string())
     } else {
         None
     };
+
+    eprintln!(
+        "CVH [run_agent]: task_id={}, model={}, base_url={}, api_key_present={}",
+        task.id,
+        model,
+        base_url,
+        api_key.is_some()
+    );
 
     let temperature = llm_settings.temperature.or(col.temperature);
 
@@ -751,11 +830,19 @@ pub async fn run_agent(
                 AgentEvent::Error(err) => {
                     let _ = app_inner.emit(
                         "agent:error",
-                        serde_json::json!({ "taskId": tid_inner, "error": err }),
+                        serde_json::json!({ "taskId": tid_inner, "error": &err }),
                     );
                     let _ = app_inner.emit(
                         "agent:status",
-                        serde_json::json!({ "taskId": tid_inner, "status": "error" }),
+                        serde_json::json!({ "taskId": tid_inner, "status": "error", "error": &err }),
+                    );
+                    let _ = app_inner.emit(
+                        "agent:output",
+                        serde_json::json!({
+                            "taskId": tid_inner,
+                            "output": format!("\n[LLM Error: {}]\n", &err),
+                            "content": format!("\n[LLM Error: {}]\n", &err),
+                        }),
                     );
                 }
             }
@@ -929,14 +1016,31 @@ pub async fn run_agent(
                 }
             }
             Err(err) => {
+                let err_str = err.to_string();
+                eprintln!("CVH [run_agent]: Agent execution failed for task {}: {}", tid, err_str);
                 let _ = app.emit(
                     "agent:status",
-                    serde_json::json!({ "taskId": tid, "status": "error" }),
+                    serde_json::json!({ "taskId": tid, "status": "error", "error": &err_str }),
                 );
                 let _ = app.emit(
                     "agent:error",
-                    serde_json::json!({ "taskId": tid, "error": err.to_string() }),
+                    serde_json::json!({ "taskId": tid, "error": &err_str }),
                 );
+                let _ = app.emit(
+                    "agent:output",
+                    serde_json::json!({
+                        "taskId": tid,
+                        "output": format!("\n[LLM Error: {}]\n", &err_str),
+                        "content": format!("\n[LLM Error: {}]\n", &err_str),
+                    }),
+                );
+                // Also persist error status in tasks.json
+                let mut tasks = load_tasks_from_disk(&root_task).await;
+                if let Some(task_idx) = tasks.iter().position(|t| t.id == tid) {
+                    tasks[task_idx].status = Some("error".to_string());
+                    tasks[task_idx].updated_at = Utc::now().timestamp_millis();
+                    let _ = save_tasks_to_disk(&root_task, &tasks).await;
+                }
             }
         }
 
@@ -1293,6 +1397,7 @@ pub async fn select_project_folder(
             let path_buf = PathBuf::from(p.trim());
             if path_buf.exists() && path_buf.is_dir() {
                 let _ = scaffold_cvh_project(&path_buf).await;
+                persist_active_project(&path_buf).await;
                 return Ok(Some(path_buf.to_string_lossy().to_string()));
             }
         }
@@ -1314,6 +1419,7 @@ pub async fn select_project_folder(
 
     if let Some(ref folder) = selected {
         let _ = scaffold_cvh_project(folder).await;
+        persist_active_project(folder).await;
     }
 
     Ok(selected.map(|p| p.to_string_lossy().to_string()))
@@ -1332,6 +1438,9 @@ pub async fn set_active_project(
     if !new_path.is_dir() {
         return Err(format!("Specified path is not a directory: {:?}", new_path));
     }
+
+    // Persist to %LOCALAPPDATA%\com.voimax.cvh\active_project.txt
+    persist_active_project(&new_path).await;
 
     // Scaffold empty .cvh structure (agents/, worktrees/, skills/, settings/) if missing
     scaffold_cvh_project(&new_path)
@@ -1411,6 +1520,7 @@ pub async fn set_project_root(
     state: State<'_, AppState>,
     app_handle: AppHandle,
 ) -> Result<String, String> {
+    persist_active_project(&PathBuf::from(path.trim())).await;
     let _cfg = set_active_project(path.clone(), state, app_handle).await?;
     Ok(path)
 }
