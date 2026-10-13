@@ -1,6 +1,6 @@
 use crate::llm::{ChatMessage, Role};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// Official compaction report detailing token space reclaimed.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -44,7 +44,7 @@ impl ExecutionStateSnapshot {
         };
 
         format!(
-            "## 📌 Preserved Execution State\n- **Modified Files**: {}\n- **Sensor Status**: {}\n- **Exact Next Step**: {}\n- **Active Blockers / Verdict**: {}",
+            "- **Modified Files**: {}\n- **Sensor Status**: {}\n- **Exact Next Step**: {}\n- **Active Blockers / Verdict**: {}",
             files_str, self.sensor_status, self.next_step, self.verdict
         )
     }
@@ -217,107 +217,20 @@ pub fn evaporate_tool_logs(messages: &mut Vec<ChatMessage>, current_turn: usize)
     evaporated_count
 }
 
-/// Structured State Snapshot for intermediate turns:
-/// When compressing intermediate turns older than the 2 most recent turns,
-/// replaces fuzzy conversational dialogue with a strict structured Markdown block:
-/// ```markdown
-/// ## 📌 Preserved Execution State
-/// - **Modified Files**: [list of modified files detected from tool calls]
-/// - **Sensor Status**: [e.g., Build: PASS, Linter: PASS]
-/// - **Exact Next Step**: [the concrete pending action]
-/// - **Active Blockers / Verdict**: [NONE / CAVEATS / CHANGES_REQUESTED]
-/// ```
+/// Compresses intermediate turns without injecting synthetic state clutter into messages.
 #[allow(clippy::ptr_arg)]
 pub fn compress_intermediate_turns(
-    messages: &mut Vec<ChatMessage>,
-    current_turn: usize,
+    _messages: &mut Vec<ChatMessage>,
+    _current_turn: usize,
 ) -> usize {
-    let turns = compute_message_turns(messages);
-    let mut compressed_count = 0;
-
-    // The 2 most recent conversation turns MUST NEVER be compressed
-    let recent_cutoff = current_turn.saturating_sub(2);
-
-    let mut modified_files: HashSet<String> = HashSet::new();
-    let mut sensor_pass = true;
-    let mut sensor_found = false;
-    let mut active_verdict = "NONE";
-
-    // Collect global state from tool calls across earlier turns
-    for msg in messages.iter() {
-        if let Some(ref tool_calls) = msg.tool_calls {
-            for tc in tool_calls {
-                if tc.function.name == "write_file" || tc.function.name == "edit_file" {
-                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&tc.function.arguments) {
-                        if let Some(path) = val.get("file_path").and_then(|p| p.as_str()) {
-                            modified_files.insert(path.to_string());
-                        }
-                    }
-                }
-            }
-        }
-
-        if msg.role == Role::Tool {
-            if let Some(ref content) = msg.content {
-                if content.contains("PASS") || content.contains("[Exit Code: 0]") {
-                    sensor_found = true;
-                } else if content.contains("FAIL") || content.contains("[Exit Code: 1]") {
-                    sensor_found = true;
-                    sensor_pass = false;
-                }
-                if content.contains("CHANGES_REQUESTED") {
-                    active_verdict = "CHANGES_REQUESTED";
-                } else if content.contains("APPROVED_WITH_CAVEATS") {
-                    active_verdict = "CAVEATS";
-                }
-            }
-        }
-    }
-
-    // Apply snapshot to intermediate assistant messages
-    for i in 0..messages.len() {
-        let turn_index = turns[i];
-        if turn_index > 0 && turn_index < recent_cutoff && messages[i].role == Role::Assistant {
-            let should_replace = if let Some(ref content) = messages[i].content {
-                !content.contains("## 📌 Preserved Execution State") && content.len() > 150
-            } else {
-                false
-            };
-
-            if should_replace {
-                let files_str = if modified_files.is_empty() {
-                    "None detected".to_string()
-                } else {
-                    let mut sorted: Vec<_> = modified_files.iter().cloned().collect();
-                    sorted.sort();
-                    sorted.join(", ")
-                };
-
-                let sensor_str = if !sensor_found || sensor_pass {
-                    "Build: PASS, Linter: PASS"
-                } else {
-                    "Build: FAIL"
-                };
-
-                let snapshot = format!(
-                    "## 📌 Preserved Execution State\n- **Modified Files**: {}\n- **Sensor Status**: {}\n- **Exact Next Step**: Continuing autonomous implementation loop\n- **Active Blockers / Verdict**: {}",
-                    files_str, sensor_str, active_verdict
-                );
-
-                messages[i].content = Some(snapshot);
-                compressed_count += 1;
-            }
-        }
-    }
-
-    compressed_count
+    // Clutter removal: do not inject synthetic 'Preserved Execution State' into chat messages array
+    0
 }
 
 /// Full State-Preserving Context Compactor:
 /// 1. Enforces Immutable Anchors (Turn 0: System + User spec, and 2 most recent turns).
 /// 2. Executes Zero-Cost Log Evaporation on tool results older than 3 turns (> 500 chars).
-/// 3. Replaces intermediate conversational turns with Structured State Snapshots.
-/// 4. Generates and returns a comprehensive `CompactionReport`.
+/// 3. Generates and returns a comprehensive `CompactionReport`.
 pub fn compact_context_messages(
     messages: &mut Vec<ChatMessage>,
     current_turn: usize,
@@ -327,7 +240,7 @@ pub fn compact_context_messages(
     // 1. Evaporate bulky tool logs (> 500 chars, older than 3 turns)
     let evaporated_count = evaporate_tool_logs(messages, current_turn);
 
-    // 2. Compress intermediate conversational turns into structured snapshots
+    // 2. Do not inject clutter into messages
     let _ = compress_intermediate_turns(messages, current_turn);
 
     let tokens_after = estimate_tokens(messages);
@@ -359,7 +272,7 @@ pub fn compact_conversation(
     let snapshot_summary = if let Some(s) = current_snapshot {
         s.to_markdown()
     } else {
-        "## 📌 Preserved Execution State\n- **Modified Files**: None recorded\n- **Sensor Status**: PASS\n- **Exact Next Step**: Proceed\n- **Active Blockers / Verdict**: NONE".to_string()
+        String::new()
     };
 
     let compacted_chars: usize = messages

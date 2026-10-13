@@ -1276,8 +1276,9 @@ where
     let system_prompt = compile_primed_system_prompt(&config.repo_root, &config.role).await?;
 
     let initial_user_prompt = format!(
-        "# Assigned Task Ground Truth\n- Task ID: {}\n- Stage: {}\n- Title: {}\n- Working Directory: {:?}\n\n## Objective & Description\n{}",
-        config.task_id, config.stage_id, config.task_title, config.worktree_path, config.task_description.trim()
+        "# Objective: {}\n\n{}",
+        config.task_title,
+        config.task_description.trim()
     );
 
     let mut messages = vec![

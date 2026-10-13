@@ -58,6 +58,7 @@ pub struct AppState {
     pub repo_root: RwLock<PathBuf>,
     pub active_agents: Mutex<HashMap<String, Arc<AtomicBool>>>,
     pub agent_contexts: Mutex<HashMap<String, Arc<Mutex<crate::agent::compactor::AgentContextState>>>>,
+    pub tasks: Arc<Mutex<Vec<Task>>>,
 }
 
 impl AppState {
@@ -71,6 +72,7 @@ impl AppState {
             repo_root: RwLock::new(actual_root),
             active_agents: Mutex::new(HashMap::new()),
             agent_contexts: Mutex::new(HashMap::new()),
+            tasks: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -329,11 +331,18 @@ pub async fn save_cortex_file(
 #[tauri::command]
 pub async fn list_tasks(state: State<'_, AppState>) -> Result<Vec<Task>, String> {
     let root = state.get_root();
-    Ok(load_tasks_from_disk(&root).await)
+    let tasks = load_tasks_from_disk(&root).await;
+    if let Ok(mut guard) = state.tasks.lock() {
+        *guard = tasks.clone();
+    }
+    Ok(tasks)
 }
 
 #[tauri::command]
 pub async fn save_tasks(tasks: Vec<Task>, state: State<'_, AppState>) -> Result<(), String> {
+    if let Ok(mut guard) = state.tasks.lock() {
+        *guard = tasks.clone();
+    }
     let root = state.get_root();
     save_tasks_to_disk(&root, &tasks).await
 }
@@ -398,6 +407,9 @@ pub async fn create_task(
     }
 
     tasks.push(new_task.clone());
+    if let Ok(mut guard) = state.tasks.lock() {
+        *guard = tasks.clone();
+    }
     save_tasks_to_disk(&root, &tasks).await?;
 
     Ok(new_task)
@@ -483,6 +495,9 @@ pub async fn move_task_stage(
     current_task.updated_at = Utc::now().timestamp_millis();
 
     let updated = current_task.clone();
+    if let Ok(mut guard) = state.tasks.lock() {
+        *guard = tasks.clone();
+    }
     save_tasks_to_disk(&root, &tasks).await?;
 
     Ok(updated)
@@ -495,13 +510,31 @@ pub async fn run_agent(
     state: State<'_, AppState>,
 ) -> Result<String, String> {
     let root = state.get_root();
-    let tasks = load_tasks_from_disk(&root).await;
 
-    let task = tasks
-        .iter()
-        .find(|t| t.id == task_id)
-        .ok_or_else(|| format!("Task {} not found", task_id))?
-        .clone();
+    // Check in-memory task registry first
+    let task_opt = {
+        if let Ok(guard) = state.tasks.lock() {
+            guard.iter().find(|t| t.id == task_id).cloned()
+        } else {
+            None
+        }
+    };
+
+    let task = match task_opt {
+        Some(t) => t,
+        None => {
+            // If not found in memory, try disk
+            let disk_tasks = load_tasks_from_disk(&root).await;
+            if let Some(t) = disk_tasks.iter().find(|t| t.id == task_id).cloned() {
+                if let Ok(mut guard) = state.tasks.lock() {
+                    *guard = disk_tasks;
+                }
+                t
+            } else {
+                return Err(format!("Task {} not found", task_id));
+            }
+        }
+    };
 
     let pipeline = load_pipeline_config(&root)
         .await
@@ -701,13 +734,16 @@ pub async fn run_agent(
         map.insert(task_id.clone(), Arc::clone(&abort_flag));
     }
 
-    // Persist status "running" to tasks.json
+    // Persist status "running" to tasks.json and update state.tasks
     {
         let mut all_tasks = load_tasks_from_disk(&root).await;
         if let Some(t) = all_tasks.iter_mut().find(|t| t.id == task_id) {
             t.status = Some("running".to_string());
             t.updated_at = Utc::now().timestamp_millis();
             let _ = save_tasks_to_disk(&root, &all_tasks).await;
+        }
+        if let Ok(mut guard) = state.tasks.lock() {
+            *guard = all_tasks;
         }
     }
 
@@ -955,6 +991,11 @@ pub async fn run_agent(
                         let new_stage = updated_task.stage_id.clone();
 
                         let _ = save_tasks_to_disk(&root_task, &tasks).await;
+                        if let Some(state_ref) = app.try_state::<AppState>() {
+                            if let Ok(mut guard) = state_ref.tasks.lock() {
+                                *guard = tasks.clone();
+                            }
+                        }
 
                         // Trigger on_enter hook for the new stage if configured
                         if let Ok(pipeline) = load_pipeline_config(&root_task).await {
@@ -1044,6 +1085,11 @@ pub async fn run_agent(
                     tasks[task_idx].status = Some("error".to_string());
                     tasks[task_idx].updated_at = Utc::now().timestamp_millis();
                     let _ = save_tasks_to_disk(&root_task, &tasks).await;
+                    if let Some(state_ref) = app.try_state::<AppState>() {
+                        if let Ok(mut guard) = state_ref.tasks.lock() {
+                            *guard = tasks.clone();
+                        }
+                    }
                 }
             }
         }
@@ -1395,6 +1441,7 @@ pub async fn fetch_available_models(
 pub async fn select_project_folder(
     path: Option<String>,
     app_handle: AppHandle,
+    state: State<'_, AppState>,
 ) -> Result<Option<String>, String> {
     if let Some(p) = path {
         if !p.trim().is_empty() {
@@ -1402,6 +1449,11 @@ pub async fn select_project_folder(
             if path_buf.exists() && path_buf.is_dir() {
                 let _ = scaffold_cvh_project(&path_buf).await;
                 persist_active_project(&path_buf).await;
+                let _ = state.set_root(path_buf.clone());
+                let tasks = load_tasks_from_disk(&path_buf).await;
+                if let Ok(mut guard) = state.tasks.lock() {
+                    *guard = tasks;
+                }
                 return Ok(Some(path_buf.to_string_lossy().to_string()));
             }
         }
@@ -1424,6 +1476,11 @@ pub async fn select_project_folder(
     if let Some(ref folder) = selected {
         let _ = scaffold_cvh_project(folder).await;
         persist_active_project(folder).await;
+        let _ = state.set_root(folder.clone());
+        let tasks = load_tasks_from_disk(folder).await;
+        if let Ok(mut guard) = state.tasks.lock() {
+            *guard = tasks;
+        }
     }
 
     Ok(selected.map(|p| p.to_string_lossy().to_string()))
@@ -1453,6 +1510,12 @@ pub async fn set_active_project(
 
     // Update AppState repo_root using write lock
     state.set_root(new_path.clone())?;
+
+    // Reload state.tasks for the new project root
+    let new_tasks = load_tasks_from_disk(&new_path).await;
+    if let Ok(mut guard) = state.tasks.lock() {
+        *guard = new_tasks;
+    }
 
     // Register or update project in global registry
     let _ = register_or_update_project(None, &new_path).await;
@@ -1513,8 +1576,11 @@ pub async fn list_projects(state: State<'_, AppState>) -> Result<Vec<ProjectEntr
 
 // Backward-compatible alias for choose_project_folder
 #[tauri::command]
-pub async fn choose_project_folder(app_handle: AppHandle) -> Result<Option<String>, String> {
-    select_project_folder(None, app_handle).await
+pub async fn choose_project_folder(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    select_project_folder(None, app_handle, state).await
 }
 
 // Backward-compatible alias for set_project_root
