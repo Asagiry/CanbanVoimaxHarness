@@ -473,6 +473,80 @@ pub fn default_boards_config() -> BoardsConfig {
     }
 }
 
+pub fn get_canonical_board_columns() -> Vec<PipelineColumn> {
+    vec![
+        PipelineColumn {
+            id: "backlog".to_string(),
+            title: "Бэклог".to_string(),
+            color: Some("#64748b".to_string()),
+            icon: Some("Inbox".to_string()),
+            persona: None,
+            context_window: Some(128000),
+            model_override: None,
+            reasoning_effort: None,
+            temperature: None,
+            gatekeeper_sensor: None,
+            allowed_tools: Some(vec![
+                "read_file".to_string(),
+                "glob".to_string(),
+                "grep".to_string(),
+                "web_search".to_string(),
+                "web_fetch".to_string(),
+            ]),
+            hooks: HashMap::new(),
+            routes: None,
+            auto_run: None,
+            terminal: None,
+        },
+        PipelineColumn {
+            id: "dev".to_string(),
+            title: "В разработке".to_string(),
+            color: Some("#f59e0b".to_string()),
+            icon: Some("Code2".to_string()),
+            persona: Some("developer".to_string()),
+            context_window: Some(400000),
+            model_override: Some("gemini-3.8-flash-high".to_string()),
+            reasoning_effort: None,
+            temperature: Some(0.2),
+            gatekeeper_sensor: None,
+            allowed_tools: Some(vec![
+                "execute_command".to_string(),
+                "read_file".to_string(),
+                "edit_file".to_string(),
+                "write_file".to_string(),
+                "glob".to_string(),
+                "grep".to_string(),
+                "subagent".to_string(),
+            ]),
+            hooks: HashMap::new(),
+            routes: None,
+            auto_run: None,
+            terminal: None,
+        },
+        PipelineColumn {
+            id: "ready".to_string(),
+            title: "Готово".to_string(),
+            color: Some("#10b981".to_string()),
+            icon: Some("CheckCircle2".to_string()),
+            persona: None,
+            context_window: Some(64000),
+            model_override: None,
+            reasoning_effort: None,
+            temperature: None,
+            gatekeeper_sensor: None,
+            allowed_tools: Some(vec![
+                "read_file".to_string(),
+                "glob".to_string(),
+                "grep".to_string(),
+            ]),
+            hooks: HashMap::new(),
+            routes: None,
+            auto_run: None,
+            terminal: Some(true),
+        },
+    ]
+}
+
 pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
     match template.to_lowercase().as_str() {
         "modeler" | "3d" | "3d-modeler" => vec![
@@ -567,96 +641,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 terminal: Some(true),
             },
         ],
-        "kanban" | "simple" => vec![
-            PipelineColumn {
-                id: "todo".to_string(),
-                title: "К выполнению".to_string(),
-                color: Some("#64748b".to_string()),
-                icon: Some("Inbox".to_string()),
-                persona: None,
-                context_window: Some(128000),
-                model_override: None,
-                reasoning_effort: None,
-                temperature: None,
-                gatekeeper_sensor: None,
-                allowed_tools: None,
-                hooks: HashMap::new(),
-                routes: None,
-                auto_run: None,
-                terminal: None,
-            },
-            PipelineColumn {
-                id: "in_progress".to_string(),
-                title: "В работе".to_string(),
-                color: Some("#3b82f6".to_string()),
-                icon: Some("PlayCircle".to_string()),
-                persona: Some("developer".to_string()),
-                context_window: Some(400000),
-                model_override: Some("gemini-3.8-flash-high".to_string()),
-                reasoning_effort: None,
-                temperature: Some(0.2),
-                gatekeeper_sensor: None,
-                allowed_tools: None,
-                hooks: HashMap::new(),
-                routes: None,
-                auto_run: None,
-                terminal: None,
-            },
-            PipelineColumn {
-                id: "ready".to_string(),
-                title: "Готово".to_string(),
-                color: Some("#10b981".to_string()),
-                icon: Some("CheckCircle2".to_string()),
-                persona: None,
-                context_window: Some(64000),
-                model_override: None,
-                reasoning_effort: None,
-                temperature: None,
-                gatekeeper_sensor: None,
-                allowed_tools: None,
-                hooks: HashMap::new(),
-                routes: None,
-                auto_run: None,
-                terminal: Some(true),
-            },
-        ],
-        "empty" => vec![
-            PipelineColumn {
-                id: "backlog".to_string(),
-                title: "Бэклог".to_string(),
-                color: Some("#64748b".to_string()),
-                icon: Some("Inbox".to_string()),
-                persona: None,
-                context_window: Some(128000),
-                model_override: None,
-                reasoning_effort: None,
-                temperature: None,
-                gatekeeper_sensor: None,
-                allowed_tools: None,
-                hooks: HashMap::new(),
-                routes: None,
-                auto_run: None,
-                terminal: None,
-            },
-            PipelineColumn {
-                id: "ready".to_string(),
-                title: "Готово".to_string(),
-                color: Some("#10b981".to_string()),
-                icon: Some("CheckCircle2".to_string()),
-                persona: None,
-                context_window: Some(64000),
-                model_override: None,
-                reasoning_effort: None,
-                temperature: None,
-                gatekeeper_sensor: None,
-                allowed_tools: None,
-                hooks: HashMap::new(),
-                routes: None,
-                auto_run: None,
-                terminal: Some(true),
-            },
-        ],
-        _ => default_pipeline_config().columns,
+        _ => get_canonical_board_columns(),
     }
 }
 
@@ -1452,6 +1437,22 @@ mod tests {
         assert_eq!(cols[2].persona.as_deref(), Some("texture-artist"));
         assert_eq!(cols[3].id, "ready");
         assert_eq!(cols[3].terminal, Some(true));
+    }
+
+    #[test]
+    fn test_get_board_template_columns_canonical_default() {
+        let cols = get_board_template_columns("canonical");
+        assert_eq!(cols.len(), 3);
+        assert_eq!(cols[0].id, "backlog");
+        assert_eq!(cols[0].title, "Бэклог");
+        assert_eq!(cols[0].persona, None);
+        assert_eq!(cols[1].id, "dev");
+        assert_eq!(cols[1].title, "В разработке");
+        assert_eq!(cols[1].persona.as_deref(), Some("developer"));
+        assert_eq!(cols[2].id, "ready");
+        assert_eq!(cols[2].title, "Готово");
+        assert_eq!(cols[2].persona, None);
+        assert_eq!(cols[2].terminal, Some(true));
     }
 
     #[tokio::test]

@@ -4,8 +4,8 @@ import { useBoardStore } from '../../stores/boardStore';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import KanbanColumn from './KanbanColumn';
-import { KanbanTask, PipelineColumn, TaskStatus } from '../../types';
-import { Plus, X, Layout } from 'lucide-react';
+import { KanbanTask, PipelineColumn, TaskStatus, BoardDef } from '../../types';
+import { Plus, X, Layout, Pencil, Trash2 } from 'lucide-react';
 import CreateBoardModal from './CreateBoardModal';
 
 const COLUMN_PALETTE = [
@@ -88,6 +88,7 @@ export default function KanbanBoard() {
     boards,
     activeBoardId,
     setActiveBoard,
+    saveBoard,
     deleteBoard,
     saveCurrentBoard,
   } = useBoardStore();
@@ -243,6 +244,49 @@ export default function KanbanBoard() {
   const [isNewAgentSelected, setIsNewAgentSelected] = useState(false);
   const [newAgentName, setNewAgentName] = useState('');
   const [columnFormError, setColumnFormError] = useState<string | null>(null);
+
+  // Board tab context menu and inline renaming state
+  interface BoardContextMenuState {
+    x: number;
+    y: number;
+    boardId: string;
+  }
+  const [boardContextMenu, setBoardContextMenu] = useState<BoardContextMenuState | null>(null);
+  const [renamingBoardId, setRenamingBoardId] = useState<string | null>(null);
+  const [renamingBoardName, setRenamingBoardName] = useState('');
+
+  useEffect(() => {
+    if (!boardContextMenu) return;
+    const handleClose = () => setBoardContextMenu(null);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setBoardContextMenu(null);
+    };
+    window.addEventListener('click', handleClose);
+    window.addEventListener('contextmenu', handleClose);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('click', handleClose);
+      window.removeEventListener('contextmenu', handleClose);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [boardContextMenu]);
+
+  const handleCommitRename = async (board: BoardDef) => {
+    const trimmed = renamingBoardName.trim();
+    setRenamingBoardId(null);
+    if (!trimmed || trimmed === board.name) return;
+    await saveBoard({ ...board, name: trimmed });
+  };
+
+  const handleTabContextMenu = (e: React.MouseEvent, boardId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setBoardContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      boardId,
+    });
+  };
 
   // 1-second timer ticker interval for live cards
   useEffect(() => {
@@ -493,30 +537,79 @@ export default function KanbanBoard() {
         <div className="flex items-center space-x-1.5 overflow-x-auto py-0.5">
           {boards.map((b) => {
             const isActive = b.id === activeBoardId;
+            const isRenaming = renamingBoardId === b.id;
             const boardTasksCount = tasks.filter((t) => (t.boardId || 'development') === b.id).length;
             return (
-              <div key={b.id} className="group relative flex items-center">
-                <button
-                  onClick={() => setActiveBoard(b.id)}
-                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition cursor-pointer select-none ${
-                    isActive
-                      ? 'bg-[#171717] text-white shadow-xs'
-                      : 'bg-[#f4f4f5] hover:bg-[#e4e4e7] text-[#52525b] hover:text-[#171717]'
-                  }`}
-                >
-                  <Layout className="h-3.5 w-3.5" />
-                  <span>{b.name}</span>
-                  <span
-                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-medium ${
+              <div
+                key={b.id}
+                className="group relative flex items-center"
+                onContextMenu={(e) => handleTabContextMenu(e, b.id)}
+              >
+                {isRenaming ? (
+                  <div
+                    className={`flex items-center space-x-1 px-2 py-1 rounded-md text-xs font-medium border ${
                       isActive
-                        ? 'bg-[#27272a] text-[#d4d4d8]'
-                        : 'bg-[#e4e4e7] text-[#71717a]'
+                        ? 'bg-[#171717] border-[#171717] text-white shadow-xs'
+                        : 'bg-white border-[#171717] text-[#171717]'
                     }`}
                   >
-                    {boardTasksCount}
-                  </span>
-                </button>
-                {boards.length > 1 && (
+                    <Layout className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-white' : 'text-[#71717a]'}`} />
+                    <input
+                      type="text"
+                      autoFocus
+                      value={renamingBoardName}
+                      onChange={(e) => setRenamingBoardName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          void handleCommitRename(b);
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setRenamingBoardId(null);
+                        }
+                      }}
+                      onBlur={() => {
+                        void handleCommitRename(b);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className={`px-1.5 py-0.5 rounded text-xs outline-hidden w-28 sm:w-36 font-sans ${
+                        isActive
+                          ? 'bg-[#27272a] text-white border border-[#3f3f46]'
+                          : 'bg-[#fafafa] text-[#171717] border border-[#d4d4d8]'
+                      }`}
+                    />
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setActiveBoard(b.id)}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      setRenamingBoardId(b.id);
+                      setRenamingBoardName(b.name);
+                    }}
+                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition cursor-pointer select-none ${
+                      isActive
+                        ? 'bg-[#171717] text-white shadow-xs'
+                        : 'bg-[#f4f4f5] hover:bg-[#e4e4e7] text-[#52525b] hover:text-[#171717]'
+                    }`}
+                    title={`Доска: ${b.name} (ПКМ — контекстное меню, Двойной клик — переименовать)`}
+                  >
+                    <Layout className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate max-w-[140px]">{b.name}</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-medium shrink-0 ${
+                        isActive
+                          ? 'bg-[#27272a] text-[#d4d4d8]'
+                          : 'bg-[#e4e4e7] text-[#71717a]'
+                      }`}
+                    >
+                      {boardTasksCount}
+                    </span>
+                  </button>
+                )}
+                {!isRenaming && boards.length > 1 && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -940,6 +1033,61 @@ export default function KanbanBoard() {
           </div>
         </div>
       )}
+
+      {/* Board Tab Context Menu (ПКМ) */}
+      {boardContextMenu && (() => {
+        const targetBoard = boards.find((b) => b.id === boardContextMenu.boardId);
+        if (!targetBoard) return null;
+        return (
+          <div
+            className="fixed z-50 min-w-[190px] bg-white rounded-lg shadow-xl border border-[#ebebeb] py-1 text-xs font-sans animate-in fade-in zoom-in-95 duration-100 select-none"
+            style={{
+              top: Math.min(boardContextMenu.y, window.innerHeight - 120),
+              left: Math.min(boardContextMenu.x, window.innerWidth - 200),
+            }}
+            onClick={(e) => e.stopPropagation()}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            <div className="px-3 py-1 text-[10px] font-semibold text-[#a1a1aa] uppercase tracking-wider border-b border-[#f4f4f5] mb-1 truncate">
+              Доска: {targetBoard.name}
+            </div>
+            <button
+              onClick={() => {
+                setBoardContextMenu(null);
+                setRenamingBoardId(targetBoard.id);
+                setRenamingBoardName(targetBoard.name);
+              }}
+              className="w-full flex items-center space-x-2 px-3 py-1.5 text-left text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
+            >
+              <Pencil className="h-3.5 w-3.5 text-[#71717a]" />
+              <span>Переименовать доску</span>
+            </button>
+            <button
+              onClick={() => {
+                setBoardContextMenu(null);
+                if (boards.length <= 1) return;
+                if (
+                  window.confirm(
+                    `Удалить доску «${targetBoard.name}»? Все задачи этой доски будут перенесены на активную доску.`
+                  )
+                ) {
+                  void deleteBoard(targetBoard.id);
+                }
+              }}
+              disabled={boards.length <= 1}
+              className={`w-full flex items-center space-x-2 px-3 py-1.5 text-left transition ${
+                boards.length <= 1
+                  ? 'text-[#a1a1aa] cursor-not-allowed opacity-50'
+                  : 'text-red-600 hover:bg-red-50 hover:text-red-700 cursor-pointer'
+              }`}
+              title={boards.length <= 1 ? 'Нельзя удалить единственную доску' : undefined}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Удалить доску</span>
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Create Board Modal */}
       <CreateBoardModal

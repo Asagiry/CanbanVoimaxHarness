@@ -3,6 +3,49 @@ import { KanbanTask, PipelineColumn, TaskStatus, TaskVerdict, TaskPriority, Boar
 import { INITIAL_COLUMNS } from './mockData';
 import { useProjectStore } from './projectStore';
 
+export const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
+  {
+    id: 'backlog',
+    title: 'Бэклог',
+    color: '#64748b',
+    icon: 'Inbox',
+    persona: null,
+    contextWindow: 128000,
+    modelOverride: null,
+    wipLimit: 10,
+    hooks: {},
+  },
+  {
+    id: 'dev',
+    title: 'В разработке',
+    color: '#f59e0b',
+    icon: 'Code2',
+    persona: 'developer',
+    contextWindow: 400000,
+    modelOverride: 'gemini-3.8-flash-high',
+    temperature: 0.2,
+    wipLimit: 3,
+    hooks: {
+      on_enter: '.cvh/hooks/on_enter_dev.bat',
+    },
+    gatekeeperSensor: 'cargo check',
+  },
+  {
+    id: 'ready',
+    title: 'Готово',
+    color: '#10b981',
+    icon: 'CheckCircle2',
+    persona: null,
+    terminal: true,
+    contextWindow: 64000,
+    modelOverride: null,
+    hooks: {
+      on_enter: '.cvh/hooks/on_finish_done.bat',
+    },
+    gatekeeperSensor: 'cargo check & npm run build',
+  },
+];
+
 export const DEFAULT_BOARD: BoardDef = {
   id: 'development',
   name: 'Разработка',
@@ -261,7 +304,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       const { invoke } = await import('@tauri-apps/api/core');
       const newBoard = await invoke<BoardDef>('create_board', {
         name: trimmed,
-        template: template || null,
+        template: template || 'canonical',
       });
       if (newBoard) {
         set((state) => ({
@@ -280,7 +323,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const newBoard: BoardDef = {
       id: uniqueId,
       name: trimmed,
-      columns: INITIAL_COLUMNS,
+      columns: CANONICAL_BOARD_COLUMNS,
     };
     set((state) => ({
       boards: [...state.boards, newBoard],
