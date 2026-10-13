@@ -41,3 +41,4 @@ llm.json
 .env.local
 *.local
 .cvh/worktrees/
+package-lock.json
