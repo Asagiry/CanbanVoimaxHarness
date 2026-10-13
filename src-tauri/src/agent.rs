@@ -57,6 +57,7 @@ pub struct Task {
 #[serde(tag = "type", content = "payload")]
 pub enum AgentEvent {
     Token(String),
+    Output(String),
     Thought(String),
     ToolCall {
         id: String,
@@ -1101,6 +1102,7 @@ pub struct AgentSessionConfig {
     pub task_id: String,
     pub task_title: String,
     pub task_description: String,
+    pub steer_prompt: Option<String>,
     pub base_url: String,
     pub api_key: Option<String>,
     pub model: String,
@@ -1270,6 +1272,13 @@ where
         ChatMessage::user(initial_user_prompt).with_cache_control(crate::llm::CacheControl::ephemeral()),
     ];
 
+    if let Some(ref steer) = config.steer_prompt {
+        let steer_trimmed = steer.trim();
+        if !steer_trimmed.is_empty() {
+            messages.push(ChatMessage::user(format!("[USER STEER]: {}", steer_trimmed)));
+        }
+    }
+
     // Tool Policy Matrix: filter out disabled tools when building schema array (saving tokens!)
     let tool_policy = load_tool_policies(&config.repo_root)
         .await
@@ -1393,6 +1402,9 @@ where
                             event_sink(AgentEvent::Token(text));
                         }
                     }
+                }
+                StreamChunk::Output(output) => {
+                    event_sink(AgentEvent::Output(output));
                 }
                 StreamChunk::Thought(thought) => {
                     event_sink(AgentEvent::Thought(thought));

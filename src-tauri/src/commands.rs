@@ -1358,32 +1358,40 @@ pub async fn run_agent(
         }
     };
 
-    // If an explicit prompt was provided by the user, merge it into task description
-    if let Some(p) = prompt {
+    // If an explicit prompt was provided by the user:
+    // - If task.description is empty (brand-new task without prompt), set initial description
+    // - If task already exists and has a description, DO NOT mutate task.description; pass steer message to LLM context
+    let steer_prompt = if let Some(p) = prompt {
         let p_trimmed = p.trim();
         if !p_trimmed.is_empty() {
             if task.description.trim().is_empty() {
                 task.description = p_trimmed.to_string();
-            } else if !task.description.contains(p_trimmed) {
-                task.description.push_str(&format!("\n\n[USER]: {}", p_trimmed));
-            }
-            task.updated_at = Utc::now().timestamp_millis();
+                task.updated_at = Utc::now().timestamp_millis();
 
-            // Persist description update immediately
-            let mut all_tasks = load_tasks_from_disk(&root).await;
-            if let Some(t) = all_tasks.iter_mut().find(|t| t.id == task_id) {
-                t.description = task.description.clone();
-                t.updated_at = task.updated_at;
-                let _ = save_tasks_to_disk(&root, &all_tasks).await;
-            }
-            if let Ok(mut guard) = app_handle.state::<AppState>().tasks.lock() {
-                if let Some(t) = guard.iter_mut().find(|t| t.id == task_id) {
+                // Persist description update immediately
+                let mut all_tasks = load_tasks_from_disk(&root).await;
+                if let Some(t) = all_tasks.iter_mut().find(|t| t.id == task_id) {
                     t.description = task.description.clone();
                     t.updated_at = task.updated_at;
+                    let _ = save_tasks_to_disk(&root, &all_tasks).await;
                 }
+                if let Ok(mut guard) = app_handle.state::<AppState>().tasks.lock() {
+                    if let Some(t) = guard.iter_mut().find(|t| t.id == task_id) {
+                        t.description = task.description.clone();
+                        t.updated_at = task.updated_at;
+                    }
+                }
+                None
+            } else {
+                // Task already exists with an objective: preserve pristine initial prompt, pass steer to dialogue context
+                Some(p_trimmed.to_string())
             }
+        } else {
+            None
         }
-    }
+    } else {
+        None
+    };
 
     let pipeline = load_pipeline_config(&root)
         .await
@@ -1622,6 +1630,7 @@ pub async fn run_agent(
         task_id: task.id.clone(),
         task_title: task.title.clone(),
         task_description: task.description.clone(),
+        steer_prompt,
         base_url,
         api_key,
         model,
@@ -1648,6 +1657,15 @@ pub async fn run_agent(
                         "token": &token
                     });
                     let _ = app_inner.emit("agent:token", &payload);
+                    let _ = app_inner.emit("agent:output", &payload);
+                }
+                AgentEvent::Output(output) => {
+                    let payload = serde_json::json!({
+                        "taskId": tid_inner,
+                        "output": &output,
+                        "content": &output,
+                        "token": &output
+                    });
                     let _ = app_inner.emit("agent:output", &payload);
                 }
                 AgentEvent::Thought(thought) => {
@@ -2616,17 +2634,15 @@ pub async fn steer_agent(
         }
     }
 
-    // Append steering instruction into task description on disk so subsequent priming contains it
+    // Update timestamp on task without polluting task.description with steer messages
     {
         let mut current_tasks = load_tasks_from_disk(&root).await;
         if let Some(t) = current_tasks.iter_mut().find(|t| t.id == task_id) {
-            t.description.push_str(&format!("\n\n[USER STEER]: {}", message));
             t.updated_at = Utc::now().timestamp_millis();
             let _ = save_tasks_to_disk(&root, &current_tasks).await;
         }
         if let Ok(mut guard) = state.tasks.lock() {
             if let Some(t) = guard.iter_mut().find(|t| t.id == task_id) {
-                t.description.push_str(&format!("\n\n[USER STEER]: {}", message));
                 t.updated_at = Utc::now().timestamp_millis();
             }
         }
