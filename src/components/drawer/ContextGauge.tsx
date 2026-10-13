@@ -4,18 +4,22 @@ import { CompactionReport } from '../../types';
 
 interface ContextGaugeProps {
   taskId: string;
+  turns?: number;
   contextWindow?: number;
   stageLimit?: number;
   currentEstimatedTokens?: number;
   onCompact?: () => Promise<{ savedTokens: number; evaporatedCount: number } | void>;
+  variant?: 'status-bar' | 'header-ring';
 }
 
 export default function ContextGauge({
   taskId,
+  turns,
   contextWindow,
   stageLimit = 128000,
   currentEstimatedTokens,
   onCompact,
+  variant = 'status-bar',
 }: ContextGaugeProps) {
   const effectiveLimit = contextWindow || stageLimit;
 
@@ -98,6 +102,14 @@ export default function ContextGauge({
     ? Math.round(totalUsedTokens / 1000)
     : (totalUsedTokens / 1000).toFixed(1);
   const maxTokensK = Math.round(effectiveLimit / 1000);
+
+  const calculatedTurns = useMemo(() => {
+    const tools = toolExecutions?.[taskId]?.length || 0;
+    const thoughts = streamEntries?.[taskId]?.thoughts?.length || 0;
+    const outputs = streamEntries?.[taskId]?.outputs?.length || 0;
+    return Math.max(tools + outputs, thoughts, 0);
+  }, [taskId, toolExecutions, streamEntries]);
+  const effectiveTurns = turns !== undefined ? turns : calculatedTurns;
 
   // Telemetry: cache hit % + output throughput (TPS) for the current measurement
   const telemetry = taskTelemetry?.[taskId];
@@ -208,141 +220,171 @@ export default function ContextGauge({
     }
   };
 
-  return (
-    <div className="relative group inline-flex items-center">
-      {/* Compact Circular Ring Trigger (28px) */}
-      <div
-        className="relative w-7 h-7 flex items-center justify-center cursor-pointer select-none rounded-full hover:ring-2 hover:ring-[#ebebeb] transition"
-        title={`Контекст: ${percent}% (~${usedTokensK}K / ${maxTokensK}K) · Кеш: ${cacheText} · TPS: ${tpsText}`}
-      >
-        <svg className="w-7 h-7 -rotate-90 transform" viewBox="0 0 28 28">
-          {/* Track circle */}
-          <circle
-            cx="14"
-            cy="14"
-            r={radius}
-            stroke="#e5e7eb"
-            strokeWidth="2.5"
-            fill="none"
-          />
-          {/* Progress circle */}
-          <circle
-            cx="14"
-            cy="14"
-            r={radius}
-            stroke={strokeColor}
-            strokeWidth="2.5"
-            strokeDasharray={circumference}
-            strokeDashoffset={strokeDashoffset}
-            strokeLinecap="round"
-            fill="none"
-            className="transition-all duration-300"
-          />
-        </svg>
-        <span className="absolute inset-0 flex items-center justify-center text-[8.5px] font-mono font-semibold text-[#171717] tabular-nums">
-          {percent}%
-        </span>
-      </div>
+  const miniCircumference = 2 * Math.PI * 6; // ~37.699
+  const miniStrokeDashoffset = miniCircumference - (miniCircumference * percent) / 100;
 
-      {/* Всегда видимые Кеш/TPS справа от кольца */}
-      <span className="ml-1.5 font-mono text-[10px] text-[#666666] tabular-nums whitespace-nowrap">
-        <span title={cacheTitle}>Кеш {cacheText}</span>
-        <span> · </span>
-        <span title={tpsTitle}>{tpsText} TPS</span>
+  if (variant === 'header-ring') {
+    return (
+      <div className="relative group inline-flex items-center">
+        <div
+          className="relative w-7 h-7 flex items-center justify-center cursor-pointer select-none rounded-full hover:ring-2 hover:ring-[#ebebeb] transition"
+          title={`Контекст: ${percent}% (~${usedTokensK}K / ${maxTokensK}K) · Кеш: ${cacheText} · TPS: ${tpsText}`}
+        >
+          <svg className="w-7 h-7 -rotate-90 transform" viewBox="0 0 28 28">
+            <circle cx="14" cy="14" r={radius} stroke="#e5e7eb" strokeWidth="2.5" fill="none" />
+            <circle
+              cx="14"
+              cy="14"
+              r={radius}
+              stroke={strokeColor}
+              strokeWidth="2.5"
+              strokeDasharray={circumference}
+              strokeDashoffset={strokeDashoffset}
+              strokeLinecap="round"
+              fill="none"
+              className="transition-all duration-300"
+            />
+          </svg>
+          <span className="absolute inset-0 flex items-center justify-center text-[8.5px] font-mono font-semibold text-[#171717] tabular-nums">
+            {percent}%
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Elegant bottom status bar under chat input card
+  return (
+    <div className="font-mono text-xs text-zinc-400 flex items-center justify-center gap-6 py-1.5 select-none">
+      {/* ⏱️ {turns} шагов · {tps} tok/s */}
+      <span className="flex items-center gap-1.5" title={tpsTitle}>
+        <span>⏱️</span>
+        <span className="tabular-nums">{effectiveTurns} шагов · {tpsText} tok/s</span>
       </span>
 
-      {/* Floating Hover Card (Vercel / ChatGPT Aesthetic) */}
-      <div className="absolute right-0 top-full mt-2 z-50 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-all duration-150 ease-out pointer-events-auto">
-        {/* Invisible hit bridge to prevent losing hover on cursor transition */}
-        <div className="absolute -top-3 left-0 right-0 h-3" />
+      {/* 💾 {tokens} tok · Кэш {cacheHitRate}% */}
+      <span className="flex items-center gap-1.5" title={cacheTitle}>
+        <span>💾</span>
+        <span className="tabular-nums">{usedTokensK}k tok · Кэш {cacheText}</span>
+      </span>
 
-        <div className="w-72 rounded-lg border border-[#ebebeb] bg-white p-3.5 shadow-md text-[#171717] select-none font-sans">
-          {/* Top Line */}
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <span className="font-semibold text-xs text-[#171717]">{percent}%</span>{' '}
-              <span className="text-xs text-[#666666]">of context used</span>
-            </div>
-            <span className="font-mono text-xs text-[#666666] tabular-nums">
-              ~{usedTokensK}K / {maxTokensK}K
-            </span>
-          </div>
+      {/* ○ {contextPercent}% (миниатюрное кольцо/круг контекста с popover) */}
+      <div className="relative group inline-flex items-center gap-1.5 cursor-pointer">
+        <div
+          className="relative w-3.5 h-3.5 flex items-center justify-center shrink-0"
+          title={`Контекст: ${percent}% (~${usedTokensK}K / ${maxTokensK}K)`}
+        >
+          <svg className="w-3.5 h-3.5 -rotate-90 transform" viewBox="0 0 16 16">
+            <circle cx="8" cy="8" r="6" stroke="#3f3f46" strokeWidth="2" fill="none" />
+            <circle
+              cx="8"
+              cy="8"
+              r="6"
+              stroke={strokeColor}
+              strokeWidth="2"
+              strokeDasharray={miniCircumference}
+              strokeDashoffset={miniStrokeDashoffset}
+              strokeLinecap="round"
+              fill="none"
+              className="transition-all duration-300"
+            />
+          </svg>
+        </div>
+        <span className="tabular-nums text-zinc-400">{percent}%</span>
 
-          {/* Segmented Progress Bar */}
-          <div className="w-full h-2 rounded-full bg-[#f4f4f5] overflow-hidden flex mb-3">
-            {systemPromptTokens > 0 && (
-              <div
-                style={{ width: `${systemPct}%` }}
-                className="h-full bg-[#71717a] transition-all duration-200"
-                title={`System prompt: ~${systemPromptTokens.toLocaleString('ru-RU')}`}
-              />
-            )}
-            {toolDefTokens > 0 && (
-              <div
-                style={{ width: `${toolPct}%` }}
-                className="h-full bg-[#8b5cf6] transition-all duration-200"
-                title={`Tool definitions: ~${toolDefTokens.toLocaleString('ru-RU')}`}
-              />
-            )}
-            {messageTokens > 0 && (
-              <div
-                style={{ width: `${msgPct}%` }}
-                className="h-full bg-[#3b82f6] transition-all duration-200"
-                title={`Messages: ~${messageTokens.toLocaleString('ru-RU')}`}
-              />
-            )}
-          </div>
+        {/* Floating Hover Card (pops UPWARDS above status bar) */}
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2.5 z-50 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-all duration-150 ease-out pointer-events-auto">
+          {/* Invisible hit bridge to prevent losing hover on cursor transition */}
+          <div className="absolute -bottom-3 left-0 right-0 h-3" />
 
-          {/* Legend List */}
-          <div className="space-y-1.5 text-xs">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <span className="w-2.5 h-2.5 rounded-xs bg-[#71717a] shrink-0" />
-                <span className="text-[#666666]">System prompt</span>
+          <div className="w-72 rounded-lg border border-[#ebebeb] bg-white p-3.5 shadow-xl text-[#171717] select-none font-sans">
+            {/* Top Line */}
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <span className="font-semibold text-xs text-[#171717]">{percent}%</span>{' '}
+                <span className="text-xs text-[#666666]">of context used</span>
               </div>
-              <span className="font-mono text-xs text-[#171717] tabular-nums">
-                ~{systemPromptTokens.toLocaleString('ru-RU')}
+              <span className="font-mono text-xs text-[#666666] tabular-nums">
+                ~{usedTokensK}K / {maxTokensK}K
               </span>
             </div>
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <span className="w-2.5 h-2.5 rounded-xs bg-[#8b5cf6] shrink-0" />
-                <span className="text-[#666666]">Tool definitions</span>
+            {/* Segmented Progress Bar */}
+            <div className="w-full h-2 rounded-full bg-[#f4f4f5] overflow-hidden flex mb-3">
+              {systemPromptTokens > 0 && (
+                <div
+                  style={{ width: `${systemPct}%` }}
+                  className="h-full bg-[#71717a] transition-all duration-200"
+                  title={`System prompt: ~${systemPromptTokens.toLocaleString('ru-RU')}`}
+                />
+              )}
+              {toolDefTokens > 0 && (
+                <div
+                  style={{ width: `${toolPct}%` }}
+                  className="h-full bg-[#8b5cf6] transition-all duration-200"
+                  title={`Tool definitions: ~${toolDefTokens.toLocaleString('ru-RU')}`}
+                />
+              )}
+              {messageTokens > 0 && (
+                <div
+                  style={{ width: `${msgPct}%` }}
+                  className="h-full bg-[#3b82f6] transition-all duration-200"
+                  title={`Messages: ~${messageTokens.toLocaleString('ru-RU')}`}
+                />
+              )}
+            </div>
+
+            {/* Legend List */}
+            <div className="space-y-1.5 text-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="w-2.5 h-2.5 rounded-xs bg-[#71717a] shrink-0" />
+                  <span className="text-[#666666]">System prompt</span>
+                </div>
+                <span className="font-mono text-xs text-[#171717] tabular-nums">
+                  ~{systemPromptTokens.toLocaleString('ru-RU')}
+                </span>
               </div>
-              <span className="font-mono text-xs text-[#171717] tabular-nums">
-                ~{toolDefTokens.toLocaleString('ru-RU')}
-              </span>
-            </div>
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <span className="w-2.5 h-2.5 rounded-xs bg-[#3b82f6] shrink-0" />
-                <span className="text-[#666666]">Messages</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="w-2.5 h-2.5 rounded-xs bg-[#8b5cf6] shrink-0" />
+                  <span className="text-[#666666]">Tool definitions</span>
+                </div>
+                <span className="font-mono text-xs text-[#171717] tabular-nums">
+                  ~{toolDefTokens.toLocaleString('ru-RU')}
+                </span>
               </div>
-              <span className="font-mono text-xs text-[#171717] tabular-nums">
-                ~{messageTokens.toLocaleString('ru-RU')}
-              </span>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="w-2.5 h-2.5 rounded-xs bg-[#3b82f6] shrink-0" />
+                  <span className="text-[#666666]">Messages</span>
+                </div>
+                <span className="font-mono text-xs text-[#171717] tabular-nums">
+                  ~{messageTokens.toLocaleString('ru-RU')}
+                </span>
+              </div>
             </div>
-          </div>
 
-          {/* Action Row */}
-          <div className="mt-3 pt-2.5 border-t border-[#ebebeb] flex items-center justify-between">
-            <button
-              type="button"
-              onClick={handleCompactClick}
-              disabled={isCompacting}
-              className="px-2.5 py-1 rounded-md bg-[#fafafa] hover:bg-[#f4f4f5] border border-[#ebebeb] text-[#171717] text-[11px] font-mono transition cursor-pointer disabled:opacity-50 active:scale-[0.98]"
-              title="Компактировать контекст (compact_context)"
-            >
-              {isCompacting ? 'Сжатие...' : 'Компактировать'}
-            </button>
+            {/* Action Row */}
+            <div className="mt-3 pt-2.5 border-t border-[#ebebeb] flex items-center justify-between">
+              <button
+                type="button"
+                onClick={handleCompactClick}
+                disabled={isCompacting}
+                className="px-2.5 py-1 rounded-md bg-[#fafafa] hover:bg-[#f4f4f5] border border-[#ebebeb] text-[#171717] text-[11px] font-mono transition cursor-pointer disabled:opacity-50 active:scale-[0.98]"
+                title="Компактировать контекст (compact_context)"
+              >
+                {isCompacting ? 'Сжатие...' : 'Компактировать'}
+              </button>
 
-            {savingsBadge && (
-              <span className="text-[10px] font-mono text-[#b45309] truncate max-w-[130px]">
-                {savingsBadge}
-              </span>
-            )}
+              {savingsBadge && (
+                <span className="text-[10px] font-mono text-[#b45309] truncate max-w-[130px]">
+                  {savingsBadge}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>

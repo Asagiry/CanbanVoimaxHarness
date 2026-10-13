@@ -3,7 +3,7 @@ import { Draggable } from '@hello-pangea/dnd';
 import { KanbanTask, TaskStatus } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore, syncTasksBackend } from '../../stores/boardStore';
-import { Play, Clock, GitBranch, ChevronDown, MessageSquare, GitFork } from 'lucide-react';
+import { Play, Clock, GitBranch, ChevronDown, MessageSquare, GitFork, X, Image as ImageIcon } from 'lucide-react';
 import TaskContextMenu from './TaskContextMenu';
 
 function formatStageDuration(totalSeconds: number): string {
@@ -28,9 +28,41 @@ interface KanbanCardProps {
 
 export default function KanbanCard({ task, index }: KanbanCardProps) {
   const { openDrawer } = useDrawerStore();
-  const { runTaskAgent, columns, hoveredTaskId, setHoveredTaskId, tasks } = useBoardStore();
+  const { runTaskAgent, columns, hoveredTaskId, setHoveredTaskId, tasks, updateTask } = useBoardStore();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [isSubtasksOpen, setIsSubtasksOpen] = useState(false);
+  const [isDragOverFile, setIsDragOverFile] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes('Files')) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOverFile(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOverFile(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOverFile(false);
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          updateTask(task.id, { coverImage: dataUrl });
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  };
 
   const taskColumn = columns.find((c) => c.id === task.columnId);
   const canRunAgent = Boolean(taskColumn?.persona);
@@ -138,14 +170,51 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
             onContextMenu={handleContextMenu}
             onMouseEnter={() => setHoveredTaskId(task.id)}
             onMouseLeave={() => setHoveredTaskId(null)}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
             className={`group relative mb-2 rounded-md border p-3 cursor-pointer select-none transition duration-150 active:scale-[0.99] ${
               snapshot.isDragging
                 ? 'border-[#171717] shadow-md bg-white z-40'
+                : isDragOverFile
+                ? 'border-blue-500 ring-2 ring-blue-500/40 bg-blue-50/20 shadow-md'
                 : isHighlighted
                 ? 'border-[#8b5cf6] shadow-md ring-1 ring-[#8b5cf6]/40 bg-white'
                 : 'border-[#ebebeb] bg-white hover:border-[#d4d4d8] shadow-xs'
             }`}
           >
+            {/* Drag over file overlay indicator */}
+            {isDragOverFile && (
+              <div className="absolute inset-0 bg-blue-500/10 border-2 border-dashed border-blue-500 rounded-md z-30 flex items-center justify-center backdrop-blur-2xs pointer-events-none">
+                <div className="flex items-center gap-1.5 text-xs font-mono text-blue-600 bg-white/95 px-2.5 py-1 rounded shadow-xs">
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  <span>Установить обложку</span>
+                </div>
+              </div>
+            )}
+
+            {/* Cover Image Preview (Linear / Trello style) */}
+            {task.coverImage && (
+              <div className="relative mb-2.5 -mx-3 -mt-3 rounded-t-md overflow-hidden bg-zinc-900 border-b border-[#ebebeb] group/cover max-h-36">
+                <img
+                  src={task.coverImage}
+                  alt={task.title}
+                  className="w-full h-28 object-cover transition-transform duration-200 group-hover/cover:scale-105"
+                />
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    updateTask(task.id, { coverImage: undefined });
+                  }}
+                  className="absolute top-1.5 right-1.5 p-1 rounded-full bg-black/60 hover:bg-black/90 text-white opacity-0 group-hover/cover:opacity-100 transition shadow-xs cursor-pointer"
+                  title="Удалить обложку"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+
             {/* Header: ID, Play Button, Parent link & Concise Status */}
             <div className="flex items-center justify-between mb-2 gap-1.5 flex-wrap">
               <div className="flex items-center space-x-1.5">
