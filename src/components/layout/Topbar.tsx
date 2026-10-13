@@ -48,7 +48,7 @@ export default function Topbar() {
   };
 
   return (
-    <header className="h-9 w-full flex items-center justify-between px-3 border-b border-obsidian-800/80 bg-obsidian-900/90 select-none text-xs">
+    <header className="h-10 w-full flex items-center justify-between px-3.5 border-b border-[#ebebeb] bg-white select-none text-xs text-[#171717]">
       {/* Hidden Web Directory Picker */}
       <input
         ref={folderInputRef}
@@ -63,7 +63,7 @@ export default function Topbar() {
 
       {/* Left: Project Brand & Folder Picker */}
       <div className="flex items-center space-x-2">
-        <span className="font-semibold text-slate-200 text-xs tracking-tight font-sans">
+        <span className="font-semibold text-[#171717] text-xs tracking-tight font-sans">
           {activeProject.name || 'CanbanVoimaxHarness'}
         </span>
 
@@ -74,7 +74,7 @@ export default function Topbar() {
               switchProject(e.target.value);
               loadTasks();
             }}
-            className="bg-obsidian-850 hover:bg-obsidian-800 border border-obsidian-750 rounded px-2 py-0.5 text-xs text-slate-300 font-mono transition cursor-pointer"
+            className="bg-white hover:bg-[#f9f9f9] border border-[#ebebeb] rounded-md px-2 py-1 text-xs text-[#171717] font-mono transition cursor-pointer"
           >
             {availableProjects.map((p) => (
               <option key={p.id} value={p.id}>
@@ -86,10 +86,10 @@ export default function Topbar() {
 
         <button
           onClick={handleOpenFolderClick}
-          className="flex items-center space-x-1 px-2 py-0.5 rounded bg-obsidian-850 hover:bg-obsidian-800 border border-obsidian-750 text-slate-300 hover:text-white transition cursor-pointer font-sans text-xs"
+          className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-white hover:bg-[#f9f9f9] border border-[#ebebeb] text-[#4d4d4d] hover:text-[#171717] transition cursor-pointer font-sans text-xs"
           title="Выбрать папку проекта"
         >
-          <FolderOpen className="h-3 w-3 text-slate-400" />
+          <FolderOpen className="h-3.5 w-3.5 text-[#666666]" />
           <span>Открыть папку</span>
         </button>
       </div>
@@ -97,7 +97,7 @@ export default function Topbar() {
       {/* Center: Clean Search Bar */}
       <div className="flex items-center w-56 sm:w-64 max-w-sm">
         <div className="relative w-full">
-          <Search className="absolute left-2 top-1.5 h-3.5 w-3.5 text-slate-500 pointer-events-none" />
+          <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-[#8f8f8f] pointer-events-none" />
           <input
             id={searchInputId}
             name="kanbanBoardSearch"
@@ -105,16 +105,16 @@ export default function Topbar() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Поиск..."
-            className="w-full pl-7 pr-2 py-0.5 rounded bg-obsidian-950 border border-obsidian-800 text-xs text-slate-200 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500/70 font-mono transition"
+            className="w-full pl-8 pr-2.5 py-1 rounded-md bg-[#f9f9f9] border border-[#ebebeb] text-xs text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-sans transition"
           />
         </div>
       </div>
 
       {/* Right: Only Settings Icon */}
-      <div className="flex items-center space-x-1">
+      <div className="flex items-center space-x-1.5">
         <button
           onClick={openSettings}
-          className="p-1 rounded bg-obsidian-850 hover:bg-obsidian-800 border border-obsidian-750 text-slate-400 hover:text-slate-200 transition cursor-pointer"
+          className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] border border-[#ebebeb] text-[#666666] hover:text-[#171717] transition cursor-pointer"
           title="Настройки LLM"
         >
           <Settings className="h-3.5 w-3.5" />

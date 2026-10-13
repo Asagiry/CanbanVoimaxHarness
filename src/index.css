@@ -1,25 +1,16 @@
 @import "tailwindcss";
 
 @theme {
-  /* Deep layered Obsidian engineering palette (#07090e -> #0d1117 -> #161b22 -> #21262d) */
-  --color-obsidian-950: #07090e;
-  --color-obsidian-900: #0d1117;
-  --color-obsidian-850: #161b22;
-  --color-obsidian-800: #21262d;
-  --color-obsidian-750: #30363d;
-  --color-obsidian-700: #3c444d;
-  --color-obsidian-600: #484f58;
-
-  --color-slate-750: #263345;
-  --color-slate-650: #3e4c63;
-
-  /* High-intent, crisp neon accents */
-  --color-cyber-emerald: #10b981;
-  --color-cyber-amber: #f59e0b;
-  --color-cyber-crimson: #ef4444;
-  --color-cyber-cyan: #06b6d4;
-  --color-cyber-indigo: #6366f1;
-  --color-cyber-purple: #a855f7;
+  /* Vercel & ChatGPT Light Monochrome Design System */
+  --color-paper-white: #fafafa;
+  --color-pure-white: #ffffff;
+  --color-sidebar-mist: #f9f9f9;
+  --color-hairline: #ebebeb;
+  --color-hairline-darker: #d4d4d8;
+  --color-obsidian: #171717;
+  --color-charcoal: #4d4d4d;
+  --color-stone: #666666;
+  --color-muted-badge: #ebebeb;
 
   /* Strict Developer Monospace & Sans Hierarchy */
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -29,12 +20,12 @@
 @layer base {
   * {
     box-sizing: border-box;
-    border-color: var(--color-obsidian-800);
+    border-color: #ebebeb;
   }
 
   body {
-    background-color: var(--color-obsidian-950);
-    color: #e6edf3;
+    background-color: #fafafa;
+    color: #171717;
     font-family: var(--font-sans);
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
@@ -42,28 +33,28 @@
   }
 
   ::selection {
-    background-color: rgba(6, 182, 212, 0.25);
-    color: #a5f3fc;
+    background-color: #e5e5e5;
+    color: #171717;
   }
 }
 
-/* Tactile developer scrollbar (VS Code / Linear style) */
+/* Minimalist light scrollbar (Vercel / Apple / Linear style) */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0d1117;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #30363d;
-  border-radius: 2px;
+  background: #d4d4d8;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #484f58;
+  background: #a1a1aa;
 }
 
 /* Universal Monospace & Tabular figures */
@@ -74,5 +65,5 @@
 /* Subtle hairline utility */
 .border-hairline {
   border-width: 1px;
-  border-color: #21262d;
+  border-color: #ebebeb;
 }

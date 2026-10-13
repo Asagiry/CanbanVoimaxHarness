@@ -24,8 +24,8 @@ export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnP
   const isFocused = focusedStageId === column.id;
   const isAtWipLimit = column.wipLimit ? tasks.length >= column.wipLimit : false;
 
-  const getColumnIcon = (iconName: string, color: string) => {
-    const props = { className: 'h-3.5 w-3.5 shrink-0', style: { color } };
+  const getColumnIcon = (iconName: string) => {
+    const props = { className: 'h-3.5 w-3.5 shrink-0 text-[#171717]' };
     switch (iconName) {
       case 'Inbox':
         return <Inbox {...props} />;
@@ -46,27 +46,27 @@ export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnP
 
   return (
     <div
-      className={`flex flex-col w-72 shrink-0 h-full rounded-md bg-obsidian-900 border transition-all duration-150 select-none overflow-hidden ${
+      className={`flex flex-col w-72 shrink-0 h-full rounded-lg bg-[#f9f9f9] border transition-all duration-150 select-none overflow-hidden ${
         isFocused
-          ? 'border-cyan-500 shadow-sm shadow-cyan-950/40'
-          : 'border-obsidian-800 hover:border-obsidian-750'
+          ? 'border-[#171717] shadow-sm'
+          : 'border-[#ebebeb] hover:border-[#d4d4d8]'
       }`}
     >
       {/* Top Hairline Accent Bar */}
       <div
         className="h-[2px] w-full shrink-0"
-        style={{ backgroundColor: column.color }}
+        style={{ backgroundColor: column.color || '#171717' }}
       />
 
       {/* Column Header */}
       <div
         onClick={() => focusStage(column.id)}
-        className="px-2.5 py-1.5 border-b border-obsidian-800/80 bg-obsidian-900/80 hover:bg-obsidian-850/60 transition cursor-pointer group"
+        className="px-3 py-2 border-b border-[#ebebeb] bg-white hover:bg-[#fafafa] transition cursor-pointer group"
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2 min-w-0">
-            {getColumnIcon(column.icon, column.color)}
-            <h3 className="text-xs font-medium text-slate-200 group-hover:text-white truncate">
+            {getColumnIcon(column.icon)}
+            <h3 className="text-xs font-semibold text-[#171717] truncate">
               {column.title}
             </h3>
           </div>
@@ -76,8 +76,8 @@ export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnP
             <span
               className={`px-1.5 py-0.5 rounded font-mono text-[10px] tabular-nums leading-none border ${
                 isAtWipLimit
-                  ? 'bg-rose-950/40 text-rose-300 border-rose-500/50'
-                  : 'bg-obsidian-950 text-slate-400 border-obsidian-800'
+                  ? 'bg-red-50 text-red-700 border-red-200'
+                  : 'bg-[#ebebeb] text-[#171717] border-[#ebebeb]'
               }`}
             >
               {tasks.length}
@@ -90,7 +90,7 @@ export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnP
                   e.stopPropagation();
                   onAddTask(column.id);
                 }}
-                className="p-0.5 rounded text-slate-500 hover:text-slate-200 hover:bg-obsidian-800 transition cursor-pointer"
+                className="p-1 rounded text-[#666666] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
                 title="Добавить задачу"
               >
                 <Plus className="h-3 w-3" />
@@ -108,7 +108,7 @@ export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnP
             {...provided.droppableProps}
             className={`flex-1 p-2 overflow-y-auto min-h-[140px] transition-colors ${
               snapshot.isDraggingOver
-                ? 'bg-obsidian-850/60 border border-dashed border-cyan-500/40 rounded-b-md'
+                ? 'bg-[#f4f4f5] border border-dashed border-[#171717]/30 rounded-b-lg'
                 : 'bg-transparent'
             }`}
           >

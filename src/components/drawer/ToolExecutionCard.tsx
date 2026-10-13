@@ -24,19 +24,19 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   const getToolIcon = (name: string) => {
     switch (name) {
       case 'execute_command':
-        return <Terminal className="h-3 w-3 text-slate-400" />;
+        return <Terminal className="h-3.5 w-3.5 text-[#666666]" />;
       case 'edit_file':
       case 'str_replace':
       case 'write':
       case 'write_file':
-        return <FileEdit className="h-3 w-3 text-slate-400" />;
+        return <FileEdit className="h-3.5 w-3.5 text-[#666666]" />;
       case 'read':
       case 'read_file':
-        return <FileText className="h-3 w-3 text-slate-400" />;
+        return <FileText className="h-3.5 w-3.5 text-[#666666]" />;
       case 'web_search':
-        return <Globe className="h-3 w-3 text-slate-400" />;
+        return <Globe className="h-3.5 w-3.5 text-[#666666]" />;
       default:
-        return <Code2 className="h-3 w-3 text-slate-400" />;
+        return <Code2 className="h-3.5 w-3.5 text-[#666666]" />;
     }
   };
 
@@ -74,24 +74,24 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       const newLines = newString ? newString.split('\n') : [];
 
       return (
-        <div className="rounded border border-obsidian-800 bg-obsidian-950 overflow-hidden font-mono text-[11px]">
+        <div className="rounded-md border border-[#ebebeb] bg-[#fafafa] overflow-hidden font-mono text-[11px]">
           {filePath && (
-            <div className="flex items-center justify-between px-2.5 py-1 bg-obsidian-900 border-b border-obsidian-800 text-slate-400 text-[10px]">
-              <span className="truncate max-w-[340px] text-slate-300">
+            <div className="flex items-center justify-between px-2.5 py-1 bg-[#f4f4f5] border-b border-[#ebebeb] text-[#666666] text-[10px]">
+              <span className="truncate max-w-[340px] text-[#171717]">
                 {filePath}
               </span>
-              <span className="text-slate-500">Различия</span>
+              <span className="text-[#8f8f8f]">Различия</span>
             </div>
           )}
 
-          <div className="divide-y divide-obsidian-850 select-text overflow-x-auto max-h-64 font-mono">
+          <div className="divide-y divide-[#ebebeb] select-text overflow-x-auto max-h-64 font-mono">
             {oldLines.map((line, idx) => (
               <div
                 key={`old-${idx}`}
-                className="flex items-start bg-rose-950/20 text-rose-300 px-2 py-0.5 leading-relaxed"
+                className="flex items-start bg-[#fef2f2] text-[#991b1b] px-2 py-0.5 leading-relaxed"
               >
-                <span className="w-4 shrink-0 text-rose-500 select-none text-center">-</span>
-                <span className="w-8 shrink-0 text-slate-600 select-none text-right pr-2 tabular-nums">
+                <span className="w-4 shrink-0 text-[#ef4444] select-none text-center">-</span>
+                <span className="w-8 shrink-0 text-[#8f8f8f] select-none text-right pr-2 tabular-nums">
                   {idx + 1}
                 </span>
                 <span className="whitespace-pre-wrap break-all">{line || ' '}</span>
@@ -101,10 +101,10 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             {newLines.map((line, idx) => (
               <div
                 key={`new-${idx}`}
-                className="flex items-start bg-emerald-950/20 text-emerald-300 px-2 py-0.5 leading-relaxed"
+                className="flex items-start bg-[#f0fdf4] text-[#166534] px-2 py-0.5 leading-relaxed"
               >
-                <span className="w-4 shrink-0 text-emerald-500 select-none text-center">+</span>
-                <span className="w-8 shrink-0 text-slate-600 select-none text-right pr-2 tabular-nums">
+                <span className="w-4 shrink-0 text-[#22c55e] select-none text-center">+</span>
+                <span className="w-8 shrink-0 text-[#8f8f8f] select-none text-right pr-2 tabular-nums">
                   {idx + 1}
                 </span>
                 <span className="whitespace-pre-wrap break-all">{line || ' '}</span>
@@ -119,68 +119,68 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   };
 
   return (
-    <div className="rounded border border-obsidian-800 bg-obsidian-900 overflow-hidden text-xs">
+    <div className="rounded-md border border-[#ebebeb] bg-white overflow-hidden text-xs shadow-xs">
       {/* Tool Header */}
       <div
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center justify-between px-3 py-1.5 bg-obsidian-850 hover:bg-obsidian-800 cursor-pointer transition select-none"
+        className="flex items-center justify-between px-3 py-2 bg-[#f9f9f9] hover:bg-[#f4f4f5] cursor-pointer transition select-none"
       >
         <div className="flex items-center space-x-2 min-w-0">
           {isExpanded ? (
-            <ChevronDown className="h-3 w-3 text-slate-400 shrink-0" />
+            <ChevronDown className="h-3.5 w-3.5 text-[#666666] shrink-0" />
           ) : (
-            <ChevronRight className="h-3 w-3 text-slate-400 shrink-0" />
+            <ChevronRight className="h-3.5 w-3.5 text-[#666666] shrink-0" />
           )}
 
           <div className="p-0.5 shrink-0">
             {getToolIcon(tool.toolName)}
           </div>
 
-          <span className="font-mono font-medium text-slate-300 truncate">
+          <span className="font-mono font-medium text-[#171717] truncate">
             {tool.toolName}
           </span>
         </div>
 
-        <div className="flex items-center space-x-2 shrink-0 text-[10px] font-mono">
-          <span className="flex items-center space-x-1 text-slate-500 tabular-nums">
-            <Clock className="h-2.5 w-2.5" />
+        <div className="flex items-center space-x-2.5 shrink-0 text-[10px] font-mono">
+          <span className="flex items-center space-x-1 text-[#666666] tabular-nums">
+            <Clock className="h-3 w-3" />
             <span>{formatDurationMs(tool.durationMs)}</span>
           </span>
 
           {tool.status === 'success' && (
-            <span className="text-emerald-400 tabular-nums">
+            <span className="text-[#15803d] font-medium tabular-nums">
               код: {tool.exitCode ?? 0}
             </span>
           )}
 
           {tool.status === 'failed' && (
-            <span className="text-rose-400 tabular-nums">
+            <span className="text-[#b91c1c] font-medium tabular-nums">
               код: {tool.exitCode ?? 1}
             </span>
           )}
 
           {tool.status === 'running' && (
-            <span className="text-amber-400">
+            <span className="text-[#b45309] font-medium">
               выполняется...
             </span>
           )}
 
           <button
             onClick={handleCopyLogs}
-            className="p-1 rounded text-slate-500 hover:text-white transition cursor-pointer"
+            className="p-1 rounded-md text-[#666666] hover:text-[#171717] hover:bg-white transition cursor-pointer"
             title="Скопировать вывод"
           >
-            {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+            {copied ? <Check className="h-3.5 w-3.5 text-[#15803d]" /> : <Copy className="h-3.5 w-3.5" />}
           </button>
         </div>
       </div>
 
       {/* Expanded Body */}
       {isExpanded && (
-        <div className="p-2.5 border-t border-obsidian-800 space-y-2 font-mono text-xs bg-obsidian-950">
+        <div className="p-3 border-t border-[#ebebeb] space-y-2.5 font-mono text-xs bg-white">
           {isDiffTool && (oldString !== undefined || newString !== undefined) ? (
             <div>
-              <span className="text-[10px] text-slate-500 block mb-1">
+              <span className="text-[10px] text-[#666666] block mb-1">
                 Изменения файлов (Diff)
               </span>
               {renderUnifiedDiff()}
@@ -189,10 +189,10 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             tool.params &&
             Object.keys(tool.params).length > 0 && (
               <div>
-                <span className="text-[10px] text-slate-500 block mb-1">
+                <span className="text-[10px] text-[#666666] block mb-1">
                   Параметры вызова
                 </span>
-                <pre className="p-2 rounded bg-obsidian-900 border border-obsidian-800 text-[11px] text-slate-300 overflow-x-auto leading-relaxed">
+                <pre className="p-2.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[11px] text-[#171717] overflow-x-auto leading-relaxed">
                   {JSON.stringify(tool.params, null, 2)}
                 </pre>
               </div>
@@ -201,10 +201,10 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
           {tool.stdout && (
             <div>
-              <span className="text-[10px] text-slate-500 block mb-1">
+              <span className="text-[10px] text-[#666666] block mb-1">
                 Стандартный вывод (stdout)
               </span>
-              <pre className="p-2 rounded bg-obsidian-900 border border-obsidian-800 text-[11px] text-slate-300 overflow-x-auto leading-relaxed max-h-40 whitespace-pre-wrap select-text">
+              <pre className="p-2.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[11px] text-[#171717] overflow-x-auto leading-relaxed max-h-40 whitespace-pre-wrap select-text">
                 {tool.stdout}
               </pre>
             </div>
@@ -212,10 +212,10 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
           {tool.stderr && (
             <div>
-              <span className="text-[10px] text-rose-400 block mb-1">
+              <span className="text-[10px] text-[#b91c1c] block mb-1">
                 Трассировка ошибок (stderr)
               </span>
-              <pre className="p-2 rounded bg-rose-950/20 border border-rose-900/40 text-[11px] text-rose-300 overflow-x-auto leading-relaxed max-h-40 whitespace-pre-wrap select-text">
+              <pre className="p-2.5 rounded-md bg-[#fef2f2] border border-[#fecaca] text-[11px] text-[#991b1b] overflow-x-auto leading-relaxed max-h-40 whitespace-pre-wrap select-text">
                 {tool.stderr}
               </pre>
             </div>

@@ -16,7 +16,7 @@ export default function App() {
   }, [loadTasks]);
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-obsidian-950 text-slate-100 select-none">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#fafafa] text-[#171717] select-none">
       {/* Top Navigation Bar */}
       <Topbar />
 

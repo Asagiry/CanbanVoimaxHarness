@@ -66,9 +66,9 @@ export default function ContextGauge({
   const percentage = Math.min(100, Math.round((currentTokens / effectiveLimit) * 100));
 
   const barColor = useMemo(() => {
-    if (percentage < 50) return 'bg-emerald-500';
+    if (percentage < 50) return 'bg-[#171717]';
     if (percentage <= 75) return 'bg-amber-500';
-    return 'bg-rose-500';
+    return 'bg-red-500';
   }, [percentage]);
 
   const triggerSavingsNotice = useCallback((savedCount: number) => {
@@ -149,16 +149,16 @@ export default function ContextGauge({
     <div className="flex flex-col space-y-1.5 py-1 text-xs font-mono select-none">
       {/* Toast */}
       {savingsBadge && (
-        <div className="text-[11px] text-amber-400 font-mono">
+        <div className="text-[11px] text-[#b45309] font-mono">
           {savingsBadge}
         </div>
       )}
 
       {/* Row */}
-      <div className="flex items-center justify-between text-slate-400 text-[11px]">
+      <div className="flex items-center justify-between text-[#666666] text-[11px]">
         <div className="flex items-center space-x-2">
           <span>Контекст:</span>
-          <span className="text-slate-200 tabular-nums">
+          <span className="text-[#171717] font-medium tabular-nums">
             {currentTokens.toLocaleString('ru-RU')} / {effectiveLimit.toLocaleString('ru-RU')} ({percentage}%)
           </span>
         </div>
@@ -166,7 +166,7 @@ export default function ContextGauge({
         <button
           onClick={handleCompactClick}
           disabled={isCompacting}
-          className="px-2 py-0.5 rounded bg-obsidian-950 hover:bg-obsidian-800 border border-obsidian-750 text-slate-300 hover:text-white transition cursor-pointer text-[10px]"
+          className="px-2 py-0.5 rounded-md bg-white hover:bg-[#f4f4f5] border border-[#ebebeb] text-[#171717] hover:text-[#0d0d0d] transition cursor-pointer text-[10px]"
           title="Компактировать контекст"
         >
           {isCompacting ? 'Сжатие...' : 'Компактировать контекст'}
@@ -174,7 +174,7 @@ export default function ContextGauge({
       </div>
 
       {/* Thin minimalist progress bar */}
-      <div className="w-full h-1 rounded-full bg-obsidian-950 overflow-hidden">
+      <div className="w-full h-1.5 rounded-full bg-[#ebebeb] overflow-hidden">
         <div
           className={`h-full transition-all duration-200 ${barColor}`}
           style={{ width: `${Math.max(2, percentage)}%` }}

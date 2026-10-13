@@ -112,16 +112,16 @@ export default function SettingsModal() {
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 animate-in fade-in duration-100">
-        <div className="relative flex flex-col w-[500px] max-w-full rounded-lg border border-obsidian-750 bg-obsidian-900 shadow-2xl p-5 text-slate-200">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-100">
+        <div className="relative flex flex-col w-[500px] max-w-full rounded-lg border border-[#ebebeb] bg-white shadow-2xl p-5 text-[#171717]">
           {/* Header */}
-          <div className="flex items-center justify-between pb-3 border-b border-obsidian-800">
+          <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb]">
             <div className="flex items-center space-x-2">
-              <h2 className="text-sm font-semibold text-white tracking-tight">Настройки LLM</h2>
+              <h2 className="text-sm font-semibold text-[#171717] tracking-tight">Настройки LLM</h2>
             </div>
             <button
               onClick={closeSettings}
-              className="p-1 rounded text-slate-400 hover:text-white hover:bg-obsidian-800 transition cursor-pointer"
+              className="p-1 rounded-md text-[#666666] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
               title="Закрыть"
             >
               <X className="h-4 w-4" />
@@ -132,7 +132,7 @@ export default function SettingsModal() {
           <form onSubmit={handleSubmit} className="mt-4 space-y-3.5 text-xs font-mono">
             {/* Provider */}
             <div className="space-y-1">
-              <label htmlFor={providerId} className="block text-slate-400 font-sans text-xs">
+              <label htmlFor={providerId} className="block text-[#4d4d4d] font-sans text-xs font-medium">
                 Провайдер
               </label>
               <div className="relative">
@@ -140,7 +140,7 @@ export default function SettingsModal() {
                   id={providerId}
                   value={settings.provider}
                   onChange={(e) => setSettings({ provider: e.target.value })}
-                  className="w-full rounded bg-obsidian-950 border border-obsidian-750 px-2.5 py-1.5 text-slate-200 focus:outline-hidden focus:border-cyan-500 font-mono transition"
+                  className="w-full rounded-md bg-[#fafafa] border border-[#ebebeb] px-2.5 py-1.5 text-[#171717] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono transition"
                 >
                   <option value="Antigravity Proxy">Antigravity Proxy</option>
                   <option value="OpenAI">OpenAI</option>
@@ -152,18 +152,18 @@ export default function SettingsModal() {
 
             {/* API Gateway URL */}
             <div className="space-y-1">
-              <label htmlFor={gatewayId} className="block text-slate-400 font-sans text-xs">
+              <label htmlFor={gatewayId} className="block text-[#4d4d4d] font-sans text-xs font-medium">
                 API Gateway URL
               </label>
               <div className="relative flex items-center">
-                <Globe className="absolute left-2.5 h-3.5 w-3.5 text-slate-500 pointer-events-none" />
+                <Globe className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] pointer-events-none" />
                 <input
                   id={gatewayId}
                   type="text"
                   value={settings.gatewayUrl}
                   onChange={(e) => setSettings({ gatewayUrl: e.target.value, baseUrl: e.target.value })}
                   placeholder="http://127.0.0.1:port/v1"
-                  className="w-full rounded bg-obsidian-950 border border-obsidian-750 pl-8 pr-2.5 py-1.5 text-slate-200 focus:outline-hidden focus:border-cyan-500 font-mono transition"
+                  className="w-full rounded-md bg-[#fafafa] border border-[#ebebeb] pl-8 pr-2.5 py-1.5 text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono transition"
                   required
                 />
               </div>
@@ -171,11 +171,11 @@ export default function SettingsModal() {
 
             {/* API Key (Masked) */}
             <div className="space-y-1">
-              <label htmlFor={apiKeyId} className="block text-slate-400 font-sans text-xs">
+              <label htmlFor={apiKeyId} className="block text-[#4d4d4d] font-sans text-xs font-medium">
                 API Key
               </label>
               <div className="relative flex items-center">
-                <KeyRound className="absolute left-2.5 h-3.5 w-3.5 text-slate-500 pointer-events-none" />
+                <KeyRound className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] pointer-events-none" />
                 <input
                   id={apiKeyId}
                   type={showApiKey ? 'text' : 'password'}
@@ -186,12 +186,12 @@ export default function SettingsModal() {
                       ? 'Не обязателен для локального прокси'
                       : 'sk-...'
                   }
-                  className="w-full rounded bg-obsidian-950 border border-obsidian-750 pl-8 pr-8 py-1.5 text-slate-200 focus:outline-hidden focus:border-cyan-500 font-mono transition"
+                  className="w-full rounded-md bg-[#fafafa] border border-[#ebebeb] pl-8 pr-8 py-1.5 text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono transition"
                 />
                 <button
                   type="button"
                   onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-2 p-1 text-slate-400 hover:text-slate-200 cursor-pointer"
+                  className="absolute right-2 p-1 text-[#666666] hover:text-[#171717] cursor-pointer"
                   title={showApiKey ? 'Скрыть ключ' : 'Показать ключ'}
                 >
                   {showApiKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
@@ -199,17 +199,17 @@ export default function SettingsModal() {
               </div>
             </div>
 
-            {/* Model Section with DSH-Style Selector & Fetcher */}
+            {/* Model Section */}
             <div className="space-y-1 pt-1">
               <div className="flex items-center justify-between">
-                <label htmlFor={modelId} className="block text-slate-400 font-sans text-xs">
+                <label htmlFor={modelId} className="block text-[#4d4d4d] font-sans text-xs font-medium">
                   Модель
                 </label>
                 <button
                   type="button"
                   onClick={handleFetchModels}
                   disabled={isFetchingModels}
-                  className="flex items-center space-x-1.5 text-[11px] font-sans font-medium text-cyan-400 hover:text-cyan-300 disabled:opacity-50 transition cursor-pointer px-1.5 py-0.5 rounded hover:bg-obsidian-800"
+                  className="flex items-center space-x-1.5 text-[11px] font-sans font-medium text-[#171717] hover:text-[#4d4d4d] disabled:opacity-50 transition cursor-pointer px-1.5 py-0.5 rounded-md hover:bg-[#f4f4f5]"
                   title="Получить доступные модели с сервера"
                 >
                   <RefreshCw className={`h-3 w-3 ${isFetchingModels ? 'animate-spin' : ''}`} />
@@ -219,25 +219,25 @@ export default function SettingsModal() {
 
               {isCustomModelInput ? (
                 <div className="relative flex items-center">
-                  <Cpu className="absolute left-2.5 h-3.5 w-3.5 text-slate-500 pointer-events-none" />
+                  <Cpu className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] pointer-events-none" />
                   <input
                     id={modelId}
                     type="text"
                     value={settings.model}
                     onChange={(e) => setSettings({ model: e.target.value })}
                     placeholder="Название модели..."
-                    className="w-full rounded bg-obsidian-950 border border-obsidian-750 pl-8 pr-2.5 py-1.5 text-slate-200 focus:outline-hidden focus:border-cyan-500 font-mono transition"
+                    className="w-full rounded-md bg-[#fafafa] border border-[#ebebeb] pl-8 pr-2.5 py-1.5 text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono transition"
                     required
                   />
                 </div>
               ) : (
                 <div className="relative flex items-center">
-                  <Cpu className="absolute left-2.5 h-3.5 w-3.5 text-slate-500 pointer-events-none" />
+                  <Cpu className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] pointer-events-none" />
                   <select
                     id={modelId}
                     value={settings.model}
                     onChange={(e) => setSettings({ model: e.target.value })}
-                    className="w-full rounded bg-obsidian-950 border border-obsidian-750 pl-8 pr-2.5 py-1.5 text-slate-200 focus:outline-hidden focus:border-cyan-500 font-mono text-xs transition cursor-pointer"
+                    className="w-full rounded-md bg-[#fafafa] border border-[#ebebeb] pl-8 pr-2.5 py-1.5 text-[#171717] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono text-xs transition cursor-pointer"
                   >
                     {!availableModels.includes(settings.model) && settings.model && (
                       <option value={settings.model}>{settings.model}</option>
@@ -251,14 +251,14 @@ export default function SettingsModal() {
                 </div>
               )}
 
-              <div className="flex items-center justify-between text-[10px] text-slate-500 pt-0.5 font-sans">
+              <div className="flex items-center justify-between text-[10px] text-[#666666] pt-0.5 font-sans">
                 <span>
                   {availableModels.length} {availableModels.length === 1 ? 'модель' : 'моделей'} в списке
                 </span>
                 <button
                   type="button"
                   onClick={() => setIsCustomModelInput(!isCustomModelInput)}
-                  className="text-slate-400 hover:text-cyan-400 underline cursor-pointer"
+                  className="text-[#666666] hover:text-[#171717] underline cursor-pointer"
                 >
                   {isCustomModelInput ? 'Выбрать из списка' : 'Ввести вручную'}
                 </button>
@@ -266,18 +266,18 @@ export default function SettingsModal() {
             </div>
 
             {/* Action buttons */}
-            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-obsidian-800">
+            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#ebebeb]">
               <button
                 type="button"
                 onClick={closeSettings}
-                className="px-3 py-1.5 rounded bg-obsidian-800 hover:bg-obsidian-750 text-slate-300 font-sans text-xs transition cursor-pointer"
+                className="px-3 py-1.5 rounded-md bg-white border border-[#ebebeb] hover:bg-[#f4f4f5] text-[#171717] font-sans text-xs transition cursor-pointer"
               >
                 Отмена
               </button>
               <button
                 type="submit"
                 disabled={isSaving}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded bg-cyber-cyan hover:bg-cyan-400 text-obsidian-950 font-sans font-semibold text-xs transition cursor-pointer disabled:opacity-50"
+                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-md bg-[#171717] hover:bg-[#262626] text-white font-sans font-medium text-xs transition cursor-pointer disabled:opacity-50 shadow-xs"
               >
                 {saveStatus === 'saved' ? (
                   <>
@@ -293,19 +293,19 @@ export default function SettingsModal() {
         </div>
       </div>
 
-      {/* Modal Dialog: "Choose models to add" (Выбор моделей) */}
+      {/* Modal Dialog: "Choose models to add" */}
       {isChooseModelsModalOpen && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4 animate-in fade-in duration-100">
-          <div className="relative flex flex-col w-[520px] max-w-full rounded-lg border border-obsidian-750 bg-obsidian-900 shadow-2xl p-5 text-slate-200">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-100">
+          <div className="relative flex flex-col w-[520px] max-w-full rounded-lg border border-[#ebebeb] bg-white shadow-2xl p-5 text-[#171717]">
             {/* Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-obsidian-800">
+            <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb]">
               <div className="flex items-center space-x-2">
-                <Sparkles className="h-4 w-4 text-cyan-400" />
-                <h3 className="text-sm font-semibold text-white tracking-tight">Выбор моделей</h3>
+                <Sparkles className="h-4 w-4 text-[#171717]" />
+                <h3 className="text-sm font-semibold text-[#171717] tracking-tight">Выбор моделей</h3>
               </div>
               <button
                 onClick={() => setIsChooseModelsModalOpen(false)}
-                className="p-1 rounded text-slate-400 hover:text-white hover:bg-obsidian-800 transition cursor-pointer"
+                className="p-1 rounded-md text-[#666666] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
                 title="Закрыть"
               >
                 <X className="h-4 w-4" />
@@ -315,36 +315,36 @@ export default function SettingsModal() {
             {/* Search Input */}
             <div className="mt-4">
               <div className="relative flex items-center">
-                <Search className="absolute left-2.5 h-3.5 w-3.5 text-slate-500 pointer-events-none" />
+                <Search className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] pointer-events-none" />
                 <input
                   type="text"
                   value={searchFilter}
                   onChange={(e) => setSearchFilter(e.target.value)}
-                  placeholder="Поиск моделей (Search models)..."
-                  className="w-full rounded bg-obsidian-950 border border-obsidian-750 pl-8 pr-2.5 py-1.5 text-slate-200 text-xs focus:outline-hidden focus:border-cyan-500 font-sans transition"
+                  placeholder="Поиск моделей..."
+                  className="w-full rounded-md bg-[#fafafa] border border-[#ebebeb] pl-8 pr-2.5 py-1.5 text-[#171717] text-xs placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-sans transition"
                   autoFocus
                 />
               </div>
             </div>
 
             {/* Selection Quick Action & Count */}
-            <div className="mt-2.5 flex items-center justify-between text-xs text-slate-400 px-0.5 select-none font-sans">
+            <div className="mt-2.5 flex items-center justify-between text-xs text-[#666666] px-0.5 select-none font-sans">
               <button
                 type="button"
                 onClick={handleToggleSelectAll}
-                className="text-cyan-400 hover:text-cyan-300 font-medium cursor-pointer transition"
+                className="text-[#171717] hover:underline font-medium cursor-pointer transition"
               >
                 {selectedCandidateModels.size === filteredCandidates.length && filteredCandidates.length > 0
                   ? 'Снять выбор'
                   : 'Выбрать все'}
               </button>
-              <span className="text-[11px] text-slate-500 tabular-nums">
+              <span className="text-[11px] text-[#8f8f8f] tabular-nums">
                 Выбрано: {selectedCandidateModels.size} из {filteredCandidates.length}
               </span>
             </div>
 
             {/* Models Checkbox List */}
-            <div className="mt-2 border border-obsidian-800 rounded bg-obsidian-950 max-h-64 overflow-y-auto divide-y divide-obsidian-850">
+            <div className="mt-2 border border-[#ebebeb] rounded-md bg-white max-h-64 overflow-y-auto divide-y divide-[#ebebeb]">
               {filteredCandidates.length > 0 ? (
                 filteredCandidates.map((modelName) => {
                   const isChecked = selectedCandidateModels.has(modelName);
@@ -354,19 +354,19 @@ export default function SettingsModal() {
                       key={modelName}
                       onClick={() => toggleSelectCandidate(modelName)}
                       className={`flex items-center space-x-2.5 px-3 py-2 cursor-pointer transition select-none ${
-                        isChecked ? 'bg-cyan-950/20' : 'hover:bg-obsidian-850/60'
+                        isChecked ? 'bg-[#f4f4f5]' : 'hover:bg-[#fafafa]'
                       }`}
                     >
                       {isChecked ? (
-                        <CheckSquare className="h-4 w-4 text-cyan-400 shrink-0" />
+                        <CheckSquare className="h-4 w-4 text-[#171717] shrink-0" />
                       ) : (
-                        <Square className="h-4 w-4 text-slate-500 shrink-0" />
+                        <Square className="h-4 w-4 text-[#8f8f8f] shrink-0" />
                       )}
-                      <span className="font-mono text-xs text-slate-200 truncate flex-1">
+                      <span className="font-mono text-xs text-[#171717] truncate flex-1">
                         {modelName}
                       </span>
                       {isAlreadyAdded && (
-                        <span className="text-[10px] text-slate-500 bg-obsidian-900 border border-obsidian-800 px-1.5 py-0.2 rounded font-sans">
+                        <span className="text-[10px] text-[#666666] bg-[#f4f4f5] border border-[#ebebeb] px-1.5 py-0.5 rounded-md font-sans">
                           добавлена
                         </span>
                       )}
@@ -374,18 +374,18 @@ export default function SettingsModal() {
                   );
                 })
               ) : (
-                <div className="p-6 text-center text-xs text-slate-500 font-sans">
+                <div className="p-6 text-center text-xs text-[#8f8f8f] font-sans">
                   Модели не найдены
                 </div>
               )}
             </div>
 
             {/* Footer Buttons */}
-            <div className="flex items-center justify-end space-x-2 pt-4 mt-3 border-t border-obsidian-800">
+            <div className="flex items-center justify-end space-x-2 pt-4 mt-3 border-t border-[#ebebeb]">
               <button
                 type="button"
                 onClick={() => setIsChooseModelsModalOpen(false)}
-                className="px-3 py-1.5 rounded bg-obsidian-800 hover:bg-obsidian-750 text-slate-300 font-sans text-xs transition cursor-pointer"
+                className="px-3 py-1.5 rounded-md bg-white border border-[#ebebeb] hover:bg-[#f4f4f5] text-[#171717] font-sans text-xs transition cursor-pointer"
               >
                 Отмена
               </button>
@@ -393,7 +393,7 @@ export default function SettingsModal() {
                 type="button"
                 onClick={handleAddSelectedModels}
                 disabled={selectedCandidateModels.size === 0}
-                className="px-3.5 py-1.5 rounded bg-cyber-cyan hover:bg-cyan-400 text-obsidian-950 font-sans font-semibold text-xs transition cursor-pointer disabled:opacity-50"
+                className="px-3.5 py-1.5 rounded-md bg-[#171717] hover:bg-[#262626] text-white font-sans font-medium text-xs transition cursor-pointer disabled:opacity-50 shadow-xs"
               >
                 Добавить выбранные ({selectedCandidateModels.size})
               </button>
