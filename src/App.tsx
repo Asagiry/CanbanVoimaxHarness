@@ -7,15 +7,19 @@ import RuleEditorModal from './components/cortex/RuleEditorModal';
 import ToolPolicyModal from './components/settings/ToolPolicyModal';
 import SettingsModal from './components/settings/SettingsModal';
 import { useBoardStore } from './stores/boardStore';
+import { useProjectStore } from './stores/projectStore';
 import { useDrawerStore } from './stores/drawerStore';
 
 export default function App() {
   const { loadTasks } = useBoardStore();
+  const { loadProjects } = useProjectStore();
   const { appendThought, appendOutput, addToolExecution, updateToolExecution } = useDrawerStore();
 
   useEffect(() => {
-    loadTasks();
-  }, [loadTasks]);
+    loadProjects().then(() => {
+      loadTasks();
+    });
+  }, [loadProjects, loadTasks]);
 
   useEffect(() => {
     let unlisteners: (() => void)[] = [];
@@ -89,6 +93,11 @@ export default function App() {
           loadTasks();
         });
         unlisteners.push(u6);
+
+        const uProj = await listen<any>('project:changed', () => {
+          loadTasks();
+        });
+        unlisteners.push(uProj);
       } catch (e) {
         console.info('Tauri event listeners not active in web mode:', e);
       }

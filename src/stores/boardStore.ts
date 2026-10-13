@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { KanbanTask, PipelineColumn, TaskStatus, TaskVerdict, TaskPriority } from '../types';
 import { INITIAL_COLUMNS } from './mockData';
+import { useProjectStore } from './projectStore';
 
 interface BoardState {
   columns: PipelineColumn[];
@@ -17,9 +18,9 @@ interface BoardState {
   setSearchQuery: (query: string) => void;
 
   loadTasks: () => Promise<void>;
-  moveTask: (taskId: string, targetColumnId: string) => void;
+  moveTask: (taskId: string, targetColumnId: string) => Promise<void>;
   updateTask: (taskId: string, partial: Partial<KanbanTask>) => void;
-  addTask: (task: KanbanTask) => void;
+  addTask: (task: KanbanTask) => Promise<void>;
   deleteTask: (taskId: string) => void;
   setTaskVerdict: (taskId: string, verdict: TaskVerdict, note?: string) => void;
   toggleTimer: (taskId: string) => void;
@@ -37,12 +38,21 @@ const STAGE_ORDER: Record<string, number> = {
   ready: 4,
 };
 
-const TASKS_STORAGE_KEY = 'cvh_tasks_backup';
+export function getTasksStorageKey(): string {
+  try {
+    const activeProject = useProjectStore.getState().activeProject;
+    const activeProjectId = activeProject?.id || activeProject?.rootPath || 'default';
+    const cleanId = String(activeProjectId).replace(/[^a-zA-Z0-9_\-]/g, '_');
+    return `cvh_tasks_${cleanId}`;
+  } catch {
+    return 'cvh_tasks_default';
+  }
+}
 
 function persistTasksToLocalStorage(tasks: KanbanTask[]): void {
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
+      window.localStorage.setItem(getTasksStorageKey(), JSON.stringify(tasks));
     }
   } catch (err) {
     console.warn('Failed to write tasks backup to localStorage:', err);
@@ -52,7 +62,7 @@ function persistTasksToLocalStorage(tasks: KanbanTask[]): void {
 function loadTasksFromLocalStorage(): KanbanTask[] {
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
-      const raw = window.localStorage.getItem(TASKS_STORAGE_KEY);
+      const raw = window.localStorage.getItem(getTasksStorageKey());
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -66,7 +76,7 @@ function loadTasksFromLocalStorage(): KanbanTask[] {
   return [];
 }
 
-async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
+export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
   try {
     const { invoke } = await import('@tauri-apps/api/core');
     const backendPayload = tasks.map((t) => ({
@@ -144,11 +154,23 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const rawTasks = await invoke<any[]>('list_tasks');
-      if (Array.isArray(rawTasks) && rawTasks.length > 0) {
-        const mapped = rawTasks.map(mapBackendTaskToKanban);
-        set({ tasks: mapped, isTauriConnected: true, isLoadingTasks: false });
-        persistTasksToLocalStorage(mapped);
-        return;
+      if (Array.isArray(rawTasks)) {
+        if (rawTasks.length > 0) {
+          const mapped = rawTasks.map(mapBackendTaskToKanban);
+          set({ tasks: mapped, isTauriConnected: true, isLoadingTasks: false });
+          persistTasksToLocalStorage(mapped);
+          return;
+        } else {
+          // Backend has empty tasks array on disk: check per-project localStorage backup
+          const backupTasks = loadTasksFromLocalStorage();
+          if (backupTasks.length > 0) {
+            set({ tasks: backupTasks, isTauriConnected: true, isLoadingTasks: false });
+            await syncTasksBackend(backupTasks);
+            return;
+          }
+          set({ tasks: [], isTauriConnected: true, isLoadingTasks: false });
+          return;
+        }
       }
     } catch (err) {
       console.info('Tauri list_tasks not available or returned empty:', err);
@@ -158,14 +180,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const backupTasks = loadTasksFromLocalStorage();
     if (backupTasks.length > 0) {
       set({ tasks: backupTasks, isLoadingTasks: false });
-      syncTasksBackend(backupTasks);
+      await syncTasksBackend(backupTasks);
       return;
     }
 
     set({ tasks: [], isLoadingTasks: false });
   },
 
-  moveTask: (taskId, targetColumnId) => {
+  moveTask: async (taskId, targetColumnId) => {
     const { tasks, columns } = get();
     const task = tasks.find((t) => t.id === taskId);
     if (!task || task.columnId === targetColumnId) return;
@@ -219,10 +241,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
     set({ tasks: updatedTasks });
     persistTasksToLocalStorage(updatedTasks);
-    syncTasksBackend(updatedTasks);
+    await syncTasksBackend(updatedTasks);
 
     if (effectiveTargetCol === 'dev') {
-      triggerRunAgent(taskId);
+      await triggerRunAgent(taskId);
     }
   },
 
@@ -235,14 +257,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     });
   },
 
-  addTask: (task) => {
+  addTask: async (task) => {
     const updatedTasks = [task, ...get().tasks];
     set({ tasks: updatedTasks });
     persistTasksToLocalStorage(updatedTasks);
-    syncTasksBackend(updatedTasks);
+    await syncTasksBackend(updatedTasks);
 
     if (task.columnId === 'dev') {
-      triggerRunAgent(task.id);
+      await triggerRunAgent(task.id);
     }
   },
 
@@ -262,9 +284,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     if (!task) return;
 
     if (task.columnId !== 'dev') {
-      moveTask(taskId, 'dev');
+      await moveTask(taskId, 'dev');
     } else {
       updateTask(taskId, { status: 'running', isTimerRunning: true });
+      await syncTasksBackend(get().tasks);
       await triggerRunAgent(taskId);
     }
   },

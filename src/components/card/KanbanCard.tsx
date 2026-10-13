@@ -1,7 +1,7 @@
 import { Draggable } from '@hello-pangea/dnd';
 import { KanbanTask, TaskStatus } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
-import { useBoardStore } from '../../stores/boardStore';
+import { useBoardStore, syncTasksBackend } from '../../stores/boardStore';
 import { Code2, ShieldCheck, Sparkles, Bot, Palette, Play } from 'lucide-react';
 
 interface KanbanCardProps {
@@ -11,19 +11,12 @@ interface KanbanCardProps {
 
 export default function KanbanCard({ task, index }: KanbanCardProps) {
   const { openDrawer } = useDrawerStore();
-  const { moveTask } = useBoardStore();
+  const { tasks, runTaskAgent } = useBoardStore();
 
   const handleRunAgent = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (task.columnId !== 'dev') {
-      moveTask(task.id, 'dev');
-    }
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('run_agent', { taskId: task.id });
-    } catch (err) {
-      console.info('run_agent invoke failed or web mode:', err);
-    }
+    await syncTasksBackend(tasks);
+    await runTaskAgent(task.id);
   };
 
   const getPersonaIcon = (persona?: string) => {

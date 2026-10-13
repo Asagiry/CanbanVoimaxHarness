@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useId, useMemo } from 'react';
 import { useDrawerStore, DrawerActivityItem } from '../../stores/drawerStore';
-import { useBoardStore } from '../../stores/boardStore';
+import { useBoardStore, syncTasksBackend } from '../../stores/boardStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import ToolExecutionCard from './ToolExecutionCard';
 import ContextGauge from './ContextGauge';
@@ -334,6 +334,7 @@ export default function AgentConsoleDrawer() {
     setRunError(null);
     updateTask(task.id, { status: 'running', isTimerRunning: true });
     try {
+      await syncTasksBackend(tasks);
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('run_agent', { taskId: task.id });
     } catch (err: any) {
@@ -367,6 +368,7 @@ export default function AgentConsoleDrawer() {
 
     try {
       const { invoke } = await import('@tauri-apps/api/core');
+      await syncTasksBackend(tasks);
       if (isRunning) {
         await invoke('steer_agent', { taskId: task.id, message: trimmed });
       } else {
