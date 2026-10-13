@@ -217,5 +217,21 @@
       "Eliminated guarded .unwrap() on task.worktree_path in src-tauri/src/commands.rs run_agent in favor of idiomatic pattern matching per AGENTS.md § 2.2 Ponytail Minimalism."
     ],
     "timestamp": 1791889400000
+  },
+  "CVH-018": {
+    "taskId": "CVH-018",
+    "title": "Clean Activity Feed, Circular Context Gauge with Hover Card, LocalStorage Task Persistence, and Run Error Surface",
+    "author": "Lead Frontend Artisan (react-tailwind-artisan)",
+    "verdict": "APPROVED",
+    "commitHash": "905f7d6",
+    "commitMessage": "feat(ui): clean activity feed, circular context gauge with hover card, localStorage task persistence, and run error surface",
+    "summary": "Eliminated redundant filter tab bar to deliver a clean, uninterrupted chronological activity stream. Replaced the bulky horizontal context bar with an elegant 28px circular SVG progress ring and hover breakdown card (System prompt, Tool definitions, Messages) with compact context action. Fortified task persistence with dual-layer synchronization (Tauri backend save_tasks IPC + automatic localStorage backup cvh_tasks_backup) ensuring zero task loss on app cold start, window reloads, or web preview. Added immediate error transparency by surfacing run/status errors directly in the drawer with one-click retry execution.",
+    "files": [
+      "src/components/drawer/AgentConsoleDrawer.tsx",
+      "src/components/drawer/ContextGauge.tsx",
+      "src/stores/boardStore.ts"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1791898170000
   }
 }
