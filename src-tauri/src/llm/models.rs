@@ -216,7 +216,9 @@ pub struct OpenAIToolCallDelta {
 pub struct OpenAIDelta {
     pub role: Option<String>,
     pub content: Option<String>,
+    #[serde(default)]
     pub reasoning_content: Option<String>,
+    #[serde(default)]
     pub thought: Option<String>,
     pub tool_calls: Option<Vec<OpenAIToolCallDelta>>,
 }
@@ -226,6 +228,8 @@ pub struct OpenAIChoiceDelta {
     pub delta: OpenAIDelta,
     pub finish_reason: Option<String>,
     pub index: Option<usize>,
+    #[serde(default)]
+    pub reasoning_content: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

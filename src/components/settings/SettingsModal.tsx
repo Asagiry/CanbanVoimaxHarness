@@ -146,6 +146,10 @@ export default function SettingsModal() {
                   <option value="OpenAI">OpenAI</option>
                   <option value="Anthropic">Anthropic</option>
                   <option value="Ollama">Ollama</option>
+                  {!['Antigravity Proxy', 'OpenAI', 'Anthropic', 'Ollama', 'Custom'].includes(settings.provider) && (
+                    <option value={settings.provider}>{settings.provider}</option>
+                  )}
+                  <option value="Custom">Custom</option>
                 </select>
               </div>
             </div>
