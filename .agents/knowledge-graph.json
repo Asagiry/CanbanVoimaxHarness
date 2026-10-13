@@ -128,6 +128,31 @@
         "Autonomous task advancement engine along per-task customFlow stages (or dynamic pipeline fallback) with auto-triggering of on_enter lifecycle hooks.",
         "Evaluates agent review verdicts (APPROVED, APPROVED_WITH_CAVEATS, CHANGES_REQUESTED) and dynamically routes tasks back to dev or forward to next stage / ready."
       ]
+    },
+    {
+      "name": "ZeroCredentialLeakInvariant",
+      "entityType": "Invariant",
+      "observations": [
+        "Strict prohibition against committing personal API keys, bearer tokens, or office IP addresses to Git.",
+        "Credentials reside strictly in gitignored local files (.cvh/llm.json, .env*, *.secret, *.key) or runtime UI inputs.",
+        "Default base URLs point to local proxy (http://127.0.0.1:8045/v1) and default keys evaluate to empty strings."
+      ]
+    },
+    {
+      "name": "ReasoningStreamParser",
+      "entityType": "Subsystem",
+      "observations": [
+        "Rust backend SSE streamer extracting delta.reasoning_content, choice.reasoning_content, and delta.thought into StreamChunk::Thought.",
+        "Emits unified desktop events agent:thought with taskId, thought, and delta for live thinking display."
+      ]
+    },
+    {
+      "name": "StreamCoalescer",
+      "entityType": "Subsystem",
+      "observations": [
+        "Frontend Zustand drawerStore sliding-window (3000ms) stream coalescer for thought and output deltas.",
+        "Prevents live streaming token card explosion and avoids thousands of unnecessary micro-renders in React."
+      ]
     }
   ],
   "relations": [
@@ -225,6 +250,21 @@
       "from": "CustomFlowOrchestrator",
       "to": "DynamicPipelineEngine",
       "relationType": "extends"
+    },
+    {
+      "from": "CanbanVoimaxHarness",
+      "to": "ZeroCredentialLeakInvariant",
+      "relationType": "enforces"
+    },
+    {
+      "from": "UniversalLlmStreamer",
+      "to": "ReasoningStreamParser",
+      "relationType": "parses_with"
+    },
+    {
+      "from": "FrontendControlPlane",
+      "to": "StreamCoalescer",
+      "relationType": "optimizes_with"
     }
   ]
 }

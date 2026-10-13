@@ -152,5 +152,28 @@
     ],
     "ftrScore": "100%",
     "timestamp": 1791830400000
+  },
+  "CVH-014": {
+    "taskId": "CVH-014",
+    "title": "Real AI Proxy 8045, reasoning_content SSE Streaming, and customFlow Promotion",
+    "author": "agent-developer (tauri-rust-engineer & react-tailwind-artisan)",
+    "verdict": "APPROVED",
+    "commitHash": "3146e73",
+    "mergeCommitHash": "40232db",
+    "commitMessage": "feat(runtime): wire real AI proxy 8045, reasoning_content SSE parsing, and remove stub fallbacks",
+    "summary": "Implemented dynamic multi-provider resolution pointing to local AI proxy (http://127.0.0.1:8045/v1) with gitignored credentials. Extended Rust backend SSE streaming client to parse both delta-level and choice-level reasoning_content and thought payloads into StreamChunk::Thought. Wired Tauri desktop events (agent:thought, agent:output, agent:tool_call, task:moved, agent:finished, agent:status) into React frontend App with 3000ms sliding-window thought and token stream coalescing in drawerStore. Implemented custom_flow boundary fallbacks for stage promotion and removed synthetic fallback model stubs in settingsStore to ensure real network errors bubble directly to UI. Achieved 100% First-Time-Right score with zero regressions and zero compiler warnings.",
+    "files": [
+      ".cvh/config.json",
+      "src/stores/settingsStore.ts",
+      "src/stores/drawerStore.ts",
+      "src/components/settings/SettingsModal.tsx",
+      "src/App.tsx",
+      "src-tauri/src/commands.rs",
+      "src-tauri/src/config.rs",
+      "src-tauri/src/llm/client.rs",
+      "src-tauri/src/llm/models.rs"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1791836000000
   }
 }

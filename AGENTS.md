@@ -127,3 +127,10 @@
 - Never leave front-end stores invoking deprecated stub command names (e.g., `compact_task_context`) while the backend exposes a new unified handler.
 - If backward-compatible coexistence is required during migration, wrap the primary invocation in a typed fallback ladder (`try { invoke('new_cmd') } catch { invoke('legacy_cmd') }`).
 
+### 2.10 Zero-Credential Leak & Local Environment Invariant
+- **Zero Secrets in Git Invariant**: NEVER hardcode personal API keys, bearer tokens, authorization headers, or private office/corporate IP addresses into Git-committed source files, configuration templates (`.cvh/config.json`), or task ledger entries.
+- **Gitignored Local Credentials**: Secrets and machine-local endpoint overrides MUST reside strictly in gitignored files (`.cvh/llm.json`, `.env*`, `*.secret`, `*.key`) or be injected dynamically at runtime via the UI (`SettingsModal`). Default API key factories in Rust and TypeScript MUST evaluate to empty strings (`String::new()`, `""`).
+- **Zero-Mocking Error Transparency**: Network and model discovery failures from dynamic endpoints MUST bubble directly to UI error notifications. Subagents and frontend stores are STRICTLY FORBIDDEN from masking real network or authentication failures with synthetic fallback model stubs or hardcoded lists.
+- **Reasoning Stream Coalescing**: Real-time token and reasoning deltas (`reasoning_content`, `thought`) streaming from LLMs over SSE or Tauri desktop events MUST be coalesced in frontend stores (e.g. 3-second sliding window) to prevent card explosion and avoid thousands of microscopic VDOM allocations.
+
+

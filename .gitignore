@@ -35,4 +35,9 @@ Thumbs.db
 **/.cvh/llm.json
 llm.json
 *.secret
+*.key
+.env
+.env.*
+.env.local
+*.local
 .cvh/worktrees/
