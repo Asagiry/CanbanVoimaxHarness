@@ -30,11 +30,10 @@ interface BoardState {
 // Stage sequence order to compute rework returns
 const STAGE_ORDER: Record<string, number> = {
   backlog: 0,
-  todo: 1,
-  dev: 2,
-  review: 3,
-  retro: 4,
-  ready: 5,
+  dev: 1,
+  review: 2,
+  retro: 3,
+  ready: 4,
 };
 
 function mapBackendTaskToKanban(t: any): KanbanTask {
@@ -54,6 +53,7 @@ function mapBackendTaskToKanban(t: any): KanbanTask {
     isTimerRunning: t.isTimerRunning ?? (t.stageId === 'dev'),
     returnsCount: t.returnsCount || 0,
     fastTrack: t.fastTrack,
+    customFlow: t.customFlow || t.custom_flow,
     verdict: (t.verdict as TaskVerdict) || 'NONE',
     verdictNote: t.verdictNote,
   };
@@ -197,6 +197,27 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
 
+    // Custom pipeline flow priority
+    if (task.customFlow && task.customFlow.length > 0) {
+      if (task.columnId === 'backlog') {
+        moveTask(taskId, task.customFlow[0]);
+        return;
+      }
+      const currentIndexInFlow = task.customFlow.indexOf(task.columnId);
+      if (currentIndexInFlow >= 0 && currentIndexInFlow < task.customFlow.length - 1) {
+        const nextStage = task.customFlow[currentIndexInFlow + 1];
+        moveTask(taskId, nextStage);
+        return;
+      } else if (currentIndexInFlow === -1) {
+        const currentOrder = STAGE_ORDER[task.columnId] ?? 0;
+        const nextStage = task.customFlow.find((s) => (STAGE_ORDER[s] ?? 0) > currentOrder) || task.customFlow[0];
+        moveTask(taskId, nextStage);
+        return;
+      }
+      return;
+    }
+
+    // Default sequential promotion
     const currentIndex = columns.findIndex((c) => c.id === task.columnId);
     if (currentIndex >= 0 && currentIndex < columns.length - 1) {
       const nextCol = columns[currentIndex + 1];

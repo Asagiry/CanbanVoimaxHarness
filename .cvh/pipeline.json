@@ -20,21 +20,6 @@
       "hooks": {}
     },
     {
-      "id": "todo",
-      "title": "Очередь",
-      "color": "#3b82f6",
-      "icon": "ListTodo",
-      "persona": null,
-      "contextWindow": 128000,
-      "modelOverride": null,
-      "toolPermissions": [
-        "read_file",
-        "glob",
-        "grep"
-      ],
-      "hooks": {}
-    },
-    {
       "id": "dev",
       "title": "В разработке",
       "color": "#f59e0b",

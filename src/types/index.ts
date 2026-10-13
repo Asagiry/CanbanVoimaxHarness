@@ -25,6 +25,7 @@ export interface KanbanTask {
   isTimerRunning: boolean;
   returnsCount: number;
   fastTrack?: FastTrackConfig;
+  customFlow?: string[];
   verdict?: TaskVerdict;
   verdictNote?: string;
 }

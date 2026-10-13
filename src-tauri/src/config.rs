@@ -319,17 +319,6 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
                     "hooks": {}
                 },
                 {
-                    "id": "todo",
-                    "title": "Todo Queue",
-                    "color": "#3b82f6",
-                    "icon": "ListTodo",
-                    "persona": null,
-                    "contextWindow": 128000,
-                    "modelOverride": null,
-                    "allowedTools": ["read_file", "glob", "grep"],
-                    "hooks": {}
-                },
-                {
                     "id": "dev",
                     "title": "In Development",
                     "color": "#f59e0b",

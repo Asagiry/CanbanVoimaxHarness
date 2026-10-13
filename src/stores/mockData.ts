@@ -13,17 +13,6 @@ export const INITIAL_COLUMNS: PipelineColumn[] = [
     hooks: {},
   },
   {
-    id: 'todo',
-    title: 'Очередь',
-    color: '#3b82f6',
-    icon: 'ListTodo',
-    persona: null,
-    contextWindow: 128000,
-    modelOverride: null,
-    wipLimit: 5,
-    hooks: {},
-  },
-  {
     id: 'dev',
     title: 'В разработке',
     color: '#f59e0b',
@@ -101,7 +90,6 @@ export const INITIAL_TASKS: KanbanTask[] = [
     status: 'running',
     activeStageDuration: 863, // 14m 23s
     stageDurations: {
-      todo: 240, // 4m
       dev: 863,
     },
     totalElapsed: 1103,
@@ -124,7 +112,6 @@ export const INITIAL_TASKS: KanbanTask[] = [
     status: 'waiting_review',
     activeStageDuration: 345, // 5m 45s
     stageDurations: {
-      todo: 180,
       dev: 1420,
       review: 345,
     },
@@ -150,7 +137,6 @@ export const INITIAL_TASKS: KanbanTask[] = [
     status: 'running',
     activeStageDuration: 190,
     stageDurations: {
-      todo: 90,
       dev: 980,
       review: 410,
       retro: 190,
@@ -195,7 +181,6 @@ export const INITIAL_TASKS: KanbanTask[] = [
     status: 'running',
     activeStageDuration: 520,
     stageDurations: {
-      todo: 60,
       dev: 520,
       review: 310,
     },
@@ -227,7 +212,7 @@ export const INITIAL_TASKS: KanbanTask[] = [
     title: 'Валидатор правил системного контекста агентов',
     description: 'Аудит системных инструкций до первого шага для предотвращения повторного чтения файлов правил во время работы.',
     priority: 'medium',
-    columnId: 'todo',
+    columnId: 'backlog',
     persona: 'reviewer',
     branch: 'feat/cvh-007-priming',
     worktreePath: 'worktrees/cvh-007-priming',

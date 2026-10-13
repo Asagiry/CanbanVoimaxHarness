@@ -1,18 +1,38 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { useBoardStore } from '../../stores/boardStore';
 import KanbanColumn from './KanbanColumn';
 import { KanbanTask } from '../../types';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Check, ArrowRight } from 'lucide-react';
+
+const STAGE_LABELS: Record<string, { label: string; color: string }> = {
+  dev: { label: 'Разработка', color: '#f59e0b' },
+  review: { label: 'Ревью', color: '#a855f7' },
+  retro: { label: 'Ретро', color: '#06b6d4' },
+  ready: { label: 'Готово', color: '#10b981' },
+};
 
 export default function KanbanBoard() {
   const { columns, tasks, searchQuery, moveTask, addTask, tickTimers } = useBoardStore();
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
   const [targetColumnForNew, setTargetColumnForNew] = useState<string>('backlog');
 
-  // New task form fields - no priority!
+  // New task form fields
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
+
+  // Custom Pipeline Flow stages toggles
+  const [enableReview, setEnableReview] = useState(true);
+  const [enableRetro, setEnableRetro] = useState(true);
+
+  // Active Flow computed chain
+  const activeFlow = useMemo(() => {
+    const flow = ['dev'];
+    if (enableReview) flow.push('review');
+    if (enableRetro) flow.push('retro');
+    flow.push('ready');
+    return flow;
+  }, [enableReview, enableRetro]);
 
   // 1-second timer ticker interval for live cards
   useEffect(() => {
@@ -37,6 +57,8 @@ export default function KanbanBoard() {
     setTargetColumnForNew(columnId);
     setNewTitle('');
     setNewDescription('');
+    setEnableReview(true);
+    setEnableRetro(true);
     setIsNewTaskModalOpen(true);
   };
 
@@ -64,6 +86,11 @@ export default function KanbanBoard() {
       totalElapsed: 0,
       isTimerRunning: targetColumnForNew === 'dev',
       returnsCount: 0,
+      customFlow: activeFlow,
+      fastTrack: {
+        noReview: !enableReview,
+        noRetro: !enableRetro,
+      },
       verdict: 'NONE',
     };
 
@@ -128,10 +155,10 @@ export default function KanbanBoard() {
         </div>
       </DragDropContext>
 
-      {/* Clean Add Task Modal without priority field */}
+      {/* Add Task Modal with Custom Flow Selector */}
       {isNewTaskModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 animate-in fade-in duration-100">
-          <div className="relative flex flex-col w-[440px] max-w-full rounded-lg border border-obsidian-750 bg-obsidian-900 shadow-xl p-4 text-slate-200">
+          <div className="relative flex flex-col w-[480px] max-w-full rounded-lg border border-obsidian-750 bg-obsidian-900 shadow-xl p-4 text-slate-200">
             <div className="flex items-center justify-between pb-2.5 border-b border-obsidian-800">
               <h3 className="text-sm font-semibold text-white">
                 Новая задача
@@ -165,7 +192,7 @@ export default function KanbanBoard() {
                   Описание
                 </label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
                   placeholder="Детали и требования к задаче..."
@@ -175,7 +202,7 @@ export default function KanbanBoard() {
 
               <div>
                 <label className="block font-sans text-slate-400 mb-1">
-                  Колонка
+                  Колонка размещения
                 </label>
                 <select
                   value={targetColumnForNew}
@@ -188,6 +215,100 @@ export default function KanbanBoard() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Custom Pipeline Flow Selector */}
+              <div className="space-y-2 pt-2 border-t border-obsidian-800">
+                <div className="flex items-center justify-between">
+                  <label className="block font-sans text-slate-400 font-medium">
+                    Кастомная цепочка (Custom Pipeline Flow)
+                  </label>
+                  <span className="text-[10px] text-cyan-400 font-mono">
+                    {enableReview && enableRetro
+                      ? 'Полный цикл'
+                      : !enableReview && !enableRetro
+                      ? 'Fast-track'
+                      : 'Выборочно'}
+                  </span>
+                </div>
+
+                {/* Interactive Stage Chips */}
+                <div className="flex items-center gap-1.5">
+                  {/* Dev: always on */}
+                  <div
+                    className="flex items-center space-x-1 px-2.5 py-1 rounded bg-amber-950/40 border border-amber-600/40 text-amber-300 font-mono text-[11px] cursor-not-allowed select-none"
+                    title="Разработка обязательна"
+                  >
+                    <Check className="h-3 w-3 text-amber-400" />
+                    <span>Разработка</span>
+                  </div>
+
+                  {/* Review: toggleable */}
+                  <button
+                    type="button"
+                    onClick={() => setEnableReview(!enableReview)}
+                    className={`flex items-center space-x-1 px-2.5 py-1 rounded border font-mono text-[11px] transition cursor-pointer select-none ${
+                      enableReview
+                        ? 'bg-purple-950/40 border-purple-500/50 text-purple-300 hover:bg-purple-900/40'
+                        : 'bg-obsidian-950 border-obsidian-800 text-slate-500 hover:text-slate-300 hover:border-obsidian-700'
+                    }`}
+                  >
+                    {enableReview ? (
+                      <Check className="h-3 w-3 text-purple-400" />
+                    ) : (
+                      <X className="h-3 w-3 text-slate-500" />
+                    )}
+                    <span>Ревью</span>
+                  </button>
+
+                  {/* Retro: toggleable */}
+                  <button
+                    type="button"
+                    onClick={() => setEnableRetro(!enableRetro)}
+                    className={`flex items-center space-x-1 px-2.5 py-1 rounded border font-mono text-[11px] transition cursor-pointer select-none ${
+                      enableRetro
+                        ? 'bg-cyan-950/40 border-cyan-500/50 text-cyan-300 hover:bg-cyan-900/40'
+                        : 'bg-obsidian-950 border-obsidian-800 text-slate-500 hover:text-slate-300 hover:border-obsidian-700'
+                    }`}
+                  >
+                    {enableRetro ? (
+                      <Check className="h-3 w-3 text-cyan-400" />
+                    ) : (
+                      <X className="h-3 w-3 text-slate-500" />
+                    )}
+                    <span>Ретро</span>
+                  </button>
+
+                  {/* Ready: always destination */}
+                  <div
+                    className="flex items-center space-x-1 px-2.5 py-1 rounded bg-emerald-950/40 border border-emerald-600/40 text-emerald-300 font-mono text-[11px] cursor-not-allowed select-none"
+                    title="Готово (финал)"
+                  >
+                    <Check className="h-3 w-3 text-emerald-400" />
+                    <span>Готово</span>
+                  </div>
+                </div>
+
+                {/* Live Visual Arrow Chain */}
+                <div className="flex items-center space-x-1.5 p-2 rounded bg-obsidian-950 border border-obsidian-800 text-[11px] font-mono overflow-x-auto">
+                  {activeFlow.map((stageId, idx) => (
+                    <div key={stageId} className="flex items-center space-x-1.5 shrink-0">
+                      <span
+                        className="px-2 py-0.5 rounded font-semibold text-[10px]"
+                        style={{
+                          color: STAGE_LABELS[stageId].color,
+                          backgroundColor: `${STAGE_LABELS[stageId].color}15`,
+                          border: `1px solid ${STAGE_LABELS[stageId].color}40`,
+                        }}
+                      >
+                        {STAGE_LABELS[stageId].label}
+                      </span>
+                      {idx < activeFlow.length - 1 && (
+                        <ArrowRight className="h-3 w-3 text-slate-500 shrink-0" />
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="flex items-center justify-end space-x-2 pt-2.5 border-t border-obsidian-800">
