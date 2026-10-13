@@ -1,10 +1,10 @@
 use crate::agent::{run_agent_loop, AgentEvent, AgentSessionConfig};
-pub use crate::config::{discover_project_root, persist_active_project};
 use crate::config::{
-    atomic_write_file, get_app_config_dir, load_llm_settings, load_pipeline_config,
-    load_project_config, load_project_registry, register_or_update_project,
-    save_llm_settings_to_disk, save_pipeline_config, scaffold_cvh_project, LlmSettings,
-    PipelineConfig, ProjectConfig, ProjectEntry, ProjectRegistry,
+    atomic_write_file, discover_project_root, get_app_config_dir, load_llm_settings,
+    load_pipeline_config, load_project_config, load_project_registry, persist_active_project,
+    register_or_update_project, save_llm_settings_to_disk, save_pipeline_config,
+    scaffold_cvh_project, LlmSettings, PipelineConfig, ProjectConfig, ProjectEntry,
+    ProjectRegistry,
 };
 use crate::git::{create_worktree, remove_worktree};
 use crate::hooks::{execute_hook, execute_sensor_command, HookContext};
@@ -95,8 +95,9 @@ async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
     let local_tasks_file = repo_root.join(".cvh").join("tasks.json");
     if local_tasks_file.exists() {
         if let Ok(content) = tokio::fs::read_to_string(&local_tasks_file).await {
-            if let Ok(tasks) = serde_json::from_str::<Vec<Task>>(&content) {
-                if !tasks.is_empty() {
+            let trimmed = content.trim();
+            if !trimmed.is_empty() {
+                if let Ok(tasks) = serde_json::from_str::<Vec<Task>>(trimmed) {
                     return tasks;
                 }
             }
@@ -107,14 +108,17 @@ async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
     let global_tasks_file = get_app_config_dir().join("tasks.json");
     if global_tasks_file.exists() {
         if let Ok(content) = tokio::fs::read_to_string(&global_tasks_file).await {
-            if let Ok(tasks) = serde_json::from_str::<Vec<Task>>(&content) {
-                if !tasks.is_empty() {
-                    eprintln!(
-                        "CVH [load_tasks_from_disk]: Restored {} tasks from global fallback {:?}",
-                        tasks.len(),
-                        global_tasks_file
-                    );
-                    return tasks;
+            let trimmed = content.trim();
+            if !trimmed.is_empty() {
+                if let Ok(tasks) = serde_json::from_str::<Vec<Task>>(trimmed) {
+                    if !tasks.is_empty() {
+                        eprintln!(
+                            "CVH [load_tasks_from_disk]: Restored {} tasks from global fallback {:?}",
+                            tasks.len(),
+                            global_tasks_file
+                        );
+                        return tasks;
+                    }
                 }
             }
         }
