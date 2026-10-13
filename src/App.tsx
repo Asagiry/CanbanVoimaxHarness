@@ -17,9 +17,6 @@ export default function App() {
   const { loadColumns, loadTasks, runTaskAgent, loadBoards } = useBoardStore();
   const { loadProjects } = useProjectStore();
   const { appendThought, appendOutput, addToolExecution, updateToolExecution, updateTelemetry, setThinkingStartTime } = useDrawerStore();
-  const [isAppHydrated, setIsAppHydrated] = useState(false);
-  const [showSplash, setShowSplash] = useState(true);
-
   const [isDataReady, setIsDataReady] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
 
@@ -255,9 +252,6 @@ export default function App() {
       {showSplash && (
         <SplashScreen
           isReady={isDataReady}
-          onFinish={() => setShowSplash(false)}
-        />
-      )}
           onFinish={() => setShowSplash(false)}
         />
       )}
