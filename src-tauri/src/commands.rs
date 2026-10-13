@@ -923,6 +923,8 @@ pub async fn create_task(
         parent_id: None,
         subtask_index: None,
         waiting_for_subtask_id: None,
+        cover_image: None,
+        attachments: None,
         created_at: now,
         updated_at: now,
     };
@@ -1076,6 +1078,8 @@ pub async fn create_subtask(
         parent_id: Some(parent_id.clone()),
         subtask_index: Some(next_subtask_idx),
         waiting_for_subtask_id: None,
+        cover_image: None,
+        attachments: None,
         created_at: now,
         updated_at: now,
     };
@@ -1907,6 +1911,8 @@ pub async fn run_agent(
                                     parent_id: Some(pid.clone()),
                                     subtask_index: Some(next_subtask_idx),
                                     waiting_for_subtask_id: None,
+                                    cover_image: None,
+                                    attachments: None,
                                     created_at: now,
                                     updated_at: now,
                                 };
@@ -2057,6 +2063,8 @@ pub async fn run_agent(
                                     parent_id: Some(tid.clone()),
                                     subtask_index: Some(next_subtask_idx),
                                     waiting_for_subtask_id: None,
+                                    cover_image: None,
+                                    attachments: None,
                                     created_at: now,
                                     updated_at: now,
                                 };
