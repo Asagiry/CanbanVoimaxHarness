@@ -144,12 +144,18 @@ export default function App() {
                 appendOutput(taskId, response, 'output');
               }
             }
+            // Immediately flush task activity feed to disk upon turn finish
+            useDrawerStore.getState().flushSaveDialog(taskId);
           }
           loadTasks();
         });
         unlisteners.push(u5);
 
-        const u6 = await listen<any>('agent:status', () => {
+        const u6 = await listen<any>('agent:status', (event) => {
+          const { taskId, status } = event.payload || {};
+          if (taskId && (status === 'finished' || status === 'aborted' || status === 'error')) {
+            useDrawerStore.getState().flushSaveDialog(taskId);
+          }
           loadTasks();
         });
         unlisteners.push(u6);

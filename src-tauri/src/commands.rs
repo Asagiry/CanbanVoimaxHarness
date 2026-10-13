@@ -491,6 +491,184 @@ pub async fn save_tasks(tasks: Vec<Task>, state: State<'_, AppState>) -> Result<
     res
 }
 
+// ============================================================================
+// Task Dialog Persistence
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityItem {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub item_type: String,
+    pub timestamp: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<f64>,
+}
+
+fn sanitize_task_id(task_id: &str) -> Result<String, String> {
+    let trimmed = task_id.trim();
+    if trimmed.is_empty() {
+        return Err("Task ID cannot be empty".to_string());
+    }
+    if trimmed.contains("..") || trimmed.contains('/') || trimmed.contains('\\') {
+        return Err(format!("Invalid task ID: '{}'", trimmed));
+    }
+    if trimmed.chars().any(|c| matches!(c, '<' | '>' | ':' | '"' | '|' | '?' | '*')) {
+        return Err(format!("Task ID contains invalid characters: '{}'", trimmed));
+    }
+    Ok(trimmed.to_string())
+}
+
+fn get_dialog_paths(repo_root: &Path, task_id: &str) -> (PathBuf, PathBuf, PathBuf) {
+    let p_dialogs = repo_root.join(".cvh").join("dialogs").join(format!("{}.json", task_id));
+    let p_tasks = repo_root.join(".cvh").join("tasks").join(task_id).join("dialog.json");
+    let p_global = get_app_config_dir().join("dialogs").join(format!("{}.json", task_id));
+    (p_dialogs, p_tasks, p_global)
+}
+
+#[tauri::command]
+pub async fn save_task_dialog(
+    task_id: String,
+    items: Vec<ActivityItem>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let safe_id = sanitize_task_id(&task_id)?;
+    let root = state.get_root();
+    let (p_dialogs, p_tasks, p_global) = get_dialog_paths(&root, &safe_id);
+
+    let serialized = serde_json::to_string_pretty(&items)
+        .map_err(|e| format!("Failed to serialize task dialog items: {}", e))?;
+
+    // 1. Primary path: .cvh/dialogs/<taskId>.json
+    let res_dialogs = atomic_write_file(&p_dialogs, &serialized).await;
+
+    // 2. Secondary path: .cvh/tasks/<taskId>/dialog.json
+    let res_tasks = atomic_write_file(&p_tasks, &serialized).await;
+
+    // 3. Global app data fallback: %LOCALAPPDATA%/com.voimax.cvh/dialogs/<taskId>.json
+    let res_global = atomic_write_file(&p_global, &serialized).await;
+
+    match (res_dialogs, res_tasks, res_global) {
+        (Ok(_), _, _) => {
+            eprintln!("CVH [save_task_dialog]: saved {} items to {:?}", items.len(), p_dialogs);
+            Ok(())
+        }
+        (Err(e1), Ok(_), _) => {
+            eprintln!(
+                "CVH [save_task_dialog]: Warning - failed to write {:?}: {}, but succeeded in {:?}",
+                p_dialogs, e1, p_tasks
+            );
+            Ok(())
+        }
+        (Err(e1), Err(e2), Ok(_)) => {
+            eprintln!(
+                "CVH [save_task_dialog]: Warning - failed local writes ({}, {}), but persisted to global fallback {:?}",
+                e1, e2, p_global
+            );
+            Ok(())
+        }
+        (Err(e1), Err(e2), Err(e3)) => Err(format!(
+            "Failed to save task dialog to any target: dialogs err: {}, tasks err: {}, global err: {}",
+            e1, e2, e3
+        )),
+    }
+}
+
+#[tauri::command]
+pub async fn load_task_dialog(
+    task_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<ActivityItem>, String> {
+    let safe_id = sanitize_task_id(&task_id)?;
+    let root = state.get_root();
+    let (p_dialogs, p_tasks, p_global) = get_dialog_paths(&root, &safe_id);
+
+    // 1. Try primary path: .cvh/dialogs/<taskId>.json
+    if p_dialogs.exists() {
+        if let Ok(content) = tokio::fs::read_to_string(&p_dialogs).await {
+            let trimmed = content.trim();
+            if !trimmed.is_empty() {
+                match serde_json::from_str::<Vec<ActivityItem>>(trimmed) {
+                    Ok(items) => return Ok(items),
+                    Err(e) => eprintln!(
+                        "CVH [load_task_dialog]: Failed to parse {:?}: {}",
+                        p_dialogs, e
+                    ),
+                }
+            }
+        }
+    }
+
+    // 2. Try secondary path: .cvh/tasks/<taskId>/dialog.json
+    if p_tasks.exists() {
+        if let Ok(content) = tokio::fs::read_to_string(&p_tasks).await {
+            let trimmed = content.trim();
+            if !trimmed.is_empty() {
+                match serde_json::from_str::<Vec<ActivityItem>>(trimmed) {
+                    Ok(items) => return Ok(items),
+                    Err(e) => eprintln!(
+                        "CVH [load_task_dialog]: Failed to parse {:?}: {}",
+                        p_tasks, e
+                    ),
+                }
+            }
+        }
+    }
+
+    // 3. Try global fallback: %LOCALAPPDATA%/com.voimax.cvh/dialogs/<taskId>.json
+    if p_global.exists() {
+        if let Ok(content) = tokio::fs::read_to_string(&p_global).await {
+            let trimmed = content.trim();
+            if !trimmed.is_empty() {
+                match serde_json::from_str::<Vec<ActivityItem>>(trimmed) {
+                    Ok(items) => {
+                        eprintln!(
+                            "CVH [load_task_dialog]: Restored {} items from global fallback {:?}",
+                            items.len(),
+                            p_global
+                        );
+                        return Ok(items);
+                    }
+                    Err(e) => eprintln!(
+                        "CVH [load_task_dialog]: Failed to parse {:?}: {}",
+                        p_global, e
+                    ),
+                }
+            }
+        }
+    }
+
+    // Default to empty activity feed if no dialog file exists yet
+    Ok(Vec::new())
+}
+
+#[tauri::command]
+pub async fn clear_task_dialog(
+    task_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let safe_id = sanitize_task_id(&task_id)?;
+    let root = state.get_root();
+    let (p_dialogs, p_tasks, p_global) = get_dialog_paths(&root, &safe_id);
+
+    if p_dialogs.exists() {
+        let _ = tokio::fs::remove_file(&p_dialogs).await;
+    }
+    if p_tasks.exists() {
+        let _ = tokio::fs::remove_file(&p_tasks).await;
+    }
+    if p_global.exists() {
+        let _ = tokio::fs::remove_file(&p_global).await;
+    }
+
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn create_task(
     title: String,
@@ -1957,6 +2135,108 @@ mod tests {
 
         let _ = tokio::fs::remove_dir_all(&base).await;
         let _ = tokio::fs::remove_dir_all(&empty_base).await;
+    }
+
+    #[test]
+    fn test_sanitize_task_id() {
+        assert!(sanitize_task_id("CVH-001").is_ok());
+        assert!(sanitize_task_id("task-123").is_ok());
+        assert!(sanitize_task_id("feature_test").is_ok());
+
+        assert!(sanitize_task_id("").is_err());
+        assert!(sanitize_task_id("   ").is_err());
+        assert!(sanitize_task_id("../escape").is_err());
+        assert!(sanitize_task_id("a/b").is_err());
+        assert!(sanitize_task_id("a\\b").is_err());
+        assert!(sanitize_task_id("task:1").is_err());
+        assert!(sanitize_task_id("task*1").is_err());
+        assert!(sanitize_task_id("task?1").is_err());
+    }
+
+    #[test]
+    fn test_activity_item_serialization_camel_case() {
+        let item = ActivityItem {
+            id: "th-123".to_string(),
+            item_type: "thought".to_string(),
+            timestamp: "12:00:00".to_string(),
+            content: Some("Thinking about the architecture...".to_string()),
+            tool: None,
+            duration_ms: Some(1500.0),
+        };
+
+        let json = serde_json::to_string(&item).expect("serialize");
+        assert!(json.contains(r#""type":"thought""#));
+        assert!(json.contains(r#""durationMs":1500"#));
+        assert!(!json.contains("item_type"));
+        assert!(!json.contains("duration_ms"));
+
+        let deserialized: ActivityItem = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(deserialized.id, "th-123");
+        assert_eq!(deserialized.item_type, "thought");
+        assert_eq!(deserialized.content.as_deref(), Some("Thinking about the architecture..."));
+        assert_eq!(deserialized.duration_ms, Some(1500.0));
+    }
+
+    #[tokio::test]
+    async fn test_task_dialog_disk_roundtrip() {
+        let base = PathBuf::from("target").join(format!("cvh_dialog_test_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        let items = vec![
+            ActivityItem {
+                id: "user-1".to_string(),
+                item_type: "user".to_string(),
+                timestamp: "10:00:00".to_string(),
+                content: Some("Почини сохранение диалогов".to_string()),
+                tool: None,
+                duration_ms: None,
+            },
+            ActivityItem {
+                id: "th-1".to_string(),
+                item_type: "thought".to_string(),
+                timestamp: "10:00:01".to_string(),
+                content: Some("Анализирую требования к персистентности...".to_string()),
+                tool: None,
+                duration_ms: Some(2500.0),
+            },
+            ActivityItem {
+                id: "call-1".to_string(),
+                item_type: "tool".to_string(),
+                timestamp: "10:00:03".to_string(),
+                content: None,
+                tool: Some(serde_json::json!({
+                    "id": "call-1",
+                    "toolName": "read",
+                    "status": "success",
+                    "exitCode": 0
+                })),
+                duration_ms: Some(120.0),
+            },
+            ActivityItem {
+                id: "out-1".to_string(),
+                item_type: "output".to_string(),
+                timestamp: "10:00:05".to_string(),
+                content: Some("Диалоги успешно сохраняются на диск.".to_string()),
+                tool: None,
+                duration_ms: None,
+            },
+        ];
+
+        let serialized = serde_json::to_string_pretty(&items).expect("serialize");
+        let p_dialogs = base.join(".cvh").join("dialogs").join("CVH-001.json");
+        atomic_write_file(&p_dialogs, &serialized).await.expect("write dialog");
+
+        assert!(p_dialogs.exists());
+        let read_back = tokio::fs::read_to_string(&p_dialogs).await.expect("read dialog");
+        let loaded: Vec<ActivityItem> = serde_json::from_str(&read_back).expect("parse dialog");
+
+        assert_eq!(loaded.len(), 4);
+        assert_eq!(loaded[0].item_type, "user");
+        assert_eq!(loaded[1].item_type, "thought");
+        assert_eq!(loaded[2].item_type, "tool");
+        assert_eq!(loaded[3].item_type, "output");
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
     }
 }
 
