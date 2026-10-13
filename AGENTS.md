@@ -133,4 +133,11 @@
 - **Zero-Mocking Error Transparency**: Network and model discovery failures from dynamic endpoints MUST bubble directly to UI error notifications. Subagents and frontend stores are STRICTLY FORBIDDEN from masking real network or authentication failures with synthetic fallback model stubs or hardcoded lists.
 - **Reasoning Stream Coalescing**: Real-time token and reasoning deltas (`reasoning_content`, `thought`) streaming from LLMs over SSE or Tauri desktop events MUST be coalesced in frontend stores (e.g. 3-second sliding window) to prevent card explosion and avoid thousands of microscopic VDOM allocations.
 
+### 2.11 Unified Activity Feed, Autonomous Stage Auto-Run & Task Persistence Invariant
+- **Autonomous Stage Auto-Run**: Moving a task into an active execution column (e.g. `dev` / "В РАЗРАБОТКЕ") or instantiating a task directly into an active stage MUST automatically invoke `run_agent(taskId)` over Tauri IPC. Execution MUST NOT remain silent or require ambiguous secondary manual triggers.
+- **Atomic Disk Task Persistence**: Every task mutation (creation, drag-and-drop movement, timer updates, verdict assignment, task-level model selection) MUST invoke `save_tasks` IPC to persist state atomically to `.cvh/tasks.json`. Task configurations and models must survive reloads and crashes.
+- **Unified Chronological Activity Stream**: The agent console drawer MUST NOT segregate execution logs into disjointed, empty tabs. It MUST render a unified, single-pane chronological feed interleaving initial prompt goals, collapsible `<thinking>` blocks with live pulsing indicators, formatted Markdown responses, inline tool execution cards, user steering messages, and system/error notices.
+- **Interactive Steering & Status Lifecycle**: The drawer input bar MUST dispatch `steer_agent` when the task agent is actively running, or initialize/resume via `run_agent` when idle. Drawer header controls MUST provide explicit `abort_agent` and `run_agent` lifecycle actions.
+
+
 
