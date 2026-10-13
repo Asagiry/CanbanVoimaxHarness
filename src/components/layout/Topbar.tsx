@@ -3,6 +3,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useToolPolicyStore } from '../../stores/toolPolicyStore';
+import Logo from '../common/Logo';
 import {
   FolderOpen,
   Layout,
@@ -67,6 +68,7 @@ export default function Topbar() {
 
       {/* Left: Project Brand & Folder Picker */}
       <div className="flex items-center space-x-2">
+        <Logo size={18} className="shrink-0" />
         <span className="font-semibold text-[#171717] text-xs tracking-tight font-sans">
           {activeProject.name || 'CanbanVoimaxHarness'}
         </span>

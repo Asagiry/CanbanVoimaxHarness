@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Topbar from './components/layout/Topbar';
+import SplashScreen from './components/splash/SplashScreen';
 import CortexExplorer from './components/cortex/CortexExplorer';
 import KanbanBoard from './components/board/KanbanBoard';
 import AgentConsoleDrawer from './components/drawer/AgentConsoleDrawer';
@@ -16,13 +17,21 @@ export default function App() {
   const { loadColumns, loadTasks, runTaskAgent, loadBoards } = useBoardStore();
   const { loadProjects } = useProjectStore();
   const { appendThought, appendOutput, addToolExecution, updateToolExecution, updateTelemetry, setThinkingStartTime } = useDrawerStore();
+  const [isAppHydrated, setIsAppHydrated] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
-    loadProjects().then(async () => {
-      // Boards and columns first: task mapping (columnId fallback, persona, status) resolves via columns
-      await loadBoards();
-      await loadTasks();
-    });
+    loadProjects()
+      .then(async () => {
+        // Boards and columns first: task mapping (columnId fallback, persona, status) resolves via columns
+        await loadBoards();
+        await loadTasks();
+        setIsAppHydrated(true);
+      })
+      .catch((err) => {
+        console.error('App hydration failure:', err);
+        setIsAppHydrated(true);
+      });
   }, [loadProjects, loadBoards, loadTasks]);
 
   useEffect(() => {
@@ -230,6 +239,14 @@ export default function App() {
 
       {/* LLM Settings Modal */}
       <SettingsModal />
+
+      {/* Cinematic Splash Screen Bootloader */}
+      {showSplash && (
+        <SplashScreen
+          isReady={isAppHydrated}
+          onFinish={() => setShowSplash(false)}
+        />
+      )}
 
       {/* Zoom Indicator Toast */}
       {showIndicator && (
