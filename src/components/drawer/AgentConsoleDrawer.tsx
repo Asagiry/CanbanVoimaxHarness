@@ -366,7 +366,7 @@ export default function AgentConsoleDrawer() {
   const task = tasks.find((t) => t.id === activeTaskId);
   const column = columns.find((c) => c.id === task?.columnId);
 
-  // Reset error when switching tasks
+  // Reset error when switching tasks & load dialog history from disk
   useEffect(() => {
     setRunError(null);
     // Новые задачи открываются со свёрнутыми ответами и сброшенным скроллом
@@ -374,6 +374,9 @@ export default function AgentConsoleDrawer() {
     setShowNewButton(false);
     isFirstBatchRef.current = true;
     nearBottomRef.current = true;
+    if (activeTaskId) {
+      useDrawerStore.getState().loadTaskDialog(activeTaskId);
+    }
   }, [activeTaskId]);
 
   // Listen to agent error & status events from Tauri backend
@@ -547,6 +550,7 @@ export default function AgentConsoleDrawer() {
 
     // Append user steer message into feed immediately
     appendOutput(task.id, trimmed, 'user');
+    useDrawerStore.getState().flushSaveDialog(task.id);
 
     // Update task description in Zustand store with latest user prompt
     const updatedDesc = task.description

@@ -97,6 +97,17 @@ export interface LiveStreamEntry {
   durationMs?: number;
 }
 
+export type ActivityType = 'thought' | 'output' | 'tool' | 'steer' | 'system' | 'error' | 'user';
+
+export interface ActivityItem {
+  id: string;
+  type: ActivityType;
+  timestamp: string;
+  content?: string;
+  tool?: ToolExecution;
+  durationMs?: number;
+}
+
 export interface ProjectInfo {
   id: string;
   name: string;

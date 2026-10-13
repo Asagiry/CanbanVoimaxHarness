@@ -1,18 +1,22 @@
 import { create } from 'zustand';
-import { LiveStreamEntry, ToolExecution } from '../types';
-// Clean start without mock streams
+import { LiveStreamEntry, ToolExecution, ActivityItem, ActivityType } from '../types';
 
 export type DrawerTab = 'thoughts' | 'output' | 'tools';
 
-export type ActivityType = 'thought' | 'output' | 'tool' | 'steer' | 'system' | 'error' | 'user';
+export type { ActivityType };
+export type DrawerActivityItem = ActivityItem;
 
-export interface DrawerActivityItem {
-  id: string;
-  type: ActivityType;
-  timestamp: string;
-  content?: string;
-  tool?: ToolExecution;
-  durationMs?: number;
+// In-flight debounced save timers per task
+const dialogSaveTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+
+function scheduleDialogSave(taskId: string, delayMs = 1000) {
+  if (dialogSaveTimers[taskId]) {
+    clearTimeout(dialogSaveTimers[taskId]);
+  }
+  dialogSaveTimers[taskId] = setTimeout(() => {
+    delete dialogSaveTimers[taskId];
+    useDrawerStore.getState().flushSaveDialog(taskId);
+  }, delayMs);
 }
 
 export interface TaskTelemetry {
@@ -52,9 +56,12 @@ interface DrawerState {
   setFinalTps: (taskId: string, v: number | null) => void;
   sendSteerMessage: (taskId: string, message: string) => Promise<void>;
   compactTaskContext: (taskId: string) => Promise<{ savedTokens: number; evaporatedCount: number }>;
-  clearTaskLogs: (taskId: string) => void;
+  clearTaskLogs: (taskId: string) => Promise<void> | void;
   setTaskTokens: (taskId: string, tokens: number) => void;
   evaporateClientToolLogs: (taskId: string) => { evaporatedCount: number; savedTokens: number };
+  loadTaskDialog: (taskId: string) => Promise<void>;
+  saveTaskDialog: (taskId: string) => Promise<void>;
+  flushSaveDialog: (taskId: string) => Promise<void>;
 }
 
 export const useDrawerStore = create<DrawerState>((set, get) => ({
@@ -75,6 +82,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       activeTaskId: taskId,
       activeTab: initialTab,
     });
+    get().loadTaskDialog(taskId);
   },
 
   closeDrawer: () => {
@@ -170,6 +178,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         },
       };
     });
+    scheduleDialogSave(taskId);
   },
 
   appendOutput: (taskId, content, type = 'output') => {
@@ -251,6 +260,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         },
       };
     });
+    scheduleDialogSave(taskId);
   },
 
   addToolExecution: (taskId, tool) => {
@@ -276,6 +286,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         },
       };
     });
+    scheduleDialogSave(taskId);
   },
 
   updateToolExecution: (taskId, toolId, partial) => {
@@ -305,6 +316,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         },
       };
     });
+    scheduleDialogSave(taskId);
   },
 
   updateTelemetry: (taskId, telemetry) => {
@@ -418,7 +430,11 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
     return { savedTokens, evaporatedCount };
   },
 
-  clearTaskLogs: (taskId) => {
+  clearTaskLogs: async (taskId) => {
+    if (dialogSaveTimers[taskId]) {
+      clearTimeout(dialogSaveTimers[taskId]);
+      delete dialogSaveTimers[taskId];
+    }
     set((state) => ({
       activityFeed: {
         ...state.activityFeed,
@@ -437,6 +453,17 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         [taskId]: null,
       },
     }));
+    try {
+      localStorage.removeItem(`cvh_dialog_${taskId}`);
+    } catch {
+      // ignore
+    }
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('clear_task_dialog', { taskId });
+    } catch (e) {
+      console.info('clear_task_dialog invoke error or web mode:', e);
+    }
   },
 
   setTaskTokens: (taskId, tokens) => {
@@ -500,5 +527,110 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
     });
 
     return { evaporatedCount, savedTokens };
+  },
+
+  loadTaskDialog: async (taskId) => {
+    if (!taskId) return;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const items = await invoke<DrawerActivityItem[]>('load_task_dialog', { taskId });
+      if (items && Array.isArray(items) && items.length > 0) {
+        set((state) => {
+          const currentFeed = state.activityFeed[taskId] || [];
+          if (currentFeed.length === 0 || items.length >= currentFeed.length) {
+            const tools: ToolExecution[] = [];
+            const thoughts: LiveStreamEntry[] = [];
+            const outputs: LiveStreamEntry[] = [];
+
+            for (const item of items) {
+              if (item.type === 'tool' && item.tool) {
+                tools.unshift(item.tool);
+              } else if (item.type === 'thought') {
+                thoughts.push({
+                  id: item.id,
+                  timestamp: item.timestamp,
+                  type: 'thought',
+                  content: item.content || '',
+                  durationMs: item.durationMs,
+                });
+              } else {
+                outputs.push({
+                  id: item.id,
+                  timestamp: item.timestamp,
+                  type: (item.type === 'steer' || item.type === 'system' || item.type === 'error' || item.type === 'user' ? item.type : 'output') as any,
+                  content: item.content || '',
+                });
+              }
+            }
+
+            return {
+              activityFeed: {
+                ...state.activityFeed,
+                [taskId]: items,
+              },
+              toolExecutions: {
+                ...state.toolExecutions,
+                [taskId]: tools,
+              },
+              streamEntries: {
+                ...state.streamEntries,
+                [taskId]: { thoughts, outputs },
+              },
+            };
+          }
+          return state;
+        });
+        return;
+      }
+    } catch (e) {
+      console.info('load_task_dialog invoke error or web mode:', e);
+    }
+
+    // LocalStorage fallback for web mode or cold recovery
+    try {
+      const backup = localStorage.getItem(`cvh_dialog_${taskId}`);
+      if (backup) {
+        const items = JSON.parse(backup) as DrawerActivityItem[];
+        if (Array.isArray(items) && items.length > 0) {
+          set((state) => {
+            const currentFeed = state.activityFeed[taskId] || [];
+            if (currentFeed.length === 0) {
+              return {
+                activityFeed: { ...state.activityFeed, [taskId]: items },
+              };
+            }
+            return state;
+          });
+        }
+      }
+    } catch {
+      // ignore
+    }
+  },
+
+  flushSaveDialog: async (taskId) => {
+    if (dialogSaveTimers[taskId]) {
+      clearTimeout(dialogSaveTimers[taskId]);
+      delete dialogSaveTimers[taskId];
+    }
+    const feed = get().activityFeed[taskId];
+    if (!feed || feed.length === 0) return;
+
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('save_task_dialog', { taskId, items: feed });
+    } catch (err) {
+      console.info('save_task_dialog invoke error or web mode:', err);
+    }
+
+    try {
+      localStorage.setItem(`cvh_dialog_${taskId}`, JSON.stringify(feed));
+    } catch {
+      // ignore
+    }
+  },
+
+  saveTaskDialog: async (taskId) => {
+    await get().flushSaveDialog(taskId);
   },
 }));
