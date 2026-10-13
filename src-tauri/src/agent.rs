@@ -1343,14 +1343,20 @@ where
         let api_key = config.api_key.clone();
 
         tokio::spawn(async move {
-            let _ = client.stream_openai(&base_url, api_key.as_deref(), req, tx).await;
+            if let Err(e) = client.stream_openai(&base_url, api_key.as_deref(), req, tx.clone()).await {
+                let err_msg = format!("Failed to dispatch LLM request to {}: {}", base_url, e);
+                eprintln!("CVH [agent]: {}", err_msg);
+                let _ = tx.send(StreamChunk::Error(err_msg)).await;
+            }
         });
 
         let mut turn_content = String::new();
         let mut turn_tool_calls: Vec<ToolCall> = Vec::new();
         let mut thinking_parser = ThinkingStreamParser::new();
+        let mut received_any_chunk = false;
 
         while let Some(chunk) = rx.recv().await {
+            received_any_chunk = true;
             if abort_flag.load(Ordering::SeqCst) {
                 event_sink(AgentEvent::Aborted);
                 bail!("Agent execution aborted by user");
@@ -1405,10 +1411,21 @@ where
                 }
                 StreamChunk::Done => break,
                 StreamChunk::Error(err) => {
+                    eprintln!("CVH [agent]: LLM stream error: {}", err);
                     event_sink(AgentEvent::Error(err.clone()));
                     bail!("LLM streaming error: {}", err);
                 }
             }
+        }
+
+        if !received_any_chunk && !abort_flag.load(Ordering::SeqCst) {
+            let err_msg = format!(
+                "No stream chunks received from LLM endpoint ({}) - check proxy connection or port",
+                config.base_url
+            );
+            eprintln!("CVH [agent]: {}", err_msg);
+            event_sink(AgentEvent::Error(err_msg.clone()));
+            bail!("{}", err_msg);
         }
 
         // Flush any remaining characters from the thinking parser

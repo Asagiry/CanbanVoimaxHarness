@@ -219,6 +219,199 @@ pub fn get_app_config_dir() -> PathBuf {
     }
 }
 
+pub fn discover_project_root() -> PathBuf {
+    let current = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+    // a) Check std::env::current_dir(). If it has .cvh or .git, return it.
+    if current.join(".cvh").exists() || current.join(".git").exists() {
+        eprintln!(
+            "CVH [discover_project_root]: Found .cvh or .git in current_dir: {:?}",
+            current
+        );
+        return current;
+    }
+
+    // b) Traverse parent directories (current_dir.ancestors()) looking for .cvh or .git.
+    // If found (e.g. going up from src-tauri/target/release to CanbanVoimaxHarness), return that ancestor directory!
+    for ancestor in current.ancestors() {
+        if ancestor.join(".cvh").exists() || ancestor.join(".git").exists() {
+            eprintln!(
+                "CVH [discover_project_root]: Found project root in ancestor: {:?}",
+                ancestor
+            );
+            return ancestor.to_path_buf();
+        }
+    }
+
+    // c) If not found in ancestors, check %LOCALAPPDATA%\com.voimax.cvh\active_project.txt.
+    // If it contains a valid directory path that exists, return it.
+    let active_project_file = get_app_config_dir().join("active_project.txt");
+    if active_project_file.exists() {
+        if let Ok(content) = std::fs::read_to_string(&active_project_file) {
+            let trimmed = content.trim();
+            if !trimmed.is_empty() {
+                let p = PathBuf::from(trimmed);
+                if p.exists() && p.is_dir() {
+                    eprintln!(
+                        "CVH [discover_project_root]: Using active project from {:?}: {:?}",
+                        active_project_file, p
+                    );
+                    return p;
+                }
+            }
+        }
+    }
+
+    // d) If still not found, check if C:\Users\Voimax\Projects\CanbanVoimaxHarness exists; if so, return it.
+    let hardcoded_default = PathBuf::from(r"C:\Users\Voimax\Projects\CanbanVoimaxHarness");
+    if hardcoded_default.exists() && hardcoded_default.is_dir() {
+        eprintln!(
+            "CVH [discover_project_root]: Using default path: {:?}",
+            hardcoded_default
+        );
+        return hardcoded_default;
+    }
+
+    // e) Otherwise fallback to std::env::current_dir().
+    eprintln!(
+        "CVH [discover_project_root]: Fallback to current_dir: {:?}",
+        current
+    );
+    current
+}
+
+pub async fn persist_active_project(path: &Path) {
+    let dir = get_app_config_dir();
+    let _ = tokio::fs::create_dir_all(&dir).await;
+    let target = dir.join("active_project.txt");
+    if let Err(e) = tokio::fs::write(&target, path.to_string_lossy().as_bytes()).await {
+        eprintln!(
+            "CVH [persist_active_project]: Failed to write active_project.txt: {}",
+            e
+        );
+    } else {
+        eprintln!(
+            "CVH [persist_active_project]: Saved active project to {:?}",
+            target
+        );
+    }
+}
+
+pub fn default_pipeline_config() -> PipelineConfig {
+    PipelineConfig {
+        id: "default-engineering".to_string(),
+        title: "Engineering Pipeline".to_string(),
+        tool_permissions: None,
+        columns: vec![
+            PipelineColumn {
+                id: "backlog".to_string(),
+                title: "Backlog".to_string(),
+                color: Some("#64748b".to_string()),
+                icon: Some("Inbox".to_string()),
+                persona: None,
+                context_window: Some(128000),
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: Some(vec![
+                    "read_file".to_string(),
+                    "glob".to_string(),
+                    "grep".to_string(),
+                    "web_search".to_string(),
+                    "web_fetch".to_string(),
+                ]),
+                hooks: HashMap::new(),
+                routes: None,
+            },
+            PipelineColumn {
+                id: "dev".to_string(),
+                title: "In Development".to_string(),
+                color: Some("#f59e0b".to_string()),
+                icon: Some("Code2".to_string()),
+                persona: Some("developer".to_string()),
+                context_window: Some(400000),
+                model_override: Some("gemini-3.8-flash-high".to_string()),
+                reasoning_effort: None,
+                temperature: Some(0.2),
+                gatekeeper_sensor: None,
+                allowed_tools: Some(vec![
+                    "execute_command".to_string(),
+                    "read_file".to_string(),
+                    "edit_file".to_string(),
+                    "write_file".to_string(),
+                    "glob".to_string(),
+                    "grep".to_string(),
+                    "subagent".to_string(),
+                ]),
+                hooks: HashMap::new(),
+                routes: None,
+            },
+            PipelineColumn {
+                id: "review".to_string(),
+                title: "Review".to_string(),
+                color: Some("#8b5cf6".to_string()),
+                icon: Some("CheckSquare".to_string()),
+                persona: Some("reviewer".to_string()),
+                context_window: Some(200000),
+                model_override: Some("gemini-3.8-flash-high".to_string()),
+                reasoning_effort: None,
+                temperature: Some(0.1),
+                gatekeeper_sensor: None,
+                allowed_tools: Some(vec![
+                    "execute_command".to_string(),
+                    "read_file".to_string(),
+                    "glob".to_string(),
+                    "grep".to_string(),
+                    "subagent".to_string(),
+                ]),
+                hooks: HashMap::new(),
+                routes: None,
+            },
+            PipelineColumn {
+                id: "retro".to_string(),
+                title: "Retrospective".to_string(),
+                color: Some("#ec4899".to_string()),
+                icon: Some("History".to_string()),
+                persona: Some("retro".to_string()),
+                context_window: Some(128000),
+                model_override: Some("gemini-3.8-flash-high".to_string()),
+                reasoning_effort: None,
+                temperature: Some(0.2),
+                gatekeeper_sensor: None,
+                allowed_tools: Some(vec![
+                    "read_file".to_string(),
+                    "glob".to_string(),
+                    "grep".to_string(),
+                    "write_file".to_string(),
+                    "edit_file".to_string(),
+                ]),
+                hooks: HashMap::new(),
+                routes: None,
+            },
+            PipelineColumn {
+                id: "ready".to_string(),
+                title: "Ready / Done".to_string(),
+                color: Some("#10b981".to_string()),
+                icon: Some("CheckCircle2".to_string()),
+                persona: None,
+                context_window: Some(64000),
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: Some(vec![
+                    "read_file".to_string(),
+                    "glob".to_string(),
+                    "grep".to_string(),
+                ]),
+                hooks: HashMap::new(),
+                routes: None,
+            },
+        ],
+    }
+}
+
 pub fn get_app_llm_settings_path() -> PathBuf {
     get_app_config_dir().join("llm.json")
 }
@@ -307,47 +500,7 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
     // 2. pipeline.json if not present
     let pipeline_path = cvh_dir.join("pipeline.json");
     if !pipeline_path.exists() {
-        let default_pipeline = serde_json::json!({
-            "id": "default-engineering",
-            "title": "Engineering Pipeline",
-            "columns": [
-                {
-                    "id": "backlog",
-                    "title": "Backlog",
-                    "color": "#64748b",
-                    "icon": "Inbox",
-                    "persona": null,
-                    "contextWindow": 128000,
-                    "modelOverride": null,
-                    "allowedTools": ["read_file", "glob", "grep", "web_search", "web_fetch"],
-                    "hooks": {}
-                },
-                {
-                    "id": "dev",
-                    "title": "In Development",
-                    "color": "#f59e0b",
-                    "icon": "Code2",
-                    "persona": null,
-                    "contextWindow": 400000,
-                    "modelOverride": "gemini-3.8-flash-high",
-                    "temperature": 0.2,
-                    "allowedTools": ["execute_command", "read_file", "edit_file", "write_file", "glob", "grep", "subagent"],
-                    "hooks": {},
-                    "gatekeeperSensor": null
-                },
-                {
-                    "id": "ready",
-                    "title": "Done / Production",
-                    "color": "#10b981",
-                    "icon": "CheckCircle2",
-                    "persona": null,
-                    "contextWindow": 64000,
-                    "modelOverride": null,
-                    "allowedTools": ["read_file", "glob", "grep"],
-                    "hooks": {}
-                }
-            ]
-        });
+        let default_pipeline = default_pipeline_config();
         atomic_write_file(&pipeline_path, &serde_json::to_string_pretty(&default_pipeline)?).await?;
     }
 
@@ -476,14 +629,29 @@ pub async fn save_project_config(root_path: impl AsRef<Path>, config: &ProjectCo
 
 pub async fn load_pipeline_config(root_path: impl AsRef<Path>) -> Result<PipelineConfig> {
     let pipeline_path = root_path.as_ref().join(".cvh").join("pipeline.json");
-    let content = tokio::fs::read_to_string(&pipeline_path)
-        .await
-        .with_context(|| format!("Failed to read pipeline config at {:?}", pipeline_path))?;
+    if !pipeline_path.exists() {
+        return Ok(default_pipeline_config());
+    }
 
-    let pipeline: PipelineConfig = serde_json::from_str(&content)
-        .with_context(|| format!("Failed to parse pipeline config JSON at {:?}", pipeline_path))?;
-
-    Ok(pipeline)
+    match tokio::fs::read_to_string(&pipeline_path).await {
+        Ok(content) => match serde_json::from_str::<PipelineConfig>(&content) {
+            Ok(pipeline) => Ok(pipeline),
+            Err(e) => {
+                eprintln!(
+                    "CVH [load_pipeline_config]: Failed to parse pipeline JSON at {:?}: {}. Falling back to default 5-stage pipeline.",
+                    pipeline_path, e
+                );
+                Ok(default_pipeline_config())
+            }
+        },
+        Err(e) => {
+            eprintln!(
+                "CVH [load_pipeline_config]: Failed to read pipeline file at {:?}: {}. Falling back to default 5-stage pipeline.",
+                pipeline_path, e
+            );
+            Ok(default_pipeline_config())
+        }
+    }
 }
 
 pub async fn save_pipeline_config(root_path: impl AsRef<Path>, config: &PipelineConfig) -> Result<()> {
