@@ -159,10 +159,10 @@ export default function Topbar() {
         className="hidden"
       />
 
-      {/* Left: Futuristic Logo + Project Brand & Folder Picker */}
+      {/* Left: Vercel/ChatGPT Geometric Logo + Project Brand & Folder Picker */}
       <div className="flex items-center space-x-2 shrink-0" data-tauri-drag-region>
         <div className="flex items-center space-x-2 cursor-default" data-no-drag>
-          <Logo size={20} glow animated className="drop-shadow-xs" />
+          <Logo size={18} className="shrink-0" />
           <span className="font-semibold text-[#171717] text-xs tracking-tight font-sans">
             {activeProject.name || 'CanbanVoimaxHarness'}
           </span>

@@ -1,164 +1,170 @@
-import { useState, useEffect, useRef } from 'react';
-import Logo from '../common/Logo';
+import { useEffect, useState, useRef } from 'react';
 
-interface SplashScreenProps {
-  /** Flag indicating whether background data initialization has completed */
-  isReady: boolean;
-  /** Callback fired once exit fade-out transition has fully completed */
+export interface SplashScreenProps {
+  isReady?: boolean;
+  minDisplayTimeMs?: number;
   onFinish?: () => void;
 }
 
-export default function SplashScreen({ isReady, onFinish }: SplashScreenProps) {
-  const [progress, setProgress] = useState(12);
-  const [statusText, setStatusText] = useState('Инициализация харнесса...');
-  const [isExiting, setIsExiting] = useState(false);
-  const [isDone, setIsDone] = useState(false);
+export default function SplashScreen({
+  isReady = true,
+  minDisplayTimeMs = 900,
+  onFinish,
+}: SplashScreenProps) {
+  const [stepIndex, setStepIndex] = useState<number>(0);
+  const [progress, setProgress] = useState<number>(10);
+  const [isFading, setIsFading] = useState<boolean>(false);
+  const [cursorVisible, setCursorVisible] = useState<boolean>(true);
+  const startTimeRef = useRef<number>(Date.now());
 
-  // Preserve latest onFinish reference to prevent unnecessary effect re-triggers
-  const onFinishRef = useRef(onFinish);
+  // Cursor blink effect
   useEffect(() => {
-    onFinishRef.current = onFinish;
-  }, [onFinish]);
+    const cursorInterval = setInterval(() => {
+      setCursorVisible((v) => !v);
+    }, 450);
+    return () => clearInterval(cursorInterval);
+  }, []);
 
+  // Staggered boot sequence
   useEffect(() => {
-    // Simulated smooth progress ramp-up while loading
     const timer1 = setTimeout(() => {
+      setStepIndex(1);
       setProgress(35);
-      setStatusText('Синхронизация Git-ворктри и контекста...');
-    }, 280);
+    }, 180);
 
     const timer2 = setTimeout(() => {
-      setProgress(68);
-      setStatusText('Загрузка досок и задач...');
-    }, 600);
+      setStepIndex(2);
+      setProgress(65);
+    }, 380);
 
     const timer3 = setTimeout(() => {
-      setProgress(88);
-      setStatusText('Подготовка интерфейса управления...');
-    }, 900);
+      setStepIndex(3);
+      setProgress(90);
+    }, 580);
+
+    const timer4 = setTimeout(() => {
+      setStepIndex(4);
+      setProgress(100);
+    }, 780);
 
     return () => {
       clearTimeout(timer1);
       clearTimeout(timer2);
       clearTimeout(timer3);
+      clearTimeout(timer4);
     };
   }, []);
 
+  // Trigger fade out once all steps completed and data is ready
   useEffect(() => {
-    if (!isReady) return;
+    if (stepIndex < 4 || !isReady) return;
 
-    let exitTimer: ReturnType<typeof setTimeout> | undefined;
-    let removeTimer: ReturnType<typeof setTimeout> | undefined;
+    const elapsed = Date.now() - startTimeRef.current;
+    const remaining = Math.max(0, minDisplayTimeMs - elapsed);
 
-    // Minimum display elapsed + data ready -> reach 100% and initiate fade-out
-    const finishTimer = setTimeout(() => {
-      setProgress(100);
-      setStatusText('Харнесс готов к работе');
+    const fadeTimer = setTimeout(() => {
+      setIsFading(true);
+      const finishTimer = setTimeout(() => {
+        onFinish?.();
+      }, 500); // 500ms fade transition
+      return () => clearTimeout(finishTimer);
+    }, remaining);
 
-      // Trigger exit fade-out
-      exitTimer = setTimeout(() => {
-        setIsExiting(true);
-
-        // Remove from DOM after transition
-        removeTimer = setTimeout(() => {
-          setIsDone(true);
-          onFinishRef.current?.();
-        }, 650);
-      }, 250);
-    }, 1000);
-
-    return () => {
-      clearTimeout(finishTimer);
-      if (exitTimer) clearTimeout(exitTimer);
-      if (removeTimer) clearTimeout(removeTimer);
-    };
-  }, [isReady]);
-
-  if (isDone) return null;
+    return () => clearTimeout(fadeTimer);
+  }, [stepIndex, isReady, minDisplayTimeMs, onFinish]);
 
   return (
     <div
-      data-tauri-drag-region
-      className={`fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#09090b] text-white select-none transition-all duration-600 ease-out ${
-        isExiting
-          ? 'opacity-0 scale-[1.02] pointer-events-none filter blur-xs'
-          : 'opacity-100 scale-100'
+      className={`fixed inset-0 z-9999 flex items-center justify-center bg-[#0d0d0d] select-none transition-opacity duration-500 ease-out ${
+        isFading ? 'opacity-0 pointer-events-none' : 'opacity-100'
       }`}
     >
-      {/* Ambient Cybernetic Radial Aura */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background:
-            'radial-gradient(circle at 50% 45%, rgba(139, 92, 246, 0.14) 0%, rgba(6, 182, 212, 0.08) 28%, rgba(16, 185, 129, 0.03) 55%, transparent 72%)',
-        }}
-      />
-
-      {/* Subtle Micro-Grid Background */}
-      <div
-        className="absolute inset-0 opacity-[0.035] pointer-events-none"
-        style={{
-          backgroundImage:
-            'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)',
-          backgroundSize: '32px 32px',
-        }}
-      />
-
-      {/* Central Content Block */}
-      <div className="relative z-10 flex flex-col items-center max-w-sm px-6 text-center" data-tauri-drag-region>
-        {/* Glowing Central Logo with Pulsing Ring */}
-        <div className="relative mb-6 flex items-center justify-center group" data-no-drag>
-          {/* Outer Breathing Glow Ring */}
-          <div className="absolute -inset-4 rounded-full bg-gradient-to-tr from-violet-600/30 via-cyan-500/30 to-amber-500/20 blur-xl animate-pulse" />
-          <div className="absolute -inset-1 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-xs" />
-
-          {/* Vector Quantum Logo (80px) */}
-          <div className="relative p-3.5">
-            <Logo size={80} animated glow className="drop-shadow-[0_0_24px_rgba(6,182,212,0.6)]" />
+      {/* Typeset terminal on obsidian / paper surface panel */}
+      <div className="w-[90vw] max-w-[460px] bg-[#171717] border border-[#27272a] rounded-[6px] shadow-2xl overflow-hidden flex flex-col">
+        {/* Terminal Header Bar */}
+        <div className="h-8 px-3.5 border-b border-[#27272a] bg-[#121212] flex items-center justify-between text-[11px] font-mono text-[#8f8f8f]">
+          <div className="flex items-center space-x-2">
+            <span className="text-[#ffffff]">▲</span>
+            <span className="tracking-widest uppercase">KERNEL_BOOT</span>
+          </div>
+          <div className="flex items-center space-x-2 text-[10px] text-[#52525b]">
+            <span>TTY_VOIMAX</span>
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#297a3a]" />
           </div>
         </div>
 
-        {/* Cinematic Title & Monospace Badge */}
-        <div className="mb-8" data-tauri-drag-region>
-          <h1 className="text-xl font-bold tracking-tight text-white font-sans flex items-center justify-center gap-1.5 drop-shadow-md">
-            <span>CANBAN</span>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-violet-400 to-amber-400 font-extrabold">
-              VOIMAX
-            </span>
-            <span>HARNESS</span>
-          </h1>
-          <p className="text-[10px] font-mono text-zinc-400 tracking-widest uppercase mt-1.5 flex items-center justify-center gap-2">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-            <span>AGENTIC IDE CONTROL PLANE</span>
-            <span className="text-zinc-600">•</span>
-            <span className="text-zinc-500">v0.1.0</span>
-          </p>
-        </div>
+        {/* CLI Terminal Body */}
+        <div className="p-4 sm:p-5 font-mono text-xs text-[#fafafa] space-y-2.5 min-h-[160px] flex flex-col justify-between">
+          <div className="space-y-2">
+            {/* Header: Delta + Title */}
+            <div className="flex items-center space-x-2 text-[#ffffff] font-semibold text-[13px] tracking-tight">
+              <span className="text-[#ffffff]">▲</span>
+              <span>CANBAN_VOIMAX_HARNESS v0.1.0</span>
+            </div>
 
-        {/* Minimalist Glowing Progress Bar */}
-        <div className="w-64 max-w-xs flex flex-col items-center gap-2.5" data-no-drag>
-          <div className="w-full h-[3px] rounded-full bg-zinc-800/80 overflow-hidden relative border border-white/5 backdrop-blur-xs shadow-inner">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-violet-500 to-emerald-400 transition-all duration-300 ease-out shadow-[0_0_12px_rgba(6,182,212,0.8)]"
-              style={{ width: `${progress}%` }}
-            />
+            {/* Sequence Line 1 */}
+            {stepIndex >= 1 && (
+              <div className="flex items-center space-x-2 text-[#d4d4d8] animate-in fade-in duration-150">
+                <span className="text-[#297a3a] font-bold">✓</span>
+                <span className="tracking-wide">INITIALIZING_CORE_KERNELS</span>
+              </div>
+            )}
+
+            {/* Sequence Line 2 */}
+            {stepIndex >= 2 && (
+              <div className="flex items-center space-x-2 text-[#d4d4d8] animate-in fade-in duration-150">
+                <span className="text-[#297a3a] font-bold">✓</span>
+                <span className="tracking-wide">HYDRATING_WORKSPACE_BOARDS</span>
+              </div>
+            )}
+
+            {/* Sequence Line 3 */}
+            {stepIndex >= 3 && (
+              <div className="flex items-center space-x-2 text-[#d4d4d8] animate-in fade-in duration-150">
+                <span className="text-[#297a3a] font-bold">✓</span>
+                <span className="tracking-wide">DISCOVERING_AGENT_WORKTREES</span>
+              </div>
+            )}
+
+            {/* Final Ready State */}
+            {stepIndex >= 4 && (
+              <div className="flex items-center space-x-2 text-[#297a3a] font-semibold tracking-wider animate-in fade-in duration-150 pt-1">
+                <span>[SYSTEM READY]</span>
+                <span className="text-[#8f8f8f] font-normal text-[11px]">
+                  (0% color slop · hairline invariant)
+                </span>
+              </div>
+            )}
+
+            {/* Terminal Cursor */}
+            {stepIndex < 4 && (
+              <div className="text-[#8f8f8f] text-xs">
+                <span>&gt; loading modules</span>
+                <span
+                  className={`inline-block ml-1 transition-opacity ${
+                    cursorVisible ? 'opacity-100' : 'opacity-0'
+                  }`}
+                >
+                  ▋
+                </span>
+              </div>
+            )}
           </div>
 
-          {/* Status Label & Percent Readout */}
-          <div className="w-full flex items-center justify-between text-[11px] font-mono text-zinc-400 px-0.5">
-            <span className="tracking-tight transition-opacity duration-200">
-              {statusText}
-            </span>
-            <span className="tabular-nums font-semibold text-zinc-300 ml-2">
-              {Math.round(progress)}%
-            </span>
+          {/* Footer Metadata */}
+          <div className="pt-2 text-[10px] text-[#71717a] flex items-center justify-between border-t border-[#27272a]/60">
+            <span>MEM: ~40MB OK</span>
+            <span>{progress}%</span>
           </div>
         </div>
-      </div>
 
-      {/* Bottom Subtle Corner Telemetry Accent */}
-      <div className="absolute bottom-4 text-center font-mono text-[9px] text-zinc-600 tracking-wider pointer-events-none select-none uppercase">
-        TAURI V2 • REACT 19 • OBSIDIAN QUANTUM RUNTIME
+        {/* Elegant Hairline Progress Indicator */}
+        <div className="h-[2px] w-full bg-[#27272a] relative overflow-hidden">
+          <div
+            className="h-full bg-white transition-all duration-200 ease-out"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
       </div>
     </div>
   );
