@@ -307,6 +307,16 @@ function ThinkingCard({
   );
 }
 
+// Clean prompt helper: strips legacy appended [USER STEER] or [USER]: blocks for pure prompt display
+function getCleanPrompt(description?: string, title?: string): string {
+  const raw = (description || title || '').trim();
+  const steerIdx = raw.search(/\n\s*\[USER(?:\s+STEER)?\]:/i);
+  if (steerIdx !== -1) {
+    return raw.slice(0, steerIdx).trim();
+  }
+  return raw;
+}
+
 export default function AgentConsoleDrawer() {
   const {
     isOpen,
@@ -553,11 +563,13 @@ export default function AgentConsoleDrawer() {
     appendOutput(task.id, trimmed, 'user');
     useDrawerStore.getState().flushSaveDialog(task.id);
 
-    // Update task description in Zustand store with latest user prompt
-    const updatedDesc = task.description
-      ? `${task.description}\n\n[USER]: ${trimmed}`
-      : trimmed;
-    updateTask(task.id, { description: updatedDesc, status: 'running', isTimerRunning: true });
+    // Do NOT pollute task description with user steer messages.
+    // If task has no description yet, set initial prompt. Otherwise, keep original description untouched.
+    if (!task.description) {
+      updateTask(task.id, { description: trimmed, status: 'running', isTimerRunning: true });
+    } else {
+      updateTask(task.id, { status: 'running', isTimerRunning: true });
+    }
 
     try {
       const { invoke } = await import('@tauri-apps/api/core');
@@ -751,7 +763,7 @@ export default function AgentConsoleDrawer() {
               </span>
             </div>
             <div className="text-sm text-[#171717] leading-relaxed whitespace-pre-wrap select-text font-sans">
-              {task.description || task.title}
+              {getCleanPrompt(task.description, task.title)}
             </div>
           </div>
 

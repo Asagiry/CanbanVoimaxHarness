@@ -203,6 +203,17 @@ impl LlmClient {
         }
     }
 
+    /// Stream chat from OpenAI-compatible endpoint with automatic reconnect resilience (alias to stream_openai).
+    pub async fn stream_chat(
+        &self,
+        base_url: &str,
+        api_key: Option<&str>,
+        request: OpenAIChatRequest,
+        tx: Sender<StreamChunk>,
+    ) -> Result<()> {
+        self.stream_openai(base_url, api_key, request, tx).await
+    }
+
     /// Stream an OpenAI-compatible endpoint (OpenAI, Local Antigravity proxy, DeepSeek, Ollama).
     pub async fn stream_openai(
         &self,
@@ -234,34 +245,94 @@ impl LlmClient {
             }
         }
 
-        let response = match self
-            .client
-            .post(&endpoint)
-            .headers(headers)
-            .json(&request)
-            .send()
-            .await
-        {
-            Ok(resp) => resp,
-            Err(e) => {
-                let err_msg = format!("Failed to connect to OpenAI endpoint {}: {}", endpoint, e);
-                eprintln!("CVH [llm_client]: {}", err_msg);
-                let _ = tx.send(StreamChunk::Error(err_msg.clone())).await;
-                bail!(err_msg);
+        let mut attempt = 0;
+        let max_reconnects = 10;
+        let mut response = None;
+
+        loop {
+            let req = self
+                .client
+                .post(&endpoint)
+                .headers(headers.clone())
+                .json(&request);
+
+            match req.send().await {
+                Ok(resp) => {
+                    if resp.status().is_success() {
+                        response = Some(resp);
+                        break;
+                    }
+
+                    let status = resp.status();
+                    let text = resp
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Failed to read error body".to_string());
+                    let err_summary = if text.len() > 120 {
+                        format!("{}...", &text[..120])
+                    } else {
+                        text.clone()
+                    };
+                    let err_msg = format!("HTTP {}: {}", status, err_summary);
+
+                    if status.is_server_error() && attempt < max_reconnects {
+                        attempt += 1;
+                        let delay_secs = attempt * 10;
+                        let notice = format!(
+                            "\n[Связь с LLM API недоступна ({}). Повторная попытка {}/10 через {}с...]\n",
+                            err_msg, attempt, delay_secs
+                        );
+                        eprintln!("CVH [llm_client]: {}", notice);
+                        let _ = tx.send(StreamChunk::Output(notice)).await;
+                        tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs as u64)).await;
+                        if tx.is_closed() {
+                            bail!("Stream channel closed by receiver");
+                        }
+                        continue;
+                    } else {
+                        let final_err = format!("OpenAI API error [{}]: {}", status, text);
+                        eprintln!("CVH [llm_client]: {}", final_err);
+                        let _ = tx.send(StreamChunk::Error(final_err.clone())).await;
+                        bail!(final_err);
+                    }
+                }
+                Err(e) => {
+                    let err_msg = e.to_string();
+                    if attempt < max_reconnects {
+                        attempt += 1;
+                        let delay_secs = attempt * 10;
+                        let notice = format!(
+                            "\n[Связь с LLM API недоступна ({}). Повторная попытка {}/10 через {}с...]\n",
+                            err_msg, attempt, delay_secs
+                        );
+                        eprintln!("CVH [llm_client]: {}", notice);
+                        let _ = tx.send(StreamChunk::Output(notice)).await;
+                        tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs as u64)).await;
+                        if tx.is_closed() {
+                            bail!("Stream channel closed by receiver");
+                        }
+                        continue;
+                    } else {
+                        let final_err = format!(
+                            "Failed to connect to OpenAI endpoint {} after {} attempts: {}",
+                            endpoint, attempt, err_msg
+                        );
+                        eprintln!("CVH [llm_client]: {}", final_err);
+                        let _ = tx.send(StreamChunk::Error(final_err.clone())).await;
+                        bail!(final_err);
+                    }
+                }
+            }
+        }
+
+        let response = match response {
+            Some(r) => r,
+            None => {
+                let final_err = format!("Failed to connect to OpenAI endpoint {} after {} attempts", endpoint, max_reconnects);
+                let _ = tx.send(StreamChunk::Error(final_err.clone())).await;
+                bail!(final_err);
             }
         };
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Failed to read error body".to_string());
-            let err_msg = format!("OpenAI API error [{}]: {}", status, text);
-            eprintln!("CVH [llm_client]: {}", err_msg);
-            let _ = tx.send(StreamChunk::Error(err_msg.clone())).await;
-            bail!(err_msg);
-        }
 
         let mut stream = response.bytes_stream().eventsource();
         let mut tool_calls_in_progress: HashMap<usize, (String, String, String)> = HashMap::new();
@@ -440,34 +511,94 @@ impl LlmClient {
             }
         }
 
-        let response = match self
-            .client
-            .post(&endpoint)
-            .headers(headers)
-            .json(&request)
-            .send()
-            .await
-        {
-            Ok(resp) => resp,
-            Err(e) => {
-                let err_msg = format!("Failed to connect to Anthropic endpoint {}: {}", endpoint, e);
-                eprintln!("CVH [llm_client]: {}", err_msg);
-                let _ = tx.send(StreamChunk::Error(err_msg.clone())).await;
-                bail!(err_msg);
+        let mut attempt = 0;
+        let max_reconnects = 10;
+        let mut response = None;
+
+        loop {
+            let req = self
+                .client
+                .post(&endpoint)
+                .headers(headers.clone())
+                .json(&request);
+
+            match req.send().await {
+                Ok(resp) => {
+                    if resp.status().is_success() {
+                        response = Some(resp);
+                        break;
+                    }
+
+                    let status = resp.status();
+                    let text = resp
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Failed to read error body".to_string());
+                    let err_summary = if text.len() > 120 {
+                        format!("{}...", &text[..120])
+                    } else {
+                        text.clone()
+                    };
+                    let err_msg = format!("HTTP {}: {}", status, err_summary);
+
+                    if status.is_server_error() && attempt < max_reconnects {
+                        attempt += 1;
+                        let delay_secs = attempt * 10;
+                        let notice = format!(
+                            "\n[Связь с LLM API недоступна ({}). Повторная попытка {}/10 через {}с...]\n",
+                            err_msg, attempt, delay_secs
+                        );
+                        eprintln!("CVH [llm_client]: {}", notice);
+                        let _ = tx.send(StreamChunk::Output(notice)).await;
+                        tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs as u64)).await;
+                        if tx.is_closed() {
+                            bail!("Stream channel closed by receiver");
+                        }
+                        continue;
+                    } else {
+                        let final_err = format!("Anthropic API error [{}]: {}", status, text);
+                        eprintln!("CVH [llm_client]: {}", final_err);
+                        let _ = tx.send(StreamChunk::Error(final_err.clone())).await;
+                        bail!(final_err);
+                    }
+                }
+                Err(e) => {
+                    let err_msg = e.to_string();
+                    if attempt < max_reconnects {
+                        attempt += 1;
+                        let delay_secs = attempt * 10;
+                        let notice = format!(
+                            "\n[Связь с LLM API недоступна ({}). Повторная попытка {}/10 через {}с...]\n",
+                            err_msg, attempt, delay_secs
+                        );
+                        eprintln!("CVH [llm_client]: {}", notice);
+                        let _ = tx.send(StreamChunk::Output(notice)).await;
+                        tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs as u64)).await;
+                        if tx.is_closed() {
+                            bail!("Stream channel closed by receiver");
+                        }
+                        continue;
+                    } else {
+                        let final_err = format!(
+                            "Failed to connect to Anthropic endpoint {} after {} attempts: {}",
+                            endpoint, attempt, err_msg
+                        );
+                        eprintln!("CVH [llm_client]: {}", final_err);
+                        let _ = tx.send(StreamChunk::Error(final_err.clone())).await;
+                        bail!(final_err);
+                    }
+                }
+            }
+        }
+
+        let response = match response {
+            Some(r) => r,
+            None => {
+                let final_err = format!("Failed to connect to Anthropic endpoint {} after {} attempts", endpoint, max_reconnects);
+                let _ = tx.send(StreamChunk::Error(final_err.clone())).await;
+                bail!(final_err);
             }
         };
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Failed to read error body".to_string());
-            let err_msg = format!("Anthropic API error [{}]: {}", status, text);
-            eprintln!("CVH [llm_client]: {}", err_msg);
-            let _ = tx.send(StreamChunk::Error(err_msg.clone())).await;
-            bail!(err_msg);
-        }
 
         let mut stream = response.bytes_stream().eventsource();
         let mut tool_blocks: HashMap<usize, (String, String, String)> = HashMap::new();

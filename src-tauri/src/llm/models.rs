@@ -165,6 +165,7 @@ impl TokenUsageStats {
 pub enum StreamChunk {
     Token(String),
     Thought(String),
+    Output(String),
     ToolCall {
         id: String,
         name: String,
