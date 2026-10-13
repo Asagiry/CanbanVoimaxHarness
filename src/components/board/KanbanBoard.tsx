@@ -70,10 +70,11 @@ export default function KanbanBoard() {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
-    const nextIdNum = tasks.length + 1;
-    const paddedId = String(nextIdNum).padStart(3, '0');
-    const taskId = `CVH-${paddedId}`;
-    const slug = newTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 24);
+    const nextIdNum = tasks.length > 0
+      ? Math.max(...tasks.map((t) => parseInt(t.id.replace(/\D/g, ''), 10) || 0), tasks.length) + 1
+      : 1;
+    const paddedId = `CVH-${String(nextIdNum).padStart(3, '0')}`;
+    const taskId = paddedId;
 
     const newTask: KanbanTask = {
       id: taskId,
@@ -82,8 +83,8 @@ export default function KanbanBoard() {
       priority: 'high',
       columnId: targetColumnForNew,
       persona: targetColumnForNew === 'dev' ? 'developer' : targetColumnForNew === 'review' ? 'reviewer' : 'artisan',
-      branch: `feat/${slug}`,
-      worktreePath: `worktrees/${slug}`,
+      branch: `feat/${paddedId.toLowerCase()}`,
+      worktreePath: `.cvh/worktrees/${paddedId.toLowerCase()}`,
       status: targetColumnForNew === 'dev' ? 'running' : 'idle',
       activeStageDuration: 0,
       stageDurations: {},

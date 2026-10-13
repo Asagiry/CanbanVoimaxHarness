@@ -47,9 +47,9 @@ function persistStoredProjects(projects: ProjectInfo[]): void {
 
 const initialProjects = loadStoredProjects();
 const DEFAULT_PROJECT: ProjectInfo = initialProjects[0] || {
-  id: 'current-workspace',
+  id: 'default',
   name: 'CanbanVoimaxHarness',
-  rootPath: typeof window !== 'undefined' ? window.location.pathname : '.',
+  rootPath: '',
   activeBranch: 'main',
   worktreesCount: 0,
 };
@@ -75,8 +75,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       }
     }
 
-    // Immediately reload tasks for the newly selected project
-    await useBoardStore.getState().loadTasks();
+    // When switching projects, clear and reload board tasks
+    const board = useBoardStore.getState();
+    board.setTasks([]);
+    await board.loadTasks();
   },
 
   updateActiveProject: (partial: Partial<ProjectInfo>) => {
@@ -86,68 +88,20 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   loadProjects: async () => {
-    const state = get();
-    if (state.isTauriEnvironment) {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        // 1. Try to load registered projects list from backend
-        const list = await invoke<Array<{ id: string; name: string; path: string; rootPath?: string; activeBranch?: string; worktreesCount?: number }>>('list_projects');
-        if (Array.isArray(list) && list.length > 0) {
-          const mapped: ProjectInfo[] = list.map((p) => ({
-            id: p.id,
-            name: p.name,
-            rootPath: p.rootPath || p.path,
-            activeBranch: p.activeBranch || 'main',
-            worktreesCount: p.worktreesCount || 0,
-          }));
-
-          const stored = loadStoredProjects();
-          const combined = [...mapped];
-          for (const s of stored) {
-            if (!combined.some((c) => c.id === s.id || c.rootPath === s.rootPath)) {
-              combined.push(s);
-            }
-          }
-
-          set({ availableProjects: combined, activeProject: combined[0] });
-          persistStoredProjects(combined);
-          return;
-        }
-
-        // 2. Fallback: query active project config from backend
-        const cfg = await invoke<{ name: string; version: string }>('get_project_config_cmd');
-        if (cfg && cfg.name) {
-          const name = cfg.name;
-          const id = name.toLowerCase().replace(/\s+/g, '-');
-          const proj: ProjectInfo = {
-            id,
-            name,
-            rootPath: '.',
-            activeBranch: 'main',
-            worktreesCount: 0,
-          };
-          const stored = loadStoredProjects();
-          const combined = [proj, ...stored.filter((p) => p.id !== id)];
-          set({ activeProject: proj, availableProjects: combined });
-          persistStoredProjects(combined);
-          return;
-        }
-      } catch (err) {
-        console.warn('Failed to load projects from Tauri:', err);
-      }
-    }
-
-    // Web fallback or Tauri without backend projects
     const stored = loadStoredProjects();
     if (stored.length > 0) {
-      set({ availableProjects: stored, activeProject: stored[0] });
+      set({
+        availableProjects: stored,
+        activeProject: stored[0],
+      });
+    } else {
+      set({
+        availableProjects: [],
+      });
     }
   },
 
   selectProjectFolder: async () => {
-    const state = get();
-    if (!state.isTauriEnvironment) return null;
-
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const chosen = await invoke<string | null>('choose_project_folder');
@@ -168,8 +122,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   setActiveProjectByPath: async (path: string) => {
     const state = get();
     const cleanPath = path.trim();
+    if (!cleanPath) return;
+
     const name = cleanPath.split(/[/\\]/).filter(Boolean).pop() || 'Project';
-    const id = name.toLowerCase().replace(/\s+/g, '-');
+    const id = name.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
 
     let projName = name;
     if (state.isTauriEnvironment) {
@@ -201,7 +157,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     });
     persistStoredProjects(updatedProjects);
 
-    // Immediately reload tasks for the new project
-    await useBoardStore.getState().loadTasks();
+    // Call useBoardStore.getState().loadTasks() to load that project's tasks
+    const board = useBoardStore.getState();
+    board.setTasks([]);
+    await board.loadTasks();
   },
 }));

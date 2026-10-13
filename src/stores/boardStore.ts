@@ -41,9 +41,8 @@ const STAGE_ORDER: Record<string, number> = {
 export function getTasksStorageKey(): string {
   try {
     const activeProject = useProjectStore.getState().activeProject;
-    const activeProjectId = activeProject?.id || activeProject?.rootPath || 'default';
-    const cleanId = String(activeProjectId).replace(/[^a-zA-Z0-9_\-]/g, '_');
-    return `cvh_tasks_${cleanId}`;
+    const storageKey = `cvh_tasks_${activeProject?.id || 'default'}`;
+    return storageKey;
   } catch {
     return 'cvh_tasks_default';
   }
