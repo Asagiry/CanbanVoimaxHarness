@@ -111,6 +111,8 @@ pub struct PipelineColumn {
     pub icon: Option<String>,
     #[serde(default)]
     pub persona: Option<String>,
+    #[serde(rename = "onEnterScript", default)]
+    pub on_enter_script: Option<String>,
     #[serde(rename = "contextWindow", default)]
     pub context_window: Option<u64>,
     #[serde(rename = "modelOverride", default)]
@@ -343,6 +345,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 color: Some("#64748b".to_string()),
                 icon: Some("Inbox".to_string()),
                 persona: None,
+                on_enter_script: None,
                 context_window: Some(128000),
                 model_override: None,
                 reasoning_effort: None,
@@ -366,6 +369,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 color: Some("#f59e0b".to_string()),
                 icon: Some("Code2".to_string()),
                 persona: Some("developer".to_string()),
+                on_enter_script: None,
                 context_window: Some(400000),
                 model_override: Some("gemini-3.8-flash-high".to_string()),
                 reasoning_effort: None,
@@ -391,6 +395,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 color: Some("#8b5cf6".to_string()),
                 icon: Some("CheckSquare".to_string()),
                 persona: Some("reviewer".to_string()),
+                on_enter_script: None,
                 context_window: Some(200000),
                 model_override: Some("gemini-3.8-flash-high".to_string()),
                 reasoning_effort: None,
@@ -414,6 +419,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 color: Some("#ec4899".to_string()),
                 icon: Some("History".to_string()),
                 persona: Some("retro".to_string()),
+                on_enter_script: None,
                 context_window: Some(128000),
                 model_override: Some("gemini-3.8-flash-high".to_string()),
                 reasoning_effort: None,
@@ -437,6 +443,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 color: Some("#10b981".to_string()),
                 icon: Some("CheckCircle2".to_string()),
                 persona: None,
+                on_enter_script: None,
                 context_window: Some(64000),
                 model_override: None,
                 reasoning_effort: None,
@@ -556,6 +563,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 color: Some("#a855f7".to_string()),
                 icon: Some("Lightbulb".to_string()),
                 persona: Some("concept-artist".to_string()),
+                on_enter_script: None,
                 context_window: Some(200000),
                 model_override: Some("gemini-3.8-flash-high".to_string()),
                 reasoning_effort: None,
@@ -577,6 +585,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 color: Some("#3b82f6".to_string()),
                 icon: Some("Box".to_string()),
                 persona: Some("modeler".to_string()),
+                on_enter_script: None,
                 context_window: Some(300000),
                 model_override: Some("gemini-3.8-flash-high".to_string()),
                 reasoning_effort: None,
@@ -601,6 +610,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 color: Some("#f59e0b".to_string()),
                 icon: Some("Palette".to_string()),
                 persona: Some("texture-artist".to_string()),
+                on_enter_script: None,
                 context_window: Some(200000),
                 model_override: Some("gemini-3.8-flash-high".to_string()),
                 reasoning_effort: None,
@@ -625,6 +635,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 color: Some("#10b981".to_string()),
                 icon: Some("CheckCircle2".to_string()),
                 persona: None,
+                on_enter_script: None,
                 context_window: Some(64000),
                 model_override: None,
                 reasoning_effort: None,
@@ -641,7 +652,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 terminal: Some(true),
             },
         ],
-        _ => get_canonical_board_columns(),
+_ => get_canonical_board_columns(),
     }
 }
 

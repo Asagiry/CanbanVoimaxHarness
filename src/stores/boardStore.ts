@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { KanbanTask, PipelineColumn, TaskStatus, TaskVerdict, TaskPriority, BoardDef } from '../types';
+import { KanbanTask, PipelineColumn, PipelineConfig, TaskStatus, TaskVerdict, TaskPriority, BoardDef } from '../types';
 import { INITIAL_COLUMNS } from './mockData';
 import { useProjectStore } from './projectStore';
 
@@ -79,6 +79,7 @@ interface BoardState {
   saveBoard: (board: BoardDef) => Promise<void>;
   deleteBoard: (boardId: string) => Promise<void>;
   saveCurrentBoard: (columns: PipelineColumn[]) => Promise<void>;
+  updateColumn: (columnId: string, partial: Partial<PipelineColumn>) => Promise<void>;
 
   loadColumns: () => Promise<void>;
   loadTasks: () => Promise<void>;
@@ -389,6 +390,31 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     await get().saveBoard(updated);
   },
 
+  updateColumn: async (columnId: string, partial: Partial<PipelineColumn>) => {
+    const { columns, activeBoardId, boards } = get();
+    const nextColumns = columns.map((c) => (c.id === columnId ? { ...c, ...partial } : c));
+    const updatedBoards = boards.map((b) => (b.id === activeBoardId ? { ...b, columns: nextColumns } : b));
+    set({ columns: nextColumns, boards: updatedBoards });
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      let cfg: PipelineConfig | null = null;
+      try {
+        cfg = await invoke<PipelineConfig>('get_pipeline');
+      } catch {
+        cfg = null;
+      }
+      const pipeline: PipelineConfig = {
+        id: cfg?.id ?? 'default-engineering',
+        title: cfg?.title ?? 'Инженерный пайплайн',
+        columns: nextColumns,
+      };
+      await invoke('save_pipeline', { pipeline });
+      await get().saveCurrentBoard(nextColumns);
+    } catch (err) {
+      console.info('updateColumn failed or in web mode:', err);
+    }
+  },
+
   loadColumns: async () => {
     await get().loadBoards();
   },
@@ -480,6 +506,15 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
     set({ tasks: updatedTasks });
     persistTasksToLocalStorage(updatedTasks);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('move_task_stage', {
+        taskId,
+        targetStageId: targetColumnId,
+      });
+    } catch (err) {
+      console.info('Backend move_task_stage failed or in web mode:', err);
+    }
     await syncTasksBackend(updatedTasks);
 
     // Column = agent: autoRun triggers run_agent on entry (default: !!persona)

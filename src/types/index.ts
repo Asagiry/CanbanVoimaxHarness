@@ -47,6 +47,7 @@ export interface PipelineColumn {
   color: string;
   icon: string;
   persona: string | null;
+  onEnterScript?: string | null;
   // Column = agent: autoRun triggers run_agent on entry (default: !!persona),
   // terminal marks a sink column (task becomes done, no further promotion).
   autoRun?: boolean;

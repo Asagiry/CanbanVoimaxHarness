@@ -883,7 +883,7 @@ pub async fn create_task(
     let root = state.get_root();
     let mut tasks = load_tasks_from_disk(&root).await;
 
-    let effective_board_id = match board_id {
+    let effective_board_id = match board_id.as_deref() {
         Some(b) if !b.trim().is_empty() => b.trim().to_string(),
         _ => {
             load_boards_config(&root)
@@ -912,7 +912,7 @@ pub async fn create_task(
         title: title.clone(),
         description: description.clone(),
         stage_id: stage_id.clone(),
-        board_id: Some(effective_board_id),
+        board_id: Some(effective_board_id.clone()),
         worktree_path: Some(worktree_path.clone()),
         branch: Some(branch.clone()),
         verdict: None,
@@ -929,6 +929,7 @@ pub async fn create_task(
     // Check pipeline config for stage hooks
     if let Ok(pipeline) = load_pipeline_config(&root).await {
         if let Some(col) = pipeline.columns.iter().find(|c| c.id == stage_id) {
+            trigger_column_on_enter_script(col, &new_task, &stage_id, None, &root).await;
             if let Some(hook_rel) = col.hooks.get("on_enter") {
                 let hook_path = root.join(hook_rel);
                 if hook_path.exists() {
@@ -938,6 +939,8 @@ pub async fn create_task(
                         worktree_path: worktree_path.clone(),
                         branch: branch.clone(),
                         verdict: None,
+                        stage_id: Some(stage_id.clone()),
+                        board_id: Some(effective_board_id.clone()),
                         extra_env: HashMap::new(),
                     };
                     let _ = execute_hook(hook_path, &root, &ctx, None).await;
@@ -1095,14 +1098,106 @@ pub async fn create_subtask(
     let _ = app_handle.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
 
     if target_col.auto_run == Some(true) || target_col.persona.is_some() {
+        let col_clone = target_col.clone();
+        let subtask_clone = new_subtask.clone();
+        let root_clone = root.clone();
         let sid = subtask_id.clone();
         let app = app_handle.clone();
         tokio::spawn(async move {
+            trigger_column_on_enter_script(
+                &col_clone,
+                &subtask_clone,
+                &col_clone.id,
+                None,
+                &root_clone,
+            )
+            .await;
             let _ = run_agent(sid, Some(subtask_desc), app).await;
         });
     }
 
     Ok(new_subtask)
+}
+
+/// Helper: executes column on_enter_script if configured on the target column.
+/// Runs execute_hook asynchronously, injecting CVH env vars including CVH_STAGE_ID and CVH_BOARD_ID.
+/// Logs success or error output to console.
+pub async fn trigger_column_on_enter_script(
+    col: &crate::config::PipelineColumn,
+    task: &Task,
+    target_stage_id: &str,
+    verdict: Option<&str>,
+    root: &Path,
+) {
+    if let Some(ref script_str) = col.on_enter_script {
+        let trimmed = script_str.trim();
+        if trimmed.is_empty() {
+            return;
+        }
+
+        let script_buf = PathBuf::from(trimmed);
+        let script_path = if script_buf.is_absolute() {
+            script_buf
+        } else {
+            root.join(&script_buf)
+        };
+
+        if !script_path.exists() {
+            eprintln!(
+                "CVH [on_enter_script]: Hook script does not exist at {:?}",
+                script_path
+            );
+            return;
+        }
+
+        let wt_path = task
+            .worktree_path
+            .as_deref()
+            .map(PathBuf::from)
+            .filter(|p| p.exists())
+            .unwrap_or_else(|| root.to_path_buf());
+
+        let ctx = HookContext {
+            task_id: task.id.clone(),
+            task_title: task.title.clone(),
+            worktree_path: task.worktree_path.clone().unwrap_or_default(),
+            branch: task.branch.clone().unwrap_or_default(),
+            verdict: verdict.map(|v| v.to_string()).or_else(|| task.verdict.clone()),
+            stage_id: Some(target_stage_id.to_string()),
+            board_id: task.board_id.clone(),
+            extra_env: HashMap::new(),
+        };
+
+        println!(
+            "CVH [on_enter_script]: Executing hook {:?} for task {} entering stage {}",
+            script_path, task.id, target_stage_id
+        );
+
+        match execute_hook(&script_path, &wt_path, &ctx, None).await {
+            Ok(res) => {
+                if res.success {
+                    println!(
+                        "CVH [on_enter_script]: Hook {:?} succeeded for task {} in stage {} (exit code {:?}):
+STDOUT: {}",
+                        script_path, task.id, target_stage_id, res.exit_code, res.stdout
+                    );
+                } else {
+                    eprintln!(
+                        "CVH [on_enter_script]: Hook {:?} failed for task {} in stage {} (exit code {:?}):
+STDOUT: {}
+STDERR: {}",
+                        script_path, task.id, target_stage_id, res.exit_code, res.stdout, res.stderr
+                    );
+                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "CVH [on_enter_script]: Error executing hook {:?} for task {}: {}",
+                    script_path, task.id, e
+                );
+            }
+        }
+    }
 }
 
 #[tauri::command]
@@ -1177,6 +1272,8 @@ pub async fn move_task_stage(
                 worktree_path: current_task.worktree_path.clone().unwrap_or_default(),
                 branch: current_task.branch.clone().unwrap_or_default(),
                 verdict: verdict.clone().or_else(|| current_task.verdict.clone()),
+                stage_id: Some(target_stage_id.clone()),
+                board_id: current_task.board_id.clone(),
                 extra_env: HashMap::new(),
             };
             let hook_res = execute_hook(hook_path, &root, &ctx, None)
@@ -1191,6 +1288,16 @@ pub async fn move_task_stage(
             }
         }
     }
+
+    // Trigger on_enter_script if configured on target column
+    trigger_column_on_enter_script(
+        &target_col,
+        current_task,
+        &target_stage_id,
+        verdict.as_deref(),
+        &root,
+    )
+    .await;
 
     // Update task
     current_task.stage_id = target_stage_id;
@@ -1304,6 +1411,7 @@ pub async fn run_agent(
                     color: None,
                     icon: None,
                     persona: Some("developer".to_string()),
+                    on_enter_script: None,
                     context_window: Some(400000),
                     model_override: None,
                     reasoning_effort: None,
@@ -1804,12 +1912,30 @@ pub async fn run_agent(
                                 );
 
                                 if next_col.persona.is_some() || next_col.auto_run == Some(true) {
+                                    trigger_column_on_enter_script(
+                                        &next_col,
+                                        &new_subtask,
+                                        &next_col.id,
+                                        None,
+                                        &root_task,
+                                    )
+                                    .await;
                                     let _ = app.emit("agent:autorun", serde_json::json!({ "taskId": &next_subtask_id }));
                                 }
                             } else {
                                 // Terminal stage: all subtasks complete! Move root parent task to Done!
                                 if let Some(p_idx) = tasks.iter().position(|t| t.id == pid) {
-                                    let term_stage_id = next_stage_col.map(|c| c.id).unwrap_or_else(|| "ready".to_string());
+                                    let term_stage_id = next_stage_col.as_ref().map(|c| c.id.clone()).unwrap_or_else(|| "ready".to_string());
+                                    if let Some(ref term_col) = next_stage_col {
+                                        trigger_column_on_enter_script(
+                                            term_col,
+                                            &tasks[p_idx],
+                                            &term_stage_id,
+                                            Some("APPROVED"),
+                                            &root_task,
+                                        )
+                                        .await;
+                                    }
                                     tasks[p_idx].stage_id = term_stage_id.clone();
                                     tasks[p_idx].status = Some("done".to_string());
                                     tasks[p_idx].waiting_for_subtask_id = None;
@@ -1941,10 +2067,26 @@ pub async fn run_agent(
                                 );
 
                                 if next_col.persona.is_some() || next_col.auto_run == Some(true) {
+                                    trigger_column_on_enter_script(
+                                        &next_col,
+                                        &new_subtask,
+                                        &next_col.id,
+                                        None,
+                                        &root_task,
+                                    )
+                                    .await;
                                     let _ = app.emit("agent:autorun", serde_json::json!({ "taskId": &subtask_id }));
                                 }
                             } else {
                                 // Terminal column or non-persona: move root task directly
+                                trigger_column_on_enter_script(
+                                    &next_col,
+                                    &tasks[task_idx],
+                                    &next_col.id,
+                                    None,
+                                    &root_task,
+                                )
+                                .await;
                                 tasks[task_idx].stage_id = next_col.id.clone();
                                 tasks[task_idx].status = Some(if is_terminal { "done".to_string() } else { "idle".to_string() });
                                 tasks[task_idx].updated_at = Utc::now().timestamp_millis();
@@ -2537,6 +2679,7 @@ mod tests {
             color: None,
             icon: None,
             persona: None,
+            on_enter_script: None,
             context_window: None,
             model_override: None,
             reasoning_effort: None,
