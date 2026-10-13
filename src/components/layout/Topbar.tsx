@@ -5,6 +5,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { useToolPolicyStore } from '../../stores/toolPolicyStore';
 import {
   FolderOpen,
+  Layout,
   Search,
   Settings,
   Wrench,
@@ -12,7 +13,7 @@ import {
 
 export default function Topbar() {
   const { activeProject, availableProjects, switchProject, openFolder } = useProjectStore();
-  const { searchQuery, setSearchQuery, loadTasks } = useBoardStore();
+  const { searchQuery, setSearchQuery, loadTasks, boards, activeBoardId, setActiveBoard } = useBoardStore();
   const { openSettings } = useSettingsStore();
   const { openModal: openToolPolicyModal } = useToolPolicyStore();
   const searchInputId = useId();
@@ -95,6 +96,24 @@ export default function Topbar() {
           <FolderOpen className="h-3.5 w-3.5 text-[#666666]" />
           <span>Открыть папку</span>
         </button>
+
+        {boards.length > 1 && (
+          <div className="flex items-center space-x-1 pl-1.5 border-l border-[#ebebeb]">
+            <Layout className="h-3 w-3 text-[#71717a]" />
+            <select
+              value={activeBoardId}
+              onChange={(e) => setActiveBoard(e.target.value)}
+              className="bg-white hover:bg-[#f9f9f9] border border-[#ebebeb] rounded-md px-2 py-0.5 text-xs text-[#171717] font-medium transition cursor-pointer"
+              title="Переключить доску"
+            >
+              {boards.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Center: Clean Search Bar */}

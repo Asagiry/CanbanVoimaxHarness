@@ -1,7 +1,13 @@
 import { create } from 'zustand';
-import { KanbanTask, PipelineColumn, TaskStatus, TaskVerdict, TaskPriority } from '../types';
+import { KanbanTask, PipelineColumn, TaskStatus, TaskVerdict, TaskPriority, BoardDef } from '../types';
 import { INITIAL_COLUMNS } from './mockData';
 import { useProjectStore } from './projectStore';
+
+export const DEFAULT_BOARD: BoardDef = {
+  id: 'development',
+  name: 'Разработка',
+  columns: INITIAL_COLUMNS,
+};
 
 interface BoardState {
   columns: PipelineColumn[];
@@ -12,12 +18,24 @@ interface BoardState {
   isTauriConnected: boolean;
   isLoadingTasks: boolean;
 
+  boards: BoardDef[];
+  activeBoardId: string;
+  isLoadingBoards: boolean;
+
   // Actions
   setColumns: (columns: PipelineColumn[]) => void;
   setTasks: (tasks: KanbanTask[]) => void;
   setSelectedTaskId: (id: string | null) => void;
   setHoveredTaskId: (id: string | null) => void;
   setSearchQuery: (query: string) => void;
+
+  setBoards: (boards: BoardDef[]) => void;
+  setActiveBoard: (boardId: string) => Promise<void>;
+  loadBoards: () => Promise<void>;
+  createBoard: (name: string, template?: string) => Promise<BoardDef | null>;
+  saveBoard: (board: BoardDef) => Promise<void>;
+  deleteBoard: (boardId: string) => Promise<void>;
+  saveCurrentBoard: (columns: PipelineColumn[]) => Promise<void>;
 
   loadColumns: () => Promise<void>;
   loadTasks: () => Promise<void>;
@@ -73,6 +91,7 @@ function loadTasksFromLocalStorage(): KanbanTask[] {
 export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
   try {
     const { invoke } = await import('@tauri-apps/api/core');
+    const activeBoardId = useBoardStore.getState().activeBoardId || 'development';
     // NOTE: send ONLY canonical camelCase keys. Sending both stageId+columnId
     // makes Rust serde fail with "duplicate field `stageId`" and save_tasks
     // silently never persists (this broke run_agent with "Task not found").
@@ -81,6 +100,7 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
       title: t.title,
       description: t.description || '',
       stageId: t.columnId,
+      boardId: t.boardId || activeBoardId,
       worktreePath: t.worktreePath,
       branch: t.branch,
       verdict: t.verdict === 'NONE' ? null : t.verdict,
@@ -131,6 +151,7 @@ function mapBackendTaskToKanban(t: any): KanbanTask {
     description: t.description || undefined,
     priority: (t.priority as TaskPriority) || 'high',
     columnId,
+    boardId: t.boardId || t.board_id || 'development',
     persona: col?.persona ?? 'developer',
     branch: t.branch || `feat/${t.id.toLowerCase()}`,
     worktreePath: t.worktreePath || t.worktree_path || `worktrees/${t.id.toLowerCase()}`,
@@ -160,7 +181,15 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   isTauriConnected: false,
   isLoadingTasks: false,
 
-  setColumns: (columns) => set({ columns }),
+  boards: [DEFAULT_BOARD],
+  activeBoardId: 'development',
+  isLoadingBoards: false,
+
+  setColumns: (columns) => {
+    const { activeBoardId, boards } = get();
+    const updatedBoards = boards.map((b) => (b.id === activeBoardId ? { ...b, columns } : b));
+    set({ columns, boards: updatedBoards });
+  },
   setTasks: (tasks) => {
     persistTasksToLocalStorage(tasks);
     set({ tasks });
@@ -168,36 +197,157 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   setSelectedTaskId: (id) => set({ selectedTaskId: id }),
   setHoveredTaskId: (id) => set({ hoveredTaskId: id }),
   setSearchQuery: (query) => set({ searchQuery: query }),
+  setBoards: (boards) => set({ boards }),
 
-  loadColumns: async () => {
+  setActiveBoard: async (boardId: string) => {
+    const { boards } = get();
+    const targetBoard = boards.find((b) => b.id === boardId);
+    if (!targetBoard) return;
+    set({
+      activeBoardId: boardId,
+      columns: targetBoard.columns,
+    });
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      // Backend get_pipeline returns PipelineConfig { id, title, columns }
-      const pipeline = await invoke<{ id: string; title: string; columns: any[] }>('get_pipeline');
-      const rawCols = pipeline?.columns;
-      if (Array.isArray(rawCols) && rawCols.length > 0) {
-        const mapped: PipelineColumn[] = rawCols.map((c: any) => ({
-          id: c.id,
-          title: c.title,
-          color: c.color ?? '#64748b',
-          icon: c.icon ?? 'Inbox',
-          persona: c.persona ?? null,
-          autoRun: c.autoRun,
-          terminal: c.terminal,
-          contextWindow: c.contextWindow ?? c.context_window ?? 128000,
-          modelOverride: c.modelOverride ?? c.model_override ?? null,
-          temperature: c.temperature,
-          reasoningEffort: c.reasoningEffort ?? c.reasoning_effort,
-          gatekeeperSensor: c.gatekeeperSensor ?? c.gatekeeper_sensor ?? null,
-          wipLimit: c.wipLimit,
-          hooks: c.hooks ?? {},
-          routes: c.routes ?? undefined,
-        }));
-        set({ columns: mapped });
+      await invoke('set_active_board', { boardId });
+    } catch (err) {
+      console.info('set_active_board IPC failed or in web mode:', err);
+    }
+  },
+
+  loadBoards: async () => {
+    set({ isLoadingBoards: true });
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const [rawBoards, rawActiveId] = await Promise.all([
+        invoke<BoardDef[]>('list_boards'),
+        invoke<string>('get_active_board_id').catch(() => 'development'),
+      ]);
+      if (Array.isArray(rawBoards) && rawBoards.length > 0) {
+        const activeId = rawBoards.some((b) => b.id === rawActiveId)
+          ? rawActiveId
+          : rawBoards[0].id;
+        const currentBoard = rawBoards.find((b) => b.id === activeId) ?? rawBoards[0];
+        set({
+          boards: rawBoards,
+          activeBoardId: activeId,
+          columns: currentBoard.columns,
+          isLoadingBoards: false,
+        });
+        return;
       }
     } catch (err) {
-      console.info('Tauri get_pipeline not available or in web mode:', err);
+      console.info('loadBoards IPC not available or in web mode:', err);
     }
+
+    const current = get();
+    if (current.boards.length > 0) {
+      const curBoard = current.boards.find((b) => b.id === current.activeBoardId) ?? current.boards[0];
+      set({ columns: curBoard.columns, isLoadingBoards: false });
+    } else {
+      set({
+        boards: [DEFAULT_BOARD],
+        activeBoardId: 'development',
+        columns: INITIAL_COLUMNS,
+        isLoadingBoards: false,
+      });
+    }
+  },
+
+  createBoard: async (name: string, template?: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const newBoard = await invoke<BoardDef>('create_board', {
+        name: trimmed,
+        template: template || null,
+      });
+      if (newBoard) {
+        set((state) => ({
+          boards: [...state.boards, newBoard],
+          activeBoardId: newBoard.id,
+          columns: newBoard.columns,
+        }));
+        return newBoard;
+      }
+    } catch (err) {
+      console.info('create_board IPC failed, falling back to local state:', err);
+    }
+
+    const slug = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'board';
+    const uniqueId = `${slug}-${Date.now().toString(36)}`;
+    const newBoard: BoardDef = {
+      id: uniqueId,
+      name: trimmed,
+      columns: INITIAL_COLUMNS,
+    };
+    set((state) => ({
+      boards: [...state.boards, newBoard],
+      activeBoardId: uniqueId,
+      columns: newBoard.columns,
+    }));
+    return newBoard;
+  },
+
+  saveBoard: async (board: BoardDef) => {
+    set((state) => {
+      const nextBoards = state.boards.map((b) => (b.id === board.id ? board : b));
+      const isCurrent = state.activeBoardId === board.id;
+      return {
+        boards: nextBoards,
+        columns: isCurrent ? board.columns : state.columns,
+      };
+    });
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('save_board', { board });
+    } catch (err) {
+      console.info('save_board IPC failed or in web mode:', err);
+    }
+  },
+
+  deleteBoard: async (boardId: string) => {
+    const { boards, activeBoardId, tasks } = get();
+    if (boards.length <= 1) return;
+
+    const filtered = boards.filter((b) => b.id !== boardId);
+    const nextActiveId = activeBoardId === boardId ? filtered[0].id : activeBoardId;
+    const nextBoard = filtered.find((b) => b.id === nextActiveId) ?? filtered[0];
+
+    const updatedTasks = tasks.map((t) =>
+      (t.boardId || 'development') === boardId ? { ...t, boardId: nextActiveId } : t
+    );
+
+    set({
+      boards: filtered,
+      activeBoardId: nextActiveId,
+      columns: nextBoard.columns,
+      tasks: updatedTasks,
+    });
+    persistTasksToLocalStorage(updatedTasks);
+
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('delete_board', { boardId });
+    } catch (err) {
+      console.info('delete_board IPC failed or in web mode:', err);
+    }
+  },
+
+  saveCurrentBoard: async (columns: PipelineColumn[]) => {
+    const { activeBoardId, boards } = get();
+    const current = boards.find((b) => b.id === activeBoardId);
+    if (!current) {
+      set({ columns });
+      return;
+    }
+    const updated: BoardDef = { ...current, columns };
+    await get().saveBoard(updated);
+  },
+
+  loadColumns: async () => {
+    await get().loadBoards();
   },
 
   loadTasks: async () => {
@@ -306,14 +456,19 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   },
 
   addTask: async (task) => {
-    const updatedTasks = [task, ...get().tasks];
+    const activeBoardId = get().activeBoardId || 'development';
+    const taskWithBoard: KanbanTask = {
+      ...task,
+      boardId: task.boardId || activeBoardId,
+    };
+    const updatedTasks = [taskWithBoard, ...get().tasks];
     set({ tasks: updatedTasks });
     persistTasksToLocalStorage(updatedTasks);
     await syncTasksBackend(updatedTasks);
 
-    const targetColDef = get().columns.find((c) => c.id === task.columnId);
+    const targetColDef = get().columns.find((c) => c.id === taskWithBoard.columnId);
     if (targetColDef?.autoRun ?? !!targetColDef?.persona) {
-      await triggerRunAgent(task.id, task.description);
+      await triggerRunAgent(taskWithBoard.id, taskWithBoard.description);
     }
   },
 

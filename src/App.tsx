@@ -13,17 +13,17 @@ import { useUiZoom } from './hooks/useUiZoom';
 
 export default function App() {
   const { rootStyle, zoomPercent, showIndicator, resetZoom } = useUiZoom();
-  const { loadColumns, loadTasks, runTaskAgent } = useBoardStore();
+  const { loadColumns, loadTasks, runTaskAgent, loadBoards } = useBoardStore();
   const { loadProjects } = useProjectStore();
   const { appendThought, appendOutput, addToolExecution, updateToolExecution, updateTelemetry, setThinkingStartTime } = useDrawerStore();
 
   useEffect(() => {
     loadProjects().then(async () => {
-      // Columns first: task mapping (columnId fallback, persona, status) resolves via columns
-      await loadColumns();
+      // Boards and columns first: task mapping (columnId fallback, persona, status) resolves via columns
+      await loadBoards();
       await loadTasks();
     });
-  }, [loadProjects, loadColumns, loadTasks]);
+  }, [loadProjects, loadBoards, loadTasks]);
 
   useEffect(() => {
     let unlisteners: (() => void)[] = [];

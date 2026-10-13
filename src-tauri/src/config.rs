@@ -101,7 +101,7 @@ pub struct ProjectConfig {
     pub providers: HashMap<String, ProviderConfig>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PipelineColumn {
     pub id: String,
     pub title: String,
@@ -133,6 +133,25 @@ pub struct PipelineColumn {
     pub terminal: Option<bool>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BoardDef {
+    pub id: String,
+    pub name: String,
+    pub columns: Vec<PipelineColumn>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BoardsConfig {
+    #[serde(rename = "activeBoardId", default = "default_board_id")]
+    pub active_board_id: String,
+    #[serde(default)]
+    pub boards: Vec<BoardDef>,
+}
+
+pub fn default_board_id() -> String {
+    "development".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PipelineConfig {
     pub id: String,
@@ -140,6 +159,10 @@ pub struct PipelineConfig {
     #[serde(rename = "toolPermissions", default)]
     pub tool_permissions: Option<ToolPermissions>,
     pub columns: Vec<PipelineColumn>,
+    #[serde(default)]
+    pub boards: Option<Vec<BoardDef>>,
+    #[serde(rename = "activeBoardId", default)]
+    pub active_board_id: Option<String>,
 }
 
 pub fn resolve_allowed_tools(
@@ -430,7 +453,272 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 terminal: None,
             },
         ],
+        boards: None,
+        active_board_id: None,
     }
+}
+
+pub fn default_board_def() -> BoardDef {
+    BoardDef {
+        id: "development".to_string(),
+        name: "Разработка".to_string(),
+        columns: default_pipeline_config().columns,
+    }
+}
+
+pub fn default_boards_config() -> BoardsConfig {
+    BoardsConfig {
+        active_board_id: "development".to_string(),
+        boards: vec![default_board_def()],
+    }
+}
+
+pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
+    match template.to_lowercase().as_str() {
+        "modeler" | "3d" | "3d-modeler" => vec![
+            PipelineColumn {
+                id: "concept".to_string(),
+                title: "Концепт".to_string(),
+                color: Some("#a855f7".to_string()),
+                icon: Some("Lightbulb".to_string()),
+                persona: Some("concept-artist".to_string()),
+                context_window: Some(200000),
+                model_override: Some("gemini-3.8-flash-high".to_string()),
+                reasoning_effort: None,
+                temperature: Some(0.4),
+                gatekeeper_sensor: None,
+                allowed_tools: Some(vec![
+                    "web_search".to_string(),
+                    "web_fetch".to_string(),
+                    "read_file".to_string(),
+                ]),
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            PipelineColumn {
+                id: "modeling".to_string(),
+                title: "Моделирование".to_string(),
+                color: Some("#3b82f6".to_string()),
+                icon: Some("Box".to_string()),
+                persona: Some("modeler".to_string()),
+                context_window: Some(300000),
+                model_override: Some("gemini-3.8-flash-high".to_string()),
+                reasoning_effort: None,
+                temperature: Some(0.2),
+                gatekeeper_sensor: None,
+                allowed_tools: Some(vec![
+                    "execute_command".to_string(),
+                    "read_file".to_string(),
+                    "edit_file".to_string(),
+                    "write_file".to_string(),
+                    "glob".to_string(),
+                    "grep".to_string(),
+                ]),
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            PipelineColumn {
+                id: "texturing".to_string(),
+                title: "Текстурирование".to_string(),
+                color: Some("#f59e0b".to_string()),
+                icon: Some("Palette".to_string()),
+                persona: Some("texture-artist".to_string()),
+                context_window: Some(200000),
+                model_override: Some("gemini-3.8-flash-high".to_string()),
+                reasoning_effort: None,
+                temperature: Some(0.2),
+                gatekeeper_sensor: None,
+                allowed_tools: Some(vec![
+                    "execute_command".to_string(),
+                    "read_file".to_string(),
+                    "edit_file".to_string(),
+                    "write_file".to_string(),
+                    "glob".to_string(),
+                    "grep".to_string(),
+                ]),
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            PipelineColumn {
+                id: "ready".to_string(),
+                title: "Готово".to_string(),
+                color: Some("#10b981".to_string()),
+                icon: Some("CheckCircle2".to_string()),
+                persona: None,
+                context_window: Some(64000),
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: Some(vec![
+                    "read_file".to_string(),
+                    "glob".to_string(),
+                    "grep".to_string(),
+                ]),
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: Some(true),
+            },
+        ],
+        "kanban" | "simple" => vec![
+            PipelineColumn {
+                id: "todo".to_string(),
+                title: "К выполнению".to_string(),
+                color: Some("#64748b".to_string()),
+                icon: Some("Inbox".to_string()),
+                persona: None,
+                context_window: Some(128000),
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            PipelineColumn {
+                id: "in_progress".to_string(),
+                title: "В работе".to_string(),
+                color: Some("#3b82f6".to_string()),
+                icon: Some("PlayCircle".to_string()),
+                persona: Some("developer".to_string()),
+                context_window: Some(400000),
+                model_override: Some("gemini-3.8-flash-high".to_string()),
+                reasoning_effort: None,
+                temperature: Some(0.2),
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            PipelineColumn {
+                id: "ready".to_string(),
+                title: "Готово".to_string(),
+                color: Some("#10b981".to_string()),
+                icon: Some("CheckCircle2".to_string()),
+                persona: None,
+                context_window: Some(64000),
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: Some(true),
+            },
+        ],
+        "empty" => vec![
+            PipelineColumn {
+                id: "backlog".to_string(),
+                title: "Бэклог".to_string(),
+                color: Some("#64748b".to_string()),
+                icon: Some("Inbox".to_string()),
+                persona: None,
+                context_window: Some(128000),
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            PipelineColumn {
+                id: "ready".to_string(),
+                title: "Готово".to_string(),
+                color: Some("#10b981".to_string()),
+                icon: Some("CheckCircle2".to_string()),
+                persona: None,
+                context_window: Some(64000),
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: Some(true),
+            },
+        ],
+        _ => default_pipeline_config().columns,
+    }
+}
+
+pub async fn load_boards_config(root_path: impl AsRef<Path>) -> Result<BoardsConfig> {
+    let root = root_path.as_ref();
+    let boards_file = root.join(".cvh").join("boards.json");
+    if boards_file.exists() {
+        if let Ok(content) = tokio::fs::read_to_string(&boards_file).await {
+            if let Ok(cfg) = serde_json::from_str::<BoardsConfig>(&content) {
+                if !cfg.boards.is_empty() {
+                    return Ok(cfg);
+                }
+            }
+        }
+    }
+
+    let pipeline_file = root.join(".cvh").join("pipeline.json");
+    if pipeline_file.exists() {
+        if let Ok(content) = tokio::fs::read_to_string(&pipeline_file).await {
+            if let Ok(pipe) = serde_json::from_str::<PipelineConfig>(&content) {
+                if let Some(boards) = pipe.boards {
+                    if !boards.is_empty() {
+                        let active = pipe.active_board_id.unwrap_or_else(default_board_id);
+                        return Ok(BoardsConfig {
+                            active_board_id: active,
+                            boards,
+                        });
+                    }
+                }
+                let def_board = BoardDef {
+                    id: "development".to_string(),
+                    name: if pipe.title.trim().is_empty() { "Разработка".to_string() } else { pipe.title },
+                    columns: if pipe.columns.is_empty() { default_pipeline_config().columns } else { pipe.columns },
+                };
+                return Ok(BoardsConfig {
+                    active_board_id: "development".to_string(),
+                    boards: vec![def_board],
+                });
+            }
+        }
+    }
+
+    Ok(default_boards_config())
+}
+
+pub async fn save_boards_config(root_path: impl AsRef<Path>, config: &BoardsConfig) -> Result<()> {
+    let root = root_path.as_ref();
+    let boards_file = root.join(".cvh").join("boards.json");
+    let serialized_boards = serde_json::to_string_pretty(config)
+        .context("Failed to serialize BoardsConfig")?;
+    atomic_write_file(&boards_file, &serialized_boards).await?;
+
+    let mut pipeline = load_pipeline_config(root).await.unwrap_or_else(|_| default_pipeline_config());
+    pipeline.boards = Some(config.boards.clone());
+    pipeline.active_board_id = Some(config.active_board_id.clone());
+    if let Some(active_board) = config.boards.iter().find(|b| b.id == config.active_board_id) {
+        pipeline.columns = active_board.columns.clone();
+        pipeline.title = active_board.name.clone();
+    }
+    save_pipeline_config(root, &pipeline).await?;
+
+    Ok(())
 }
 
 pub fn get_app_llm_settings_path() -> PathBuf {
@@ -682,10 +970,23 @@ pub async fn load_pipeline_config(root_path: impl AsRef<Path>) -> Result<Pipelin
 }
 
 pub async fn save_pipeline_config(root_path: impl AsRef<Path>, config: &PipelineConfig) -> Result<()> {
-    let pipeline_path = root_path.as_ref().join(".cvh").join("pipeline.json");
+    let root = root_path.as_ref();
+    let pipeline_path = root.join(".cvh").join("pipeline.json");
     let serialized = serde_json::to_string_pretty(config)
         .context("Failed to serialize PipelineConfig to JSON")?;
-    atomic_write_file(&pipeline_path, &serialized).await
+    atomic_write_file(&pipeline_path, &serialized).await?;
+
+    if let Some(ref boards) = config.boards {
+        let boards_cfg = BoardsConfig {
+            active_board_id: config.active_board_id.clone().unwrap_or_else(default_board_id),
+            boards: boards.clone(),
+        };
+        let boards_file = root.join(".cvh").join("boards.json");
+        if let Ok(serialized_boards) = serde_json::to_string_pretty(&boards_cfg) {
+            let _ = atomic_write_file(&boards_file, &serialized_boards).await;
+        }
+    }
+    Ok(())
 }
 
 pub fn get_default_registry_path() -> PathBuf {
@@ -1128,4 +1429,101 @@ mod tests {
 
         let _ = tokio::fs::remove_dir_all(&base_dir).await;
     }
+
+    #[test]
+    fn test_default_boards_config() {
+        let cfg = default_boards_config();
+        assert_eq!(cfg.active_board_id, "development");
+        assert_eq!(cfg.boards.len(), 1);
+        assert_eq!(cfg.boards[0].id, "development");
+        assert_eq!(cfg.boards[0].name, "Разработка");
+        assert_eq!(cfg.boards[0].columns.len(), 5);
+    }
+
+    #[test]
+    fn test_get_board_template_columns_modeler() {
+        let cols = get_board_template_columns("modeler");
+        assert_eq!(cols.len(), 4);
+        assert_eq!(cols[0].id, "concept");
+        assert_eq!(cols[0].persona.as_deref(), Some("concept-artist"));
+        assert_eq!(cols[1].id, "modeling");
+        assert_eq!(cols[1].persona.as_deref(), Some("modeler"));
+        assert_eq!(cols[2].id, "texturing");
+        assert_eq!(cols[2].persona.as_deref(), Some("texture-artist"));
+        assert_eq!(cols[3].id, "ready");
+        assert_eq!(cols[3].terminal, Some(true));
+    }
+
+    #[tokio::test]
+    async fn test_boards_config_persistence_and_sync() {
+        let base_dir = std::env::temp_dir().join(format!("cvh_test_boards_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base_dir).await.expect("test dir");
+
+        let mut cfg = default_boards_config();
+        let modeler_cols = get_board_template_columns("modeler");
+        cfg.boards.push(BoardDef {
+            id: "modeler".to_string(),
+            name: "3D Моделирование".to_string(),
+            columns: modeler_cols,
+        });
+        cfg.active_board_id = "modeler".to_string();
+
+        save_boards_config(&base_dir, &cfg).await.expect("save boards");
+
+        // Verify boards.json exists
+        assert!(base_dir.join(".cvh").join("boards.json").exists());
+        // Verify pipeline.json synchronized with active board
+        let pipe = load_pipeline_config(&base_dir).await.expect("load pipeline");
+        assert_eq!(pipe.title, "3D Моделирование");
+        assert_eq!(pipe.columns.len(), 4);
+
+        // Load boards config back
+        let reloaded = load_boards_config(&base_dir).await.expect("load boards");
+        assert_eq!(reloaded.active_board_id, "modeler");
+        assert_eq!(reloaded.boards.len(), 2);
+
+        let _ = tokio::fs::remove_dir_all(&base_dir).await;
+    }
+
+    #[tokio::test]
+    async fn test_legacy_pipeline_migration_to_boards() {
+        let base_dir = std::env::temp_dir().join(format!("cvh_test_legacy_{}", uuid::Uuid::new_v4()));
+        let cvh = base_dir.join(".cvh");
+        tokio::fs::create_dir_all(&cvh).await.expect("test dir");
+
+        let legacy_pipeline = serde_json::json!({
+            "id": "custom-engineering",
+            "title": "Мой пайплайн",
+            "columns": [
+                {
+                    "id": "col1",
+                    "title": "Стадия 1",
+                    "color": "#64748b",
+                    "icon": "Inbox",
+                    "persona": null,
+                    "contextWindow": 128000,
+                    "modelOverride": null,
+                    "reasoningEffort": null,
+                    "temperature": null,
+                    "gatekeeperSensor": null,
+                    "allowedTools": null,
+                    "hooks": {},
+                    "routes": null,
+                    "autoRun": null,
+                    "terminal": null
+                }
+            ]
+        });
+
+        atomic_write_file(&cvh.join("pipeline.json"), &serde_json::to_string_pretty(&legacy_pipeline).unwrap()).await.unwrap();
+
+        let boards_cfg = load_boards_config(&base_dir).await.expect("load boards from legacy");
+        assert_eq!(boards_cfg.active_board_id, "development");
+        assert_eq!(boards_cfg.boards.len(), 1);
+        assert_eq!(boards_cfg.boards[0].name, "Мой пайплайн");
+        assert_eq!(boards_cfg.boards[0].columns.len(), 1);
+
+        let _ = tokio::fs::remove_dir_all(&base_dir).await;
+    }
 }
+
