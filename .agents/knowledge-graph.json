@@ -54,8 +54,8 @@
       "name": "TauriDesktopCoreEngine",
       "entityType": "Subsystem",
       "observations": [
-        "Tauri v2 + Tokio async runtime providing 13 IPC commands and native event emitters.",
-        "Executes process trees with graceful termination and non-blocking stdio drain on Windows.",
+        "Tauri v2 + Tokio async runtime providing IPC commands (including fetch_available_models, run_agent, compact_context) and native event emitters.",
+        "Executes process trees with graceful termination and non-blocking stdio drain on Windows, with clean native WebView2 window initialization.",
         "Ensures atomic configuration persistence and worktree path scoping."
       ]
     },
@@ -102,6 +102,31 @@
         "Trigger policy restricted to pull_request and workflow_dispatch, eliminating duplicate and expensive push trigger runs on main.",
         "Eliminates STATIC_VCRUNTIME warning by configuring tauri_build::WindowsAttributes::new().static_vc_runtime(true) in src-tauri/build.rs.",
         "Restricts bundle.targets to ['nsis'] in src-tauri/tauri.conf.json, preventing WiX 3 download hangs and light.exe packaging failures."
+      ]
+    },
+    {
+      "name": "ThinkingStreamParser",
+      "entityType": "Subsystem",
+      "observations": [
+        "Real-time streaming parser in agent.rs buffering token chunks and extracting <thinking> / <think> tags into agent:thought telemetry.",
+        "Handles partial tag splits across SSE token boundaries and cleanly separates reasoning thoughts from final turn content.",
+        "Flushes residual buffer content upon stream termination."
+      ]
+    },
+    {
+      "name": "ModelDiscoveryIPC",
+      "entityType": "Subsystem",
+      "observations": [
+        "Tauri IPC command fetch_available_models querying candidate endpoints (/models, /v1/models, /api/tags) with optional Bearer auth.",
+        "Normalizes OpenAI, Ollama, and JSON array schemas with deduplicated sorting."
+      ]
+    },
+    {
+      "name": "CustomFlowOrchestrator",
+      "entityType": "Subsystem",
+      "observations": [
+        "Autonomous task advancement engine along per-task customFlow stages (or dynamic pipeline fallback) with auto-triggering of on_enter lifecycle hooks.",
+        "Evaluates agent review verdicts (APPROVED, APPROVED_WITH_CAVEATS, CHANGES_REQUESTED) and dynamically routes tasks back to dev or forward to next stage / ready."
       ]
     }
   ],
@@ -180,6 +205,26 @@
       "from": "CiDesktopBundlePipeline",
       "to": "CanbanVoimaxHarness",
       "relationType": "verifies"
+    },
+    {
+      "from": "TauriDesktopCoreEngine",
+      "to": "ModelDiscoveryIPC",
+      "relationType": "exposes"
+    },
+    {
+      "from": "ReActAgentLoop",
+      "to": "ThinkingStreamParser",
+      "relationType": "parses_with"
+    },
+    {
+      "from": "CanbanVoimaxHarness",
+      "to": "CustomFlowOrchestrator",
+      "relationType": "orchestrates"
+    },
+    {
+      "from": "CustomFlowOrchestrator",
+      "to": "DynamicPipelineEngine",
+      "relationType": "extends"
     }
   ]
 }

@@ -134,5 +134,23 @@
     ],
     "ftrScore": "100%",
     "timestamp": 1791824555382
+  },
+  "CVH-012": {
+    "taskId": "CVH-012",
+    "title": "Backend Runtime: Model Discovery IPC, Custom Flow Agent Execution & Windows Cleanup",
+    "author": "tauri-rust-engineer",
+    "verdict": "APPROVED",
+    "commitHash": "f1bdd1e",
+    "mergeCommitHash": "abd1c81",
+    "commitMessage": "feat(backend): add fetch_available_models, agent execution along custom flow, and eliminate GPU/ACL hacks",
+    "summary": "Implemented fetch_available_models IPC command with candidate endpoint probing (/models, /v1/models, /api/tags), Bearer auth, OpenAI/Ollama payload normalization, and deduplicated sorting. Added real ReAct agent execution with absolute precedence of llm_settings, live streaming events (agent:thought via ThinkingStreamParser for <thinking> tags, agent:output, agent:status running/finished), and autonomous task promotion along custom_flow and pipeline fallback with stage on_enter hook execution and review routing. Cleaned up Windows/WebView2 workarounds by removing --disable-gpu, icacls process spawn, and hardcoded second monitor window positioning.",
+    "files": [
+      "src-tauri/src/agent.rs",
+      "src-tauri/src/commands.rs",
+      "src-tauri/src/lib.rs",
+      "src-tauri/src/main.rs"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1791830400000
   }
 }
