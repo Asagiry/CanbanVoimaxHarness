@@ -3,7 +3,7 @@ use crate::config::{
     atomic_write_file, discover_project_root, get_app_config_dir, load_llm_settings,
     load_pipeline_config, load_project_config, load_project_registry, persist_active_project,
     register_or_update_project, save_llm_settings_to_disk, save_pipeline_config,
-    scaffold_cvh_project, BoardDef, get_board_template_columns, get_canonical_board_columns, load_boards_config,
+    scaffold_cvh_project, BoardDef, get_board_template_columns, load_boards_config,
     save_boards_config, LlmSettings, PipelineConfig, ProjectConfig, ProjectEntry,
     ProjectRegistry,
 };
