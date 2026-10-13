@@ -29,6 +29,10 @@ pub struct Task {
     pub branch: Option<String>,
     #[serde(default)]
     pub verdict: Option<String>,
+    #[serde(rename = "customFlow", alias = "custom_flow", default)]
+    pub custom_flow: Option<Vec<String>>,
+    #[serde(default)]
+    pub status: Option<String>,
     #[serde(rename = "createdAt")]
     pub created_at: i64,
     #[serde(rename = "updatedAt")]
@@ -307,6 +311,8 @@ pub async fn create_task(
         worktree_path: Some(worktree_path.clone()),
         branch: Some(branch.clone()),
         verdict: None,
+        custom_flow: None,
+        status: None,
         created_at: now,
         updated_at: now,
     };
@@ -466,20 +472,24 @@ pub async fn run_agent(
         .await
         .unwrap_or_default();
 
-    let model = col
-        .model_override
-        .clone()
-        .or_else(|| {
-            if !llm_settings.model.trim().is_empty() {
-                Some(llm_settings.model.clone())
-            } else {
-                proj_cfg.default_model.clone()
-            }
-        })
-        .unwrap_or_else(|| "gemini-3.8-flash-high".to_string());
+    // LLM settings take absolute precedence
+    let model = if !llm_settings.model.trim().is_empty() {
+        llm_settings.model.trim().to_string()
+    } else if let Some(ref m) = col.model_override {
+        if !m.trim().is_empty() {
+            m.trim().to_string()
+        } else {
+            proj_cfg.default_model.clone().unwrap_or_else(|| "gemini-3.8-flash-high".to_string())
+        }
+    } else {
+        proj_cfg
+            .default_model
+            .clone()
+            .unwrap_or_else(|| "gemini-3.8-flash-high".to_string())
+    };
 
     let base_url = if !llm_settings.base_url.trim().is_empty() {
-        llm_settings.base_url.clone()
+        llm_settings.base_url.trim().to_string()
     } else {
         proj_cfg
             .api_base_url
@@ -493,7 +503,7 @@ pub async fn run_agent(
         None
     };
 
-    let temperature = col.temperature.or(llm_settings.temperature);
+    let temperature = llm_settings.temperature.or(col.temperature);
 
     let worktree_dir = task
         .worktree_path
@@ -512,8 +522,14 @@ pub async fn run_agent(
         map.insert(task_id.clone(), Arc::clone(&abort_flag));
     }
 
+    // Emit live status: running
+    let _ = app_handle.emit(
+        "agent:status",
+        serde_json::json!({ "taskId": task.id, "status": "running" }),
+    );
+
     let agent_cfg = AgentSessionConfig {
-        repo_root: root,
+        repo_root: root.clone(),
         worktree_path: worktree_dir,
         role: persona_role,
         stage_id: task.stage_id.clone(),
@@ -530,6 +546,7 @@ pub async fn run_agent(
 
     let tid = task.id.clone();
     let app = app_handle.clone();
+    let root_task = root.clone();
 
     tokio::spawn(async move {
         let app_inner = app.clone();
@@ -540,7 +557,11 @@ pub async fn run_agent(
                 AgentEvent::Token(token) => {
                     let _ = app_inner.emit(
                         "agent:token",
-                        serde_json::json!({ "taskId": tid_inner, "token": token }),
+                        serde_json::json!({ "taskId": tid_inner, "token": &token }),
+                    );
+                    let _ = app_inner.emit(
+                        "agent:output",
+                        serde_json::json!({ "taskId": tid_inner, "output": &token, "content": &token, "token": &token }),
                     );
                 }
                 AgentEvent::Thought(thought) => {
@@ -612,22 +633,166 @@ pub async fn run_agent(
                         "agent:aborted",
                         serde_json::json!({ "taskId": tid_inner }),
                     );
+                    let _ = app_inner.emit(
+                        "agent:status",
+                        serde_json::json!({ "taskId": tid_inner, "status": "aborted" }),
+                    );
                 }
                 AgentEvent::Error(err) => {
                     let _ = app_inner.emit(
                         "agent:error",
                         serde_json::json!({ "taskId": tid_inner, "error": err }),
                     );
+                    let _ = app_inner.emit(
+                        "agent:status",
+                        serde_json::json!({ "taskId": tid_inner, "status": "error" }),
+                    );
                 }
             }
         };
 
         let result = run_agent_loop(agent_cfg, abort_flag, event_sink).await;
-        if let Err(err) = result {
-            let _ = app.emit(
-                "agent:error",
-                serde_json::json!({ "taskId": tid, "error": err.to_string() }),
-            );
+
+        match result {
+            Ok(final_response) => {
+                let _ = app.emit(
+                    "agent:status",
+                    serde_json::json!({ "taskId": tid, "status": "finished" }),
+                );
+
+                // Auto-promotion along Custom Flow or Pipeline Flow
+                let mut tasks = load_tasks_from_disk(&root_task).await;
+                if let Some(task_idx) = tasks.iter().position(|t| t.id == tid) {
+                    let old_stage = tasks[task_idx].stage_id.clone();
+
+                    // Check for review verdict if current stage is review
+                    if tasks[task_idx].stage_id == "review" {
+                        let upper = final_response.to_uppercase();
+                        if upper.contains("APPROVED_WITH_CAVEATS") {
+                            tasks[task_idx].verdict = Some("APPROVED_WITH_CAVEATS".to_string());
+                        } else if upper.contains("APPROVED") {
+                            tasks[task_idx].verdict = Some("APPROVED".to_string());
+                        } else if upper.contains("CHANGES_REQUESTED") {
+                            tasks[task_idx].verdict = Some("CHANGES_REQUESTED".to_string());
+                        }
+                    }
+
+                    let mut promoted = false;
+
+                    // If task has custom_flow
+                    if let Some(ref flow) = tasks[task_idx].custom_flow {
+                        if let Some(curr_idx) = flow.iter().position(|s| s == &tasks[task_idx].stage_id) {
+                            if tasks[task_idx].stage_id == "review"
+                                && tasks[task_idx].verdict.as_deref() == Some("CHANGES_REQUESTED")
+                            {
+                                // Route back to dev if changes requested
+                                if curr_idx > 0 {
+                                    tasks[task_idx].stage_id = flow[curr_idx - 1].clone();
+                                } else {
+                                    tasks[task_idx].stage_id = "dev".to_string();
+                                }
+                                tasks[task_idx].status = Some("running".to_string());
+                                promoted = true;
+                            } else if curr_idx + 1 < flow.len() {
+                                let next_stage = flow[curr_idx + 1].clone();
+                                tasks[task_idx].stage_id = next_stage;
+                                tasks[task_idx].status = Some("running".to_string());
+                                promoted = true;
+                            } else {
+                                // At end of custom_flow: set status to done (ready)
+                                tasks[task_idx].stage_id = "ready".to_string();
+                                tasks[task_idx].status = Some("done".to_string());
+                                promoted = true;
+                            }
+                        }
+                    } else {
+                        // Standard pipeline fallback
+                        if tasks[task_idx].stage_id == "review"
+                            && tasks[task_idx].verdict.as_deref() == Some("CHANGES_REQUESTED")
+                        {
+                            tasks[task_idx].stage_id = "dev".to_string();
+                            tasks[task_idx].status = Some("running".to_string());
+                            promoted = true;
+                        } else if let Ok(pipeline) = load_pipeline_config(&root_task).await {
+                            if let Some(curr_idx) = pipeline.columns.iter().position(|c| c.id == tasks[task_idx].stage_id) {
+                                if curr_idx + 1 < pipeline.columns.len() {
+                                    let next_stage = pipeline.columns[curr_idx + 1].id.clone();
+                                    tasks[task_idx].stage_id = next_stage.clone();
+                                    if next_stage == "ready" {
+                                        tasks[task_idx].status = Some("done".to_string());
+                                    } else {
+                                        tasks[task_idx].status = Some("running".to_string());
+                                    }
+                                    promoted = true;
+                                } else {
+                                    tasks[task_idx].status = Some("done".to_string());
+                                    promoted = true;
+                                }
+                            }
+                        }
+                    }
+
+                    if promoted {
+                        tasks[task_idx].updated_at = Utc::now().timestamp_millis();
+                        let updated_task = tasks[task_idx].clone();
+                        let new_stage = updated_task.stage_id.clone();
+
+                        let _ = save_tasks_to_disk(&root_task, &tasks).await;
+
+                        // Trigger on_enter hook for the new stage if configured
+                        if let Ok(pipeline) = load_pipeline_config(&root_task).await {
+                            if let Some(col) = pipeline.columns.iter().find(|c| c.id == new_stage) {
+                                if let Some(hook_rel) = col.hooks.get("on_enter") {
+                                    let hook_path = root_task.join(hook_rel);
+                                    if hook_path.exists() {
+                                        let ctx = HookContext {
+                                            task_id: updated_task.id.clone(),
+                                            task_title: updated_task.title.clone(),
+                                            worktree_path: updated_task.worktree_path.clone().unwrap_or_default(),
+                                            branch: updated_task.branch.clone().unwrap_or_default(),
+                                            verdict: updated_task.verdict.clone(),
+                                            extra_env: HashMap::new(),
+                                        };
+                                        let _ = execute_hook(hook_path, &root_task, &ctx, None).await;
+                                    }
+                                }
+                            }
+                        }
+
+                        let _ = app.emit(
+                            "agent:finished",
+                            serde_json::json!({
+                                "taskId": tid,
+                                "response": final_response,
+                                "stageId": new_stage,
+                                "task": &updated_task,
+                            }),
+                        );
+
+                        let _ = app.emit(
+                            "task:moved",
+                            serde_json::json!({
+                                "taskId": tid,
+                                "fromStage": old_stage,
+                                "toStage": new_stage,
+                                "stageId": new_stage,
+                                "status": updated_task.status,
+                                "task": updated_task,
+                            }),
+                        );
+                    }
+                }
+            }
+            Err(err) => {
+                let _ = app.emit(
+                    "agent:status",
+                    serde_json::json!({ "taskId": tid, "status": "error" }),
+                );
+                let _ = app.emit(
+                    "agent:error",
+                    serde_json::json!({ "taskId": tid, "error": err.to_string() }),
+                );
+            }
         }
 
         // Clean up from active_agents registry upon agent completion
@@ -827,6 +992,113 @@ pub async fn save_llm_settings(
     save_llm_settings_to_disk(&root, &settings)
         .await
         .map_err(|e| format!("Failed to save LLM settings: {}", e))
+}
+
+#[tauri::command]
+pub async fn fetch_available_models(
+    base_url: String,
+    api_key: Option<String>,
+) -> Result<Vec<String>, String> {
+    let trimmed_base = base_url.trim().trim_end_matches('/');
+    if trimmed_base.is_empty() {
+        return Err("base_url cannot be empty".to_string());
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    // Prepare candidate endpoints in priority order
+    let mut candidates = Vec::new();
+    if trimmed_base.ends_with("/models") || trimmed_base.ends_with("/api/tags") {
+        candidates.push(trimmed_base.to_string());
+    } else if trimmed_base.ends_with("/v1") {
+        candidates.push(format!("{}/models", trimmed_base));
+        let root = trimmed_base.trim_end_matches("/v1");
+        candidates.push(format!("{}/models", root));
+        candidates.push(format!("{}/api/tags", root));
+    } else {
+        candidates.push(format!("{}/models", trimmed_base));
+        candidates.push(format!("{}/v1/models", trimmed_base));
+        candidates.push(format!("{}/api/tags", trimmed_base));
+    }
+
+    let mut last_error = String::new();
+
+    for url in candidates {
+        let mut req = client.get(&url);
+        if let Some(ref key) = api_key {
+            let key_trimmed = key.trim();
+            if !key_trimmed.is_empty() {
+                req = req.header(
+                    reqwest::header::AUTHORIZATION,
+                    format!("Bearer {}", key_trimmed),
+                );
+            }
+        }
+
+        match req.send().await {
+            Ok(resp) => {
+                if resp.status().is_success() {
+                    match resp.json::<serde_json::Value>().await {
+                        Ok(json) => {
+                            let mut models = Vec::new();
+
+                            // OpenAI format: {"data": [{"id": "model-id"}, ...]}
+                            if let Some(data) = json.get("data").and_then(|d| d.as_array()) {
+                                for item in data {
+                                    if let Some(id) = item.get("id").and_then(|i| i.as_str()) {
+                                        models.push(id.to_string());
+                                    }
+                                }
+                            }
+                            // Ollama format: {"models": [{"name": "model-id"}, ...]}
+                            else if let Some(models_arr) = json.get("models").and_then(|m| m.as_array()) {
+                                for item in models_arr {
+                                    if let Some(name) = item.get("name").and_then(|n| n.as_str()) {
+                                        models.push(name.to_string());
+                                    } else if let Some(model) = item.get("model").and_then(|m| m.as_str()) {
+                                        models.push(model.to_string());
+                                    }
+                                }
+                            }
+                            // Array format fallback: [{"id": "..."}, ...] or ["model-id", ...]
+                            else if let Some(arr) = json.as_array() {
+                                for item in arr {
+                                    if let Some(id) = item.get("id").and_then(|i| i.as_str()) {
+                                        models.push(id.to_string());
+                                    } else if let Some(name) = item.get("name").and_then(|n| n.as_str()) {
+                                        models.push(name.to_string());
+                                    } else if let Some(s) = item.as_str() {
+                                        models.push(s.to_string());
+                                    }
+                                }
+                            }
+
+                            if !models.is_empty() {
+                                models.sort();
+                                models.dedup();
+                                return Ok(models);
+                            } else {
+                                last_error = format!("Endpoint {} returned no recognized models in JSON payload", url);
+                            }
+                        }
+                        Err(e) => {
+                            last_error = format!("Failed to parse JSON from {}: {}", url, e);
+                        }
+                    }
+                } else {
+                    last_error = format!("Endpoint {} returned HTTP status {}", url, resp.status());
+                }
+            }
+            Err(e) => {
+                last_error = format!("Failed to connect to {}: {}", url, e);
+            }
+        }
+    }
+
+    Err(format!("Could not fetch models from {}: {}", base_url, last_error))
 }
 
 // ============================================================================

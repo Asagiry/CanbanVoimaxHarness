@@ -1100,6 +1100,143 @@ pub struct AgentSessionConfig {
     pub max_turns: usize,
 }
 
+#[derive(Debug, Default)]
+pub struct ThinkingStreamParser {
+    in_thinking: bool,
+    buffer: String,
+}
+
+impl ThinkingStreamParser {
+    pub fn new() -> Self {
+        Self {
+            in_thinking: false,
+            buffer: String::new(),
+        }
+    }
+
+    /// Process an incoming token chunk. Returns a list of (is_thought, text) chunks.
+    pub fn push(&mut self, chunk: &str) -> Vec<(bool, String)> {
+        self.buffer.push_str(chunk);
+        let mut outputs = Vec::new();
+
+        loop {
+            if !self.in_thinking {
+                // Look for opening tag <thinking> or <think>
+                let open_thinking = self.buffer.find("<thinking>");
+                let open_think = self.buffer.find("<think>");
+
+                let earliest_open = match (open_thinking, open_think) {
+                    (Some(pos1), Some(pos2)) => {
+                        if pos1 <= pos2 {
+                            Some((pos1, "<thinking>".len()))
+                        } else {
+                            Some((pos2, "<think>".len()))
+                        }
+                    }
+                    (Some(pos), None) => Some((pos, "<thinking>".len())),
+                    (None, Some(pos)) => Some((pos, "<think>".len())),
+                    (None, None) => None,
+                };
+
+                if let Some((pos, tag_len)) = earliest_open {
+                    if pos > 0 {
+                        outputs.push((false, self.buffer[..pos].to_string()));
+                    }
+                    self.in_thinking = true;
+                    self.buffer = self.buffer[pos + tag_len..].to_string();
+                    continue;
+                }
+
+                // If not found, check if end of buffer could be a partial opening tag
+                let mut partial_len = 0;
+                for tag in &["<thinking>", "<think>"] {
+                    for len in 1..tag.len() {
+                        if self.buffer.ends_with(&tag[..len]) && len > partial_len {
+                            partial_len = len;
+                        }
+                    }
+                }
+
+                if partial_len > 0 {
+                    let safe_len = self.buffer.len() - partial_len;
+                    if safe_len > 0 {
+                        outputs.push((false, self.buffer[..safe_len].to_string()));
+                        self.buffer = self.buffer[safe_len..].to_string();
+                    }
+                    break;
+                } else {
+                    if !self.buffer.is_empty() {
+                        outputs.push((false, std::mem::take(&mut self.buffer)));
+                    }
+                    break;
+                }
+            } else {
+                // In thinking: look for closing tag </thinking> or </think>
+                let close_thinking = self.buffer.find("</thinking>");
+                let close_think = self.buffer.find("</think>");
+
+                let earliest_close = match (close_thinking, close_think) {
+                    (Some(pos1), Some(pos2)) => {
+                        if pos1 <= pos2 {
+                            Some((pos1, "</thinking>".len()))
+                        } else {
+                            Some((pos2, "</think>".len()))
+                        }
+                    }
+                    (Some(pos), None) => Some((pos, "</thinking>".len())),
+                    (None, Some(pos)) => Some((pos, "</think>".len())),
+                    (None, None) => None,
+                };
+
+                if let Some((pos, tag_len)) = earliest_close {
+                    if pos > 0 {
+                        outputs.push((true, self.buffer[..pos].to_string()));
+                    }
+                    self.in_thinking = false;
+                    self.buffer = self.buffer[pos + tag_len..].to_string();
+                    continue;
+                }
+
+                // If not found, check if end of buffer could be a partial closing tag
+                let mut partial_len = 0;
+                for tag in &["</thinking>", "</think>"] {
+                    for len in 1..tag.len() {
+                        if self.buffer.ends_with(&tag[..len]) && len > partial_len {
+                            partial_len = len;
+                        }
+                    }
+                }
+
+                if partial_len > 0 {
+                    let safe_len = self.buffer.len() - partial_len;
+                    if safe_len > 0 {
+                        outputs.push((true, self.buffer[..safe_len].to_string()));
+                        self.buffer = self.buffer[safe_len..].to_string();
+                    }
+                    break;
+                } else {
+                    if !self.buffer.is_empty() {
+                        outputs.push((true, std::mem::take(&mut self.buffer)));
+                    }
+                    break;
+                }
+            }
+        }
+
+        outputs
+    }
+
+    /// Flush any remaining buffered characters at the end of the stream
+    pub fn flush(&mut self) -> Vec<(bool, String)> {
+        if self.buffer.is_empty() {
+            Vec::new()
+        } else {
+            let item = (self.in_thinking, std::mem::take(&mut self.buffer));
+            vec![item]
+        }
+    }
+}
+
 /// Executes the full ReAct loop for an agent session with deterministic prefix caching,
 /// zero-trust tool policy filtering, and state-preserving context compaction.
 pub async fn run_agent_loop<F>(
@@ -1186,6 +1323,7 @@ where
 
         let mut turn_content = String::new();
         let mut turn_tool_calls: Vec<ToolCall> = Vec::new();
+        let mut thinking_parser = ThinkingStreamParser::new();
 
         while let Some(chunk) = rx.recv().await {
             if abort_flag.load(Ordering::SeqCst) {
@@ -1195,8 +1333,15 @@ where
 
             match chunk {
                 StreamChunk::Token(token) => {
-                    turn_content.push_str(&token);
-                    event_sink(AgentEvent::Token(token));
+                    let parsed = thinking_parser.push(&token);
+                    for (is_thought, text) in parsed {
+                        if is_thought {
+                            event_sink(AgentEvent::Thought(text));
+                        } else {
+                            turn_content.push_str(&text);
+                            event_sink(AgentEvent::Token(text));
+                        }
+                    }
                 }
                 StreamChunk::Thought(thought) => {
                     event_sink(AgentEvent::Thought(thought));
@@ -1238,6 +1383,17 @@ where
                     event_sink(AgentEvent::Error(err.clone()));
                     bail!("LLM streaming error: {}", err);
                 }
+            }
+        }
+
+        // Flush any remaining characters from the thinking parser
+        let flushed = thinking_parser.flush();
+        for (is_thought, text) in flushed {
+            if is_thought {
+                event_sink(AgentEvent::Thought(text));
+            } else {
+                turn_content.push_str(&text);
+                event_sink(AgentEvent::Token(text));
             }
         }
 
