@@ -175,5 +175,25 @@
     ],
     "ftrScore": "100%",
     "timestamp": 1791836000000
+  },
+  "CVH-015": {
+    "taskId": "CVH-015",
+    "title": "Task-Level Model Selection, Persistence & Unified DSH Activity Feed",
+    "author": "agent-developer (react-tailwind-artisan & tauri-rust-engineer)",
+    "verdict": "APPROVED",
+    "commitHash": "d9cf958",
+    "commitMessage": "feat(feed): task model selection, backend persistence, and unified DSH activity feed",
+    "summary": "Resolved silent dev stage execution and fragmented UI: implemented task-level model selection in NewTaskModal and model badges on cards/drawer, auto-run agent invocation on dev stage entry, save_tasks IPC persistence to .cvh/tasks.json, and a unified DSH & Claude Code chronological activity feed with collapsible live thinking blocks, markdown response rendering, inline tool execution cards, agent status controls (abort/run), and interactive steering via steer_agent.",
+    "files": [
+      "src/types/index.ts",
+      "src/stores/boardStore.ts",
+      "src/stores/drawerStore.ts",
+      "src/components/board/KanbanBoard.tsx",
+      "src/components/card/KanbanCard.tsx",
+      "src/components/drawer/AgentConsoleDrawer.tsx",
+      "src-tauri/src/commands.rs"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1791885299000
   }
 }

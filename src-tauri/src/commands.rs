@@ -534,31 +534,48 @@ pub async fn run_agent(
     let temperature = llm_settings.temperature.or(col.temperature);
 
     // If task.worktree_path is None or doesn't exist on disk, create or scaffold cleanly
-    let worktree_dir = {
-        let path_exists = if let Some(ref p) = task.worktree_path {
-            if p.trim().is_empty() {
-                false
+    let worktree_dir = match &task.worktree_path {
+        Some(p) if !p.trim().is_empty() => {
+            let pb = Path::new(p);
+            let exists = if pb.is_absolute() {
+                pb.exists()
             } else {
-                let pb = Path::new(p);
+                root.join(pb).exists()
+            };
+            if exists {
                 if pb.is_absolute() {
-                    pb.exists()
+                    pb.to_path_buf()
                 } else {
-                    root.join(pb).exists()
+                    root.join(pb)
+                }
+            } else {
+                let task_slug = task.id.to_lowercase();
+                match create_worktree(&root, &task_slug, "main").await {
+                    Ok(wt_abs) => {
+                        let wt_str = wt_abs.to_string_lossy().to_string();
+                        let branch_name = format!("feat/{}", task_slug);
+                        let mut all_tasks = load_tasks_from_disk(&root).await;
+                        if let Some(t) = all_tasks.iter_mut().find(|t| t.id == task_id) {
+                            t.worktree_path = Some(wt_str.clone());
+                            if t.branch.is_none() {
+                                t.branch = Some(branch_name);
+                            }
+                            t.updated_at = Utc::now().timestamp_millis();
+                            let _ = save_tasks_to_disk(&root, &all_tasks).await;
+                        }
+                        wt_abs
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "Worktree creation error for {}: {}, falling back to repo root",
+                            task_id, e
+                        );
+                        root.clone()
+                    }
                 }
             }
-        } else {
-            false
-        };
-
-        if path_exists {
-            let p = task.worktree_path.as_ref().unwrap();
-            let pb = Path::new(p);
-            if pb.is_absolute() {
-                pb.to_path_buf()
-            } else {
-                root.join(pb)
-            }
-        } else {
+        }
+        _ => {
             let task_slug = task.id.to_lowercase();
             match create_worktree(&root, &task_slug, "main").await {
                 Ok(wt_abs) => {

@@ -153,6 +153,23 @@
         "Frontend Zustand drawerStore sliding-window (3000ms) stream coalescer for thought and output deltas.",
         "Prevents live streaming token card explosion and avoids thousands of unnecessary micro-renders in React."
       ]
+    },
+    {
+      "name": "UnifiedDshActivityFeed",
+      "entityType": "Subsystem",
+      "observations": [
+        "Chronological unified activity stream inspired by DSH and Claude Code, interleaving prompt goals, collapsible thinking blocks, Markdown assistant outputs, inline tool executions, system notices, and user steering.",
+        "Eliminates fragmented tab segregation by rendering real-time thoughts alongside tool executions and conversational turns."
+      ]
+    },
+    {
+      "name": "TaskModelPersistence",
+      "entityType": "Subsystem",
+      "observations": [
+        "Task-level model configuration selector in NewTaskModal and badge indicators on Kanban cards and AgentConsoleDrawer header.",
+        "Synchronous disk persistence via Tauri save_tasks IPC command maintaining atomic write integrity in .cvh/tasks.json.",
+        "Autonomous run_agent invocation triggered upon transitioning tasks into dev ('В РАЗРАБОТКЕ') column."
+      ]
     }
   ],
   "relations": [
@@ -265,6 +282,26 @@
       "from": "FrontendControlPlane",
       "to": "StreamCoalescer",
       "relationType": "optimizes_with"
+    },
+    {
+      "from": "FrontendControlPlane",
+      "to": "UnifiedDshActivityFeed",
+      "relationType": "renders"
+    },
+    {
+      "from": "UnifiedDshActivityFeed",
+      "to": "StreamCoalescer",
+      "relationType": "consumes"
+    },
+    {
+      "from": "FrontendControlPlane",
+      "to": "TaskModelPersistence",
+      "relationType": "configures"
+    },
+    {
+      "from": "TaskModelPersistence",
+      "to": "TauriDesktopCoreEngine",
+      "relationType": "persisted_by"
     }
   ]
 }
