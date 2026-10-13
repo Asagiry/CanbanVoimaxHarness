@@ -6,13 +6,13 @@
 >
 > 1. **DELEGATE ALL WORK**: Every task (Rust backend, Tauri v2 IPC, React UI, LLM streaming, hooks, git worktree manager) MUST be delegated to specialized Level 1 subagents (`agent-developer`, `tauri-rust-engineer`, `react-tailwind-artisan`) running on `gemini-3.8-flash-high`.
 > 2. **ATOMIC TASK DECOMPOSITION & ZERO KITCHEN-SINK DELEGATIONS (§ 1.2)**: NEVER dump multiple orthogonal domains into a single agent prompt (e.g., Rust process management + React DND board + LLM SSE parser). Decompose requests into distinct, single-responsibility subagents running in parallel isolated worktrees.
-> 3. **AUTONOMOUS ISOLATED WORKTREES MANDATORY (§ 2.2)**: Every subagent MUST work in its own isolated `git worktree` (`worktrees/<task-slug>`), execute all edits and test runs inside that directory, and upon receiving `APPROVED`: autonomously merge into `main`, verify `cargo check && npm run build`, delete the worktree (`git worktree remove worktrees/<task-slug> --force`), delete the feature branch, and record the task into the ledger. Never let subagents write concurrently to the root working directory.
+> 3. **AUTONOMOUS ISOLATED WORKTREES MANDATORY (§ 2.3)**: Every subagent MUST work in its own isolated `git worktree` (`worktrees/<task-slug>`), execute all edits and test runs inside that directory, and upon receiving `APPROVED`: autonomously merge into `main`, verify `cargo check && npm run build`, delete the worktree (`git worktree remove worktrees/<task-slug> --force`), delete the feature branch, and record the task into the ledger. Never let subagents write concurrently to the root working directory.
 > 4. **3-TIER GOVERNANCE**: Lead Subagent -> Level 2 Reviewer (`agent-developer-reviewer`) -> Level 3 Retro Verifier (`agent-retro-verifier`).
 > 5. **AUTONOMOUS MERGE UPON `APPROVED`**: Merges to `main` occur only after verified `APPROVED` verdicts and zero compiler/linter errors.
-> 6. **STRICT SINGLE-TASK CEILING & ZERO AUTONOMOUS SCOPE-CREEP [TOKEN PRESERVATION] (§ 1.3)**: Every subagent is assigned EXACTLY ONE atomic task and MUST STOP IMMEDIATELY upon completion. Subagents are STRICTLY FORBIDDEN from expanding scope or inventing unassigned work.
-> 7. **NASA GROUND TRUTH VERIFICATION MANDATE [STRICT PROHIBITION OF SYNTHETIC MOCKS] (§ 1.4)**: All verification MUST rely exclusively on Ground Truth Runtime Sensors:
+> 6. **STRICT SINGLE-TASK CEILING & ZERO AUTONOMOUS SCOPE-CREEP (§ 1.3)**: Every subagent is assigned EXACTLY ONE atomic task and MUST STOP IMMEDIATELY upon completion. Subagents are STRICTLY FORBIDDEN from expanding scope or inventing unassigned work.
+> 7. **NASA GROUND TRUTH VERIFICATION MANDATE (§ 1.4)**: All verification MUST rely exclusively on Ground Truth Runtime Sensors:
 >    - Compiler & Clippy Sensor: `cargo check` and `cargo clippy -- -D warnings`.
->    - Frontend Bundle Sensor: `npm run build` (`tsc && vite build`).
+>    - Frontend Bundle Sensor: `pnpm run build` (`tsc && vite build`).
 >    - Live Process Sensor: real subprocess execution and real HTTP/SSE streaming tests against local AI proxies.
 > 8. **ZERO-CONTEXT-POLLING RULE [HARD BAN ON MONITORING SPAM] (§ 1.5)**: When background subagents are executing, the Root Orchestrator is STRICTLY FORBIDDEN from executing monitoring/polling loops (`list_agents`, `job_list`, `pwsh git status/log`). Wait passively for subagent push notices.
 
@@ -28,13 +28,13 @@
 
 ## 1. Multi-Agent Hierarchy & Router Map
 
-```
+```text
 [Root Orchestrator Agent] (Pure Coordinator, Level 0)
        │
        ├──► [Lead Subagent: Developer / Rust Engineer / UI Artisan] (Level 1)
        │      ├── 1. Authors code inside isolated worktrees/<task-slug>/
-       │      ├── 2. Runs sensors (cargo check, cargo clippy, npm run build)
-       │      ├── 3. Spawns Level 2 Reviewer via `tools.subagent`
+       │      ├── 2. Runs sensors (cargo check, cargo clippy, pnpm run build)
+       │      ├── 3. Spawns Level 2 Reviewer via subagent
        │      │      │
        │      │      └──► [Reviewer Subagent: agent-developer-reviewer] (Level 2)
        │      │             ├── Audits diffs, Rust safety, memory leaks, UI anti-slop
@@ -60,111 +60,127 @@
 - **Project Structure**:
   ```text
   CanbanVoimaxHarness/
-  ├── src-tauri/             # Rust Backend
+  ├── src-tauri/             # Rust Desktop Backend
   │   ├── src/
   │   │   ├── main.rs        # Tauri entrypoint & plugin setup
-  │   │   ├── config.rs      # .cvh/ project & pipeline parser
+  │   │   ├── config.rs      # .cvh/ project, boards, and tool-policy parser
   │   │   ├── git.rs         # Native worktree & branch manager
-  │   │   ├── hooks.rs       # Transition scripts (.bat/.ps1) runner
-  │   │   ├── llm/           # Universal SSE streaming client
-  │   │   ├── agent.rs       # ReAct loop, zero-turn memory priming
+  │   │   ├── hooks.rs       # Transition scripts (.bat/.ps1/.sh) runner
+  │   │   ├── llm/           # Universal SSE streaming client & model registry
+  │   │   ├── agent.rs       # ReAct loop, zero-turn memory priming, custom tools
   │   │   └── commands.rs    # Tauri IPC commands & event emitters
   │   └── Cargo.toml
-  ├── src/                   # React Frontend
+  ├── src/                   # React 19 Tactical Frontend
   │   ├── components/
-  │   │   ├── board/         # Interactive Kanban board
+  │   │   ├── board/         # Interactive Kanban board & multi-board switcher
   │   │   ├── card/          # Tactile Kanban card & status badges
-  │   │   ├── drawer/        # Live Agent stream & thought viewer
-  │   │   └── settings/      # Pipeline & persona config screens
+  │   │   ├── drawer/        # Live Agent stream & activity feed viewer
+  │   │   └── settings/      # Pipeline, tool policy & LLM config screens
   │   ├── stores/            # Zustand reactive stores
   │   └── App.tsx
-  ├── .cvh/                  # Dogfooding configuration for CVH itself
-  └── .agents/               # Skills, rules, and task ledgers
+  ├── .cvh/                  # Project Harness Configuration
+  │   ├── agents/            # Persona markdown prompts (<role>.md)
+  │   ├── boards.json        # Multi-board definitions & active board
+  │   ├── pipeline.json      # Pipeline columns, routing, sensors, & hooks
+  │   ├── settings/          # Enforced settings (tool-policy.json)
+  │   ├── tools/             # Custom executable tools (<tool>.json)
+  │   ├── hooks/             # Stage transition scripts (.bat/.ps1)
+  │   ├── dialogs/           # Persisted task activity items (<taskId>.json)
+  │   └── spill/             # Spilled large tool outputs (>100 lines / >8KB)
+  └── .agents/               # Skills catalog and task history ledgers
   ```
 
-### 2.2 Ponytail Minimalism & Anti-Slop Code Standards
-- **Zero-Dead-Code Invariant**: No placeholder functions, no unused imports, no unreachable branches.
-- **Strict Error Handling in Rust**: Zero naked `.unwrap()` calls in production paths; use `Result<T, AppError>`, `anyhow`, or `thiserror`.
-- **Rust HTTP Header Typing**: When constructing `HeaderMap`, header keys MUST implement `IntoHeaderName`. Use `HeaderName::from_static(...)` or `&'static str` literals; never pass `HeaderValue` as a key.
-- **Rust Closure Move & Borrow Invariant**: When passing collections (e.g., `modified_files`) to fallback closures like `unwrap_or_else`, clone or borrow to avoid premature move errors (`E0382`) if the collection is queried later in the same scope.
-- **Zero-GC / Re-Render Loop Guard**: In React, no object allocations inside animation loops or unmemoized DND callbacks.
-- **JSX Tag Hierarchy Cleanliness**: Strictly verify balanced JSX opening/closing tags and run `npm run build` (`tsc && vite build`) before marking UI tasks complete.
-- **Anti-Slop UI Standard**: Tactile, modern cyber-slate/obsidian dark theme with neon accent indicators, clean monospace numerals for timers, and zero cartoonish bloat.
+### 2.2 Board-As-Control-Plane: Columns = Agents Invariant
+- **Columns Represent Agents**: In CanbanVoimaxHarness, columns are not passive status holders; they represent specialized autonomous roles. When a column declares `persona: "<role>"`, entering this column automatically triggers the agent loop initialized with that persona.
+- **Backlog-to-Ready Invariant**: Tasks flow deterministically from an intake column (`backlog`) to a completion column (`ready` / `done`).
+- **Subtask Execution Hierarchy**: When a task advances to an audit/review column, the root parent card remains pinned in its active stage while an isolated child subtask (`<task-id>.<subtask-index>`, e.g. `CVH-012.1`) executes the review persona.
+- **Stage Auto-Run Invariant**: Moving a task card into an active stage immediately emits `agent:autorun` and executes `run_agent(taskId)`.
 
-### 2.3 Pre-Scaffolded Worktree Invariant (§ 1.6)
-- The Root Orchestrator scaffolds the isolated worktree (`worktrees/<task-slug>`) BEFORE spawning the subagent.
-- The subagent performs 100% of its work inside that folder.
-- Upon `APPROVED`, the subagent merges into `main`, verifies sensors, and removes the worktree.
+### 2.3 Multi-Board Architecture (`.cvh/boards.json`)
+- **First-Class Multi-Board Engine**: Workspaces can host multiple distinct boards configured in `.cvh/boards.json` and mirrored in `.cvh/pipeline.json`.
+- **Active Board Tracking**: `BoardsConfig` maintains `active_board_id` and an array of `BoardDef` items (`id`, `name`, `columns`).
+- **Domain Templates**: CanbanVoimaxHarness includes pre-built board presets:
+  - `development`: Canonical 5-stage engineering pipeline (`backlog` → `dev` → `review` → `retro` → `ready`).
+  - `modeler` / `3d`: 3D Asset creation pipeline (`concept` → `modeling` → `texturing` → `ready`).
+  - `kanban`: Lean 3-stage agile workflow (`todo` → `in_progress` → `ready`).
+  - `empty`: Minimal 2-stage sandbox (`backlog` → `ready`).
 
-### 2.4 Zero-Turn Memory Priming Invariant
+### 2.4 Three-Tier Disk-Based Dialogue Storage Invariant
+- **Atomic 3-Tier Redundancy**: Task chat messages and activity feed items are persisted on disk upon every step and streaming delta to eliminate memory loss:
+  1. Primary: `<repo_root>/.cvh/dialogs/<taskId>.json`
+  2. Secondary: `<repo_root>/.cvh/tasks/<taskId>/dialog.json`
+  3. Global Fallback: `%LOCALAPPDATA%/com.voimax.cvh/dialogs/<taskId>.json`
+- **Restoration Hierarchy**: On task selection or application launch, `load_task_dialog` queries the primary path first, falling back gracefully to secondary and global stores.
+
+### 2.5 Two-Level Tool Policy Matrix: Strict AND-Semantics
+- **Two-Tier Enforcement**:
+  - **Level A (Global Switches)**: Defined in `tool-policy.json` under `globalEnabled`.
+  - **Level B (Stage Overrides)**: Defined under `stageOverrides.<stage_id>` or column-level `allowedTools`.
+- **Ironclad AND-Semantics**: `effective(tool, stage) = global_enabled[tool] && stage_override[stage][tool]`.
+  - If a tool is globally disabled, a stage CANNOT re-enable it.
+  - Both levels must evaluate to `true` for a tool to be permitted.
+- **Zero-Trust Request Stripping**: Disabled tools are completely purged from the tool schema definitions sent to the LLM. This guarantees zero tool hallucinations and saves ~2,400+ tokens per inference step.
+- **Alias Normalization**: Tools aliases (`bash` → `execute_command`, `str_replace` → `edit_file`) are normalized before checking policy.
+- **Single Source of Truth**: The active tool policy resides strictly in `.cvh/settings/tool-policy.json`.
+
+### 2.6 Column Transition Hooks & Gatekeeper Sensors
+- **Autonomous Lifecycle Hooks**: Columns declare transition scripts in `hooks` (e.g. `hooks.on_enter`). Supports `.bat`, `.cmd`, `.ps1`, `.sh`, and native binaries.
+- **Injected Context Variables**: Scripts receive full task and worktree execution context via environment variables:
+  - `CVH_TASK_ID`: Unique task ID (e.g. `CVH-042`).
+  - `CVH_TASK_TITLE`: Human-readable task title.
+  - `CVH_WORKTREE_PATH`: Absolute path to the isolated worktree directory.
+  - `CVH_BRANCH`: Feature branch name (e.g. `feat/CVH-042`).
+  - `CVH_STAGE_ID`: Target stage identifier (e.g. `dev`, `review`, `ready`).
+  - `CVH_VERDICT`: Reviewer verdict when transitioning out of review.
+- **Gatekeeper Sensor Validation**: If a column defines `gatekeeperSensor` (e.g. `cargo check`), the sensor command executes inside the worktree before transition. If the command exits with non-zero status, the card move is rejected.
+- **Robust Process Termination**: Hook scripts are managed with timeout bounds (default 180s); on Windows, timed-out or aborted processes are cleaned up via `taskkill /F /T /PID <pid>`.
+
+### 2.7 Automated Verdict-Based Routing
+- **Deterministic Verdict Extraction**: The orchestrator parses structured verdicts from agent responses:
+  - `APPROVED`: Stage successfully verified.
+  - `APPROVED_WITH_CAVEATS`: Verified with non-blocking notes.
+  - `CHANGES_REQUESTED`: Audit rejected; modifications required.
+- **Routing Decision Tree**:
+  - When `CHANGES_REQUESTED` is emitted by a reviewer subtask: the parent task in the development stage is unlocked, and its status resets to `idle` for the developer to address feedback.
+  - When `APPROVED` is emitted: the task advances according to `routes.on_approved` or moves to the next sequential column in the pipeline.
+  - Upon reaching a column with `terminal: true` (or the final `ready` stage), the task is marked as `done`.
+
+### 2.8 Dynamic Custom Tools (`.cvh/tools/`)
+- **Extensible Schema Engine**: Adding a JSON descriptor in `.cvh/tools/<tool_name>.json` automatically exposes a custom tool to all agents:
+  ```json
+  {
+    "name": "run_linter",
+    "description": "Run project linter inside worktree",
+    "parameters": {
+      "type": "object",
+      "properties": { "fix": { "type": "boolean" } }
+    },
+    "command": "npm run lint -- {{args}}"
+  }
+  ```
+- **Automatic Argument Injection**: `{{args}}` is dynamically substituted with the tool call arguments and executed within the active worktree.
+- **Tool Output Spilling Invariant**: Outputs exceeding 100 lines or 8 KB are automatically written to `.cvh/spill/<timestamp>-<tool>.log`, returning only the head (20 lines) and tail (20 lines) to protect model context.
+
+### 2.9 Zero-Turn Memory Priming Invariant
 - Personas are defined in `.cvh/agents/<role>.md`.
-- When spawning an agent, Rust pre-compiles `SystemMessage = Role Persona + Project Rules + Skills + Task Prompt`.
+- When spawning an agent, Rust pre-compiles:
+  `SystemMessage = Role Persona + Project Rules + Skills + Task Prompt`
 - The agent starts Turn 1 with 100% memory primed. Never ask agents to read rule files during their turn.
 
-### 2.5 Two-Level Tool Policy Matrix & Zero-Trust Iron Barrier
-- Two-tier security control: Level A (global switches) and Level B (per-column permissions configured in `.cvh/pipeline.json`).
-- **Zero-Trust Schema Exclusion**: When a tool is disabled for the active column, its JSON schema definition MUST be completely stripped from the LLM request payload.
-- Never rely on post-hoc prompt warnings to disallow tools. Stripping schemas guarantees zero hallucinations and saves ~2,400+ tokens per step.
-
-### 2.6 State-Preserving Context Compactor & Immutable Anchors
+### 2.10 State-Preserving Context Compactor & Immutable Anchors
 - **Zero-LLM Fast Evaporation**: Tool outputs older than the last 2 turns exceeding 500 characters are automatically trimmed to head summaries.
-- **Four Immutable Anchors**:
-  1. System Prompt (`messages[0]`): Immutable.
-  2. Initial Task Prompt (`messages[1]`): Immutable.
-  3. Preserved Execution State (`messages[2]`): Dynamic Markdown snapshot tracking modified files, sensor status, next steps, and verdict.
-  4. Working Window: The most recent 2 turns remain uncompacted for full reasoning continuity.
+- **Deterministic Prefix Caching**: System messages and tool schemas maintain deterministic alphabetical ordering with zero dynamic timestamps or session IDs in the prompt prefix to maximize provider prompt cache hit rates (>90%).
 
-### 2.7 Tool Output Spilling Invariant
-- Tool outputs exceeding 100 lines or 8 KB MUST be automatically spilled to `.cvh/spill/<timestamp>-<tool>.log`.
-- Injected context preserves the first 20 lines (HEAD), last 20 lines (TAIL), and the spilled file path for auditability.
+### 2.11 Ponytail Minimalism & Anti-Slop Code Standards
+- **Zero-Dead-Code Invariant**: No placeholder functions, no unused imports, no unreachable branches.
+- **Strict Error Handling in Rust**: Zero naked `.unwrap()` calls in production paths; use `Result<T, AppError>`, `anyhow`, or `thiserror`.
+- **Rust HTTP Header Typing**: Header keys in `HeaderMap` MUST implement `IntoHeaderName`. Use `HeaderName::from_static(...)` or `&'static str`; never pass `HeaderValue` as a key.
+- **Anti-Slop UI Standard**: Tactile obsidian dark theme (`#07090e`, `#0d1117`, `#161b22`), monospace numerals (`tabular-nums`) for timers/metrics, and zero pastel gradients or generic illustrations.
 
-### 2.8 Deterministic Prefix Caching Invariant
-- System messages and tool schemas MUST maintain deterministic ordering (tools sorted alphabetically by name) with zero dynamic timestamp or session ID injections.
-- For Anthropic API, apply `cache_control: {"type": "ephemeral"}` to maximize provider prompt cache hit rates (>90%).
-
-### 2.9 Tauri IPC Contract Parity Invariant
-- When introducing or refactoring Tauri IPC commands (e.g., `compact_context`), frontend callers (Zustand stores, React hooks, components) MUST synchronously bind to the new command name and typed return schema (`CompactionReport`).
-- Never leave front-end stores invoking deprecated stub command names (e.g., `compact_task_context`) while the backend exposes a new unified handler.
-- If backward-compatible coexistence is required during migration, wrap the primary invocation in a typed fallback ladder (`try { invoke('new_cmd') } catch { invoke('legacy_cmd') }`).
-
-### 2.10 Zero-Credential Leak & Local Environment Invariant
-- **Zero Secrets in Git Invariant**: NEVER hardcode personal API keys, bearer tokens, authorization headers, or private office/corporate IP addresses into Git-committed source files, configuration templates (`.cvh/config.json`), or task ledger entries.
-- **Gitignored Local Credentials**: Secrets and machine-local endpoint overrides MUST reside strictly in gitignored files (`.cvh/llm.json`, `.env*`, `*.secret`, `*.key`) or be injected dynamically at runtime via the UI (`SettingsModal`). Default API key factories in Rust and TypeScript MUST evaluate to empty strings (`String::new()`, `""`).
-- **Zero-Mocking Error Transparency**: Network and model discovery failures from dynamic endpoints MUST bubble directly to UI error notifications. Subagents and frontend stores are STRICTLY FORBIDDEN from masking real network or authentication failures with synthetic fallback model stubs or hardcoded lists.
-- **Reasoning Stream Coalescing**: Real-time token and reasoning deltas (`reasoning_content`, `thought`) streaming from LLMs over SSE or Tauri desktop events MUST be coalesced in frontend stores (e.g. 3-second sliding window) to prevent card explosion and avoid thousands of microscopic VDOM allocations.
-
-### 2.11 Unified Activity Feed, Autonomous Stage Auto-Run & Task Persistence Invariant
-- **Autonomous Stage Auto-Run**: Moving a task into an active execution column (e.g. `dev` / "В РАЗРАБОТКЕ") or instantiating a task directly into an active stage MUST automatically invoke `run_agent(taskId)` over Tauri IPC. Execution MUST NOT remain silent or require ambiguous secondary manual triggers.
-- **Dual-Layer Persistence Reliability (Backend IPC + LocalStorage Backup)**: Every task mutation (creation, drag-and-drop movement, timer updates, verdict assignment, task-level model selection) MUST invoke `save_tasks` IPC to persist state atomically to `.cvh/tasks.json`. To eliminate race conditions during cold start, window reloads, or web preview, the frontend board store MUST simultaneously mirror state to `localStorage` (`cvh_tasks_backup`) and gracefully restore from it whenever backend `list_tasks` returns empty.
-- **Clean Chronological Stream Standard (Ban on Clutter Tabs & Redundant Filters)**: The agent console drawer MUST NOT segregate execution logs into disjointed tabs or display redundant filter bars ("ВСЕ СОБЫТИЯ", "МЫСЛИ", "ВЫВОД / ЧАТ", "ИНСТРУМЕНТЫ"). It MUST render a single clean chronological activity feed interleaving initial prompt goals, collapsible `<thinking>` blocks with live pulsing indicators, formatted Markdown responses, inline tool execution cards, user steering messages, and system notices.
-- **Compact Circular Gauge & Detailed Popover**: Context usage in headers MUST NOT consume bulky horizontal width. It MUST render as an elegant 28px circular progress ring with percentage readout and a floating hover breakdown card displaying token consumption for System Prompt, Tool definitions, and Messages alongside instant compaction controls.
-- **Immediate Error Transparency & One-Click Retry**: Agent execution errors (`agent:error`, `agent:status: error`, or IPC invocation failures) MUST immediately surface in an amber/crimson drawer banner with error details, reset task status to `idle` with stopped timers, and provide a one-click "Повторить запуск" (retry) trigger.
-- **Interactive Steering & Status Lifecycle**: The drawer input bar MUST dispatch `steer_agent` when the task agent is actively running, or initialize/resume via `run_agent` when idle. Drawer header controls MUST provide explicit `abort_agent` and `run_agent` lifecycle actions.
-
-### 2.12 Rust Macro Hygiene, Toolchain Isolation & Guarded Unwrap Ban
-- **Duplicate Tauri Command Handler Ban**: When merging or adding IPC commands, strictly verify that identifiers registered in `tauri::generate_handler![...]` inside `src-tauri/src/lib.rs` are unique. Never duplicate macro handler entries across concurrent feature branches.
-- **Zero-Unwrap Invariant Absolute Enforcement**: Pattern matching (`match`, `if let Some(...)`) or fallible chaining (`?`, `ok_or_else()`, `unwrap_or_else()`) MUST be used exclusively. Guarded `.unwrap()` calls (e.g. `if opt.is_some() { opt.unwrap() }` or boolean flags) are strictly forbidden in production code paths.
-- **Hermetic Toolchain & Lock-Free Sensor Precedence**: When building or checking in environments with repository-local toolchains (`.toolchain/cargo/bin`), environment variables (`$env:PATH`, `$env:CARGO_HOME`, `$env:RUSTUP_HOME`) MUST be explicitly configured. Sensor checks must favor `cargo check` to prevent MSVC `link.exe` temp file locking and sandbox I/O contention on Windows.
-
-### 2.13 Multi-Tier Workspace Root Discovery, Fallback Pipeline & Dual-Layer Disk Persistence
-- **Workspace Root Discovery Ladder**: In desktop GUI runtimes, binaries launched via Explorer double-click from `target/release`, shortcuts, or taskbars evaluate working directories differently from terminal shells. Root discovery MUST follow a robust traversal ladder:
-  1. Inspect `std::env::current_dir()` for `.cvh` or `.git`.
-  2. Climb `current_dir.ancestors()` to detect the project root when launched from target/release or debug subdirectories.
-  3. Inspect `%LOCALAPPDATA%\com.voimax.cvh\active_project.txt` for the user's last active project folder.
-  4. Fall back to canonical workspace default before defaulting to `.`.
-  5. Automatically persist the active workspace path to `active_project.txt` upon folder selection, project opening, or root updates.
-- **Fail-Safe Pipeline Fallback**: `load_pipeline_config` and `run_agent` MUST NEVER fail or crash on missing or unparseable pipeline configurations. When `pipeline.json` is missing or corrupted, smoothly fall back to `default_pipeline_config()` providing the full 5 canonical stages (backlog, dev, review, retro, ready).
-- **Dual-Layer Persistence Reliability & Empty List Invariant**: Persist task state atomically to both local `<repo_root>/.cvh/tasks.json` and `%LOCALAPPDATA%\com.voimax.cvh\tasks.json`. When restoring state on startup, if local `<repo_root>/.cvh/tasks.json` exists on disk and parses as valid JSON—even if it is an empty list `[]`—it MUST be honored directly without falling back to global backup to prevent resurrecting deleted tasks.
-
-### 2.14 Zero-Silent-Drop Streaming & Multi-Channel Error Dispatching
-- **Zero-Silent-Drop Invariant**: In async Tokio streaming tasks, network errors in request dispatch (`send().await` failure, connection refused, port closed) or non-200 HTTP responses MUST explicitly forward `StreamChunk::Error(err_msg)` into the mpsc channel sender before exiting. Discarding dispatch errors with `let _ = ...` or premature `bail!` without notifying the receiver channel is strictly forbidden.
-- **Zero-Chunk Channel Closure Guard**: The streaming consumer loop MUST track whether any chunk was received (`received_any_chunk`). If the mpsc channel closes with 0 chunks received and no user abort was signaled, it MUST emit `AgentEvent::Error` detailing the endpoint and port diagnostics, rather than silently exiting.
-- **Multi-Channel UI Error Transparency**: Agent execution errors in `run_agent` MUST simultaneously dispatch across all control channels:
-  1. `agent:error` desktop event.
-  2. `agent:status` desktop event with `{ status: "error", error: err_str }`.
-  3. `agent:output` desktop event formatting `\n[LLM Error: <msg>]\n` into the chronological activity feed.
-  4. Atomically persist `{ status: "error" }` in `.cvh/tasks.json` to reflect error state in card badges and prevent orphaned running states.
-
-
-
-
+### 2.12 Zero-Credential Leak & Local Environment Invariant
+- **Zero Secrets in Git**: Secrets and local endpoints reside strictly in gitignored files (`.cvh/llm.json`, `.env*`, `*.secret`, `*.key`) or runtime UI settings. Default API keys evaluate to empty strings (`String::new()`, `""`).
+- **Multi-Tier Workspace Root Discovery**: GUI launches locate the project root via:
+  1. Current directory inspection for `.cvh` or `.git`.
+  2. Ancestor directory traversal.
+  3. `%LOCALAPPDATA%/com.voimax.cvh/active_project.txt`.
+  4. Automatic persistence upon opening new workspaces.
