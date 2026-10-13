@@ -3,8 +3,9 @@ import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
 import { useBoardStore } from '../../stores/boardStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import KanbanColumn from './KanbanColumn';
-import { KanbanTask, PipelineColumn, PipelineConfig, TaskStatus } from '../../types';
-import { Plus, X } from 'lucide-react';
+import { KanbanTask, PipelineColumn, TaskStatus } from '../../types';
+import { Plus, X, Layout } from 'lucide-react';
+import CreateBoardModal from './CreateBoardModal';
 
 const COLUMN_PALETTE = [
   '#64748b',
@@ -53,9 +54,23 @@ interface AgentPersonaOption {
 const NEW_AGENT_OPTION = '__new__';
 
 export default function KanbanBoard() {
-  const { columns, tasks, searchQuery, moveTask, addTask, tickTimers, setColumns } = useBoardStore();
+  const {
+    columns,
+    tasks,
+    searchQuery,
+    moveTask,
+    addTask,
+    tickTimers,
+    setColumns,
+    boards,
+    activeBoardId,
+    setActiveBoard,
+    deleteBoard,
+    saveCurrentBoard,
+  } = useBoardStore();
   const { availableModels, settings } = useSettingsStore();
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
+  const [isCreateBoardModalOpen, setIsCreateBoardModalOpen] = useState(false);
   const [targetColumnForNew, setTargetColumnForNew] = useState<string>('backlog');
   const [selectedModel, setSelectedModel] = useState<string>(settings.model || 'gemini-3.8-flash-high');
 
@@ -100,22 +115,10 @@ export default function KanbanBoard() {
 
   const savePipelineConfig = async (next: PipelineColumn[]): Promise<boolean> => {
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      let cfg: PipelineConfig | null = null;
-      try {
-        cfg = await invoke<PipelineConfig>('get_pipeline');
-      } catch {
-        cfg = null;
-      }
-      const pipeline: PipelineConfig = {
-        id: cfg?.id ?? 'default-engineering',
-        title: cfg?.title ?? 'Инженерный пайплайн',
-        columns: next,
-      };
-      await invoke('save_pipeline', { pipeline });
+      await saveCurrentBoard(next);
       return true;
     } catch (err) {
-      console.info('save_pipeline недоступен, изменения колонок откачены:', err);
+      console.info('saveCurrentBoard failed, rolling back:', err);
       return false;
     }
   };
@@ -172,6 +175,7 @@ export default function KanbanBoard() {
       description: newDescription.trim() || undefined,
       priority: 'high',
       columnId: targetColumnForNew,
+      boardId: activeBoardId || 'development',
       persona,
       branch: `feat/${paddedId.toLowerCase()}`,
       worktreePath: `.cvh/worktrees/${paddedId.toLowerCase()}`,
@@ -310,8 +314,12 @@ export default function KanbanBoard() {
     }
   };
 
-  // Filter tasks based on searchQuery
-  const filteredTasks = tasks.filter((task) => {
+  // Filter tasks based on activeBoardId and searchQuery
+  const currentBoardTasks = tasks.filter(
+    (task) => (task.boardId || 'development') === activeBoardId
+  );
+
+  const filteredTasks = currentBoardTasks.filter((task) => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
@@ -326,28 +334,91 @@ export default function KanbanBoard() {
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#fafafa]">
       {/* Board Top Toolbar */}
       <div className="flex items-center justify-between px-3.5 py-2 border-b border-[#ebebeb] bg-white text-xs select-none">
-        <div className="flex items-center space-x-1.5 text-[#666666] text-xs">
-          <span>Всего задач:</span>
-          <span className="text-[#171717] font-semibold tabular-nums font-mono">{tasks.length}</span>
+        {/* Left: Board Switcher Tabs */}
+        <div className="flex items-center space-x-1.5 overflow-x-auto py-0.5">
+          {boards.map((b) => {
+            const isActive = b.id === activeBoardId;
+            const boardTasksCount = tasks.filter((t) => (t.boardId || 'development') === b.id).length;
+            return (
+              <div key={b.id} className="group relative flex items-center">
+                <button
+                  onClick={() => setActiveBoard(b.id)}
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition cursor-pointer select-none ${
+                    isActive
+                      ? 'bg-[#171717] text-white shadow-xs'
+                      : 'bg-[#f4f4f5] hover:bg-[#e4e4e7] text-[#52525b] hover:text-[#171717]'
+                  }`}
+                >
+                  <Layout className="h-3.5 w-3.5" />
+                  <span>{b.name}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-medium ${
+                      isActive
+                        ? 'bg-[#27272a] text-[#d4d4d8]'
+                        : 'bg-[#e4e4e7] text-[#71717a]'
+                    }`}
+                  >
+                    {boardTasksCount}
+                  </span>
+                </button>
+                {boards.length > 1 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (
+                        window.confirm(
+                          `Удалить доску «${b.name}»? Все задачи этой доски будут перенесены на активную доску.`
+                        )
+                      ) {
+                        void deleteBoard(b.id);
+                      }
+                    }}
+                    title={`Удалить доску «${b.name}»`}
+                    className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-500 text-[#a1a1aa] transition cursor-pointer -ml-1 mr-0.5"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          <button
+            onClick={() => setIsCreateBoardModalOpen(true)}
+            className="flex items-center space-x-1 px-2.5 py-1.5 rounded-md border border-dashed border-[#d4d4d8] hover:border-[#171717] text-[#71717a] hover:text-[#171717] text-xs font-medium transition cursor-pointer select-none"
+            title="Создать новую доску"
+          >
+            <Plus className="h-3 w-3" />
+            <span>Новая доска</span>
+          </button>
         </div>
 
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={handleOpenAddColumn}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-white border border-[#ebebeb] hover:bg-[#f4f4f5] text-[#171717] font-sans text-xs font-medium transition cursor-pointer active:scale-[0.99]"
-            title="Добавить колонку"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>Колонка</span>
-          </button>
-          <button
-            onClick={handleOpenAddTask}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-[#171717] hover:bg-[#262626] text-white font-sans text-xs font-medium transition cursor-pointer shadow-xs active:scale-[0.99]"
-            title="Создать новую задачу"
-          >
-            <Plus className="h-3.5 w-3.5 text-white" />
-            <span>Создать задачу</span>
-          </button>
+        {/* Right: Board Stats & Action Buttons */}
+        <div className="flex items-center space-x-3">
+          <div className="hidden sm:flex items-center space-x-1.5 text-[#666666] text-xs">
+            <span>Задач на доске:</span>
+            <span className="text-[#171717] font-semibold tabular-nums font-mono">
+              {currentBoardTasks.length}
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleOpenAddColumn}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-white border border-[#ebebeb] hover:bg-[#f4f4f5] text-[#171717] font-sans text-xs font-medium transition cursor-pointer active:scale-[0.99]"
+              title="Добавить колонку"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Колонка</span>
+            </button>
+            <button
+              onClick={handleOpenAddTask}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-[#171717] hover:bg-[#262626] text-white font-sans text-xs font-medium transition cursor-pointer shadow-xs active:scale-[0.99]"
+              title="Создать новую задачу"
+            >
+              <Plus className="h-3.5 w-3.5 text-white" />
+              <span>Создать задачу</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -591,6 +662,12 @@ export default function KanbanBoard() {
           </div>
         </div>
       )}
+
+      {/* Create Board Modal */}
+      <CreateBoardModal
+        isOpen={isCreateBoardModalOpen}
+        onClose={() => setIsCreateBoardModalOpen(false)}
+      />
     </div>
   );
 }

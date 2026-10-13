@@ -3,7 +3,8 @@ use crate::config::{
     atomic_write_file, discover_project_root, get_app_config_dir, load_llm_settings,
     load_pipeline_config, load_project_config, load_project_registry, persist_active_project,
     register_or_update_project, save_llm_settings_to_disk, save_pipeline_config,
-    scaffold_cvh_project, LlmSettings, PipelineConfig, ProjectConfig, ProjectEntry,
+    scaffold_cvh_project, BoardDef, get_board_template_columns, load_boards_config,
+    save_boards_config, LlmSettings, PipelineConfig, ProjectConfig, ProjectEntry,
     ProjectRegistry,
 };
 use crate::git::{create_worktree, remove_worktree};
@@ -210,6 +211,46 @@ impl AppState {
     }
 }
 
+fn ensure_task_board_id(mut tasks: Vec<Task>) -> Vec<Task> {
+    for t in &mut tasks {
+        if t.board_id.as_deref().unwrap_or("").trim().is_empty() {
+            t.board_id = Some("development".to_string());
+        }
+    }
+    tasks
+}
+
+pub fn slugify_board_name(name: &str) -> String {
+    let cyrillic_map = [
+        ('а', "a"), ('б', "b"), ('в', "v"), ('г', "g"), ('д', "d"),
+        ('е', "e"), ('ё', "yo"), ('ж', "zh"), ('з', "z"), ('и', "i"),
+        ('й', "y"), ('к', "k"), ('л', "l"), ('м', "m"), ('н', "n"),
+        ('о', "o"), ('п', "p"), ('р', "r"), ('с', "s"), ('т', "t"),
+        ('у', "u"), ('ф', "f"), ('х', "h"), ('ц', "ts"), ('ч', "ch"),
+        ('ш', "sh"), ('щ', "sch"), ('ъ', ""), ('ы', "y"), ('ь', ""),
+        ('э', "e"), ('ю', "yu"), ('я', "ya"),
+    ];
+    let mut slug = String::new();
+    for c in name.chars() {
+        let lower = c.to_ascii_lowercase();
+        if lower.is_ascii_alphanumeric() {
+            slug.push(lower);
+        } else if let Some((_, lat)) = cyrillic_map.iter().find(|(cyr, _)| *cyr == lower) {
+            slug.push_str(lat);
+        } else if lower == ' ' || lower == '-' || lower == '_' {
+            if !slug.ends_with('-') && !slug.is_empty() {
+                slug.push('-');
+            }
+        }
+    }
+    let trimmed = slug.trim_matches('-').to_string();
+    if trimmed.is_empty() {
+        format!("board-{}", &uuid::Uuid::new_v4().to_string()[..6])
+    } else {
+        trimmed
+    }
+}
+
 async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
     let local_tasks_file = repo_root.join(".cvh").join("tasks.json");
     if local_tasks_file.exists() {
@@ -217,7 +258,7 @@ async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
             let trimmed = content.trim();
             if !trimmed.is_empty() {
                 if let Ok(tasks) = serde_json::from_str::<Vec<Task>>(trimmed) {
-                    return tasks;
+                    return ensure_task_board_id(tasks);
                 }
             }
         }
@@ -236,7 +277,7 @@ async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
                             tasks.len(),
                             global_tasks_file
                         );
-                        return tasks;
+                        return ensure_task_board_id(tasks);
                     }
                 }
             }
@@ -296,6 +337,168 @@ pub async fn save_pipeline(
     save_pipeline_config(&root, &pipeline)
         .await
         .map_err(|e| format!("Failed to save pipeline: {}", e))
+}
+
+#[tauri::command]
+pub async fn list_boards(state: State<'_, AppState>) -> Result<Vec<BoardDef>, String> {
+    let root = state.get_root();
+    let config = load_boards_config(&root)
+        .await
+        .map_err(|e| format!("Failed to load boards: {}", e))?;
+    Ok(config.boards)
+}
+
+#[tauri::command]
+pub async fn get_active_board_id(state: State<'_, AppState>) -> Result<String, String> {
+    let root = state.get_root();
+    let config = load_boards_config(&root)
+        .await
+        .map_err(|e| format!("Failed to load boards: {}", e))?;
+    Ok(config.active_board_id)
+}
+
+#[tauri::command]
+pub async fn create_board(
+    name: String,
+    template: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<BoardDef, String> {
+    let trimmed_name = name.trim();
+    if trimmed_name.is_empty() {
+        return Err("Название доски не может быть пустым".to_string());
+    }
+    let root = state.get_root();
+    let mut config = load_boards_config(&root)
+        .await
+        .map_err(|e| format!("Failed to load boards: {}", e))?;
+
+    let base_slug = slugify_board_name(trimmed_name);
+    let mut unique_id = base_slug.clone();
+    let mut counter = 2;
+    while config.boards.iter().any(|b| b.id == unique_id) {
+        unique_id = format!("{}-{}", base_slug, counter);
+        counter += 1;
+    }
+
+    let tmpl = template.as_deref().unwrap_or("development");
+    let raw_cols = get_board_template_columns(tmpl);
+    let columns = normalize_pipeline_columns(raw_cols)?;
+
+    let new_board = BoardDef {
+        id: unique_id.clone(),
+        name: trimmed_name.to_string(),
+        columns,
+    };
+
+    config.boards.push(new_board.clone());
+    config.active_board_id = unique_id;
+
+    save_boards_config(&root, &config)
+        .await
+        .map_err(|e| format!("Failed to save new board: {}", e))?;
+
+    Ok(new_board)
+}
+
+#[tauri::command]
+pub async fn save_board(
+    mut board: BoardDef,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let trimmed_name = board.name.trim();
+    if trimmed_name.is_empty() {
+        return Err("Название доски не может быть пустым".to_string());
+    }
+    board.name = trimmed_name.to_string();
+    board.columns = normalize_pipeline_columns(board.columns)?;
+
+    let root = state.get_root();
+    let mut config = load_boards_config(&root)
+        .await
+        .map_err(|e| format!("Failed to load boards: {}", e))?;
+
+    if let Some(existing) = config.boards.iter_mut().find(|b| b.id == board.id) {
+        *existing = board;
+    } else {
+        config.boards.push(board);
+    }
+
+    save_boards_config(&root, &config)
+        .await
+        .map_err(|e| format!("Failed to save board: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_board(
+    board_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let root = state.get_root();
+    let mut config = load_boards_config(&root)
+        .await
+        .map_err(|e| format!("Failed to load boards: {}", e))?;
+
+    if config.boards.len() <= 1 {
+        return Err("Нельзя удалить единственную доску в проекте".to_string());
+    }
+
+    let pos = config
+        .boards
+        .iter()
+        .position(|b| b.id == board_id)
+        .ok_or_else(|| format!("Доска '{}' не найдена", board_id))?;
+
+    config.boards.remove(pos);
+
+    if config.active_board_id == board_id {
+        config.active_board_id = config.boards[0].id.clone();
+    }
+
+    save_boards_config(&root, &config)
+        .await
+        .map_err(|e| format!("Failed to save boards after deletion: {}", e))?;
+
+    let mut tasks = load_tasks_from_disk(&root).await;
+    let mut tasks_modified = false;
+    for t in &mut tasks {
+        if t.board_id.as_deref() == Some(&board_id) {
+            t.board_id = Some(config.active_board_id.clone());
+            tasks_modified = true;
+        }
+    }
+    if tasks_modified {
+        if let Ok(mut guard) = state.tasks.lock() {
+            *guard = tasks.clone();
+        }
+        let _ = save_tasks_to_disk(&root, &tasks).await;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_active_board(
+    board_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let root = state.get_root();
+    let mut config = load_boards_config(&root)
+        .await
+        .map_err(|e| format!("Failed to load boards: {}", e))?;
+
+    if !config.boards.iter().any(|b| b.id == board_id) {
+        return Err(format!("Доска '{}' не найдена", board_id));
+    }
+
+    config.active_board_id = board_id;
+
+    save_boards_config(&root, &config)
+        .await
+        .map_err(|e| format!("Failed to set active board: {}", e))?;
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -496,10 +699,21 @@ pub async fn create_task(
     title: String,
     description: String,
     stage_id: String,
+    board_id: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<Task, String> {
     let root = state.get_root();
     let mut tasks = load_tasks_from_disk(&root).await;
+
+    let effective_board_id = match board_id {
+        Some(b) if !b.trim().is_empty() => b.trim().to_string(),
+        _ => {
+            load_boards_config(&root)
+                .await
+                .map(|bc| bc.active_board_id)
+                .unwrap_or_else(|_| "development".to_string())
+        }
+    };
 
     // Generate task ID
     let task_num = tasks.len() + 1;
@@ -520,6 +734,7 @@ pub async fn create_task(
         title: title.clone(),
         description: description.clone(),
         stage_id: stage_id.clone(),
+        board_id: Some(effective_board_id),
         worktree_path: Some(worktree_path.clone()),
         branch: Some(branch.clone()),
         verdict: None,
@@ -574,17 +789,32 @@ pub async fn move_task_stage(
         .position(|t| t.id == task_id)
         .ok_or_else(|| format!("Task {} not found", task_id))?;
 
-    let pipeline = load_pipeline_config(&root)
-        .await
-        .map_err(|e| format!("Failed to load pipeline: {}", e))?;
-
-    let target_col = pipeline
-        .columns
-        .iter()
-        .find(|c| c.id == target_stage_id)
-        .ok_or_else(|| format!("Target stage {} not found in pipeline", target_stage_id))?;
-
     let current_task = &mut tasks[task_idx];
+
+    let target_col = {
+        let boards_cfg = load_boards_config(&root).await.ok();
+        let col_from_board = boards_cfg.as_ref().and_then(|bc| {
+            let b = if let Some(ref bid) = current_task.board_id {
+                bc.boards.iter().find(|b| &b.id == bid)
+            } else {
+                bc.boards.iter().find(|b| b.id == bc.active_board_id)
+            };
+            b.and_then(|b| b.columns.iter().find(|c| c.id == target_stage_id).cloned())
+        });
+        match col_from_board {
+            Some(c) => c,
+            None => {
+                let pipeline = load_pipeline_config(&root)
+                    .await
+                    .map_err(|e| format!("Failed to load pipeline: {}", e))?;
+                pipeline
+                    .columns
+                    .into_iter()
+                    .find(|c| c.id == target_stage_id)
+                    .ok_or_else(|| format!("Target stage {} not found in pipeline or board", target_stage_id))?
+            }
+        }
+    };
 
     // Gatekeeper Sensor Verification
     if let Some(sensor_cmd) = &target_col.gatekeeper_sensor {
@@ -721,34 +951,42 @@ pub async fn run_agent(
         .await
         .unwrap_or_else(|_| crate::config::default_pipeline_config());
 
-    let col = pipeline
-        .columns
-        .iter()
-        .find(|c| c.id == task.stage_id)
-        .cloned()
-        .unwrap_or_else(|| {
-            eprintln!(
-                "CVH [run_agent]: Column '{}' not found in pipeline, falling back to default column",
-                task.stage_id
-            );
-            pipeline.columns.first().cloned().unwrap_or_else(|| crate::config::PipelineColumn {
-                id: task.stage_id.clone(),
-                title: task.stage_id.clone(),
-                color: None,
-                icon: None,
-                persona: Some("developer".to_string()),
-                context_window: Some(400000),
-                model_override: None,
-                reasoning_effort: None,
-                temperature: Some(0.2),
-                gatekeeper_sensor: None,
-                allowed_tools: None,
-                hooks: HashMap::new(),
-                routes: None,
-                auto_run: None,
-                terminal: None,
-            })
+    let col = {
+        let boards_cfg = load_boards_config(&root).await.ok();
+        let col_from_board = boards_cfg.as_ref().and_then(|bc| {
+            let b = if let Some(ref bid) = task.board_id {
+                bc.boards.iter().find(|b| &b.id == bid)
+            } else {
+                bc.boards.iter().find(|b| b.id == bc.active_board_id)
+            };
+            b.and_then(|b| b.columns.iter().find(|c| c.id == task.stage_id).cloned())
         });
+        col_from_board
+            .or_else(|| pipeline.columns.iter().find(|c| c.id == task.stage_id).cloned())
+            .unwrap_or_else(|| {
+                eprintln!(
+                    "CVH [run_agent]: Column '{}' not found in board or pipeline, falling back to default column",
+                    task.stage_id
+                );
+                pipeline.columns.first().cloned().unwrap_or_else(|| crate::config::PipelineColumn {
+                    id: task.stage_id.clone(),
+                    title: task.stage_id.clone(),
+                    color: None,
+                    icon: None,
+                    persona: Some("developer".to_string()),
+                    context_window: Some(400000),
+                    model_override: None,
+                    reasoning_effort: None,
+                    temperature: Some(0.2),
+                    gatekeeper_sensor: None,
+                    allowed_tools: None,
+                    hooks: HashMap::new(),
+                    routes: None,
+                    auto_run: None,
+                    terminal: None,
+                })
+            })
+    };
 
     let persona_role = col.persona.clone().unwrap_or_else(|| "developer".to_string());
 
@@ -1958,5 +2196,39 @@ mod tests {
         let _ = tokio::fs::remove_dir_all(&base).await;
         let _ = tokio::fs::remove_dir_all(&empty_base).await;
     }
+
+    #[test]
+    fn test_slugify_board_name_cyrillic_and_latin() {
+        assert_eq!(slugify_board_name("3D Моделирование"), "3d-modelirovanie");
+        assert_eq!(slugify_board_name("Разработка"), "razrabotka");
+        assert_eq!(slugify_board_name("Dev Pipeline"), "dev-pipeline");
+        assert_eq!(slugify_board_name("Engineering Core 2"), "engineering-core-2");
+    }
+
+    #[test]
+    fn test_task_board_id_serialization() {
+        let json_with_board = r#"{
+            "id": "CVH-100",
+            "title": "3D asset task",
+            "stageId": "concept",
+            "boardId": "modeler"
+        }"#;
+
+        let task: Task = serde_json::from_str(json_with_board).expect("deserialize task");
+        assert_eq!(task.board_id.as_deref(), Some("modeler"));
+
+        let json_without_board = r#"{
+            "id": "CVH-101",
+            "title": "Legacy task",
+            "stageId": "dev"
+        }"#;
+
+        let legacy_task: Task = serde_json::from_str(json_without_board).expect("deserialize legacy task");
+        assert!(legacy_task.board_id.is_none());
+
+        let fixed = ensure_task_board_id(vec![legacy_task]);
+        assert_eq!(fixed[0].board_id.as_deref(), Some("development"));
+    }
 }
+
 

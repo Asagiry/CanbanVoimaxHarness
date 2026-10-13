@@ -9,12 +9,19 @@ export interface FastTrackConfig {
   noRetro?: boolean;
 }
 
+export interface BoardDef {
+  id: string;
+  name: string;
+  columns: PipelineColumn[];
+}
+
 export interface KanbanTask {
   id: string;
   title: string;
   description?: string;
   priority: TaskPriority;
   columnId: string;
+  boardId?: string;
   persona: string;
   branch: string;
   worktreePath: string;

@@ -23,6 +23,8 @@ pub struct Task {
     pub description: String,
     #[serde(rename = "stageId", alias = "stage_id", alias = "columnId")]
     pub stage_id: String,
+    #[serde(rename = "boardId", alias = "board_id", default)]
+    pub board_id: Option<String>,
     #[serde(rename = "worktreePath", alias = "worktree_path", default)]
     pub worktree_path: Option<String>,
     #[serde(default)]

@@ -11,17 +11,17 @@ import { useProjectStore } from './stores/projectStore';
 import { useDrawerStore } from './stores/drawerStore';
 
 export default function App() {
-  const { loadColumns, loadTasks } = useBoardStore();
+  const { loadColumns, loadTasks, loadBoards } = useBoardStore();
   const { loadProjects } = useProjectStore();
   const { appendThought, appendOutput, addToolExecution, updateToolExecution, updateTelemetry, setThinkingStartTime } = useDrawerStore();
 
   useEffect(() => {
     loadProjects().then(async () => {
-      // Columns first: task mapping (columnId fallback, persona, status) resolves via columns
-      await loadColumns();
+      // Boards and columns first: task mapping (columnId fallback, persona, status) resolves via columns
+      await loadBoards();
       await loadTasks();
     });
-  }, [loadProjects, loadColumns, loadTasks]);
+  }, [loadProjects, loadBoards, loadTasks]);
 
   useEffect(() => {
     let unlisteners: (() => void)[] = [];

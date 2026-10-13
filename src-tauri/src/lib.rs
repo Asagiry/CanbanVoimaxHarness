@@ -34,6 +34,12 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_pipeline,
             save_pipeline,
+            list_boards,
+            create_board,
+            save_board,
+            delete_board,
+            set_active_board,
+            get_active_board_id,
             list_agent_personas,
             create_agent_persona,
             get_project_config_cmd,
