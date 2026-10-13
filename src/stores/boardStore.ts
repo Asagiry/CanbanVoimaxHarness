@@ -37,6 +37,35 @@ const STAGE_ORDER: Record<string, number> = {
   ready: 4,
 };
 
+const TASKS_STORAGE_KEY = 'cvh_tasks_backup';
+
+function persistTasksToLocalStorage(tasks: KanbanTask[]): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
+    }
+  } catch (err) {
+    console.warn('Failed to write tasks backup to localStorage:', err);
+  }
+}
+
+function loadTasksFromLocalStorage(): KanbanTask[] {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw = window.localStorage.getItem(TASKS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to read tasks backup from localStorage:', err);
+  }
+  return [];
+}
+
 async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
   try {
     const { invoke } = await import('@tauri-apps/api/core');
@@ -103,7 +132,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   isLoadingTasks: false,
 
   setColumns: (columns) => set({ columns }),
-  setTasks: (tasks) => set({ tasks }),
+  setTasks: (tasks) => {
+    persistTasksToLocalStorage(tasks);
+    set({ tasks });
+  },
   setSelectedTaskId: (id) => set({ selectedTaskId: id }),
   setSearchQuery: (query) => set({ searchQuery: query }),
 
@@ -112,15 +144,24 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const rawTasks = await invoke<any[]>('list_tasks');
-      if (Array.isArray(rawTasks)) {
+      if (Array.isArray(rawTasks) && rawTasks.length > 0) {
         const mapped = rawTasks.map(mapBackendTaskToKanban);
         set({ tasks: mapped, isTauriConnected: true, isLoadingTasks: false });
+        persistTasksToLocalStorage(mapped);
         return;
       }
     } catch (err) {
-      // In web mode or when invoke fails, keep board clean without mock tasks
       console.info('Tauri list_tasks not available or returned empty:', err);
     }
+
+    // Fallback: restore from localStorage backup
+    const backupTasks = loadTasksFromLocalStorage();
+    if (backupTasks.length > 0) {
+      set({ tasks: backupTasks, isLoadingTasks: false });
+      syncTasksBackend(backupTasks);
+      return;
+    }
+
     set({ tasks: [], isLoadingTasks: false });
   },
 
@@ -177,6 +218,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     });
 
     set({ tasks: updatedTasks });
+    persistTasksToLocalStorage(updatedTasks);
     syncTasksBackend(updatedTasks);
 
     if (effectiveTargetCol === 'dev') {
@@ -187,6 +229,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   updateTask: (taskId, partial) => {
     set((state) => {
       const updatedTasks = state.tasks.map((t) => (t.id === taskId ? { ...t, ...partial } : t));
+      persistTasksToLocalStorage(updatedTasks);
       syncTasksBackend(updatedTasks);
       return { tasks: updatedTasks };
     });
@@ -195,6 +238,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   addTask: (task) => {
     const updatedTasks = [task, ...get().tasks];
     set({ tasks: updatedTasks });
+    persistTasksToLocalStorage(updatedTasks);
     syncTasksBackend(updatedTasks);
 
     if (task.columnId === 'dev') {
@@ -208,6 +252,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       tasks: updatedTasks,
       selectedTaskId: get().selectedTaskId === taskId ? null : get().selectedTaskId,
     });
+    persistTasksToLocalStorage(updatedTasks);
     syncTasksBackend(updatedTasks);
   },
 
@@ -225,11 +270,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   },
 
   setTaskVerdict: (taskId, verdict, note) => {
-    set((state) => ({
-      tasks: state.tasks.map((t) =>
+    set((state) => {
+      const updatedTasks = state.tasks.map((t) =>
         t.id === taskId ? { ...t, verdict, verdictNote: note ?? t.verdictNote } : t
-      ),
-    }));
+      );
+      persistTasksToLocalStorage(updatedTasks);
+      syncTasksBackend(updatedTasks);
+      return { tasks: updatedTasks };
+    });
   },
 
   toggleTimer: (taskId) => {

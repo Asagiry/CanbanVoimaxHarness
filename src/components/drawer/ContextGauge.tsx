@@ -30,46 +30,82 @@ export default function ContextGauge({
   const [isCompacting, setIsCompacting] = useState(false);
   const [savingsBadge, setSavingsBadge] = useState<string | null>(null);
 
-  const currentTokens = useMemo(() => {
-    if (currentEstimatedTokens !== undefined) {
-      return currentEstimatedTokens;
-    }
-
-    if (tokenOverrides?.[taskId] !== undefined) {
-      return tokenOverrides[taskId];
-    }
-
-    let charCount = 3800;
-
+  // Dynamic token calculations
+  const { totalUsedTokens, systemPromptTokens, toolDefTokens, messageTokens } = useMemo(() => {
+    // 1. Calculate dynamic message characters
+    let messageChars = 0;
     const streams = streamEntries?.[taskId];
     if (streams) {
       for (const th of streams.thoughts) {
-        charCount += th.content.length;
+        messageChars += th.content.length;
       }
       for (const out of streams.outputs) {
-        charCount += out.content.length;
+        messageChars += out.content.length;
       }
     }
 
     const tools = toolExecutions?.[taskId];
     if (tools) {
       for (const t of tools) {
-        charCount += (t.stdout?.length || 0);
-        charCount += (t.stderr?.length || 0);
-        charCount += JSON.stringify(t.params || {}).length;
+        messageChars += (t.stdout?.length || 0);
+        messageChars += (t.stderr?.length || 0);
+        messageChars += JSON.stringify(t.params || {}).length;
       }
     }
 
-    return Math.max(1200, Math.round(charCount / 4));
+    const dynamicMsgTokens = Math.max(300, Math.round(messageChars / 4));
+    const baseSystem = 3200;
+    const baseTool = 2400;
+    const estimatedTotal = baseSystem + baseTool + dynamicMsgTokens;
+
+    const total = currentEstimatedTokens !== undefined
+      ? currentEstimatedTokens
+      : tokenOverrides?.[taskId] !== undefined
+      ? tokenOverrides[taskId]
+      : estimatedTotal;
+
+    // Segment token allocation:
+    let sys = baseSystem;
+    let tool = baseTool;
+    let msg = Math.max(0, total - sys - tool);
+
+    if (total < sys + tool) {
+      const ratio = total / (sys + tool);
+      sys = Math.round(baseSystem * ratio);
+      tool = Math.round(baseTool * ratio);
+      msg = Math.max(0, total - sys - tool);
+    }
+
+    return {
+      totalUsedTokens: total,
+      systemPromptTokens: sys,
+      toolDefTokens: tool,
+      messageTokens: msg,
+    };
   }, [taskId, currentEstimatedTokens, tokenOverrides, streamEntries, toolExecutions]);
 
-  const percentage = Math.min(100, Math.round((currentTokens / effectiveLimit) * 100));
+  const percent = Math.min(100, Math.max(0, Math.round((totalUsedTokens / effectiveLimit) * 100)));
 
-  const barColor = useMemo(() => {
-    if (percentage < 50) return 'bg-[#171717]';
-    if (percentage <= 75) return 'bg-amber-500';
-    return 'bg-red-500';
-  }, [percentage]);
+  // Segment widths against 100% capacity
+  const systemPct = Math.max(0, (systemPromptTokens / effectiveLimit) * 100);
+  const toolPct = Math.max(0, (toolDefTokens / effectiveLimit) * 100);
+  const msgPct = Math.max(0, (messageTokens / effectiveLimit) * 100);
+
+  const usedTokensK = (totalUsedTokens / 1000) >= 10
+    ? Math.round(totalUsedTokens / 1000)
+    : (totalUsedTokens / 1000).toFixed(1);
+  const maxTokensK = Math.round(effectiveLimit / 1000);
+
+  // SVG circular gauge geometry (diameter 28px)
+  const radius = 10;
+  const circumference = 2 * Math.PI * radius; // ~62.8318
+  const strokeDashoffset = circumference - (circumference * percent) / 100;
+
+  const strokeColor = useMemo(() => {
+    if (percent < 60) return '#171717';
+    if (percent <= 85) return '#f59e0b';
+    return '#ef4444';
+  }, [percent]);
 
   const triggerSavingsNotice = useCallback((savedCount: number) => {
     setSavingsBadge(`Оптимизировано: ~${savedCount.toLocaleString('ru-RU')} токенов`);
@@ -93,7 +129,7 @@ export default function ContextGauge({
           }
         });
       } catch {
-        // Fallback
+        // Fallback in web mode
       }
     };
     setupListener();
@@ -146,39 +182,135 @@ export default function ContextGauge({
   };
 
   return (
-    <div className="flex flex-col space-y-1.5 py-1 text-xs font-mono select-none">
-      {/* Toast */}
-      {savingsBadge && (
-        <div className="text-[11px] text-[#b45309] font-mono">
-          {savingsBadge}
-        </div>
-      )}
-
-      {/* Row */}
-      <div className="flex items-center justify-between text-[#666666] text-[11px]">
-        <div className="flex items-center space-x-2">
-          <span>Контекст:</span>
-          <span className="text-[#171717] font-medium tabular-nums">
-            {currentTokens.toLocaleString('ru-RU')} / {effectiveLimit.toLocaleString('ru-RU')} ({percentage}%)
-          </span>
-        </div>
-
-        <button
-          onClick={handleCompactClick}
-          disabled={isCompacting}
-          className="px-2 py-0.5 rounded-md bg-white hover:bg-[#f4f4f5] border border-[#ebebeb] text-[#171717] hover:text-[#0d0d0d] transition cursor-pointer text-[10px]"
-          title="Компактировать контекст"
-        >
-          {isCompacting ? 'Сжатие...' : 'Компактировать контекст'}
-        </button>
+    <div className="relative group inline-flex items-center">
+      {/* Compact Circular Ring Trigger (28px) */}
+      <div
+        className="relative w-7 h-7 flex items-center justify-center cursor-pointer select-none rounded-full hover:ring-2 hover:ring-[#ebebeb] transition"
+        title={`Контекст: ${percent}% (~${usedTokensK}K / ${maxTokensK}K)`}
+      >
+        <svg className="w-7 h-7 -rotate-90 transform" viewBox="0 0 28 28">
+          {/* Track circle */}
+          <circle
+            cx="14"
+            cy="14"
+            r={radius}
+            stroke="#e5e7eb"
+            strokeWidth="2.5"
+            fill="none"
+          />
+          {/* Progress circle */}
+          <circle
+            cx="14"
+            cy="14"
+            r={radius}
+            stroke={strokeColor}
+            strokeWidth="2.5"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            fill="none"
+            className="transition-all duration-300"
+          />
+        </svg>
+        <span className="absolute inset-0 flex items-center justify-center text-[8.5px] font-mono font-semibold text-[#171717] tabular-nums">
+          {percent}%
+        </span>
       </div>
 
-      {/* Thin minimalist progress bar */}
-      <div className="w-full h-1.5 rounded-full bg-[#ebebeb] overflow-hidden">
-        <div
-          className={`h-full transition-all duration-200 ${barColor}`}
-          style={{ width: `${Math.max(2, percentage)}%` }}
-        />
+      {/* Floating Hover Card (Vercel / ChatGPT Aesthetic) */}
+      <div className="absolute right-0 top-full mt-2 z-50 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-all duration-150 ease-out pointer-events-auto">
+        {/* Invisible hit bridge to prevent losing hover on cursor transition */}
+        <div className="absolute -top-3 left-0 right-0 h-3" />
+
+        <div className="w-72 rounded-lg border border-[#ebebeb] bg-white p-3.5 shadow-md text-[#171717] select-none font-sans">
+          {/* Top Line */}
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <span className="font-semibold text-xs text-[#171717]">{percent}%</span>{' '}
+              <span className="text-xs text-[#666666]">of context used</span>
+            </div>
+            <span className="font-mono text-xs text-[#666666] tabular-nums">
+              ~{usedTokensK}K / {maxTokensK}K
+            </span>
+          </div>
+
+          {/* Segmented Progress Bar */}
+          <div className="w-full h-2 rounded-full bg-[#f4f4f5] overflow-hidden flex mb-3">
+            {systemPromptTokens > 0 && (
+              <div
+                style={{ width: `${systemPct}%` }}
+                className="h-full bg-[#71717a] transition-all duration-200"
+                title={`System prompt: ~${systemPromptTokens.toLocaleString('ru-RU')}`}
+              />
+            )}
+            {toolDefTokens > 0 && (
+              <div
+                style={{ width: `${toolPct}%` }}
+                className="h-full bg-[#8b5cf6] transition-all duration-200"
+                title={`Tool definitions: ~${toolDefTokens.toLocaleString('ru-RU')}`}
+              />
+            )}
+            {messageTokens > 0 && (
+              <div
+                style={{ width: `${msgPct}%` }}
+                className="h-full bg-[#3b82f6] transition-all duration-200"
+                title={`Messages: ~${messageTokens.toLocaleString('ru-RU')}`}
+              />
+            )}
+          </div>
+
+          {/* Legend List */}
+          <div className="space-y-1.5 text-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <span className="w-2.5 h-2.5 rounded-xs bg-[#71717a] shrink-0" />
+                <span className="text-[#666666]">System prompt</span>
+              </div>
+              <span className="font-mono text-xs text-[#171717] tabular-nums">
+                ~{systemPromptTokens.toLocaleString('ru-RU')}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <span className="w-2.5 h-2.5 rounded-xs bg-[#8b5cf6] shrink-0" />
+                <span className="text-[#666666]">Tool definitions</span>
+              </div>
+              <span className="font-mono text-xs text-[#171717] tabular-nums">
+                ~{toolDefTokens.toLocaleString('ru-RU')}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <span className="w-2.5 h-2.5 rounded-xs bg-[#3b82f6] shrink-0" />
+                <span className="text-[#666666]">Messages</span>
+              </div>
+              <span className="font-mono text-xs text-[#171717] tabular-nums">
+                ~{messageTokens.toLocaleString('ru-RU')}
+              </span>
+            </div>
+          </div>
+
+          {/* Action Row */}
+          <div className="mt-3 pt-2.5 border-t border-[#ebebeb] flex items-center justify-between">
+            <button
+              type="button"
+              onClick={handleCompactClick}
+              disabled={isCompacting}
+              className="px-2.5 py-1 rounded-md bg-[#fafafa] hover:bg-[#f4f4f5] border border-[#ebebeb] text-[#171717] text-[11px] font-mono transition cursor-pointer disabled:opacity-50 active:scale-[0.98]"
+              title="Компактировать контекст (compact_context)"
+            >
+              {isCompacting ? 'Сжатие...' : 'Компактировать'}
+            </button>
+
+            {savingsBadge && (
+              <span className="text-[10px] font-mono text-[#b45309] truncate max-w-[130px]">
+                {savingsBadge}
+              </span>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
