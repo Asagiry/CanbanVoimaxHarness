@@ -1,6 +1,6 @@
 export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
 
-export type TaskStatus = 'idle' | 'running' | 'paused' | 'waiting_review' | 'blocked' | 'done';
+export type TaskStatus = 'idle' | 'running' | 'paused' | 'waiting_review' | 'waiting_subtask' | 'blocked' | 'done';
 
 export type TaskVerdict = 'NONE' | 'APPROVED' | 'APPROVED_WITH_CAVEATS' | 'CHANGES_REQUESTED';
 
@@ -29,6 +29,9 @@ export interface KanbanTask {
   verdict?: TaskVerdict;
   verdictNote?: string;
   model?: string;
+  parentId?: string;
+  subtaskIndex?: number;
+  waitingForSubtaskId?: string;
 }
 
 export interface PipelineColumn {

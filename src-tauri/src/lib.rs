@@ -47,6 +47,7 @@ pub fn run() {
             load_task_dialog,
             clear_task_dialog,
             create_task,
+            create_subtask,
             move_task_stage,
             run_agent,
             abort_agent,

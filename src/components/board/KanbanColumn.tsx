@@ -24,7 +24,15 @@ interface KanbanColumnProps {
 export default function KanbanColumn({ column, tasks, index, onDeleteColumn }: KanbanColumnProps) {
   const { focusStage, focusedStageId } = useCortexStore();
   const isFocused = focusedStageId === column.id;
-  const isAtWipLimit = column.wipLimit ? tasks.length >= column.wipLimit : false;
+  const isDoneColumn = Boolean(
+    column.terminal ||
+    column.id === 'ready' ||
+    column.title.toLowerCase().includes('готов') ||
+    column.title.toLowerCase().includes('done')
+  );
+  // В колонке "Done" отображается ТОЛЬКО корневая основная задача (CVH-012)
+  const displayTasks = isDoneColumn ? tasks.filter((t) => !t.parentId) : tasks;
+  const isAtWipLimit = column.wipLimit ? displayTasks.length >= column.wipLimit : false;
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
 
   const getColumnIcon = (iconName: string) => {
@@ -90,7 +98,7 @@ export default function KanbanColumn({ column, tasks, index, onDeleteColumn }: K
               isAtWipLimit ? 'text-red-600' : 'text-[#8f8f8f]'
             }`}
           >
-            Всего задач: {tasks.length}
+            Всего задач: {displayTasks.length}
           </span>
         </div>
       </div>
@@ -107,7 +115,7 @@ export default function KanbanColumn({ column, tasks, index, onDeleteColumn }: K
                 : 'bg-transparent'
             }`}
           >
-            {tasks.map((task, index) => (
+            {displayTasks.map((task, index) => (
               <KanbanCard key={task.id} task={task} index={index} />
             ))}
             {provided.placeholder}

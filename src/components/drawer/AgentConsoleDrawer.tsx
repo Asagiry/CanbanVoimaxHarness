@@ -314,6 +314,7 @@ export default function AgentConsoleDrawer() {
     activityFeed,
     streamEntries,
     toolExecutions,
+    openDrawer,
     closeDrawer,
     appendOutput,
   } = useDrawerStore();
@@ -601,6 +602,32 @@ export default function AgentConsoleDrawer() {
             <span className="px-2 py-0.5 rounded-md font-mono text-xs uppercase bg-[#f4f4f5] border border-[#ebebeb] text-[#171717]">
               {column?.title || task.columnId}
             </span>
+
+            {/* Parent Task Badge & Navigation */}
+            {task.parentId && (
+              <button
+                type="button"
+                onClick={() => openDrawer(task.parentId!)}
+                className="flex items-center space-x-1 px-2 py-0.5 rounded-md font-mono text-xs text-[#6366f1] bg-[#eef2ff] border border-[#c7d2fe] hover:bg-[#e0e7ff] transition cursor-pointer"
+                title={`Перейти к родительской задаче ${task.parentId}`}
+              >
+                <GitBranch className="h-3 w-3 text-[#6366f1]" />
+                <span>Родитель: {task.parentId}</span>
+              </button>
+            )}
+
+            {/* Waiting for Subtask Badge & Navigation */}
+            {task.waitingForSubtaskId && (
+              <button
+                type="button"
+                onClick={() => openDrawer(task.waitingForSubtaskId!)}
+                className="flex items-center space-x-1 px-2 py-0.5 rounded-md font-mono text-xs text-[#b45309] bg-[#fffbeb] border border-[#fde68a] hover:bg-[#fef3c7] transition cursor-pointer"
+                title={`Открыть активную подзадачу ${task.waitingForSubtaskId}`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-[#f59e0b] animate-pulse" />
+                <span>Ждем: {task.waitingForSubtaskId}</span>
+              </button>
+            )}
 
             {/* Model Badge */}
             <span

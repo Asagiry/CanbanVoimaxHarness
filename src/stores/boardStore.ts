@@ -7,6 +7,7 @@ interface BoardState {
   columns: PipelineColumn[];
   tasks: KanbanTask[];
   selectedTaskId: string | null;
+  hoveredTaskId: string | null;
   searchQuery: string;
   isTauriConnected: boolean;
   isLoadingTasks: boolean;
@@ -15,6 +16,7 @@ interface BoardState {
   setColumns: (columns: PipelineColumn[]) => void;
   setTasks: (tasks: KanbanTask[]) => void;
   setSelectedTaskId: (id: string | null) => void;
+  setHoveredTaskId: (id: string | null) => void;
   setSearchQuery: (query: string) => void;
 
   loadColumns: () => Promise<void>;
@@ -22,6 +24,7 @@ interface BoardState {
   moveTask: (taskId: string, targetColumnId: string) => Promise<void>;
   updateTask: (taskId: string, partial: Partial<KanbanTask>) => void;
   addTask: (task: KanbanTask) => Promise<void>;
+  createSubtask: (parentId: string, targetColumnId?: string) => Promise<KanbanTask | null>;
   deleteTask: (taskId: string) => void;
   setTaskVerdict: (taskId: string, verdict: TaskVerdict, note?: string) => void;
   toggleTimer: (taskId: string) => void;
@@ -84,6 +87,9 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
       customFlow: t.customFlow,
       status: t.status,
       model: t.model,
+      parentId: t.parentId ?? null,
+      subtaskIndex: t.subtaskIndex ?? null,
+      waitingForSubtaskId: t.waitingForSubtaskId ?? null,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     }));
@@ -111,12 +117,13 @@ function mapBackendTaskToKanban(t: any): KanbanTask {
   const columnId = knownCol?.id ?? columns[0]?.id ?? rawId ?? 'backlog';
   const col = columns.find((c) => c.id === columnId);
 
-  // terminal → done, persona column → running, otherwise idle
-  const status: TaskStatus = col?.terminal
+  // Respect existing status or infer based on column
+  const rawStatus = (t.status as TaskStatus) || undefined;
+  const status: TaskStatus = rawStatus ?? (col?.terminal
     ? 'done'
     : col?.persona
     ? 'running'
-    : 'idle';
+    : 'idle');
 
   return {
     id: t.id,
@@ -138,6 +145,9 @@ function mapBackendTaskToKanban(t: any): KanbanTask {
     verdict: (t.verdict as TaskVerdict) || 'NONE',
     verdictNote: t.verdictNote,
     model: t.model || undefined,
+    parentId: t.parentId ?? t.parent_id ?? undefined,
+    subtaskIndex: t.subtaskIndex ?? t.subtask_index ?? undefined,
+    waitingForSubtaskId: t.waitingForSubtaskId ?? t.waiting_for_subtask_id ?? undefined,
   };
 }
 
@@ -145,6 +155,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   columns: INITIAL_COLUMNS,
   tasks: [], // Initialized with empty array - NO mock tasks!
   selectedTaskId: null,
+  hoveredTaskId: null,
   searchQuery: '',
   isTauriConnected: false,
   isLoadingTasks: false,
@@ -155,6 +166,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     set({ tasks });
   },
   setSelectedTaskId: (id) => set({ selectedTaskId: id }),
+  setHoveredTaskId: (id) => set({ hoveredTaskId: id }),
   setSearchQuery: (query) => set({ searchQuery: query }),
 
   loadColumns: async () => {
@@ -303,6 +315,98 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     if (targetColDef?.autoRun ?? !!targetColDef?.persona) {
       await triggerRunAgent(task.id, task.description);
     }
+  },
+
+  createSubtask: async (parentId: string, targetColumnId?: string) => {
+    const { tasks, columns } = get();
+    const parent = tasks.find((t) => t.id === parentId);
+    if (!parent) return null;
+
+    const parentColIndex = columns.findIndex((c) => c.id === parent.columnId);
+    const targetCol = targetColumnId
+      ? columns.find((c) => c.id === targetColumnId)
+      : parentColIndex >= 0 && parentColIndex + 1 < columns.length
+      ? columns[parentColIndex + 1]
+      : null;
+
+    if (!targetCol) return null;
+
+    // Calculate subtask index
+    const existingSubtasks = tasks.filter(
+      (t) => t.parentId === parentId || t.id.startsWith(`${parentId}.`)
+    );
+    const nextIndex =
+      existingSubtasks.reduce((max, t) => {
+        const parsed = t.subtaskIndex ?? parseInt(t.id.split('.').pop() || '0', 10);
+        return Math.max(max, isNaN(parsed) ? 0 : parsed);
+      }, 0) + 1;
+    const subtaskId = `${parentId}.${nextIndex}`;
+
+    // Try Tauri backend IPC first
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const backendSubtask = await invoke<any>('create_subtask', {
+        parentId,
+        targetStageId: targetCol.id,
+        title: null,
+      });
+      if (backendSubtask) {
+        await get().loadTasks();
+        return get().tasks.find((t) => t.id === subtaskId) || null;
+      }
+    } catch (err) {
+      console.info('create_subtask invoke fallback to client state:', err);
+    }
+
+    // Web mode / client fallback
+    const subtaskStatus: TaskStatus = targetCol.terminal
+      ? 'done'
+      : targetCol.persona
+      ? 'running'
+      : 'idle';
+
+    const newSubtask: KanbanTask = {
+      id: subtaskId,
+      title: `[${targetCol.title}] ${parent.title}`,
+      description: `### Подзадача этапа: ${targetCol.title}\nРодительская задача: ${parentId}\n\n${parent.description || ''}`,
+      priority: parent.priority,
+      columnId: targetCol.id,
+      persona: targetCol.persona || 'reviewer',
+      branch: parent.branch,
+      worktreePath: parent.worktreePath,
+      status: subtaskStatus,
+      activeStageDuration: 0,
+      stageDurations: {},
+      totalElapsed: 0,
+      isTimerRunning: subtaskStatus === 'running',
+      returnsCount: 0,
+      verdict: 'NONE',
+      model: targetCol.modelOverride || parent.model,
+      parentId,
+      subtaskIndex: nextIndex,
+    };
+
+    const updatedTasks = tasks.map((t) => {
+      if (t.id === parentId) {
+        return {
+          ...t,
+          status: 'waiting_subtask' as TaskStatus,
+          waitingForSubtaskId: subtaskId,
+        };
+      }
+      return t;
+    });
+
+    const finalTasks = [...updatedTasks, newSubtask];
+    set({ tasks: finalTasks });
+    persistTasksToLocalStorage(finalTasks);
+    await syncTasksBackend(finalTasks);
+
+    if (targetCol.autoRun ?? !!targetCol.persona) {
+      await triggerRunAgent(subtaskId, newSubtask.description);
+    }
+
+    return newSubtask;
   },
 
   deleteTask: (taskId) => {

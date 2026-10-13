@@ -18,7 +18,7 @@ export default function TaskContextMenu({ task, x, y, onClose }: TaskContextMenu
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
 
-  const { columns, moveTask, deleteTask, runTaskAgent } = useBoardStore();
+  const { columns, moveTask, deleteTask, runTaskAgent, createSubtask } = useBoardStore();
   const { openDrawer } = useDrawerStore();
 
   // Поджать координаты, чтобы меню не вылезало за край viewport.
@@ -90,6 +90,11 @@ export default function TaskContextMenu({ task, x, y, onClose }: TaskContextMenu
     await runTaskAgent(task.id);
   };
 
+  const handleCreateSubtask = async () => {
+    onClose();
+    await createSubtask(task.id);
+  };
+
   const handleMove = async (targetColumnId: string) => {
     onClose();
     if (targetColumnId === task.columnId) return;
@@ -127,6 +132,14 @@ export default function TaskContextMenu({ task, x, y, onClose }: TaskContextMenu
         className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] cursor-pointer"
       >
         Запустить агента
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        onClick={handleCreateSubtask}
+        className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] cursor-pointer text-[#8b5cf6]"
+      >
+        + Создать подзадачу
       </button>
 
       <div className="my-1 border-t border-[#ebebeb]" />
