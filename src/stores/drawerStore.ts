@@ -4,6 +4,17 @@ import { LiveStreamEntry, ToolExecution } from '../types';
 
 export type DrawerTab = 'thoughts' | 'output' | 'tools';
 
+export type ActivityType = 'thought' | 'output' | 'tool' | 'steer' | 'system' | 'error' | 'user';
+
+export interface DrawerActivityItem {
+  id: string;
+  type: ActivityType;
+  timestamp: string;
+  content?: string;
+  tool?: ToolExecution;
+  durationMs?: number;
+}
+
 export interface TaskTelemetry {
   inputTokens: number;
   outputTokens: number;
@@ -16,6 +27,7 @@ interface DrawerState {
   isOpen: boolean;
   activeTaskId: string | null;
   activeTab: DrawerTab;
+  activityFeed: Record<string, DrawerActivityItem[]>;
   streamEntries: Record<string, { thoughts: LiveStreamEntry[]; outputs: LiveStreamEntry[] }>;
   toolExecutions: Record<string, ToolExecution[]>;
   taskTelemetry: Record<string, TaskTelemetry>;
@@ -33,6 +45,7 @@ interface DrawerState {
     type?: 'output' | 'error' | 'system' | 'steer' | 'user'
   ) => void;
   addToolExecution: (taskId: string, tool: ToolExecution) => void;
+  updateToolExecution: (taskId: string, toolId: string, partial: Partial<ToolExecution>) => void;
   updateTelemetry: (taskId: string, telemetry: Partial<TaskTelemetry>) => void;
   setThinkingStartTime: (taskId: string, time: number | null) => void;
   sendSteerMessage: (taskId: string, message: string) => Promise<void>;
@@ -46,6 +59,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
   isOpen: false,
   activeTaskId: null,
   activeTab: 'thoughts',
+  activityFeed: {},
   streamEntries: {},
   toolExecutions: {},
   taskTelemetry: {},
@@ -79,7 +93,10 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       const existing = state.streamEntries[taskId] || { thoughts: [], outputs: [] };
       const last = existing.thoughts[existing.thoughts.length - 1];
 
-      // If last thought exists and is recent (< 3s), append content to avoid card explosion during streaming
+      const existingFeed = state.activityFeed[taskId] || [];
+      const lastFeedItem = existingFeed[existingFeed.length - 1];
+
+      // Stream coalescing for thoughts (< 3s window)
       if (last && last.durationMs !== undefined && now - (start + last.durationMs) < 3000) {
         const updated = [...existing.thoughts];
         updated[updated.length - 1] = {
@@ -87,6 +104,24 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
           content: last.content + content,
           durationMs,
         };
+
+        const updatedFeed = [...existingFeed];
+        if (lastFeedItem && lastFeedItem.type === 'thought') {
+          updatedFeed[updatedFeed.length - 1] = {
+            ...lastFeedItem,
+            content: (lastFeedItem.content || '') + content,
+            durationMs,
+          };
+        } else {
+          updatedFeed.push({
+            id: `th-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            type: 'thought',
+            timestamp: timeStr,
+            content,
+            durationMs,
+          });
+        }
+
         return {
           streamEntries: {
             ...state.streamEntries,
@@ -94,6 +129,10 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
               ...existing,
               thoughts: updated,
             },
+          },
+          activityFeed: {
+            ...state.activityFeed,
+            [taskId]: updatedFeed,
           },
         };
       }
@@ -106,6 +145,14 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         durationMs,
       };
 
+      const newFeedItem: DrawerActivityItem = {
+        id: newEntry.id,
+        type: 'thought',
+        timestamp: timeStr,
+        content,
+        durationMs,
+      };
+
       return {
         streamEntries: {
           ...state.streamEntries,
@@ -113,6 +160,10 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
             ...existing,
             thoughts: [...existing.thoughts, newEntry],
           },
+        },
+        activityFeed: {
+          ...state.activityFeed,
+          [taskId]: [...existingFeed, newFeedItem],
         },
       };
     });
@@ -125,13 +176,35 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       const existing = state.streamEntries[taskId] || { thoughts: [], outputs: [] };
       const last = existing.outputs[existing.outputs.length - 1];
 
-      // If last output is same type, append content for smooth token stream
+      const existingFeed = state.activityFeed[taskId] || [];
+      const lastFeedItem = existingFeed[existingFeed.length - 1];
+
+      const activityType: ActivityType =
+        type === 'steer' ? 'steer' : type === 'system' ? 'system' : type === 'error' ? 'error' : type === 'user' ? 'user' : 'output';
+
+      // Stream coalescing for outputs of same type (output or user)
       if (last && last.type === type && (type === 'output' || type === 'user')) {
         const updated = [...existing.outputs];
         updated[updated.length - 1] = {
           ...last,
           content: last.content + content,
         };
+
+        const updatedFeed = [...existingFeed];
+        if (lastFeedItem && lastFeedItem.type === activityType) {
+          updatedFeed[updatedFeed.length - 1] = {
+            ...lastFeedItem,
+            content: (lastFeedItem.content || '') + content,
+          };
+        } else {
+          updatedFeed.push({
+            id: `out-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            type: activityType,
+            timestamp: timeStr,
+            content,
+          });
+        }
+
         return {
           streamEntries: {
             ...state.streamEntries,
@@ -139,6 +212,10 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
               ...existing,
               outputs: updated,
             },
+          },
+          activityFeed: {
+            ...state.activityFeed,
+            [taskId]: updatedFeed,
           },
         };
       }
@@ -150,6 +227,13 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         content,
       };
 
+      const newFeedItem: DrawerActivityItem = {
+        id: newEntry.id,
+        type: activityType,
+        timestamp: timeStr,
+        content,
+      };
+
       return {
         streamEntries: {
           ...state.streamEntries,
@@ -158,6 +242,10 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
             outputs: [...existing.outputs, newEntry],
           },
         },
+        activityFeed: {
+          ...state.activityFeed,
+          [taskId]: [...existingFeed, newFeedItem],
+        },
       };
     });
   },
@@ -165,10 +253,52 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
   addToolExecution: (taskId, tool) => {
     set((state) => {
       const existing = state.toolExecutions[taskId] || [];
+      const existingFeed = state.activityFeed[taskId] || [];
+
+      const feedItem: DrawerActivityItem = {
+        id: tool.id,
+        type: 'tool',
+        timestamp: tool.timestamp,
+        tool,
+      };
+
       return {
         toolExecutions: {
           ...state.toolExecutions,
           [taskId]: [tool, ...existing],
+        },
+        activityFeed: {
+          ...state.activityFeed,
+          [taskId]: [...existingFeed, feedItem],
+        },
+      };
+    });
+  },
+
+  updateToolExecution: (taskId, toolId, partial) => {
+    set((state) => {
+      const existing = state.toolExecutions[taskId] || [];
+      const updated = existing.map((t) => (t.id === toolId ? { ...t, ...partial } : t));
+
+      const existingFeed = state.activityFeed[taskId] || [];
+      const updatedFeed = existingFeed.map((item) => {
+        if (item.type === 'tool' && (item.id === toolId || item.tool?.id === toolId)) {
+          return {
+            ...item,
+            tool: item.tool ? { ...item.tool, ...partial } : undefined,
+          };
+        }
+        return item;
+      });
+
+      return {
+        toolExecutions: {
+          ...state.toolExecutions,
+          [taskId]: updated,
+        },
+        activityFeed: {
+          ...state.activityFeed,
+          [taskId]: updatedFeed,
         },
       };
     });
@@ -278,6 +408,10 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
 
   clearTaskLogs: (taskId) => {
     set((state) => ({
+      activityFeed: {
+        ...state.activityFeed,
+        [taskId]: [],
+      },
       streamEntries: {
         ...state.streamEntries,
         [taskId]: { thoughts: [], outputs: [] },

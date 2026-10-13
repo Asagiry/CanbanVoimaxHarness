@@ -25,6 +25,7 @@ interface BoardState {
   toggleTimer: (taskId: string) => void;
   tickTimers: () => void;
   promoteTaskToNextStage: (taskId: string) => void;
+  runTaskAgent: (taskId: string) => Promise<void>;
 }
 
 // Stage sequence order to compute rework returns
@@ -35,6 +36,39 @@ const STAGE_ORDER: Record<string, number> = {
   retro: 3,
   ready: 4,
 };
+
+async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const backendPayload = tasks.map((t) => ({
+      id: t.id,
+      title: t.title,
+      description: t.description || '',
+      stageId: t.columnId,
+      columnId: t.columnId,
+      worktreePath: t.worktreePath,
+      branch: t.branch,
+      verdict: t.verdict === 'NONE' ? null : t.verdict,
+      customFlow: t.customFlow,
+      status: t.status,
+      model: t.model,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }));
+    await invoke('save_tasks', { tasks: backendPayload });
+  } catch (err) {
+    console.info('Backend save_tasks not available or in web mode:', err);
+  }
+}
+
+async function triggerRunAgent(taskId: string): Promise<void> {
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('run_agent', { taskId });
+  } catch (err) {
+    console.info('run_agent invoke failed or in web mode:', err);
+  }
+}
 
 function mapBackendTaskToKanban(t: any): KanbanTask {
   return {
@@ -56,6 +90,7 @@ function mapBackendTaskToKanban(t: any): KanbanTask {
     customFlow: t.customFlow || t.custom_flow,
     verdict: (t.verdict as TaskVerdict) || 'NONE',
     verdictNote: t.verdictNote,
+    model: t.model || undefined,
   };
 }
 
@@ -142,23 +177,51 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     });
 
     set({ tasks: updatedTasks });
+    syncTasksBackend(updatedTasks);
+
+    if (effectiveTargetCol === 'dev') {
+      triggerRunAgent(taskId);
+    }
   },
 
   updateTask: (taskId, partial) => {
-    set((state) => ({
-      tasks: state.tasks.map((t) => (t.id === taskId ? { ...t, ...partial } : t)),
-    }));
+    set((state) => {
+      const updatedTasks = state.tasks.map((t) => (t.id === taskId ? { ...t, ...partial } : t));
+      syncTasksBackend(updatedTasks);
+      return { tasks: updatedTasks };
+    });
   },
 
   addTask: (task) => {
-    set((state) => ({ tasks: [task, ...state.tasks] }));
+    const updatedTasks = [task, ...get().tasks];
+    set({ tasks: updatedTasks });
+    syncTasksBackend(updatedTasks);
+
+    if (task.columnId === 'dev') {
+      triggerRunAgent(task.id);
+    }
   },
 
   deleteTask: (taskId) => {
-    set((state) => ({
-      tasks: state.tasks.filter((t) => t.id !== taskId),
-      selectedTaskId: state.selectedTaskId === taskId ? null : state.selectedTaskId,
-    }));
+    const updatedTasks = get().tasks.filter((t) => t.id !== taskId);
+    set({
+      tasks: updatedTasks,
+      selectedTaskId: get().selectedTaskId === taskId ? null : get().selectedTaskId,
+    });
+    syncTasksBackend(updatedTasks);
+  },
+
+  runTaskAgent: async (taskId) => {
+    const { tasks, moveTask, updateTask } = get();
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+
+    if (task.columnId !== 'dev') {
+      moveTask(taskId, 'dev');
+    } else {
+      updateTask(taskId, { status: 'running', isTimerRunning: true });
+      await triggerRunAgent(taskId);
+    }
   },
 
   setTaskVerdict: (taskId, verdict, note) => {

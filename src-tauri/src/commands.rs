@@ -20,10 +20,11 @@ use tauri_plugin_dialog::DialogExt;
 pub struct Task {
     pub id: String,
     pub title: String,
+    #[serde(default)]
     pub description: String,
-    #[serde(rename = "stageId")]
+    #[serde(rename = "stageId", alias = "columnId")]
     pub stage_id: String,
-    #[serde(rename = "worktreePath", default)]
+    #[serde(rename = "worktreePath", alias = "worktree_path", default)]
     pub worktree_path: Option<String>,
     #[serde(default)]
     pub branch: Option<String>,
@@ -35,9 +36,9 @@ pub struct Task {
     pub status: Option<String>,
     #[serde(default)]
     pub model: Option<String>,
-    #[serde(rename = "createdAt")]
+    #[serde(rename = "createdAt", alias = "created_at", default)]
     pub created_at: i64,
-    #[serde(rename = "updatedAt")]
+    #[serde(rename = "updatedAt", alias = "updated_at", default)]
     pub updated_at: i64,
 }
 
@@ -481,29 +482,30 @@ pub async fn run_agent(
         .await
         .unwrap_or_default();
 
-    // Check task.model first; only fall back to llm_settings.model or project default if None or empty
-    let model = if let Some(ref m) = task.model {
-        if !m.trim().is_empty() {
-            m.trim().to_string()
+    // Model resolution precedence:
+    // 1. Task-specific model override (task.model)
+    // 2. Global LLM settings model (llm_settings.model)
+    // 3. Pipeline column model override (col.model_override)
+    // 4. Project default model (proj_cfg.default_model)
+    let model = if let Some(ref tm) = task.model {
+        if !tm.trim().is_empty() {
+            tm.trim().to_string()
         } else if !llm_settings.model.trim().is_empty() {
             llm_settings.model.trim().to_string()
-        } else if let Some(ref col_m) = col.model_override {
-            if !col_m.trim().is_empty() {
-                col_m.trim().to_string()
+        } else if let Some(ref m) = col.model_override {
+            if !m.trim().is_empty() {
+                m.trim().to_string()
             } else {
                 proj_cfg.default_model.clone().unwrap_or_else(|| "gemini-3.8-flash-high".to_string())
             }
         } else {
-            proj_cfg
-                .default_model
-                .clone()
-                .unwrap_or_else(|| "gemini-3.8-flash-high".to_string())
+            proj_cfg.default_model.clone().unwrap_or_else(|| "gemini-3.8-flash-high".to_string())
         }
     } else if !llm_settings.model.trim().is_empty() {
         llm_settings.model.trim().to_string()
-    } else if let Some(ref col_m) = col.model_override {
-        if !col_m.trim().is_empty() {
-            col_m.trim().to_string()
+    } else if let Some(ref m) = col.model_override {
+        if !m.trim().is_empty() {
+            m.trim().to_string()
         } else {
             proj_cfg.default_model.clone().unwrap_or_else(|| "gemini-3.8-flash-high".to_string())
         }
@@ -583,6 +585,10 @@ pub async fn run_agent(
             }
         }
     };
+
+    if !worktree_dir.exists() {
+        let _ = tokio::fs::create_dir_all(&worktree_dir).await;
+    }
 
     let abort_flag = Arc::new(AtomicBool::new(false));
 

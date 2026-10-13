@@ -1,7 +1,8 @@
 import { Draggable } from '@hello-pangea/dnd';
 import { KanbanTask, TaskStatus } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
-import { Code2, ShieldCheck, Sparkles, Bot, Palette } from 'lucide-react';
+import { useBoardStore } from '../../stores/boardStore';
+import { Code2, ShieldCheck, Sparkles, Bot, Palette, Play } from 'lucide-react';
 
 interface KanbanCardProps {
   task: KanbanTask;
@@ -10,6 +11,20 @@ interface KanbanCardProps {
 
 export default function KanbanCard({ task, index }: KanbanCardProps) {
   const { openDrawer } = useDrawerStore();
+  const { moveTask } = useBoardStore();
+
+  const handleRunAgent = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (task.columnId !== 'dev') {
+      moveTask(task.id, 'dev');
+    }
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('run_agent', { taskId: task.id });
+    } catch (err) {
+      console.info('run_agent invoke failed or web mode:', err);
+    }
+  };
 
   const getPersonaIcon = (persona?: string) => {
     switch (persona?.toLowerCase()) {
@@ -84,11 +99,24 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
               : 'border-[#ebebeb] bg-white hover:border-[#d4d4d8] shadow-xs'
           }`}
         >
-          {/* Header: ID & Concise Status */}
+          {/* Header: ID, Play Button & Concise Status */}
           <div className="flex items-center justify-between mb-2">
-            <span className="font-mono text-[10px] font-semibold text-[#171717] bg-[#f4f4f5] px-1.5 py-0.5 rounded border border-[#ebebeb] tabular-nums">
-              {task.id}
-            </span>
+            <div className="flex items-center space-x-1.5">
+              <span className="font-mono text-[10px] font-semibold text-[#171717] bg-[#f4f4f5] px-1.5 py-0.5 rounded border border-[#ebebeb] tabular-nums">
+                {task.id}
+              </span>
+              {(task.columnId === 'backlog' || (task.columnId === 'dev' && task.status !== 'running')) && (
+                <button
+                  type="button"
+                  onClick={handleRunAgent}
+                  className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#171717] bg-[#f4f4f5] hover:bg-[#171717] hover:text-white border border-[#ebebeb] transition cursor-pointer"
+                  title="Запустить агента (run_agent)"
+                >
+                  <Play className="h-2.5 w-2.5 fill-current" />
+                  <span>Пуск</span>
+                </button>
+              )}
+            </div>
             {getStatusBadge(task.status)}
           </div>
 
@@ -97,17 +125,27 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
             {task.title}
           </h4>
 
-          {/* Footer: Persona Assignee & Branch */}
+          {/* Footer: Persona Assignee, Model Badge & Branch */}
           <div className="flex items-center justify-between pt-2 border-t border-[#ebebeb] text-[10px] font-mono text-[#666666]">
             <div className="flex items-center space-x-1.5">
               {getPersonaIcon(task.persona)}
               <span className="capitalize text-[#4d4d4d]">{task.persona || 'agent'}</span>
             </div>
-            {task.branch && (
-              <span className="text-[#8f8f8f] truncate max-w-[120px]" title={task.branch}>
-                {task.branch}
-              </span>
-            )}
+            <div className="flex items-center space-x-1.5 shrink-0">
+              {task.model && (
+                <span
+                  className="text-[9px] font-mono text-[#666666] bg-[#f4f4f5] px-1.5 py-0.5 rounded border border-[#ebebeb] truncate max-w-[120px]"
+                  title={`Модель: ${task.model}`}
+                >
+                  {task.model}
+                </span>
+              )}
+              {task.branch && (
+                <span className="text-[#8f8f8f] truncate max-w-[100px]" title={task.branch}>
+                  {task.branch}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       )}

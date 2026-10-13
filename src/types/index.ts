@@ -28,6 +28,7 @@ export interface KanbanTask {
   customFlow?: string[];
   verdict?: TaskVerdict;
   verdictNote?: string;
+  model?: string;
 }
 
 export interface PipelineColumn {

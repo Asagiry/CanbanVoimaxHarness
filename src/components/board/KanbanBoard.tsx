@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { useBoardStore } from '../../stores/boardStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import KanbanColumn from './KanbanColumn';
 import { KanbanTask } from '../../types';
 import { Plus, X, Check, ArrowRight } from 'lucide-react';
@@ -14,8 +15,10 @@ const STAGE_LABELS: Record<string, { label: string }> = {
 
 export default function KanbanBoard() {
   const { columns, tasks, searchQuery, moveTask, addTask, tickTimers } = useBoardStore();
+  const { availableModels, settings } = useSettingsStore();
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
   const [targetColumnForNew, setTargetColumnForNew] = useState<string>('backlog');
+  const [selectedModel, setSelectedModel] = useState<string>(settings.model || 'gemini-3.8-flash-high');
 
   // New task form fields
   const [newTitle, setNewTitle] = useState('');
@@ -57,6 +60,7 @@ export default function KanbanBoard() {
     setTargetColumnForNew(columnId);
     setNewTitle('');
     setNewDescription('');
+    setSelectedModel(settings.model || (availableModels.length > 0 ? availableModels[0] : 'gemini-3.8-flash-high'));
     setEnableReview(true);
     setEnableRetro(true);
     setIsNewTaskModalOpen(true);
@@ -92,6 +96,7 @@ export default function KanbanBoard() {
         noRetro: !enableRetro,
       },
       verdict: 'NONE',
+      model: selectedModel,
     };
 
     addTask(newTask);
@@ -212,6 +217,23 @@ export default function KanbanBoard() {
                   {columns.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-mono text-[#4d4d4d] font-medium mb-1">
+                  Модель агента
+                </label>
+                <select
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[#171717] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono text-xs cursor-pointer transition"
+                >
+                  {(availableModels.length > 0 ? availableModels : [settings.model || 'gemini-3.8-flash-high']).map((m) => (
+                    <option key={m} value={m}>
+                      {m}
                     </option>
                   ))}
                 </select>

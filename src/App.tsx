@@ -11,7 +11,7 @@ import { useDrawerStore } from './stores/drawerStore';
 
 export default function App() {
   const { loadTasks } = useBoardStore();
-  const { appendThought, appendOutput, addToolExecution } = useDrawerStore();
+  const { appendThought, appendOutput, addToolExecution, updateToolExecution } = useDrawerStore();
 
   useEffect(() => {
     loadTasks();
@@ -62,6 +62,19 @@ export default function App() {
         });
         unlisteners.push(u3);
 
+        const uToolResult = await listen<any>('agent:tool_result', (event) => {
+          const { taskId, id, result, success } = event.payload || {};
+          if (taskId && id) {
+            const outStr = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+            updateToolExecution(taskId, id, {
+              status: success ? 'success' : 'failed',
+              stdout: success ? outStr : undefined,
+              stderr: !success ? outStr : undefined,
+            });
+          }
+        });
+        unlisteners.push(uToolResult);
+
         const u4 = await listen<any>('task:moved', () => {
           loadTasks();
         });
@@ -86,7 +99,7 @@ export default function App() {
     return () => {
       unlisteners.forEach((u) => u());
     };
-  }, [loadTasks, appendThought, appendOutput, addToolExecution]);
+  }, [loadTasks, appendThought, appendOutput, addToolExecution, updateToolExecution]);
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#fafafa] text-[#171717] select-none">
