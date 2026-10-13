@@ -43,6 +43,10 @@ pub struct Task {
     pub subtask_index: Option<u32>,
     #[serde(rename = "waitingForSubtaskId", alias = "waiting_for_subtask_id", default)]
     pub waiting_for_subtask_id: Option<String>,
+    #[serde(rename = "coverImage", alias = "cover_image", default)]
+    pub cover_image: Option<String>,
+    #[serde(default)]
+    pub attachments: Option<Vec<String>>,
     #[serde(rename = "createdAt", alias = "created_at", default)]
     pub created_at: i64,
     #[serde(rename = "updatedAt", alias = "updated_at", default)]

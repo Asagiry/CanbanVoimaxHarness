@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useId, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useDrawerStore, DrawerActivityItem } from '../../stores/drawerStore';
 import { useBoardStore, syncTasksBackend } from '../../stores/boardStore';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -7,11 +7,12 @@ import ContextGauge from './ContextGauge';
 import {
   ArrowDown,
   ArrowLeft,
+  ArrowUp,
+  Plus,
   X,
   GitBranch,
   FolderGit2,
   Brain,
-  Send,
   Play,
   Square,
   Target,
@@ -186,6 +187,22 @@ function MarkdownContent({ content }: { content: string }) {
         continue;
       }
 
+      // Image line: ![alt](url)
+      const imgMatch = line.trim().match(/^!\[(.*?)\]\((.*?)\)$/);
+      if (imgMatch) {
+        result.push(
+          <div key={`img-${index}`} className="my-2 rounded-lg overflow-hidden border border-[#ebebeb] max-w-lg bg-zinc-900 shadow-xs">
+            <img
+              src={imgMatch[2]}
+              alt={imgMatch[1] || 'Изображение'}
+              className="w-full max-h-80 object-contain cursor-pointer"
+              onClick={() => window.open(imgMatch[2], '_blank')}
+            />
+          </div>
+        );
+        continue;
+      }
+
       // Headings
       if (line.startsWith('#### ')) {
         result.push(
@@ -331,7 +348,15 @@ export default function AgentConsoleDrawer() {
   const isFirstBatchRef = useRef(true);
   const nearBottomRef = useRef(true);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const promptInputId = useId();
+
+  // Modern chat attachments, toolbar states & textarea ref
+  const [attachedImages, setAttachedImages] = useState<Array<{ id: string; name: string; dataUrl: string }>>([]);
+  const [isDragOverChat, setIsDragOverChat] = useState(false);
+  const [isToolMenuOpen, setIsToolMenuOpen] = useState(false);
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
+  const [toolAccessMode, setToolAccessMode] = useState<'full' | 'readonly'>('full');
+  const chatFileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const toggleOutput = (id: string) => {
     setExpandedOutputs((prev) => {
@@ -516,6 +541,120 @@ export default function AgentConsoleDrawer() {
   const isRunning = task.status === 'running';
   const effectiveModel = task.model || settings.model || 'gemini-3.8-flash-high';
 
+  const { availableModels } = useSettingsStore();
+  const selectableModels = useMemo(() => {
+    return Array.from(
+      new Set([
+        effectiveModel,
+        ...(availableModels || []),
+        'gemini-3.8-flash-high',
+        'gemini-2.5-pro',
+        'claude-3-7-sonnet-20250219',
+        'gpt-4o',
+      ])
+    );
+  }, [effectiveModel, availableModels]);
+
+  const turns = useMemo(() => {
+    const feed = activityFeed[task.id] || [];
+    const feedCount = feed.filter((a) => a.type === 'tool' || a.type === 'thought' || a.type === 'output').length;
+    const toolsCount = toolExecutions[task.id]?.length || 0;
+    const outputsCount = streamEntries[task.id]?.outputs?.filter((o) => o.type === 'output').length || 0;
+    return Math.max(feedCount, toolsCount + outputsCount, 0);
+  }, [task.id, activityFeed, toolExecutions, streamEntries]);
+
+  const adjustTextareaHeight = (el: HTMLTextAreaElement) => {
+    el.style.height = 'auto';
+    const newHeight = Math.min(Math.max(el.scrollHeight, 40), 180);
+    el.style.height = `${newHeight}px`;
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInteractiveInput(e.target.value);
+    adjustTextareaHeight(e.target);
+  };
+
+  const handleAddChatImages = (files: FileList | File[]) => {
+    const validFiles = Array.from(files).filter(
+      (f) => f.type.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(f.name)
+    );
+    if (validFiles.length === 0) return;
+
+    validFiles.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        setAttachedImages((prev) => [
+          ...prev,
+          {
+            id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            name: file.name,
+            dataUrl,
+          },
+        ]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleChatFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      handleAddChatImages(e.target.files);
+    }
+    e.target.value = '';
+  };
+
+  const handleChatDragOver = (e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes('Files')) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOverChat(true);
+    }
+  };
+
+  const handleChatDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOverChat(false);
+  };
+
+  const handleChatDrop = (e: React.DragEvent) => {
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOverChat(false);
+      handleAddChatImages(e.dataTransfer.files);
+    }
+  };
+
+  const handleChatPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    const pastedFiles: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          pastedFiles.push(file);
+        }
+      }
+    }
+
+    if (pastedFiles.length > 0) {
+      e.preventDefault();
+      handleAddChatImages(pastedFiles);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendPrompt();
+    }
+  };
+
   const handleRunAgent = async () => {
     setRunError(null);
     updateTask(task.id, { status: 'running', isTimerRunning: true });
@@ -541,31 +680,44 @@ export default function AgentConsoleDrawer() {
     }
   };
 
-  const handleSendPrompt = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSendPrompt = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     const trimmed = interactiveInput.trim();
-    if (!trimmed) return;
+    if (!trimmed && attachedImages.length === 0) return;
+
+    const currentImages = [...attachedImages];
+    const imageUrls = currentImages.map((img) => img.dataUrl);
 
     setInteractiveInput('');
+    setAttachedImages([]);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
     setRunError(null);
 
-    // Append user steer message into feed immediately
-    appendOutput(task.id, trimmed, 'user');
+    const promptText = trimmed || (currentImages.length > 0 ? 'Изображение прикреплено' : '');
+
+    // Append user steer message into feed immediately with attached images
+    appendOutput(task.id, promptText, 'user', imageUrls.length > 0 ? imageUrls : undefined);
     useDrawerStore.getState().flushSaveDialog(task.id);
 
-    // Update task description in Zustand store with latest user prompt
+    // Update task description in Zustand store with latest user prompt & image attachments
+    const imageNotice = currentImages.length > 0
+      ? `\n[Прикреплено ${currentImages.length} изображений: ${currentImages.map((i) => i.name).join(', ')}]`
+      : '';
+    const fullMessage = `${promptText}${imageNotice}`;
     const updatedDesc = task.description
-      ? `${task.description}\n\n[USER]: ${trimmed}`
-      : trimmed;
+      ? `${task.description}\n\n[USER]: ${fullMessage}`
+      : fullMessage;
     updateTask(task.id, { description: updatedDesc, status: 'running', isTimerRunning: true });
 
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       await syncTasksBackend(useBoardStore.getState().tasks);
       if (isRunning) {
-        await invoke('steer_agent', { taskId: task.id, message: trimmed });
+        await invoke('steer_agent', { taskId: task.id, message: fullMessage });
       } else {
-        await invoke('run_agent', { taskId: task.id, prompt: trimmed });
+        await invoke('run_agent', { taskId: task.id, prompt: fullMessage });
       }
     } catch (err: any) {
       console.info('steer_agent / run_agent invoke failed or web mode:', err);
@@ -672,7 +824,7 @@ export default function AgentConsoleDrawer() {
             )}
           </div>
 
-          {/* Right Controls: Status & Compact Gauge */}
+          {/* Right Controls: Status */}
           <div className="flex items-center space-x-3">
             {isRunning ? (
               <div className="flex items-center space-x-2">
@@ -697,8 +849,6 @@ export default function AgentConsoleDrawer() {
                 </span>
               </div>
             )}
-
-            <ContextGauge taskId={task.id} />
           </div>
         </div>
       </header>
@@ -793,6 +943,23 @@ export default function AgentConsoleDrawer() {
                     </div>
                     <span className="tabular-nums">{activity.timestamp}</span>
                   </div>
+                  {activity.images && activity.images.length > 0 && (
+                    <div className="flex items-center gap-2 mb-2.5 flex-wrap">
+                      {activity.images.map((imgUrl, i) => (
+                        <div
+                          key={i}
+                          className="relative rounded-lg overflow-hidden border border-[#ebebeb] max-w-[240px] max-h-40 bg-zinc-900 shadow-xs"
+                        >
+                          <img
+                            src={imgUrl}
+                            alt={`Прикреплённое изображение ${i + 1}`}
+                            className="w-full h-full max-h-40 object-cover hover:scale-105 transition-transform duration-150 cursor-pointer"
+                            onClick={() => window.open(imgUrl, '_blank')}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <p className="text-sm text-[#171717] whitespace-pre-wrap select-text leading-relaxed font-sans">
                     {activity.content}
                   </p>
@@ -886,33 +1053,191 @@ export default function AgentConsoleDrawer() {
         )}
       </div>
 
-      {/* f) Interactive Input & Steer Bar */}
-      <footer className="border-t border-[#ebebeb] bg-white p-3 shrink-0 shadow-sm">
+      {/* f) Interactive Input & Steer Bar: Floating Dark Card & Bottom Status Bar */}
+      <footer className="border-t border-[#ebebeb] bg-[#fafafa]/80 backdrop-blur-xs p-3 shrink-0 shadow-xs">
         <div className="max-w-4xl mx-auto">
-          <form onSubmit={handleSendPrompt} className="flex items-center space-x-2">
-            <input
-              id={promptInputId}
-              name="interactivePromptInput"
-              type="text"
+          {/* Floating Modern Dark Card */}
+          <div
+            onDragOver={handleChatDragOver}
+            onDragLeave={handleChatDragLeave}
+            onDrop={handleChatDrop}
+            className={`rounded-2xl bg-[#1e1e20] border transition-all shadow-xl p-3 ${
+              isDragOverChat ? 'border-blue-500 ring-2 ring-blue-500/30 bg-[#242428]' : 'border-[#2e2e32]'
+            }`}
+          >
+            {/* Attached Images Thumbnail Preview Bar */}
+            {attachedImages.length > 0 && (
+              <div className="flex items-center gap-2 mb-2.5 pb-1 overflow-x-auto select-none">
+                {attachedImages.map((img) => (
+                  <div
+                    key={img.id}
+                    className="relative group shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-[#38383e] bg-[#141416]"
+                  >
+                    <img
+                      src={img.dataUrl}
+                      alt={img.name}
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setAttachedImages((prev) => prev.filter((i) => i.id !== img.id))}
+                      className="absolute top-1 right-1 w-4 h-4 rounded-full bg-black/80 hover:bg-black text-white flex items-center justify-center text-xs leading-none transition cursor-pointer"
+                      title="Удалить"
+                    >
+                      ×
+                    </button>
+                    <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1 py-0.5 text-[8.5px] font-mono text-zinc-300 truncate text-center">
+                      {img.name}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Multiline auto-resizing textarea */}
+            <textarea
+              ref={textareaRef}
+              rows={1}
               value={interactiveInput}
-              onChange={(e) => setInteractiveInput(e.target.value)}
-              placeholder={
-                isRunning
-                  ? 'Направить агента (steer_agent): скорректировать ход решения...'
-                  : 'Запустить агента с указанием или задать уточняющий вопрос...'
-              }
-              className="flex-1 rounded-md bg-[#f9f9f9] border border-[#ebebeb] px-3.5 py-2 text-sm text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-sans transition"
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              onPaste={handleChatPaste}
+              placeholder="Напишите сообщение, задачу или прикрепите изображение..."
+              className="w-full bg-transparent text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none resize-none leading-relaxed min-h-[44px] max-h-44 overflow-y-auto font-sans"
             />
-            <button
-              type="submit"
-              disabled={!interactiveInput.trim()}
-              className="px-4 py-2 rounded-md bg-[#171717] hover:bg-[#262626] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-xs transition cursor-pointer flex items-center space-x-1.5 shadow-xs"
-              title="Отправить команду агенту"
-            >
-              <span>{isRunning ? 'Направить' : 'Отправить'}</span>
-              <Send className="h-3.5 w-3.5" />
-            </button>
-          </form>
+
+            {/* Bottom toolbar inside card */}
+            <div className="flex items-center justify-between pt-2 mt-1 border-t border-[#2a2a2e] select-none">
+              {/* Left Toolbar Items */}
+              <div className="flex items-center space-x-2">
+                {/* Round "+" Button */}
+                <button
+                  type="button"
+                  onClick={() => chatFileInputRef.current?.click()}
+                  className="w-7 h-7 rounded-full bg-[#2a2a2e] hover:bg-[#38383e] text-zinc-300 hover:text-white flex items-center justify-center transition cursor-pointer"
+                  title="Прикрепить изображение (PNG, JPG, WebP) или файл"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+
+                {/* Hidden File Input for "+" Button */}
+                <input
+                  ref={chatFileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  multiple
+                  className="hidden"
+                  onChange={handleChatFileSelect}
+                />
+
+                {/* Status Pill: "🛡️ Full access ⌵" */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsToolMenuOpen(!isToolMenuOpen)}
+                    className="px-2.5 py-1 rounded-full bg-[#2a2a2e] hover:bg-[#38383e] text-zinc-300 font-mono text-xs border border-[#38383e] transition cursor-pointer flex items-center gap-1.5"
+                    title="Режим доступа к инструментам"
+                  >
+                    <span>{toolAccessMode === 'full' ? '🛡️ Full access' : '🔒 Read only'}</span>
+                    <ChevronDown className="h-3 w-3 text-zinc-400" />
+                  </button>
+                  {isToolMenuOpen && (
+                    <div className="absolute bottom-full left-0 mb-2 w-48 rounded-lg bg-[#242428] border border-[#38383e] shadow-xl p-1 z-30 font-mono text-xs">
+                      <div className="px-2 py-1 text-zinc-400 text-[10px] uppercase">Режим инструментов</div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setToolAccessMode('full');
+                          setIsToolMenuOpen(false);
+                        }}
+                        className={`w-full text-left px-2 py-1.5 rounded flex items-center justify-between cursor-pointer ${
+                          toolAccessMode === 'full' ? 'bg-[#2f2f35] text-white' : 'text-zinc-300 hover:bg-[#2a2a2e]'
+                        }`}
+                      >
+                        <span>🛡️ Full access</span>
+                        {toolAccessMode === 'full' && <span className="text-emerald-400">✓</span>}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setToolAccessMode('readonly');
+                          setIsToolMenuOpen(false);
+                        }}
+                        className={`w-full text-left px-2 py-1.5 rounded flex items-center justify-between cursor-pointer ${
+                          toolAccessMode === 'readonly' ? 'bg-[#2f2f35] text-white' : 'text-zinc-300 hover:bg-[#2a2a2e]'
+                        }`}
+                      >
+                        <span>🔒 Read only</span>
+                        {toolAccessMode === 'readonly' && <span className="text-emerald-400">✓</span>}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Toolbar Items */}
+              <div className="flex items-center space-x-2">
+                {/* Minimalist Model Selector */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
+                    className="px-2.5 py-1 rounded-full bg-[#2a2a2e] hover:bg-[#38383e] text-zinc-300 font-mono text-xs border border-[#38383e] transition cursor-pointer flex items-center gap-1.5 max-w-[200px]"
+                    title={`Модель задачи: ${effectiveModel}`}
+                  >
+                    <span className="truncate">{effectiveModel}</span>
+                    <ChevronDown className="h-3 w-3 text-zinc-400 shrink-0" />
+                  </button>
+                  {isModelMenuOpen && (
+                    <div className="absolute bottom-full right-0 mb-2 w-56 rounded-lg bg-[#242428] border border-[#38383e] shadow-xl p-1 z-30 font-mono text-xs max-h-60 overflow-y-auto">
+                      <div className="px-2 py-1 text-zinc-400 text-[10px] uppercase">Выбор модели</div>
+                      {selectableModels.map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => {
+                            updateTask(task.id, { model: m });
+                            setIsModelMenuOpen(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 rounded flex items-center justify-between cursor-pointer ${
+                            effectiveModel === m ? 'bg-[#2f2f35] text-white' : 'text-zinc-300 hover:bg-[#2a2a2e]'
+                          }`}
+                        >
+                          <span className="truncate">{m}</span>
+                          {effectiveModel === m && <span className="text-emerald-400 shrink-0 ml-1">✓</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Round Action Button: Abort when running, Send when idle */}
+                {isRunning ? (
+                  <button
+                    type="button"
+                    onClick={handleAbortAgent}
+                    className="w-8 h-8 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-md transition cursor-pointer active:scale-95"
+                    title="Остановить выполнение (abort_agent)"
+                  >
+                    <Square className="h-3.5 w-3.5 fill-white text-white" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleSendPrompt()}
+                    disabled={!interactiveInput.trim() && attachedImages.length === 0}
+                    className="w-8 h-8 rounded-full bg-blue-500 hover:bg-blue-600 disabled:opacity-40 disabled:hover:bg-blue-500 disabled:cursor-not-allowed text-white flex items-center justify-center shadow-md transition cursor-pointer active:scale-95"
+                    title="Отправить сообщение агенту (Enter)"
+                  >
+                    <ArrowUp className="h-4 w-4 stroke-[2.5]" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Elegant Telemetry Status Line (Кэш, TPS, Контекст) under chat card */}
+          <ContextGauge taskId={task.id} turns={turns} />
         </div>
       </footer>
     </div>

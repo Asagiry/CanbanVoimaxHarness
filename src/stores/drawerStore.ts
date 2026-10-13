@@ -47,7 +47,8 @@ interface DrawerState {
   appendOutput: (
     taskId: string,
     content: string,
-    type?: 'output' | 'error' | 'system' | 'steer' | 'user'
+    type?: 'output' | 'error' | 'system' | 'steer' | 'user',
+    images?: string[]
   ) => void;
   addToolExecution: (taskId: string, tool: ToolExecution) => void;
   updateToolExecution: (taskId: string, toolId: string, partial: Partial<ToolExecution>) => void;
@@ -181,7 +182,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
     scheduleDialogSave(taskId);
   },
 
-  appendOutput: (taskId, content, type = 'output') => {
+  appendOutput: (taskId, content, type = 'output', images) => {
     const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false });
 
     set((state) => {
@@ -194,8 +195,8 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       const activityType: ActivityType =
         type === 'steer' ? 'steer' : type === 'system' ? 'system' : type === 'error' ? 'error' : type === 'user' ? 'user' : 'output';
 
-      // Stream coalescing for outputs of same type (output or user)
-      if (last && last.type === type && (type === 'output' || type === 'user')) {
+      // Stream coalescing for outputs of same type (output or user) when no images
+      if (!images?.length && last && last.type === type && (type === 'output' || type === 'user')) {
         const updated = [...existing.outputs];
         updated[updated.length - 1] = {
           ...last,
@@ -237,6 +238,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         timestamp: timeStr,
         type,
         content,
+        images,
       };
 
       const newFeedItem: DrawerActivityItem = {
@@ -244,6 +246,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         type: activityType,
         timestamp: timeStr,
         content,
+        images,
       };
 
       return {

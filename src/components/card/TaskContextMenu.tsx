@@ -18,8 +18,30 @@ export default function TaskContextMenu({ task, x, y, onClose }: TaskContextMenu
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
 
-  const { columns, moveTask, deleteTask, runTaskAgent, createSubtask } = useBoardStore();
+  const { columns, moveTask, deleteTask, runTaskAgent, createSubtask, updateTask } = useBoardStore();
   const { openDrawer } = useDrawerStore();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAttachCover = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      updateTask(task.id, { coverImage: dataUrl });
+      onClose();
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveCover = () => {
+    updateTask(task.id, { coverImage: undefined });
+    onClose();
+  };
 
   // Поджать координаты, чтобы меню не вылезало за край viewport.
   useLayoutEffect(() => {
@@ -141,6 +163,36 @@ export default function TaskContextMenu({ task, x, y, onClose }: TaskContextMenu
       >
         + Создать подзадачу
       </button>
+
+      <div className="my-1 border-t border-[#ebebeb]" />
+
+      <button
+        type="button"
+        role="menuitem"
+        onClick={handleAttachCover}
+        className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] cursor-pointer flex items-center justify-between"
+      >
+        <span>📷 {task.coverImage ? 'Сменить обложку...' : 'Прикрепить обложку...'}</span>
+      </button>
+
+      {task.coverImage && (
+        <button
+          type="button"
+          role="menuitem"
+          onClick={handleRemoveCover}
+          className="w-full px-3 py-1.5 text-left hover:bg-[#fef2f2] text-[#b91c1c] cursor-pointer"
+        >
+          Удалить обложку
+        </button>
+      )}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={handleFileChange}
+      />
 
       <div className="my-1 border-t border-[#ebebeb]" />
 

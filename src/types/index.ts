@@ -19,6 +19,8 @@ export interface KanbanTask {
   id: string;
   title: string;
   description?: string;
+  coverImage?: string;
+  attachments?: string[];
   priority: TaskPriority;
   columnId: string;
   boardId?: string;
@@ -105,6 +107,7 @@ export interface LiveStreamEntry {
   type: 'thought' | 'output' | 'system' | 'error' | 'steer' | 'user';
   content: string;
   durationMs?: number;
+  images?: string[];
 }
 
 export type ActivityType = 'thought' | 'output' | 'tool' | 'steer' | 'system' | 'error' | 'user';
@@ -116,6 +119,7 @@ export interface ActivityItem {
   content?: string;
   tool?: ToolExecution;
   durationMs?: number;
+  images?: string[];
 }
 
 export interface ProjectInfo {
