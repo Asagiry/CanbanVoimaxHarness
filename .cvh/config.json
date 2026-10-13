@@ -4,11 +4,11 @@
   "description": "Desktop Agentic IDE and Orchestrator built on Rust, Tauri v2, and React",
   "activePipeline": "default-engineering",
   "defaultModel": "gemini-3.8-flash-high",
-  "apiBaseUrl": "http://127.0.0.1:19387/api/ai",
+  "apiBaseUrl": "http://127.0.0.1:8045/v1",
   "providers": {
     "antigravity": {
       "type": "openai-compatible",
-      "baseUrl": "http://127.0.0.1:19387/api/ai",
+      "baseUrl": "http://127.0.0.1:8045/v1",
       "defaultModel": "gemini-3.8-flash-high"
     },
     "deepseek": {

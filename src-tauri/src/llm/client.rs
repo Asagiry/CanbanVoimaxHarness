@@ -194,13 +194,14 @@ impl LlmClient {
                                 }
 
                                 // Reasoning / Thought delta
-                                if let Some(reasoning) = choice.delta.reasoning_content {
-                                    if !reasoning.is_empty() {
-                                        let _ = tx.send(StreamChunk::Thought(reasoning)).await;
-                                    }
-                                } else if let Some(thought) = choice.delta.thought {
-                                    if !thought.is_empty() {
-                                        let _ = tx.send(StreamChunk::Thought(thought)).await;
+                                let reasoning = choice
+                                    .delta
+                                    .reasoning_content
+                                    .or(choice.reasoning_content)
+                                    .or(choice.delta.thought);
+                                if let Some(thought_text) = reasoning {
+                                    if !thought_text.is_empty() {
+                                        let _ = tx.send(StreamChunk::Thought(thought_text)).await;
                                     }
                                 }
 

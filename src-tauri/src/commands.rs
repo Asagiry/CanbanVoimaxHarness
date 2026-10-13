@@ -463,7 +463,7 @@ pub async fn run_agent(
             description: None,
             active_pipeline: None,
             default_model: Some("gemini-3.8-flash-high".to_string()),
-            api_base_url: Some("http://127.0.0.1:19387/api/ai".to_string()),
+            api_base_url: Some("http://127.0.0.1:8045/v1".to_string()),
             tool_permissions: None,
             providers: HashMap::new(),
         });
@@ -494,7 +494,7 @@ pub async fn run_agent(
         proj_cfg
             .api_base_url
             .clone()
-            .unwrap_or_else(|| "http://127.0.0.1:19387/api/ai".to_string())
+            .unwrap_or_else(|| "http://127.0.0.1:8045/v1".to_string())
     };
 
     let api_key = if !llm_settings.api_key.trim().is_empty() {
@@ -567,7 +567,7 @@ pub async fn run_agent(
                 AgentEvent::Thought(thought) => {
                     let _ = app_inner.emit(
                         "agent:thought",
-                        serde_json::json!({ "taskId": tid_inner, "thought": thought }),
+                        serde_json::json!({ "taskId": tid_inner, "thought": &thought, "delta": &thought }),
                     );
                 }
                 AgentEvent::ToolCall { id, name, arguments } => {
@@ -681,27 +681,43 @@ pub async fn run_agent(
 
                     // If task has custom_flow
                     if let Some(ref flow) = tasks[task_idx].custom_flow {
-                        if let Some(curr_idx) = flow.iter().position(|s| s == &tasks[task_idx].stage_id) {
-                            if tasks[task_idx].stage_id == "review"
-                                && tasks[task_idx].verdict.as_deref() == Some("CHANGES_REQUESTED")
-                            {
-                                // Route back to dev if changes requested
-                                if curr_idx > 0 {
-                                    tasks[task_idx].stage_id = flow[curr_idx - 1].clone();
+                        if !flow.is_empty() {
+                            if let Some(curr_idx) = flow.iter().position(|s| s == &tasks[task_idx].stage_id) {
+                                if tasks[task_idx].stage_id == "review"
+                                    && tasks[task_idx].verdict.as_deref() == Some("CHANGES_REQUESTED")
+                                {
+                                    // Route back to dev if changes requested
+                                    if curr_idx > 0 {
+                                        tasks[task_idx].stage_id = flow[curr_idx - 1].clone();
+                                    } else {
+                                        tasks[task_idx].stage_id = "dev".to_string();
+                                    }
+                                    tasks[task_idx].status = Some("running".to_string());
+                                    promoted = true;
+                                } else if curr_idx + 1 < flow.len() {
+                                    let next_stage = flow[curr_idx + 1].clone();
+                                    tasks[task_idx].stage_id = next_stage.clone();
+                                    if next_stage == "ready" {
+                                        tasks[task_idx].status = Some("done".to_string());
+                                    } else {
+                                        tasks[task_idx].status = Some("running".to_string());
+                                    }
+                                    promoted = true;
                                 } else {
-                                    tasks[task_idx].stage_id = "dev".to_string();
+                                    // At end of custom_flow: set status to done (ready)
+                                    tasks[task_idx].stage_id = "ready".to_string();
+                                    tasks[task_idx].status = Some("done".to_string());
+                                    promoted = true;
                                 }
-                                tasks[task_idx].status = Some("running".to_string());
-                                promoted = true;
-                            } else if curr_idx + 1 < flow.len() {
-                                let next_stage = flow[curr_idx + 1].clone();
-                                tasks[task_idx].stage_id = next_stage;
-                                tasks[task_idx].status = Some("running".to_string());
-                                promoted = true;
                             } else {
-                                // At end of custom_flow: set status to done (ready)
-                                tasks[task_idx].stage_id = "ready".to_string();
-                                tasks[task_idx].status = Some("done".to_string());
+                                // Current stage not found in custom_flow (e.g. backlog): start from first stage
+                                let next_stage = flow[0].clone();
+                                tasks[task_idx].stage_id = next_stage.clone();
+                                if next_stage == "ready" {
+                                    tasks[task_idx].status = Some("done".to_string());
+                                } else {
+                                    tasks[task_idx].status = Some("running".to_string());
+                                }
                                 promoted = true;
                             }
                         }
@@ -1179,7 +1195,7 @@ pub async fn set_active_project(
             description: None,
             active_pipeline: None,
             default_model: Some("gemini-3.8-flash-high".to_string()),
-            api_base_url: Some("http://127.0.0.1:19387/api/ai".to_string()),
+            api_base_url: Some("http://127.0.0.1:8045/v1".to_string()),
             tool_permissions: None,
             providers: HashMap::new(),
         },

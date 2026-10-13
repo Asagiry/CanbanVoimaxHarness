@@ -169,7 +169,7 @@ pub fn resolve_allowed_tools(
 pub struct LlmSettings {
     #[serde(default = "default_llm_provider")]
     pub provider: String,
-    #[serde(rename = "apiKey", alias = "api_key", default)]
+    #[serde(rename = "apiKey", alias = "api_key", default = "default_llm_api_key")]
     pub api_key: String,
     #[serde(rename = "baseUrl", alias = "base_url", default = "default_llm_base_url")]
     pub base_url: String,
@@ -183,8 +183,12 @@ fn default_llm_provider() -> String {
     "antigravity".to_string()
 }
 
+fn default_llm_api_key() -> String {
+    String::new()
+}
+
 fn default_llm_base_url() -> String {
-    "http://127.0.0.1:19387/api/ai".to_string()
+    "http://127.0.0.1:8045/v1".to_string()
 }
 
 fn default_llm_model() -> String {
@@ -195,7 +199,7 @@ impl Default for LlmSettings {
     fn default() -> Self {
         Self {
             provider: default_llm_provider(),
-            api_key: String::new(),
+            api_key: default_llm_api_key(),
             base_url: default_llm_base_url(),
             model: default_llm_model(),
             temperature: Some(0.2),
@@ -295,7 +299,7 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
             "description": format!("CanbanVoimaxHarness Workspace for {}", project_name),
             "activePipeline": "default-engineering",
             "defaultModel": "gemini-3.8-flash-high",
-            "apiBaseUrl": "http://127.0.0.1:19387/api/ai"
+            "apiBaseUrl": "http://127.0.0.1:8045/v1"
         });
         atomic_write_file(&config_path, &serde_json::to_string_pretty(&default_config)?).await?;
     }

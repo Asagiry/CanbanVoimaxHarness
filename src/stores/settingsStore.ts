@@ -28,29 +28,15 @@ interface SettingsStoreState {
 
 const DEFAULT_SETTINGS: LlmSettingsState = {
   provider: 'Antigravity Proxy',
-  gatewayUrl: 'http://127.0.0.1:19387/api/ai',
-  baseUrl: 'http://127.0.0.1:19387/api/ai',
+  gatewayUrl: 'http://127.0.0.1:8045/v1',
+  baseUrl: 'http://127.0.0.1:8045/v1',
   apiKey: '',
   model: 'gemini-3.8-flash-high',
 };
 
-const DEFAULT_AVAILABLE_MODELS: string[] = [
-  'gemini-3.8-flash-high',
-  'gemini-2.5-pro',
-  'gemini-2.5-flash',
-  'claude-3-7-sonnet-20250219',
-  'claude-3-5-sonnet-20241022',
-  'gpt-4o',
-  'gpt-4o-mini',
-  'o3-mini',
-  'deepseek-chat',
-  'deepseek-reasoner',
-  'qwen2.5-coder:32b',
-];
-
 const PROVIDER_PRESETS: Record<string, { gatewayUrl: string; defaultModel: string }> = {
   'Antigravity Proxy': {
-    gatewayUrl: 'http://127.0.0.1:19387/api/ai',
+    gatewayUrl: 'http://127.0.0.1:8045/v1',
     defaultModel: 'gemini-3.8-flash-high',
   },
   'OpenAI': {
@@ -65,12 +51,16 @@ const PROVIDER_PRESETS: Record<string, { gatewayUrl: string; defaultModel: strin
     gatewayUrl: 'http://127.0.0.1:11434/v1',
     defaultModel: 'qwen2.5-coder:32b',
   },
+  'Custom': {
+    gatewayUrl: '',
+    defaultModel: '',
+  },
 };
 
 export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
   isOpen: false,
   settings: DEFAULT_SETTINGS,
-  availableModels: DEFAULT_AVAILABLE_MODELS,
+  availableModels: ['gemini-3.8-flash-high'],
   isSaving: false,
   saveStatus: 'idle',
   errorMessage: null,
@@ -142,7 +132,7 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
       if (savedModels) {
         const parsed = JSON.parse(savedModels);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          set({ availableModels: Array.from(new Set([...DEFAULT_AVAILABLE_MODELS, ...parsed])) });
+          set({ availableModels: Array.from(new Set(parsed)) });
         }
       }
     } catch {
@@ -216,7 +206,7 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
           provider: target.provider,
           gatewayUrl: target.gatewayUrl,
           baseUrl: target.gatewayUrl,
-          apiKey: target.apiKey.trim() || null,
+          apiKey: target.apiKey.trim(),
           model: target.model.trim(),
         },
       });
@@ -234,7 +224,14 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
     const baseUrl = (customBaseUrl ?? settings.baseUrl ?? settings.gatewayUrl ?? '').trim();
     const apiKey = (customApiKey ?? settings.apiKey ?? '').trim();
 
+    if (!baseUrl) {
+      const errMessage = 'Base URL / Gateway URL cannot be empty';
+      set({ errorMessage: errMessage });
+      throw new Error(errMessage);
+    }
+
     // 1. Try Tauri invoke: fetch_available_models({ baseUrl, apiKey })
+    let tauriError: any = null;
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const result = await invoke<any>('fetch_available_models', { baseUrl, apiKey });
@@ -243,20 +240,24 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
           .map((item: any) => (typeof item === 'string' ? item : item.id || item.name || String(item)))
           .filter(Boolean);
         if (models.length > 0) {
-          return Array.from(new Set(models));
+          const unique = Array.from(new Set(models));
+          set({ availableModels: unique, errorMessage: null });
+          return unique;
         }
       }
     } catch (err) {
+      tauriError = err;
       console.info('Tauri fetch_available_models fallback to client fetch:', err);
     }
 
     // 2. Client-side direct fetch fallback
-    const cleanBase = baseUrl.replace(/\/+$/, '') || 'http://127.0.0.1:19387/api/ai';
+    const cleanBase = baseUrl.replace(/\/+$/, '');
     const endpointsToTry = [
       `${cleanBase}/models`,
       cleanBase.endsWith('/v1') ? `${cleanBase}/models` : `${cleanBase}/v1/models`,
     ];
 
+    let lastFetchError: any = null;
     for (const url of endpointsToTry) {
       try {
         const headers: Record<string, string> = {
@@ -274,16 +275,29 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
               .map((m: any) => (typeof m === 'string' ? m : m.id || m.name || ''))
               .filter(Boolean);
             if (models.length > 0) {
-              return Array.from(new Set(models));
+              const unique = Array.from(new Set(models));
+              set({ availableModels: unique, errorMessage: null });
+              return unique;
             }
           }
+        } else {
+          const errText = await res.text().catch(() => res.statusText);
+          lastFetchError = new Error(`HTTP ${res.status}: ${errText}`);
         }
-      } catch {
-        // Continue trying next endpoint
+      } catch (err) {
+        lastFetchError = err;
       }
     }
 
-    // Fallback: return default models list if network fetch fails
-    return DEFAULT_AVAILABLE_MODELS;
+    // Never silently mask errors with hardcoded models!
+    const errMessage = `Failed to fetch models from ${baseUrl}: ${
+      lastFetchError instanceof Error
+        ? lastFetchError.message
+        : tauriError
+        ? String(tauriError)
+        : 'Network or endpoint unreachable'
+    }`;
+    set({ errorMessage: errMessage });
+    throw new Error(errMessage);
   },
 }));

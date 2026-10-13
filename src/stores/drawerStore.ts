@@ -75,16 +75,37 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
     const start = get().thinkingStartTime[taskId] || now;
     const durationMs = now - start;
 
-    const newEntry: LiveStreamEntry = {
-      id: `th-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      timestamp: timeStr,
-      type: 'thought',
-      content,
-      durationMs,
-    };
-
     set((state) => {
       const existing = state.streamEntries[taskId] || { thoughts: [], outputs: [] };
+      const last = existing.thoughts[existing.thoughts.length - 1];
+
+      // If last thought exists and is recent (< 3s), append content to avoid card explosion during streaming
+      if (last && last.durationMs !== undefined && now - (start + last.durationMs) < 3000) {
+        const updated = [...existing.thoughts];
+        updated[updated.length - 1] = {
+          ...last,
+          content: last.content + content,
+          durationMs,
+        };
+        return {
+          streamEntries: {
+            ...state.streamEntries,
+            [taskId]: {
+              ...existing,
+              thoughts: updated,
+            },
+          },
+        };
+      }
+
+      const newEntry: LiveStreamEntry = {
+        id: `th-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: timeStr,
+        type: 'thought',
+        content,
+        durationMs,
+      };
+
       return {
         streamEntries: {
           ...state.streamEntries,
@@ -99,15 +120,36 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
 
   appendOutput: (taskId, content, type = 'output') => {
     const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false });
-    const newEntry: LiveStreamEntry = {
-      id: `out-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      timestamp: timeStr,
-      type,
-      content,
-    };
 
     set((state) => {
       const existing = state.streamEntries[taskId] || { thoughts: [], outputs: [] };
+      const last = existing.outputs[existing.outputs.length - 1];
+
+      // If last output is same type, append content for smooth token stream
+      if (last && last.type === type && (type === 'output' || type === 'user')) {
+        const updated = [...existing.outputs];
+        updated[updated.length - 1] = {
+          ...last,
+          content: last.content + content,
+        };
+        return {
+          streamEntries: {
+            ...state.streamEntries,
+            [taskId]: {
+              ...existing,
+              outputs: updated,
+            },
+          },
+        };
+      }
+
+      const newEntry: LiveStreamEntry = {
+        id: `out-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: timeStr,
+        type,
+        content,
+      };
+
       return {
         streamEntries: {
           ...state.streamEntries,
