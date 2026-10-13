@@ -41,7 +41,7 @@ pub async fn create_worktree(
     base_branch: &str,
 ) -> Result<PathBuf> {
     let repo_path = repo_root.as_ref();
-    let worktree_rel = PathBuf::from("worktrees").join(task_slug);
+    let worktree_rel = PathBuf::from(".cvh").join("worktrees").join(task_slug);
     let worktree_abs = repo_path.join(&worktree_rel);
     let branch_name = format!("feat/{}", task_slug);
 
@@ -88,7 +88,7 @@ pub async fn remove_worktree(
     task_slug: &str,
 ) -> Result<()> {
     let repo_path = repo_root.as_ref();
-    let worktree_rel = PathBuf::from("worktrees").join(task_slug);
+    let worktree_rel = PathBuf::from(".cvh").join("worktrees").join(task_slug);
     let worktree_str = worktree_rel.to_string_lossy().to_string();
 
     // Run git worktree remove --force
