@@ -71,12 +71,23 @@ pub async fn create_worktree(
         .await
         .with_context(|| format!("Failed to attach existing branch '{}' to worktree '{}'", branch_name, worktree_str))?;
     } else {
+        // Verify base branch exists; if not, fallback to "HEAD" so it works on any repo/branch
+        let base_check = Command::new("git")
+            .current_dir(repo_path)
+            .args(["rev-parse", "--verify", base_branch])
+            .output()
+            .await;
+        let effective_base = match base_check {
+            Ok(out) if out.status.success() => base_branch,
+            _ => "HEAD",
+        };
+
         run_git(
             repo_path,
-            &["worktree", "add", "-b", &branch_name, &worktree_str, base_branch],
+            &["worktree", "add", "-b", &branch_name, &worktree_str, effective_base],
         )
         .await
-        .with_context(|| format!("Failed to create worktree '{}' from branch '{}'", worktree_str, base_branch))?;
+        .with_context(|| format!("Failed to create worktree '{}' from branch '{}'", worktree_str, effective_base))?;
     }
 
     Ok(worktree_abs)

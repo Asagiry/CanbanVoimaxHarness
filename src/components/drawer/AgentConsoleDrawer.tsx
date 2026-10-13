@@ -5,6 +5,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import ToolExecutionCard from './ToolExecutionCard';
 import ContextGauge from './ContextGauge';
 import {
+  ArrowDown,
   ArrowLeft,
   X,
   GitBranch,
@@ -58,7 +59,33 @@ function MarkdownContent({ content }: { content: string }) {
       });
     };
 
-    lines.forEach((line, index) => {
+    const splitTableRow = (row: string): string[] => {
+      let t = row.trim();
+      if (t.startsWith('|')) t = t.slice(1);
+      if (t.endsWith('|')) t = t.slice(0, -1);
+      return t.split('|').map((c) => c.trim());
+    };
+
+    const parseDelimiterRow = (row: string): Array<'left' | 'center' | 'right'> | null => {
+      const cells = splitTableRow(row);
+      if (cells.length === 0) return null;
+      const aligns: Array<'left' | 'center' | 'right'> = [];
+      for (const c of cells) {
+        if (!/^:?-+:?$/.test(c)) return null;
+        if (c.startsWith(':') && c.endsWith(':') && c.length >= 3) aligns.push('center');
+        else if (c.endsWith(':')) aligns.push('right');
+        else aligns.push('left');
+      }
+      return aligns;
+    };
+
+    const isHrLine = (row: string): boolean => {
+      const nospace = row.trim().replace(/\s+/g, '');
+      return /^(-{3,}|\*{3,}|_{3,})$/.test(nospace);
+    };
+
+    for (let index = 0; index < lines.length; index++) {
+      const line = lines[index];
       if (line.startsWith('```')) {
         if (!inCodeBlock) {
           inCodeBlock = true;
@@ -82,16 +109,91 @@ function MarkdownContent({ content }: { content: string }) {
             </div>
           );
         }
-        return;
+        continue;
       }
 
       if (inCodeBlock) {
         codeBuffer.push(line);
-        return;
+        continue;
+      }
+
+      // GFM table: header with `|` + delimiter row, then data rows with `|`
+      if (line.includes('|') && index + 1 < lines.length) {
+        const aligns = parseDelimiterRow(lines[index + 1]);
+        if (aligns) {
+          const headerCells = splitTableRow(line);
+          const colCount = Math.max(headerCells.length, aligns.length);
+          const normAligns: Array<'left' | 'center' | 'right'> = Array.from(
+            { length: colCount },
+            (_, k) => aligns[k] ?? 'left'
+          );
+          const normHeader: string[] = Array.from(
+            { length: colCount },
+            (_, k) => headerCells[k] ?? ''
+          );
+          const bodyRows: string[][] = [];
+          let j = index + 2;
+          while (j < lines.length && lines[j].includes('|') && lines[j].trim() !== '' && !lines[j].startsWith('```')) {
+            const cells = splitTableRow(lines[j]);
+            bodyRows.push(Array.from({ length: colCount }, (_, k) => cells[k] ?? ''));
+            j++;
+          }
+          result.push(
+            <div
+              key={`table-${index}`}
+              className="my-2 overflow-x-auto rounded-md border border-[#ebebeb]"
+            >
+              <table className="w-full border-collapse text-[11px] font-mono tabular-nums">
+                <thead>
+                  <tr>
+                    {normHeader.map((cell, k) => (
+                      <th
+                        key={k}
+                        style={{ textAlign: normAligns[k] }}
+                        className="border border-[#ebebeb] bg-[#f9f9f9] px-2 py-1.5 font-semibold text-[#171717]"
+                      >
+                        {formatInline(cell)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {bodyRows.map((row, r) => (
+                    <tr key={r}>
+                      {row.map((cell, k) => (
+                        <td
+                          key={k}
+                          style={{ textAlign: normAligns[k] }}
+                          className="border border-[#ebebeb] px-2 py-1.5 text-[#171717]"
+                        >
+                          {formatInline(cell)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+          index = j - 1;
+          continue;
+        }
+      }
+
+      // Thematic break outside tables
+      if (isHrLine(line)) {
+        result.push(<hr key={index} className="border-[#ebebeb] my-2.5" />);
+        continue;
       }
 
       // Headings
-      if (line.startsWith('### ')) {
+      if (line.startsWith('#### ')) {
+        result.push(
+          <h5 key={index} className="text-[11px] font-semibold text-[#171717] mt-3 mb-1">
+            {formatInline(line.slice(5))}
+          </h5>
+        );
+      } else if (line.startsWith('### ')) {
         result.push(
           <h4 key={index} className="text-xs font-semibold text-[#171717] mt-3 mb-1">
             {formatInline(line.slice(4))}
@@ -124,7 +226,7 @@ function MarkdownContent({ content }: { content: string }) {
           </p>
         );
       }
-    });
+    }
 
     if (inCodeBlock && codeBuffer.length > 0) {
       result.push(
@@ -149,13 +251,25 @@ function MarkdownContent({ content }: { content: string }) {
 function ThinkingCard({
   thought,
   isTaskRunning,
+  taskId,
 }: {
   thought: DrawerActivityItem;
   isTaskRunning: boolean;
+  taskId: string;
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
+  const thinkingStart = useDrawerStore((s) => s.thinkingStartTime[taskId] ?? null);
 
-  const durationSec = thought.durationMs ? Math.round(thought.durationMs / 1000) : 0;
+  // Живой таймер без setInterval: обновляется на ре-рендерах от чанков.
+  // Пока задача running — от thinkingStartTime, после финиша — финал из thought.durationMs.
+  let timerText: string;
+  if (isTaskRunning && thinkingStart != null) {
+    timerText = `${((Date.now() - thinkingStart) / 1000).toFixed(1)}с`;
+  } else if (thought.durationMs) {
+    timerText = `${Math.round(thought.durationMs / 1000)}с`;
+  } else {
+    timerText = '0с';
+  }
 
   return (
     <div className="rounded-md border border-[#ebebeb] bg-[#fcfcfc] overflow-hidden shadow-xs transition duration-150">
@@ -173,21 +287,13 @@ function ThinkingCard({
           <span className="font-mono text-xs font-semibold text-[#171717]">
             &lt;thinking&gt;
           </span>
-          {isTaskRunning && (
-            <span className="flex items-center space-x-1 px-1.5 py-0.2 rounded text-[10px] font-mono text-[#15803d] bg-[#f0fdf4] border border-[#bbf7d0]">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#15803d] animate-pulse" />
-              <span>размышление...</span>
-            </span>
-          )}
         </div>
 
         <div className="flex items-center space-x-2 text-[10px] font-mono text-[#666666]">
-          {durationSec > 0 && (
-            <span className="flex items-center space-x-1 tabular-nums">
-              <Clock className="h-3 w-3" />
-              <span>{durationSec}с</span>
-            </span>
-          )}
+          <span className="flex items-center space-x-1 tabular-nums">
+            <Clock className="h-3 w-3" />
+            <span>{timerText}</span>
+          </span>
           <span className="tabular-nums">{thought.timestamp}</span>
         </div>
       </div>
@@ -217,8 +323,45 @@ export default function AgentConsoleDrawer() {
 
   const [interactiveInput, setInteractiveInput] = useState('');
   const [runError, setRunError] = useState<string | null>(null);
+  // 1. Свёрнутость блоков «Ответ агента»: по умолчанию все свёрнуты (Set раскрытых пуст).
+  const [expandedOutputs, setExpandedOutputs] = useState<Set<string>>(() => new Set());
+  // 2. Умный автоскролл: кнопка «К новому» видна, только если пришли события вне низа.
+  const [showNewButton, setShowNewButton] = useState(false);
+  const isFirstBatchRef = useRef(true);
+  const nearBottomRef = useRef(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const promptInputId = useId();
+
+  const toggleOutput = (id: string) => {
+    setExpandedOutputs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const scrollToBottom = () => {
+    const el = scrollRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+    nearBottomRef.current = true;
+    setShowNewButton(false);
+  };
+
+  const handleFeedScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    nearBottomRef.current = nearBottom;
+    if (nearBottom) {
+      setShowNewButton(false);
+    }
+  };
 
   const task = tasks.find((t) => t.id === activeTaskId);
   const column = columns.find((c) => c.id === task?.columnId);
@@ -226,6 +369,11 @@ export default function AgentConsoleDrawer() {
   // Reset error when switching tasks
   useEffect(() => {
     setRunError(null);
+    // Новые задачи открываются со свёрнутыми ответами и сброшенным скроллом
+    setExpandedOutputs(new Set());
+    setShowNewButton(false);
+    isFirstBatchRef.current = true;
+    nearBottomRef.current = true;
   }, [activeTaskId]);
 
   // Listen to agent error & status events from Tauri backend
@@ -239,6 +387,26 @@ export default function AgentConsoleDrawer() {
         const { listen } = await import('@tauri-apps/api/event');
         unlistenStatus = await listen<{ taskId?: string; status?: string }>('agent:status', (event) => {
           if (event.payload?.taskId === task.id) {
+            const st = event.payload.status;
+            // Заморозка TPS на терминальных статусах (бэкенд может не прислать agent:finished)
+            if (st === 'finished' || st === 'aborted' || st === 'error') {
+              try {
+                const ds = useDrawerStore.getState();
+                if (ds.finalTps[task.id] == null) {
+                  const tele = ds.taskTelemetry[task.id];
+                  const start = ds.thinkingStartTime[task.id];
+                  if (tele && start != null) {
+                    const elapsedSec = (Date.now() - start) / 1000;
+                    const outTokens = tele.outputTokens ?? 0;
+                    if (elapsedSec > 0 && outTokens > 0) {
+                      ds.setFinalTps(task.id, outTokens / elapsedSec);
+                    }
+                  }
+                }
+              } catch {
+                // ignore
+              }
+            }
             if (event.payload.status === 'error') {
               setRunError((prev) => prev || 'Агент сообщил об ошибке выполнения');
               updateTask(task.id, { status: 'idle', isTimerRunning: false });
@@ -318,10 +486,24 @@ export default function AgentConsoleDrawer() {
     return merged;
   }, [task, activityFeed, streamEntries, toolExecutions]);
 
-  // Auto-scroll on new entries
+  // Умный автоскролл: вниз только если пользователь уже внизу или это первое событие.
+  // Позиция до вставки нового контента отслеживается в nearBottomRef через onScroll,
+  // поэтому рост scrollHeight на длинных чанках не даёт ложного «отошёл вверх».
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const el = scrollRef.current;
+    if (!el) return;
+    if (isFirstBatchRef.current) {
+      isFirstBatchRef.current = false;
+      el.scrollTop = el.scrollHeight;
+      nearBottomRef.current = true;
+      setShowNewButton(false);
+      return;
+    }
+    if (nearBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+      setShowNewButton(false);
+    } else {
+      setShowNewButton(true);
     }
   }, [unifiedActivities]);
 
@@ -334,9 +516,9 @@ export default function AgentConsoleDrawer() {
     setRunError(null);
     updateTask(task.id, { status: 'running', isTimerRunning: true });
     try {
-      await syncTasksBackend(tasks);
+      await syncTasksBackend(useBoardStore.getState().tasks);
       const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('run_agent', { taskId: task.id });
+      await invoke('run_agent', { taskId: task.id, prompt: task.description || null });
     } catch (err: any) {
       console.info('run_agent invoke failed or web mode:', err);
       const errMsg = err?.message || (typeof err === 'string' ? err : 'Не удалось запустить агента');
@@ -366,14 +548,19 @@ export default function AgentConsoleDrawer() {
     // Append user steer message into feed immediately
     appendOutput(task.id, trimmed, 'user');
 
+    // Update task description in Zustand store with latest user prompt
+    const updatedDesc = task.description
+      ? `${task.description}\n\n[USER]: ${trimmed}`
+      : trimmed;
+    updateTask(task.id, { description: updatedDesc, status: 'running', isTimerRunning: true });
+
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      await syncTasksBackend(tasks);
+      await syncTasksBackend(useBoardStore.getState().tasks);
       if (isRunning) {
         await invoke('steer_agent', { taskId: task.id, message: trimmed });
       } else {
-        updateTask(task.id, { status: 'running', isTimerRunning: true });
-        await invoke('run_agent', { taskId: task.id });
+        await invoke('run_agent', { taskId: task.id, prompt: trimmed });
       }
     } catch (err: any) {
       console.info('steer_agent / run_agent invoke failed or web mode:', err);
@@ -477,15 +664,6 @@ export default function AgentConsoleDrawer() {
                 <span className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-mono text-[#666666] bg-[#f4f4f5] border border-[#ebebeb]">
                   <span>Ожидание указаний</span>
                 </span>
-                <button
-                  type="button"
-                  onClick={handleRunAgent}
-                  className="flex items-center space-x-1 px-3 py-1 rounded-md text-xs font-mono font-medium text-white bg-[#171717] hover:bg-[#262626] border border-[#171717] transition cursor-pointer shadow-xs"
-                  title="Запустить агента (run_agent)"
-                >
-                  <Play className="h-3 w-3 fill-current" />
-                  <span>Запустить агента</span>
-                </button>
               </div>
             )}
 
@@ -525,7 +703,8 @@ export default function AgentConsoleDrawer() {
       )}
 
       {/* Main Unified Activity Feed Area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 bg-[#fafafa]">
+      <div className="relative flex-1 flex flex-col min-h-0 bg-[#fafafa]">
+        <div ref={scrollRef} onScroll={handleFeedScroll} className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="max-w-4xl mx-auto space-y-3.5">
           {/* a) Task Goal / User Objective Card */}
           <div className="rounded-lg border border-[#ebebeb] bg-white p-4 shadow-xs">
@@ -554,6 +733,7 @@ export default function AgentConsoleDrawer() {
                   key={activity.id}
                   thought={activity}
                   isTaskRunning={isRunning}
+                  taskId={task.id}
                 />
               );
             }
@@ -623,53 +803,56 @@ export default function AgentConsoleDrawer() {
               );
             }
 
-            // c) Assistant Response / Output Markdown Block
+            // c) Assistant Response / Output Markdown Block (скрываемый, по умолчанию свёрнут)
+            const isOutputExpanded = expandedOutputs.has(activity.id);
             return (
               <div
                 key={activity.id}
-                className="rounded-lg border border-[#ebebeb] bg-white p-4 shadow-xs"
+                className="rounded-lg border border-[#ebebeb] bg-white shadow-xs overflow-hidden"
               >
-                <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#ebebeb] text-[10px] font-mono text-[#666666]">
+                <div
+                  onClick={() => toggleOutput(activity.id)}
+                  className="flex items-center justify-between px-4 py-2.5 hover:bg-[#f9f9f9] cursor-pointer transition select-none text-[10px] font-mono text-[#666666]"
+                >
                   <div className="flex items-center space-x-1.5 text-[#171717] font-medium">
+                    {isOutputExpanded ? (
+                      <ChevronDown className="h-3.5 w-3.5 text-[#666666]" />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5 text-[#666666]" />
+                    )}
                     <Sparkles className="h-3 w-3 text-[#171717]" />
                     <span>Ответ агента</span>
                   </div>
                   <span className="tabular-nums">{activity.timestamp}</span>
                 </div>
-                {activity.content ? (
-                  <MarkdownContent content={activity.content} />
-                ) : (
-                  <div className="text-xs text-[#8f8f8f] font-mono">Генерация ответа...</div>
+                {isOutputExpanded && (
+                  <div className="px-4 pb-4 pt-2.5 border-t border-[#ebebeb]">
+                    {activity.content ? (
+                      <MarkdownContent content={activity.content} />
+                    ) : (
+                      <div className="text-xs text-[#8f8f8f] font-mono">Генерация ответа...</div>
+                    )}
+                  </div>
                 )}
               </div>
             );
           })}
 
-          {/* Empty state when no activity yet */}
-          {unifiedActivities.length === 0 && (
-            <div className="h-48 flex flex-col items-center justify-center rounded-lg border border-dashed border-[#ebebeb] bg-white text-center p-6">
-              <Sparkles className="h-6 w-6 text-[#8f8f8f] mb-2" />
-              <p className="text-xs font-medium text-[#171717] mb-1">
-                {isRunning ? 'Агент приступил к работе...' : 'Ожидание действий агента'}
-              </p>
-              <p className="text-[11px] text-[#666666] max-w-sm mb-3">
-                {isRunning
-                  ? 'События, мысли и вызовы инструментов появятся в ленте в режиме реального времени.'
-                  : 'Нажмите «Запустить агента» или отправьте команду ниже для начала решения задачи.'}
-              </p>
-              {!isRunning && (
-                <button
-                  type="button"
-                  onClick={handleRunAgent}
-                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-[#171717] hover:bg-[#262626] text-white text-xs font-medium transition cursor-pointer shadow-xs"
-                >
-                  <Play className="h-3.5 w-3.5 fill-current" />
-                  <span>Запустить агента</span>
-                </button>
-              )}
-            </div>
-          )}
+          {/* No placeholder: thinking/tool events render immediately on arrival.
+              Agent is launched via the input bar below or the card Play button. */}
         </div>
+        </div>
+        {showNewButton && (
+          <button
+            type="button"
+            onClick={scrollToBottom}
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-[#171717] hover:bg-[#262626] text-white text-xs font-medium font-sans shadow-md transition cursor-pointer active:scale-[0.98]"
+            title="Перейти к новым сообщениям"
+          >
+            <ArrowDown className="h-3.5 w-3.5" />
+            <span>К новому</span>
+          </button>
+        )}
       </div>
 
       {/* f) Interactive Input & Steer Bar */}

@@ -1,8 +1,25 @@
+import { useState } from 'react';
 import { Draggable } from '@hello-pangea/dnd';
 import { KanbanTask, TaskStatus } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore, syncTasksBackend } from '../../stores/boardStore';
-import { Code2, ShieldCheck, Sparkles, Bot, Palette, Play } from 'lucide-react';
+import { Play, Clock } from 'lucide-react';
+import TaskContextMenu from './TaskContextMenu';
+
+function formatStageDuration(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  if (s < 60) return `${s}с`;
+  const minutesTotal = Math.floor(s / 60);
+  if (minutesTotal < 60) return `${minutesTotal}м`;
+  const hoursTotal = Math.floor(minutesTotal / 60);
+  if (hoursTotal < 24) {
+    const m = minutesTotal % 60;
+    return m > 0 ? `${hoursTotal}ч ${m}м` : `${hoursTotal}ч`;
+  }
+  const days = Math.floor(hoursTotal / 24);
+  const h = hoursTotal % 24;
+  return `${days}д ${h}ч`;
+}
 
 interface KanbanCardProps {
   task: KanbanTask;
@@ -11,27 +28,21 @@ interface KanbanCardProps {
 
 export default function KanbanCard({ task, index }: KanbanCardProps) {
   const { openDrawer } = useDrawerStore();
-  const { tasks, runTaskAgent } = useBoardStore();
+  const { runTaskAgent, columns } = useBoardStore();
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const taskColumn = columns.find((c) => c.id === task.columnId);
+  const canRunAgent = Boolean(taskColumn?.persona);
 
   const handleRunAgent = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    await syncTasksBackend(tasks);
+    await syncTasksBackend(useBoardStore.getState().tasks);
     await runTaskAgent(task.id);
   };
 
-  const getPersonaIcon = (persona?: string) => {
-    switch (persona?.toLowerCase()) {
-      case 'developer':
-        return <Code2 className="h-3 w-3 text-[#171717] shrink-0" />;
-      case 'reviewer':
-        return <ShieldCheck className="h-3 w-3 text-[#171717] shrink-0" />;
-      case 'retro':
-        return <Sparkles className="h-3 w-3 text-[#171717] shrink-0" />;
-      case 'artisan':
-        return <Palette className="h-3 w-3 text-[#171717] shrink-0" />;
-      default:
-        return <Bot className="h-3 w-3 text-[#666666] shrink-0" />;
-    }
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY });
   };
 
   const getStatusBadge = (status: TaskStatus) => {
@@ -79,13 +90,15 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
   };
 
   return (
-    <Draggable draggableId={task.id} index={index}>
-      {(provided, snapshot) => (
-        <div
-          ref={provided.innerRef}
-          {...provided.draggableProps}
-          {...provided.dragHandleProps}
-          onClick={() => openDrawer(task.id)}
+    <>
+      <Draggable draggableId={task.id} index={index}>
+        {(provided, snapshot) => (
+          <div
+            ref={provided.innerRef}
+            {...provided.draggableProps}
+            {...provided.dragHandleProps}
+            onClick={() => openDrawer(task.id)}
+            onContextMenu={handleContextMenu}
           className={`group relative mb-2 rounded-md border p-3 cursor-pointer select-none transition duration-150 active:scale-[0.99] ${
             snapshot.isDragging
               ? 'border-[#171717] shadow-md bg-white z-40'
@@ -98,7 +111,7 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
               <span className="font-mono text-[10px] font-semibold text-[#171717] bg-[#f4f4f5] px-1.5 py-0.5 rounded border border-[#ebebeb] tabular-nums">
                 {task.id}
               </span>
-              {(task.columnId === 'backlog' || (task.columnId === 'dev' && task.status !== 'running')) && (
+              {canRunAgent && (
                 <button
                   type="button"
                   onClick={handleRunAgent}
@@ -118,30 +131,45 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
             {task.title}
           </h4>
 
-          {/* Footer: Persona Assignee, Model Badge & Branch */}
-          <div className="flex items-center justify-between pt-2 border-t border-[#ebebeb] text-[10px] font-mono text-[#666666]">
-            <div className="flex items-center space-x-1.5">
-              {getPersonaIcon(task.persona)}
-              <span className="capitalize text-[#4d4d4d]">{task.persona || 'agent'}</span>
+          {/* Footer: модель (строка 1), ветка + время в колонке (строка 2) */}
+          <div className="pt-2 border-t border-[#ebebeb]">
+            <div
+              className="truncate font-mono text-[10px] text-[#666666]"
+              title={task.model ? `Модель: ${task.model}` : 'Модель не задана'}
+            >
+              {task.model || 'модель не задана'}
             </div>
-            <div className="flex items-center space-x-1.5 shrink-0">
-              {task.model && (
-                <span
-                  className="text-[9px] font-mono text-[#666666] bg-[#f4f4f5] px-1.5 py-0.5 rounded border border-[#ebebeb] truncate max-w-[120px]"
-                  title={`Модель: ${task.model}`}
-                >
-                  {task.model}
+            <div className="mt-1 flex items-center justify-between gap-2 font-mono text-[10px]">
+              <span
+                className="truncate text-[#8f8f8f] min-w-0"
+                title={task.branch ? `Ветка: ${task.branch}` : 'Ветка не задана'}
+              >
+                {task.branch || 'без ветки'}
+              </span>
+              <span
+                title="Время в текущей колонке"
+                className="inline-flex items-center gap-1 text-[#8f8f8f] tabular-nums whitespace-nowrap shrink-0"
+              >
+                <Clock className="h-3 w-3 shrink-0" />
+                <span>
+                  {(task.activeStageDuration ?? 0) <= 0
+                    ? 'только что'
+                    : `в колонке ${formatStageDuration(task.activeStageDuration ?? 0)}`}
                 </span>
-              )}
-              {task.branch && (
-                <span className="text-[#8f8f8f] truncate max-w-[100px]" title={task.branch}>
-                  {task.branch}
-                </span>
-              )}
+              </span>
             </div>
           </div>
         </div>
       )}
     </Draggable>
+      {contextMenu && (
+        <TaskContextMenu
+          task={task}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+    </>
   );
 }

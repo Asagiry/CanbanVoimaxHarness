@@ -18,7 +18,7 @@ interface ToolExecutionCardProps {
 }
 
 export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const getToolIcon = (name: string) => {
@@ -44,6 +44,55 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   const filePath = (tool.params?.file_path as string) || (tool.params?.path as string);
   const oldString = tool.params?.old_string as string | undefined;
   const newString = tool.params?.new_string as string | undefined;
+
+  const truncate = (s: string, max: number) =>
+    s.length > max ? `${s.slice(0, max)}…` : s;
+
+  const getSummaryFull = (): string | undefined => {
+    const p = tool.params ?? {};
+    const str = (v: unknown): string | undefined =>
+      typeof v === 'string' && v.length > 0 ? v : undefined;
+    switch (tool.toolName) {
+      case 'read_file':
+      case 'read':
+      case 'write_file':
+      case 'write':
+      case 'edit_file':
+      case 'str_replace':
+        return str(p.file_path) ?? str(p.path);
+      case 'glob':
+        return str(p.pattern);
+      case 'grep': {
+        const pattern = str(p.pattern);
+        if (!pattern) return undefined;
+        const path = str(p.path);
+        return path && path !== '.' ? `${pattern} в ${path}` : pattern;
+      }
+      case 'execute_command':
+      case 'bash':
+        return str(p.command) ?? str(p.cmd);
+      case 'web_search':
+        return str(p.query);
+      case 'web_fetch':
+        return str(p.url);
+      case 'subagent':
+        return str(p.role);
+      default: {
+        const first = Object.values(p).find((v) => typeof v === 'string' && (v as string).length > 0) as string | undefined;
+        return first;
+      }
+    }
+  };
+
+  const summaryFull = getSummaryFull();
+  const summary =
+    summaryFull === undefined
+      ? undefined
+      : tool.toolName === 'execute_command' || tool.toolName === 'bash'
+        ? truncate(summaryFull, 90)
+        : !['read_file', 'read', 'write_file', 'write', 'edit_file', 'str_replace', 'glob', 'grep', 'web_search', 'web_fetch', 'subagent'].includes(tool.toolName)
+          ? truncate(summaryFull, 80)
+          : summaryFull;
 
   const handleCopyLogs = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -125,7 +174,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
         onClick={() => setIsExpanded(!isExpanded)}
         className="flex items-center justify-between px-3 py-2 bg-[#f9f9f9] hover:bg-[#f4f4f5] cursor-pointer transition select-none"
       >
-        <div className="flex items-center space-x-2 min-w-0">
+        <div className="flex items-center space-x-2 min-w-0 flex-1">
           {isExpanded ? (
             <ChevronDown className="h-3.5 w-3.5 text-[#666666] shrink-0" />
           ) : (
@@ -136,9 +185,18 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             {getToolIcon(tool.toolName)}
           </div>
 
-          <span className="font-mono font-medium text-[#171717] truncate">
+          <span className="font-mono font-medium text-[#171717] shrink-0">
             {tool.toolName}
           </span>
+
+          {summary && (
+            <span
+              title={summaryFull}
+              className="font-mono text-[#8f8f8f] truncate max-w-[320px]"
+            >
+              {summary}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center space-x-2.5 shrink-0 text-[10px] font-mono">

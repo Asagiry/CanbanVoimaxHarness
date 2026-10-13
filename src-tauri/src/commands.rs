@@ -10,38 +10,14 @@ use crate::git::{create_worktree, remove_worktree};
 use crate::hooks::{execute_hook, execute_sensor_command, HookContext};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Task {
-    pub id: String,
-    pub title: String,
-    #[serde(default)]
-    pub description: String,
-    #[serde(rename = "stageId", alias = "columnId")]
-    pub stage_id: String,
-    #[serde(rename = "worktreePath", alias = "worktree_path", default)]
-    pub worktree_path: Option<String>,
-    #[serde(default)]
-    pub branch: Option<String>,
-    #[serde(default)]
-    pub verdict: Option<String>,
-    #[serde(rename = "customFlow", alias = "custom_flow", default)]
-    pub custom_flow: Option<Vec<String>>,
-    #[serde(default)]
-    pub status: Option<String>,
-    #[serde(default)]
-    pub model: Option<String>,
-    #[serde(rename = "createdAt", alias = "created_at", default)]
-    pub created_at: i64,
-    #[serde(rename = "updatedAt", alias = "updated_at", default)]
-    pub updated_at: i64,
-}
+pub use crate::agent::Task;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CortexNode {
@@ -52,6 +28,147 @@ pub struct CortexNode {
     pub is_dir: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<CortexNode>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentPersonaInfo {
+    pub role: String,
+    pub has_prompt: bool,
+}
+
+/// Stable-нормализация порядка колонок канбана:
+/// `backlog` — всегда первая (если есть), `ready` — всегда последняя (если есть),
+/// остальные сохраняют относительный порядок. Дублирующиеся id — ошибка.
+pub fn normalize_pipeline_columns(
+    columns: Vec<crate::config::PipelineColumn>,
+) -> Result<Vec<crate::config::PipelineColumn>, String> {
+    let mut seen = HashSet::new();
+    for c in &columns {
+        if !seen.insert(c.id.clone()) {
+            return Err(format!(
+                "Дублирующийся id колонки: '{}' — id колонок должны быть уникальными",
+                c.id
+            ));
+        }
+    }
+    let mut backlog: Option<crate::config::PipelineColumn> = None;
+    let mut ready: Option<crate::config::PipelineColumn> = None;
+    let mut middle = Vec::with_capacity(columns.len());
+    for col in columns {
+        if col.id == "backlog" && backlog.is_none() {
+            backlog = Some(col);
+        } else if col.id == "ready" && ready.is_none() {
+            ready = Some(col);
+        } else {
+            middle.push(col);
+        }
+    }
+    let mut out = Vec::with_capacity(
+        backlog.is_some() as usize + middle.len() + ready.is_some() as usize,
+    );
+    if let Some(b) = backlog {
+        out.push(b);
+    }
+    out.extend(middle);
+    if let Some(r) = ready {
+        out.push(r);
+    }
+    Ok(out)
+}
+
+/// Валидация имени персоны: ^[a-z0-9][a-z0-9-]*$
+pub fn is_valid_persona_role(role: &str) -> bool {
+    let mut chars = role.chars();
+    let first = match chars.next() {
+        Some(c) => c,
+        None => return false,
+    };
+    if !(first.is_ascii_lowercase() || first.is_ascii_digit()) {
+        return false;
+    }
+    for c in chars {
+        if !(c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-') {
+            return false;
+        }
+    }
+    true
+}
+
+fn persona_placeholder_template(role: &str) -> String {
+    format!(
+        "# Роль: {role}\n\n\
+        > Этот файл создан автоматически командой `create_agent_persona`. \
+        > Заполните его под свою персону — все секции ниже помечены TODO.\n\n\
+        ## TODO: цель персоны\n\n\
+        - Опишите, за что отвечает эта персона и какие задачи решает.\n\n\
+        ## TODO: стиль\n\n\
+        - Опишите стиль общения и работы: тон, детальность, формат ответов.\n\n\
+        ## TODO: запреты\n\n\
+        - Перечислите, что персоне запрещено делать.\n\n\
+        ## TODO: чеклист настройки\n\n\
+        - [ ] Заполнена цель персоны\n\
+        - [ ] Описан стиль\n\
+        - [ ] Перечислены запреты\n\
+        - [ ] Проверена работа персоны на тестовой задаче\n"
+    )
+}
+
+/// Сканирует `<root>/.cvh/agents/*.md` (только `.md`, сортировка по имени).
+/// Пустая/отсутствующая папка → пустой vec, не ошибка.
+pub async fn list_agent_personas_in(root: &Path) -> Vec<AgentPersonaInfo> {
+    let agents_dir = root.join(".cvh").join("agents");
+    let mut out = Vec::new();
+    let Ok(mut entries) = tokio::fs::read_dir(&agents_dir).await else {
+        return out;
+    };
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !name.ends_with(".md") {
+            continue;
+        }
+        let Ok(ft) = entry.file_type().await else {
+            continue;
+        };
+        if !ft.is_file() {
+            continue;
+        }
+        if let Some(role) = name.strip_suffix(".md") {
+            if role.is_empty() {
+                continue;
+            }
+            out.push(AgentPersonaInfo {
+                role: role.to_string(),
+                has_prompt: true,
+            });
+        }
+    }
+    out.sort_by(|a, b| a.role.cmp(&b.role));
+    out
+}
+
+/// Создаёт `.cvh/agents/<role>.md` с плейсхолдер-шаблоном.
+/// Возвращает относительный путь `.cvh/agents/<role>.md`.
+pub async fn create_agent_persona_file(root: &Path, role: &str) -> Result<String, String> {
+    if !is_valid_persona_role(role) {
+        return Err(format!(
+            "Недопустимое имя роли '{}': разрешены только строчные латинские буквы, цифры и дефис (шаблон ^[a-z0-9][a-z0-9-]*$)",
+            role
+        ));
+    }
+    let agents_dir = root.join(".cvh").join("agents");
+    let target = agents_dir.join(format!("{}.md", role));
+    if target.exists() {
+        return Err(format!(
+            "Персона '{}' уже существует: .cvh/agents/{}.md",
+            role, role
+        ));
+    }
+    let content = persona_placeholder_template(role);
+    atomic_write_file(&target, &content)
+        .await
+        .map_err(|e| format!("Не удалось создать персону '{}': {}", role, e))?;
+    Ok(format!(".cvh/agents/{}.md", role))
 }
 
 pub struct AppState {
@@ -171,13 +288,31 @@ pub async fn get_pipeline(state: State<'_, AppState>) -> Result<PipelineConfig, 
 
 #[tauri::command]
 pub async fn save_pipeline(
-    pipeline: PipelineConfig,
+    mut pipeline: PipelineConfig,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    pipeline.columns = normalize_pipeline_columns(pipeline.columns)?;
     let root = state.get_root();
     save_pipeline_config(&root, &pipeline)
         .await
         .map_err(|e| format!("Failed to save pipeline: {}", e))
+}
+
+#[tauri::command]
+pub async fn list_agent_personas(
+    state: State<'_, AppState>,
+) -> Result<Vec<AgentPersonaInfo>, String> {
+    let root = state.get_root();
+    Ok(list_agent_personas_in(&root).await)
+}
+
+#[tauri::command]
+pub async fn create_agent_persona(
+    role: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let root = state.get_root();
+    create_agent_persona_file(&root, &role).await
 }
 
 #[tauri::command]
@@ -344,7 +479,16 @@ pub async fn save_tasks(tasks: Vec<Task>, state: State<'_, AppState>) -> Result<
         *guard = tasks.clone();
     }
     let root = state.get_root();
-    save_tasks_to_disk(&root, &tasks).await
+    let res = save_tasks_to_disk(&root, &tasks).await;
+    match &res {
+        Ok(_) => eprintln!(
+            "CVH [save_tasks]: persisted {} tasks to {:?}",
+            tasks.len(),
+            root.join(".cvh").join("tasks.json")
+        ),
+        Err(e) => eprintln!("CVH [save_tasks]: FAILED to persist {} tasks: {}", tasks.len(), e),
+    }
+    res
 }
 
 #[tauri::command]
@@ -506,6 +650,7 @@ pub async fn move_task_stage(
 #[tauri::command]
 pub async fn run_agent(
     task_id: String,
+    prompt: Option<String>,
     app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
@@ -520,7 +665,7 @@ pub async fn run_agent(
         }
     };
 
-    let task = match task_opt {
+    let mut task = match task_opt {
         Some(t) => t,
         None => {
             // If not found in memory, try disk
@@ -531,10 +676,46 @@ pub async fn run_agent(
                 }
                 t
             } else {
+                let mem_count = state.tasks.lock().map(|g| g.len()).unwrap_or(0);
+                eprintln!(
+                    "CVH [run_agent]: Task {} not found (in-memory tasks: {}, disk tasks in {:?}: {}, root: {:?})",
+                    task_id,
+                    mem_count,
+                    root.join(".cvh").join("tasks.json"),
+                    disk_tasks.len(),
+                    root
+                );
                 return Err(format!("Task {} not found", task_id));
             }
         }
     };
+
+    // If an explicit prompt was provided by the user, merge it into task description
+    if let Some(p) = prompt {
+        let p_trimmed = p.trim();
+        if !p_trimmed.is_empty() {
+            if task.description.trim().is_empty() {
+                task.description = p_trimmed.to_string();
+            } else if !task.description.contains(p_trimmed) {
+                task.description.push_str(&format!("\n\n[USER]: {}", p_trimmed));
+            }
+            task.updated_at = Utc::now().timestamp_millis();
+
+            // Persist description update immediately
+            let mut all_tasks = load_tasks_from_disk(&root).await;
+            if let Some(t) = all_tasks.iter_mut().find(|t| t.id == task_id) {
+                t.description = task.description.clone();
+                t.updated_at = task.updated_at;
+                let _ = save_tasks_to_disk(&root, &all_tasks).await;
+            }
+            if let Ok(mut guard) = state.tasks.lock() {
+                if let Some(t) = guard.iter_mut().find(|t| t.id == task_id) {
+                    t.description = task.description.clone();
+                    t.updated_at = task.updated_at;
+                }
+            }
+        }
+    }
 
     let pipeline = load_pipeline_config(&root)
         .await
@@ -564,6 +745,8 @@ pub async fn run_agent(
                 allowed_tools: None,
                 hooks: HashMap::new(),
                 routes: None,
+                auto_run: None,
+                terminal: None,
             })
         });
 
@@ -897,87 +1080,90 @@ pub async fn run_agent(
                     serde_json::json!({ "taskId": tid, "status": "finished" }),
                 );
 
-                // Auto-promotion along Custom Flow or Pipeline Flow
+                // Auto-promotion along pipeline columns (columns are fully custom)
                 let mut tasks = load_tasks_from_disk(&root_task).await;
                 if let Some(task_idx) = tasks.iter().position(|t| t.id == tid) {
                     let old_stage = tasks[task_idx].stage_id.clone();
 
-                    // Check for review verdict if current stage is review
-                    if tasks[task_idx].stage_id == "review" {
-                        let upper = final_response.to_uppercase();
-                        if upper.contains("APPROVED_WITH_CAVEATS") {
-                            tasks[task_idx].verdict = Some("APPROVED_WITH_CAVEATS".to_string());
-                        } else if upper.contains("APPROVED") {
-                            tasks[task_idx].verdict = Some("APPROVED".to_string());
-                        } else if upper.contains("CHANGES_REQUESTED") {
-                            tasks[task_idx].verdict = Some("CHANGES_REQUESTED".to_string());
-                        }
+                    // Parse verdict from agent output for any column.
+                    let upper = final_response.to_uppercase();
+                    if upper.contains("CHANGES_REQUESTED") {
+                        tasks[task_idx].verdict = Some("CHANGES_REQUESTED".to_string());
+                    } else if upper.contains("APPROVED_WITH_CAVEATS") {
+                        tasks[task_idx].verdict = Some("APPROVED_WITH_CAVEATS".to_string());
+                    } else if upper.contains("APPROVED") {
+                        tasks[task_idx].verdict = Some("APPROVED".to_string());
                     }
 
                     let mut promoted = false;
 
-                    // If task has custom_flow
-                    if let Some(ref flow) = tasks[task_idx].custom_flow {
-                        if !flow.is_empty() {
-                            if let Some(curr_idx) = flow.iter().position(|s| s == &tasks[task_idx].stage_id) {
-                                if tasks[task_idx].stage_id == "review"
-                                    && tasks[task_idx].verdict.as_deref() == Some("CHANGES_REQUESTED")
-                                {
-                                    // Route back to dev if changes requested
-                                    if curr_idx > 0 {
-                                        tasks[task_idx].stage_id = flow[curr_idx - 1].clone();
-                                    } else {
-                                        tasks[task_idx].stage_id = "dev".to_string();
-                                    }
-                                    tasks[task_idx].status = Some("running".to_string());
-                                    promoted = true;
-                                } else if curr_idx + 1 < flow.len() {
-                                    let next_stage = flow[curr_idx + 1].clone();
-                                    tasks[task_idx].stage_id = next_stage.clone();
-                                    if next_stage == "ready" {
-                                        tasks[task_idx].status = Some("done".to_string());
-                                    } else {
-                                        tasks[task_idx].status = Some("running".to_string());
-                                    }
-                                    promoted = true;
-                                } else {
-                                    // At end of custom_flow: set status to done (ready)
-                                    tasks[task_idx].stage_id = "ready".to_string();
-                                    tasks[task_idx].status = Some("done".to_string());
-                                    promoted = true;
-                                }
-                            } else {
-                                // Current stage not found in custom_flow (e.g. backlog): start from first stage
-                                let next_stage = flow[0].clone();
-                                tasks[task_idx].stage_id = next_stage.clone();
-                                if next_stage == "ready" {
-                                    tasks[task_idx].status = Some("done".to_string());
-                                } else {
-                                    tasks[task_idx].status = Some("running".to_string());
-                                }
-                                promoted = true;
-                            }
-                        }
-                    } else {
-                        // Standard pipeline fallback
-                        if tasks[task_idx].stage_id == "review"
-                            && tasks[task_idx].verdict.as_deref() == Some("CHANGES_REQUESTED")
+                    // Generic auto-promotion: verdict routes first, else column to the right.
+                    if let Ok(pipeline) = load_pipeline_config(&root_task).await {
+                        if let Some(curr_idx) = pipeline
+                            .columns
+                            .iter()
+                            .position(|c| c.id == tasks[task_idx].stage_id)
                         {
-                            tasks[task_idx].stage_id = "dev".to_string();
-                            tasks[task_idx].status = Some("running".to_string());
-                            promoted = true;
-                        } else if let Ok(pipeline) = load_pipeline_config(&root_task).await {
-                            if let Some(curr_idx) = pipeline.columns.iter().position(|c| c.id == tasks[task_idx].stage_id) {
-                                if curr_idx + 1 < pipeline.columns.len() {
-                                    let next_stage = pipeline.columns[curr_idx + 1].id.clone();
-                                    tasks[task_idx].stage_id = next_stage.clone();
-                                    if next_stage == "ready" {
-                                        tasks[task_idx].status = Some("done".to_string());
-                                    } else {
-                                        tasks[task_idx].status = Some("running".to_string());
+                            let curr_col = pipeline.columns[curr_idx].clone();
+
+                            // Resolve verdict-routed target from current column routes.
+                            let mut route_target: Option<String> = None;
+                            if upper.contains("CHANGES_REQUESTED") {
+                                if let Some(routes) = curr_col.routes.as_ref() {
+                                    if let Some(t) = routes.get("on_changes_requested") {
+                                        route_target = Some(t.clone());
                                     }
+                                }
+                            } else if upper.contains("APPROVED_WITH_CAVEATS") {
+                                if let Some(routes) = curr_col.routes.as_ref() {
+                                    if let Some(t) = routes
+                                        .get("on_approved_with_caveats")
+                                        .or_else(|| routes.get("on_approved"))
+                                    {
+                                        route_target = Some(t.clone());
+                                    }
+                                }
+                            } else if upper.contains("APPROVED") {
+                                if let Some(routes) = curr_col.routes.as_ref() {
+                                    if let Some(t) = routes.get("on_approved") {
+                                        route_target = Some(t.clone());
+                                    }
+                                }
+                            }
+
+                            let status_for = |col: &crate::config::PipelineColumn| {
+                                if col.terminal == Some(true) {
+                                    "done".to_string()
+                                } else if col.persona.is_some() {
+                                    "running".to_string()
+                                } else {
+                                    "idle".to_string()
+                                }
+                            };
+
+                            if let Some(target_id) = route_target {
+                                if let Some(target_col) = pipeline
+                                    .columns
+                                    .iter()
+                                    .find(|c| c.id == target_id)
+                                    .cloned()
+                                {
+                                    let st = status_for(&target_col);
+                                    tasks[task_idx].stage_id = target_col.id;
+                                    tasks[task_idx].status = Some(st);
+                                    promoted = true;
+                                }
+                            }
+
+                            if !promoted {
+                                if curr_idx + 1 < pipeline.columns.len() {
+                                    let next_col = pipeline.columns[curr_idx + 1].clone();
+                                    let st = status_for(&next_col);
+                                    tasks[task_idx].stage_id = next_col.id;
+                                    tasks[task_idx].status = Some(st);
                                     promoted = true;
                                 } else {
+                                    // Rightmost column: stay in place, mark done.
                                     tasks[task_idx].status = Some("done".to_string());
                                     promoted = true;
                                 }
@@ -1018,17 +1204,6 @@ pub async fn run_agent(
                         }
 
                         let _ = app.emit(
-                            "agent:finished",
-                            serde_json::json!({
-                                "taskId": tid,
-                                "status": "finished",
-                                "response": final_response,
-                                "stageId": new_stage,
-                                "task": &updated_task,
-                            }),
-                        );
-
-                        let _ = app.emit(
                             "task:moved",
                             serde_json::json!({
                                 "taskId": tid,
@@ -1040,8 +1215,17 @@ pub async fn run_agent(
                             }),
                         );
                     } else {
-                        if tasks[task_idx].stage_id == "ready" {
-                            tasks[task_idx].status = Some("done".to_string());
+                        // No promotion (unknown column): mark done only for terminal columns.
+                        if let Ok(pipeline) = load_pipeline_config(&root_task).await {
+                            if let Some(col) = pipeline
+                                .columns
+                                .iter()
+                                .find(|c| c.id == tasks[task_idx].stage_id)
+                            {
+                                if col.terminal == Some(true) {
+                                    tasks[task_idx].status = Some("done".to_string());
+                                }
+                            }
                         }
                         tasks[task_idx].updated_at = Utc::now().timestamp_millis();
                         let updated_task = tasks[task_idx].clone();
@@ -1253,11 +1437,22 @@ pub async fn steer_agent(
     state: State<'_, AppState>,
 ) -> Result<String, String> {
     let root = state.get_root();
-    let tasks = load_tasks_from_disk(&root).await;
-    let _task = tasks
-        .iter()
-        .find(|t| t.id == task_id)
-        .ok_or_else(|| format!("Task {} not found", task_id))?;
+
+    // Check in-memory task registry first, then fallback to disk
+    let task_found = {
+        if let Ok(guard) = state.tasks.lock() {
+            guard.iter().any(|t| t.id == task_id)
+        } else {
+            false
+        }
+    };
+
+    if !task_found {
+        let tasks = load_tasks_from_disk(&root).await;
+        if !tasks.iter().any(|t| t.id == task_id) {
+            return Err(format!("Task {} not found", task_id));
+        }
+    }
 
     let steer_payload = serde_json::json!({
         "taskId": task_id,
@@ -1285,6 +1480,12 @@ pub async fn steer_agent(
             t.updated_at = Utc::now().timestamp_millis();
             let _ = save_tasks_to_disk(&root, &current_tasks).await;
         }
+        if let Ok(mut guard) = state.tasks.lock() {
+            if let Some(t) = guard.iter_mut().find(|t| t.id == task_id) {
+                t.description.push_str(&format!("\n\n[USER STEER]: {}", message));
+                t.updated_at = Utc::now().timestamp_millis();
+            }
+        }
     }
 
     // Append user turn to active compaction context if present
@@ -1300,7 +1501,7 @@ pub async fn steer_agent(
     }
 
     // Re-invoke agent loop with steering message
-    run_agent(task_id, app_handle, state).await
+    run_agent(task_id, Some(message), app_handle, state).await
 }
 
 // ============================================================================
@@ -1593,5 +1794,169 @@ pub async fn set_project_root(
     persist_active_project(&PathBuf::from(path.trim())).await;
     let _cfg = set_active_project(path.clone(), state, app_handle).await?;
     Ok(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::PipelineColumn;
+    use std::collections::HashMap;
+
+    fn test_col(id: &str) -> PipelineColumn {
+        PipelineColumn {
+            id: id.to_string(),
+            title: id.to_string(),
+            color: None,
+            icon: None,
+            persona: None,
+            context_window: None,
+            model_override: None,
+            reasoning_effort: None,
+            temperature: None,
+            gatekeeper_sensor: None,
+            allowed_tools: None,
+            hooks: HashMap::new(),
+            routes: None,
+            auto_run: None,
+            terminal: None,
+        }
+    }
+
+    fn ids(cols: &[PipelineColumn]) -> Vec<String> {
+        cols.iter().map(|c| c.id.clone()).collect()
+    }
+
+    #[test]
+    fn test_normalize_backlog_first_ready_last_stable() {
+        let cols = vec![
+            test_col("dev"),
+            test_col("ready"),
+            test_col("review"),
+            test_col("backlog"),
+            test_col("qa"),
+        ];
+        let out = normalize_pipeline_columns(cols).expect("normalize failed");
+        assert_eq!(ids(&out), vec!["backlog", "dev", "review", "qa", "ready"]);
+    }
+
+    #[test]
+    fn test_normalize_already_ordered_keeps_middle_order() {
+        let cols = vec![
+            test_col("backlog"),
+            test_col("a"),
+            test_col("b"),
+            test_col("ready"),
+        ];
+        let out = normalize_pipeline_columns(cols).expect("normalize failed");
+        assert_eq!(ids(&out), vec!["backlog", "a", "b", "ready"]);
+    }
+
+    #[test]
+    fn test_normalize_without_specials_keeps_order() {
+        let cols = vec![test_col("a"), test_col("b"), test_col("c")];
+        let out = normalize_pipeline_columns(cols).expect("normalize failed");
+        assert_eq!(ids(&out), vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn test_normalize_duplicate_ids_error() {
+        let cols = vec![test_col("dev"), test_col("dev")];
+        let err = normalize_pipeline_columns(cols).expect_err("expected duplicate error");
+        assert!(err.contains("dev"), "unexpected error text: {}", err);
+    }
+
+    #[test]
+    fn test_persona_role_validation() {
+        for ok in ["developer", "a", "0abc", "my-role-1", "r2-d2"] {
+            assert!(is_valid_persona_role(ok), "expected valid: {}", ok);
+        }
+        for bad in [
+            "",
+            "-abc",
+            "Abc",
+            "my_role",
+            "my role",
+            "роль",
+            "a/b",
+            "A",
+            "dev!",
+        ] {
+            assert!(!is_valid_persona_role(bad), "expected invalid: {}", bad);
+        }
+    }
+
+    #[test]
+    fn test_persona_placeholder_template_ru() {
+        let t = persona_placeholder_template("reviewer");
+        assert!(t.contains("# Роль: reviewer"));
+        assert!(t.contains("TODO"));
+        assert!(t.contains("создан автоматически"));
+    }
+
+    #[test]
+    fn test_agent_persona_info_camel_case() {
+        let info = AgentPersonaInfo {
+            role: "developer".to_string(),
+            has_prompt: true,
+        };
+        let v = serde_json::to_value(&info).expect("serialize");
+        assert_eq!(v.get("role").and_then(|x| x.as_str()), Some("developer"));
+        assert_eq!(v.get("hasPrompt").and_then(|x| x.as_bool()), Some(true));
+        assert!(v.get("has_prompt").is_none());
+    }
+
+    #[tokio::test]
+    async fn test_create_persona_placeholder_in_tmp_dir() {
+        let base =
+            PathBuf::from("target").join(format!("cvh_persona_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        // invalid role → Err
+        let bad = create_agent_persona_file(&base, "Bad_Name").await;
+        assert!(bad.is_err());
+
+        // valid create → relative path + placeholder content
+        let rel = create_agent_persona_file(&base, "my-role")
+            .await
+            .expect("create failed");
+        assert_eq!(rel, ".cvh/agents/my-role.md");
+        let content = tokio::fs::read_to_string(base.join(".cvh").join("agents").join("my-role.md"))
+            .await
+            .expect("read created file");
+        assert!(content.contains("# Роль: my-role"));
+
+        // duplicate → Err mentioning существование
+        let dup = create_agent_persona_file(&base, "my-role").await;
+        assert!(dup.is_err());
+        assert!(dup.unwrap_err().contains("уже существует"));
+
+        // list sees it, sorted, .md only
+        tokio::fs::write(
+            base.join(".cvh").join("agents").join("aaa.md"),
+            "# Роль: aaa\n",
+        )
+        .await
+        .expect("seed aaa");
+        tokio::fs::write(
+            base.join(".cvh").join("agents").join("notes.txt"),
+            "ignore me",
+        )
+        .await
+        .expect("seed txt");
+        let listed = list_agent_personas_in(&base).await;
+        let roles: Vec<String> = listed.iter().map(|p| p.role.clone()).collect();
+        assert_eq!(roles, vec!["aaa".to_string(), "my-role".to_string()]);
+        assert!(listed.iter().all(|p| p.has_prompt));
+
+        // missing folder → empty vec, not error
+        let empty_base =
+            PathBuf::from("target").join(format!("cvh_persona_empty_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&empty_base).await.expect("empty dir");
+        let empty = list_agent_personas_in(&empty_base).await;
+        assert!(empty.is_empty());
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+        let _ = tokio::fs::remove_dir_all(&empty_base).await;
+    }
 }
 

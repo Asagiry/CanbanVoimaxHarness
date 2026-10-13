@@ -17,6 +17,7 @@ interface BoardState {
   setSelectedTaskId: (id: string | null) => void;
   setSearchQuery: (query: string) => void;
 
+  loadColumns: () => Promise<void>;
   loadTasks: () => Promise<void>;
   moveTask: (taskId: string, targetColumnId: string) => Promise<void>;
   updateTask: (taskId: string, partial: Partial<KanbanTask>) => void;
@@ -28,15 +29,6 @@ interface BoardState {
   promoteTaskToNextStage: (taskId: string) => void;
   runTaskAgent: (taskId: string) => Promise<void>;
 }
-
-// Stage sequence order to compute rework returns
-const STAGE_ORDER: Record<string, number> = {
-  backlog: 0,
-  dev: 1,
-  review: 2,
-  retro: 3,
-  ready: 4,
-};
 
 export function getTasksStorageKey(): string {
   try {
@@ -78,12 +70,14 @@ function loadTasksFromLocalStorage(): KanbanTask[] {
 export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
   try {
     const { invoke } = await import('@tauri-apps/api/core');
+    // NOTE: send ONLY canonical camelCase keys. Sending both stageId+columnId
+    // makes Rust serde fail with "duplicate field `stageId`" and save_tasks
+    // silently never persists (this broke run_agent with "Task not found").
     const backendPayload = tasks.map((t) => ({
       id: t.id,
       title: t.title,
       description: t.description || '',
       stageId: t.columnId,
-      columnId: t.columnId,
       worktreePath: t.worktreePath,
       branch: t.branch,
       verdict: t.verdict === 'NONE' ? null : t.verdict,
@@ -99,30 +93,45 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
   }
 }
 
-async function triggerRunAgent(taskId: string): Promise<void> {
+async function triggerRunAgent(taskId: string, prompt?: string): Promise<void> {
   try {
     const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('run_agent', { taskId });
+    await invoke('run_agent', { taskId, prompt: prompt || null });
   } catch (err) {
     console.info('run_agent invoke failed or in web mode:', err);
   }
 }
 
 function mapBackendTaskToKanban(t: any): KanbanTask {
+  // Fully generic: resolve everything through the current board columns.
+  // (defined outside create(), so columns come from getState()).
+  const columns = useBoardStore.getState().columns;
+  const rawId: string | undefined = t.stageId || t.stage_id;
+  const knownCol = columns.find((c) => c.id === rawId);
+  const columnId = knownCol?.id ?? columns[0]?.id ?? rawId ?? 'backlog';
+  const col = columns.find((c) => c.id === columnId);
+
+  // terminal → done, persona column → running, otherwise idle
+  const status: TaskStatus = col?.terminal
+    ? 'done'
+    : col?.persona
+    ? 'running'
+    : 'idle';
+
   return {
     id: t.id,
     title: t.title,
     description: t.description || undefined,
     priority: (t.priority as TaskPriority) || 'high',
-    columnId: t.stageId || t.stage_id || 'backlog',
-    persona: t.persona || (t.stageId === 'dev' ? 'developer' : t.stageId === 'review' ? 'reviewer' : 'artisan'),
+    columnId,
+    persona: col?.persona ?? 'developer',
     branch: t.branch || `feat/${t.id.toLowerCase()}`,
     worktreePath: t.worktreePath || t.worktree_path || `worktrees/${t.id.toLowerCase()}`,
-    status: (t.status as TaskStatus) || (t.stageId === 'dev' ? 'running' : 'idle'),
+    status,
     activeStageDuration: t.activeStageDuration || 0,
     stageDurations: t.stageDurations || {},
     totalElapsed: t.totalElapsed || 0,
-    isTimerRunning: t.isTimerRunning ?? (t.stageId === 'dev'),
+    isTimerRunning: status === 'running',
     returnsCount: t.returnsCount || 0,
     fastTrack: t.fastTrack,
     customFlow: t.customFlow || t.custom_flow,
@@ -147,6 +156,37 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   },
   setSelectedTaskId: (id) => set({ selectedTaskId: id }),
   setSearchQuery: (query) => set({ searchQuery: query }),
+
+  loadColumns: async () => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      // Backend get_pipeline returns PipelineConfig { id, title, columns }
+      const pipeline = await invoke<{ id: string; title: string; columns: any[] }>('get_pipeline');
+      const rawCols = pipeline?.columns;
+      if (Array.isArray(rawCols) && rawCols.length > 0) {
+        const mapped: PipelineColumn[] = rawCols.map((c: any) => ({
+          id: c.id,
+          title: c.title,
+          color: c.color ?? '#64748b',
+          icon: c.icon ?? 'Inbox',
+          persona: c.persona ?? null,
+          autoRun: c.autoRun,
+          terminal: c.terminal,
+          contextWindow: c.contextWindow ?? c.context_window ?? 128000,
+          modelOverride: c.modelOverride ?? c.model_override ?? null,
+          temperature: c.temperature,
+          reasoningEffort: c.reasoningEffort ?? c.reasoning_effort,
+          gatekeeperSensor: c.gatekeeperSensor ?? c.gatekeeper_sensor ?? null,
+          wipLimit: c.wipLimit,
+          hooks: c.hooks ?? {},
+          routes: c.routes ?? undefined,
+        }));
+        set({ columns: mapped });
+      }
+    } catch (err) {
+      console.info('Tauri get_pipeline not available or in web mode:', err);
+    }
+  },
 
   loadTasks: async () => {
     set({ isLoadingTasks: true });
@@ -191,11 +231,13 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const task = tasks.find((t) => t.id === taskId);
     if (!task || task.columnId === targetColumnId) return;
 
-    const sourceColIndex = STAGE_ORDER[task.columnId] ?? 0;
-    const targetColIndex = STAGE_ORDER[targetColumnId] ?? 0;
+    // Generic rework detection: board order only, no hardcoded stages
+    const sourceColIndex = columns.findIndex((c) => c.id === task.columnId);
+    const targetColIndex = columns.findIndex((c) => c.id === targetColumnId);
 
     // Check if task is being returned / reworked backwards
-    const isRework = targetColIndex < sourceColIndex || (targetColumnId === 'dev' && task.columnId === 'review');
+    const isRework =
+      sourceColIndex >= 0 && targetColIndex >= 0 && targetColIndex < sourceColIndex;
     const newReturnsCount = isRework ? task.returnsCount + 1 : task.returnsCount;
 
     // Freeze current stage duration
@@ -206,34 +248,27 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       [currentStage]: (task.stageDurations[currentStage] || 0) + currentDuration,
     };
 
-    // Fast-Track checks
-    let effectiveTargetCol = targetColumnId;
-    if (task.fastTrack?.noReview && targetColumnId === 'review') {
-      effectiveTargetCol = task.fastTrack?.noRetro ? 'ready' : 'retro';
-    } else if (task.fastTrack?.noRetro && targetColumnId === 'retro') {
-      effectiveTargetCol = 'ready';
-    }
+    // NOTE: fastTrack (noReview/noRetro) is intentionally ignored —
+    // the task always lands in the requested target column.
 
-    const targetColDef = columns.find((c) => c.id === effectiveTargetCol);
-    const newStatus: TaskStatus =
-      effectiveTargetCol === 'ready'
-        ? 'done'
-        : effectiveTargetCol === 'dev' || effectiveTargetCol === 'retro'
-        ? 'running'
-        : effectiveTargetCol === 'review'
-        ? 'waiting_review'
-        : 'idle';
+    const targetColDef = columns.find((c) => c.id === targetColumnId);
+    // terminal → done, persona column → running, otherwise idle
+    const newStatus: TaskStatus = targetColDef?.terminal
+      ? 'done'
+      : targetColDef?.persona
+      ? 'running'
+      : 'idle';
 
     const updatedTasks = tasks.map((t) => {
       if (t.id !== taskId) return t;
       return {
         ...t,
-        columnId: effectiveTargetCol,
+        columnId: targetColumnId,
         persona: targetColDef?.persona || t.persona,
         status: newStatus,
         activeStageDuration: 0,
         stageDurations: updatedStageDurations,
-        isTimerRunning: newStatus === 'running' || newStatus === 'waiting_review',
+        isTimerRunning: newStatus === 'running',
         returnsCount: newReturnsCount,
       };
     });
@@ -242,8 +277,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     persistTasksToLocalStorage(updatedTasks);
     await syncTasksBackend(updatedTasks);
 
-    if (effectiveTargetCol === 'dev') {
-      await triggerRunAgent(taskId);
+    // Column = agent: autoRun triggers run_agent on entry (default: !!persona)
+    if (targetColDef?.autoRun ?? !!targetColDef?.persona) {
+      const targetTask = updatedTasks.find((t) => t.id === taskId);
+      await triggerRunAgent(taskId, targetTask?.description);
     }
   },
 
@@ -262,8 +299,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     persistTasksToLocalStorage(updatedTasks);
     await syncTasksBackend(updatedTasks);
 
-    if (task.columnId === 'dev') {
-      await triggerRunAgent(task.id);
+    const targetColDef = get().columns.find((c) => c.id === task.columnId);
+    if (targetColDef?.autoRun ?? !!targetColDef?.persona) {
+      await triggerRunAgent(task.id, task.description);
     }
   },
 
@@ -278,16 +316,22 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   },
 
   runTaskAgent: async (taskId) => {
-    const { tasks, moveTask, updateTask } = get();
+    const { tasks, columns, moveTask, updateTask } = get();
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
 
-    if (task.columnId !== 'dev') {
-      await moveTask(taskId, 'dev');
-    } else {
+    const taskCol = columns.find((c) => c.id === task.columnId);
+    if (taskCol?.persona) {
       updateTask(taskId, { status: 'running', isTimerRunning: true });
       await syncTasksBackend(get().tasks);
-      await triggerRunAgent(taskId);
+      await triggerRunAgent(taskId, task.description);
+    } else {
+      // Task sits in a non-agent column: move to the FIRST column with a persona
+      // (moveTask auto-runs the agent on entry).
+      const firstAgentCol = columns.find((c) => c.persona);
+      if (firstAgentCol) {
+        await moveTask(taskId, firstAgentCol.id);
+      }
     }
   },
 
@@ -330,27 +374,24 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
 
-    // Custom pipeline flow priority
+    // Custom pipeline flow priority (only if valid against the board)
     if (task.customFlow && task.customFlow.length > 0) {
-      if (task.columnId === 'backlog') {
-        moveTask(taskId, task.customFlow[0]);
-        return;
-      }
       const currentIndexInFlow = task.customFlow.indexOf(task.columnId);
       if (currentIndexInFlow >= 0 && currentIndexInFlow < task.customFlow.length - 1) {
         const nextStage = task.customFlow[currentIndexInFlow + 1];
-        moveTask(taskId, nextStage);
-        return;
-      } else if (currentIndexInFlow === -1) {
-        const currentOrder = STAGE_ORDER[task.columnId] ?? 0;
-        const nextStage = task.customFlow.find((s) => (STAGE_ORDER[s] ?? 0) > currentOrder) || task.customFlow[0];
-        moveTask(taskId, nextStage);
+        if (columns.some((c) => c.id === nextStage)) {
+          moveTask(taskId, nextStage);
+          return;
+        }
+        // Invalid flow target → fall through to board order
+      } else if (currentIndexInFlow >= 0) {
+        // Already at the end of a valid custom flow: nowhere to promote
         return;
       }
-      return;
+      // Current column not in customFlow → fall through to board order
     }
 
-    // Default sequential promotion
+    // Default sequential promotion: next column on the board
     const currentIndex = columns.findIndex((c) => c.id === task.columnId);
     if (currentIndex >= 0 && currentIndex < columns.length - 1) {
       const nextCol = columns[currentIndex + 1];

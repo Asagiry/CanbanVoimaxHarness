@@ -18,9 +18,15 @@ export default defineConfig({
     target: 'esnext',
     minify: false,
   },
+  optimizeDeps: {
+    entries: ['index.html'],
+  },
   server: {
     port: 5173,
     strictPort: true,
+    watch: {
+      ignored: ['**/src-tauri/**'],
+    },
   },
   clearScreen: false,
 });

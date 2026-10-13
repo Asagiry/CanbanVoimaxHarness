@@ -44,25 +44,32 @@ impl ToolPermissions {
     }
 
     /// Check if tool (or its SWE-bench alias) is permitted for the given stage_id.
+    ///
+    /// AND-semantics: `effective = global && stage` (a missing stage entry
+    /// defaults to `true`, an empty global list means "no global restriction").
+    /// A global disable can no longer be overridden back on by a stage entry.
     pub fn is_tool_allowed(&self, stage_id: &str, tool_name: &str) -> bool {
         let canonical = normalize_tool_name(tool_name);
 
-        if let Some(stage_tools) = self.stage_allowed_tools.get(stage_id) {
-            return stage_tools.iter().any(|t| {
+        let global_ok = if self.global_allowed_tools.is_empty() {
+            true
+        } else {
+            self.global_allowed_tools.iter().any(|t| {
                 let ct = normalize_tool_name(t);
                 ct == canonical || t == tool_name
-            });
-        }
+            })
+        };
 
-        if !self.global_allowed_tools.is_empty() {
-            return self.global_allowed_tools.iter().any(|t| {
+        let stage_ok = match self.stage_allowed_tools.get(stage_id) {
+            Some(stage_tools) => stage_tools.iter().any(|t| {
                 let ct = normalize_tool_name(t);
                 ct == canonical || t == tool_name
-            });
-        }
+            }),
+            // No stage record: no stage-level restriction.
+            None => true,
+        };
 
-        // Default: permitted if no restrictions defined
-        true
+        global_ok && stage_ok
     }
 
     pub fn get_allowed_tools_for_stage(&self, stage_id: &str) -> Option<Vec<String>> {
@@ -120,6 +127,10 @@ pub struct PipelineColumn {
     pub hooks: HashMap<String, String>,
     #[serde(default)]
     pub routes: Option<HashMap<String, String>>,
+    #[serde(rename = "autoRun", default)]
+    pub auto_run: Option<bool>,
+    #[serde(default)]
+    pub terminal: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -323,6 +334,8 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 ]),
                 hooks: HashMap::new(),
                 routes: None,
+                auto_run: None,
+                terminal: None,
             },
             PipelineColumn {
                 id: "dev".to_string(),
@@ -346,6 +359,8 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 ]),
                 hooks: HashMap::new(),
                 routes: None,
+                auto_run: None,
+                terminal: None,
             },
             PipelineColumn {
                 id: "review".to_string(),
@@ -367,6 +382,8 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 ]),
                 hooks: HashMap::new(),
                 routes: None,
+                auto_run: None,
+                terminal: None,
             },
             PipelineColumn {
                 id: "retro".to_string(),
@@ -388,6 +405,8 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 ]),
                 hooks: HashMap::new(),
                 routes: None,
+                auto_run: None,
+                terminal: None,
             },
             PipelineColumn {
                 id: "ready".to_string(),
@@ -407,6 +426,8 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 ]),
                 hooks: HashMap::new(),
                 routes: None,
+                auto_run: None,
+                terminal: None,
             },
         ],
     }
@@ -512,8 +533,14 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
         atomic_write_file(&tasks_path, "[]").await?;
     }
 
-    // 4. Default tool policy in settings/ if not present
-    let tool_policy_path = settings_dir.join("tool-policy.json");
+    // 4. Default tool policy in settings/ if not present.
+    // NOTE: this MUST be tool_policy_path() — the same single file that
+    // load_tool_policies()/save_tool_policies() use. A past split-brain
+    // (scaffold wrote settings/tool-policy.json while load/save used
+    // .cvh/tool_policy.json) left fresh projects with a missing enforced
+    // file, so load fell back to all-allowed defaults and silently ignored
+    // user disables.
+    let tool_policy_path = tool_policy_path(repo_root);
     if !tool_policy_path.exists() {
         let default_tp = ToolPolicyConfig::default();
         atomic_write_file(&tool_policy_path, &serde_json::to_string_pretty(&default_tp)?).await?;
@@ -783,30 +810,64 @@ impl Default for ToolPolicyConfig {
     }
 }
 
+/// Normalized lookup into a policy map: matches the canonical name first,
+/// then any SWE-bench alias key (`bash`/`str_replace`) stored in the map.
+fn policy_lookup(map: &HashMap<String, bool>, canonical: &str) -> Option<bool> {
+    if let Some(&allowed) = map.get(canonical) {
+        return Some(allowed);
+    }
+    for (k, &v) in map.iter() {
+        if normalize_tool_name(k) == canonical {
+            return Some(v);
+        }
+    }
+    None
+}
+
 pub fn is_tool_allowed(
     policy: &ToolPolicyConfig,
     stage_id: Option<&str>,
     tool_name: &str,
 ) -> bool {
-    // Stage-level override takes precedence
-    if let Some(stage) = stage_id {
-        if let Some(stage_map) = policy.stage_overrides.get(stage) {
-            if let Some(&allowed) = stage_map.get(tool_name) {
-                return allowed;
-            }
-        }
-    }
-    // Global switch fallback
-    policy.global_enabled.get(tool_name).copied().unwrap_or(true)
+    // Normalize SWE-bench aliases (bash -> execute_command,
+    // str_replace -> edit_file) so the schema filter in run_agent_loop and
+    // the zero-trust gate in execute_tool evaluate the same canonical name.
+    let canonical = normalize_tool_name(tool_name);
+    // AND-semantics: effective(tool, stage) = globalEnabled && stageOverride
+    // (missing entries default to true). A stage override of `true` can no
+    // longer re-enable a globally disabled tool; both layers must allow it.
+    let global_ok = policy_lookup(&policy.global_enabled, canonical).unwrap_or(true);
+    let stage_ok = match stage_id {
+        Some(stage) => policy
+            .stage_overrides
+            .get(stage)
+            .and_then(|stage_map| policy_lookup(stage_map, canonical))
+            .unwrap_or(true),
+        None => true,
+    };
+    global_ok && stage_ok
 }
 
-pub async fn load_tool_policies(root_path: impl AsRef<Path>) -> Result<ToolPolicyConfig> {
-    let policy_path = root_path.as_ref().join(".cvh").join("tool_policy.json");
-    if !policy_path.exists() {
-        return Ok(ToolPolicyConfig::default());
-    }
+/// Canonical on-disk location of the Tool Policy Matrix.
+///
+/// Single source of truth shared by scaffold, save/load and the agent loop:
+/// `<root>/.cvh/settings/tool-policy.json`.
+pub fn tool_policy_path(root_path: &Path) -> PathBuf {
+    root_path
+        .join(".cvh")
+        .join("settings")
+        .join("tool-policy.json")
+}
 
-    let content = tokio::fs::read_to_string(&policy_path)
+/// Legacy pre-unification location (`<root>/.cvh/tool_policy.json`).
+/// Read-only fallback for projects whose disables were saved before the
+/// path unification; new saves always converge to [`tool_policy_path`].
+pub fn legacy_tool_policy_path(root_path: &Path) -> PathBuf {
+    root_path.join(".cvh").join("tool_policy.json")
+}
+
+async fn read_tool_policy_file(policy_path: &Path) -> Result<ToolPolicyConfig> {
+    let content = tokio::fs::read_to_string(policy_path)
         .await
         .with_context(|| format!("Failed to read tool policy at {:?}", policy_path))?;
 
@@ -816,11 +877,37 @@ pub async fn load_tool_policies(root_path: impl AsRef<Path>) -> Result<ToolPolic
     Ok(config)
 }
 
+pub async fn load_tool_policies(root_path: impl AsRef<Path>) -> Result<ToolPolicyConfig> {
+    let root = root_path.as_ref();
+    let canonical = tool_policy_path(root);
+    let legacy = legacy_tool_policy_path(root);
+
+    // Prefer the legacy file while it exists: it holds the last actually
+    // enforced matrix on pre-unification installs (the canonical settings
+    // file there is still the scaffold default). Once the next save runs,
+    // state converges to the canonical file only (see save_tool_policies).
+    if legacy.exists() {
+        return read_tool_policy_file(&legacy).await;
+    }
+    if canonical.exists() {
+        return read_tool_policy_file(&canonical).await;
+    }
+    Ok(ToolPolicyConfig::default())
+}
+
 pub async fn save_tool_policies(root_path: impl AsRef<Path>, config: &ToolPolicyConfig) -> Result<()> {
-    let policy_path = root_path.as_ref().join(".cvh").join("tool_policy.json");
+    let root = root_path.as_ref();
+    let canonical = tool_policy_path(root);
     let serialized = serde_json::to_string_pretty(config)
         .context("Failed to serialize ToolPolicyConfig to JSON")?;
-    atomic_write_file(&policy_path, &serialized).await
+    atomic_write_file(&canonical, &serialized).await?;
+    // Converge split-brain installs: drop the legacy file so future loads
+    // can only see the canonical matrix. Best-effort; a missing file is fine.
+    let legacy = legacy_tool_policy_path(root);
+    if legacy.exists() {
+        let _ = tokio::fs::remove_file(&legacy).await;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -877,6 +964,167 @@ mod tests {
         let mut read_agents = tokio::fs::read_dir(cvh.join("agents")).await.expect("Read dir failed");
         let first_entry = read_agents.next_entry().await.expect("Next entry failed");
         assert!(first_entry.is_none(), "Expected agents/ to be completely empty per user mandate");
+
+        let _ = tokio::fs::remove_dir_all(&base_dir).await;
+    }
+
+    fn policy_with_dev_exec_disabled() -> ToolPolicyConfig {
+        let mut policy = ToolPolicyConfig::default();
+        let dev = policy.stage_overrides.entry("dev".to_string()).or_default();
+        dev.insert("execute_command".to_string(), false);
+        dev.insert("read_file".to_string(), false);
+        policy
+    }
+
+    #[test]
+    fn test_disabled_tool_blocked_for_stage_including_alias() {
+        // Regression: a matrix with execute_command=false / read_file=false
+        // for a stage must deny both the canonical name and the SWE-bench
+        // alias ("bash"), exactly as the execute_tool gate evaluates them.
+        let policy = policy_with_dev_exec_disabled();
+
+        assert!(!is_tool_allowed(&policy, Some("dev"), "execute_command"));
+        assert!(!is_tool_allowed(&policy, Some("dev"), "bash"));
+        assert!(!is_tool_allowed(&policy, Some("dev"), "read_file"));
+        // Untouched stage entries keep working (review allows execute_command
+        // by default).
+        assert!(is_tool_allowed(&policy, Some("review"), "execute_command"));
+        // str_replace alias normalizes to edit_file (disabled in review).
+        assert!(!is_tool_allowed(&policy, Some("review"), "str_replace"));
+    }
+
+    #[test]
+    fn test_tool_policy_and_semantics_global_stage() {
+        // AND-semantics: effective(tool, stage) = globalEnabled && stageOverride
+        // (missing entries default to true). A stage `true` must NOT resurrect
+        // a globally disabled tool (the reported bug: default dev/review
+        // overrides are almost all `true`, so global-off did nothing).
+        let mut policy = ToolPolicyConfig::default();
+
+        // global=false + stage=true -> false (incl. alias normalization).
+        policy.global_enabled.insert("read_file".to_string(), false);
+        assert!(!is_tool_allowed(&policy, Some("dev"), "read_file"));
+        // No stage record at all + global=false -> false.
+        assert!(!is_tool_allowed(&policy, Some("no-such-stage"), "read_file"));
+        assert!(!is_tool_allowed(&policy, None, "read_file"));
+
+        // global=true + stage=false -> false.
+        policy.global_enabled.insert("read_file".to_string(), true);
+        policy
+            .stage_overrides
+            .entry("dev".to_string())
+            .or_default()
+            .insert("read_file".to_string(), false);
+        assert!(!is_tool_allowed(&policy, Some("dev"), "read_file"));
+
+        // Both true -> true.
+        policy
+            .stage_overrides
+            .entry("dev".to_string())
+            .or_default()
+            .insert("read_file".to_string(), true);
+        assert!(is_tool_allowed(&policy, Some("dev"), "read_file"));
+
+        // Alias pair under AND: global execute_command=false + stage bash=true
+        // (stored under alias key) -> still false.
+        policy.global_enabled.insert("execute_command".to_string(), false);
+        let dev = policy.stage_overrides.entry("dev".to_string()).or_default();
+        dev.remove("execute_command");
+        dev.insert("bash".to_string(), true);
+        assert!(!is_tool_allowed(&policy, Some("dev"), "execute_command"));
+        assert!(!is_tool_allowed(&policy, Some("dev"), "bash"));
+    }
+
+    #[test]
+    fn test_tool_permissions_and_semantics() {
+        // Same AND-semantics for the legacy allowlist model:
+        // effective = global_ok && stage_ok (missing entries default to true).
+        use std::collections::HashMap;
+
+        // global=false + stage=true -> false.
+        let mut stage_map = HashMap::new();
+        stage_map.insert(
+            "dev".to_string(),
+            vec!["read_file".to_string(), "execute_command".to_string()],
+        );
+        let perms = ToolPermissions::new(vec!["execute_command".to_string()], stage_map);
+        assert!(!perms.is_tool_allowed("dev", "read_file"));
+        // global=true + stage=false (absent from stage list) -> false.
+        assert!(!perms.is_tool_allowed("dev", "glob"));
+        // Both true -> true (incl. bash alias normalization).
+        assert!(perms.is_tool_allowed("dev", "execute_command"));
+        assert!(perms.is_tool_allowed("dev", "bash"));
+        // No stage record + global=false -> false; unrestricted tool -> true.
+        assert!(!perms.is_tool_allowed("no-such-stage", "read_file"));
+        assert!(perms.is_tool_allowed("no-such-stage", "execute_command"));
+
+        // Empty global + no stages: fail-open default preserved.
+        let open = ToolPermissions::new(vec![], HashMap::new());
+        assert!(open.is_tool_allowed("dev", "read_file"));
+    }
+
+    #[test]
+    fn test_tool_policy_paths_unified() {
+        // Regression: scaffold, save and load must share ONE canonical file.
+        // The split-brain (scaffold -> .cvh/settings/tool-policy.json vs
+        // load/save -> .cvh/tool_policy.json) left fresh projects without an
+        // enforced file, so loads failed open to all-allowed defaults.
+        let root = Path::new("/repo");
+        assert_eq!(
+            tool_policy_path(root),
+            root.join(".cvh").join("settings").join("tool-policy.json")
+        );
+        assert_ne!(tool_policy_path(root), legacy_tool_policy_path(root));
+    }
+
+    #[tokio::test]
+    async fn test_tool_policy_save_load_roundtrip_canonical() {
+        // Regression: what the matrix saves is what the agent loop loads,
+        // from the canonical settings file.
+        let base_dir = std::path::PathBuf::from("target").join(format!("cvh_policy_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base_dir).await.expect("test dir");
+
+        save_tool_policies(&base_dir, &policy_with_dev_exec_disabled())
+            .await
+            .expect("save failed");
+
+        assert!(tool_policy_path(&base_dir).exists());
+        assert!(!legacy_tool_policy_path(&base_dir).exists());
+
+        let loaded = load_tool_policies(&base_dir).await.expect("load failed");
+        assert!(!is_tool_allowed(&loaded, Some("dev"), "execute_command"));
+        assert!(!is_tool_allowed(&loaded, Some("dev"), "bash"));
+        assert!(!is_tool_allowed(&loaded, Some("dev"), "read_file"));
+
+        let _ = tokio::fs::remove_dir_all(&base_dir).await;
+    }
+
+    #[tokio::test]
+    async fn test_tool_policy_legacy_file_migrated_on_save() {
+        // Regression: pre-unification installs keep their enforced disables:
+        // a legacy-only .cvh/tool_policy.json is still honoured on load and
+        // converges to the canonical file on the next save.
+        let base_dir = std::path::PathBuf::from("target").join(format!("cvh_legacy_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base_dir).await.expect("test dir");
+
+        let legacy = legacy_tool_policy_path(&base_dir);
+        atomic_write_file(
+            &legacy,
+            &serde_json::to_string_pretty(&policy_with_dev_exec_disabled()).expect("json"),
+        )
+        .await
+        .expect("legacy seed failed");
+
+        // Load honours the legacy matrix (no silent fail-open to defaults).
+        let loaded = load_tool_policies(&base_dir).await.expect("load failed");
+        assert!(!is_tool_allowed(&loaded, Some("dev"), "execute_command"));
+
+        // Next save converges to the canonical path and drops the legacy file.
+        save_tool_policies(&base_dir, &loaded).await.expect("save failed");
+        assert!(tool_policy_path(&base_dir).exists());
+        assert!(!legacy_tool_policy_path(&base_dir).exists());
+        let reloaded = load_tool_policies(&base_dir).await.expect("reload failed");
+        assert!(!is_tool_allowed(&reloaded, Some("dev"), "execute_command"));
 
         let _ = tokio::fs::remove_dir_all(&base_dir).await;
     }

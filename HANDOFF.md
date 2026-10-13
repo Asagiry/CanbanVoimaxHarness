@@ -1,141 +1,102 @@
 # CanbanVoimaxHarness — Передача смены (HANDOFF)
-**Дата:** 12-13 октября 2026 г.  
-**Ветка:** `main`  
-**Последний коммит:** `cc3ac33` (fix(commands): remove unused variable warning in set_project_root)  
+**Дата:** 13 октября 2026 г., вечер (сессия на Linux)
+**Ветка:** `main`
+**Последний коммит:** `2294135` (всё ниже — НЕ закоммичено, см. раздел 5)
 **Репозиторий:** `https://github.com/Asagiry/CanbanVoimaxHarness`
+**Машина сессии:** Ubuntu 24.04 (X11, DISPLAY=:0), проект `/home/vepishin/Projects/CanbanVoimaxHarness`
 
 ---
 
-## 1. Резюме сессии: Что полностью реализовано и влито в `main`
+## 1. Что сделано за сессию (по порядку)
 
-Все задачи текущего спринта успешно реализованы, протестированы сенсорами (`cargo check`, `cargo test`, `npm run build`) и влиты в ветку `main`.
+### 1.1. Окружение Linux с нуля
+- Склонирован репозиторий по SSH (`git@github.com:Asagiry/CanbanVoimaxHarness.git`) — HTTPS с паролем GitHub больше не принимает, только SSH/токен.
+- Установлены: `rustup stable 1.99.0`, системные либы Tauri v2 (`libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`), `npm install`.
+- Проверки зелёные: `npm run build`, `cargo check`, `cargo test` (сейчас 21 passed).
+- Приложение запускается нативно: `setsid env DISPLAY=:0 ./src-tauri/target/debug/canban-voimax-harness` из корня репо (ВАЖНО: workdir = корень, иначе скаффолдит мусорный `.cvh` в месте запуска — такой уже чистили в `src-tauri/.cvh`).
+- ВАЖНО про `pkill -f canban-voimax-harness`: убивает собственный shell (паттерн совпадает). Гасить только `kill <PID>` (PID смотреть через `ps aux | grep -F target/debug/canban`).
 
-### 1.1. Минималистичный UI & Полная русификация (de-slop)
-- **Удаление ИИ-слопа:** вырезаны маркетинговые клише («Next-Gen», «Cortex Mind», «Autonomous Engine»).
-- **Очистка шапки (Topbar):** удалены телеметрические бейджи; оставлены только имя проекта, кнопка «Открыть папку», строка поиска и иконка настроек.
-- **Полный русский язык:** интерфейс колонок (*Бэклог*, *Очередь*, *В работе*, *Ревью / Контроль*, *Ретроспектива*, *Готово*), модальных окон, кнопок и статусов переведен на русский.
+### 1.2. Починен агент-луп («Task not found», не стартовал ни на винде, ни на линуксе)
+Корневые причины (все исправлены):
+1. **Фронт терял текст пользователя**: `handleSendPrompt` при idle вызывал `run_agent(taskId)` без текста. Теперь `run_agent(task_id, prompt?)` вмерживает prompt в description; фронт передаёт текст всегда.
+2. **Serde-дубль ронял все сейвы**: фронт слал `stageId` + `columnId` одновременно → `duplicate field 'stageId'` → `save_tasks` падал всегда → `tasks.json` вечно `[]`. Доказано отдельным тестом. Теперь шлётся только `stageId`.
+3. **Ворктри подозревали зря**: `git worktree add/remove` проверен вручную — работает. До создания ворктри код просто не доходил (п.1–2). Плюс `create_worktree` теперь проверяет base-ветку и падает на `HEAD`, а не только `main`.
+4. Дубли `Task`-структур слиты в одну (`pub use crate::agent::Task`), алиасы унифицированы.
+5. `steer_agent` теперь смотрит сначала в in-memory реестр, как `run_agent`.
+6. `agent:finished` слался ДВАЖДЫ (в sink + после промоушена) → финал троился в ленте. Остался один emit; фронт дополнительно дедупит по `endsWith(response)`.
+7. `vite.config.ts`: `optimizeDeps.entries=['index.html']` + игнор `src-tauri/**` в watch (esbuild падал с EPIPE на артефактах таргета).
 
-### 1.2. Карточки задач и доска Kanban
-- **Убран внутренний скролл на карточках:** карточки естественно адаптируются по высоте, не создавая вложенных полос прокрутки.
-- **Удалены бейджи срочности:** убраны ярлыки срочности (*Critical, High, Medium, Low*); оставлен лаконичный ID задачи, заголовок и роль.
-- **Горизонтальный скролл колесиком мыши:** добавлен обработчик `onWheel` (`scrollLeft += deltaY`), позволяющий плавно листать колонки доски обычным колесиком мыши.
-- **Чат задачи на весь экран (Card-as-a-Chat):**
-  - Клик по карточке открывает полноэкранный рабочий режим (`fixed inset-0 z-50`).
-  - Добавлена кнопка «← Назад к доске» в шапке окна чата.
-  - Поддерживается быстрое закрытие по клавише `Escape`.
-- **Очистка чужих мок-задач:** моки `INITIAL_TASKS` удалены из `boardStore`; задачи подгружаются из реального бэкенда через `invoke('list_tasks')`. При пустой доске отображается кнопка «Создать задачу».
+### 1.3. Матрица тулов и политики (3 бага, все закрыты)
+- Модалка существовала, но `openModal()` нигде не вызывался → добавлена кнопка-гаечный ключ в топбар слева от настроек LLM.
+- Был хардлок «Блок» для review (edit/write) — убран, review как все.
+- **Split-brain путей**: скаффолд писал `.cvh/settings/tool-policy.json`, чтение/запись шли в `.cvh/tool_policy.json` → унифицировано на canonical, legacy мигрируется при сейве.
+- **Семантика AND**: было «оверрайд перебивает глобал» (дефолтные true гасили глобальное false) → стало `effective = global && stage` (нет записи = true). Пустой набор тулов валиден (шлём `tools: None`).
+- Матрица показывает только колонки-агенты (`persona != null`); таб переименован «Матрица агентов».
 
-### 1.3. Настройки LLM-подключения
-- **Компонент `SettingsModal`:**
-  - Провайдер: *Antigravity Proxy*, *OpenAI*, *Anthropic*, *Ollama*.
-  - Шлюз: адрес API (Base URL).
-  - Маскированный API-ключ с кнопкой показать/скрыть.
-  - Модель (например, `gemini-3.8-flash-high`).
-- **Безопасное хранение ключей:**
-  - Системный путь: `%LOCALAPPDATA%\com.voimax.cvh\llm.json` (зеркало в `.cvh/llm.json`).
-  - Файлы секретов надёжно исключены из репозитория в `.gitignore` (`**/.cvh/llm.json`, `llm.json`, `*.secret`).
-  - Фронтенд синхронизирует настройки через Zustand (`settingsStore`) с фоллбэком на `localStorage`.
-- **IPC команды:** `get_llm_settings`, `save_llm_settings`.
-- **Интеграция с рантаймом агентов:** `run_agent` в `commands.rs` динамически читает `base_url` и `api_key` из `load_llm_settings`.
+### 1.4. Архитектура «колонки = агенты, всё кастомное»
+- Автопродвижение в `commands.rs` переписано: вердикт-роуты (если заданы) → иначе строго колонка справа → справа пусто = stay + done. Статус: `terminal→done`, `persona→running`, иначе `idle`. Ноль литералов dev/review/retro/ready. `custom_flow` игнорируется (поле оставлено для совместимости).
+- `PipelineColumn`: +`autoRun?`, +`terminal?` (Rust `Option<bool>`, TS optional; backward-compatible).
+- Стор generic: `STAGE_ORDER`, `fastTrack`-ветки, `backlog`-спецкейсы удалены; статус/авторан/промоушен одной формулой; `loadColumns()` тянет `get_pipeline` на старте и смене проекта (раньше колонки вообще не грузились из бэкенда).
+- Модалка создания: без чекбоксов Ревью/Ретро, без `customFlow`/`fastTrack`.
+- Колонки: кнопка «+ Колонка» (название + агент + автоцвет, вставка перед terminal), drag-reorder колонок (горизонтальный DnD, backlog pinned first / ready pinned last — и на фронте, и нормализацией в `save_pipeline`), удаление через ПКМ-меню шапки (× убран).
+- Backlog/ready: неудаляемые (guard + скрытие), без персоны, persona-less скрыты из матрицы.
+- Создание задачи ТОЛЬКО общей кнопкой (плюсики с колонок убраны) → всегда в backlog.
+- ПКМ-меню: на задаче (Открыть/Запустить/Переместить/Удалить) и на шапке колонки (Переименовать/Сменить агента/Удалить).
+- Создание колонки: select существующих агентов (`list_agent_personas`) + «+ Новый агент» → `create_agent_persona` пишет плейсхолдер `.cvh/agents/<role>.md`.
+- Проводник разума: стадии строятся из колонок (уникальные persona по порядку), .md грузится через `read_cortex_file`, отсутствие → плейсхолдер + «Создать шаблон» (`save_cortex_file`). Моки только как fallback.
+- Слово `artisan` вычищено везде (дефолт персоны `developer`).
 
-### 1.4. Выбор проекта и структура каталогов `.cvh`
-- **Кнопка «Открыть папку»:** вызывает нативный диалог выбора папки (IPC `select_project_folder` / `choose_project_folder` + фоллбэк на фронтенде).
-- **Инициализация `.cvh` (Scaffold):** в соответствии с требованием пользователя создаётся **исключительно пустая структура каталогов** без шаблонных ролей:
-  - `.cvh/`
-  - `.cvh/agents/` (пустая папка, роли настраиваются вручную)
-  - `.cvh/worktrees/` (пустая папка для git-ворктри)
-  - `.cvh/skills/` (пустая папка под скиллы)
-  - `.cvh/settings/` (пустая папка под настройки)
-- **IPC команды переключения:** `set_active_project`, `set_project_root`, `list_projects`.
-- **Глобальный реестр проектов:** `~/.cvh/registry.json`.
+### 1.5. Лента чата и карточки
+- «Ответы агента» скрываемы (свёрнуты по умолчанию, Markdown только при раскрытии).
+- Умный автоскролл (только если внизу, иначе кнопка «↓ К новому»).
+- Thinking: бейдж «размышление...» убран, живой таймер в шапке thinking-блока.
+- TPS морозится на финише (`finalTps`), сброс на `turn_start`.
+- «Кеш % · TPS» всегда видны строкой справа от кольца контекста (из ховера убраны).
+- Markdown: GFM-таблицы (терпимые к битым строкам), `---`→`<hr>`, `####`.
+- Карточка: футер в 2 строки (модель + ветка + время в колонке «в колонке Nм»), персоны нет; бейдж времени тикает каждую секунду; счётчик «Всего задач» в шапке починен по высоте.
+- Кнопка «Запустить агента» убрана из шапки чата (остались инпут «Отправить», пустое состояние, «Повторить запуск»).
+- Плейсхолдер «Агент приступил к работе» удалён.
 
-### 1.5. Безопасность и стабильность бэкенда (Rust)
-- **Защита от Path Traversal:** в `agent.rs` функция `resolve_safe_path` нормализует пути и строго проверяет `starts_with(worktree_dir)`, запрещая выход за пределы ворктри через `..`.
-- **Очистка `active_agents`:** завершившиеся задачи гарантированно удаляются из реестра активных агентов в `commands.rs`.
-- **Тесты:** исправлен импорт `ToolCall` в `compactor.rs` для `#[cfg(test)]`.
-
----
-
-## 2. Инцидент с падением WebView2: Причины и решение
-
-### 2.1. Хронология и факты
-1. Сборка `f27376b` (с флагами `--disable-features=RendererCodeIntegrity --disable-gpu` в `main.rs`) **успешно запустилась у пользователя** на втором мониторе ("все запустилось все ворк"). Профиль `EBWebView` был корректно создан.
-2. При последующей пересборке коммита `cc3ac33` возникла ошибка: файл `canban-voimax-harness.exe` был занят предыдущим работающим процессом (PID 24096).
-3. При попытке принудительно разблокировать файл были завершены все процессы `msedgewebview2.exe` по системе.
-4. В результате:
-   - Первый запуск новой копии выдал `0x800700AA (ERROR_BUSY / "Требуемый ресурс занят")`, так как старый процесс ещё удерживал дескрипторы User Data Folder (`com.voimax.cvh`).
-   - После удаления папки профиля загрузчик WebView2 стал возвращать `0x8000FFFF (E_UNEXPECTED / "Разрушительный сбой")` или `os error 5 (Отказано в доступе)` из-за разорванных IPC пайпов и осиротевших объектов ядра.
-5. **Важно:** Запуски приложения из тестовой песочницы DSH Harness **всегда** падают с `os error 5`, поскольку песочница блокирует создание и открытие именованных пайпов Windows (Named Pipes IPC). Единственным валидным тестом является прямой запуск в интерактивной сессии пользователя (двойной клик по `.exe`).
-
-### 2.2. План действий на завтра:
-1. **Перезагрузить ПК:** перезагрузка очистит все осиротевшие мьютексы и объекты ядра Windows, оставшиеся после принудительного завершения процессов.
-2. **Запустить собранный релизный бинарник двойным кликом:**
-   ```text
-   C:\Users\VibeCode\CanbanVoimaxHarness\src-tauri\target\release\canban-voimax-harness.exe
-   ```
-   На чистой системе окно откроется на втором мониторе со всеми новыми функциями.
-
-### 2.3. Рекомендуемые архитектурные доработки (на завтра)
-1. **Подключить `tauri-plugin-single-instance`:**
-   - Предотвратит краш `0x800700AA`: при случайном повторном клике по `.exe` вторая копия не станет пытаться захватить профиль WebView2, а сфокусирует уже открытое главное окно и тихо завершится.
-2. **Предсоздание UDF с грантом AppContainer:**
-   - В `main.rs` перед вызовом `canban_voimax_harness_lib::run()` на Windows:
-     ```rust
-     if let Ok(local) = std::env::var("LOCALAPPDATA") {
-         let udf = std::path::PathBuf::from(local).join("com.voimax.cvh");
-         let _ = std::fs::create_dir_all(&udf);
-         let _ = std::process::Command::new("icacls")
-             .args([udf.to_str().unwrap(), "/grant", "*S-1-15-2-1:(OI)(CI)F", "/Q"])
-             .output();
-     }
-     ```
-3. **Замена `rfd` на `tauri-plugin-dialog`:**
-   - Исключит зависимость `rfd = "0.15"` и связанные с ней COM STA/OLE предупреждения на Windows.
+### 1.6. Кеш (честный итог)
+- Наша сторона приведена в порядок: детерминированный префикс (сортировка custom tools, frozen breakpoints на system+user вместо прыгающего ephemeral), compactor срабатывает только при `turn>3 && tokens>40k` (раньше каждый терн с 3-го ломал префикс мутацией), парсинг всех форм usage (`cached_tokens`, `cached_content_token_count` и др.), eprintln-логи `CVH [cache]` (prefix_hash до/после) и `CVH [llm_client] usage raw=` на каждый терн.
+- Главная причина нулей — прокси `:8045` (Antigravity-архитектура OpenAI→Gemini): `cache_control` не транслируется, `cachedContentTokenCount` отбрасывается из usage. Если `prefix_hash` стабилен, а `cached_*` в `usage raw=` нет — чинить маппер ответа прокси (`usageMetadata.cachedContentTokenCount → usage.prompt_tokens_details.cached_tokens`). Gemini implicit caching при этом может реально работать (скидка), просто неинструментирован.
+- UDF-грант из прошлой смены: `main.rs` теперь ещё и `icacls *S-1-15-2-1:(OI)(CI)F` на `%LOCALAPPDATA%\com.voimax.cvh` (Windows).
 
 ---
 
-## 3. Инструкция по сборке (Канонический тулчейн)
+## 2. Текущее состояние архитектуры (что теперь правда)
 
-Сборка на машине выполняется **без MSVC IDE** через `llvm-mingw` + сплейсенный WinSDK:
+- **Колонка = агент.** Всё кастомное: добавление/удаление/переименование/DnD-перестановка. `backlog` всегда первая, `ready` всегда последняя (особые: без персоны, неудаляемые, скрыты из матрицы). Нормализация порядка и на фронте, и в `save_pipeline`.
+- **Продвижение:** вердикт-роуты → иначе сосед справа → справа пусто = stay+done. Статус из `terminal/persona`.
+- **Персоны:** `.cvh/agents/<role>.md`, выбор из существующих или создание с плейсхолдером при создании/смене агента колонки. Проводник разума строится из колонок.
+- **Политики тулов:** `effective = global && stage`, канон `.cvh/settings/tool-policy.json` (+миграция legacy `.cvh/tool_policy.json`). Отключённые тулы вырезаются из схемы до LLM + гейт на исполнении.
+- **Системный промпт худой:** только persona + tool instructions (+custom tools из `.cvh/tools`). Корневой `AGENTS.md` и `.agents/skills` больше не шлются модели.
+- **События:** ровно один `agent:finished` за прогон (+фронт-дедуп), `task:moved` отдельно.
+- **Запуск:** приложение живое, PID 80080, лог `/tmp/cvh_app.log`. Последняя проверка: `npm run build` OK, `cargo test` 21/21 OK.
 
-```powershell
-$llvmBin = "C:\Users\Voimax\llvm-mingw-20261006-ucrt-x86_64\bin"
-$sdkDir  = "C:\Users\Voimax\sdk"
-$inc1 = "$sdkDir\win\Include\10.0.26100\um"
-$inc2 = "$sdkDir\win\Include\10.0.26100\shared"
-$inc3 = "$sdkDir\win\Include\10.0.26100\ucrt"
-$inc4 = "$sdkDir\vc\include"
-$isystem = "-isystem $inc1 -isystem $inc2 -isystem $inc3 -isystem $inc4"
+## 3. Как запускать
 
-$env:PATH = "$llvmBin;$env:USERPROFILE\.cargo\bin;$env:PATH"
-$env:LIB  = "$sdkDir\win\Lib\10.0.26100\um\x64;$sdkDir\win\Lib\10.0.26100\ucrt\x64;$sdkDir\vc\lib\x64"
-$env:CC   = "$llvmBin\clang.exe"
-$env:CXX  = "$llvmBin\clang++.exe"
-$env:AR   = "$llvmBin\lib.exe"
-$env:RC   = "$llvmBin\rc.exe"
-$env:CFLAGS   = $isystem
-$env:CXXFLAGS = $isystem
-$env:RUSTFLAGS = "-C linker=rust-lld"
-
-# Сборка релизного бинарника и установщика
-npm run tauri build
+**Linux (эта машина):**
+```bash
+npm run build
+export PATH="$HOME/.cargo/bin:$PATH" && cargo build   # в src-tauri/
+setsid env DISPLAY=:0 ./src-tauri/target/debug/canban-voimax-harness > /tmp/cvh_app.log 2>&1 < /dev/null &
+# workdir ОБЯЗАТЕЛЬНО корень репо! гасить только kill <PID>, НЕ pkill -f (убьёт свой shell)
 ```
+**Windows (домашняя машина):** тулчейн `llvm-mingw + WinSDK` из прошлой смены (см. git-историю HANDOFF: `$llvmBin/clang`, `LIB`, `RUSTFLAGS=-C linker=rust-lld`, `npm run tauri build`). Артефакты: `src-tauri\target\release\canban-voimax-harness.exe`, NSIS-сетап в `bundle\nsis`. После пула с этой сессии — пересобрать release (в коде есть изменения Rust: политики, промоушен, персоны IPC).
 
-Готовые артефакты:
-- **EXE:** `src-tauri\target\release\canban-voimax-harness.exe`
-- **Установщик NSIS:** `src-tauri\target\release\bundle\nsis\CanbanVoimaxHarness_0.1.0_x64-setup.exe`
+## 4. Известно / TODO на дом
 
----
+1. **Прокси `:8045` и кеш** — см. 1.6. Без фикса маппера телеметрия кеша всегда 0.
+2. **Модель многословна**: каждый терн = блок «Ответ агента» (до 25). Повторы одинаковых саммари подряд не схлопываются — кандидат на display-дедуп идентичных соседних output-блоков.
+3. **Остатки `fastTrack`/`customFlow`**: из роутинга выведены, но поля/типы ещё лежат (`types`, маппер прокидывает как данные). Можно удалить следующим заходом.
+4. **`tasks.json`/`pipeline.json`/персоны в `.cvh/` изменены рантаймом** (задачи CVH-001..004, колонки, disables) — это данные, не код; перед коммитом решить что коммитить.
+5. `mockData.ts` (INITIAL_COLUMNS/CORTEX) оставлен только как seed для web-preview.
+6. Дефолтный `pipeline.json`/`default_pipeline_config` на английском vs русские названия в UI — после сброса конфига имена «переведутся»; seed стоит синхронизировать.
+7. `discover_project_root` содержит захардкоженный Windows-путь (`config.rs`) — не трогали.
 
-## 4. Состояние Git перед пушем
+## 5. Git-статус (не закоммичено!)
 
-- **Ветка:** `main`
-- **История коммитов спринта:**
-  - `cc3ac33` fix(commands): remove unused variable warning in set_project_root
-  - `ba7013d` merge(feat/llm-settings): LLM connection settings & workspace project switching IPC commands
-  - `82abc08` feat(llm,project): add LLM connection settings & workspace project switching IPC commands
-  - `c0d1b2d` Merge branch 'feat/board-ux' into main
-  - `c605131` feat(ux): minimalist board, fullscreen task chat, real task loading, and llm settings
-  - `7564c88` feat(ui): complete Russian localization, de-slop and minimalist design
-  - `f27376b` fix(desktop): add WebView2 RendererCodeIntegrity and disable-gpu mitigation flags
-  - `8c5f8d6` feat(desktop): configure second monitor auto-positioning and panic logger
+- Последний коммит `2294135`; сверху **27 изменённых + 2 новых файла** (`ColumnContextMenu.tsx`, `TaskContextMenu.tsx`), дифф ~+2400/−700.
+- Требуется решение: `git add` осознанно (код vs `.cvh/`-данные), коммит, пуш в `origin/main` — чтобы дома продолжить `git pull`.
+- HANDOFF этот файл — тоже незакоммичен, коммитить вместе.

@@ -19,10 +19,11 @@ use tokio::sync::mpsc;
 pub struct Task {
     pub id: String,
     pub title: String,
+    #[serde(default)]
     pub description: String,
-    #[serde(rename = "stageId")]
+    #[serde(rename = "stageId", alias = "stage_id", alias = "columnId")]
     pub stage_id: String,
-    #[serde(rename = "worktreePath", default)]
+    #[serde(rename = "worktreePath", alias = "worktree_path", default)]
     pub worktree_path: Option<String>,
     #[serde(default)]
     pub branch: Option<String>,
@@ -34,9 +35,9 @@ pub struct Task {
     pub status: Option<String>,
     #[serde(default)]
     pub model: Option<String>,
-    #[serde(rename = "createdAt")]
+    #[serde(rename = "createdAt", alias = "created_at", default)]
     pub created_at: i64,
-    #[serde(rename = "updatedAt")]
+    #[serde(rename = "updatedAt", alias = "updated_at", default)]
     pub updated_at: i64,
 }
 
@@ -78,9 +79,13 @@ pub enum AgentEvent {
     Error(String),
 }
 
-/// Zero-Turn Memory Priming: compiles strictly static SystemMessage from Persona, AGENTS.md, Skills, and Tool Instructions.
+/// Zero-Turn Memory Priming: compiles strictly static SystemMessage from the
+/// role Persona (`.cvh/agents/<role>.md` + fallback) and Tool Instructions.
 /// Strictly static System Prompt: Zero dynamic timestamps, zero random UUIDs in the System prompt to prevent cache invalidation.
 /// Dynamic context (task ID, title, description, worktree path) belongs exclusively in the user message.
+/// NOTE: root-level `AGENTS.md` and `.agents/skills` are deliberately NOT
+/// injected here — the model receives only `.cvh` persona + tool instructions
+/// (custom tools themselves still load from `.cvh/tools` via get_all_tools).
 pub async fn compile_primed_system_prompt(
     repo_root: &Path,
     role: &str,
@@ -97,44 +102,7 @@ pub async fn compile_primed_system_prompt(
         sections.push(format!("# Role Persona: {}\nYou are an expert AI agent in {}.", role, role));
     }
 
-    // 2. Project Guidelines & Invariants (AGENTS.md)
-    let agents_md = repo_root.join("AGENTS.md");
-    if agents_md.exists() {
-        if let Ok(agents_text) = tokio::fs::read_to_string(&agents_md).await {
-            sections.push(format!("# Architectural Invariants & Guidelines\n\n{}", agents_text.trim()));
-        }
-    }
-
-    // 3. Skills Repository
-    let skills_dir = repo_root.join(".agents").join("skills");
-    if skills_dir.exists() {
-        let mut skills_summary = Vec::new();
-        if let Ok(mut entries) = tokio::fs::read_dir(&skills_dir).await {
-            let mut entries_vec = Vec::new();
-            while let Ok(Some(entry)) = entries.next_entry().await {
-                entries_vec.push(entry);
-            }
-            // Deterministic sort of skills
-            entries_vec.sort_by_key(|e| e.file_name());
-
-            for entry in entries_vec {
-                if entry.file_type().await.map(|t| t.is_dir()).unwrap_or(false) {
-                    let skill_name = entry.file_name().to_string_lossy().to_string();
-                    let skill_doc = entry.path().join("SKILL.md");
-                    if skill_doc.exists() {
-                        if let Ok(content) = tokio::fs::read_to_string(&skill_doc).await {
-                            skills_summary.push(format!("### Skill `{}`\n{}", skill_name, content.trim()));
-                        }
-                    }
-                }
-            }
-        }
-        if !skills_summary.is_empty() {
-            sections.push(format!("# Active Agent Skills\n\n{}", skills_summary.join("\n\n")));
-        }
-    }
-
-    // 4. Tool Instructions (SWE-bench Industrial Suite)
+    // 2. Tool Instructions (SWE-bench Industrial Suite)
     sections.push(
         "# Scoped Tool Execution Mandate\n\
         You have direct tool access scoped to your isolated worktree. \
@@ -292,7 +260,11 @@ pub async fn load_custom_tools(repo_root: &Path) -> Vec<CustomToolConfig> {
 
 pub async fn get_all_tools(repo_root: &Path) -> Vec<ToolDefinition> {
     let mut tools = get_standard_tools();
-    let custom_tools = load_custom_tools(repo_root).await;
+    let mut custom_tools = load_custom_tools(repo_root).await;
+    // Deterministic order: filesystem read_dir order is OS-dependent.
+    // Sort custom tools by name so merged list is stable (final active list
+    // is additionally sorted alphabetically in run_agent_loop for prefix caching).
+    custom_tools.sort_by(|a, b| a.name.cmp(&b.name));
     for ct in custom_tools {
         tools.push(ToolDefinition::function(
             &ct.name,
@@ -1311,8 +1283,11 @@ where
 
         event_sink(AgentEvent::TurnStart { turn });
 
-        // State-Preserving Context Compactor: evaporate bloated tool outputs >3 turns old
-        if turn > 3 || messages.len() > 8 {
+        // State-Preserving Context Compactor: evaporate bloated tool outputs >3 turns old.
+        // Prefix-cache guard: mutating old tool outputs rewrites the prompt prefix and
+        // invalidates Gemini implicit caching from that byte onward. Fire only on real
+        // need (large estimated context), not on message count, to keep prefix stable.
+        if turn > 3 && compactor::estimate_tokens(&messages) > 40_000 {
             let compaction_res = compactor::compact_conversation(&mut messages, None);
             if compaction_res.saved_chars > 0 {
                 event_sink(AgentEvent::Compacted {
@@ -1323,18 +1298,50 @@ where
             }
         }
 
-        // Anthropic Prompt Caching: Maintain ephemeral cache_control breakpoint on the last stable turn
-        if turn > 1 && messages.len() >= 2 {
-            let last_idx = messages.len() - 1;
-            messages[last_idx].cache_control = Some(crate::llm::CacheControl::ephemeral());
-        }
+        // Prompt-cache breakpoints: frozen on stable anchors (system + initial user,
+        // set once at init). Do NOT retag the last message each turn: for the
+        // OpenAI-compatible Gemini path the proxy strips `cache_control` before
+        // upstream (no cache effect, only request-byte churn), and unbounded
+        // breakpoints exceed the 4-breakpoint budget. New suffix messages stay
+        // untagged so already-sent prefix bytes never change.
+
+        // Cache-debug: hash/len of the exact serialized prefix about to be sent.
+        // No prompt content is logged, only lengths + hash.
+        let (prefix_len, prefix_hash) = {
+            let msg_json = serde_json::to_string(&messages).unwrap_or_default();
+            let tools_json = serde_json::to_string(&active_tools).unwrap_or_default();
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            std::hash::Hash::hash(&msg_json, &mut hasher);
+            std::hash::Hash::hash(&tools_json, &mut hasher);
+            (
+                msg_json.len() + tools_json.len(),
+                std::hash::Hasher::finish(&hasher),
+            )
+        };
+        eprintln!(
+            "CVH [cache] turn={} model={} msgs={} tools={} prefix_len={} prefix_hash={:016x}",
+            turn,
+            config.model,
+            messages.len(),
+            active_tools.len(),
+            prefix_len,
+            prefix_hash
+        );
 
         let req = OpenAIChatRequest {
             model: config.model.clone(),
             messages: messages.clone(),
             temperature: config.temperature,
             stream: true,
-            tools: Some(active_tools.clone()),
+            // Empty active_tools (everything disabled) is a valid case: send
+            // tools=None so the field is omitted from the OpenAI-compatible
+            // payload (stream_openai only sorts Some) and the model answers
+            // with plain text. Sending `"tools":[]` is rejected by some proxies.
+            tools: if active_tools.is_empty() {
+                None
+            } else {
+                Some(active_tools.clone())
+            },
             reasoning_effort: config.reasoning_effort.clone(),
         };
 
@@ -1402,6 +1409,17 @@ where
                     } else {
                         0.0
                     };
+                    eprintln!(
+                        "CVH [cache] turn={} model={} input={} output={} cache_read={} cache_creation={} hit_rate={:.1}% prefix_hash={:016x}",
+                        turn,
+                        config.model,
+                        input_tokens,
+                        output_tokens,
+                        cache_read_tokens,
+                        cache_creation_tokens,
+                        cache_hit_rate,
+                        prefix_hash
+                    );
                     event_sink(AgentEvent::Telemetry {
                         input_tokens,
                         output_tokens,
@@ -1491,4 +1509,64 @@ where
         final_response: final_msg.clone(),
     });
     Ok(final_msg)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_system_prompt_is_lean_cvh_only() {
+        // Regression: only `.cvh` persona + tool instructions reach the model.
+        // Root `AGENTS.md` and `.agents/skills` must NOT be injected even when
+        // present on disk (user mandate: send the model ONLY .cvh + persona).
+        let base =
+            std::path::PathBuf::from("target").join(format!("cvh_prompt_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh").join("agents"))
+            .await
+            .expect("test dirs");
+        tokio::fs::write(
+            base.join(".cvh").join("agents").join("developer.md"),
+            "PERSONA_MARKER_ALPHA",
+        )
+        .await
+        .expect("persona seed");
+        tokio::fs::write(base.join("AGENTS.md"), "AGENTS_MARKER_BETA")
+            .await
+            .expect("agents seed");
+        let skill_dir = base.join(".agents").join("skills").join("demo");
+        tokio::fs::create_dir_all(&skill_dir)
+            .await
+            .expect("skill dirs");
+        tokio::fs::write(skill_dir.join("SKILL.md"), "SKILL_MARKER_GAMMA")
+            .await
+            .expect("skill seed");
+
+        let prompt = compile_primed_system_prompt(&base, "developer")
+            .await
+            .expect("prompt failed");
+
+        assert!(
+            prompt.contains("PERSONA_MARKER_ALPHA"),
+            "persona from .cvh/agents must be present"
+        );
+        assert!(
+            !prompt.contains("AGENTS_MARKER_BETA"),
+            "root AGENTS.md must NOT leak into the system prompt"
+        );
+        assert!(
+            !prompt.contains("SKILL_MARKER_GAMMA"),
+            ".agents/skills must NOT leak into the system prompt"
+        );
+        assert!(
+            !prompt.contains("Active Agent Skills"),
+            "skills section must be gone"
+        );
+        assert!(
+            prompt.contains("Scoped Tool Execution Mandate"),
+            "tool instructions must be kept"
+        );
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
 }

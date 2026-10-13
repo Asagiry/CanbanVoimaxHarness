@@ -1,1 +1,30 @@
-[]
+[
+  {
+    "id": "CVH-002",
+    "title": "testv3",
+    "description": "привет какие тулы тебе доступны?",
+    "stageId": "ready",
+    "worktreePath": "/home/vepishin/Projects/CanbanVoimaxHarness/.cvh/worktrees/cvh-002",
+    "branch": "feat/cvh-002",
+    "verdict": null,
+    "customFlow": null,
+    "status": "idle",
+    "model": "gemini-3.8-flash-high",
+    "createdAt": 1791902461347,
+    "updatedAt": 1791902474668
+  },
+  {
+    "id": "CVH-001",
+    "title": "test",
+    "description": "расскажи какие тулзы тебе доступны в текущем харнесе\n\n[USER]: ты увеен? я просто разработчик этого харнеса и отключил все тулзы кроме одного\n\n[USER]: должен быть доступен только web_fetch ну попробуй вызвать другие тулзы проверим\n\n[USER]: ну прочитай файл какой нибудь на компе и расскажи что там",
+    "stageId": "ready",
+    "worktreePath": "/home/vepishin/Projects/CanbanVoimaxHarness/.cvh/worktrees/cvh-001",
+    "branch": "feat/cvh-001",
+    "verdict": null,
+    "customFlow": null,
+    "status": "idle",
+    "model": "gemini-3.8-flash-high",
+    "createdAt": 1791902461347,
+    "updatedAt": 1791902461347
+  }
+]

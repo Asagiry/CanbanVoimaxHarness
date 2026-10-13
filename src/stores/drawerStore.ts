@@ -32,6 +32,7 @@ interface DrawerState {
   toolExecutions: Record<string, ToolExecution[]>;
   taskTelemetry: Record<string, TaskTelemetry>;
   thinkingStartTime: Record<string, number | null>;
+  finalTps: Record<string, number | null>;
   tokenOverrides: Record<string, number>;
 
   // Actions
@@ -48,6 +49,7 @@ interface DrawerState {
   updateToolExecution: (taskId: string, toolId: string, partial: Partial<ToolExecution>) => void;
   updateTelemetry: (taskId: string, telemetry: Partial<TaskTelemetry>) => void;
   setThinkingStartTime: (taskId: string, time: number | null) => void;
+  setFinalTps: (taskId: string, v: number | null) => void;
   sendSteerMessage: (taskId: string, message: string) => Promise<void>;
   compactTaskContext: (taskId: string) => Promise<{ savedTokens: number; evaporatedCount: number }>;
   clearTaskLogs: (taskId: string) => void;
@@ -64,6 +66,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
   toolExecutions: {},
   taskTelemetry: {},
   thinkingStartTime: {},
+  finalTps: {},
   tokenOverrides: {},
 
   openDrawer: (taskId, initialTab = 'thoughts') => {
@@ -331,6 +334,15 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
     }));
   },
 
+  setFinalTps: (taskId, v) => {
+    set((state) => ({
+      finalTps: {
+        ...state.finalTps,
+        [taskId]: v,
+      },
+    }));
+  },
+
   sendSteerMessage: async (taskId, message) => {
     // 1. Append user steering message into output stream
     get().appendOutput(taskId, message, 'steer');
@@ -419,6 +431,10 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       toolExecutions: {
         ...state.toolExecutions,
         [taskId]: [],
+      },
+      finalTps: {
+        ...state.finalTps,
+        [taskId]: null,
       },
     }));
   },

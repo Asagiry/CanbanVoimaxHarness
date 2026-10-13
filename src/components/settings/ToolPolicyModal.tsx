@@ -14,6 +14,8 @@ export default function ToolPolicyModal() {
   } = useToolPolicyStore();
 
   const { columns } = useBoardStore();
+  // В матрице только агенты: backlog/ready без persona не имеют тул-контекста.
+  const agentColumns = columns.filter((col) => col.persona != null);
   const [activeTab, setActiveTab] = useState<'matrix' | 'global'>('matrix');
 
   if (!isModalOpen) return null;
@@ -28,7 +30,7 @@ export default function ToolPolicyModal() {
               Настройки матрицы инструментов
             </h2>
             <p className="text-[11px] text-[#666666] font-mono mt-0.5">
-              Разграничение прав доступа инструментов по этапам
+              Разграничение прав доступа инструментов по агентам
             </p>
           </div>
           <button
@@ -50,7 +52,7 @@ export default function ToolPolicyModal() {
                 : 'border-transparent text-[#666666] hover:text-[#171717]'
             }`}
           >
-            Матрица этапов
+            Матрица агентов
           </button>
           <button
             onClick={() => setActiveTab('global')}
@@ -73,7 +75,7 @@ export default function ToolPolicyModal() {
                   <tr className="border-b border-[#ebebeb] bg-[#f9f9f9] text-[#666666] text-[10px] uppercase">
                     <th className="py-2.5 px-3 font-medium">Инструмент</th>
                     <th className="py-2.5 px-2 text-right font-medium">Вес</th>
-                    {columns.map((col) => (
+                    {agentColumns.map((col) => (
                       <th key={col.id} className="py-2.5 px-2 text-center font-medium border-l border-[#ebebeb]">
                         <span className="truncate max-w-[80px] block">
                           {col.title}
@@ -103,17 +105,12 @@ export default function ToolPolicyModal() {
                           {tool.tokenWeight}
                         </td>
 
-                        {columns.map((col) => {
+                        {agentColumns.map((col) => {
                           const isAllowed = isToolAllowed(tool.id, col.id);
-                          const isReviewLock = col.id === 'review' && (tool.id === 'edit_file' || tool.id === 'write_file');
 
                           return (
                             <td key={col.id} className="py-2 px-2 text-center border-l border-[#ebebeb]">
-                              {isReviewLock ? (
-                                <span className="text-[10px] text-[#8f8f8f] select-none">
-                                  Блок
-                                </span>
-                              ) : !isGloballyActive ? (
+                              {!isGloballyActive ? (
                                 <span className="text-[10px] text-[#8f8f8f] select-none">
                                   Выкл
                                 </span>

@@ -27,11 +27,17 @@ fn main() {
         eprintln!("{msg}");
     }));
 
-    // WebView2 user-data folder (UDF) resilience: ensure the folder exists.
+    // WebView2 user-data folder (UDF) resilience: ensure the folder exists
+    // and grant AppContainer permissions (*S-1-15-2-1) to avoid 0x8000FFFF/Access Denied.
     #[cfg(target_os = "windows")]
     if let Ok(localappdata) = std::env::var("LOCALAPPDATA") {
         let udf = std::path::PathBuf::from(localappdata).join("com.voimax.cvh");
         let _ = std::fs::create_dir_all(&udf);
+        if let Some(path_str) = udf.to_str() {
+            let _ = std::process::Command::new("icacls")
+                .args([path_str, "/grant", "*S-1-15-2-1:(OI)(CI)F", "/Q"])
+                .output();
+        }
     }
 
     canban_voimax_harness_lib::run();

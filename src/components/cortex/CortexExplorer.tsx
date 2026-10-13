@@ -1,5 +1,6 @@
-import { useState, useId } from 'react';
+import { useState, useId, useEffect } from 'react';
 import { useCortexStore } from '../../stores/cortexStore';
+import { useBoardStore } from '../../stores/boardStore';
 import {
   ChevronDown,
   ChevronRight,
@@ -9,23 +10,37 @@ import {
   Settings,
   Search,
   User,
+  Plus,
 } from 'lucide-react';
 import { CortexAgentFile, CortexAgentStage } from '../../types';
 
 export default function CortexExplorer() {
-  const { stages, activeFile, focusedStageId, toggleStageExpand, openFile } = useCortexStore();
+  const { stages, activeFile, focusedStageId, toggleStageExpand, openFile, personaMissing, createPersonaTemplate } = useCortexStore();
+  const syncStagesFromColumns = useCortexStore((s) => s.syncStagesFromColumns);
+  const { columns } = useBoardStore();
   const [filterQuery, setFilterQuery] = useState('');
-  const [openRulesFolders, setOpenRulesFolders] = useState<Record<string, boolean>>({
-    dev: true,
-    review: true,
-  });
+  const [openRulesFolders, setOpenRulesFolders] = useState<Record<string, boolean>>({});
   const searchInputId = useId();
+
+  // Источник стадий — колонки доски (колонка с persona = агент).
+  // Мок-стадии из стора остаются только как fallback, когда columns пуст.
+  useEffect(() => {
+    syncStagesFromColumns(columns);
+  }, [columns, syncStagesFromColumns]);
 
   const toggleRulesFolder = (stageId: string) => {
     setOpenRulesFolders((prev) => ({
       ...prev,
-      [stageId]: !prev[stageId],
+      [stageId]: !(prev[stageId] ?? true),
     }));
+  };
+
+  const handleOpenFile = (fileId: string) => {
+    void openFile(fileId);
+  };
+
+  const handleCreateTemplate = (fileId: string) => {
+    void createPersonaTemplate(fileId);
   };
 
   const filteredStages = stages.map((stage) => {
@@ -124,8 +139,31 @@ export default function CortexExplorer() {
                       displayName="Роли"
                       isActive={activeFile?.id === personaFile.id}
                       icon={<User className="h-3.5 w-3.5 text-[#666666] shrink-0" />}
-                      onSelect={() => openFile(personaFile.id)}
+                      onSelect={() => handleOpenFile(personaFile.id)}
                     />
+                  )}
+
+                  {/* Персона отсутствует на диске: плейсхолдер + создание шаблона */}
+                  {personaFile && personaMissing[personaFile.id] && (
+                    <div className="px-2 py-1.5 rounded-md border border-dashed border-[#d4d4d4] bg-white space-y-1">
+                      <div className="text-[11px] font-sans text-[#666666]">
+                        Персона не настроена
+                      </div>
+                      <div
+                        className="text-[10px] font-mono text-[#8f8f8f] truncate"
+                        title={personaFile.path}
+                      >
+                        {personaFile.path}
+                      </div>
+                      <button
+                        onClick={() => handleCreateTemplate(personaFile.id)}
+                        className="flex items-center space-x-1 px-2 py-1 rounded-md text-[11px] font-mono bg-[#171717] hover:bg-[#262626] text-white transition cursor-pointer"
+                        title="Создать шаблон персоны"
+                      >
+                        <Plus className="h-3 w-3 shrink-0" />
+                        <span>Создать шаблон</span>
+                      </button>
+                    </div>
                   )}
 
                   {/* 2. Правила пайплайна */}
@@ -153,7 +191,7 @@ export default function CortexExplorer() {
                               displayName={ruleFile.name}
                               isActive={activeFile?.id === ruleFile.id}
                               icon={<FileText className="h-3.5 w-3.5 text-[#666666] shrink-0" />}
-                              onSelect={() => openFile(ruleFile.id)}
+                              onSelect={() => handleOpenFile(ruleFile.id)}
                             />
                           ))}
                         </div>
@@ -168,7 +206,7 @@ export default function CortexExplorer() {
                       displayName="Системные инструкции"
                       isActive={activeFile?.id === settingsFile.id}
                       icon={<Settings className="h-3.5 w-3.5 text-[#666666] shrink-0" />}
-                      onSelect={() => openFile(settingsFile.id)}
+                      onSelect={() => handleOpenFile(settingsFile.id)}
                     />
                   )}
                 </div>

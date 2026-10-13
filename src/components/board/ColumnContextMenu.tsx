@@ -1,0 +1,396 @@
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import type { PipelineColumn, PipelineConfig } from '../../types';
+import { useBoardStore } from '../../stores/boardStore';
+
+interface ColumnContextMenuProps {
+  column: PipelineColumn;
+  x: number;
+  y: number;
+  onClose: () => void;
+  onDeleteColumn?: (columnId: string) => void;
+}
+
+interface AgentPersonaOption {
+  role: string;
+}
+
+const MENU_WIDTH = 264;
+const VIEWPORT_MARGIN = 8;
+const NEW_AGENT_OPTION = '__new__';
+
+// backlog и ready — особые системные колонки: удалить их нельзя.
+const PROTECTED_COLUMN_IDS = new Set(['backlog', 'ready']);
+
+export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColumn }: ColumnContextMenuProps) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ left: x, top: y });
+  const [mode, setMode] = useState<'main' | 'rename' | 'persona'>('main');
+
+  const { columns, setColumns } = useBoardStore();
+  const isProtected = PROTECTED_COLUMN_IDS.has(column.id);
+
+  // Переименование
+  const [draftTitle, setDraftTitle] = useState(column.title);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [renameSaving, setRenameSaving] = useState(false);
+
+  // Смена агента
+  const [personas, setPersonas] = useState<AgentPersonaOption[]>([]);
+  const [usePersonaSelect, setUsePersonaSelect] = useState(false);
+  const [personasLoading, setPersonasLoading] = useState(false);
+  const [selectedPersona, setSelectedPersona] = useState(column.persona ?? '');
+  const [isNewAgentSelected, setIsNewAgentSelected] = useState(false);
+  const [newAgentName, setNewAgentName] = useState('');
+  const [personaError, setPersonaError] = useState<string | null>(null);
+  const [personaSaving, setPersonaSaving] = useState(false);
+
+  // Поджать координаты, чтобы меню не вылезало за край viewport.
+  useLayoutEffect(() => {
+    const el = menuRef.current;
+    if (!el) {
+      setPos({
+        left: Math.min(x, Math.max(VIEWPORT_MARGIN, window.innerWidth - MENU_WIDTH - VIEWPORT_MARGIN)),
+        top: Math.min(y, Math.max(VIEWPORT_MARGIN, window.innerHeight - VIEWPORT_MARGIN)),
+      });
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    let left = x;
+    let top = y;
+    if (left + rect.width > window.innerWidth - VIEWPORT_MARGIN) {
+      left = Math.max(VIEWPORT_MARGIN, window.innerWidth - rect.width - VIEWPORT_MARGIN);
+    }
+    if (top + rect.height > window.innerHeight - VIEWPORT_MARGIN) {
+      top = Math.max(VIEWPORT_MARGIN, window.innerHeight - rect.height - VIEWPORT_MARGIN);
+    }
+    if (left !== x || top !== y) {
+      setPos({ left, top });
+    }
+  }, [x, y, mode]);
+
+  // Вся логика закрытия внутри: клик вне, Esc, скролл/ресайз.
+  useEffect(() => {
+    const handlePointerDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    const handleScroll = () => onClose();
+    const handleResize = () => onClose();
+    const handleContextMenu = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('contextmenu', handleContextMenu);
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('contextmenu', handleContextMenu);
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [onClose]);
+
+  const savePipelineConfig = async (next: PipelineColumn[]): Promise<boolean> => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      let cfg: PipelineConfig | null = null;
+      try {
+        cfg = await invoke<PipelineConfig>('get_pipeline');
+      } catch {
+        cfg = null;
+      }
+      const pipeline: PipelineConfig = {
+        id: cfg?.id ?? 'default-engineering',
+        title: cfg?.title ?? 'Инженерный пайплайн',
+        columns: next,
+      };
+      await invoke('save_pipeline', { pipeline });
+      return true;
+    } catch (err) {
+      console.info('save_pipeline недоступен, изменения колонок откачены:', err);
+      return false;
+    }
+  };
+
+  const handleSaveRename = async () => {
+    const title = draftTitle.trim();
+    if (!title) return;
+    if (title === column.title) {
+      setMode('main');
+      return;
+    }
+    setRenameError(null);
+    setRenameSaving(true);
+    const prev = columns;
+    const next = prev.map((c) => (c.id === column.id ? { ...c, title } : c));
+    setColumns(next);
+    const saved = await savePipelineConfig(next);
+    setRenameSaving(false);
+    if (!saved) {
+      setColumns(prev);
+      setRenameError('Не удалось сохранить. Изменения откачены.');
+      return;
+    }
+    onClose();
+  };
+
+  const loadPersonas = async () => {
+    setPersonasLoading(true);
+    setPersonaError(null);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const list = await invoke<AgentPersonaOption[]>('list_agent_personas');
+      if (Array.isArray(list)) {
+        setPersonas(list);
+        setUsePersonaSelect(true);
+      } else {
+        setUsePersonaSelect(false);
+      }
+    } catch {
+      // IPC недоступен — откат на свободный текстовый ввод.
+      setUsePersonaSelect(false);
+    } finally {
+      setPersonasLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (mode === 'persona') {
+      setSelectedPersona(column.persona ?? '');
+      setIsNewAgentSelected(false);
+      setNewAgentName('');
+      setPersonaError(null);
+      void loadPersonas();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
+  const handleSavePersona = async () => {
+    setPersonaError(null);
+    let personaName: string;
+    if (usePersonaSelect && isNewAgentSelected) {
+      const role = newAgentName.trim();
+      if (!role) {
+        setPersonaError('Укажите имя нового агента.');
+        return;
+      }
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('create_agent_persona', { role });
+      } catch (err) {
+        setPersonaError(err instanceof Error ? err.message : String(err));
+        return;
+      }
+      personaName = role;
+    } else {
+      personaName = selectedPersona.trim();
+    }
+
+    const nextPersona = personaName || null;
+    if (nextPersona === (column.persona ?? null)) {
+      setMode('main');
+      return;
+    }
+
+    setPersonaSaving(true);
+    const prev = columns;
+    const next = prev.map((c) => (c.id === column.id ? { ...c, persona: nextPersona } : c));
+    setColumns(next);
+    const saved = await savePipelineConfig(next);
+    setPersonaSaving(false);
+    if (!saved) {
+      setColumns(prev);
+      setPersonaError('Не удалось сохранить. Изменения откачены.');
+      return;
+    }
+    onClose();
+  };
+
+  const handleDelete = () => {
+    onClose();
+    onDeleteColumn?.(column.id);
+  };
+
+  const selectedKnown = personas.some((p) => p.role === selectedPersona);
+
+  const menu = (
+    <div
+      ref={menuRef}
+      role="menu"
+      className="fixed z-50 rounded-md border border-[#ebebeb] bg-white py-1 font-sans text-xs text-[#171717] shadow-md"
+      style={{ left: pos.left, top: pos.top, width: MENU_WIDTH }}
+      onClick={(e) => e.stopPropagation()}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {mode === 'main' && (
+        <>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setDraftTitle(column.title);
+              setRenameError(null);
+              setMode('rename');
+            }}
+            className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] cursor-pointer"
+          >
+            Переименовать
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => setMode('persona')}
+            className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] cursor-pointer"
+          >
+            Сменить агента
+          </button>
+          <div className="my-1 border-t border-[#ebebeb]" />
+          <button
+            type="button"
+            role="menuitem"
+            disabled={isProtected}
+            title={isProtected ? 'Особые колонки удалить нельзя' : undefined}
+            onClick={handleDelete}
+            className={`w-full px-3 py-1.5 text-left ${
+              isProtected
+                ? 'text-[#8f8f8f] cursor-not-allowed'
+                : 'text-[#b91c1c] hover:bg-[#fef2f2] cursor-pointer'
+            }`}
+          >
+            Удалить
+          </button>
+        </>
+      )}
+
+      {mode === 'rename' && (
+        <div className="px-3 py-2">
+          <div className="text-[#4d4d4d] font-medium mb-1">Новое название</div>
+          <input
+            type="text"
+            autoFocus
+            value={draftTitle}
+            onChange={(e) => setDraftTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void handleSaveRename();
+              }
+            }}
+            className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[#171717] focus:outline-hidden focus:border-[#171717] focus:bg-white transition"
+          />
+          {renameError && (
+            <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
+              {renameError}
+            </div>
+          )}
+          <div className="mt-2 flex items-center justify-end space-x-2">
+            <button
+              type="button"
+              onClick={() => setMode('main')}
+              className="px-2.5 py-1.5 rounded-md bg-white border border-[#ebebeb] hover:bg-[#f4f4f5] transition cursor-pointer"
+            >
+              Отмена
+            </button>
+            <button
+              type="button"
+              disabled={!draftTitle.trim() || renameSaving}
+              onClick={() => void handleSaveRename()}
+              className="px-3 py-1.5 rounded-md bg-[#171717] hover:bg-[#262626] text-white font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-default"
+            >
+              Сохранить
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mode === 'persona' && (
+        <div className="px-3 py-2">
+          <div className="text-[#4d4d4d] font-medium mb-1">Агент колонки</div>
+          <div className="mb-1.5 text-[#8f8f8f]">Текущий: {column.persona ?? 'не назначен'}</div>
+          {usePersonaSelect ? (
+            <select
+              value={isNewAgentSelected ? NEW_AGENT_OPTION : selectedPersona}
+              onChange={(e) => {
+                if (e.target.value === NEW_AGENT_OPTION) {
+                  setIsNewAgentSelected(true);
+                } else {
+                  setIsNewAgentSelected(false);
+                  setSelectedPersona(e.target.value);
+                }
+              }}
+              disabled={personasLoading || personaSaving}
+              className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[#171717] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono transition cursor-pointer"
+            >
+              {selectedPersona && !selectedKnown && (
+                <option value={selectedPersona}>{selectedPersona}</option>
+              )}
+              {personas.map((p) => (
+                <option key={p.role} value={p.role}>
+                  {p.role}
+                </option>
+              ))}
+              <option value={NEW_AGENT_OPTION}>+ Новый агент</option>
+            </select>
+          ) : (
+            <input
+              type="text"
+              autoFocus
+              value={selectedPersona}
+              onChange={(e) => setSelectedPersona(e.target.value)}
+              placeholder={personasLoading ? 'Загрузка агентов...' : 'developer'}
+              className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono transition"
+            />
+          )}
+          {usePersonaSelect && isNewAgentSelected && (
+            <input
+              type="text"
+              autoFocus
+              value={newAgentName}
+              onChange={(e) => setNewAgentName(e.target.value)}
+              placeholder="Имя нового агента"
+              className="mt-1.5 w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono transition"
+            />
+          )}
+          {personaError && (
+            <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
+              {personaError}
+            </div>
+          )}
+          <div className="mt-2 flex items-center justify-end space-x-2">
+            <button
+              type="button"
+              onClick={() => setMode('main')}
+              className="px-2.5 py-1.5 rounded-md bg-white border border-[#ebebeb] hover:bg-[#f4f4f5] transition cursor-pointer"
+            >
+              Назад
+            </button>
+            <button
+              type="button"
+              disabled={personaSaving || personasLoading}
+              onClick={() => void handleSavePersona()}
+              className="px-3 py-1.5 rounded-md bg-[#171717] hover:bg-[#262626] text-white font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-default"
+            >
+              Сохранить
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  return createPortal(menu, document.body);
+}

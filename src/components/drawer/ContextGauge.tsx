@@ -23,6 +23,9 @@ export default function ContextGauge({
     streamEntries,
     toolExecutions,
     tokenOverrides,
+    taskTelemetry,
+    thinkingStartTime,
+    finalTps,
     setTaskTokens,
     evaporateClientToolLogs,
   } = useDrawerStore();
@@ -95,6 +98,30 @@ export default function ContextGauge({
     ? Math.round(totalUsedTokens / 1000)
     : (totalUsedTokens / 1000).toFixed(1);
   const maxTokensK = Math.round(effectiveLimit / 1000);
+
+  // Telemetry: cache hit % + output throughput (TPS) for the current measurement
+  const telemetry = taskTelemetry?.[taskId];
+  const thinkingStart = thinkingStartTime?.[taskId] ?? null;
+
+  const cacheText = telemetry ? `${Math.round(telemetry.cacheHitRate)}%` : '—';
+  const cacheTitle = telemetry
+    ? `Попадания в prompt cache: ${Math.round(telemetry.cacheHitRate)}% (из кеша прочитано ${telemetry.cacheReadTokens.toLocaleString('ru-RU')} из ${(telemetry.inputTokens + telemetry.cacheReadTokens).toLocaleString('ru-RU')} входных токенов терна)`
+    : 'Нет данных телеметрии от модели';
+
+  const elapsedSec = thinkingStart != null ? (Date.now() - thinkingStart) / 1000 : null;
+  const outputTokens = telemetry?.outputTokens ?? 0;
+  const frozenTps = finalTps?.[taskId] ?? null;
+  const liveTps =
+    elapsedSec != null && elapsedSec > 0 && outputTokens > 0 ? outputTokens / elapsedSec : null;
+  // После финиша показываем замороженное значение, чтобы TPS не «таял»
+  const tpsValue = frozenTps != null ? frozenTps : liveTps;
+  const tpsText = tpsValue != null ? tpsValue.toFixed(1) : '—';
+  const tpsTitle =
+    frozenTps != null
+      ? `Скорость генерации на финише: ${outputTokens.toLocaleString('ru-RU')} токенов вывода (${frozenTps.toFixed(1)} TPS, замер остановлен)`
+      : tpsValue != null && elapsedSec != null
+        ? `Скорость генерации: ${outputTokens.toLocaleString('ru-RU')} токенов вывода за ${elapsedSec.toFixed(1)} с (замер от начала терна)`
+        : 'Нет данных для расчёта скорости генерации';
 
   // SVG circular gauge geometry (diameter 28px)
   const radius = 10;
@@ -186,7 +213,7 @@ export default function ContextGauge({
       {/* Compact Circular Ring Trigger (28px) */}
       <div
         className="relative w-7 h-7 flex items-center justify-center cursor-pointer select-none rounded-full hover:ring-2 hover:ring-[#ebebeb] transition"
-        title={`Контекст: ${percent}% (~${usedTokensK}K / ${maxTokensK}K)`}
+        title={`Контекст: ${percent}% (~${usedTokensK}K / ${maxTokensK}K) · Кеш: ${cacheText} · TPS: ${tpsText}`}
       >
         <svg className="w-7 h-7 -rotate-90 transform" viewBox="0 0 28 28">
           {/* Track circle */}
@@ -216,6 +243,13 @@ export default function ContextGauge({
           {percent}%
         </span>
       </div>
+
+      {/* Всегда видимые Кеш/TPS справа от кольца */}
+      <span className="ml-1.5 font-mono text-[10px] text-[#666666] tabular-nums whitespace-nowrap">
+        <span title={cacheTitle}>Кеш {cacheText}</span>
+        <span> · </span>
+        <span title={tpsTitle}>{tpsText} TPS</span>
+      </span>
 
       {/* Floating Hover Card (Vercel / ChatGPT Aesthetic) */}
       <div className="absolute right-0 top-full mt-2 z-50 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-all duration-150 ease-out pointer-events-auto">

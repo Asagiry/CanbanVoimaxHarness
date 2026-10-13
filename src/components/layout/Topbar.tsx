@@ -2,16 +2,19 @@ import { useRef, useId } from 'react';
 import { useProjectStore } from '../../stores/projectStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useToolPolicyStore } from '../../stores/toolPolicyStore';
 import {
   FolderOpen,
   Search,
   Settings,
+  Wrench,
 } from 'lucide-react';
 
 export default function Topbar() {
   const { activeProject, availableProjects, switchProject, openFolder } = useProjectStore();
   const { searchQuery, setSearchQuery, loadTasks } = useBoardStore();
   const { openSettings } = useSettingsStore();
+  const { openModal: openToolPolicyModal } = useToolPolicyStore();
   const searchInputId = useId();
   const folderInputRef = useRef<HTMLInputElement>(null);
 
@@ -112,6 +115,13 @@ export default function Topbar() {
 
       {/* Right: Only Settings Icon */}
       <div className="flex items-center space-x-1.5">
+        <button
+          onClick={openToolPolicyModal}
+          className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] border border-[#ebebeb] text-[#666666] hover:text-[#171717] transition cursor-pointer"
+          title="Матрица инструментов — доступ тулов по агентам"
+        >
+          <Wrench className="h-3.5 w-3.5" />
+        </button>
         <button
           onClick={openSettings}
           className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] border border-[#ebebeb] text-[#666666] hover:text-[#171717] transition cursor-pointer"

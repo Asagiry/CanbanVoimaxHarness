@@ -53,6 +53,105 @@ pub fn filter_active_tools(
     filtered
 }
 
+/// Robust usage extractors: different OpenAI-compatible proxies report cache
+/// telemetry under different keys (OpenAI `prompt_tokens_details.cached_tokens`,
+/// Responses-API `input_tokens_details.cached_tokens`, top-level `cached_tokens`,
+/// Gemini-native `cached_content_token_count`, Anthropic-style
+/// `cache_read_input_tokens`). Try each in order; missing keys yield 0.
+/// Pure functions so prefix/telemetry behaviour is unit-testable.
+pub fn extract_openai_input_tokens(usage: &serde_json::Value) -> u64 {
+    usage
+        .get("prompt_tokens")
+        .and_then(|v| v.as_u64())
+        .or_else(|| usage.get("input_tokens").and_then(|v| v.as_u64()))
+        .unwrap_or(0)
+}
+
+pub fn extract_openai_output_tokens(usage: &serde_json::Value) -> u64 {
+    usage
+        .get("completion_tokens")
+        .and_then(|v| v.as_u64())
+        .or_else(|| usage.get("output_tokens").and_then(|v| v.as_u64()))
+        .unwrap_or(0)
+}
+
+pub fn extract_openai_cache_read(usage: &serde_json::Value) -> u64 {
+    // Canonical OpenAI Chat Completions shape.
+    if let Some(v) = usage
+        .get("prompt_tokens_details")
+        .and_then(|d| d.get("cached_tokens"))
+        .and_then(|v| v.as_u64())
+    {
+        return v;
+    }
+    // Responses-API shape.
+    if let Some(v) = usage
+        .get("input_tokens_details")
+        .and_then(|d| d.get("cached_tokens"))
+        .and_then(|v| v.as_u64())
+    {
+        return v;
+    }
+    // Gemini-native passthrough shapes (in case a proxy forwards them verbatim).
+    if let Some(v) = usage
+        .get("cached_content_token_count")
+        .and_then(|v| v.as_u64())
+    {
+        return v;
+    }
+    if let Some(v) = usage
+        .get("cache_tokens_details")
+        .and_then(|d| d.get("cached_content_token_count"))
+        .and_then(|v| v.as_u64())
+    {
+        return v;
+    }
+    // Anthropic-style / generic fallbacks some proxies emit.
+    if let Some(v) = usage
+        .get("cache_read_input_tokens")
+        .and_then(|v| v.as_u64())
+    {
+        return v;
+    }
+    if let Some(v) = usage
+        .get("prompt_cache_hit_tokens")
+        .and_then(|v| v.as_u64())
+    {
+        return v;
+    }
+    usage
+        .get("cached_tokens")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0)
+}
+
+pub fn extract_openai_cache_creation(usage: &serde_json::Value) -> u64 {
+    if let Some(v) = usage
+        .get("prompt_tokens_details")
+        .and_then(|d| d.get("cache_creation_tokens"))
+        .and_then(|v| v.as_u64())
+    {
+        return v;
+    }
+    if let Some(v) = usage
+        .get("input_tokens_details")
+        .and_then(|d| d.get("cache_write_tokens"))
+        .and_then(|v| v.as_u64())
+    {
+        return v;
+    }
+    if let Some(v) = usage
+        .get("cache_creation_input_tokens")
+        .and_then(|v| v.as_u64())
+    {
+        return v;
+    }
+    usage
+        .get("cache_creation_tokens")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0)
+}
+
 /// Converts ToolDefinitions to Anthropic native tools with alphabetical sorting
 /// and optional ephemeral prompt caching on the final tool.
 pub fn prepare_anthropic_tools(
@@ -176,20 +275,23 @@ impl LlmClient {
                     }
 
                     if let Ok(chunk) = serde_json::from_str::<OpenAIChatChunk>(data) {
-                        // Telemetry / Usage delta if available (e.g. DeepSeek / OpenAI prompt cache hit)
+                        // Telemetry / Usage delta if available (e.g. DeepSeek / OpenAI prompt cache hit).
+                        // Raw usage is logged so a zero cache_read can be attributed to the
+                        // proxy payload (missing cached_tokens) rather than to our parser.
                         if let Some(usage) = chunk.usage {
-                            let input_tokens = usage.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-                            let output_tokens = usage.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-                            let cache_read = usage
-                                .get("prompt_tokens_details")
-                                .and_then(|d| d.get("cached_tokens"))
-                                .and_then(|v| v.as_u64())
-                                .unwrap_or(0);
+                            let input_tokens = extract_openai_input_tokens(&usage);
+                            let output_tokens = extract_openai_output_tokens(&usage);
+                            let cache_read = extract_openai_cache_read(&usage);
+                            let cache_creation = extract_openai_cache_creation(&usage);
+                            eprintln!(
+                                "CVH [llm_client] usage raw={} parsed input={} output={} cache_read={} cache_creation={}",
+                                usage, input_tokens, output_tokens, cache_read, cache_creation
+                            );
                             let _ = tx.send(StreamChunk::Usage {
                                 input_tokens,
                                 output_tokens,
                                 cache_read_tokens: cache_read,
-                                cache_creation_tokens: 0,
+                                cache_creation_tokens: cache_creation,
                             }).await;
                         }
 
@@ -465,5 +567,53 @@ impl LlmClient {
 
         let _ = tx.send(StreamChunk::Done).await;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_openai_cache_read_openai_shape() {
+        let usage = serde_json::json!({
+            "prompt_tokens": 15000,
+            "completion_tokens": 100,
+            "total_tokens": 15100,
+            "prompt_tokens_details": { "cached_tokens": 12000, "audio_tokens": 0 }
+        });
+        assert_eq!(extract_openai_input_tokens(&usage), 15000);
+        assert_eq!(extract_openai_output_tokens(&usage), 100);
+        assert_eq!(extract_openai_cache_read(&usage), 12000);
+    }
+
+    #[test]
+    fn test_extract_openai_cache_read_fallback_shapes() {
+        // Responses-API shape.
+        let responses = serde_json::json!({
+            "input_tokens": 15000,
+            "output_tokens": 100,
+            "input_tokens_details": { "cached_tokens": 9000 }
+        });
+        assert_eq!(extract_openai_input_tokens(&responses), 15000);
+        assert_eq!(extract_openai_output_tokens(&responses), 100);
+        assert_eq!(extract_openai_cache_read(&responses), 9000);
+
+        // Gemini-native passthrough shape.
+        let gemini = serde_json::json!({
+            "prompt_tokens": 15000,
+            "completion_tokens": 100,
+            "cached_content_token_count": 7000
+        });
+        assert_eq!(extract_openai_cache_read(&gemini), 7000);
+
+        // Proxy that drops all cache counters: must parse as 0, not fail.
+        let bare = serde_json::json!({
+            "prompt_tokens": 15000,
+            "completion_tokens": 100,
+            "total_tokens": 15100
+        });
+        assert_eq!(extract_openai_cache_read(&bare), 0);
+        assert_eq!(extract_openai_cache_creation(&bare), 0);
     }
 }

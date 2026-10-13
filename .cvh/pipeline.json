@@ -1,6 +1,7 @@
 {
   "id": "default-engineering",
   "title": "Инженерный пайплайн разработки",
+  "toolPermissions": null,
   "columns": [
     {
       "id": "backlog",
@@ -10,14 +11,14 @@
       "persona": null,
       "contextWindow": 128000,
       "modelOverride": null,
-      "toolPermissions": [
-        "read_file",
-        "glob",
-        "grep",
-        "web_search",
-        "web_fetch"
-      ],
-      "hooks": {}
+      "reasoningEffort": null,
+      "temperature": null,
+      "gatekeeperSensor": null,
+      "allowedTools": null,
+      "hooks": {},
+      "routes": null,
+      "autoRun": null,
+      "terminal": null
     },
     {
       "id": "dev",
@@ -27,64 +28,16 @@
       "persona": "developer",
       "contextWindow": 400000,
       "modelOverride": "gemini-3.8-flash-high",
+      "reasoningEffort": null,
       "temperature": 0.2,
-      "toolPermissions": [
-        "execute_command",
-        "read_file",
-        "edit_file",
-        "write_file",
-        "glob",
-        "grep",
-        "subagent"
-      ],
+      "gatekeeperSensor": null,
+      "allowedTools": null,
       "hooks": {
         "on_enter": ".cvh/hooks/on_enter_dev.bat"
       },
-      "gatekeeperSensor": null
-    },
-    {
-      "id": "review",
-      "title": "Ревью / Контроль",
-      "color": "#a855f7",
-      "icon": "ShieldCheck",
-      "persona": "reviewer",
-      "contextWindow": 200000,
-      "modelOverride": "gemini-3.8-flash-high",
-      "reasoningEffort": "high",
-      "temperature": 0.1,
-      "toolPermissions": [
-        "execute_command",
-        "read_file",
-        "glob",
-        "grep",
-        "subagent"
-      ],
-      "routes": {
-        "on_approved": "retro",
-        "on_approved_with_caveats": "retro",
-        "on_changes_requested": "dev"
-      },
-      "hooks": {}
-    },
-    {
-      "id": "retro",
-      "title": "Ретроспектива",
-      "color": "#06b6d4",
-      "icon": "Sparkles",
-      "persona": "retro",
-      "contextWindow": 150000,
-      "modelOverride": "gemini-3.8-flash-high",
-      "temperature": 0.2,
-      "toolPermissions": [
-        "read_file",
-        "edit_file",
-        "glob",
-        "grep"
-      ],
-      "routes": {
-        "on_finished": "ready"
-      },
-      "hooks": {}
+      "routes": null,
+      "autoRun": null,
+      "terminal": null
     },
     {
       "id": "ready",
@@ -94,15 +47,16 @@
       "persona": null,
       "contextWindow": 64000,
       "modelOverride": null,
-      "toolPermissions": [
-        "read_file",
-        "glob",
-        "grep"
-      ],
+      "reasoningEffort": null,
+      "temperature": null,
+      "gatekeeperSensor": "cargo check",
+      "allowedTools": null,
       "hooks": {
         "on_enter": ".cvh/hooks/on_finish_done.bat"
       },
-      "gatekeeperSensor": "cargo check"
+      "routes": null,
+      "autoRun": null,
+      "terminal": null
     }
   ]
 }

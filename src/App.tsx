@@ -11,15 +11,17 @@ import { useProjectStore } from './stores/projectStore';
 import { useDrawerStore } from './stores/drawerStore';
 
 export default function App() {
-  const { loadTasks } = useBoardStore();
+  const { loadColumns, loadTasks } = useBoardStore();
   const { loadProjects } = useProjectStore();
-  const { appendThought, appendOutput, addToolExecution, updateToolExecution } = useDrawerStore();
+  const { appendThought, appendOutput, addToolExecution, updateToolExecution, updateTelemetry, setThinkingStartTime } = useDrawerStore();
 
   useEffect(() => {
-    loadProjects().then(() => {
-      loadTasks();
+    loadProjects().then(async () => {
+      // Columns first: task mapping (columnId fallback, persona, status) resolves via columns
+      await loadColumns();
+      await loadTasks();
     });
-  }, [loadProjects, loadTasks]);
+  }, [loadProjects, loadColumns, loadTasks]);
 
   useEffect(() => {
     let unlisteners: (() => void)[] = [];
@@ -79,12 +81,68 @@ export default function App() {
         });
         unlisteners.push(uToolResult);
 
+        const uTelemetry = await listen<any>('agent:telemetry', (event) => {
+          const { taskId, inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens, cacheHitRate } = event.payload || {};
+          if (!taskId) return;
+          const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+          updateTelemetry(taskId, {
+            inputTokens: num(inputTokens),
+            outputTokens: num(outputTokens),
+            cacheReadTokens: num(cacheReadTokens),
+            cacheCreationTokens: num(cacheCreationTokens),
+            cacheHitRate: num(cacheHitRate),
+          });
+          // Fallback замера длительности: если turn_start не пришёл, стартуем от первого события терна
+          const drawerState = useDrawerStore.getState();
+          if (drawerState.thinkingStartTime[taskId] == null) {
+            drawerState.setThinkingStartTime(taskId, Date.now());
+          }
+        });
+        unlisteners.push(uTelemetry);
+
+        const uTurnStart = await listen<any>('agent:turn_start', (event) => {
+          const { taskId } = event.payload || {};
+          if (taskId) {
+            useDrawerStore.getState().setFinalTps(taskId, null);
+            setThinkingStartTime(taskId, Date.now());
+          }
+        });
+        unlisteners.push(uTurnStart);
+
         const u4 = await listen<any>('task:moved', () => {
           loadTasks();
         });
         unlisteners.push(u4);
 
-        const u5 = await listen<any>('agent:finished', () => {
+        const u5 = await listen<any>('agent:finished', (event) => {
+          const { taskId, response } = event.payload || {};
+          if (taskId) {
+            // Заморозка TPS на финише: те же источники, что в ContextGauge
+            try {
+              const st = useDrawerStore.getState();
+              const tele = st.taskTelemetry[taskId];
+              const start = st.thinkingStartTime[taskId];
+              if (tele && start != null) {
+                const elapsedSec = (Date.now() - start) / 1000;
+                const outTokens = tele.outputTokens ?? 0;
+                if (elapsedSec > 0 && outTokens > 0) {
+                  st.setFinalTps(taskId, outTokens / elapsedSec);
+                }
+              }
+            } catch {
+              // ignore
+            }
+            // Дедуп финала: текст уже пристримился токенами agent:output,
+            // а бэкенд может прислать agent:finished дважды
+            if (response && response.length > 0) {
+              const feed = useDrawerStore.getState().activityFeed[taskId];
+              const last = feed?.[feed.length - 1];
+              const lastContent = last?.content || '';
+              if (!lastContent.endsWith(response)) {
+                appendOutput(taskId, response, 'output');
+              }
+            }
+          }
           loadTasks();
         });
         unlisteners.push(u5);
@@ -94,7 +152,8 @@ export default function App() {
         });
         unlisteners.push(u6);
 
-        const uProj = await listen<any>('project:changed', () => {
+        const uProj = await listen<any>('project:changed', async () => {
+          await loadColumns();
           loadTasks();
         });
         unlisteners.push(uProj);
@@ -108,7 +167,7 @@ export default function App() {
     return () => {
       unlisteners.forEach((u) => u());
     };
-  }, [loadTasks, appendThought, appendOutput, addToolExecution, updateToolExecution]);
+  }, [loadColumns, loadTasks, appendThought, appendOutput, addToolExecution, updateToolExecution, updateTelemetry, setThinkingStartTime]);
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#fafafa] text-[#171717] select-none">
