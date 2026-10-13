@@ -9,9 +9,7 @@ import {
   X,
   GitBranch,
   FolderGit2,
-  Terminal,
   Brain,
-  MessageSquare,
   Send,
   Play,
   Square,
@@ -218,12 +216,55 @@ export default function AgentConsoleDrawer() {
   const { settings } = useSettingsStore();
 
   const [interactiveInput, setInteractiveInput] = useState('');
-  const [filter, setFilter] = useState<'all' | 'thoughts' | 'output' | 'tools'>('all');
+  const [runError, setRunError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const promptInputId = useId();
 
   const task = tasks.find((t) => t.id === activeTaskId);
   const column = columns.find((c) => c.id === task?.columnId);
+
+  // Reset error when switching tasks
+  useEffect(() => {
+    setRunError(null);
+  }, [activeTaskId]);
+
+  // Listen to agent error & status events from Tauri backend
+  useEffect(() => {
+    if (!task?.id) return;
+    let unlistenStatus: (() => void) | undefined;
+    let unlistenError: (() => void) | undefined;
+
+    const setupErrorListeners = async () => {
+      try {
+        const { listen } = await import('@tauri-apps/api/event');
+        unlistenStatus = await listen<{ taskId?: string; status?: string }>('agent:status', (event) => {
+          if (event.payload?.taskId === task.id) {
+            if (event.payload.status === 'error') {
+              setRunError((prev) => prev || 'Агент сообщил об ошибке выполнения');
+              updateTask(task.id, { status: 'idle', isTimerRunning: false });
+            } else if (event.payload.status === 'running') {
+              setRunError(null);
+            }
+          }
+        });
+
+        unlistenError = await listen<{ taskId?: string; error?: string }>('agent:error', (event) => {
+          if (event.payload && (!event.payload.taskId || event.payload.taskId === task.id)) {
+            setRunError(event.payload.error || 'Произошла непредвиденная ошибка агента');
+            updateTask(task.id, { status: 'idle', isTimerRunning: false });
+          }
+        });
+      } catch {
+        // web mode fallback
+      }
+    };
+
+    setupErrorListeners();
+    return () => {
+      if (unlistenStatus) unlistenStatus();
+      if (unlistenError) unlistenError();
+    };
+  }, [task?.id, updateTask]);
 
   // Esc key listener to close drawer
   useEffect(() => {
@@ -277,21 +318,12 @@ export default function AgentConsoleDrawer() {
     return merged;
   }, [task, activityFeed, streamEntries, toolExecutions]);
 
-  // Filtered Activity List
-  const filteredActivities = useMemo(() => {
-    if (filter === 'all') return unifiedActivities;
-    if (filter === 'thoughts') return unifiedActivities.filter((a) => a.type === 'thought');
-    if (filter === 'output') return unifiedActivities.filter((a) => a.type === 'output' || a.type === 'user' || a.type === 'steer');
-    if (filter === 'tools') return unifiedActivities.filter((a) => a.type === 'tool');
-    return unifiedActivities;
-  }, [unifiedActivities, filter]);
-
   // Auto-scroll on new entries
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [filteredActivities]);
+  }, [unifiedActivities]);
 
   if (!isOpen || !task) return null;
 
@@ -299,12 +331,16 @@ export default function AgentConsoleDrawer() {
   const effectiveModel = task.model || settings.model || 'gemini-3.8-flash-high';
 
   const handleRunAgent = async () => {
+    setRunError(null);
     updateTask(task.id, { status: 'running', isTimerRunning: true });
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('run_agent', { taskId: task.id });
-    } catch (err) {
+    } catch (err: any) {
       console.info('run_agent invoke failed or web mode:', err);
+      const errMsg = err?.message || (typeof err === 'string' ? err : 'Не удалось запустить агента');
+      setRunError(errMsg);
+      updateTask(task.id, { status: 'idle', isTimerRunning: false });
     }
   };
 
@@ -324,6 +360,7 @@ export default function AgentConsoleDrawer() {
     if (!trimmed) return;
 
     setInteractiveInput('');
+    setRunError(null);
 
     // Append user steer message into feed immediately
     appendOutput(task.id, trimmed, 'user');
@@ -336,8 +373,13 @@ export default function AgentConsoleDrawer() {
         updateTask(task.id, { status: 'running', isTimerRunning: true });
         await invoke('run_agent', { taskId: task.id });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.info('steer_agent / run_agent invoke failed or web mode:', err);
+      const errMsg = err?.message || (typeof err === 'string' ? err : 'Ошибка отправки команды агенту');
+      setRunError(errMsg);
+      if (!isRunning) {
+        updateTask(task.id, { status: 'idle', isTimerRunning: false });
+      }
     }
   };
 
@@ -445,64 +487,40 @@ export default function AgentConsoleDrawer() {
               </div>
             )}
 
-            <div className="w-64">
-              <ContextGauge taskId={task.id} />
-            </div>
+            <ContextGauge taskId={task.id} />
           </div>
         </div>
       </header>
 
-      {/* Quick Filter Bar */}
-      <div className="flex items-center justify-between border-b border-[#ebebeb] bg-[#fafafa] px-4 py-1.5 text-xs font-mono select-none">
-        <div className="flex items-center space-x-1.5">
-          <span className="text-[#8f8f8f] mr-1 text-[11px]">Лента:</span>
-          <button
-            onClick={() => setFilter('all')}
-            className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
-              filter === 'all'
-                ? 'bg-white border border-[#ebebeb] text-[#171717] font-semibold shadow-xs'
-                : 'text-[#666666] hover:text-[#171717]'
-            }`}
-          >
-            Все события ({unifiedActivities.length})
-          </button>
-          <button
-            onClick={() => setFilter('thoughts')}
-            className={`flex items-center space-x-1 px-2.5 py-1 rounded-md transition cursor-pointer ${
-              filter === 'thoughts'
-                ? 'bg-white border border-[#ebebeb] text-[#171717] font-semibold shadow-xs'
-                : 'text-[#666666] hover:text-[#171717]'
-            }`}
-          >
-            <Brain className="h-3 w-3" />
-            <span>Мысли</span>
-          </button>
-          <button
-            onClick={() => setFilter('output')}
-            className={`flex items-center space-x-1 px-2.5 py-1 rounded-md transition cursor-pointer ${
-              filter === 'output'
-                ? 'bg-white border border-[#ebebeb] text-[#171717] font-semibold shadow-xs'
-                : 'text-[#666666] hover:text-[#171717]'
-            }`}
-          >
-            <MessageSquare className="h-3 w-3" />
-            <span>Вывод / Чат</span>
-          </button>
-          <button
-            onClick={() => setFilter('tools')}
-            className={`flex items-center space-x-1 px-2.5 py-1 rounded-md transition cursor-pointer ${
-              filter === 'tools'
-                ? 'bg-white border border-[#ebebeb] text-[#171717] font-semibold shadow-xs'
-                : 'text-[#666666] hover:text-[#171717]'
-            }`}
-          >
-            <Terminal className="h-3 w-3" />
-            <span>Инструменты</span>
-          </button>
+      {/* Warning Banner on agent run error */}
+      {runError && (
+        <div className="mx-4 md:mx-6 mt-3 px-3.5 py-2.5 rounded-lg bg-[#fef2f2] border border-[#fecaca] text-[#991b1b] flex items-center justify-between shadow-xs shrink-0 animate-in fade-in duration-150">
+          <div className="flex items-center space-x-2.5 min-w-0 mr-3">
+            <AlertTriangle className="h-4 w-4 text-[#dc2626] shrink-0" />
+            <div className="text-xs font-medium font-sans truncate">
+              <span className="font-semibold">Ошибка выполнения:</span> {runError}
+            </div>
+          </div>
+          <div className="flex items-center space-x-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleRunAgent}
+              className="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-[#dc2626] hover:bg-[#b91c1c] text-white text-xs font-medium transition cursor-pointer shadow-xs active:scale-[0.98]"
+            >
+              <Play className="h-3 w-3 fill-current" />
+              <span>Повторить запуск</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setRunError(null)}
+              className="p-1 text-[#dc2626] hover:text-[#991b1b] rounded transition cursor-pointer"
+              title="Закрыть уведомление"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
-
-        <span className="text-[11px] text-[#8f8f8f]">DSH & Claude Code Feed</span>
-      </div>
+      )}
 
       {/* Main Unified Activity Feed Area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 bg-[#fafafa]">
@@ -526,7 +544,7 @@ export default function AgentConsoleDrawer() {
           </div>
 
           {/* Unified Chronological Activity Stream */}
-          {filteredActivities.map((activity) => {
+          {unifiedActivities.map((activity) => {
             // b) Live Streaming Thinking Block
             if (activity.type === 'thought') {
               return (
@@ -626,7 +644,7 @@ export default function AgentConsoleDrawer() {
           })}
 
           {/* Empty state when no activity yet */}
-          {filteredActivities.length === 0 && (
+          {unifiedActivities.length === 0 && (
             <div className="h-48 flex flex-col items-center justify-center rounded-lg border border-dashed border-[#ebebeb] bg-white text-center p-6">
               <Sparkles className="h-6 w-6 text-[#8f8f8f] mb-2" />
               <p className="text-xs font-medium text-[#171717] mb-1">
