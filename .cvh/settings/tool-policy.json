@@ -1,0 +1,37 @@
+{
+  "globalEnabled": {
+    "write_file": true,
+    "glob": true,
+    "execute_command": true,
+    "web_search": true,
+    "read_file": true,
+    "grep": true,
+    "edit_file": true,
+    "subagent": true,
+    "web_fetch": true
+  },
+  "stageOverrides": {
+    "dev": {
+      "glob": true,
+      "web_search": false,
+      "subagent": true,
+      "read_file": true,
+      "execute_command": true,
+      "edit_file": true,
+      "write_file": true,
+      "grep": true,
+      "web_fetch": true
+    },
+    "review": {
+      "web_search": true,
+      "edit_file": false,
+      "subagent": true,
+      "grep": true,
+      "glob": true,
+      "execute_command": true,
+      "write_file": false,
+      "web_fetch": true,
+      "read_file": true
+    }
+  }
+}

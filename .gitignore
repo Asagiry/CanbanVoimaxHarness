@@ -35,3 +35,4 @@ Thumbs.db
 **/.cvh/llm.json
 llm.json
 *.secret
+.cvh/worktrees/
