@@ -58,6 +58,7 @@ pub fn run() {
             run_agent,
             abort_agent,
             cleanup_task_worktree,
+            get_task_git_diff,
             get_tool_policies,
             save_tool_policies,
             compact_task_context,

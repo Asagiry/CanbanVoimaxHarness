@@ -4,6 +4,7 @@ import { useBoardStore, syncTasksBackend } from '../../stores/boardStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import ToolExecutionCard from './ToolExecutionCard';
 import ContextGauge from './ContextGauge';
+import GitDiffSidebar from './GitDiffSidebar';
 import {
   ArrowDown,
   ArrowLeft,
@@ -23,6 +24,7 @@ import {
   User,
   AlertTriangle,
   Info,
+  GitCompare,
 } from 'lucide-react';
 
 // Lightweight Markdown Renderer for streaming assistant output
@@ -328,6 +330,8 @@ export default function AgentConsoleDrawer() {
   const [expandedOutputs, setExpandedOutputs] = useState<Set<string>>(() => new Set());
   // 2. Умный автоскролл: кнопка «К новому» видна, только если пришли события вне низа.
   const [showNewButton, setShowNewButton] = useState(false);
+  // 3. Состояние панели Git Diff (по умолчанию развёрнута)
+  const [isDiffCollapsed, setIsDiffCollapsed] = useState(false);
   const isFirstBatchRef = useRef(true);
   const nearBottomRef = useRef(true);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -698,6 +702,21 @@ export default function AgentConsoleDrawer() {
               </div>
             )}
 
+            {/* Git Diff Toggle Button */}
+            <button
+              type="button"
+              onClick={() => setIsDiffCollapsed((prev) => !prev)}
+              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-mono border transition cursor-pointer ${
+                !isDiffCollapsed
+                  ? 'bg-[#18181b] text-white border-[#27272a] shadow-xs'
+                  : 'bg-[#f4f4f5] text-[#171717] border-[#ebebeb] hover:bg-[#e4e4e7]'
+              }`}
+              title={isDiffCollapsed ? 'Развернуть Git Diff панель' : 'Скрыть Git Diff панель'}
+            >
+              <GitCompare className="h-3.5 w-3.5" />
+              <span>Git Diff</span>
+            </button>
+
             <ContextGauge taskId={task.id} />
           </div>
         </div>
@@ -733,8 +752,12 @@ export default function AgentConsoleDrawer() {
         </div>
       )}
 
-      {/* Main Unified Activity Feed Area */}
-      <div className="relative flex-1 flex flex-col min-h-0 bg-[#fafafa]">
+      {/* Two-Column Layout: Left (Feed + Steer Bar) | Right (GitDiffSidebar) */}
+      <div className="flex-1 flex flex-row min-h-0 min-w-0 overflow-hidden">
+        {/* Left Column: Activity Feed + Steer Bar */}
+        <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa]">
+          {/* Main Unified Activity Feed Area */}
+          <div className="relative flex-1 flex flex-col min-h-0 bg-[#fafafa]">
         <div ref={scrollRef} onScroll={handleFeedScroll} className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="max-w-4xl mx-auto space-y-3.5">
           {/* a) Task Goal / User Objective Card */}
@@ -916,5 +939,14 @@ export default function AgentConsoleDrawer() {
         </div>
       </footer>
     </div>
+
+    {/* Right Column: Git Diff Interactive Sidebar */}
+    <GitDiffSidebar
+      taskId={task.id}
+      isCollapsed={isDiffCollapsed}
+      onToggleCollapse={() => setIsDiffCollapsed((prev) => !prev)}
+    />
+  </div>
+</div>
   );
 }

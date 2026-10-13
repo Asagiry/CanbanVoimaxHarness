@@ -133,6 +133,23 @@ export interface CompactionReport {
   saved_tokens: number;
 }
 
+export interface DiffFile {
+  path: string;
+  status: 'M' | 'A' | 'D' | string;
+  additions: number;
+  deletions: number;
+  patch: string;
+}
+
+export interface TaskGitDiff {
+  files: DiffFile[];
+  totalAdditions: number;
+  totalDeletions: number;
+  total_additions?: number;
+  total_deletions?: number;
+  branch: string;
+}
+
 export interface LlmSettings {
   provider: string;
   apiKey: string;
