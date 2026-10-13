@@ -33,6 +33,8 @@ pub struct Task {
     pub custom_flow: Option<Vec<String>>,
     #[serde(default)]
     pub status: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
     #[serde(rename = "createdAt")]
     pub created_at: i64,
     #[serde(rename = "updatedAt")]
@@ -280,6 +282,12 @@ pub async fn list_tasks(state: State<'_, AppState>) -> Result<Vec<Task>, String>
 }
 
 #[tauri::command]
+pub async fn save_tasks(tasks: Vec<Task>, state: State<'_, AppState>) -> Result<(), String> {
+    let root = state.get_root();
+    save_tasks_to_disk(&root, &tasks).await
+}
+
+#[tauri::command]
 pub async fn create_task(
     title: String,
     description: String,
@@ -313,6 +321,7 @@ pub async fn create_task(
         verdict: None,
         custom_flow: None,
         status: None,
+        model: None,
         created_at: now,
         updated_at: now,
     };
@@ -472,12 +481,29 @@ pub async fn run_agent(
         .await
         .unwrap_or_default();
 
-    // LLM settings take absolute precedence
-    let model = if !llm_settings.model.trim().is_empty() {
-        llm_settings.model.trim().to_string()
-    } else if let Some(ref m) = col.model_override {
+    // Check task.model first; only fall back to llm_settings.model or project default if None or empty
+    let model = if let Some(ref m) = task.model {
         if !m.trim().is_empty() {
             m.trim().to_string()
+        } else if !llm_settings.model.trim().is_empty() {
+            llm_settings.model.trim().to_string()
+        } else if let Some(ref col_m) = col.model_override {
+            if !col_m.trim().is_empty() {
+                col_m.trim().to_string()
+            } else {
+                proj_cfg.default_model.clone().unwrap_or_else(|| "gemini-3.8-flash-high".to_string())
+            }
+        } else {
+            proj_cfg
+                .default_model
+                .clone()
+                .unwrap_or_else(|| "gemini-3.8-flash-high".to_string())
+        }
+    } else if !llm_settings.model.trim().is_empty() {
+        llm_settings.model.trim().to_string()
+    } else if let Some(ref col_m) = col.model_override {
+        if !col_m.trim().is_empty() {
+            col_m.trim().to_string()
         } else {
             proj_cfg.default_model.clone().unwrap_or_else(|| "gemini-3.8-flash-high".to_string())
         }
@@ -505,11 +531,58 @@ pub async fn run_agent(
 
     let temperature = llm_settings.temperature.or(col.temperature);
 
-    let worktree_dir = task
-        .worktree_path
-        .as_deref()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| root.clone());
+    // If task.worktree_path is None or doesn't exist on disk, create or scaffold cleanly
+    let worktree_dir = {
+        let path_exists = if let Some(ref p) = task.worktree_path {
+            if p.trim().is_empty() {
+                false
+            } else {
+                let pb = Path::new(p);
+                if pb.is_absolute() {
+                    pb.exists()
+                } else {
+                    root.join(pb).exists()
+                }
+            }
+        } else {
+            false
+        };
+
+        if path_exists {
+            let p = task.worktree_path.as_ref().unwrap();
+            let pb = Path::new(p);
+            if pb.is_absolute() {
+                pb.to_path_buf()
+            } else {
+                root.join(pb)
+            }
+        } else {
+            let task_slug = task.id.to_lowercase();
+            match create_worktree(&root, &task_slug, "main").await {
+                Ok(wt_abs) => {
+                    let wt_str = wt_abs.to_string_lossy().to_string();
+                    let branch_name = format!("feat/{}", task_slug);
+                    let mut all_tasks = load_tasks_from_disk(&root).await;
+                    if let Some(t) = all_tasks.iter_mut().find(|t| t.id == task_id) {
+                        t.worktree_path = Some(wt_str.clone());
+                        if t.branch.is_none() {
+                            t.branch = Some(branch_name);
+                        }
+                        t.updated_at = Utc::now().timestamp_millis();
+                        let _ = save_tasks_to_disk(&root, &all_tasks).await;
+                    }
+                    wt_abs
+                }
+                Err(e) => {
+                    eprintln!(
+                        "Worktree creation error for {}: {}, falling back to repo root",
+                        task_id, e
+                    );
+                    root.clone()
+                }
+            }
+        }
+    };
 
     let abort_flag = Arc::new(AtomicBool::new(false));
 
@@ -520,6 +593,16 @@ pub async fn run_agent(
             .lock()
             .map_err(|_| "Failed to lock active agents".to_string())?;
         map.insert(task_id.clone(), Arc::clone(&abort_flag));
+    }
+
+    // Persist status "running" to tasks.json
+    {
+        let mut all_tasks = load_tasks_from_disk(&root).await;
+        if let Some(t) = all_tasks.iter_mut().find(|t| t.id == task_id) {
+            t.status = Some("running".to_string());
+            t.updated_at = Utc::now().timestamp_millis();
+            let _ = save_tasks_to_disk(&root, &all_tasks).await;
+        }
     }
 
     // Emit live status: running
@@ -555,14 +638,14 @@ pub async fn run_agent(
         let event_sink = move |event: AgentEvent| {
             match event {
                 AgentEvent::Token(token) => {
-                    let _ = app_inner.emit(
-                        "agent:token",
-                        serde_json::json!({ "taskId": tid_inner, "token": &token }),
-                    );
-                    let _ = app_inner.emit(
-                        "agent:output",
-                        serde_json::json!({ "taskId": tid_inner, "output": &token, "content": &token, "token": &token }),
-                    );
+                    let payload = serde_json::json!({
+                        "taskId": tid_inner,
+                        "output": &token,
+                        "content": &token,
+                        "token": &token
+                    });
+                    let _ = app_inner.emit("agent:token", &payload);
+                    let _ = app_inner.emit("agent:output", &payload);
                 }
                 AgentEvent::Thought(thought) => {
                     let _ = app_inner.emit(
@@ -625,7 +708,11 @@ pub async fn run_agent(
                 AgentEvent::Finished { final_response } => {
                     let _ = app_inner.emit(
                         "agent:finished",
-                        serde_json::json!({ "taskId": tid_inner, "response": final_response }),
+                        serde_json::json!({
+                            "taskId": tid_inner,
+                            "status": "finished",
+                            "response": final_response
+                        }),
                     );
                 }
                 AgentEvent::Aborted => {
@@ -779,6 +866,7 @@ pub async fn run_agent(
                             "agent:finished",
                             serde_json::json!({
                                 "taskId": tid,
+                                "status": "finished",
                                 "response": final_response,
                                 "stageId": new_stage,
                                 "task": &updated_task,
@@ -792,6 +880,24 @@ pub async fn run_agent(
                                 "fromStage": old_stage,
                                 "toStage": new_stage,
                                 "stageId": new_stage,
+                                "status": updated_task.status,
+                                "task": updated_task,
+                            }),
+                        );
+                    } else {
+                        if tasks[task_idx].stage_id == "ready" {
+                            tasks[task_idx].status = Some("done".to_string());
+                        }
+                        tasks[task_idx].updated_at = Utc::now().timestamp_millis();
+                        let updated_task = tasks[task_idx].clone();
+                        let _ = save_tasks_to_disk(&root_task, &tasks).await;
+                        let _ = app.emit(
+                            "task:moved",
+                            serde_json::json!({
+                                "taskId": tid,
+                                "fromStage": old_stage.clone(),
+                                "toStage": old_stage,
+                                "stageId": tasks[task_idx].stage_id,
                                 "status": updated_task.status,
                                 "task": updated_task,
                             }),
@@ -982,6 +1088,39 @@ pub async fn steer_agent(
         "type": "steer"
     });
     let _ = app_handle.emit("agent:steer", steer_payload);
+
+    // If an agent is currently running for this task, signal abort before re-triggering
+    {
+        let mut map = state
+            .active_agents
+            .lock()
+            .map_err(|_| "Failed to lock active agents".to_string())?;
+        if let Some(flag) = map.remove(&task_id) {
+            flag.store(true, Ordering::SeqCst);
+        }
+    }
+
+    // Append steering instruction into task description on disk so subsequent priming contains it
+    {
+        let mut current_tasks = load_tasks_from_disk(&root).await;
+        if let Some(t) = current_tasks.iter_mut().find(|t| t.id == task_id) {
+            t.description.push_str(&format!("\n\n[USER STEER]: {}", message));
+            t.updated_at = Utc::now().timestamp_millis();
+            let _ = save_tasks_to_disk(&root, &current_tasks).await;
+        }
+    }
+
+    // Append user turn to active compaction context if present
+    if let Ok(contexts) = state.agent_contexts.lock() {
+        if let Some(cs) = contexts.get(&task_id) {
+            if let Ok(mut guard) = cs.lock() {
+                guard.messages.push(crate::llm::ChatMessage::user(format!(
+                    "[USER STEER]: {}",
+                    message
+                )));
+            }
+        }
+    }
 
     // Re-invoke agent loop with steering message
     run_agent(task_id, app_handle, state).await

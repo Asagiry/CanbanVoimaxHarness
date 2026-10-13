@@ -42,6 +42,7 @@ pub fn run() {
             save_cortex_file,
             list_tasks,
             create_task,
+            save_tasks,
             move_task_stage,
             run_agent,
             abort_agent,

@@ -16,6 +16,31 @@ use tokio::process::Command;
 use tokio::sync::mpsc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Task {
+    pub id: String,
+    pub title: String,
+    pub description: String,
+    #[serde(rename = "stageId")]
+    pub stage_id: String,
+    #[serde(rename = "worktreePath", default)]
+    pub worktree_path: Option<String>,
+    #[serde(default)]
+    pub branch: Option<String>,
+    #[serde(default)]
+    pub verdict: Option<String>,
+    #[serde(rename = "customFlow", alias = "custom_flow", default)]
+    pub custom_flow: Option<Vec<String>>,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(rename = "createdAt")]
+    pub created_at: i64,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload")]
 pub enum AgentEvent {
     Token(String),
