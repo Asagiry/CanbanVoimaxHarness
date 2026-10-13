@@ -25,15 +25,20 @@ const PROTECTED_COLUMN_IDS = new Set(['backlog', 'ready']);
 export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColumn }: ColumnContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
-  const [mode, setMode] = useState<'main' | 'rename' | 'persona'>('main');
+  const [mode, setMode] = useState<'main' | 'rename' | 'persona' | 'script'>('main');
 
-  const { columns, setColumns } = useBoardStore();
+  const { columns, setColumns, updateColumn } = useBoardStore();
   const isProtected = PROTECTED_COLUMN_IDS.has(column.id);
 
   // Переименование
   const [draftTitle, setDraftTitle] = useState(column.title);
   const [renameError, setRenameError] = useState<string | null>(null);
   const [renameSaving, setRenameSaving] = useState(false);
+
+  // Скрипт перехода
+  const [draftScript, setDraftScript] = useState(column.onEnterScript ?? '');
+  const [scriptError, setScriptError] = useState<string | null>(null);
+  const [scriptSaving, setScriptSaving] = useState(false);
 
   // Смена агента
   const [personas, setPersonas] = useState<AgentPersonaOption[]>([]);
@@ -220,6 +225,32 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
     onClose();
   };
 
+  const handleSaveScript = async () => {
+    const trimmed = draftScript.trim();
+    const nextScript = trimmed.length > 0 ? trimmed : undefined;
+    if (nextScript === (column.onEnterScript ?? undefined)) {
+      setMode('main');
+      return;
+    }
+
+    setScriptError(null);
+    setScriptSaving(true);
+    const prev = columns;
+    const next = prev.map((c) => (c.id === column.id ? { ...c, onEnterScript: nextScript } : c));
+    setColumns(next);
+    if (updateColumn) {
+      await updateColumn(column.id, { onEnterScript: nextScript });
+    }
+    const saved = await savePipelineConfig(next);
+    setScriptSaving(false);
+    if (!saved) {
+      setColumns(prev);
+      setScriptError('Не удалось сохранить. Изменения откачены.');
+      return;
+    }
+    onClose();
+  };
+
   const handleDelete = () => {
     onClose();
     onDeleteColumn?.(column.id);
@@ -257,6 +288,18 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
             className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] cursor-pointer"
           >
             Сменить агента
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setDraftScript(column.onEnterScript ?? '');
+              setScriptError(null);
+              setMode('script');
+            }}
+            className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] cursor-pointer"
+          >
+            Скрипт перехода (.bat, .ps1, .py, .sh)
           </button>
           <div className="my-1 border-t border-[#ebebeb]" />
           <button
@@ -382,6 +425,57 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
               type="button"
               disabled={personaSaving || personasLoading}
               onClick={() => void handleSavePersona()}
+              className="px-3 py-1.5 rounded-md bg-[#171717] hover:bg-[#262626] text-white font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-default"
+            >
+              Сохранить
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mode === 'script' && (
+        <div className="px-3 py-2">
+          <div className="text-[#4d4d4d] font-medium mb-1">Скрипт перехода</div>
+          <div
+            className="mb-1.5 text-[#8f8f8f] truncate font-mono text-[10px]"
+            title={column.onEnterScript ?? 'не задан'}
+          >
+            Текущий: {column.onEnterScript ?? 'не задан'}
+          </div>
+          <input
+            type="text"
+            autoFocus
+            value={draftScript}
+            onChange={(e) => setDraftScript(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void handleSaveScript();
+              }
+            }}
+            placeholder="scripts/setup.bat, .py, .ps1, .sh"
+            className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono text-xs transition"
+          />
+          <div className="mt-1 text-[10px] text-[#8f8f8f]">
+            Запускается при входе задачи (.bat, .ps1, .py, .sh)
+          </div>
+          {scriptError && (
+            <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
+              {scriptError}
+            </div>
+          )}
+          <div className="mt-2 flex items-center justify-end space-x-2">
+            <button
+              type="button"
+              onClick={() => setMode('main')}
+              className="px-2.5 py-1.5 rounded-md bg-white border border-[#ebebeb] hover:bg-[#f4f4f5] transition cursor-pointer"
+            >
+              Назад
+            </button>
+            <button
+              type="button"
+              disabled={scriptSaving}
+              onClick={() => void handleSaveScript()}
               className="px-3 py-1.5 rounded-md bg-[#171717] hover:bg-[#262626] text-white font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-default"
             >
               Сохранить

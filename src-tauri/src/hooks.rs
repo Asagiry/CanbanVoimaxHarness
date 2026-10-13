@@ -15,6 +15,10 @@ pub struct HookContext {
     #[serde(default)]
     pub verdict: Option<String>,
     #[serde(default)]
+    pub stage_id: Option<String>,
+    #[serde(default)]
+    pub board_id: Option<String>,
+    #[serde(default)]
     pub extra_env: HashMap<String, String>,
 }
 
@@ -75,6 +79,11 @@ pub async fn execute_hook(
                 .arg(script);
             c
         }
+        "py" => {
+            let mut c = Command::new("python");
+            c.arg(script);
+            c
+        }
         "sh" => {
             let mut c = Command::new("sh");
             c.arg(script);
@@ -98,6 +107,12 @@ pub async fn execute_hook(
     cmd.env("CVH_BRANCH", &context.branch);
     if let Some(v) = &context.verdict {
         cmd.env("CVH_VERDICT", v);
+    }
+    if let Some(stage) = &context.stage_id {
+        cmd.env("CVH_STAGE_ID", stage);
+    }
+    if let Some(board) = &context.board_id {
+        cmd.env("CVH_BOARD_ID", board);
     }
     for (k, v) in &context.extra_env {
         cmd.env(k, v);
