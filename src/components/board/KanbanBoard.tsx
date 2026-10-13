@@ -3,7 +3,7 @@ import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { useBoardStore } from '../../stores/boardStore';
 import KanbanColumn from './KanbanColumn';
 import { KanbanTask } from '../../types';
-import { Plus, X, Inbox } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 
 export default function KanbanBoard() {
   const { columns, tasks, searchQuery, moveTask, addTask, tickTimers } = useBoardStore();
@@ -86,37 +86,21 @@ export default function KanbanBoard() {
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-obsidian-950">
       {/* Board Top Toolbar */}
-      <div className="flex items-center justify-between px-3.5 py-1.5 border-b border-obsidian-800 bg-obsidian-900/95 text-xs font-mono select-none">
-        <div className="flex items-center space-x-2 text-slate-400">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-obsidian-800/80 bg-obsidian-900/40 text-xs font-mono select-none">
+        <div className="flex items-center space-x-1.5 text-slate-400 text-[11px]">
           <span>Задач:</span>
-          <strong className="text-slate-100 tabular-nums">{tasks.length}</strong>
+          <span className="text-slate-200 font-semibold tabular-nums">{tasks.length}</span>
         </div>
 
         <button
           onClick={() => handleOpenAddTask('backlog')}
-          className="flex items-center space-x-1.5 px-3 py-1 rounded bg-cyan-400 hover:bg-cyan-300 text-obsidian-950 font-sans font-semibold text-xs transition cursor-pointer"
+          className="flex items-center space-x-1 px-2.5 py-1 rounded bg-obsidian-850 hover:bg-obsidian-800 border border-obsidian-750 hover:border-obsidian-700 text-slate-200 hover:text-white font-sans text-xs transition cursor-pointer"
           title="Создать новую задачу"
         >
-          <Plus className="h-3.5 w-3.5" />
+          <Plus className="h-3.5 w-3.5 text-cyan-400" />
           <span>Создать задачу</span>
         </button>
       </div>
-
-      {/* Empty State Banner if no tasks */}
-      {tasks.length === 0 && (
-        <div className="mx-4 my-2.5 px-4 py-3 rounded-lg border border-obsidian-800 bg-obsidian-900/70 flex items-center justify-between text-xs text-slate-300">
-          <div className="flex items-center space-x-2.5">
-            <Inbox className="h-4 w-4 text-slate-500" />
-            <span>Доска пуста. Начните работу, создав первую задачу.</span>
-          </div>
-          <button
-            onClick={() => handleOpenAddTask('backlog')}
-            className="px-2.5 py-1 rounded bg-obsidian-800 hover:bg-obsidian-750 border border-obsidian-700 text-slate-200 hover:text-white transition cursor-pointer font-sans"
-          >
-            + Создать задачу
-          </button>
-        </div>
-      )}
 
       {/* Kanban Columns Horizontal Container with Mouse Wheel Scroll */}
       <DragDropContext onDragEnd={handleDragEnd}>

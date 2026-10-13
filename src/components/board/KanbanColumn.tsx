@@ -46,7 +46,7 @@ export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnP
 
   return (
     <div
-      className={`flex flex-col w-72 shrink-0 h-full rounded-lg bg-obsidian-900 border transition-all duration-150 select-none overflow-hidden ${
+      className={`flex flex-col w-72 shrink-0 h-full rounded-md bg-obsidian-900 border transition-all duration-150 select-none overflow-hidden ${
         isFocused
           ? 'border-cyan-500 shadow-sm shadow-cyan-950/40'
           : 'border-obsidian-800 hover:border-obsidian-750'
@@ -61,12 +61,12 @@ export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnP
       {/* Column Header */}
       <div
         onClick={() => focusStage(column.id)}
-        className="px-3 py-2 border-b border-obsidian-800 bg-obsidian-850 hover:bg-obsidian-800/70 transition cursor-pointer group"
+        className="px-2.5 py-1.5 border-b border-obsidian-800/80 bg-obsidian-900/80 hover:bg-obsidian-850/60 transition cursor-pointer group"
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2 min-w-0">
             {getColumnIcon(column.icon, column.color)}
-            <h3 className="text-xs font-semibold text-slate-100 group-hover:text-white truncate">
+            <h3 className="text-xs font-medium text-slate-200 group-hover:text-white truncate">
               {column.title}
             </h3>
           </div>
@@ -74,10 +74,10 @@ export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnP
           <div className="flex items-center space-x-1.5">
             {/* Task Counter */}
             <span
-              className={`px-1.5 py-0.2 rounded font-mono text-[10px] tabular-nums border ${
+              className={`px-1.5 py-0.5 rounded font-mono text-[10px] tabular-nums leading-none border ${
                 isAtWipLimit
                   ? 'bg-rose-950/40 text-rose-300 border-rose-500/50'
-                  : 'bg-obsidian-950 text-slate-400 border-obsidian-750'
+                  : 'bg-obsidian-950 text-slate-400 border-obsidian-800'
               }`}
             >
               {tasks.length}
@@ -90,7 +90,7 @@ export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnP
                   e.stopPropagation();
                   onAddTask(column.id);
                 }}
-                className="p-1 rounded text-slate-400 hover:text-white hover:bg-obsidian-750 transition cursor-pointer"
+                className="p-0.5 rounded text-slate-500 hover:text-slate-200 hover:bg-obsidian-800 transition cursor-pointer"
                 title="Добавить задачу"
               >
                 <Plus className="h-3 w-3" />
@@ -108,8 +108,8 @@ export default function KanbanColumn({ column, tasks, onAddTask }: KanbanColumnP
             {...provided.droppableProps}
             className={`flex-1 p-2 overflow-y-auto min-h-[140px] transition-colors ${
               snapshot.isDraggingOver
-                ? 'bg-obsidian-850/80 border-2 border-dashed border-cyan-500/40 rounded-b-lg'
-                : 'bg-obsidian-950/30'
+                ? 'bg-obsidian-850/60 border border-dashed border-cyan-500/40 rounded-b-md'
+                : 'bg-transparent'
             }`}
           >
             {tasks.map((task, index) => (
