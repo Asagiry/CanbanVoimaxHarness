@@ -8,7 +8,8 @@
     "execute_command": true,
     "web_fetch": true,
     "grep": true,
-    "web_search": true
+    "web_search": true,
+    "todo_write": true
   },
   "stageOverrides": {
     "dev": {
@@ -20,7 +21,8 @@
       "execute_command": false,
       "web_fetch": false,
       "write_file": false,
-      "read_file": true
+      "read_file": true,
+      "todo_write": true
     },
     "review": {
       "edit_file": false,

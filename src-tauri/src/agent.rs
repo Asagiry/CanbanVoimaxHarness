@@ -16,6 +16,18 @@ use tokio::process::Command;
 use tokio::sync::mpsc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TodoItem {
+    #[serde(default = "default_todo_id")]
+    pub id: String,
+    pub content: String,
+    pub status: String,
+}
+
+fn default_todo_id() -> String {
+    uuid::Uuid::new_v4().to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
     pub id: String,
     pub title: String,
@@ -47,11 +59,15 @@ pub struct Task {
     pub cover_image: Option<String>,
     #[serde(default)]
     pub attachments: Option<Vec<String>>,
+    #[serde(default)]
+    pub todos: Option<Vec<TodoItem>>,
     #[serde(rename = "createdAt", alias = "created_at", default)]
     pub created_at: i64,
     #[serde(rename = "updatedAt", alias = "updated_at", default)]
     pub updated_at: i64,
 }
+
+pub type KanbanTask = Task;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload")]
@@ -87,6 +103,10 @@ pub enum AgentEvent {
     },
     Finished {
         final_response: String,
+    },
+    TaskUpdated {
+        task_id: String,
+        todos: Vec<TodoItem>,
     },
     Aborted,
     Error(String),
@@ -238,6 +258,27 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
                     "prompt": { "type": "string", "description": "Detailed task instructions." }
                 },
                 "required": ["role", "prompt"]
+            }),
+        ),
+        ToolDefinition::function(
+            "todo_write",
+            "Record and update task plan list to show progress. Add todos with status pending | in_progress | completed.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "todos": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "content": { "type": "string" },
+                                "status": { "type": "string", "enum": ["pending", "in_progress", "completed"] }
+                            },
+                            "required": ["content", "status"]
+                        }
+                    }
+                },
+                "required": ["todos"]
             }),
         ),
     ]
@@ -411,6 +452,7 @@ pub async fn execute_tool(
     args: &serde_json::Value,
     abort_handle: Arc<AtomicBool>,
     tool_policy: &ToolPolicyConfig,
+    task_id: Option<&str>,
 ) -> Result<String> {
     if abort_handle.load(Ordering::SeqCst) {
         bail!("Operation aborted");
@@ -608,6 +650,82 @@ pub async fn execute_tool(
                 .and_then(|v| v.as_str())
                 .context("Missing required parameter 'prompt'")?;
             format!("Subagent [{}] dispatched with task: {}", role, prompt)
+        }
+
+        "todo_write" => {
+            let raw_todos = args
+                .get("todos")
+                .and_then(|v| v.as_array())
+                .context("Missing required parameter 'todos' (must be array)")?;
+
+            let mut parsed_todos: Vec<TodoItem> = Vec::new();
+            let mut completed_cnt = 0;
+            let mut in_progress_cnt = 0;
+            let mut pending_cnt = 0;
+
+            for (idx, item) in raw_todos.iter().enumerate() {
+                let content = item
+                    .get("content")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
+                if content.is_empty() {
+                    continue;
+                }
+                let raw_status = item
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("pending")
+                    .trim()
+                    .to_lowercase();
+
+                let status = match raw_status.as_str() {
+                    "completed" | "done" => {
+                        completed_cnt += 1;
+                        "completed".to_string()
+                    }
+                    "in_progress" | "running" => {
+                        in_progress_cnt += 1;
+                        "in_progress".to_string()
+                    }
+                    _ => {
+                        pending_cnt += 1;
+                        "pending".to_string()
+                    }
+                };
+
+                let id = item
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| format!("todo-{}", idx + 1));
+
+                parsed_todos.push(TodoItem { id, content, status });
+            }
+
+            // If task_id provided, atomically persist to .cvh/tasks.json
+            if let Some(tid) = task_id {
+                let tasks_path = repo_root.join(".cvh").join("tasks.json");
+                if tasks_path.exists() {
+                    if let Ok(content) = tokio::fs::read_to_string(&tasks_path).await {
+                        if let Ok(mut tasks) = serde_json::from_str::<Vec<Task>>(&content) {
+                            if let Some(target_task) = tasks.iter_mut().find(|t| t.id == tid) {
+                                target_task.todos = Some(parsed_todos.clone());
+                                target_task.updated_at = chrono::Utc::now().timestamp_millis();
+                                if let Ok(serialized) = serde_json::to_string_pretty(&tasks) {
+                                    let _ = crate::config::atomic_write_file(&tasks_path, &serialized).await;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            format!(
+                "Updated todo list: {} completed, {} in progress, {} pending.",
+                completed_cnt, in_progress_cnt, pending_cnt
+            )
         }
 
         custom_tool => {
@@ -1509,8 +1627,48 @@ where
                 &parsed_args,
                 Arc::clone(&abort_flag),
                 &tool_policy,
+                Some(&config.task_id),
             )
             .await;
+
+            if tc.function.name == "todo_write" && exec_result.is_ok() {
+                if let Some(raw_todos) = parsed_args.get("todos").and_then(|v| v.as_array()) {
+                    let mut todos_vec = Vec::new();
+                    for (idx, item) in raw_todos.iter().enumerate() {
+                        let content = item
+                            .get("content")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .trim()
+                            .to_string();
+                        if content.is_empty() {
+                            continue;
+                        }
+                        let raw_status = item
+                            .get("status")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("pending")
+                            .trim()
+                            .to_lowercase();
+                        let status = match raw_status.as_str() {
+                            "completed" | "done" => "completed",
+                            "in_progress" | "running" => "in_progress",
+                            _ => "pending",
+                        }
+                        .to_string();
+                        let id = item
+                            .get("id")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| format!("todo-{}", idx + 1));
+                        todos_vec.push(TodoItem { id, content, status });
+                    }
+                    event_sink(AgentEvent::TaskUpdated {
+                        task_id: config.task_id.clone(),
+                        todos: todos_vec,
+                    });
+                }
+            }
 
             let (result_str, success) = match exec_result {
                 Ok(out) => (out, true),

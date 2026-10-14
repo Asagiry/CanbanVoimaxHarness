@@ -5,6 +5,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import ToolExecutionCard from './ToolExecutionCard';
 import ContextGauge from './ContextGauge';
 import GitDiffSidebar from './GitDiffSidebar';
+import TaskTodoWidget from './TaskTodoWidget';
 import ErrorBoundary from '../common/ErrorBoundary';
 import {
   ArrowDown,
@@ -920,6 +921,13 @@ export default function AgentConsoleDrawer() {
         {/* Left Column: Activity Feed + Steer Bar */}
         <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] overflow-hidden">
         <ErrorBoundary scopeLabel="чат задачи" onClose={closeDrawer}>
+          {/* Anchored Task To-dos Plan Widget (DSH-Style) */}
+          <div className="px-4 md:px-6 pt-3 pb-2 shrink-0 border-b border-[#ebebeb] bg-[#fafafa]">
+            <div className="max-w-4xl mx-auto">
+              <TaskTodoWidget task={task} />
+            </div>
+          </div>
+
           {/* Main Unified Activity Feed Area */}
           <div className="relative flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] overflow-hidden">
         <div ref={scrollRef} onScroll={handleFeedScroll} className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6">

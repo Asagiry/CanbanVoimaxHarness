@@ -1,5 +1,11 @@
 export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
 
+export interface TodoItem {
+  id: string;
+  content: string;
+  status: 'pending' | 'in_progress' | 'completed';
+}
+
 export type TaskStatus = 'idle' | 'running' | 'paused' | 'waiting_review' | 'waiting_subtask' | 'blocked' | 'done';
 
 export type TaskVerdict = 'NONE' | 'APPROVED' | 'APPROVED_WITH_CAVEATS' | 'CHANGES_REQUESTED';
@@ -41,6 +47,7 @@ export interface KanbanTask {
   parentId?: string;
   subtaskIndex?: number;
   waitingForSubtaskId?: string;
+  todos?: TodoItem[];
 }
 
 export interface PipelineColumn {
