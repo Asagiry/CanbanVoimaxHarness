@@ -256,5 +256,25 @@
       "Verified default_pipeline_config schema matches canonical 5-stage pipeline specification."
     ],
     "timestamp": 1791898200000
+  },
+  "CVH-021": {
+    "taskId": "CVH-021",
+    "title": "Restore SplashScreen bootloader and fix drawer white-screen flex layout",
+    "author": "react-tailwind-artisan",
+    "verdict": "APPROVED_WITH_CAVEATS",
+    "commitHash": "4e97cc6",
+    "resolutionCommitHash": "0732d49",
+    "commitMessage": "fix(ui): restore SplashScreen bootloader and fix drawer white-screen flex layout",
+    "summary": "Restored terminal CLI bootloader SplashScreen.tsx with kernel boot sequence, TTY_VOIMAX header, hairline progress bar, and isDataReady hydration guard. Fixed critical drawer white-screen layout failure by hoisting AgentConsoleDrawer and SplashScreen outside the CSS transformed/zoomed container to the root fragment level, establishing h-screen max-h-screen overflow-hidden bounds, and enforcing min-h-0/min-w-0 on all flex children. Resolved Level 2 review caveat in commit 0732d49 by hoisting and cleaning up finishTimer on unmount.",
+    "files": [
+      "src/App.tsx",
+      "src/components/drawer/AgentConsoleDrawer.tsx",
+      "src/components/splash/SplashScreen.tsx"
+    ],
+    "ftrScore": "85%",
+    "caveatsResolved": [
+      "Hoisted finishTimer into effect scope and cleaned it up on unmount to prevent state updates on unmounted SplashScreen component."
+    ],
+    "timestamp": 1791966200000
   }
 }

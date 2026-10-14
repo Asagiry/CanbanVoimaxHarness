@@ -184,3 +184,9 @@
   2. Ancestor directory traversal.
   3. `%LOCALAPPDATA%/com.voimax.cvh/active_project.txt`.
   4. Automatic persistence upon opening new workspaces.
+
+### 2.13 Viewport Overlay & Flex Boundary Invariants
+- **Root-Level Overlay Hoisting**: All full-screen overlays, drawers (`AgentConsoleDrawer`), modals, and splash screens (`SplashScreen`) using `position: fixed` MUST be rendered at the root React fragment level outside any zoomed (`transform`, `zoom`) or flex-row layout containers. Anchoring them inside transformed containers breaks viewport clipping and containment.
+- **Defensive Flex Bounding (`min-h-0` / `min-w-0`)**: Every flex-col or flex-row container hosting scrollable streams, activity feeds, or diff sidebars MUST enforce `min-h-0`, `min-w-0`, and `overflow-hidden` at all intermediate layers. Without this, dynamic child content expands default `auto` dimensions, pushing headers and steer bars off-screen.
+- **Zero-Unilateral-Feature-Deletion**: When resolving UI regressions or restyling themes, subagents MUST NOT delete functional components (e.g. bootloader sequence, gauges). Mismatched themes must be restyled, not pruned.
+- **Staggered Effect Timer Cleanup**: All nested asynchronous timers (`setTimeout` within callbacks) MUST have their handles hoisted and explicitly cancelled in the `useEffect` cleanup return to prevent unmounted memory leaks.
