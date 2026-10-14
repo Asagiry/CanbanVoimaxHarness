@@ -2,16 +2,27 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    // Mitigate msedgewebview2.exe STATUS_BREAKPOINT (0x80000003) crashes:
-    // third-party DLL injectors (Camo, AnyDesk, Aurora SDK) trip Chromium's
-    // RendererCodeIntegrity guard, and GPU-process faults kill the renderer.
-    // The WebView2 loader appends this env var to its own browser arguments.
+    // Mitigate msedgewebview2.exe STATUS_BREAKPOINT (0x80000003) crashes in msedge_elf.dll:
+    // On non-admin Windows accounts or with local proxies/software present, Chromium's
+    // sandbox and GPU process trip STATUS_BREAKPOINT (0x80000003) in msedge_elf.dll.
+    // Providing --no-sandbox, --disable-features=RendererCodeIntegrity, and --disable-gpu
+    // prevents the early crash and guarantees stable desktop webview execution.
     #[cfg(target_os = "windows")]
-    if std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").is_err() {
-        std::env::set_var(
-            "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
-            "--disable-features=RendererCodeIntegrity",
-        );
+    {
+        let required_flags = "--disable-features=RendererCodeIntegrity --no-sandbox --disable-gpu";
+        match std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS") {
+            Ok(existing) => {
+                if !existing.contains("--no-sandbox") {
+                    std::env::set_var(
+                        "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+                        format!("{existing} {required_flags}"),
+                    );
+                }
+            }
+            Err(_) => {
+                std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", required_flags);
+            }
+        }
     }
 
     // Install file-based panic hook so panics are never lost silently
