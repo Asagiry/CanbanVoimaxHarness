@@ -307,6 +307,15 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
       parentId: t.parentId ?? null,
       subtaskIndex: t.subtaskIndex ?? null,
       waitingForSubtaskId: t.waitingForSubtaskId ?? null,
+      // NOTE: todos MUST be included — otherwise every sync wipes the plan
+      // the agent saved via todo_write (backend save_tasks replaces the file).
+      todos: Array.isArray(t.todos)
+        ? t.todos.map((td: any) => ({
+            id: String(td?.id ?? ''),
+            content: String(td?.content ?? ''),
+            status: td?.status === 'completed' || td?.status === 'in_progress' ? td.status : 'pending',
+          }))
+        : null,
       createdAt: t.createdAt || Date.now(),
       updatedAt: Date.now(),
     }));

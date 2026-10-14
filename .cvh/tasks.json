@@ -9,7 +9,7 @@
     "branch": "feat/cvh-003",
     "verdict": null,
     "customFlow": null,
-    "status": "running",
+    "status": "paused",
     "model": "gemini-3.8-flash-high",
     "parentId": null,
     "subtaskIndex": null,
@@ -18,6 +18,6 @@
     "attachments": null,
     "todos": null,
     "createdAt": 1791984064620,
-    "updatedAt": 1791984070813
+    "updatedAt": 1791984470199
   }
 ]
