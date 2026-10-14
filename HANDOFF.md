@@ -1,99 +1,82 @@
-# CanbanVoimaxHarness — Передача смены / Handoff (Переход на Linux)
-
-**Дата фиксации:** 14 октября 2026 г.  
-**Ветка:** `main` (полностью синхронизирована с `origin/main` на GitHub)  
-**Репозиторий:** `https://github.com/Asagiry/CanbanVoimaxHarness.git`  
-**Статус сборки:** 🟢 0 ошибок компилятора (`cargo check`), 🟢 0 ошибок фронтенда (`npm run build`)  
-**Релизный бинарник Windows:** `src-tauri/target/release/canban-voimax-harness.exe` (15.4 МБ, собран и проверен)
+# CanbanVoimaxHarness — Передача смены (HANDOFF)
+**Дата:** 14 октября 2026 г., день (сессия на Linux)
+**Ветка:** `main` → `c57c3ae` (синхронно с `origin/main`, дерево чистое)
+**Репозиторий:** `https://github.com/Asagiry/CanbanVoimaxHarness`
+**Машина:** Ubuntu 24.04 (X11), `/home/vepishin/Projects/CanbanVoimaxHarness`
 
 ---
 
-## ⚡ 1. Быстрый старт на Linux (в 3 команды)
+## 1. Что сделано за сессию
 
-Когда сядешь за Linux-машину:
+### 1.1. Агент-луп и политики тулов
+- `run_agent(task_id, prompt?)` вмерживает текст в description; убран serde-дубль `stageId`+`columnId` (ронял все `save_tasks`); единый `Task`; `steer_agent` смотрит in-memory.
+- Ровно один `agent:finished` + фронт-дедуп; **безлимитный ReAct-цикл** (выход: терминальный текст/abort/ошибка); +терминальный терн удалён за ненадобностью.
+- Политики: канон `.cvh/settings/tool-policy.json`, семантика `global && stage`, алиасы, `tools: None` при пустом наборе; `todo_write` в дефолтах; CRUD кастомных тулов (`list/save/delete_custom_tool`); кастомные видны в матрице.
+- Худой системник: только persona + `.cvh` (без корневого `AGENTS.md`/`.agents/skills`).
+- Кеш: детерминированный префикс, frozen breakpoints, парсинг всех форм usage, `CVH [cache]`-логи. Нули в основном от прокси `:8045` (отбрасывает счётчики).
+
+### 1.2. Ворктри только хуком (финальный флоу)
+- Автосоздание вырезано из `run_agent`/`create_task`. Нет пути → fallback корень + warn.
+- `builtin:create_worktree` на **старте**: маркер `on_enter` в колонке ИЛИ дефолт бэклога без явного хука; shell-хуки первее (`CVH_WORKTREE=`/`CVH_BRANCH=` из stdout скипают builtin).
+- Скаффолд ставит маркер бэклогу только если в корне есть `.git`.
+- Создание задачи идёт через бэкенд `create_task(title, description, stage_id, board_id?, skip_worktree?)`; в модалке чекбокс «Создать worktree при старте» (дефолт ВКЛ). Подзадачи наследуют worktree родителя.
+- `moveTask` фронта идёт через `move_task_stage` IPC (хуки/сенсоры срабатывают), fallback на `save_tasks`.
+- В свежий ворктри синкается живой `.cvh` (`sync_cvh_runtime_state`, без worktrees/dialogs/spill/секретов).
+- В промпт агента добавляется `[HOOK] worktree: <path> — твой изолированный workdir, работаешь тут.`
+
+### 1.3. Колонки = агенты, всё кастомное
+- Промоушен: вердикт-роуты → сосед справа → stay+done; статус `terminal→done`, `persona→running`. `STAGE_ORDER`/`fastTrack`/`customFlow` выведены из роутинга; `PipelineColumn`: `autoRun?`, `terminal?`.
+- Backlog всегда первая, ready всегда последняя (pinned, неудаляемые, нормализация и на фронте, и в `save_pipeline`); создание только в backlog; DnD-перестановка колонок; ПКМ-меню задачи и шапки колонки (переименовать/сменить агента/удалить/скрипт).
+- Персоны: `list/create_agent_persona` (flat `.cvh/agents/<role>.md`), имена авто-слагифицируются (кириллица → латиница, превью «Роль:»), `src/lib/slug.ts`.
+- Легаси вырезано: dual-path политик/персон, migrate-*, их тесты. Serde-алиасы оставлены (безвредны).
+- ID монотонные (`cvh_task_seq_*`, бэкенд max+1); удаление чистит ворктри+ветку+диалоги+каскад подзадач.
+
+### 1.4. Проводник разума (две секции)
+- Секция «Колонки»: только хуки + поле АГЕНТ (select/свободный ввод); backlog и ready/terminal — системные узлы «система» (хуки видны, rules/setting убраны) — на ready вешается on_finish вроде коммит+пуш.
+- Секция «Агенты»: agent.md, rules/, hooks/ (бейджи on_enter/on_finish/встроенный), setting; создание файлов с формами; отсутствующие — плейсхолдеры.
+- Поиск один на обе секции.
+
+### 1.5. Чат и доска
+- Шапка чата = шапка приложения (лого+Назад, wrench/настройки, оконные кнопки); ворктри-полоса ниже шапки.
+- To-do стрип вплотную над отправкой, свёрнут по умолчанию, read-only (заполняет агент через `todo_write`), скрыт при выкл. туле; `todos` едут в sync-пейлоаде (больше не затираются).
+- Ответы скрываемы, умный автоскролл + «К новому», thinking-таймер, фриз TPS, `Кеш·TPS` у кольца, микробатчинг токенов ~150мс, GFM-таблицы, `log_ui_error` + window hooks в лог, ErrorBoundary везде.
+- Карточки: футер (модель/ветка/время/`созд.`/`идёт`), обложки вырезаны полностью, ПКМ-меню; шапки колонок 13px; топбар без дублей (поиск в ряду вкладок, подпись папки); общий `WindowControls`; светлый сплэш-минимал + drag; kill-ai-slop; `.desktop` с иконкой.
+- Матрица только по агентам (persona != null); кнопка-гаечный ключ в топбаре.
+
+## 2. Как запускать (важно: фронт вшит в бинарь!)
 
 ```bash
-# 1. Затянуть все свежие коммиты из main
-git pull origin main
-
-# 2. Установить/проверить зависимости фронтенда
-npm install
-
-# 3. Запустить в сверхбыстром dev-режиме с мгновенным HMR:
-npm run tauri dev
+npm run build                                   # фронт
+export PATH="$HOME/.cargo/bin:$PATH"
+cargo clean -p canban-voimax-harness && cargo build   # в src-tauri/ (clean обязателен — иначе вшьётся старый фронт!)
+# сверка: strings target/debug/canban-voimax-harness | grep -o 'index-.*\.js' == dist/assets/index-*.js
+ps aux | grep -F target/debug/canban | grep -v grep | awk '{print $2}' | xargs -r kill
+setsid env DISPLAY=:0 ./src-tauri/target/debug/canban-voimax-harness > /tmp/cvh_app.log 2>&1 < /dev/null &
+# workdir = корень репо; гасить только kill <PID>, НЕ pkill -f
 ```
+Проверки: `npm run build`, `cargo check`, `cargo test` (сейчас 52 passed). Живое: PID 35537, лог `/tmp/cvh_app.log`.
 
-> **Системные зависимости Tauri v2 для Linux (Ubuntu/Debian/Arch/Fedora):**
-> Если на Linux Tauri запускается впервые:
-> ```bash
-> # Ubuntu / Debian:
-> sudo apt update && sudo apt install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
-> # Arch Linux:
-> sudo pacman -S webkit2gtk-4.1 base-devel openssl
-> ```
+## 3. Открытые пункты / TODO
 
----
+1. **Прокси `:8045` и кеш** — если `prefix_hash` стабилен, а `cached_*` в `usage raw=` нет: чинить маппер ответа прокси.
+2. **Модель болтлива** — каждый терн = блок «Ответ агента»; схлоп идентичных соседних блоков не сделан.
+3. **Остатки `fastTrack`/`customFlow`** — выведены из роутинга, поля/типы лежат; удалить следующим заходом.
+4. **`ToolPermissions`/allowlist-модель и `column.allowedTools`** — по GUIDE помечены «частично», gate их не смотрит; унифицировать с политиками.
+5. **Дефолтный pipeline на английском** vs русские названия; seed синхронизировать.
+6. **`discover_project_root`** — захардкоженный Windows-путь; `max_turns` — мёртвое поле; `retro`-дефолта нет в бэкенде.
+7. **Редактор проводника vs бэкенд**: убедиться что openFile персон правит тот файл что читает рантайм (см. GUIDE, 14 «частично»).
+8. GUIDE: `docs/GUIDE.md` (676 строк) — сверить после этой сессии (проводник/backlog-ready/worktree-старт), там же 4 «задумано» (SQLite, граф памяти, удаление персон командой).
 
-## 🛠️ 2. Что полностью сделано и исправлено за эту сессию
+## 4. Справочник `.cvh` (что где лежит)
 
-Все изменения реализованы специализированными субагентами в изолированных ворктри, прошли Level 2 Review (`agent-developer-reviewer`), проверены физическими сенсорами и влиты в `main`:
-
-### 1. 🪟 Устранен краш белого экрана при клике на карточку задачи (CVH-023)
-* **Причина бага:** В `src/components/drawer/AgentConsoleDrawer.tsx` стоял досрочный выход `if (!isOpen || !task) return null;`, а **после него** вызывались хуки `useMemo` (`selectableModels`, `turns`). В момент клика на карточку `isOpen` становился `true`, React обнаруживал новые хуки и падал с фатальным `Error: Rendered more hooks than during the previous render`.
-* **Решение:** Все хуки вынесены наверх strictly до условных операторов; в `src/App.tsx` компонент `<AgentConsoleDrawer />` обернут в `<ErrorBoundary scopeLabel="Консоль задачи">`.
-
-### 2. ⚡ Мгновенный HMR Dev-режим вместо 7-минутных ребиздов (CVH-024)
-* **Причина задержек:** Vite по умолчанию биндился на IPv6 (`::1`), а Tauri CLI ждал IPv4 (`127.0.0.1:5173`).
-* **Решение:** Зафиксирован `host: '127.0.0.1'` в `vite.config.ts` и `devUrl: "http://127.0.0.1:5173"` в `tauri.conf.json`. В dev-режиме (`npm run tauri dev`) правки в React обновляются за **30–50 миллисекунд** без перезапуска Rust.
-
-### 3. 🛡️ Запуск от обычного пользователя без прав администратора (CVH-025)
-* **Причина:** Команда `icacls` в `main.rs` ранее не наследовала права рекурсивно (`/T`), из-за чего при создании кэша WebView2 от имени админа последующий запуск обычным пользователем падал с `0x80070005 (Access Denied)`. Зависшие файлы блокировок (`Default\LOCK`, `leveldb\LOCK`) вызывали панику `0x800700AA ("Требуемый ресурс занят")`.
-* **Решение:** Внедрено рекурсивное назначение прав `(OI)(CI)F` для `%USERNAME%` и AppContainer `*S-1-15-2-1`, а также автоматическая безопасная зачистка старых lock-файлов перед стартом.
-
-### 4. 🚀 Устранено мгновенное закрытие окна (STATUS_BREAKPOINT 0x80000003) (CVH-026)
-* **Причина (из отчета Windows Error Reporting `Report.wer`):** `msedgewebview2.exe` падал в раннем загрузчике `msedge_elf.dll` со смещением `0x0000000000281a5b` из-за срабатывания внутреннего брейкпоинта проверки целостности песочницы Chromium на непривилегированных учетных записях.
-* **Решение:** В `src-tauri/src/main.rs` внедрены флаги ранней инициализации `--no-sandbox --disable-features=RendererCodeIntegrity --disable-gpu`. Приложение стабильно держит окно и не схлопывается.
-
-### 5. 📌 Закрепление терминальных колонок и устранение глитча DND (CVH-027)
-* **Закрепление колонок:** Колонки **«Бэклог»** (индекс 0) и **«Готово»** (последний индекс) намертво закреплены (`isPinned`):
-  * На них отключен drag (`isDragDisabled={isPinned}`), убраны курсоры захвата (`cursor-default`), скрыты кнопки удаления.
-  * В `KanbanBoard.tsx` сброс на индексы 0 или `length - 1` жестко отклоняется, а целевой индекс клампится в диапазон `[1, length - 2]`.
-* **Устранение рывка DND:** Убран конфликтный CSS-класс `transition-all duration-150` на контейнерах колонок, который воевал с инлайн-стилями `style.transform` библиотеки `@hello-pangea/dnd` и заставлял колонку «Готово» отлетать вправо. Для крайних колонок выставлен жесткий `transform: 'none'`.
-
----
-
-## 📖 3. Архитектурные уроки книги «Инженерия обвязки агентов» (Understanding Harness Engineering, октябрь 2026)
-
-Изучена книга-манифест `@techNmak` (опыт Anthropic, OpenAI, Microsoft, Google). Утверждены к внедрению в CVH:
-
-1. **Внешнее структурированное состояние (§ 17, 30) ➔ Интерактивный To-Dos Plan Widget (как в DSH):**
-   * Модели склонны терять нить в длинных сессиях. Состояние плана должно быть внешним артефактом, доступным для чтения и человеку, и агенту.
-   * Агент перед началом работы формулирует план в виде чеклиста и последовательно отмечает шаги (`pending` ➔ `in_progress` ➔ `completed`).
-2. **Структурированный формат ошибок инструментов (§ 10):**
-   * Сбой инструмента — это не фатальный краш, а наблюдение ($o_t$).
-   * Возвращать агенту типизированный JSON: `{ status: "failed", tool: "...", exit_code: 1, error: "...", retryable: false, suggestion: "..." }`.
-3. **Многомерные метрики задачи (§ 24):**
-   * Отображение счетчика ходов (Turns count: `Ход 3 / 25`), таймера времени активности и расхода токенов на карточке и в шапке консоли без искусственных блокировок автономии.
-4. **Постепенное раскрытие (§ 13):**
-   * Переход от монолитных правил к прогрессивной подгрузке скиллов из каталога по требованию.
-
----
-
-## 🧭 4. Текущие и запланированные задачи (Roadmap)
-
-| ID | Название задачи | Область | Статус |
-| :--- | :--- | :--- | :---: |
-| **CVH-028** | **Интерактивный To-Dos Plan Widget (DSH-Style)**: Сворачиваемая плашка чеклиста в консоли задачи (`TaskTodoWidget.tsx`) с зелеными точками `completed`, вращающимся спиннером `in_progress`, серыми точками `pending`, сохранением в `tasks.json` и поддержкой инструмента `todo_write` в ReAct-цикле. | Full-stack (React + Rust) | 🟡 **В разработке** (ворктри `worktrees/cvh-028-interactive-todo-plan`) |
-| **CVH-029** | **Структурированный протокол ошибок инструментов (§ 10)**: Типизированный JSON-ответ при ошибках CLI/команд вместо сырых трейсбеков. | Rust Backend (`agent.rs`, `commands.rs`) | ⚪ **В очереди** |
-| **CVH-030** | **Многомерные метрики задачи (Turns, Time, Tokens)**: Моноширинные бейджи шагов и таймера на карточке канбана и в шапке дровера. | React UI (`KanbanCard.tsx`, `AgentConsoleDrawer.tsx`) | ⚪ **В очереди** |
-
----
-
-## 📂 5. Памятка по структуре и правилам репозитория
-
-* Все новые фичи строго разрабатываются через субагентов в изолированных ворктри (`worktrees/<task-slug>`).
-* Обязательное прохождение датчиков Ground Truth: `cargo check` и `npm run build`.
-* Двухуровневое ревью: Lead Subagent ➔ `agent-developer-reviewer` (Level 2). По указанию пользователя этап ретроспективы (Level 3) пропускается.
-* Слияние в `main` только при вердикте `APPROVED`.
-
-**Всё запушено в `origin/main`. Ветка чистая, проект готов к открытию и работе на Linux! 🐧🚀**
+- `pipeline.json` — колонки/поток (порядок, persona, hooks, routes, autoRun/terminal)
+- `boards.json` — доски (вкладки, у каждой свои колонки)
+- `config.json` — проект (имя/версия/activePipeline)
+- `llm.json` — секреты подключения (baseUrl/ключ, **gitignored**, в ворктри не копируется)
+- `tasks.json` — задачи всех досок (id/стадии/статусы/todos)
+- `tasks/<id>/` + `dialogs/` — история чатов по задачам (два пути: основной `dialogs/<id>.json`, запасной `tasks/<id>/dialog.json` — кандидаты на слияние)
+- `agents/<role>.md` — персоны (flat; per-agent dirs не внедрены)
+- `settings/tool-policy.json` — матрица (global && stage)
+- `tools/*.json` — кастомные shell-тулы (`{name,description,parameters,command}` с `{args}`)
+- `hooks/` — скрипты переходов (on_enter/on_finish, `CVH_*` env + `CVH_WORKTREE=` из stdout)
+- `skills/` — скиллы агента; `spill/` — длинные выводы тулов (>100 строк/8КБ, head/tail в контекст); `worktrees/` — git-ворктри задач (gitignored-через `.gitignore`: `.cvh/worktrees/`)
