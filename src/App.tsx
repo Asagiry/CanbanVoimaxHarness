@@ -183,6 +183,16 @@ export default function App() {
         });
         unlisteners.push(uTaskMoved);
 
+        const uTaskUpdated = await listen<{ taskId?: string; todos?: any[] }>('task:updated', (event) => {
+          const { taskId, todos } = event.payload || {};
+          if (taskId && todos) {
+            useBoardStore.getState().updateTask(taskId, { todos });
+          } else {
+            loadTasks();
+          }
+        });
+        unlisteners.push(uTaskUpdated);
+
         const uTasksUpdated = await listen<any>('tasks:updated', () => {
           loadTasks();
         });

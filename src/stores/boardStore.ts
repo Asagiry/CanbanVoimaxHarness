@@ -167,6 +167,13 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
     parentId: raw.parentId ?? raw.parent_id ?? undefined,
     subtaskIndex: raw.subtaskIndex ?? raw.subtask_index ?? undefined,
     waitingForSubtaskId: raw.waitingForSubtaskId ?? raw.waiting_for_subtask_id ?? undefined,
+    todos: Array.isArray(raw.todos)
+      ? raw.todos.map((item: any, idx: number) => ({
+          id: typeof item?.id === 'string' && item.id.trim() !== '' ? item.id : `todo-${idx + 1}`,
+          content: typeof item?.content === 'string' ? item.content : '',
+          status: item?.status === 'completed' || item?.status === 'in_progress' ? item.status : 'pending',
+        }))
+      : undefined,
   };
 }
 

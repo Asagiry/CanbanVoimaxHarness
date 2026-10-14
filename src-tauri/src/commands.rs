@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
-pub use crate::agent::Task;
+pub use crate::agent::{KanbanTask, Task, TodoItem};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CortexNode {
@@ -925,6 +925,7 @@ pub async fn create_task(
         waiting_for_subtask_id: None,
         cover_image: None,
         attachments: None,
+        todos: None,
         created_at: now,
         updated_at: now,
     };
@@ -1080,6 +1081,7 @@ pub async fn create_subtask(
         waiting_for_subtask_id: None,
         cover_image: None,
         attachments: None,
+        todos: None,
         created_at: now,
         updated_at: now,
     };
@@ -1740,6 +1742,19 @@ pub async fn run_agent(
                         }),
                     );
                 }
+                AgentEvent::TaskUpdated { task_id, todos } => {
+                    let _ = app_inner.emit(
+                        "task:updated",
+                        serde_json::json!({
+                            "taskId": &task_id,
+                            "todos": &todos,
+                        }),
+                    );
+                    let _ = app_inner.emit(
+                        "tasks:updated",
+                        serde_json::json!({ "taskId": &task_id }),
+                    );
+                }
                 AgentEvent::Aborted => {
                     let _ = app_inner.emit(
                         "agent:aborted",
@@ -1913,6 +1928,7 @@ pub async fn run_agent(
                                     waiting_for_subtask_id: None,
                                     cover_image: None,
                                     attachments: None,
+                                    todos: None,
                                     created_at: now,
                                     updated_at: now,
                                 };
@@ -2065,6 +2081,7 @@ pub async fn run_agent(
                                     waiting_for_subtask_id: None,
                                     cover_image: None,
                                     attachments: None,
+                                    todos: None,
                                     created_at: now,
                                     updated_at: now,
                                 };
