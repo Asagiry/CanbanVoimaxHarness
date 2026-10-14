@@ -1,50 +1,52 @@
 {
   "globalEnabled": {
-    "subagent": true,
-    "edit_file": true,
     "glob": true,
-    "read_file": true,
-    "write_file": true,
-    "execute_command": true,
     "web_fetch": true,
-    "grep": true,
     "web_search": true,
-    "todo_write": true
+    "edit_file": true,
+    "subagent": true,
+    "grep": true,
+    "execute_command": true,
+    "read_file": true,
+    "todo_write": true,
+    "write_file": true
   },
   "stageOverrides": {
-    "dev": {
-      "grep": false,
-      "subagent": false,
+    "retro": {
+      "todo_write": true,
       "web_search": false,
-      "glob": false,
-      "edit_file": false,
-      "execute_command": false,
-      "web_fetch": false,
-      "write_file": false,
+      "execute_command": true,
       "read_file": true,
-      "todo_write": true
+      "glob": true,
+      "grep": true,
+      "web_fetch": false,
+      "edit_file": false,
+      "write_file": true,
+      "subagent": false
     },
     "review": {
-      "edit_file": false,
-      "write_file": false,
-      "web_fetch": true,
+      "execute_command": true,
       "web_search": true,
+      "edit_file": false,
       "grep": true,
+      "glob": true,
       "read_file": true,
+      "subagent": true,
+      "todo_write": true,
+      "web_fetch": true,
+      "write_file": false
+    },
+    "dev": {
+      "read_file": true,
+      "edit_file": true,
       "execute_command": true,
       "glob": true,
-      "subagent": true
-    },
-    "retro": {
+      "web_search": false,
       "write_file": true,
       "grep": true,
-      "read_file": true,
-      "glob": true,
+      "todo_write": true,
       "subagent": false,
-      "edit_file": false,
-      "web_fetch": false,
-      "execute_command": true,
-      "web_search": false
+      "web_fetch": false
     }
   }
 }

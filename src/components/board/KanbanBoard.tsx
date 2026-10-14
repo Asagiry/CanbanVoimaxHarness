@@ -1,11 +1,11 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
-import { useBoardStore } from '../../stores/boardStore';
+import { useBoardStore, allocateNextTaskNum, formatTaskId } from '../../stores/boardStore';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import KanbanColumn from './KanbanColumn';
 import { KanbanTask, PipelineColumn, TaskStatus, BoardDef } from '../../types';
-import { Plus, X, Layout, Pencil, Trash2 } from 'lucide-react';
+import { Plus, X, Layout, Pencil, Trash2, Search } from 'lucide-react';
 import CreateBoardModal from './CreateBoardModal';
 
 const COLUMN_PALETTE = [
@@ -79,6 +79,7 @@ export default function KanbanBoard() {
     columns,
     tasks,
     searchQuery,
+    setSearchQuery,
     moveTask,
     addTask,
     tickTimers,
@@ -227,7 +228,6 @@ export default function KanbanBoard() {
   }, [computeThreads]);
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
   const [isCreateBoardModalOpen, setIsCreateBoardModalOpen] = useState(false);
-  const [targetColumnForNew, setTargetColumnForNew] = useState<string>('backlog');
   const [selectedModel, setSelectedModel] = useState<string>(settings.model || 'gemini-3.8-flash-high');
 
   // New task form fields
@@ -367,8 +367,6 @@ export default function KanbanBoard() {
 
   // Создание задач — только через общую кнопку доски: цель backlog, иначе первая колонка.
   const handleOpenAddTask = () => {
-    const target = columns.some((c) => c.id === 'backlog') ? 'backlog' : (columns[0]?.id ?? 'backlog');
-    setTargetColumnForNew(target);
     setNewTitle('');
     setNewDescription('');
     setSelectedModel(settings.model || (availableModels.length > 0 ? availableModels[0] : 'gemini-3.8-flash-high'));
@@ -379,14 +377,13 @@ export default function KanbanBoard() {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
-    const targetCol = columns.find((c) => c.id === targetColumnForNew);
+    const targetColumnId = columns.some((c) => c.id === 'backlog') ? 'backlog' : (columns[0]?.id ?? 'backlog');
+    const targetCol = columns.find((c) => c.id === targetColumnId);
     const persona = targetCol?.persona ?? 'developer';
     const status: TaskStatus = targetCol?.terminal ? 'done' : targetCol?.persona ? 'running' : 'idle';
 
-    const nextIdNum = tasks.length > 0
-      ? Math.max(...tasks.map((t) => parseInt(t.id.replace(/\D/g, ''), 10) || 0), tasks.length) + 1
-      : 1;
-    const paddedId = `CVH-${String(nextIdNum).padStart(3, '0')}`;
+    // Monotonic IDs: persistent per-project counter, never re-issued after delete.
+    const paddedId = formatTaskId(allocateNextTaskNum(tasks));
     const taskId = paddedId;
 
     const newTask: KanbanTask = {
@@ -394,7 +391,7 @@ export default function KanbanBoard() {
       title: newTitle.trim(),
       description: newDescription.trim() || undefined,
       priority: 'high',
-      columnId: targetColumnForNew,
+      columnId: targetColumnId,
       boardId: activeBoardId || 'development',
       persona,
       branch: `feat/${paddedId.toLowerCase()}`,
@@ -554,8 +551,20 @@ export default function KanbanBoard() {
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#fafafa]">
       {/* Board Top Toolbar */}
       <div className="flex items-center justify-between px-3.5 py-2 border-b border-[#ebebeb] bg-white text-xs select-none">
-        {/* Left: Board Switcher Tabs */}
+        {/* Left: Search first, then board name tabs */}
         <div className="flex items-center space-x-1.5 overflow-x-auto py-0.5">
+          <div className="relative w-44 sm:w-52 shrink-0">
+            <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-[#8f8f8f] pointer-events-none" />
+            <input
+              id="board-search"
+              name="kanbanBoardSearch"
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Поиск..."
+              className="w-full pl-8 pr-2.5 py-1 rounded-md bg-[#f9f9f9] border border-[#ebebeb] text-xs text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-sans transition"
+            />
+          </div>
           {boards.map((b) => {
             const isActive = b.id === activeBoardId;
             const isRenaming = renamingBoardId === b.id;
@@ -1008,23 +1017,6 @@ export default function KanbanBoard() {
                   placeholder="Детали и требования к задаче..."
                   className="w-full px-3 py-1.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-sans resize-none transition"
                 />
-              </div>
-
-              <div>
-                <label className="block font-sans text-[#4d4d4d] font-medium mb-1">
-                  Колонка размещения
-                </label>
-                <select
-                  value={targetColumnForNew}
-                  onChange={(e) => setTargetColumnForNew(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[#171717] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono text-xs cursor-pointer transition"
-                >
-                  {columns.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.title}
-                    </option>
-                  ))}
-                </select>
               </div>
 
               <div>

@@ -258,13 +258,11 @@ export default function ContextGauge({
     <div className="font-mono text-xs text-[#8f8f8f] flex items-center justify-center gap-6 py-1.5 select-none">
       {/* ⏱️ {turns} шагов · {tps} tok/s */}
       <span className="flex items-center gap-1.5" title={tpsTitle}>
-        <span>⏱️</span>
         <span className="tabular-nums">{effectiveTurns} шагов · {tpsText} tok/s</span>
       </span>
 
       {/* 💾 {tokens} tok · Кэш {cacheHitRate}% */}
       <span className="flex items-center gap-1.5" title={cacheTitle}>
-        <span>💾</span>
         <span className="tabular-nums">{usedTokensK}k tok · Кэш {cacheText}</span>
       </span>
 

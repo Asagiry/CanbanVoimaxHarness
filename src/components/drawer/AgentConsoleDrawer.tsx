@@ -7,6 +7,9 @@ import ContextGauge from './ContextGauge';
 import GitDiffSidebar from './GitDiffSidebar';
 import TaskTodoWidget from './TaskTodoWidget';
 import ErrorBoundary from '../common/ErrorBoundary';
+import WindowControls, { toggleMaximizeWindow } from '../layout/WindowControls';
+import Logo from '../common/Logo';
+import { useToolPolicyStore } from '../../stores/toolPolicyStore';
 import {
   ArrowDown,
   ArrowLeft,
@@ -23,11 +26,12 @@ import {
   ChevronRight,
   Sparkles,
   Clock,
-  Cpu,
   User,
   AlertTriangle,
   Info,
   GitCompare,
+  Settings,
+  Wrench,
 } from 'lucide-react';
 
 // Lightweight Markdown Renderer for streaming assistant output
@@ -345,13 +349,14 @@ export default function AgentConsoleDrawer() {
     activityFeed,
     streamEntries,
     toolExecutions,
-    openDrawer,
     closeDrawer,
     appendOutput,
   } = useDrawerStore();
 
-  const { tasks, columns, updateTask } = useBoardStore();
-  const { settings, availableModels } = useSettingsStore();
+  const { tasks, updateTask } = useBoardStore();
+  const { settings, availableModels, openSettings } = useSettingsStore();
+  const isToolAllowed = useToolPolicyStore((s) => s.isToolAllowed);
+  const openToolPolicyModal = useToolPolicyStore((s) => s.openModal);
 
   const [interactiveInput, setInteractiveInput] = useState('');
   const [runError, setRunError] = useState<string | null>(null);
@@ -368,9 +373,7 @@ export default function AgentConsoleDrawer() {
   // Modern chat attachments, toolbar states & textarea ref
   const [attachedImages, setAttachedImages] = useState<Array<{ id: string; name: string; dataUrl: string }>>([]);
   const [isDragOverChat, setIsDragOverChat] = useState(false);
-  const [isToolMenuOpen, setIsToolMenuOpen] = useState(false);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
-  const [toolAccessMode, setToolAccessMode] = useState<'full' | 'readonly'>('full');
   const chatFileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -406,7 +409,6 @@ export default function AgentConsoleDrawer() {
   };
 
   const task = tasks.find((t) => t.id === activeTaskId);
-  const column = columns.find((c) => c.id === task?.columnId);
 
   // Reset error when switching tasks & load dialog history from disk
   useEffect(() => {
@@ -579,6 +581,14 @@ export default function AgentConsoleDrawer() {
 
   const isRunning = task.status === 'running';
 
+  const handleHeaderDoubleClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button, input, select, textarea, [data-no-drag]')) {
+      return;
+    }
+    void toggleMaximizeWindow();
+  };
+
   const adjustTextareaHeight = (el: HTMLTextAreaElement) => {
     el.style.height = 'auto';
     const newHeight = Math.min(Math.max(el.scrollHeight, 40), 180);
@@ -750,84 +760,63 @@ export default function AgentConsoleDrawer() {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col h-screen max-h-screen overflow-hidden bg-white text-[#171717] select-none animate-in fade-in duration-150">
-      {/* Fullscreen Header: Clean Vercel / Claude Code Aesthetic */}
-      <header className="border-b border-[#ebebeb] bg-white px-4 py-2.5 shrink-0 z-10 shadow-xs">
-        <div className="flex items-center justify-between">
-          {/* Left: "Назад к доске", Task ID, Stage badge, Model badge & Title */}
-          <div className="flex items-center space-x-2.5 min-w-0">
-            <button
-              onClick={closeDrawer}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-[#f9f9f9] text-[#171717] border border-[#ebebeb] transition font-sans text-xs font-medium cursor-pointer shadow-xs active:scale-[0.98]"
-              title="Назад к доске (Esc)"
-            >
-              <ArrowLeft className="h-4 w-4 text-[#171717]" />
-              <span>Назад</span>
-            </button>
-
-            <span className="text-[#ebebeb] font-mono text-sm">/</span>
-
-            <span className="px-2 py-0.5 rounded-md font-mono text-xs font-semibold bg-[#f4f4f5] border border-[#ebebeb] text-[#171717] tabular-nums">
-              {task.id ?? ''}
-            </span>
-
-            <span className="px-2 py-0.5 rounded-md font-mono text-xs uppercase bg-[#f4f4f5] border border-[#ebebeb] text-[#171717]">
-              {column?.title || task.columnId || ''}
-            </span>
-
-            {/* Parent Task Badge & Navigation */}
-            {task.parentId && (
+      {/* Outer guard: header/banner are outside inner boundaries — any throw here
+          used to unmount the whole tree into a white screen. */}
+      <ErrorBoundary scopeLabel="окно чата" onClose={closeDrawer}>
+      {/* Header mirrors the main topbar: h-10, drag region, window controls */}
+      <header
+        data-tauri-drag-region
+        onDoubleClick={handleHeaderDoubleClick}
+        className="h-10 border-b border-[#ebebeb] bg-white pl-4 pr-0 shrink-0 z-10 shadow-xs flex items-center"
+      >
+        <div className="flex items-center justify-between w-full h-full">
+          {/* Left: Logo + Back (mirrors the main topbar: folder picker replaced by Back) */}
+          <div className="flex items-center space-x-2 shrink-0" data-tauri-drag-region>
+            <div className="flex items-center space-x-2" data-no-drag>
+              <Logo size={18} className="shrink-0" />
               <button
-                type="button"
-                onClick={() => openDrawer(task.parentId!)}
-                className="flex items-center space-x-1 px-2 py-0.5 rounded-md font-mono text-xs text-[#6366f1] bg-[#eef2ff] border border-[#c7d2fe] hover:bg-[#e0e7ff] transition cursor-pointer"
-                title={`Перейти к родительской задаче ${task.parentId}`}
+                data-no-drag
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={closeDrawer}
+                className="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-white hover:bg-[#f9f9f9] text-[#171717] border border-[#ebebeb] transition font-sans text-xs font-medium cursor-pointer shadow-xs active:scale-[0.98]"
+                title="Назад к доске (Esc)"
               >
-                <GitBranch className="h-3 w-3 text-[#6366f1]" />
-                <span>Родитель: {task.parentId}</span>
+                <ArrowLeft className="h-4 w-4 text-[#171717]" />
+                <span>Назад</span>
               </button>
-            )}
-
-            {/* Waiting for Subtask Badge & Navigation */}
-            {task.waitingForSubtaskId && (
-              <button
-                type="button"
-                onClick={() => openDrawer(task.waitingForSubtaskId!)}
-                className="flex items-center space-x-1 px-2 py-0.5 rounded-md font-mono text-xs text-[#b45309] bg-[#fffbeb] border border-[#fde68a] hover:bg-[#fef3c7] transition cursor-pointer"
-                title={`Открыть активную подзадачу ${task.waitingForSubtaskId}`}
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-[#f59e0b] animate-pulse" />
-                <span>Ждем: {task.waitingForSubtaskId}</span>
-              </button>
-            )}
-
-            {/* Model Badge */}
-            <span
-              className="flex items-center space-x-1 px-2 py-0.5 rounded-md font-mono text-xs text-[#4d4d4d] bg-[#fafafa] border border-[#ebebeb]"
-              title={`Модель задачи: ${effectiveModel}`}
-            >
-              <Cpu className="h-3 w-3 text-[#666666]" />
-              <span>[{effectiveModel}]</span>
-            </span>
-
-            <h2 className="text-sm font-semibold text-[#171717] truncate max-w-sm font-sans">
-              {task.title ?? ''}
-            </h2>
+            </div>
           </div>
 
-          {/* Right: Close button */}
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={closeDrawer}
-              className="p-1.5 rounded-md text-[#666666] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
-              title="Закрыть (Esc)"
-            >
-              <X className="h-5 w-5" />
-            </button>
+          {/* Right: same triggers + window controls as the main topbar */}
+          <div className="flex items-center h-full space-x-1 shrink-0" data-tauri-drag-region>
+            <div className="flex items-center space-x-1.5 pr-2" data-no-drag>
+              <button
+                data-no-drag
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={openToolPolicyModal}
+                className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] border border-[#ebebeb] text-[#666666] hover:text-[#171717] transition cursor-pointer"
+                title="Матрица инструментов — доступ тулов по агентам"
+              >
+                <Wrench className="h-3.5 w-3.5" />
+              </button>
+              <button
+                data-no-drag
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={openSettings}
+                className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] border border-[#ebebeb] text-[#666666] hover:text-[#171717] transition cursor-pointer"
+                title="Настройки LLM"
+              >
+                <Settings className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="h-4 w-px bg-[#ebebeb] mx-1" />
+            <WindowControls />
           </div>
         </div>
+      </header>
 
-        {/* Sub-header: Path, Branch, Context gauge & Agent Controls */}
-        <div className="mt-2 flex items-center justify-between text-xs font-mono text-[#666666] pt-2 border-t border-[#ebebeb]">
+      {/* Worktree strip below the header */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-[#ebebeb] bg-white text-xs font-mono text-[#666666] shrink-0">
           <div className="flex items-center space-x-2.5">
             {task.worktreePath && (
               <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-[#f9f9f9] border border-[#ebebeb]">
@@ -884,7 +873,6 @@ export default function AgentConsoleDrawer() {
             </button>
           </div>
         </div>
-      </header>
 
       {/* Warning Banner on agent run error */}
       {runError && (
@@ -921,13 +909,6 @@ export default function AgentConsoleDrawer() {
         {/* Left Column: Activity Feed + Steer Bar */}
         <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] overflow-hidden">
         <ErrorBoundary scopeLabel="чат задачи" onClose={closeDrawer}>
-          {/* Anchored Task To-dos Plan Widget (DSH-Style) */}
-          <div className="px-4 md:px-6 pt-3 pb-2 shrink-0 border-b border-[#ebebeb] bg-[#fafafa]">
-            <div className="max-w-4xl mx-auto">
-              <TaskTodoWidget task={task} />
-            </div>
-          </div>
-
           {/* Main Unified Activity Feed Area */}
           <div className="relative flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] overflow-hidden">
         <div ref={scrollRef} onScroll={handleFeedScroll} className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6">
@@ -1100,8 +1081,18 @@ export default function AgentConsoleDrawer() {
         )}
       </div>
 
+        {/* Agent plan strip flush against the send box (read-only, filled by agent
+            via todo_write). Hidden when the tool is disabled in policy. */}
+        {isToolAllowed('todo_write', task.columnId) && (
+          <div className="px-4 md:px-6 pt-2 pb-1 shrink-0 border-t border-[#ebebeb] bg-[#fafafa]">
+            <div className="max-w-3xl mx-auto">
+              <TaskTodoWidget task={task} />
+            </div>
+          </div>
+        )}
+
       {/* f) Interactive Input & Steer Bar: Floating Light Card & Bottom Status Bar */}
-      <footer className="border-t border-[#ebebeb] bg-[#fafafa]/80 backdrop-blur-xs p-3 shrink-0 shadow-xs z-10">
+        <footer className="border-t border-[#ebebeb] bg-[#fafafa]/80 backdrop-blur-xs px-3 pb-3 pt-1 shrink-0 shadow-xs z-10">
         <div className="max-w-4xl mx-auto">
           {/* Floating Modern Light Card */}
           <div
@@ -1177,49 +1168,6 @@ export default function AgentConsoleDrawer() {
                   onChange={handleChatFileSelect}
                 />
 
-                {/* Status Pill: "🛡️ Full access ⌵" */}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setIsToolMenuOpen(!isToolMenuOpen)}
-                    className="px-2.5 py-1 rounded-full bg-[#f4f4f5] hover:bg-[#e4e4e7] text-[#171717] font-mono text-xs border border-[#ebebeb] transition cursor-pointer flex items-center gap-1.5"
-                    title="Режим доступа к инструментам"
-                  >
-                    <span>{toolAccessMode === 'full' ? '🛡️ Full access' : '🔒 Read only'}</span>
-                    <ChevronDown className="h-3 w-3 text-[#8f8f8f]" />
-                  </button>
-                  {isToolMenuOpen && (
-                    <div className="absolute bottom-full left-0 mb-2 w-48 rounded-lg bg-white border border-[#ebebeb] shadow-md p-1 z-30 font-mono text-xs">
-                      <div className="px-2 py-1 text-[#8f8f8f] text-[10px] uppercase">Режим инструментов</div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setToolAccessMode('full');
-                          setIsToolMenuOpen(false);
-                        }}
-                        className={`w-full text-left px-2 py-1.5 rounded flex items-center justify-between cursor-pointer ${
-                          toolAccessMode === 'full' ? 'bg-[#f4f4f5] text-[#171717]' : 'text-[#4d4d4d] hover:bg-[#f9f9f9]'
-                        }`}
-                      >
-                        <span>🛡️ Full access</span>
-                        {toolAccessMode === 'full' && <span className="text-emerald-600">✓</span>}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setToolAccessMode('readonly');
-                          setIsToolMenuOpen(false);
-                        }}
-                        className={`w-full text-left px-2 py-1.5 rounded flex items-center justify-between cursor-pointer ${
-                          toolAccessMode === 'readonly' ? 'bg-[#f4f4f5] text-[#171717]' : 'text-[#4d4d4d] hover:bg-[#f9f9f9]'
-                        }`}
-                      >
-                        <span>🔒 Read only</span>
-                        {toolAccessMode === 'readonly' && <span className="text-emerald-600">✓</span>}
-                      </button>
-                    </div>
-                  )}
-                </div>
               </div>
 
               {/* Right Toolbar Items */}
@@ -1299,6 +1247,7 @@ export default function AgentConsoleDrawer() {
       />
     </ErrorBoundary>
   </div>
+      </ErrorBoundary>
 </div>
   );
 }

@@ -1,4 +1,4 @@
-use crate::agent::{run_agent_loop, AgentEvent, AgentSessionConfig};
+use crate::agent::{run_agent_loop, AgentEvent, AgentSessionConfig, CustomToolConfig};
 use crate::config::{
     atomic_write_file, discover_project_root, get_app_config_dir, load_llm_settings,
     load_pipeline_config, load_project_config, load_project_registry, persist_active_project,
@@ -7,7 +7,7 @@ use crate::config::{
     save_boards_config, LlmSettings, PipelineConfig, ProjectConfig, ProjectEntry,
     ProjectRegistry,
 };
-use crate::git::{create_worktree, remove_worktree};
+use crate::git::{create_worktree, delete_branch, remove_worktree};
 use crate::hooks::{execute_hook, execute_sensor_command, HookContext};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -233,7 +233,9 @@ pub fn slugify_board_name(name: &str) -> String {
     ];
     let mut slug = String::new();
     for c in name.chars() {
-        let lower = c.to_ascii_lowercase();
+        // Unicode lowercase FIRST so Cyrillic uppercase hits the transliteration
+        // map below (to_ascii_lowercase leaves e.g. 'М' untouched, breaking lookup).
+        let lower: char = c.to_lowercase().next().unwrap_or(c);
         if lower.is_ascii_alphanumeric() {
             slug.push(lower);
         } else if let Some((_, lat)) = cyrillic_map.iter().find(|(cyr, _)| *cyr == lower) {
@@ -851,6 +853,14 @@ pub async fn load_task_dialog(
     Ok(Vec::new())
 }
 
+/// Receives renderer-side JS errors so white-screen crashes land in the backend log.
+#[tauri::command]
+pub async fn log_ui_error(message: String) -> Result<(), String> {
+    let trimmed = message.chars().take(4000).collect::<String>();
+    eprintln!("CVH [UI-ERROR]: {}", trimmed);
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn clear_task_dialog(
     task_id: String,
@@ -894,8 +904,11 @@ pub async fn create_task(
         }
     };
 
-    // Generate task ID
-    let task_num = tasks.len() + 1;
+    // Generate task ID — monotonic max+1 over on-disk tasks, never len+1:
+    // after deleting tasks, len shrinks but the max suffix does not, so IDs
+    // are never re-issued (re-issued CVH-001 would resurrect stale dialog
+    // history from .cvh/dialogs/ and localStorage).
+    let task_num = next_task_num(&tasks);
     let task_id = format!("CVH-{:03}", task_num);
     let task_slug = task_id.to_lowercase();
     let now = Utc::now().timestamp_millis();
@@ -960,6 +973,27 @@ pub async fn create_task(
     save_tasks_to_disk(&root, &tasks).await?;
 
     Ok(new_task)
+}
+
+/// Monotonic top-level task number: max numeric suffix over existing tasks + 1.
+/// Subtask suffixes (CVH-012.3) count toward their base number only.
+fn next_task_num(tasks: &[Task]) -> u32 {
+    let mut max_num: u32 = 0;
+    for t in tasks {
+        let base = t.id.split('.').next().unwrap_or(t.id.as_str());
+        let digits: String = base.chars().filter(|c| c.is_ascii_digit()).collect();
+        if let Ok(n) = digits.parse::<u32>() {
+            if n > max_num {
+                max_num = n;
+            }
+        }
+    }
+    // Belt & braces: skip any id that still collides (e.g. non-standard ids).
+    let mut candidate = max_num.saturating_add(1).max(1);
+    while tasks.iter().any(|t| t.id == format!("CVH-{:03}", candidate)) {
+        candidate = candidate.saturating_add(1);
+    }
+    candidate
 }
 
 /// Helper: calculates next subtask index for a given parent task id.
@@ -2227,7 +2261,12 @@ pub async fn cleanup_task_worktree(
     let task_slug = task_id.to_lowercase();
     remove_worktree(&root, &task_slug)
         .await
-        .map_err(|e| format!("Failed to remove worktree for {}: {}", task_id, e))
+        .map_err(|e| format!("Failed to remove worktree for {}: {}", task_id, e))?;
+    // Also drop the feature branch created for the task (best-effort: it may
+    // already be merged/deleted or never have existed — never fail cleanup).
+    let branch = format!("feat/{}", task_slug);
+    let _ = delete_branch(&root, &branch, true).await;
+    Ok(())
 }
 
 // ============================================================================
@@ -2522,6 +2561,106 @@ pub async fn save_tool_policies(
     crate::config::save_tool_policies(&root, &policies)
         .await
         .map_err(|e| format!("Failed to save tool policies: {}", e))
+}
+
+// ============================================================================
+// Custom Tools (.cvh/tools/*.json) IPC Commands
+// ============================================================================
+
+/// Валидация имени кастомного тула: ^[a-z0-9_]+$
+pub fn is_valid_custom_tool_name(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+}
+
+/// Сканирует `<root>/.cvh/tools/*.json` (пропуск битых файлов молча, сортировка по name).
+/// Пустая/отсутствующая папка → пустой vec, не ошибка.
+pub async fn list_custom_tools_in(root: &Path) -> Vec<CustomToolConfig> {
+    let mut tools = crate::agent::load_custom_tools(root).await;
+    tools.sort_by(|a, b| a.name.cmp(&b.name));
+    tools
+}
+
+/// Записывает `.cvh/tools/<name>.json` pretty-JSON (создаёт папку при нужде).
+/// Возвращает относительный путь `.cvh/tools/<name>.json`.
+pub async fn save_custom_tool_file(
+    root: &Path,
+    name: &str,
+    description: &str,
+    parameters: serde_json::Value,
+    command: &str,
+) -> Result<String, String> {
+    if !is_valid_custom_tool_name(name) {
+        return Err(format!(
+            "Недопустимое имя тула '{}': разрешены только строчные латинские буквы, цифры и подчёркивание (шаблон ^[a-z0-9_]+$)",
+            name
+        ));
+    }
+    if !parameters.is_object() {
+        return Err("Параметр 'parameters' должен быть JSON-объектом".to_string());
+    }
+    let cfg = CustomToolConfig {
+        name: name.to_string(),
+        description: description.to_string(),
+        parameters,
+        command: command.to_string(),
+    };
+    let serialized =
+        serde_json::to_string_pretty(&cfg).map_err(|e| format!("Failed to serialize custom tool: {}", e))?;
+    let target = root.join(".cvh").join("tools").join(format!("{}.json", name));
+    atomic_write_file(&target, &serialized)
+        .await
+        .map_err(|e| format!("Failed to save custom tool '{}': {}", name, e))?;
+    Ok(format!(".cvh/tools/{}.json", name))
+}
+
+/// Удаляет `.cvh/tools/<name>.json`. Err если имени нет или файла нет.
+pub async fn delete_custom_tool_file(root: &Path, name: &str) -> Result<(), String> {
+    if !is_valid_custom_tool_name(name) {
+        return Err(format!(
+            "Недопустимое имя тула '{}': разрешены только строчные латинские буквы, цифры и подчёркивание (шаблон ^[a-z0-9_]+$)",
+            name
+        ));
+    }
+    let target = root.join(".cvh").join("tools").join(format!("{}.json", name));
+    if !target.exists() {
+        return Err(format!("Кастомный тул '{}' не найден", name));
+    }
+    tokio::fs::remove_file(&target)
+        .await
+        .map_err(|e| format!("Failed to delete custom tool '{}': {}", name, e))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn list_custom_tools(
+    state: State<'_, AppState>,
+) -> Result<Vec<CustomToolConfig>, String> {
+    let root = state.get_root();
+    Ok(list_custom_tools_in(&root).await)
+}
+
+#[tauri::command]
+pub async fn save_custom_tool(
+    name: String,
+    description: String,
+    parameters: serde_json::Value,
+    command: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let root = state.get_root();
+    save_custom_tool_file(&root, &name, &description, parameters, &command).await
+}
+
+#[tauri::command]
+pub async fn delete_custom_tool(
+    name: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let root = state.get_root();
+    delete_custom_tool_file(&root, &name).await
 }
 
 #[tauri::command]
@@ -3146,6 +3285,31 @@ mod tests {
     }
 
     #[test]
+    fn test_next_task_num_never_reuses_ids() {
+        // Gap after deletion: len is 2 but max suffix is 3 -> next must be 4,
+        // never CVH-003 again (stale dialog history) and never len+1=3.
+        let tasks: Vec<Task> = serde_json::from_value(serde_json::json!([
+            {"id": "CVH-001", "title": "a", "stageId": "backlog"},
+            {"id": "CVH-003", "title": "b", "stageId": "backlog"},
+            {"id": "CVH-003.2", "title": "sub", "stageId": "dev", "parentId": "CVH-003", "subtaskIndex": 2}
+        ]))
+        .expect("deserialize tasks");
+        assert_eq!(next_task_num(&tasks), 4);
+
+        // Empty disk -> first id.
+        let empty: Vec<Task> = vec![];
+        assert_eq!(next_task_num(&empty), 1);
+
+        // Subtask-only suffixes must not inflate the top-level counter.
+        let subs: Vec<Task> = serde_json::from_value(serde_json::json!([
+            {"id": "CVH-002", "title": "a", "stageId": "backlog"},
+            {"id": "CVH-002.9", "title": "sub", "stageId": "dev", "parentId": "CVH-002", "subtaskIndex": 9}
+        ]))
+        .expect("deserialize tasks");
+        assert_eq!(next_task_num(&subs), 3);
+    }
+
+    #[test]
     fn test_sanitize_task_id() {
         assert!(sanitize_task_id("CVH-001").is_ok());
         assert!(sanitize_task_id("task-123").is_ok());
@@ -3278,6 +3442,139 @@ mod tests {
 
         let fixed = ensure_task_board_id(vec![legacy_task]);
         assert_eq!(fixed[0].board_id.as_deref(), Some("development"));
+    }
+
+    #[tokio::test]
+    async fn test_custom_tools_save_list_delete_roundtrip() {
+        let base =
+            PathBuf::from("target").join(format!("cvh_tools_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        let params = serde_json::json!({
+            "type": "object",
+            "properties": { "path": { "type": "string" } },
+            "required": ["path"]
+        });
+
+        // save b_tool first, then a_tool → list must be sorted by name
+        let rel_b = save_custom_tool_file(&base, "b_tool", "B desc", params.clone(), "echo b")
+            .await
+            .expect("save b_tool");
+        assert_eq!(rel_b, ".cvh/tools/b_tool.json");
+        let rel_a = save_custom_tool_file(&base, "a_tool", "A desc", params.clone(), "echo a")
+            .await
+            .expect("save a_tool");
+        assert_eq!(rel_a, ".cvh/tools/a_tool.json");
+
+        // pretty JSON on disk parses back to the same config
+        let raw = tokio::fs::read_to_string(base.join(".cvh").join("tools").join("a_tool.json"))
+            .await
+            .expect("read a_tool file");
+        let parsed: CustomToolConfig = serde_json::from_str(&raw).expect("parse a_tool");
+        assert_eq!(parsed.name, "a_tool");
+        assert_eq!(parsed.description, "A desc");
+        assert_eq!(parsed.command, "echo a");
+        assert_eq!(parsed.parameters, params);
+
+        let listed = list_custom_tools_in(&base).await;
+        let names: Vec<String> = listed.iter().map(|t| t.name.clone()).collect();
+        assert_eq!(names, vec!["a_tool".to_string(), "b_tool".to_string()]);
+
+        delete_custom_tool_file(&base, "a_tool").await.expect("delete a_tool");
+        assert!(!base.join(".cvh").join("tools").join("a_tool.json").exists());
+        let listed2 = list_custom_tools_in(&base).await;
+        let names2: Vec<String> = listed2.iter().map(|t| t.name.clone()).collect();
+        assert_eq!(names2, vec!["b_tool".to_string()]);
+
+        delete_custom_tool_file(&base, "b_tool").await.expect("delete b_tool");
+        let listed3 = list_custom_tools_in(&base).await;
+        assert!(listed3.is_empty());
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_custom_tool_invalid_name_rejected() {
+        let base =
+            PathBuf::from("target").join(format!("cvh_tools_badname_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+        let params = serde_json::json!({"type": "object"});
+
+        for bad in ["", "BadName", "with space", "has-dash", "a/b", "имя", "name!"] {
+            let res = save_custom_tool_file(&base, bad, "d", params.clone(), "cmd").await;
+            assert!(res.is_err(), "expected invalid name error for '{}'", bad);
+            let del = delete_custom_tool_file(&base, bad).await;
+            assert!(del.is_err(), "expected delete invalid name error for '{}'", bad);
+        }
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_custom_tool_parameters_must_be_object() {
+        let base =
+            PathBuf::from("target").join(format!("cvh_tools_params_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        for non_obj in [
+            serde_json::json!([]),
+            serde_json::json!("str"),
+            serde_json::json!(42),
+            serde_json::Value::Null,
+        ] {
+            let res =
+                save_custom_tool_file(&base, "good_name", "d", non_obj, "cmd").await;
+            assert!(res.is_err(), "expected parameters-object error");
+        }
+        // nothing was written
+        assert!(list_custom_tools_in(&base).await.is_empty());
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_custom_tool_delete_missing_errors() {
+        let base =
+            PathBuf::from("target").join(format!("cvh_tools_missing_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        let res = delete_custom_tool_file(&base, "no_such_tool").await;
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("не найден"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_custom_tool_broken_json_ignored() {
+        let base =
+            PathBuf::from("target").join(format!("cvh_tools_broken_{}", uuid::Uuid::new_v4()));
+        let tools_dir = base.join(".cvh").join("tools");
+        tokio::fs::create_dir_all(&tools_dir).await.expect("test dir");
+
+        save_custom_tool_file(&base, "good_tool", "ok", serde_json::json!({"type": "object"}), "echo ok")
+            .await
+            .expect("save good");
+        // broken json + non-json file must be silently skipped
+        tokio::fs::write(tools_dir.join("broken.json"), "{ not valid json {{{")
+            .await
+            .expect("seed broken");
+        tokio::fs::write(tools_dir.join("notes.txt"), "ignore me")
+            .await
+            .expect("seed txt");
+
+        let listed = list_custom_tools_in(&base).await;
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].name, "good_tool");
+
+        // missing folder → []
+        let empty_base =
+            PathBuf::from("target").join(format!("cvh_tools_empty_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&empty_base).await.expect("empty dir");
+        assert!(list_custom_tools_in(&empty_base).await.is_empty());
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+        let _ = tokio::fs::remove_dir_all(&empty_base).await;
     }
 }
 

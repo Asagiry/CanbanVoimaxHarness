@@ -5,6 +5,7 @@ import {
   Copy,
   Check,
   X,
+  Wrench,
 } from 'lucide-react';
 
 interface ToolExecutionCardProps {
@@ -311,10 +312,10 @@ ${tool.stderr}` : '',
           </button>
 
           <span
-            className="text-[12px] leading-none shrink-0 select-none"
+            className="flex items-center shrink-0 select-none text-[#8f8f8f]"
             title="Инструмент"
           >
-            ⚙️
+            <Wrench className="h-3.5 w-3.5" />
           </span>
 
           <span className="font-mono font-medium text-[#171717] shrink-0">

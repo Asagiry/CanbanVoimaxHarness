@@ -1070,6 +1070,7 @@ pub fn default_global_tools() -> HashMap<String, bool> {
     map.insert("web_search".to_string(), true);
     map.insert("web_fetch".to_string(), true);
     map.insert("subagent".to_string(), true);
+    map.insert("todo_write".to_string(), true);
     map
 }
 
@@ -1088,6 +1089,7 @@ impl Default for ToolPolicyConfig {
         review_map.insert("web_search".to_string(), true);
         review_map.insert("web_fetch".to_string(), true);
         review_map.insert("subagent".to_string(), true);
+        review_map.insert("todo_write".to_string(), true);
         stage_overrides.insert("review".to_string(), review_map);
 
         // Dev stage: write enabled, web_search disabled
@@ -1101,6 +1103,7 @@ impl Default for ToolPolicyConfig {
         dev_map.insert("web_search".to_string(), false);
         dev_map.insert("web_fetch".to_string(), true);
         dev_map.insert("subagent".to_string(), true);
+        dev_map.insert("todo_write".to_string(), true);
         stage_overrides.insert("dev".to_string(), dev_map);
 
         Self {

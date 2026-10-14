@@ -20,6 +20,7 @@ export default function CortexExplorer() {
   const { columns } = useBoardStore();
   const [filterQuery, setFilterQuery] = useState('');
   const [openRulesFolders, setOpenRulesFolders] = useState<Record<string, boolean>>({});
+  const [creatingStageId, setCreatingStageId] = useState<string | null>(null);
   const searchInputId = useId();
 
   // Источник стадий — колонки доски (колонка с persona = агент).
@@ -103,31 +104,54 @@ export default function CortexExplorer() {
               }`}
             >
               {/* Stage Root Folder Header */}
-              <button
-                onClick={() => toggleStageExpand(stage.stageId)}
-                className="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-left transition cursor-pointer"
-              >
-                <div className="flex items-center space-x-2 min-w-0">
-                  {stage.isExpanded ? (
-                    <ChevronDown className="h-3.5 w-3.5 text-[#666666] shrink-0" />
-                  ) : (
-                    <ChevronRight className="h-3.5 w-3.5 text-[#666666] shrink-0" />
-                  )}
+              <div className="group flex items-center gap-0.5 px-1">
+                <button
+                  onClick={() => toggleStageExpand(stage.stageId)}
+                  className="flex-1 flex items-center justify-between px-1.5 py-1.5 rounded-md text-left transition cursor-pointer min-w-0"
+                >
+                  <div className="flex items-center space-x-2 min-w-0">
+                    {stage.isExpanded ? (
+                      <ChevronDown className="h-3.5 w-3.5 text-[#666666] shrink-0" />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5 text-[#666666] shrink-0" />
+                    )}
 
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: stage.color || '#171717' }}
-                  />
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: stage.color || '#171717' }}
+                    />
 
-                  <span className="font-sans text-xs font-semibold text-[#171717] truncate">
-                    {stage.stageTitle}
+                    <span className="font-sans text-xs font-semibold text-[#171717] truncate">
+                      {stage.stageTitle}
+                    </span>
+                  </div>
+
+                  <span className="text-[10px] font-mono text-[#666666] truncate ml-1">
+                    {stage.personaName}
                   </span>
-                </div>
+                </button>
 
-                <span className="text-[10px] font-mono text-[#666666] truncate ml-1">
-                  {stage.personaName}
-                </span>
-              </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!stage.isExpanded) toggleStageExpand(stage.stageId);
+                    setCreatingStageId((prev) => (prev === stage.stageId ? null : stage.stageId));
+                  }}
+                  title="Новый .md файл"
+                  aria-label="Новый .md файл"
+                  className="p-1 rounded-md text-[#8f8f8f] hover:text-[#171717] hover:bg-[#ebebeb]/60 transition cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shrink-0"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {/* Инлайн-форма создания .md-файла */}
+              {creatingStageId === stage.stageId && (
+                <NewCortexFileForm
+                  stage={stage}
+                  onClose={() => setCreatingStageId(null)}
+                />
+              )}
 
               {/* Children */}
               {stage.isExpanded && (
@@ -216,6 +240,140 @@ export default function CortexExplorer() {
         })}
       </div>
     </aside>
+  );
+}
+
+function NewCortexFileForm({
+  stage,
+  onClose,
+}: {
+  stage: CortexAgentStage;
+  onClose: () => void;
+}) {
+  const createCortexFile = useCortexStore((s) => s.createCortexFile);
+  const hasPersona = (stage.personaName ?? '').trim().length > 0;
+  const [rawName, setRawName] = useState('');
+  const [kind, setKind] = useState<'rule' | 'persona'>('rule');
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const effectiveKind: 'rule' | 'persona' = !hasPersona ? 'rule' : kind;
+  const targetDir =
+    effectiveKind === 'persona'
+      ? '.cvh/agents/'
+      : `.cvh/rules/${hasPersona ? stage.stageId : 'common'}/`;
+
+  const handleSubmit = async () => {
+    try {
+      const trimmed = rawName.trim();
+      const base = /\.md$/i.test(trimmed) ? trimmed.slice(0, -3).trim() : trimmed;
+      if (!base) {
+        setError('Введите имя файла');
+        return;
+      }
+      if (!/^[A-Za-z0-9-_]+$/.test(base)) {
+        setError('Только латиница, цифры, - и _');
+        return;
+      }
+      const fileName = `${base}.md`;
+      const duplicate = stage.files.some(
+        (f) => f.name.toLowerCase() === fileName.toLowerCase()
+      );
+      if (duplicate) {
+        setError(`Файл ${fileName} уже есть в стадии`);
+        return;
+      }
+      setError(null);
+      setIsSaving(true);
+      await createCortexFile(stage.stageId, rawName, effectiveKind);
+      onClose();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message || 'Не удалось создать файл');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="mx-1 mb-1 rounded-md border border-[#ebebeb] bg-white px-2 py-2 space-y-2">
+      <div className="text-[11px] font-sans font-semibold text-[#171717]">
+        Новый .md файл
+      </div>
+
+      <input
+        type="text"
+        value={rawName}
+        onChange={(e) => {
+          setRawName(e.target.value);
+          if (error) setError(null);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') void handleSubmit();
+          if (e.key === 'Escape') onClose();
+        }}
+        placeholder="имя-файла"
+        autoFocus
+        className="w-full px-2 py-1 text-xs rounded-md bg-white border border-[#ebebeb] text-[#171717] font-mono placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] transition"
+      />
+      <div className="text-[10px] font-mono text-[#8f8f8f]">
+        Латиница, цифры, - и _ (.md добавится автоматически)
+      </div>
+
+      {hasPersona ? (
+        <div className="flex items-center gap-3 text-[11px] font-mono text-[#4d4d4d]">
+          <label className="flex items-center gap-1 cursor-pointer">
+            <input
+              type="radio"
+              name={`cortex-kind-${stage.stageId}`}
+              checked={kind === 'rule'}
+              onChange={() => setKind('rule')}
+              className="accent-[#171717]"
+            />
+            <span>Правило</span>
+          </label>
+          <label className="flex items-center gap-1 cursor-pointer">
+            <input
+              type="radio"
+              name={`cortex-kind-${stage.stageId}`}
+              checked={kind === 'persona'}
+              onChange={() => setKind('persona')}
+              className="accent-[#171717]"
+            />
+            <span>Персона</span>
+          </label>
+        </div>
+      ) : (
+        <div className="text-[10px] font-mono text-[#8f8f8f]">
+          Тип: правило (у стадии нет персоны)
+        </div>
+      )}
+
+      <div className="text-[10px] font-mono text-[#8f8f8f] truncate" title={`${targetDir}${rawName.trim() || 'имя-файла'}.md`}>
+        {targetDir}
+      </div>
+
+      {error && (
+        <div className="text-[11px] font-sans text-red-600">{error}</div>
+      )}
+
+      <div className="flex items-center gap-1.5">
+        <button
+          onClick={() => void handleSubmit()}
+          disabled={isSaving}
+          className="px-2.5 py-1 rounded-md text-[11px] font-mono bg-[#171717] hover:bg-[#262626] text-white transition cursor-pointer disabled:opacity-50"
+        >
+          {isSaving ? 'Создание...' : 'Создать'}
+        </button>
+        <button
+          onClick={onClose}
+          disabled={isSaving}
+          className="px-2.5 py-1 rounded-md text-[11px] font-mono bg-white border border-[#ebebeb] text-[#4d4d4d] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer disabled:opacity-50"
+        >
+          Отмена
+        </button>
+      </div>
+    </div>
   );
 }
 

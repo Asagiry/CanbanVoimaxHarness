@@ -25,8 +25,9 @@ export interface KanbanTask {
   id: string;
   title: string;
   description?: string;
-  coverImage?: string;
   attachments?: string[];
+  createdAt?: number;
+  updatedAt?: number;
   priority: TaskPriority;
   columnId: string;
   boardId?: string;

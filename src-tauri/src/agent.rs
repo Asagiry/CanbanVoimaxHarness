@@ -1412,9 +1412,13 @@ where
     active_tools.sort_by(|a, b| a.function.name.cmp(&b.function.name));
 
     let llm_client = LlmClient::new();
-    let max_turns = if config.max_turns == 0 { 25 } else { config.max_turns };
 
-    for turn in 1..=max_turns {
+    // Безлимитный ReAct-цикл (лимит шагов убран по требованию): выход только
+    // через терминальный ответ модели (текст без тул-коллов), abort_flag
+    // (кнопка «Остановить») или ошибку LLM-стрима.
+    let mut turn: usize = 0;
+    loop {
+        turn += 1;
         if abort_flag.load(Ordering::SeqCst) {
             event_sink(AgentEvent::Aborted);
             bail!("Agent execution aborted by user");
@@ -1686,11 +1690,8 @@ where
         }
     }
 
-    let final_msg = "Maximum turns reached without terminal response.".to_string();
-    event_sink(AgentEvent::Finished {
-        final_response: final_msg.clone(),
-    });
-    Ok(final_msg)
+    // Недостижимо: цикл выше бесконечен и выходит только через
+    // return (терминальный ответ), bail! (abort/ошибка) внутри.
 }
 
 #[cfg(test)]

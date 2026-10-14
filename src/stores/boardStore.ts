@@ -87,7 +87,7 @@ interface BoardState {
   updateTask: (taskId: string, partial: Partial<KanbanTask>) => void;
   addTask: (task: KanbanTask) => Promise<void>;
   createSubtask: (parentId: string, targetColumnId?: string) => Promise<KanbanTask | null>;
-  deleteTask: (taskId: string) => void;
+  deleteTask: (taskId: string) => Promise<void>;
   setTaskVerdict: (taskId: string, verdict: TaskVerdict, note?: string) => void;
   toggleTimer: (taskId: string) => void;
   tickTimers: () => void;
@@ -103,6 +103,83 @@ export function getTasksStorageKey(): string {
   } catch {
     return 'cvh_tasks_default';
   }
+}
+
+export function getTaskSeqStorageKey(): string {
+  try {
+    const activeProject = useProjectStore.getState().activeProject;
+    return `cvh_task_seq_${activeProject?.id || 'default'}`;
+  } catch {
+    return 'cvh_task_seq_default';
+  }
+}
+
+function getSubtaskSeqStorageKey(parentId: string): string {
+  return `${getTaskSeqStorageKey()}_sub_${parentId}`;
+}
+
+/** Numeric suffix of a top-level id: CVH-012 -> 12. Subtask CVH-012.3 -> base 12. */
+export function parseTopLevelTaskNum(id: string): number {
+  const m = /^CVH-(\d+)/i.exec(id.trim());
+  if (!m) return 0;
+  const n = parseInt(m[1], 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function readSeq(key: string): number {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw = window.localStorage.getItem(key);
+      const n = raw == null ? 0 : parseInt(raw, 10);
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    }
+  } catch {
+    // ignore — treat as empty counter
+  }
+  return 0;
+}
+
+function writeSeq(key: string, value: number): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(key, String(value));
+    }
+  } catch (err) {
+    console.warn('Failed to write task seq to localStorage:', err);
+  }
+}
+
+function maxTaskNum(tasks: KanbanTask[]): number {
+  let max = 0;
+  for (const t of tasks) {
+    const n = parseTopLevelTaskNum(t.id);
+    if (n > max) max = n;
+  }
+  return max;
+}
+
+/**
+ * Raise the persistent counter floor so it never falls below existing tasks.
+ * Only ever raises — never resets, so deleted IDs are never re-issued.
+ */
+export function syncTaskSeqWithTasks(tasks: KanbanTask[]): void {
+  const key = getTaskSeqStorageKey();
+  writeSeq(key, Math.max(readSeq(key), maxTaskNum(tasks), tasks.length));
+}
+
+/**
+ * Allocate the next monotonic top-level task number and persist the
+ * incremented counter. next = max(counter, max numeric suffix, tasks.length) + 1.
+ */
+export function allocateNextTaskNum(tasks: KanbanTask[]): number {
+  const key = getTaskSeqStorageKey();
+  const next = Math.max(readSeq(key), maxTaskNum(tasks), tasks.length) + 1;
+  writeSeq(key, next);
+  return next;
+}
+
+export function formatTaskId(num: number): string {
+  return `CVH-${String(num).padStart(3, '0')}`;
 }
 
 function persistTasksToLocalStorage(tasks: KanbanTask[]): void {
@@ -145,8 +222,13 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
     id: raw.id,
     title: typeof raw.title === 'string' && raw.title.trim() !== '' ? raw.title : raw.id,
     description: typeof raw.description === 'string' && raw.description !== '' ? raw.description : undefined,
-    coverImage: raw.coverImage ?? raw.cover_image ?? raw.cover_image_url ?? undefined,
     attachments: Array.isArray(raw.attachments) ? raw.attachments.filter((a: unknown) => typeof a === 'string') : undefined,
+    createdAt: typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt)
+      ? raw.createdAt
+      : (typeof raw.created_at === 'number' && Number.isFinite(raw.created_at) ? raw.created_at : Date.now()),
+    updatedAt: typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt)
+      ? raw.updatedAt
+      : (typeof raw.updated_at === 'number' && Number.isFinite(raw.updated_at) ? raw.updated_at : Date.now()),
     priority: (raw.priority as TaskPriority) || 'high',
     columnId,
     boardId: raw.boardId || raw.board_id || 'development',
@@ -225,7 +307,7 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
       parentId: t.parentId ?? null,
       subtaskIndex: t.subtaskIndex ?? null,
       waitingForSubtaskId: t.waitingForSubtaskId ?? null,
-      createdAt: Date.now(),
+      createdAt: t.createdAt || Date.now(),
       updatedAt: Date.now(),
     }));
     await invoke('save_tasks', { tasks: backendPayload });
@@ -259,8 +341,9 @@ function mapBackendTaskToKanban(t: any): KanbanTask {
     id: fallbackId,
     title: fallbackId,
     description: undefined,
-    coverImage: undefined,
     attachments: undefined,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
     priority: 'high' as TaskPriority,
     columnId: fallbackCol,
     boardId: 'development',
@@ -497,12 +580,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           const mapped = rawTasks.map(mapBackendTaskToKanban);
           set({ tasks: mapped, isTauriConnected: true, isLoadingTasks: false });
           persistTasksToLocalStorage(mapped);
+          syncTaskSeqWithTasks(mapped);
           return;
         } else {
           // Backend has empty tasks array on disk: check per-project localStorage backup
           const backupTasks = loadTasksFromLocalStorage();
           if (backupTasks.length > 0) {
             set({ tasks: backupTasks, isTauriConnected: true, isLoadingTasks: false });
+            syncTaskSeqWithTasks(backupTasks);
             await syncTasksBackend(backupTasks);
             return;
           }
@@ -518,6 +603,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const backupTasks = loadTasksFromLocalStorage();
     if (backupTasks.length > 0) {
       set({ tasks: backupTasks, isLoadingTasks: false });
+      syncTaskSeqWithTasks(backupTasks);
       await syncTasksBackend(backupTasks);
       return;
     }
@@ -615,6 +701,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const updatedTasks = [taskWithBoard, ...get().tasks];
     set({ tasks: updatedTasks });
     persistTasksToLocalStorage(updatedTasks);
+    // Keep the monotonic counter ahead of any explicitly assigned id.
+    syncTaskSeqWithTasks(updatedTasks);
     await syncTasksBackend(updatedTasks);
 
     const targetColDef = get().columns.find((c) => c.id === taskWithBoard.columnId);
@@ -637,15 +725,17 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
     if (!targetCol) return null;
 
-    // Calculate subtask index
+    // Calculate subtask index — monotonic per parent: never re-issue an index
+    // of a deleted subtask (its dialog history may still be referenced).
     const existingSubtasks = tasks.filter(
       (t) => t.parentId === parentId || t.id.startsWith(`${parentId}.`)
     );
-    const nextIndex =
-      existingSubtasks.reduce((max, t) => {
-        const parsed = t.subtaskIndex ?? parseInt(t.id.split('.').pop() || '0', 10);
-        return Math.max(max, isNaN(parsed) ? 0 : parsed);
-      }, 0) + 1;
+    const siblingMax = existingSubtasks.reduce((max, t) => {
+      const parsed = t.subtaskIndex ?? parseInt(t.id.split('.').pop() || '0', 10);
+      return Math.max(max, isNaN(parsed) ? 0 : parsed);
+    }, 0);
+    const subSeqKey = getSubtaskSeqStorageKey(parentId);
+    const nextIndex = Math.max(siblingMax + 1, readSeq(subSeqKey) + 1);
     const subtaskId = `${parentId}.${nextIndex}`;
 
     // Try Tauri backend IPC first
@@ -656,7 +746,17 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         targetStageId: targetCol.id,
         title: null,
       });
+      if (backendSubtask && typeof backendSubtask.id === 'string') {
+        // Backend computes its own index (max+1 over disk tasks): adopt the
+        // real id and raise our per-parent counter to it so later indexes
+        // never collide with it.
+        const usedIdx = parseInt(backendSubtask.id.split('.').pop() || '0', 10);
+        writeSeq(subSeqKey, Number.isFinite(usedIdx) && usedIdx > 0 ? Math.max(usedIdx, nextIndex) : nextIndex);
+        await get().loadTasks();
+        return get().tasks.find((t) => t.id === backendSubtask.id) || null;
+      }
       if (backendSubtask) {
+        writeSeq(subSeqKey, nextIndex);
         await get().loadTasks();
         return get().tasks.find((t) => t.id === subtaskId) || null;
       }
@@ -706,6 +806,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const finalTasks = [...updatedTasks, newSubtask];
     set({ tasks: finalTasks });
     persistTasksToLocalStorage(finalTasks);
+    writeSeq(getSubtaskSeqStorageKey(parentId), nextIndex);
     await syncTasksBackend(finalTasks);
 
     if (targetCol.autoRun ?? !!targetCol.persona) {
@@ -715,14 +816,62 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     return newSubtask;
   },
 
-  deleteTask: (taskId) => {
-    const updatedTasks = get().tasks.filter((t) => t.id !== taskId);
+  deleteTask: async (taskId) => {
+    const { tasks } = get();
+    const target = tasks.find((t) => t.id === taskId);
+    // Subtasks (CVH-012.1) share the parent's worktree/branch — only
+    // top-level tasks own git resources.
+    const isSubtask = !!target?.parentId || taskId.includes('.');
+
+    // Cascade: the task plus all its descendants (via parentId or id prefix).
+    const toDelete = new Set<string>([taskId]);
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const t of tasks) {
+        if (toDelete.has(t.id)) continue;
+        if ((t.parentId && toDelete.has(t.parentId)) || [...toDelete].some((id) => t.id.startsWith(`${id}.`))) {
+          toDelete.add(t.id);
+          grew = true;
+        }
+      }
+    }
+    const ids = [...toDelete];
+
+    // (a) Worktree + branch cleanup (best-effort, never blocks deletion).
+    if (!isSubtask) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('cleanup_task_worktree', { taskId });
+      } catch (err) {
+        console.info('cleanup_task_worktree invoke error or web mode:', err);
+      }
+    }
+
+    // (б) Dialog history cleanup via the drawer store action:
+    // localStorage `cvh_dialog_<id>` + invoke clear_task_dialog (.cvh/dialogs/,
+    // .cvh/tasks/<id>/, global fallback).
+    try {
+      const { useDrawerStore } = await import('./drawerStore');
+      for (const id of ids) {
+        try {
+          await useDrawerStore.getState().clearTaskLogs(id);
+        } catch (err) {
+          console.info('clearTaskLogs error for task:', id, err);
+        }
+      }
+    } catch (err) {
+      console.info('drawerStore clearTaskLogs unavailable:', err);
+    }
+
+    // (в) Remove from store + persist + sync.
+    const updatedTasks = get().tasks.filter((t) => !toDelete.has(t.id));
     set({
       tasks: updatedTasks,
-      selectedTaskId: get().selectedTaskId === taskId ? null : get().selectedTaskId,
+      selectedTaskId: toDelete.has(get().selectedTaskId ?? '') ? null : get().selectedTaskId,
     });
     persistTasksToLocalStorage(updatedTasks);
-    syncTasksBackend(updatedTasks);
+    await syncTasksBackend(updatedTasks);
   },
 
   runTaskAgent: async (taskId) => {

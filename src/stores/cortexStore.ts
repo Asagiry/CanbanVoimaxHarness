@@ -19,9 +19,34 @@ interface CortexState {
   syncStagesFromColumns: (columns: PipelineColumn[]) => void;
   openFile: (fileId: string) => Promise<void>;
   createPersonaTemplate: (fileId: string) => Promise<void>;
+  // Создать новый .md-файл в стадии: kind определяет папку и шаблон.
+  // Правила -> `.cvh/rules/<stageId|common>/`, персоны -> `.cvh/agents/`.
+  // При ошибке IPC бросает Error с русским текстом (форма показывает его красным).
+  createCortexFile: (stageId: string, rawName: string, kind: 'rule' | 'persona') => Promise<void>;
   updateActiveFileContent: (content: string) => void;
   saveRules: () => Promise<void>;
   closeEditor: () => void;
+}
+
+// Минимальный русский шаблон правила для `.cvh/rules/<stage>/`
+function buildRuleTemplate(baseName: string, stageTitle: string): string {
+  return (
+    `# Правило: ${baseName} (${stageTitle})\n` +
+    `\n` +
+    `## Назначение\n` +
+    `Опишите назначение правила.\n` +
+    `\n` +
+    `## Проверки\n` +
+    `- Проверять результат реальными сенсорами перед сдачей.\n`
+  );
+}
+
+// Нормализация имени: trim + автосуффикс .md. Возвращает { base, fileName }.
+function normalizeCortexFileName(rawName: string): { base: string; fileName: string } {
+  const trimmed = rawName.trim();
+  const withoutExt = /\.md$/i.test(trimmed) ? trimmed.slice(0, -3) : trimmed;
+  const base = withoutExt.trim();
+  return { base, fileName: `${base}.md` };
 }
 
 // Шаблон персоны на русском для отсутствующего .cvh/agents/<persona>.md
@@ -80,6 +105,15 @@ export const useCortexStore = create<CortexState>((set, get) => ({
     const prevStages = get().stages;
     const prevStageById = new Map(prevStages.map((st) => [st.stageId, st]));
     const prevFileById = new Map(prevStages.flatMap((st) => st.files.map((f) => [f.id, f])));
+    // Ранее созданные файлы (правила/персоны) по stageId — пережить пересборку стадий.
+    const prevExtrasByStage = new Map<string, CortexAgentFile[]>();
+    for (const st of prevStages) {
+      for (const f of st.files) {
+        const arr = prevExtrasByStage.get(f.stageId) ?? [];
+        arr.push(f);
+        prevExtrasByStage.set(f.stageId, arr);
+      }
+    }
 
     // Уникальные persona в порядке колонок; колонки без персоны пропускаются
     const boardStages: CortexAgentStage[] = [];
@@ -88,6 +122,9 @@ export const useCortexStore = create<CortexState>((set, get) => ({
       seenPersonas.add(col.persona);
       const fileId = `${col.id}-persona`;
       const prevFile = prevFileById.get(fileId);
+      // Подхватить ранее созданные файлы стадии (рядом с моками вида .cvh/rules/dev/*.md),
+      // чтобы пересборка из колонок их не стирала.
+      const extras = (prevExtrasByStage.get(col.id) ?? []).filter((f) => f.id !== fileId);
       boardStages.push({
         stageId: col.id,
         stageTitle: col.title,
@@ -105,6 +142,7 @@ export const useCortexStore = create<CortexState>((set, get) => ({
             content: prevFile?.content ?? '',
             isDirty: prevFile?.isDirty ?? false,
           },
+          ...extras,
         ],
       });
     }
@@ -211,6 +249,75 @@ export const useCortexStore = create<CortexState>((set, get) => ({
       });
       return;
     }
+  },
+
+  createCortexFile: async (stageId, rawName, kind) => {
+    const { stages } = get();
+    const stage = stages.find((st) => st.stageId === stageId);
+    if (!stage) throw new Error('Стадия не найдена');
+
+    const hasPersona = (stage.personaName ?? '').trim().length > 0;
+    const effectiveKind: 'rule' | 'persona' = !hasPersona ? 'rule' : kind;
+
+    const { base, fileName } = normalizeCortexFileName(rawName);
+    if (!base) throw new Error('Введите имя файла');
+    if (!/^[A-Za-z0-9-_]+$/.test(base)) {
+      throw new Error('Только латиница, цифры, - и _');
+    }
+
+    // Папки рядом с существующими путями: правила — `.cvh/rules/<stageId|common>/`,
+    // персоны — `.cvh/agents/` (как `.cvh/rules/dev/safety.md`, `.cvh/agents/<role>.md`).
+    const targetPath =
+      effectiveKind === 'persona'
+        ? `.cvh/agents/${fileName}`
+        : `.cvh/rules/${hasPersona ? stage.stageId : 'common'}/${fileName}`;
+
+    const duplicate = stage.files.some(
+      (f) => f.name.toLowerCase() === fileName.toLowerCase() || f.path.toLowerCase() === targetPath.toLowerCase()
+    );
+    if (duplicate) throw new Error(`Файл ${fileName} уже есть в стадии`);
+
+    const content =
+      effectiveKind === 'persona'
+        ? buildPersonaTemplate(base, stage.stageTitle)
+        : buildRuleTemplate(base, stage.stageTitle);
+
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('save_cortex_file', { path: targetPath, content });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(`Не удалось сохранить файл: ${detail}`);
+    }
+
+    // Уникальный id узла в пределах стадии
+    let fileId = `${stageId}-${effectiveKind}-${base}`;
+    let suffix = 2;
+    const existingIds = new Set(stage.files.map((f) => f.id));
+    while (existingIds.has(fileId)) {
+      fileId = `${stageId}-${effectiveKind}-${base}-${suffix}`;
+      suffix += 1;
+    }
+
+    const created: CortexAgentFile = {
+      id: fileId,
+      name: fileName,
+      stageId,
+      type: effectiveKind,
+      path: targetPath,
+      content,
+      isDirty: false,
+    };
+
+    // Узел появляется в дереве стадии и открывается в редакторе (существующий флоу)
+    set((state) => ({
+      stages: state.stages.map((st) =>
+        st.stageId === stageId ? { ...st, files: [...st.files, created] } : st
+      ),
+      activeFile: created,
+      isEditorOpen: true,
+      saveFeedback: null,
+    }));
   },
 
   updateActiveFileContent: (content) => {

@@ -31,7 +31,9 @@ export default function KanbanColumn({
   isPinned: isPinnedProp,
   onDeleteColumn,
 }: KanbanColumnProps) {
-  const { focusStage, focusedStageId } = useCortexStore();
+  // Клик по шапке больше не подсвечивает колонку и не трогает проводник
+  // (фокус из проводника в доску оставлен, обратного нет).
+  const { focusedStageId } = useCortexStore();
   const isFocused = focusedStageId === column.id;
   const isDoneColumn = Boolean(
     column.terminal ||
@@ -102,7 +104,6 @@ export default function KanbanColumn({
       {/* Column Header (drag handle для смены порядка колонок; ПКМ — действия с колонкой) */}
       <div
         {...(!isPinned ? colProvided.dragHandleProps : {})}
-        onClick={() => focusStage(column.id)}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -119,12 +120,12 @@ export default function KanbanColumn({
       >
         <div className="flex items-center gap-2 min-w-0 w-full overflow-hidden">
           {getColumnIcon(column.icon)}
-          <h3 className="text-xs font-semibold text-[#171717] truncate leading-none">
+          <h3 className="text-[13px] font-semibold text-[#171717] truncate leading-none">
             {column.title}
           </h3>
-          {/* Task Counter */}
+          {/* Task Counter (same baseline as the title) */}
           <span
-            className={`text-[10px] font-mono tabular-nums whitespace-nowrap leading-none shrink-0 ${
+            className={`text-[10px] font-mono tabular-nums whitespace-nowrap leading-none shrink-0 translate-y-[1px] ${
               isAtWipLimit ? 'text-red-600' : 'text-[#8f8f8f]'
             }`}
           >

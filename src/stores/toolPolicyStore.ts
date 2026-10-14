@@ -82,6 +82,14 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     category: 'agent',
     tokenWeight: 310,
   },
+  {
+    id: 'todo_write',
+    name: 'todo_write',
+    label: 'План To-dos',
+    description: 'Фиксация и обновление плана задачи: шаги pending | in_progress | completed',
+    category: 'agent',
+    tokenWeight: 280,
+  },
 ];
 
 export interface ToolPolicyState {
@@ -111,6 +119,7 @@ const DEFAULT_GLOBAL: Record<string, boolean> = {
   web_search: true,
   web_fetch: true,
   subagent: true,
+  todo_write: true,
 };
 
 const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
@@ -124,6 +133,7 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     web_search: true,
     web_fetch: true,
     subagent: true,
+    todo_write: true,
   },
   dev: {
     execute_command: true,
@@ -135,6 +145,7 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     web_search: false,
     web_fetch: true,
     subagent: true,
+    todo_write: true,
   },
   retro: {
     execute_command: true,
@@ -146,6 +157,7 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     web_search: false,
     web_fetch: false,
     subagent: false,
+    todo_write: true,
   },
 };
 
