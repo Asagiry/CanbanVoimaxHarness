@@ -5,6 +5,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import ToolExecutionCard from './ToolExecutionCard';
 import ContextGauge from './ContextGauge';
 import GitDiffSidebar from './GitDiffSidebar';
+import ErrorBoundary from '../common/ErrorBoundary';
 import {
   ArrowDown,
   ArrowLeft,
@@ -29,9 +30,9 @@ import {
 } from 'lucide-react';
 
 // Lightweight Markdown Renderer for streaming assistant output
-function MarkdownContent({ content }: { content: string }) {
+function MarkdownContent({ content }: { content?: string }) {
   const elements = useMemo(() => {
-    const lines = content.split('\n');
+    const lines = (content ?? '').split('\n');
     const result: React.ReactNode[] = [];
     let inCodeBlock = false;
     let codeLanguage = '';
@@ -193,7 +194,7 @@ function MarkdownContent({ content }: { content: string }) {
       const imgMatch = line.trim().match(/^!\[(.*?)\]\((.*?)\)$/);
       if (imgMatch) {
         result.push(
-          <div key={`img-${index}`} className="my-2 rounded-lg overflow-hidden border border-[#ebebeb] max-w-lg bg-zinc-900 shadow-xs">
+          <div key={`img-${index}`} className="my-2 rounded-lg overflow-hidden border border-[#ebebeb] max-w-lg bg-[#f4f4f5] shadow-xs">
             <img
               src={imgMatch[2]}
               alt={imgMatch[1] || 'Изображение'}
@@ -284,7 +285,7 @@ function ThinkingCard({
   let timerText: string;
   if (isTaskRunning && thinkingStart != null) {
     timerText = `${((Date.now() - thinkingStart) / 1000).toFixed(1)}с`;
-  } else if (thought.durationMs) {
+  } else if (thought?.durationMs) {
     timerText = `${Math.round(thought.durationMs / 1000)}с`;
   } else {
     timerText = '0с';
@@ -313,13 +314,13 @@ function ThinkingCard({
             <Clock className="h-3 w-3" />
             <span>{timerText}</span>
           </span>
-          <span className="tabular-nums">{thought.timestamp}</span>
+          <span className="tabular-nums">{thought?.timestamp ?? ''}</span>
         </div>
       </div>
 
       {isExpanded && (
         <div className="p-3 border-t border-[#ebebeb] bg-[#ffffff] font-mono text-[13px] leading-relaxed text-[#333333] whitespace-pre-wrap select-text max-h-96 overflow-y-auto">
-          {thought.content}
+          {thought?.content ?? ''}
         </div>
       )}
     </div>
@@ -503,25 +504,25 @@ export default function AgentConsoleDrawer() {
     const rawTools = toolExecutions[task.id] || [];
 
     const merged: DrawerActivityItem[] = [
-      ...rawStream.thoughts.map((th) => ({
-        id: th.id,
+      ...(rawStream.thoughts ?? []).map((th) => ({
+        id: th?.id ?? `th-${Date.now()}`,
         type: 'thought' as const,
-        timestamp: th.timestamp,
-        content: th.content,
-        durationMs: th.durationMs,
+        timestamp: th?.timestamp ?? '',
+        content: th?.content ?? '',
+        durationMs: th?.durationMs,
       })),
-      ...rawStream.outputs.map((out) => ({
-        id: out.id,
-        type: (out.type === 'steer' || out.type === 'system' || out.type === 'error' || out.type === 'user'
+      ...(rawStream.outputs ?? []).map((out) => ({
+        id: out?.id ?? `out-${Date.now()}`,
+        type: (out?.type === 'steer' || out?.type === 'system' || out?.type === 'error' || out?.type === 'user'
           ? out.type
           : 'output') as any,
-        timestamp: out.timestamp,
-        content: out.content,
+        timestamp: out?.timestamp ?? '',
+        content: out?.content ?? '',
       })),
-      ...rawTools.map((t) => ({
-        id: t.id,
+      ...(rawTools ?? []).map((t) => ({
+        id: t?.id ?? `tool-${Date.now()}`,
         type: 'tool' as const,
-        timestamp: t.timestamp,
+        timestamp: t?.timestamp ?? '',
         tool: t,
       })),
     ];
@@ -571,9 +572,9 @@ export default function AgentConsoleDrawer() {
 
   const turns = useMemo(() => {
     const feed = activityFeed[task.id] || [];
-    const feedCount = feed.filter((a) => a.type === 'tool' || a.type === 'thought' || a.type === 'output').length;
+    const feedCount = (feed ?? []).filter((a) => a?.type === 'tool' || a?.type === 'thought' || a?.type === 'output').length;
     const toolsCount = toolExecutions[task.id]?.length || 0;
-    const outputsCount = streamEntries[task.id]?.outputs?.filter((o) => o.type === 'output').length || 0;
+    const outputsCount = streamEntries[task.id]?.outputs?.filter((o) => o?.type === 'output').length || 0;
     return Math.max(feedCount, toolsCount + outputsCount, 0);
   }, [task.id, activityFeed, toolExecutions, streamEntries]);
 
@@ -765,11 +766,11 @@ export default function AgentConsoleDrawer() {
             <span className="text-[#ebebeb] font-mono text-sm">/</span>
 
             <span className="px-2 py-0.5 rounded-md font-mono text-xs font-semibold bg-[#f4f4f5] border border-[#ebebeb] text-[#171717] tabular-nums">
-              {task.id}
+              {task.id ?? ''}
             </span>
 
             <span className="px-2 py-0.5 rounded-md font-mono text-xs uppercase bg-[#f4f4f5] border border-[#ebebeb] text-[#171717]">
-              {column?.title || task.columnId}
+              {column?.title || task.columnId || ''}
             </span>
 
             {/* Parent Task Badge & Navigation */}
@@ -808,7 +809,7 @@ export default function AgentConsoleDrawer() {
             </span>
 
             <h2 className="text-sm font-semibold text-[#171717] truncate max-w-sm font-sans">
-              {task.title}
+              {task.title ?? ''}
             </h2>
           </div>
 
@@ -872,7 +873,7 @@ export default function AgentConsoleDrawer() {
               onClick={() => setIsDiffCollapsed((prev) => !prev)}
               className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-mono border transition cursor-pointer ${
                 !isDiffCollapsed
-                  ? 'bg-[#18181b] text-white border-[#27272a] shadow-xs'
+                  ? 'bg-[#171717] text-white border-[#171717] shadow-xs'
                   : 'bg-[#f4f4f5] text-[#171717] border-[#ebebeb] hover:bg-[#e4e4e7]'
               }`}
               title={isDiffCollapsed ? 'Развернуть Git Diff панель' : 'Скрыть Git Diff панель'}
@@ -918,6 +919,7 @@ export default function AgentConsoleDrawer() {
       <div className="flex-1 flex flex-row min-h-0 min-w-0 overflow-hidden">
         {/* Left Column: Activity Feed + Steer Bar */}
         <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa]">
+        <ErrorBoundary scopeLabel="чат задачи" onClose={closeDrawer}>
           {/* Main Unified Activity Feed Area */}
           <div className="relative flex-1 flex flex-col min-h-0 bg-[#fafafa]">
         <div ref={scrollRef} onScroll={handleFeedScroll} className="flex-1 overflow-y-auto p-4 md:p-6">
@@ -941,12 +943,13 @@ export default function AgentConsoleDrawer() {
           </div>
 
           {/* Unified Chronological Activity Stream */}
-          {unifiedActivities.map((activity) => {
+          {(unifiedActivities ?? []).map((activity, idx) => {
+            const key = activity?.id ?? `activity-${idx}`;
             // b) Live Streaming Thinking Block
-            if (activity.type === 'thought') {
+            if (activity?.type === 'thought') {
               return (
                 <ThinkingCard
-                  key={activity.id}
+                  key={key}
                   thought={activity}
                   isTaskRunning={isRunning}
                   taskId={task.id}
@@ -955,20 +958,21 @@ export default function AgentConsoleDrawer() {
             }
 
             // d) Inline Tool Execution Card
-            if (activity.type === 'tool' && activity.tool) {
+            if (activity?.type === 'tool' && activity?.tool) {
               return (
                 <ToolExecutionCard
-                  key={activity.id}
+                  key={key}
                   tool={activity.tool}
                 />
               );
             }
 
             // User steer message
-            if (activity.type === 'user' || activity.type === 'steer') {
+            if (activity?.type === 'user' || activity?.type === 'steer') {
+              const images = Array.isArray(activity?.images) ? activity.images : [];
               return (
                 <div
-                  key={activity.id}
+                  key={key}
                   className="rounded-lg border border-[#ebebeb] bg-[#f9f9f9] p-3.5 shadow-xs"
                 >
                   <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-[#ebebeb] text-[10px] font-mono text-[#666666]">
@@ -976,14 +980,14 @@ export default function AgentConsoleDrawer() {
                       <User className="h-3 w-3" />
                       <span>Указание пользователя (Steer)</span>
                     </div>
-                    <span className="tabular-nums">{activity.timestamp}</span>
+                    <span className="tabular-nums">{activity?.timestamp ?? ''}</span>
                   </div>
-                  {activity.images && activity.images.length > 0 && (
+                  {images.length > 0 && (
                     <div className="flex items-center gap-2 mb-2.5 flex-wrap">
-                      {activity.images.map((imgUrl, i) => (
+                      {images.map((imgUrl, i) => (
                         <div
                           key={i}
-                          className="relative rounded-lg overflow-hidden border border-[#ebebeb] max-w-[240px] max-h-40 bg-zinc-900 shadow-xs"
+                          className="relative rounded-lg overflow-hidden border border-[#ebebeb] max-w-[240px] max-h-40 bg-[#f4f4f5] shadow-xs"
                         >
                           <img
                             src={imgUrl}
@@ -996,55 +1000,55 @@ export default function AgentConsoleDrawer() {
                     </div>
                   )}
                   <p className="text-sm text-[#171717] whitespace-pre-wrap select-text leading-relaxed font-sans">
-                    {activity.content}
+                    {activity?.content ?? ''}
                   </p>
                 </div>
               );
             }
 
             // System notices
-            if (activity.type === 'system') {
+            if (activity?.type === 'system') {
               return (
                 <div
-                  key={activity.id}
+                  key={key}
                   className="flex items-center space-x-2 rounded-md border border-[#ebebeb] bg-[#f4f4f5] px-3 py-2 text-xs text-[#4d4d4d] font-mono shadow-xs"
                 >
                   <Info className="h-3.5 w-3.5 text-[#666666] shrink-0" />
-                  <span className="flex-1">{activity.content}</span>
+                  <span className="flex-1">{activity?.content ?? ''}</span>
                   <span className="text-[10px] text-[#8f8f8f] tabular-nums">
-                    {activity.timestamp}
+                    {activity?.timestamp ?? ''}
                   </span>
                 </div>
               );
             }
 
             // Error notices
-            if (activity.type === 'error') {
+            if (activity?.type === 'error') {
               return (
                 <div
-                  key={activity.id}
+                  key={key}
                   className="flex items-start space-x-2 rounded-md border border-[#fecaca] bg-[#fef2f2] p-3 text-xs text-[#991b1b] font-mono shadow-xs"
                 >
                   <AlertTriangle className="h-4 w-4 text-[#dc2626] shrink-0 mt-0.5" />
                   <div className="flex-1 whitespace-pre-wrap select-text">
-                    {activity.content}
+                    {activity?.content ?? ''}
                   </div>
                   <span className="text-[10px] text-[#b91c1c] tabular-nums shrink-0">
-                    {activity.timestamp}
+                    {activity?.timestamp ?? ''}
                   </span>
                 </div>
               );
             }
 
             // c) Assistant Response / Output Markdown Block (скрываемый, по умолчанию свёрнут)
-            const isOutputExpanded = expandedOutputs.has(activity.id);
+            const isOutputExpanded = expandedOutputs.has(key);
             return (
               <div
-                key={activity.id}
+                key={key}
                 className="rounded-lg border border-[#ebebeb] bg-white shadow-xs overflow-hidden"
               >
                 <div
-                  onClick={() => toggleOutput(activity.id)}
+                  onClick={() => toggleOutput(key)}
                   className="flex items-center justify-between px-4 py-2.5 hover:bg-[#f9f9f9] cursor-pointer transition select-none text-[10px] font-mono text-[#666666]"
                 >
                   <div className="flex items-center space-x-1.5 text-[#171717] font-medium">
@@ -1056,11 +1060,11 @@ export default function AgentConsoleDrawer() {
                     <Sparkles className="h-3 w-3 text-[#171717]" />
                     <span>Ответ агента</span>
                   </div>
-                  <span className="tabular-nums">{activity.timestamp}</span>
+                  <span className="tabular-nums">{activity?.timestamp ?? ''}</span>
                 </div>
                 {isOutputExpanded && (
                   <div className="px-4 pb-4 pt-2.5 border-t border-[#ebebeb]">
-                    {activity.content ? (
+                    {activity?.content ? (
                       <MarkdownContent content={activity.content} />
                     ) : (
                       <div className="text-xs text-[#8f8f8f] font-mono">Генерация ответа...</div>
@@ -1088,16 +1092,16 @@ export default function AgentConsoleDrawer() {
         )}
       </div>
 
-      {/* f) Interactive Input & Steer Bar: Floating Dark Card & Bottom Status Bar */}
+      {/* f) Interactive Input & Steer Bar: Floating Light Card & Bottom Status Bar */}
       <footer className="border-t border-[#ebebeb] bg-[#fafafa]/80 backdrop-blur-xs p-3 shrink-0 shadow-xs">
         <div className="max-w-4xl mx-auto">
-          {/* Floating Modern Dark Card */}
+          {/* Floating Modern Light Card */}
           <div
             onDragOver={handleChatDragOver}
             onDragLeave={handleChatDragLeave}
             onDrop={handleChatDrop}
-            className={`rounded-2xl bg-[#1e1e20] border transition-all shadow-xl p-3 ${
-              isDragOverChat ? 'border-blue-500 ring-2 ring-blue-500/30 bg-[#242428]' : 'border-[#2e2e32]'
+            className={`rounded-2xl bg-white border border-[#ebebeb] transition-all shadow-xs p-3 ${
+              isDragOverChat ? 'ring-2 ring-blue-500/30 bg-blue-50/40' : ''
             }`}
           >
             {/* Attached Images Thumbnail Preview Bar */}
@@ -1106,7 +1110,7 @@ export default function AgentConsoleDrawer() {
                 {attachedImages.map((img) => (
                   <div
                     key={img.id}
-                    className="relative group shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-[#38383e] bg-[#141416]"
+                    className="relative group shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-[#ebebeb] bg-[#f4f4f5]"
                   >
                     <img
                       src={img.dataUrl}
@@ -1116,12 +1120,12 @@ export default function AgentConsoleDrawer() {
                     <button
                       type="button"
                       onClick={() => setAttachedImages((prev) => prev.filter((i) => i.id !== img.id))}
-                      className="absolute top-1 right-1 w-4 h-4 rounded-full bg-black/80 hover:bg-black text-white flex items-center justify-center text-xs leading-none transition cursor-pointer"
+                      className="absolute top-1 right-1 w-4 h-4 rounded-full bg-white/90 hover:bg-white text-[#171717] border border-[#ebebeb] flex items-center justify-center text-xs leading-none transition cursor-pointer"
                       title="Удалить"
                     >
                       ×
                     </button>
-                    <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1 py-0.5 text-[8.5px] font-mono text-zinc-300 truncate text-center">
+                    <div className="absolute inset-x-0 bottom-0 bg-white/90 px-1 py-0.5 text-[8.5px] font-mono text-[#666666] truncate text-center border-t border-[#ebebeb]">
                       {img.name}
                     </div>
                   </div>
@@ -1138,18 +1142,18 @@ export default function AgentConsoleDrawer() {
               onKeyDown={handleKeyDown}
               onPaste={handleChatPaste}
               placeholder="Напишите сообщение, задачу или прикрепите изображение..."
-              className="w-full bg-transparent text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none resize-none leading-relaxed min-h-[44px] max-h-44 overflow-y-auto font-sans"
+              className="w-full bg-transparent text-sm text-[#171717] placeholder:text-[#8f8f8f] focus:outline-none resize-none leading-relaxed min-h-[44px] max-h-44 overflow-y-auto font-sans"
             />
 
             {/* Bottom toolbar inside card */}
-            <div className="flex items-center justify-between pt-2 mt-1 border-t border-[#2a2a2e] select-none">
+            <div className="flex items-center justify-between pt-2 mt-1 border-t border-[#ebebeb] select-none">
               {/* Left Toolbar Items */}
               <div className="flex items-center space-x-2">
                 {/* Round "+" Button */}
                 <button
                   type="button"
                   onClick={() => chatFileInputRef.current?.click()}
-                  className="w-7 h-7 rounded-full bg-[#2a2a2e] hover:bg-[#38383e] text-zinc-300 hover:text-white flex items-center justify-center transition cursor-pointer"
+                  className="w-7 h-7 rounded-full bg-[#f4f4f5] hover:bg-[#171717] text-[#171717] hover:text-white flex items-center justify-center transition cursor-pointer"
                   title="Прикрепить изображение (PNG, JPG, WebP) или файл"
                 >
                   <Plus className="h-4 w-4" />
@@ -1170,15 +1174,15 @@ export default function AgentConsoleDrawer() {
                   <button
                     type="button"
                     onClick={() => setIsToolMenuOpen(!isToolMenuOpen)}
-                    className="px-2.5 py-1 rounded-full bg-[#2a2a2e] hover:bg-[#38383e] text-zinc-300 font-mono text-xs border border-[#38383e] transition cursor-pointer flex items-center gap-1.5"
+                    className="px-2.5 py-1 rounded-full bg-[#f4f4f5] hover:bg-[#e4e4e7] text-[#171717] font-mono text-xs border border-[#ebebeb] transition cursor-pointer flex items-center gap-1.5"
                     title="Режим доступа к инструментам"
                   >
                     <span>{toolAccessMode === 'full' ? '🛡️ Full access' : '🔒 Read only'}</span>
-                    <ChevronDown className="h-3 w-3 text-zinc-400" />
+                    <ChevronDown className="h-3 w-3 text-[#8f8f8f]" />
                   </button>
                   {isToolMenuOpen && (
-                    <div className="absolute bottom-full left-0 mb-2 w-48 rounded-lg bg-[#242428] border border-[#38383e] shadow-xl p-1 z-30 font-mono text-xs">
-                      <div className="px-2 py-1 text-zinc-400 text-[10px] uppercase">Режим инструментов</div>
+                    <div className="absolute bottom-full left-0 mb-2 w-48 rounded-lg bg-white border border-[#ebebeb] shadow-md p-1 z-30 font-mono text-xs">
+                      <div className="px-2 py-1 text-[#8f8f8f] text-[10px] uppercase">Режим инструментов</div>
                       <button
                         type="button"
                         onClick={() => {
@@ -1186,11 +1190,11 @@ export default function AgentConsoleDrawer() {
                           setIsToolMenuOpen(false);
                         }}
                         className={`w-full text-left px-2 py-1.5 rounded flex items-center justify-between cursor-pointer ${
-                          toolAccessMode === 'full' ? 'bg-[#2f2f35] text-white' : 'text-zinc-300 hover:bg-[#2a2a2e]'
+                          toolAccessMode === 'full' ? 'bg-[#f4f4f5] text-[#171717]' : 'text-[#4d4d4d] hover:bg-[#f9f9f9]'
                         }`}
                       >
                         <span>🛡️ Full access</span>
-                        {toolAccessMode === 'full' && <span className="text-emerald-400">✓</span>}
+                        {toolAccessMode === 'full' && <span className="text-emerald-600">✓</span>}
                       </button>
                       <button
                         type="button"
@@ -1199,11 +1203,11 @@ export default function AgentConsoleDrawer() {
                           setIsToolMenuOpen(false);
                         }}
                         className={`w-full text-left px-2 py-1.5 rounded flex items-center justify-between cursor-pointer ${
-                          toolAccessMode === 'readonly' ? 'bg-[#2f2f35] text-white' : 'text-zinc-300 hover:bg-[#2a2a2e]'
+                          toolAccessMode === 'readonly' ? 'bg-[#f4f4f5] text-[#171717]' : 'text-[#4d4d4d] hover:bg-[#f9f9f9]'
                         }`}
                       >
                         <span>🔒 Read only</span>
-                        {toolAccessMode === 'readonly' && <span className="text-emerald-400">✓</span>}
+                        {toolAccessMode === 'readonly' && <span className="text-emerald-600">✓</span>}
                       </button>
                     </div>
                   )}
@@ -1217,15 +1221,15 @@ export default function AgentConsoleDrawer() {
                   <button
                     type="button"
                     onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
-                    className="px-2.5 py-1 rounded-full bg-[#2a2a2e] hover:bg-[#38383e] text-zinc-300 font-mono text-xs border border-[#38383e] transition cursor-pointer flex items-center gap-1.5 max-w-[200px]"
+                    className="px-2.5 py-1 rounded-full bg-[#f4f4f5] hover:bg-[#e4e4e7] text-[#171717] font-mono text-xs border border-[#ebebeb] transition cursor-pointer flex items-center gap-1.5 max-w-[200px]"
                     title={`Модель задачи: ${effectiveModel}`}
                   >
                     <span className="truncate">{effectiveModel}</span>
-                    <ChevronDown className="h-3 w-3 text-zinc-400 shrink-0" />
+                    <ChevronDown className="h-3 w-3 text-[#8f8f8f] shrink-0" />
                   </button>
                   {isModelMenuOpen && (
-                    <div className="absolute bottom-full right-0 mb-2 w-56 rounded-lg bg-[#242428] border border-[#38383e] shadow-xl p-1 z-30 font-mono text-xs max-h-60 overflow-y-auto">
-                      <div className="px-2 py-1 text-zinc-400 text-[10px] uppercase">Выбор модели</div>
+                    <div className="absolute bottom-full right-0 mb-2 w-56 rounded-lg bg-white border border-[#ebebeb] shadow-md p-1 z-30 font-mono text-xs max-h-60 overflow-y-auto">
+                      <div className="px-2 py-1 text-[#8f8f8f] text-[10px] uppercase">Выбор модели</div>
                       {selectableModels.map((m) => (
                         <button
                           key={m}
@@ -1235,11 +1239,11 @@ export default function AgentConsoleDrawer() {
                             setIsModelMenuOpen(false);
                           }}
                           className={`w-full text-left px-2 py-1.5 rounded flex items-center justify-between cursor-pointer ${
-                            effectiveModel === m ? 'bg-[#2f2f35] text-white' : 'text-zinc-300 hover:bg-[#2a2a2e]'
+                            effectiveModel === m ? 'bg-[#f4f4f5] text-[#171717]' : 'text-[#4d4d4d] hover:bg-[#f9f9f9]'
                           }`}
                         >
                           <span className="truncate">{m}</span>
-                          {effectiveModel === m && <span className="text-emerald-400 shrink-0 ml-1">✓</span>}
+                          {effectiveModel === m && <span className="text-emerald-600 shrink-0 ml-1">✓</span>}
                         </button>
                       ))}
                     </div>
@@ -1251,17 +1255,17 @@ export default function AgentConsoleDrawer() {
                   <button
                     type="button"
                     onClick={handleAbortAgent}
-                    className="w-8 h-8 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-md transition cursor-pointer active:scale-95"
+                    className="w-8 h-8 rounded-full bg-[#fef2f2] hover:bg-[#fee2e2] text-[#b91c1c] border border-[#fecaca] flex items-center justify-center shadow-xs transition cursor-pointer active:scale-95"
                     title="Остановить выполнение (abort_agent)"
                   >
-                    <Square className="h-3.5 w-3.5 fill-white text-white" />
+                    <Square className="h-3.5 w-3.5 fill-current" />
                   </button>
                 ) : (
                   <button
                     type="button"
                     onClick={() => handleSendPrompt()}
                     disabled={!interactiveInput.trim() && attachedImages.length === 0}
-                    className="w-8 h-8 rounded-full bg-blue-500 hover:bg-blue-600 disabled:opacity-40 disabled:hover:bg-blue-500 disabled:cursor-not-allowed text-white flex items-center justify-center shadow-md transition cursor-pointer active:scale-95"
+                    className="w-8 h-8 rounded-full bg-[#171717] hover:bg-black disabled:opacity-40 disabled:hover:bg-[#171717] disabled:cursor-not-allowed text-white flex items-center justify-center shadow-xs transition cursor-pointer active:scale-95"
                     title="Отправить сообщение агенту (Enter)"
                   >
                     <ArrowUp className="h-4 w-4 stroke-[2.5]" />
@@ -1275,14 +1279,17 @@ export default function AgentConsoleDrawer() {
           <ContextGauge taskId={task.id} turns={turns} />
         </div>
       </footer>
+        </ErrorBoundary>
     </div>
 
     {/* Right Column: Git Diff Interactive Sidebar */}
-    <GitDiffSidebar
-      taskId={task.id}
-      isCollapsed={isDiffCollapsed}
-      onToggleCollapse={() => setIsDiffCollapsed((prev) => !prev)}
-    />
+    <ErrorBoundary scopeLabel="Git Diff" onClose={() => setIsDiffCollapsed(true)}>
+      <GitDiffSidebar
+        taskId={task.id}
+        isCollapsed={isDiffCollapsed}
+        onToggleCollapse={() => setIsDiffCollapsed((prev) => !prev)}
+      />
+    </ErrorBoundary>
   </div>
 </div>
   );

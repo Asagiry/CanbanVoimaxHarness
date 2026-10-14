@@ -27,8 +27,8 @@ interface ParsedDiffLine {
   newNum: number | null;
 }
 
-function parseUnifiedPatch(patch: string): ParsedDiffLine[] {
-  if (!patch) return [];
+function parseUnifiedPatch(patch?: string | null): ParsedDiffLine[] {
+  if (!patch || typeof patch !== 'string') return [];
   const lines = patch.split('\n');
   const result: ParsedDiffLine[] = [];
   let oldLine = 0;
@@ -97,12 +97,13 @@ export default function GitDiffSidebar({
     setError(null);
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const data = await invoke<TaskGitDiff>('get_task_git_diff', { taskId });
-      setDiff(data);
+      const data = await invoke<TaskGitDiff | null>('get_task_git_diff', { taskId });
+      setDiff(data ?? null);
       setSelectedFilePath((prev) => {
-        if (!data.files || data.files.length === 0) return null;
-        if (prev && data.files.some((f) => f.path === prev)) return prev;
-        return data.files[0]?.path || null;
+        const files = data?.files ?? [];
+        if (!files || files.length === 0) return null;
+        if (prev && files.some((f) => f?.path === prev)) return prev;
+        return files[0]?.path || null;
       });
     } catch (err: any) {
       console.info('get_task_git_diff invoke failed or web mode:', err);
@@ -165,12 +166,13 @@ export default function GitDiffSidebar({
   }, [taskId, scheduleFetch]);
 
   const activeFile = useMemo<DiffFile | null>(() => {
-    if (!diff?.files || diff.files.length === 0) return null;
-    return diff.files.find((f) => f.path === selectedFilePath) || diff.files[0] || null;
+    const files = diff?.files ?? [];
+    if (!files || files.length === 0) return null;
+    return files.find((f) => f?.path === selectedFilePath) || files[0] || null;
   }, [diff, selectedFilePath]);
 
   const parsedLines = useMemo(() => {
-    return activeFile ? parseUnifiedPatch(activeFile.patch) : [];
+    return activeFile ? parseUnifiedPatch(activeFile.patch ?? '') : [];
   }, [activeFile]);
 
   const handleCopyPatch = async () => {
@@ -187,36 +189,37 @@ export default function GitDiffSidebar({
   const totalAdditions = diff?.totalAdditions ?? (diff as any)?.total_additions ?? 0;
   const totalDeletions = diff?.totalDeletions ?? (diff as any)?.total_deletions ?? 0;
   const filesCount = diff?.files?.length ?? 0;
+  const files = diff?.files ?? [];
 
   // Collapsed Rail View
   if (isCollapsed) {
     return (
       <aside
-        className={`w-11 shrink-0 border-l border-[#27272a] bg-[#121214] flex flex-col items-center py-3 select-none transition-all duration-150 ${className}`}
+        className={`w-11 shrink-0 border-l border-[#ebebeb] bg-white flex flex-col items-center py-3 select-none transition-all duration-150 ${className}`}
       >
         <button
           type="button"
           onClick={onToggleCollapse}
-          className="p-1.5 rounded-md text-[#a1a1aa] hover:text-white hover:bg-[#27272a] transition cursor-pointer"
+          className="p-1.5 rounded-md text-[#8f8f8f] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
           title="Развернуть Git Diff"
         >
           <PanelRightOpen className="h-4 w-4" />
         </button>
 
         <div className="mt-4 flex flex-col items-center space-y-2">
-          <GitCompare className="h-4 w-4 text-[#71717a]" />
+          <GitCompare className="h-4 w-4 text-[#8f8f8f]" />
           {filesCount > 0 && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-[#27272a] text-[#a1a1aa] border border-[#3f3f46]/50">
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-[#f4f4f5] text-[#666666] border border-[#ebebeb]">
               {filesCount}
             </span>
           )}
           {totalAdditions > 0 && (
-            <span className="text-[10px] font-mono font-medium text-emerald-400">
+            <span className="text-[10px] font-mono font-medium text-[#15803d]">
               +{totalAdditions}
             </span>
           )}
           {totalDeletions > 0 && (
-            <span className="text-[10px] font-mono font-medium text-rose-400">
+            <span className="text-[10px] font-mono font-medium text-[#b91c1c]">
               -{totalDeletions}
             </span>
           )}
@@ -227,7 +230,7 @@ export default function GitDiffSidebar({
           className="mt-6 flex-1 flex items-center justify-center cursor-pointer group"
           title="Нажмите, чтобы развернуть Git Diff"
         >
-          <span className="text-[11px] font-mono text-[#71717a] group-hover:text-white transition tracking-wider [writing-mode:vertical-rl] rotate-180">
+          <span className="text-[11px] font-mono text-[#8f8f8f] group-hover:text-[#171717] transition tracking-wider [writing-mode:vertical-rl] rotate-180">
             Git Diff
           </span>
         </div>
@@ -238,18 +241,18 @@ export default function GitDiffSidebar({
   // Expanded Sidebar View (440px wide)
   return (
     <aside
-      className={`w-[440px] shrink-0 border-l border-[#27272a] bg-[#121214] flex flex-col h-full text-[#e4e4e7] overflow-hidden select-none ${className}`}
+      className={`w-[440px] shrink-0 border-l border-[#ebebeb] bg-white flex flex-col h-full text-[#171717] overflow-hidden select-none ${className}`}
     >
       {/* 1. Header: Title, Badges, Refresh, Collapse */}
-      <header className="px-3.5 py-2.5 border-b border-[#27272a] bg-[#18181b]/90 flex items-center justify-between shrink-0">
+      <header className="px-3.5 py-2.5 border-b border-[#ebebeb] bg-white flex items-center justify-between shrink-0 shadow-xs">
         <div className="flex items-center space-x-2 min-w-0">
-          <GitCompare className="h-4 w-4 text-[#a1a1aa] shrink-0" />
-          <span className="font-semibold text-xs text-[#f4f4f5] tracking-wide font-sans">
+          <GitCompare className="h-4 w-4 text-[#8f8f8f] shrink-0" />
+          <span className="font-semibold text-xs text-[#171717] tracking-wide font-sans">
             Git Diff
           </span>
 
           {/* Changed files badge */}
-          <span className="px-2 py-0.5 rounded-md text-[11px] font-mono bg-[#27272a] text-[#a1a1aa] border border-[#3f3f46]/50 whitespace-nowrap">
+          <span className="px-2 py-0.5 rounded-md text-[11px] font-mono bg-[#f4f4f5] text-[#666666] border border-[#ebebeb] whitespace-nowrap">
             {formatFilesCount(filesCount)}
           </span>
 
@@ -257,10 +260,10 @@ export default function GitDiffSidebar({
           {(totalAdditions > 0 || totalDeletions > 0) && (
             <div className="flex items-center space-x-1.5 text-[11px] font-mono tabular-nums">
               {totalAdditions > 0 && (
-                <span className="text-emerald-400 font-medium">+{totalAdditions}</span>
+                <span className="text-[#15803d] font-medium">+{totalAdditions}</span>
               )}
               {totalDeletions > 0 && (
-                <span className="text-rose-400 font-medium">-{totalDeletions}</span>
+                <span className="text-[#b91c1c] font-medium">-{totalDeletions}</span>
               )}
             </div>
           )}
@@ -270,10 +273,10 @@ export default function GitDiffSidebar({
           {/* Branch badge */}
           {diff?.branch && (
             <div
-              className="flex items-center space-x-1 px-2 py-0.5 rounded-md bg-[#222226] border border-[#2e2e33] text-[10px] font-mono text-[#a1a1aa] max-w-[130px] truncate"
+              className="flex items-center space-x-1 px-2 py-0.5 rounded-md bg-[#f9f9f9] border border-[#ebebeb] text-[10px] font-mono text-[#666666] max-w-[130px] truncate"
               title={`Текущая ветка: ${diff.branch}`}
             >
-              <GitBranch className="h-3 w-3 text-[#71717a] shrink-0" />
+              <GitBranch className="h-3 w-3 text-[#8f8f8f] shrink-0" />
               <span className="truncate">{diff.branch}</span>
             </div>
           )}
@@ -283,11 +286,11 @@ export default function GitDiffSidebar({
             type="button"
             onClick={fetchDiff}
             disabled={isLoading}
-            className="p-1.5 rounded-md text-[#a1a1aa] hover:text-white hover:bg-[#27272a] disabled:opacity-50 transition cursor-pointer"
+            className="p-1.5 rounded-md text-[#8f8f8f] hover:text-[#171717] hover:bg-[#f4f4f5] disabled:opacity-50 transition cursor-pointer"
             title="Обновить дифф"
           >
             <RefreshCw
-              className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin text-emerald-400' : ''}`}
+              className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin text-emerald-600' : ''}`}
             />
           </button>
 
@@ -295,7 +298,7 @@ export default function GitDiffSidebar({
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="p-1.5 rounded-md text-[#a1a1aa] hover:text-white hover:bg-[#27272a] transition cursor-pointer"
+            className="p-1.5 rounded-md text-[#8f8f8f] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
             title="Свернуть панель (Git Diff)"
           >
             <PanelRightClose className="h-4 w-4" />
@@ -305,13 +308,13 @@ export default function GitDiffSidebar({
 
       {/* Error state */}
       {error && (
-        <div className="p-2.5 bg-rose-950/40 border-b border-rose-900/50 text-rose-300 text-xs font-mono flex items-center space-x-2 shrink-0">
-          <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+        <div className="p-2.5 bg-[#fef2f2] border-b border-[#fecaca] text-[#991b1b] text-xs font-mono flex items-center space-x-2 shrink-0">
+          <AlertCircle className="h-4 w-4 text-[#dc2626] shrink-0" />
           <span className="flex-1 truncate">{error}</span>
           <button
             type="button"
             onClick={fetchDiff}
-            className="underline hover:text-white cursor-pointer ml-1 text-[11px]"
+            className="underline hover:text-[#171717] cursor-pointer ml-1 text-[11px]"
           >
             Повторить
           </button>
@@ -321,17 +324,17 @@ export default function GitDiffSidebar({
       {/* 2. Main Content Area */}
       {filesCount === 0 ? (
         // Clean empty state placeholder
-        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-          <div className="h-12 w-12 rounded-full bg-emerald-950/30 border border-emerald-800/40 flex items-center justify-center mb-3">
-            <CheckCircle2 className="h-6 w-6 text-emerald-400" />
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center bg-[#fafafa]">
+          <div className="h-12 w-12 rounded-full bg-[#f0fdf4] border border-[#bbf7d0] flex items-center justify-center mb-3">
+            <CheckCircle2 className="h-6 w-6 text-[#15803d]" />
           </div>
-          <h3 className="text-sm font-semibold text-[#f4f4f5] font-sans">Ворктри чистое</h3>
-          <p className="text-xs text-[#71717a] mt-1 max-w-[260px] leading-relaxed">
+          <h3 className="text-sm font-semibold text-[#171717] font-sans">Ворктри чистое</h3>
+          <p className="text-xs text-[#666666] mt-1 max-w-[260px] leading-relaxed">
             Нет изменений / рабочее дерево чистое
           </p>
           {diff?.branch && (
-            <div className="mt-4 px-2.5 py-1 rounded-md bg-[#18181b] border border-[#27272a] text-[11px] font-mono text-[#a1a1aa] flex items-center space-x-1.5">
-              <GitBranch className="h-3 w-3 text-[#71717a]" />
+            <div className="mt-4 px-2.5 py-1 rounded-md bg-white border border-[#ebebeb] text-[11px] font-mono text-[#666666] flex items-center space-x-1.5">
+              <GitBranch className="h-3 w-3 text-[#8f8f8f]" />
               <span>Ветка: {diff.branch}</span>
             </div>
           )}
@@ -339,11 +342,12 @@ export default function GitDiffSidebar({
       ) : (
         <div className="flex-1 flex flex-col min-h-0">
           {/* File list cards */}
-          <div className="max-h-[220px] overflow-y-auto p-2 space-y-1.5 border-b border-[#27272a] bg-[#141417]/80 shrink-0">
-            <div className="px-1 text-[10px] font-mono text-[#71717a] uppercase tracking-wider font-semibold">
+          <div className="max-h-[220px] overflow-y-auto p-2 space-y-1.5 border-b border-[#ebebeb] bg-[#fafafa] shrink-0">
+            <div className="px-1 text-[10px] font-mono text-[#8f8f8f] uppercase tracking-wider font-semibold">
               Изменённые файлы ({filesCount})
             </div>
-            {diff?.files.map((file) => {
+            {files.map((file) => {
+              if (!file?.path) return null;
               const isActive = file.path === activeFile?.path;
               const lastSlashIndex = file.path.lastIndexOf('/');
               const dirPart =
@@ -353,20 +357,20 @@ export default function GitDiffSidebar({
 
               const statusColor =
                 file.status === 'A'
-                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                  ? 'bg-[#f0fdf4] text-[#15803d] border-[#bbf7d0]'
                   : file.status === 'D'
-                  ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
-                  : 'bg-amber-500/15 text-amber-400 border-amber-500/30';
+                  ? 'bg-[#fef2f2] text-[#b91c1c] border-[#fecaca]'
+                  : 'bg-[#fffbeb] text-[#b45309] border-[#fde68a]';
 
               return (
                 <button
                   key={file.path}
                   type="button"
                   onClick={() => setSelectedFilePath(file.path)}
-                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-left text-xs font-mono transition cursor-pointer ${
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-left text-xs font-mono transition cursor-pointer border ${
                     isActive
-                      ? 'bg-[#27272a] text-white ring-1 ring-white/10 shadow-xs'
-                      : 'bg-[#18181b]/70 hover:bg-[#202024] text-[#d4d4d8]'
+                      ? 'bg-white text-[#171717] border-[#171717] shadow-xs'
+                      : 'bg-white hover:bg-[#f9f9f9] text-[#4d4d4d] border-[#ebebeb]'
                   }`}
                 >
                   <div className="flex items-center space-x-2 min-w-0 mr-2">
@@ -376,17 +380,17 @@ export default function GitDiffSidebar({
                       {file.status}
                     </span>
                     <span className="truncate text-xs">
-                      {dirPart && <span className="text-[#71717a]">{dirPart}</span>}
-                      <span className="font-medium text-[#f4f4f5]">{filePart}</span>
+                      {dirPart && <span className="text-[#8f8f8f]">{dirPart}</span>}
+                      <span className="font-medium text-[#171717]">{filePart}</span>
                     </span>
                   </div>
 
                   <div className="flex items-center space-x-1 text-[11px] tabular-nums shrink-0 font-mono">
-                    {file.additions > 0 && (
-                      <span className="text-emerald-400">+{file.additions}</span>
+                    {(file.additions ?? 0) > 0 && (
+                      <span className="text-[#15803d]">+{file.additions}</span>
                     )}
-                    {file.deletions > 0 && (
-                      <span className="text-rose-400">-{file.deletions}</span>
+                    {(file.deletions ?? 0) > 0 && (
+                      <span className="text-[#b91c1c]">-{file.deletions}</span>
                     )}
                   </div>
                 </button>
@@ -395,36 +399,36 @@ export default function GitDiffSidebar({
           </div>
 
           {/* 3. Diff Viewer of Selected File */}
-          <div className="flex-1 flex flex-col min-h-0 bg-[#0d0d0f]">
+          <div className="flex-1 flex flex-col min-h-0 bg-white">
             {activeFile ? (
               <>
                 {/* Active file toolbar */}
-                <div className="px-3 py-1.5 border-b border-[#27272a] bg-[#141416] flex items-center justify-between text-xs font-mono shrink-0">
+                <div className="px-3 py-1.5 border-b border-[#ebebeb] bg-[#f9f9f9] flex items-center justify-between text-xs font-mono shrink-0">
                   <div className="flex items-center space-x-1.5 min-w-0 mr-2">
-                    <FileCode className="h-3.5 w-3.5 text-[#a1a1aa] shrink-0" />
-                    <span className="truncate text-[#f4f4f5] font-medium" title={activeFile.path}>
+                    <FileCode className="h-3.5 w-3.5 text-[#8f8f8f] shrink-0" />
+                    <span className="truncate text-[#171717] font-medium" title={activeFile.path}>
                       {activeFile.path}
                     </span>
                   </div>
 
                   <div className="flex items-center space-x-2 shrink-0">
                     <div className="flex items-center space-x-1 text-[11px] tabular-nums">
-                      {activeFile.additions > 0 && (
-                        <span className="text-emerald-400">+{activeFile.additions}</span>
+                      {(activeFile.additions ?? 0) > 0 && (
+                        <span className="text-[#15803d]">+{activeFile.additions}</span>
                       )}
-                      {activeFile.deletions > 0 && (
-                        <span className="text-rose-400">-{activeFile.deletions}</span>
+                      {(activeFile.deletions ?? 0) > 0 && (
+                        <span className="text-[#b91c1c]">-{activeFile.deletions}</span>
                       )}
                     </div>
 
                     <button
                       type="button"
                       onClick={handleCopyPatch}
-                      className="p-1 rounded hover:bg-[#27272a] text-[#a1a1aa] hover:text-white transition cursor-pointer"
+                      className="p-1 rounded hover:bg-[#f4f4f5] text-[#8f8f8f] hover:text-[#171717] transition cursor-pointer"
                       title="Скопировать patch"
                     >
                       {copied ? (
-                        <Check className="h-3.5 w-3.5 text-emerald-400" />
+                        <Check className="h-3.5 w-3.5 text-emerald-600" />
                       ) : (
                         <Copy className="h-3.5 w-3.5" />
                       )}
@@ -432,10 +436,10 @@ export default function GitDiffSidebar({
                   </div>
                 </div>
 
-                {/* Diff lines view */}
-                <div className="flex-1 overflow-auto p-2 font-mono text-[11px] leading-relaxed select-text bg-[#0b0b0d]">
+                {/* Diff lines view (эстетика ToolExecutionCard) */}
+                <div className="flex-1 overflow-auto p-2 font-mono text-[11px] leading-relaxed select-text bg-white">
                   {parsedLines.length === 0 ? (
-                    <div className="p-4 text-center text-[#71717a] text-xs">
+                    <div className="p-4 text-center text-[#8f8f8f] text-xs">
                       Нет изменений в данном файле
                     </div>
                   ) : (
@@ -444,7 +448,7 @@ export default function GitDiffSidebar({
                         return (
                           <div
                             key={idx}
-                            className="text-[#52525b] text-[10px] py-0.5 px-1 truncate select-text"
+                            className="text-[#8f8f8f] text-[10px] py-0.5 px-1 truncate select-text"
                           >
                             {line.text}
                           </div>
@@ -455,7 +459,7 @@ export default function GitDiffSidebar({
                         return (
                           <div
                             key={idx}
-                            className="bg-cyan-950/30 text-cyan-400 border-y border-cyan-900/40 my-1 py-0.5 px-2 text-[10px] font-semibold select-text"
+                            className="bg-[#f4f4f5] text-[#666666] border-y border-[#ebebeb] my-1 py-0.5 px-2 text-[10px] font-semibold select-text"
                           >
                             {line.text}
                           </div>
@@ -466,15 +470,15 @@ export default function GitDiffSidebar({
                         return (
                           <div
                             key={idx}
-                            className="flex items-start bg-[#10301a]/70 text-emerald-300 hover:bg-[#133d21] border-l-2 border-emerald-500 py-0.5"
+                            className="flex items-start bg-[#f0fdf4] text-[#166534] hover:bg-[#dcfce7] border-l-2 border-[#22c55e] py-0.5"
                           >
-                            <span className="w-8 shrink-0 text-right pr-2 text-[#52525b] select-none text-[10px]">
+                            <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] select-none text-[10px]">
                               {/* no old line */}
                             </span>
-                            <span className="w-8 shrink-0 text-right pr-2 text-emerald-500/80 select-none text-[10px] tabular-nums">
+                            <span className="w-8 shrink-0 text-right pr-2 text-[#16a34a] select-none text-[10px] tabular-nums">
                               {line.newNum}
                             </span>
-                            <span className="w-4 shrink-0 text-center text-emerald-400 font-bold select-none">
+                            <span className="w-4 shrink-0 text-center text-[#16a34a] font-bold select-none">
                               +
                             </span>
                             <span className="flex-1 whitespace-pre-wrap break-all pr-2">
@@ -488,15 +492,15 @@ export default function GitDiffSidebar({
                         return (
                           <div
                             key={idx}
-                            className="flex items-start bg-[#3b1219]/70 text-rose-300 hover:bg-[#48161f] border-l-2 border-rose-500 py-0.5"
+                            className="flex items-start bg-[#fef2f2] text-[#991b1b] hover:bg-[#fee2e2] border-l-2 border-[#ef4444] py-0.5"
                           >
-                            <span className="w-8 shrink-0 text-right pr-2 text-rose-500/80 select-none text-[10px] tabular-nums">
+                            <span className="w-8 shrink-0 text-right pr-2 text-[#ef4444] select-none text-[10px] tabular-nums">
                               {line.oldNum}
                             </span>
-                            <span className="w-8 shrink-0 text-right pr-2 text-[#52525b] select-none text-[10px]">
+                            <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] select-none text-[10px]">
                               {/* no new line */}
                             </span>
-                            <span className="w-4 shrink-0 text-center text-rose-400 font-bold select-none">
+                            <span className="w-4 shrink-0 text-center text-[#ef4444] font-bold select-none">
                               -
                             </span>
                             <span className="flex-1 whitespace-pre-wrap break-all pr-2">
@@ -510,15 +514,15 @@ export default function GitDiffSidebar({
                       return (
                         <div
                           key={idx}
-                          className="flex items-start hover:bg-[#161619] py-0.5 text-[#d4d4d8]"
+                          className="flex items-start hover:bg-[#f9f9f9] py-0.5 text-[#171717]"
                         >
-                          <span className="w-8 shrink-0 text-right pr-2 text-[#52525b] select-none text-[10px] tabular-nums">
+                          <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] select-none text-[10px] tabular-nums">
                             {line.oldNum}
                           </span>
-                          <span className="w-8 shrink-0 text-right pr-2 text-[#52525b] select-none text-[10px] tabular-nums">
+                          <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] select-none text-[10px] tabular-nums">
                             {line.newNum}
                           </span>
-                          <span className="w-4 shrink-0 text-center text-[#52525b] select-none">
+                          <span className="w-4 shrink-0 text-center text-[#8f8f8f] select-none">
                             {' '}
                           </span>
                           <span className="flex-1 whitespace-pre-wrap break-all pr-2">
@@ -531,7 +535,7 @@ export default function GitDiffSidebar({
                 </div>
               </>
             ) : (
-              <div className="flex-1 flex items-center justify-center text-xs text-[#71717a]">
+              <div className="flex-1 flex items-center justify-center text-xs text-[#8f8f8f]">
                 Выберите файл для просмотра изменений
               </div>
             )}

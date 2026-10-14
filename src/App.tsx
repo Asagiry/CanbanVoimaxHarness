@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import Topbar from './components/layout/Topbar';
-import SplashScreen from './components/splash/SplashScreen';
 import CortexExplorer from './components/cortex/CortexExplorer';
 import KanbanBoard from './components/board/KanbanBoard';
 import AgentConsoleDrawer from './components/drawer/AgentConsoleDrawer';
@@ -17,11 +16,8 @@ export default function App() {
   const { loadColumns, loadTasks, runTaskAgent, loadBoards } = useBoardStore();
   const { loadProjects } = useProjectStore();
   const { appendThought, appendOutput, addToolExecution, updateToolExecution, updateTelemetry, setThinkingStartTime } = useDrawerStore();
-  const [isDataReady, setIsDataReady] = useState(false);
-  const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
-    let isMounted = true;
     const init = async () => {
       try {
         await loadProjects();
@@ -30,16 +26,9 @@ export default function App() {
         await loadTasks();
       } catch (e) {
         console.warn('Initialization error:', e);
-      } finally {
-        if (isMounted) {
-          setIsDataReady(true);
-        }
       }
     };
     void init();
-    return () => {
-      isMounted = false;
-    };
   }, [loadProjects, loadBoards, loadTasks]);
 
   useEffect(() => {
@@ -247,14 +236,6 @@ export default function App() {
 
       {/* LLM Settings Modal */}
       <SettingsModal />
-
-      {/* Cinematic Splash Screen Bootloader */}
-      {showSplash && (
-        <SplashScreen
-          isReady={isDataReady}
-          onFinish={() => setShowSplash(false)}
-        />
-      )}
 
       {/* Zoom Indicator Toast */}
       {showIndicator && (

@@ -70,8 +70,8 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
     task.status === 'done' ||
     taskColumn?.terminal === true ||
     task.columnId === 'ready' ||
-    taskColumn?.title.toLowerCase().includes('готов') ||
-    taskColumn?.title.toLowerCase().includes('done')
+    taskColumn?.title?.toLowerCase().includes('готов') ||
+    taskColumn?.title?.toLowerCase().includes('done')
   );
 
   // Subtasks belonging to this task
@@ -194,8 +194,8 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
             )}
 
             {/* Cover Image Preview (Linear / Trello style) */}
-            {task.coverImage && (
-              <div className="relative mb-2.5 -mx-3 -mt-3 rounded-t-md overflow-hidden bg-zinc-900 border-b border-[#ebebeb] group/cover max-h-36">
+            {task.coverImage && typeof task.coverImage === 'string' && (
+              <div className="relative mb-2.5 -mx-3 -mt-3 rounded-t-md overflow-hidden bg-[#f4f4f5] border-b border-[#ebebeb] group/cover max-h-36">
                 <img
                   src={task.coverImage}
                   alt={task.title}
@@ -313,22 +313,23 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
                 {isSubtasksOpen && (
                   <div className="mt-1 space-y-1">
                     {subtasks.map((sub) => {
+                      const subId = sub?.id ?? '';
                       const subSuffix =
-                        sub.subtaskIndex != null
+                        sub?.subtaskIndex != null
                           ? `.${sub.subtaskIndex}`
-                          : sub.id.split('.').pop()
-                          ? `.${sub.id.split('.').pop()}`
+                          : subId.split('.').pop()
+                          ? `.${subId.split('.').pop()}`
                           : '';
-                      const subCol = columns.find((c) => c.id === sub.columnId);
-                      const stageTitle = subCol?.title || sub.columnId;
+                      const subCol = columns.find((c) => c.id === sub?.columnId);
+                      const stageTitle = subCol?.title || sub?.columnId || '';
 
                       return (
-                        <div
-                          key={sub.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openDrawer(sub.id);
-                          }}
+                          <div
+                            key={subId || Math.random().toString(36)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (subId) openDrawer(subId);
+                            }}
                           className="flex items-center justify-between p-1.5 rounded bg-[#f8f9fa] hover:bg-[#f1f3f5] border border-[#e9ecef] cursor-pointer transition text-[10px] font-mono group"
                           title={`Открыть диалог и мысли подзадачи ${sub.id}`}
                         >
@@ -337,28 +338,28 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
                               {subSuffix} {stageTitle}
                             </span>
                             <span className="text-[#666666] truncate">
-                              {sub.title.replace(/^\[.*?\]\s*/, '')}
+                              {(sub?.title ?? '').replace(/^\[.*?\]\s*/, '')}
                             </span>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                            {sub.verdict && sub.verdict !== 'NONE' ? (
+                            {sub?.verdict && sub.verdict !== 'NONE' ? (
                               <span
                                 className={`px-1 py-0.2 rounded text-[9px] font-mono ${
-                                  sub.verdict === 'APPROVED'
+                                  sub?.verdict === 'APPROVED'
                                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                    : sub.verdict === 'APPROVED_WITH_CAVEATS'
+                                    : sub?.verdict === 'APPROVED_WITH_CAVEATS'
                                     ? 'bg-amber-50 text-amber-700 border border-amber-200'
                                     : 'bg-rose-50 text-rose-700 border border-rose-200'
                                 }`}
                               >
-                                {sub.verdict === 'APPROVED'
+                                {sub?.verdict === 'APPROVED'
                                   ? 'OK'
-                                  : sub.verdict === 'APPROVED_WITH_CAVEATS'
+                                  : sub?.verdict === 'APPROVED_WITH_CAVEATS'
                                   ? 'CAVEATS'
                                   : 'REWORK'}
                               </span>
                             ) : (
-                              <span className="px-1 py-0.2 rounded text-[9px] font-mono bg-zinc-100 text-zinc-600 border border-zinc-200">
+                              <span className="px-1 py-0.2 rounded text-[9px] font-mono bg-[#f4f4f5] text-[#666666] border border-[#ebebeb]">
                                 Готово
                               </span>
                             )}

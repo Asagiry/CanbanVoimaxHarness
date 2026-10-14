@@ -15,18 +15,26 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  if (!tool) return null;
+
+  const toolName: string = (tool as ToolExecution)?.toolName ?? 'tool';
+  const params: Record<string, unknown> =
+    (tool as ToolExecution)?.params && typeof (tool as ToolExecution).params === 'object'
+      ? ((tool as ToolExecution).params as Record<string, unknown>)
+      : {};
+
   const isDiffTool =
-    tool.toolName === 'edit_file' ||
-    tool.toolName === 'str_replace' ||
-    tool.toolName === 'edit';
+    toolName === 'edit_file' ||
+    toolName === 'str_replace' ||
+    toolName === 'edit';
 
   const filePath =
-    (tool.params?.file_path as string) || (tool.params?.path as string);
-  const oldString = tool.params?.old_string as string | undefined;
-  const newString = tool.params?.new_string as string | undefined;
+    (params?.file_path as string) || (params?.path as string);
+  const oldString = params?.old_string as string | undefined;
+  const newString = params?.new_string as string | undefined;
 
   const getTarget = (): { target: string; fullTarget: string } => {
-    const p = tool.params ?? {};
+    const p = params ?? {};
     const str = (v: unknown): string | undefined =>
       typeof v === 'string' && v.trim().length > 0 ? v.trim() : undefined;
 

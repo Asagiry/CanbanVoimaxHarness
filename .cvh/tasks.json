@@ -1,5 +1,19 @@
 [
   {
+    "id": "CVH-003",
+    "title": "Привет",
+    "description": "Привет как дела у тебя",
+    "stageId": "ready",
+    "worktreePath": ".cvh/worktrees/cvh-003",
+    "branch": "feat/cvh-003",
+    "verdict": null,
+    "customFlow": null,
+    "status": "idle",
+    "model": "gemini-3.8-flash-high",
+    "createdAt": 1791961991095,
+    "updatedAt": 1791961997057
+  },
+  {
     "id": "CVH-002",
     "title": "testv3",
     "description": "привет какие тулы тебе доступны?",
@@ -10,8 +24,8 @@
     "customFlow": null,
     "status": "idle",
     "model": "gemini-3.8-flash-high",
-    "createdAt": 1791902461347,
-    "updatedAt": 1791902474668
+    "createdAt": 1791961991095,
+    "updatedAt": 1791961991095
   },
   {
     "id": "CVH-001",
@@ -24,7 +38,7 @@
     "customFlow": null,
     "status": "idle",
     "model": "gemini-3.8-flash-high",
-    "createdAt": 1791902461347,
-    "updatedAt": 1791902461347
+    "createdAt": 1791961991095,
+    "updatedAt": 1791961991095
   }
 ]

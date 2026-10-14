@@ -115,6 +115,61 @@ function persistTasksToLocalStorage(tasks: KanbanTask[]): void {
   }
 }
 
+function normalizeKanbanTask(raw: any): KanbanTask | null {
+  if (!raw || typeof raw.id !== 'string' || raw.id.trim() === '') return null;
+  const columns = useBoardStore.getState().columns;
+  const rawId: string | undefined = raw.stageId || raw.stage_id || raw.columnId;
+  const knownCol = columns.find((c) => c.id === rawId);
+  const columnId = knownCol?.id ?? columns[0]?.id ?? rawId ?? 'backlog';
+  const col = columns.find((c) => c.id === columnId);
+  const rawStatus = (raw.status as TaskStatus) || undefined;
+  const status: TaskStatus = rawStatus ?? (col?.terminal
+    ? 'done'
+    : col?.persona
+    ? 'running'
+    : 'idle');
+  const stageDurations: Record<string, number> =
+    raw.stageDurations && typeof raw.stageDurations === 'object' && !Array.isArray(raw.stageDurations)
+      ? raw.stageDurations
+      : {};
+  const activeStageDuration = typeof raw.activeStageDuration === 'number' && Number.isFinite(raw.activeStageDuration)
+    ? raw.activeStageDuration
+    : 0;
+  const totalElapsed = typeof raw.totalElapsed === 'number' && Number.isFinite(raw.totalElapsed)
+    ? raw.totalElapsed
+    : 0;
+  const returnsCount = typeof raw.returnsCount === 'number' && Number.isFinite(raw.returnsCount)
+    ? raw.returnsCount
+    : 0;
+  return {
+    id: raw.id,
+    title: typeof raw.title === 'string' && raw.title.trim() !== '' ? raw.title : raw.id,
+    description: typeof raw.description === 'string' && raw.description !== '' ? raw.description : undefined,
+    coverImage: raw.coverImage ?? raw.cover_image ?? raw.cover_image_url ?? undefined,
+    attachments: Array.isArray(raw.attachments) ? raw.attachments.filter((a: unknown) => typeof a === 'string') : undefined,
+    priority: (raw.priority as TaskPriority) || 'high',
+    columnId,
+    boardId: raw.boardId || raw.board_id || 'development',
+    persona: col?.persona ?? (typeof raw.persona === 'string' ? raw.persona : 'developer'),
+    branch: raw.branch || `feat/${raw.id.toLowerCase()}`,
+    worktreePath: raw.worktreePath || raw.worktree_path || `worktrees/${raw.id.toLowerCase()}`,
+    status,
+    activeStageDuration,
+    stageDurations,
+    totalElapsed,
+    isTimerRunning: typeof raw.isTimerRunning === 'boolean' ? raw.isTimerRunning : status === 'running',
+    returnsCount,
+    fastTrack: raw.fastTrack,
+    customFlow: raw.customFlow || raw.custom_flow,
+    verdict: (raw.verdict as TaskVerdict) || 'NONE',
+    verdictNote: raw.verdictNote,
+    model: raw.model || undefined,
+    parentId: raw.parentId ?? raw.parent_id ?? undefined,
+    subtaskIndex: raw.subtaskIndex ?? raw.subtask_index ?? undefined,
+    waitingForSubtaskId: raw.waitingForSubtaskId ?? raw.waiting_for_subtask_id ?? undefined,
+  };
+}
+
 function loadTasksFromLocalStorage(): KanbanTask[] {
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
@@ -122,7 +177,16 @@ function loadTasksFromLocalStorage(): KanbanTask[] {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          const normalized = parsed
+            .map((t) => {
+              try {
+                return normalizeKanbanTask(t);
+              } catch {
+                return null;
+              }
+            })
+            .filter((t): t is KanbanTask => t !== null);
+          return normalized;
         }
       }
     }
@@ -175,44 +239,41 @@ async function triggerRunAgent(taskId: string, prompt?: string): Promise<void> {
 function mapBackendTaskToKanban(t: any): KanbanTask {
   // Fully generic: resolve everything through the current board columns.
   // (defined outside create(), so columns come from getState()).
+  // normalizeKanbanTask fills defaults for legacy tasks created before
+  // cover/attachments fields existed (localStorage / .cvh/tasks.json).
+  const normalized = normalizeKanbanTask(t);
+  if (normalized) return normalized;
+  // Крайний фолбэк: запись без id — собрать безопасную задачу-заглушку,
+  // чтобы рендер никогда не падал с TypeError.
   const columns = useBoardStore.getState().columns;
-  const rawId: string | undefined = t.stageId || t.stage_id;
-  const knownCol = columns.find((c) => c.id === rawId);
-  const columnId = knownCol?.id ?? columns[0]?.id ?? rawId ?? 'backlog';
-  const col = columns.find((c) => c.id === columnId);
-
-  // Respect existing status or infer based on column
-  const rawStatus = (t.status as TaskStatus) || undefined;
-  const status: TaskStatus = rawStatus ?? (col?.terminal
-    ? 'done'
-    : col?.persona
-    ? 'running'
-    : 'idle');
-
+  const fallbackId = `unknown-${Date.now().toString(36)}`;
+  const fallbackCol = columns[0]?.id ?? 'backlog';
   return {
-    id: t.id,
-    title: t.title,
-    description: t.description || undefined,
-    priority: (t.priority as TaskPriority) || 'high',
-    columnId,
-    boardId: t.boardId || t.board_id || 'development',
-    persona: col?.persona ?? 'developer',
-    branch: t.branch || `feat/${t.id.toLowerCase()}`,
-    worktreePath: t.worktreePath || t.worktree_path || `worktrees/${t.id.toLowerCase()}`,
-    status,
-    activeStageDuration: t.activeStageDuration || 0,
-    stageDurations: t.stageDurations || {},
-    totalElapsed: t.totalElapsed || 0,
-    isTimerRunning: status === 'running',
-    returnsCount: t.returnsCount || 0,
-    fastTrack: t.fastTrack,
-    customFlow: t.customFlow || t.custom_flow,
-    verdict: (t.verdict as TaskVerdict) || 'NONE',
-    verdictNote: t.verdictNote,
-    model: t.model || undefined,
-    parentId: t.parentId ?? t.parent_id ?? undefined,
-    subtaskIndex: t.subtaskIndex ?? t.subtask_index ?? undefined,
-    waitingForSubtaskId: t.waitingForSubtaskId ?? t.waiting_for_subtask_id ?? undefined,
+    id: fallbackId,
+    title: fallbackId,
+    description: undefined,
+    coverImage: undefined,
+    attachments: undefined,
+    priority: 'high' as TaskPriority,
+    columnId: fallbackCol,
+    boardId: 'development',
+    persona: columns.find((c) => c.id === fallbackCol)?.persona ?? 'developer',
+    branch: `feat/${fallbackId.toLowerCase()}`,
+    worktreePath: `worktrees/${fallbackId.toLowerCase()}`,
+    status: 'idle' as TaskStatus,
+    activeStageDuration: 0,
+    stageDurations: {},
+    totalElapsed: 0,
+    isTimerRunning: false,
+    returnsCount: 0,
+    fastTrack: undefined,
+    customFlow: undefined,
+    verdict: 'NONE' as TaskVerdict,
+    verdictNote: undefined,
+    model: undefined,
+    parentId: undefined,
+    subtaskIndex: undefined,
+    waitingForSubtaskId: undefined,
   };
 }
 
@@ -471,12 +532,17 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       sourceColIndex >= 0 && targetColIndex >= 0 && targetColIndex < sourceColIndex;
     const newReturnsCount = isRework ? task.returnsCount + 1 : task.returnsCount;
 
-    // Freeze current stage duration
+    // Freeze current stage duration (legacy tasks may lack duration fields)
     const currentStage = task.columnId;
-    const currentDuration = task.activeStageDuration;
+    const currentDuration = typeof task.activeStageDuration === 'number' && Number.isFinite(task.activeStageDuration)
+      ? task.activeStageDuration
+      : 0;
+    const prevStageDurations = task.stageDurations && typeof task.stageDurations === 'object'
+      ? task.stageDurations
+      : {};
     const updatedStageDurations = {
-      ...task.stageDurations,
-      [currentStage]: (task.stageDurations[currentStage] || 0) + currentDuration,
+      ...prevStageDurations,
+      [currentStage]: (prevStageDurations[currentStage] || 0) + currentDuration,
     };
 
     // NOTE: fastTrack (noReview/noRetro) is intentionally ignored —
@@ -699,8 +765,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         }
         return {
           ...task,
-          activeStageDuration: task.activeStageDuration + 1,
-          totalElapsed: task.totalElapsed + 1,
+          activeStageDuration: (typeof task.activeStageDuration === 'number' && Number.isFinite(task.activeStageDuration) ? task.activeStageDuration : 0) + 1,
+          totalElapsed: (typeof task.totalElapsed === 'number' && Number.isFinite(task.totalElapsed) ? task.totalElapsed : 0) + 1,
         };
       }),
     }));

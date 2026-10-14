@@ -39,24 +39,24 @@ export default function ContextGauge({
 
   // Dynamic token calculations
   const { totalUsedTokens, systemPromptTokens, toolDefTokens, messageTokens } = useMemo(() => {
-    // 1. Calculate dynamic message characters
+    // 1. Calculate dynamic message characters (legacy entries may miss fields)
     let messageChars = 0;
     const streams = streamEntries?.[taskId];
     if (streams) {
-      for (const th of streams.thoughts) {
-        messageChars += th.content.length;
+      for (const th of streams.thoughts ?? []) {
+        messageChars += (th?.content ?? '').length;
       }
-      for (const out of streams.outputs) {
-        messageChars += out.content.length;
+      for (const out of streams.outputs ?? []) {
+        messageChars += (out?.content ?? '').length;
       }
     }
 
-    const tools = toolExecutions?.[taskId];
+    const tools = toolExecutions?.[taskId] ?? [];
     if (tools) {
       for (const t of tools) {
-        messageChars += (t.stdout?.length || 0);
-        messageChars += (t.stderr?.length || 0);
-        messageChars += JSON.stringify(t.params || {}).length;
+        messageChars += (t?.stdout?.length || 0);
+        messageChars += (t?.stderr?.length || 0);
+        messageChars += JSON.stringify(t?.params || {}).length;
       }
     }
 
@@ -255,7 +255,7 @@ export default function ContextGauge({
 
   // Elegant bottom status bar under chat input card
   return (
-    <div className="font-mono text-xs text-zinc-400 flex items-center justify-center gap-6 py-1.5 select-none">
+    <div className="font-mono text-xs text-[#8f8f8f] flex items-center justify-center gap-6 py-1.5 select-none">
       {/* ⏱️ {turns} шагов · {tps} tok/s */}
       <span className="flex items-center gap-1.5" title={tpsTitle}>
         <span>⏱️</span>
@@ -275,7 +275,7 @@ export default function ContextGauge({
           title={`Контекст: ${percent}% (~${usedTokensK}K / ${maxTokensK}K)`}
         >
           <svg className="w-3.5 h-3.5 -rotate-90 transform" viewBox="0 0 16 16">
-            <circle cx="8" cy="8" r="6" stroke="#3f3f46" strokeWidth="2" fill="none" />
+            <circle cx="8" cy="8" r="6" stroke="#ebebeb" strokeWidth="2" fill="none" />
             <circle
               cx="8"
               cy="8"
@@ -290,7 +290,7 @@ export default function ContextGauge({
             />
           </svg>
         </div>
-        <span className="tabular-nums text-zinc-400">{percent}%</span>
+        <span className="tabular-nums text-[#8f8f8f]">{percent}%</span>
 
         {/* Floating Hover Card (pops UPWARDS above status bar) */}
         <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2.5 z-50 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-all duration-150 ease-out pointer-events-auto">
