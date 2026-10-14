@@ -27,16 +27,52 @@ fn main() {
         eprintln!("{msg}");
     }));
 
-    // WebView2 user-data folder (UDF) resilience: ensure the folder exists
-    // and grant AppContainer permissions (*S-1-15-2-1) to avoid 0x8000FFFF/Access Denied.
+    // WebView2 user-data folder (UDF) resilience & non-admin permission inheritance:
+    // If com.voimax.cvh was created/touched during an elevated (admin) run, normal user tokens
+    // hit 0x80070005 (Access Denied). Stale lockfiles also trigger 0x800700AA (ERROR_BUSY).
     #[cfg(target_os = "windows")]
-    if let Ok(localappdata) = std::env::var("LOCALAPPDATA") {
-        let udf = std::path::PathBuf::from(localappdata).join("com.voimax.cvh");
-        let _ = std::fs::create_dir_all(&udf);
-        if let Some(path_str) = udf.to_str() {
-            let _ = std::process::Command::new("icacls")
-                .args([path_str, "/grant", "*S-1-15-2-1:(OI)(CI)F", "/Q"])
-                .output();
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+        if let Ok(localappdata) = std::env::var("LOCALAPPDATA") {
+            let base = std::path::PathBuf::from(&localappdata).join("com.voimax.cvh");
+            let _ = std::fs::create_dir_all(&base);
+
+            // Recursively ensure current user and AppContainer have Full Control
+            if let Some(path_str) = base.to_str() {
+                let username = std::env::var("USERNAME").unwrap_or_else(|_| "Users".to_string());
+                let _ = std::process::Command::new("icacls")
+                    .args([
+                        path_str,
+                        "/grant",
+                        &format!("{username}:(OI)(CI)F"),
+                        "/grant",
+                        "*S-1-15-2-1:(OI)(CI)F",
+                        "/T",
+                        "/Q",
+                        "/C",
+                    ])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .output();
+            }
+
+            // Stale lock recovery: If EBWebView\Default\LOCK or EBWebView\EBWebView.lock exist
+            // from a previous ungraceful exit or crash, attempt to remove them so WebView2 doesn't hit 0x800700AA
+            let eb_dir = base.join("EBWebView");
+            if eb_dir.exists() {
+                let lock_paths = [
+                    eb_dir.join("EBWebView.lock"),
+                    eb_dir.join("Default").join("LOCK"),
+                    eb_dir.join("Default").join("Local Storage").join("leveldb").join("LOCK"),
+                    eb_dir.join("Default").join("Session Storage").join("LOCK"),
+                ];
+                for lock in &lock_paths {
+                    if lock.exists() {
+                        let _ = std::fs::remove_file(lock);
+                    }
+                }
+            }
         }
     }
 
