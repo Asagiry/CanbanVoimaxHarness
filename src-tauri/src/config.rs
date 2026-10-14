@@ -769,19 +769,218 @@ pub async fn save_llm_settings_to_disk(repo_root: &Path, settings: &LlmSettings)
     Ok(())
 }
 
-/// Automatically scaffold the complete .cvh workspace structure if missing.
-/// Creates: .cvh/agents/, .cvh/worktrees/, .cvh/skills/, .cvh/settings/, and default config/pipeline files.
+// ============================================================================
+// Agent storage: persona — ЕДИНСТВЕННЫЙ flat-путь `.cvh/agents/<role>.md`.
+// Per-role aux dirs `.cvh/agents/<role>/` (без agent.md внутри):
+//   - `rules/*.md`    — agent rules, alphabetical order in system prompt
+//   - `hooks/`        — scripts named `on_enter.*` / `on_finish.*` by event
+//   - `setting`       — JSON without extension:
+//                       {model?, temperature?, context_window?, allowed_tools?}
+// ============================================================================
+
+/// Per-agent overrides stored in `.cvh/agents/<role>/setting` (JSON, no
+/// extension). All fields optional; a missing/broken file falls back to
+/// defaults (see [`load_agent_setting`]).
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+pub struct AgentSetting {
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub temperature: Option<f32>,
+    #[serde(default, alias = "contextWindow")]
+    pub context_window: Option<u64>,
+    #[serde(default, alias = "allowedTools")]
+    pub allowed_tools: Option<Vec<String>>,
+}
+
+/// `<root>/.cvh/agents/<role>`
+pub fn agent_dir(repo_root: &Path, role: &str) -> PathBuf {
+    repo_root.join(".cvh").join("agents").join(role)
+}
+
+/// Persona location (ЕДИНСТВЕННЫЙ путь): `<root>/.cvh/agents/<role>.md`
+pub fn agent_persona_path(repo_root: &Path, role: &str) -> PathBuf {
+    repo_root
+        .join(".cvh")
+        .join("agents")
+        .join(format!("{}.md", role))
+}
+
+/// `<root>/.cvh/agents/<role>/rules`
+pub fn agent_rules_dir(repo_root: &Path, role: &str) -> PathBuf {
+    agent_dir(repo_root, role).join("rules")
+}
+
+/// `<root>/.cvh/agents/<role>/hooks`
+pub fn agent_hooks_dir(repo_root: &Path, role: &str) -> PathBuf {
+    agent_dir(repo_root, role).join("hooks")
+}
+
+/// `<root>/.cvh/agents/<role>/setting` (JSON, no extension)
+pub fn agent_setting_path(repo_root: &Path, role: &str) -> PathBuf {
+    agent_dir(repo_root, role).join("setting")
+}
+
+/// Best-effort load of `.cvh/agents/<role>/setting`.
+/// Missing/empty/broken file → [`AgentSetting::default()`] (never an error).
+/// A present `context_window` is logged via eprintln for observability.
+pub async fn load_agent_setting(repo_root: &Path, role: &str) -> AgentSetting {
+    let path = agent_setting_path(repo_root, role);
+    let content = match tokio::fs::read_to_string(&path).await {
+        Ok(c) => c,
+        Err(_) => return AgentSetting::default(),
+    };
+    let trimmed = content.trim();
+    if trimmed.is_empty() {
+        return AgentSetting::default();
+    }
+    match serde_json::from_str::<AgentSetting>(trimmed) {
+        Ok(s) => {
+            if let Some(cw) = s.context_window {
+                eprintln!(
+                    "CVH [agent_setting]: role='{}' context_window={}",
+                    role, cw
+                );
+            }
+            s
+        }
+        Err(e) => {
+            eprintln!(
+                "CVH [agent_setting]: broken setting for role='{}' at {:?}: {}. Using defaults.",
+                role, path, e
+            );
+            AgentSetting::default()
+        }
+    }
+}
+
+/// Intersection check of a tool against the agent-level `allowed_tools`
+/// allowlist. `None` (field absent) → no restriction. Alias-aware
+/// (`bash`→`execute_command`, `str_replace`→`edit_file`).
+pub fn agent_allows_tool(allowed: Option<&[String]>, tool_name: &str) -> bool {
+    match allowed {
+        None => true,
+        Some(list) => {
+            let canonical = normalize_tool_name(tool_name);
+            list.iter().any(|t| {
+                normalize_tool_name(t) == canonical || t == tool_name
+            })
+        }
+    }
+}
+
+/// Resolve a pipeline `col.hooks` path with per-agent fallback:
+/// the configured path as before; if that file does not exist, fall back to
+/// `.cvh/agents/<persona>/hooks/<basename>`. With no persona, returns the
+/// configured path unchanged (caller checks existence).
+pub fn resolve_hook_path(
+    repo_root: &Path,
+    persona: Option<&str>,
+    hook_rel: &str,
+) -> PathBuf {
+    let primary_buf = PathBuf::from(hook_rel);
+    let primary = if primary_buf.is_absolute() {
+        primary_buf
+    } else {
+        repo_root.join(&primary_buf)
+    };
+    if primary.exists() {
+        return primary;
+    }
+    if let Some(role) = persona {
+        let role = role.trim();
+        if !role.is_empty() {
+            let basename = Path::new(hook_rel)
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
+            if !basename.is_empty() {
+                return agent_hooks_dir(repo_root, role).join(&basename);
+            }
+        }
+    }
+    primary
+}
+
+/// Minimal fresh-project pipeline: exactly two columns — `backlog` (no
+/// persona, first) and `ready` (terminal, last). The first agent is created
+/// by the user via UI; the scaffold itself seeds no personas.
+pub fn minimal_pipeline_config() -> PipelineConfig {
+    PipelineConfig {
+        id: "default-engineering".to_string(),
+        title: "Engineering Pipeline".to_string(),
+        tool_permissions: None,
+        columns: vec![
+            PipelineColumn {
+                id: "backlog".to_string(),
+                title: "Backlog".to_string(),
+                color: Some("#64748b".to_string()),
+                icon: Some("Inbox".to_string()),
+                persona: None,
+                on_enter_script: None,
+                context_window: Some(128000),
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: Some(vec![
+                    "read_file".to_string(),
+                    "glob".to_string(),
+                    "grep".to_string(),
+                    "web_search".to_string(),
+                    "web_fetch".to_string(),
+                ]),
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            PipelineColumn {
+                id: "ready".to_string(),
+                title: "Ready / Done".to_string(),
+                color: Some("#10b981".to_string()),
+                icon: Some("CheckCircle2".to_string()),
+                persona: None,
+                on_enter_script: None,
+                context_window: Some(64000),
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: Some(vec![
+                    "read_file".to_string(),
+                    "glob".to_string(),
+                    "grep".to_string(),
+                ]),
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: Some(true),
+            },
+        ],
+        boards: None,
+        active_board_id: None,
+    }
+}
+
+/// Automatically scaffold the minimal .cvh workspace structure if missing.
+/// Creates: empty `.cvh/agents/`, `.cvh/dialogs/`, `.cvh/worktrees/`,
+/// `.cvh/skills/`, `.cvh/settings/`, `.cvh/hooks/` and default
+/// config/pipeline/tasks/tool-policy files. Fresh scaffolds seed NO agents:
+/// `pipeline.json` holds only `backlog` (no persona, first) + `ready`
+/// (terminal, last); the first agent is created by the user via UI.
 pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
     let cvh_dir = repo_root.join(".cvh");
     let agents_dir = cvh_dir.join("agents");
+    let dialogs_dir = cvh_dir.join("dialogs");
     let worktrees_dir = cvh_dir.join("worktrees");
     let skills_dir = cvh_dir.join("skills");
     let settings_dir = cvh_dir.join("settings");
     let hooks_dir = cvh_dir.join("hooks");
 
-    // Initialize pure directory structure without any default agent role files
     tokio::fs::create_dir_all(&cvh_dir).await?;
     tokio::fs::create_dir_all(&agents_dir).await?;
+    tokio::fs::create_dir_all(&dialogs_dir).await?;
     tokio::fs::create_dir_all(&worktrees_dir).await?;
     tokio::fs::create_dir_all(&skills_dir).await?;
     tokio::fs::create_dir_all(&settings_dir).await?;
@@ -805,14 +1004,26 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
         atomic_write_file(&config_path, &serde_json::to_string_pretty(&default_config)?).await?;
     }
 
-    // 2. pipeline.json if not present
+    // 2. pipeline.json if not present (minimal: backlog + ready only).
+    // Если корень — git-репо (.git есть), backlog сразу получает
+    // hooks {"on_enter": "builtin:create_worktree"}; иначе hooks {}.
     let pipeline_path = cvh_dir.join("pipeline.json");
     if !pipeline_path.exists() {
-        let default_pipeline = default_pipeline_config();
-        atomic_write_file(&pipeline_path, &serde_json::to_string_pretty(&default_pipeline)?).await?;
+        let mut minimal_pipeline = minimal_pipeline_config();
+        if repo_root.join(".git").exists() {
+            if let Some(backlog) = minimal_pipeline.columns.iter_mut().find(|c| c.id == "backlog") {
+                backlog.hooks.insert(
+                    "on_enter".to_string(),
+                    "builtin:create_worktree".to_string(),
+                );
+            }
+        }
+        atomic_write_file(&pipeline_path, &serde_json::to_string_pretty(&minimal_pipeline)?).await?;
     }
 
-    // Note: agents/ directory is kept intentionally empty. Users create custom personas manually.
+    // Note: agents/ stays intentionally empty on fresh scaffolds — no persona
+    // files are seeded. The first agent is created by the user via UI
+    // (create_agent_persona → `.cvh/agents/<role>/agent.md`).
 
     // 3. Default tasks.json if not present
     let tasks_path = cvh_dir.join("tasks.json");
@@ -822,11 +1033,8 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
 
     // 4. Default tool policy in settings/ if not present.
     // NOTE: this MUST be tool_policy_path() — the same single file that
-    // load_tool_policies()/save_tool_policies() use. A past split-brain
-    // (scaffold wrote settings/tool-policy.json while load/save used
-    // .cvh/tool_policy.json) left fresh projects with a missing enforced
-    // file, so load fell back to all-allowed defaults and silently ignored
-    // user disables.
+    // load_tool_policies()/save_tool_policies() use (single canonical path,
+    // no legacy fallbacks).
     let tool_policy_path = tool_policy_path(repo_root);
     if !tool_policy_path.exists() {
         let default_tp = ToolPolicyConfig::default();
@@ -1162,13 +1370,6 @@ pub fn tool_policy_path(root_path: &Path) -> PathBuf {
         .join("tool-policy.json")
 }
 
-/// Legacy pre-unification location (`<root>/.cvh/tool_policy.json`).
-/// Read-only fallback for projects whose disables were saved before the
-/// path unification; new saves always converge to [`tool_policy_path`].
-pub fn legacy_tool_policy_path(root_path: &Path) -> PathBuf {
-    root_path.join(".cvh").join("tool_policy.json")
-}
-
 async fn read_tool_policy_file(policy_path: &Path) -> Result<ToolPolicyConfig> {
     let content = tokio::fs::read_to_string(policy_path)
         .await
@@ -1183,15 +1384,6 @@ async fn read_tool_policy_file(policy_path: &Path) -> Result<ToolPolicyConfig> {
 pub async fn load_tool_policies(root_path: impl AsRef<Path>) -> Result<ToolPolicyConfig> {
     let root = root_path.as_ref();
     let canonical = tool_policy_path(root);
-    let legacy = legacy_tool_policy_path(root);
-
-    // Prefer the legacy file while it exists: it holds the last actually
-    // enforced matrix on pre-unification installs (the canonical settings
-    // file there is still the scaffold default). Once the next save runs,
-    // state converges to the canonical file only (see save_tool_policies).
-    if legacy.exists() {
-        return read_tool_policy_file(&legacy).await;
-    }
     if canonical.exists() {
         return read_tool_policy_file(&canonical).await;
     }
@@ -1204,12 +1396,6 @@ pub async fn save_tool_policies(root_path: impl AsRef<Path>, config: &ToolPolicy
     let serialized = serde_json::to_string_pretty(config)
         .context("Failed to serialize ToolPolicyConfig to JSON")?;
     atomic_write_file(&canonical, &serialized).await?;
-    // Converge split-brain installs: drop the legacy file so future loads
-    // can only see the canonical matrix. Best-effort; a missing file is fine.
-    let legacy = legacy_tool_policy_path(root);
-    if legacy.exists() {
-        let _ = tokio::fs::remove_file(&legacy).await;
-    }
     Ok(())
 }
 
@@ -1269,6 +1455,119 @@ mod tests {
         assert!(first_entry.is_none(), "Expected agents/ to be completely empty per user mandate");
 
         let _ = tokio::fs::remove_dir_all(&base_dir).await;
+    }
+
+    #[tokio::test]
+    async fn test_scaffold_minimal_backlog_ready_only() {
+        // Fresh scaffold minimalism: pipeline.json holds exactly backlog
+        // (no persona, first) + ready (terminal, last); agents/ empty;
+        // the rest of the scaffold files stay in place.
+        let base_dir = std::path::PathBuf::from("target").join(format!("cvh_min_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base_dir).await.expect("test dir");
+
+        scaffold_cvh_project(&base_dir).await.expect("Scaffold failed");
+
+        let cvh = base_dir.join(".cvh");
+        let pipe_raw = tokio::fs::read_to_string(cvh.join("pipeline.json"))
+            .await
+            .expect("pipeline.json missing");
+        let pipe: PipelineConfig = serde_json::from_str(&pipe_raw).expect("pipeline parse");
+        assert_eq!(pipe.columns.len(), 2, "minimal scaffold must have exactly 2 columns");
+        assert_eq!(pipe.columns[0].id, "backlog");
+        assert_eq!(pipe.columns[0].persona, None, "backlog must have no persona");
+        assert_eq!(pipe.columns[1].id, "ready");
+        assert_eq!(pipe.columns[1].terminal, Some(true), "ready must be terminal last");
+
+        // agents/ strictly empty
+        let mut rd = tokio::fs::read_dir(cvh.join("agents")).await.expect("agents dir");
+        assert!(rd.next_entry().await.expect("read").is_none(), "agents/ must be empty");
+
+        // remaining scaffold files/dirs in place
+        assert!(cvh.join("dialogs").is_dir());
+        assert!(cvh.join("worktrees").is_dir());
+        assert!(cvh.join("config.json").is_file());
+        let tasks_raw = tokio::fs::read_to_string(cvh.join("tasks.json")).await.expect("tasks.json");
+        assert_eq!(tasks_raw.trim(), "[]");
+        assert!(tool_policy_path(&base_dir).is_file());
+
+        let _ = tokio::fs::remove_dir_all(&base_dir).await;
+    }
+
+    #[tokio::test]
+    async fn test_load_agent_setting_broken_falls_back_to_default() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_set_{}", uuid::Uuid::new_v4()));
+        let dir = base.join(".cvh").join("agents").join("dev");
+        tokio::fs::create_dir_all(&dir).await.expect("test dir");
+
+        // Missing → default.
+        let missing = load_agent_setting(&base, "dev").await;
+        assert_eq!(missing, AgentSetting::default());
+
+        // Broken JSON → default.
+        tokio::fs::write(dir.join("setting"), "{ not valid json {{{").await.expect("seed broken");
+        let broken = load_agent_setting(&base, "dev").await;
+        assert_eq!(broken, AgentSetting::default());
+
+        // Valid snake_case + camelCase aliases.
+        tokio::fs::write(
+            dir.join("setting"),
+            r#"{"model": "m1", "temperature": 0.7, "contextWindow": 64000, "allowedTools": ["read_file", "bash"]}"#,
+        )
+        .await
+        .expect("seed valid");
+        let valid = load_agent_setting(&base, "dev").await;
+        assert_eq!(valid.model.as_deref(), Some("m1"));
+        assert_eq!(valid.temperature, Some(0.7));
+        assert_eq!(valid.context_window, Some(64000));
+        assert_eq!(
+            valid.allowed_tools,
+            Some(vec!["read_file".to_string(), "bash".to_string()])
+        );
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[test]
+    fn test_agent_allows_tool_intersection() {
+        // None → unrestricted.
+        assert!(agent_allows_tool(None, "read_file"));
+        assert!(agent_allows_tool(None, "bash"));
+        // Listed tools pass, others are cut (intersection semantics).
+        let allowed = vec!["read_file".to_string(), "execute_command".to_string()];
+        assert!(agent_allows_tool(Some(&allowed), "read_file"));
+        assert!(agent_allows_tool(Some(&allowed), "execute_command"));
+        assert!(agent_allows_tool(Some(&allowed), "bash"), "bash alias must match execute_command");
+        assert!(!agent_allows_tool(Some(&allowed), "write_file"));
+        assert!(!agent_allows_tool(Some(&allowed), "web_search"));
+        // Empty list → nothing allowed.
+        let empty: Vec<String> = vec![];
+        assert!(!agent_allows_tool(Some(&empty), "read_file"));
+    }
+
+    #[test]
+    fn test_resolve_hook_path_primary_then_agent_fallback() {
+        let base = std::env::temp_dir().join(format!("cvh_hook_{}", uuid::Uuid::new_v4()));
+        let hooks = base.join(".cvh").join("hooks");
+        let agent_hooks = base.join(".cvh").join("agents").join("dev").join("hooks");
+        std::fs::create_dir_all(&hooks).expect("hooks dir");
+        std::fs::create_dir_all(&agent_hooks).expect("agent hooks dir");
+        std::fs::write(hooks.join("on_enter.bat"), "rem").expect("seed primary");
+        std::fs::write(agent_hooks.join("on_enter.bat"), "rem agent").expect("seed agent");
+
+        // Primary exists → primary wins.
+        let p1 = resolve_hook_path(&base, Some("dev"), ".cvh/hooks/on_enter.bat");
+        assert_eq!(p1, base.join(".cvh").join("hooks").join("on_enter.bat"));
+
+        // Primary missing → agent fallback by basename.
+        std::fs::remove_file(hooks.join("on_enter.bat")).expect("remove primary");
+        let p2 = resolve_hook_path(&base, Some("dev"), ".cvh/hooks/on_enter.bat");
+        assert_eq!(p2, agent_hooks.join("on_enter.bat"));
+
+        // No persona → configured path unchanged.
+        let p3 = resolve_hook_path(&base, None, ".cvh/hooks/on_enter.bat");
+        assert_eq!(p3, base.join(".cvh").join("hooks").join("on_enter.bat"));
+
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     fn policy_with_dev_exec_disabled() -> ToolPolicyConfig {
@@ -1367,17 +1666,14 @@ mod tests {
     }
 
     #[test]
-    fn test_tool_policy_paths_unified() {
-        // Regression: scaffold, save and load must share ONE canonical file.
-        // The split-brain (scaffold -> .cvh/settings/tool-policy.json vs
-        // load/save -> .cvh/tool_policy.json) left fresh projects without an
-        // enforced file, so loads failed open to all-allowed defaults.
+    fn test_tool_policy_path_canonical() {
+        // Single canonical file shared by scaffold, save and load:
+        // `<root>/.cvh/settings/tool-policy.json`. No legacy fallbacks.
         let root = Path::new("/repo");
         assert_eq!(
             tool_policy_path(root),
             root.join(".cvh").join("settings").join("tool-policy.json")
         );
-        assert_ne!(tool_policy_path(root), legacy_tool_policy_path(root));
     }
 
     #[tokio::test]
@@ -1392,42 +1688,11 @@ mod tests {
             .expect("save failed");
 
         assert!(tool_policy_path(&base_dir).exists());
-        assert!(!legacy_tool_policy_path(&base_dir).exists());
 
         let loaded = load_tool_policies(&base_dir).await.expect("load failed");
         assert!(!is_tool_allowed(&loaded, Some("dev"), "execute_command"));
         assert!(!is_tool_allowed(&loaded, Some("dev"), "bash"));
         assert!(!is_tool_allowed(&loaded, Some("dev"), "read_file"));
-
-        let _ = tokio::fs::remove_dir_all(&base_dir).await;
-    }
-
-    #[tokio::test]
-    async fn test_tool_policy_legacy_file_migrated_on_save() {
-        // Regression: pre-unification installs keep their enforced disables:
-        // a legacy-only .cvh/tool_policy.json is still honoured on load and
-        // converges to the canonical file on the next save.
-        let base_dir = std::path::PathBuf::from("target").join(format!("cvh_legacy_{}", uuid::Uuid::new_v4()));
-        tokio::fs::create_dir_all(&base_dir).await.expect("test dir");
-
-        let legacy = legacy_tool_policy_path(&base_dir);
-        atomic_write_file(
-            &legacy,
-            &serde_json::to_string_pretty(&policy_with_dev_exec_disabled()).expect("json"),
-        )
-        .await
-        .expect("legacy seed failed");
-
-        // Load honours the legacy matrix (no silent fail-open to defaults).
-        let loaded = load_tool_policies(&base_dir).await.expect("load failed");
-        assert!(!is_tool_allowed(&loaded, Some("dev"), "execute_command"));
-
-        // Next save converges to the canonical path and drops the legacy file.
-        save_tool_policies(&base_dir, &loaded).await.expect("save failed");
-        assert!(tool_policy_path(&base_dir).exists());
-        assert!(!legacy_tool_policy_path(&base_dir).exists());
-        let reloaded = load_tool_policies(&base_dir).await.expect("reload failed");
-        assert!(!is_tool_allowed(&reloaded, Some("dev"), "execute_command"));
 
         let _ = tokio::fs::remove_dir_all(&base_dir).await;
     }
@@ -1504,12 +1769,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_legacy_pipeline_migration_to_boards() {
-        let base_dir = std::env::temp_dir().join(format!("cvh_test_legacy_{}", uuid::Uuid::new_v4()));
+    async fn test_boards_config_fallback_to_pipeline() {
+        // boards.json missing → single-board config derived from pipeline.json
+        // columns (kept fallback, not a migration: no files are moved).
+        let base_dir = std::env::temp_dir().join(format!("cvh_test_boards_fb_{}", uuid::Uuid::new_v4()));
         let cvh = base_dir.join(".cvh");
         tokio::fs::create_dir_all(&cvh).await.expect("test dir");
 
-        let legacy_pipeline = serde_json::json!({
+        let pipeline_only = serde_json::json!({
             "id": "custom-engineering",
             "title": "Мой пайплайн",
             "columns": [
@@ -1533,9 +1800,9 @@ mod tests {
             ]
         });
 
-        atomic_write_file(&cvh.join("pipeline.json"), &serde_json::to_string_pretty(&legacy_pipeline).unwrap()).await.unwrap();
+        atomic_write_file(&cvh.join("pipeline.json"), &serde_json::to_string_pretty(&pipeline_only).unwrap()).await.unwrap();
 
-        let boards_cfg = load_boards_config(&base_dir).await.expect("load boards from legacy");
+        let boards_cfg = load_boards_config(&base_dir).await.expect("load boards from pipeline fallback");
         assert_eq!(boards_cfg.active_board_id, "development");
         assert_eq!(boards_cfg.boards.len(), 1);
         assert_eq!(boards_cfg.boards[0].name, "Мой пайплайн");

@@ -58,7 +58,6 @@ export default function ToolPolicyModal() {
 
   const { columns } = useBoardStore();
   // В матрице только агенты: backlog/ready без persona не имеют тул-контекста.
-  // Кастомные инструменты в матрице не показываются: только AVAILABLE_TOOLS.
   const agentColumns = columns.filter((col) => col.persona != null);
   const [activeTab, setActiveTab] = useState<'matrix' | 'global'>('matrix');
   const [expandedToolId, setExpandedToolId] = useState<string | null>(null);
@@ -291,6 +290,67 @@ export default function ToolPolicyModal() {
                       </tr>
                     );
                   })}
+                  {customTools.map((customTool) => {
+                    const customId = `custom:${customTool.name}`;
+                    const isCustomGloballyActive = globalEnabled[customTool.name] ?? true;
+                    const isCustomExpanded = expandedToolId === customId;
+
+                    return (
+                      <tr key={customId} className="hover:bg-[#fafafa] transition text-[#171717]">
+                        <td className="py-2.5 px-3">
+                          <button
+                            type="button"
+                            onClick={() => toggleExpanded(customId)}
+                            title={isCustomExpanded ? 'Свернуть описание' : 'Показать описание'}
+                            className="flex items-center gap-1.5 text-left cursor-pointer group"
+                          >
+                            <ChevronDown
+                              className={`h-3.5 w-3.5 shrink-0 text-[#8f8f8f] transition-transform ${isCustomExpanded ? 'rotate-180' : ''}`}
+                            />
+                            <span>
+                              <span className="font-medium text-[#171717] group-hover:underline underline-offset-2">
+                                {customTool.name}
+                              </span>
+                              <span className="ml-1.5 inline-block rounded border border-[#ebebeb] bg-[#f4f4f5] px-1 py-px text-[10px] leading-none text-[#666666] align-middle">
+                                свой
+                              </span>
+                            </span>
+                          </button>
+                          {isCustomExpanded && (
+                            <p className="text-[11px] text-[#666666] mt-1.5 font-sans leading-snug">
+                              {customTool.description}
+                            </p>
+                          )}
+                        </td>
+
+                        <td className="py-2.5 px-2 text-right text-[#8f8f8f] tabular-nums text-[11px]">
+                          —
+                        </td>
+
+                        {agentColumns.map((col) => {
+                          const isCustomAllowed = isToolAllowed(customTool.name, col.id);
+
+                          return (
+                            <td key={col.id} className="py-2 px-2 text-center border-l border-[#ebebeb]">
+                              {!isCustomGloballyActive ? (
+                                <span className="text-[10px] text-[#8f8f8f] select-none">
+                                  Выкл
+                                </span>
+                              ) : (
+                                <span className="inline-flex justify-center">
+                                  <Toggle
+                                    enabled={isCustomAllowed}
+                                    onToggle={() => setStageTool(col.id, customTool.name, !isCustomAllowed)}
+                                    title={`${customTool.name} для ${col.title}: ${isCustomAllowed ? 'включено' : 'выключено'}`}
+                                  />
+                                </span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -348,9 +408,6 @@ export default function ToolPolicyModal() {
                 <h3 className="text-xs font-semibold text-[#171717] font-sans">
                   Свои инструменты
                 </h3>
-                <p className="text-[11px] text-[#666666] font-sans mt-0.5">
-                  Пользовательские shell-инструменты. В матрице не показываются, работают через глобальный доступ.
-                </p>
 
                 {customLoading && (
                   <p className="text-[11px] text-[#666666] font-sans mt-2">Загрузка...</p>

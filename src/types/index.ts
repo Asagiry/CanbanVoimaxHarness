@@ -82,7 +82,10 @@ export interface CortexAgentFile {
   id: string;
   name: string;
   stageId: string;
-  type: 'persona' | 'rule' | 'settings';
+  // Новая схема хранения: `.cvh/agents/<role>/agent.md` (persona),
+  // `.cvh/agents/<role>/rules/*.md` (rule), `.cvh/agents/<role>/hooks/*` (hook),
+  // `.cvh/agents/<role>/setting` (settings, JSON без расширения).
+  type: 'persona' | 'rule' | 'settings' | 'hook';
   path: string;
   content: string;
   isDirty?: boolean;

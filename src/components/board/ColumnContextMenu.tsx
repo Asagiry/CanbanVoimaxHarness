@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { PipelineColumn, PipelineConfig } from '../../types';
 import { useBoardStore } from '../../stores/boardStore';
+import { slugifyTitle } from '../../lib/slug';
 
 interface ColumnContextMenuProps {
   column: PipelineColumn;
@@ -188,9 +189,10 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
     setPersonaError(null);
     let personaName: string;
     if (usePersonaSelect && isNewAgentSelected) {
-      const role = newAgentName.trim();
-      if (!role) {
-        setPersonaError('Укажите имя нового агента.');
+      // Кириллица преобразуется в латиницу автоматически (бэкенд принимает только [a-z0-9-]).
+      const role = slugifyTitle(newAgentName);
+      if (!role || role === 'column') {
+        setPersonaError('Имя должно содержать буквы или цифры.');
         return;
       }
       try {
@@ -399,14 +401,28 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
             />
           )}
           {usePersonaSelect && isNewAgentSelected && (
-            <input
-              type="text"
-              autoFocus
-              value={newAgentName}
-              onChange={(e) => setNewAgentName(e.target.value)}
-              placeholder="Имя нового агента"
-              className="mt-1.5 w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono transition"
-            />
+            <>
+              <input
+                type="text"
+                autoFocus
+                value={newAgentName}
+                onChange={(e) => setNewAgentName(e.target.value)}
+                placeholder="Имя нового агента"
+                className="mt-1.5 w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono transition"
+              />
+              {newAgentName.trim() !== '' ? (
+                <div className="mt-1 text-[10px] font-mono text-[#8f8f8f]">
+                  Роль:{' '}
+                  {slugifyTitle(newAgentName) === 'column'
+                    ? '— нужны буквы или цифры —'
+                    : slugifyTitle(newAgentName)}
+                </div>
+              ) : (
+                <div className="mt-1 text-[10px] text-[#8f8f8f]">
+                  Кириллица преобразуется в латиницу автоматически
+                </div>
+              )}
+            </>
           )}
           {personaError && (
             <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">

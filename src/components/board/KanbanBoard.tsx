@@ -1,12 +1,13 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
-import { useBoardStore, allocateNextTaskNum, formatTaskId } from '../../stores/boardStore';
+import { useBoardStore } from '../../stores/boardStore';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import KanbanColumn from './KanbanColumn';
-import { KanbanTask, PipelineColumn, TaskStatus, BoardDef } from '../../types';
+import { PipelineColumn, BoardDef } from '../../types';
 import { Plus, X, Layout, Pencil, Trash2, Search } from 'lucide-react';
 import CreateBoardModal from './CreateBoardModal';
+import { slugifyTitle, uniqueColumnId } from '../../lib/slug';
 
 const COLUMN_PALETTE = [
   '#64748b',
@@ -18,33 +19,6 @@ const COLUMN_PALETTE = [
   '#6366f1',
   '#14b8a6',
 ];
-
-const CYRILLIC_MAP: Record<string, string> = {
-  'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh',
-  'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
-  'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts',
-  'ч': 'ch', 'ш': 'sh', 'щ': 'sch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
-};
-
-function slugifyTitle(title: string): string {
-  const latin = title
-    .toLowerCase()
-    .split('')
-    .map((ch) => CYRILLIC_MAP[ch] ?? ch)
-    .join('');
-  const slug = latin
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40);
-  return slug || 'column';
-}
-
-function uniqueColumnId(base: string, taken: Set<string>): string {
-  if (!taken.has(base)) return base;
-  let n = 2;
-  while (taken.has(`${base}-${n}`)) n += 1;
-  return `${base}-${n}`;
-}
 
 interface AgentPersonaOption {
   role: string;
@@ -233,6 +207,7 @@ export default function KanbanBoard() {
   // New task form fields
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
+  const [createWorktree, setCreateWorktree] = useState(true);
 
   // New column inline form fields
   const [isAddColumnOpen, setIsAddColumnOpen] = useState(false);
@@ -366,9 +341,11 @@ export default function KanbanBoard() {
   };
 
   // Создание задач — только через общую кнопку доски: цель backlog, иначе первая колонка.
+  // Создание идёт через бэкенд create_task (on_enter-хуки + worktree на старте).
   const handleOpenAddTask = () => {
     setNewTitle('');
     setNewDescription('');
+    setCreateWorktree(true);
     setSelectedModel(settings.model || (availableModels.length > 0 ? availableModels[0] : 'gemini-3.8-flash-high'));
     setIsNewTaskModalOpen(true);
   };
@@ -378,35 +355,15 @@ export default function KanbanBoard() {
     if (!newTitle.trim()) return;
 
     const targetColumnId = columns.some((c) => c.id === 'backlog') ? 'backlog' : (columns[0]?.id ?? 'backlog');
-    const targetCol = columns.find((c) => c.id === targetColumnId);
-    const persona = targetCol?.persona ?? 'developer';
-    const status: TaskStatus = targetCol?.terminal ? 'done' : targetCol?.persona ? 'running' : 'idle';
 
-    // Monotonic IDs: persistent per-project counter, never re-issued after delete.
-    const paddedId = formatTaskId(allocateNextTaskNum(tasks));
-    const taskId = paddedId;
-
-    const newTask: KanbanTask = {
-      id: taskId,
+    void addTask({
       title: newTitle.trim(),
       description: newDescription.trim() || undefined,
-      priority: 'high',
-      columnId: targetColumnId,
+      stageId: targetColumnId,
       boardId: activeBoardId || 'development',
-      persona,
-      branch: `feat/${paddedId.toLowerCase()}`,
-      worktreePath: `.cvh/worktrees/${paddedId.toLowerCase()}`,
-      status,
-      activeStageDuration: 0,
-      stageDurations: {},
-      totalElapsed: 0,
-      isTimerRunning: status === 'running',
-      returnsCount: 0,
-      verdict: 'NONE',
+      skipWorktree: !createWorktree,
       model: selectedModel,
-    };
-
-    addTask(newTask);
+    });
     setIsNewTaskModalOpen(false);
   };
 
@@ -449,9 +406,10 @@ export default function KanbanBoard() {
 
     let personaName: string;
     if (usePersonaSelect && isNewAgentSelected) {
-      const role = newAgentName.trim();
-      if (!role) {
-        setColumnFormError('Укажите имя нового агента.');
+      // Кириллица преобразуется в латиницу автоматически (бэкенд принимает только [a-z0-9-]).
+      const role = slugifyTitle(newAgentName);
+      if (!role || role === 'column') {
+        setColumnFormError('Имя должно содержать буквы или цифры.');
         return;
       }
       try {
@@ -767,8 +725,13 @@ export default function KanbanBoard() {
                   value={newAgentName}
                   onChange={(e) => setNewAgentName(e.target.value)}
                   placeholder="Например: tester"
-                  className="w-44 px-3 py-1.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono transition"
+                  className="w-44 px-3 py-1.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-sans transition"
                 />
+                {newAgentName.trim() !== '' && (
+                  <div className="mt-1 text-[10px] font-mono text-[#8f8f8f]">
+                    Роль: {slugifyTitle(newAgentName) === 'column' ? '— нужны буквы или цифры —' : slugifyTitle(newAgentName)}
+                  </div>
+                )}
               </div>
             )}
 
@@ -1035,6 +998,18 @@ export default function KanbanBoard() {
                   ))}
                 </select>
               </div>
+
+              <label className="flex items-center space-x-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={createWorktree}
+                  onChange={(e) => setCreateWorktree(e.target.checked)}
+                  className="h-3.5 w-3.5 accent-[#171717] cursor-pointer"
+                />
+                <span className="font-sans text-[#4d4d4d]">
+                  Создать worktree при старте
+                </span>
+              </label>
 
               <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#ebebeb]">
                 <button

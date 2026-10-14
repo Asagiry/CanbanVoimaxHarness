@@ -85,7 +85,14 @@ interface BoardState {
   loadTasks: () => Promise<void>;
   moveTask: (taskId: string, targetColumnId: string) => Promise<void>;
   updateTask: (taskId: string, partial: Partial<KanbanTask>) => void;
-  addTask: (task: KanbanTask) => Promise<void>;
+  addTask: (input: {
+    title: string;
+    description?: string;
+    stageId?: string;
+    boardId?: string;
+    skipWorktree?: boolean;
+    model?: string;
+  }) => Promise<KanbanTask | null>;
   createSubtask: (parentId: string, targetColumnId?: string) => Promise<KanbanTask | null>;
   deleteTask: (taskId: string) => Promise<void>;
   setTaskVerdict: (taskId: string, verdict: TaskVerdict, note?: string) => void;
@@ -625,22 +632,88 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const task = tasks.find((t) => t.id === taskId);
     if (!task || task.columnId === targetColumnId) return;
 
+    const targetColDef = columns.find((c) => c.id === targetColumnId);
+
+    // Preferred path: backend owns the move (gatekeeper sensor, target on_enter
+    // hooks, source on_finish hooks + worktree allocation). Local state is
+    // updated from the returned Task so hook-assigned worktreePath/branch
+    // survive. `verdict` is optional in move_task_stage and omitted here.
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const backendTask = await invoke<any>('move_task_stage', {
+        taskId,
+        targetStageId: targetColumnId,
+      });
+      if (backendTask && typeof backendTask.id === 'string') {
+        const mapped = mapBackendTaskToKanban(backendTask);
+        const prev = get().tasks.find((t) => t.id === taskId) ?? task;
+        // Local-only timer/UX bookkeeping (backend has no timer fields).
+        const sourceColIndex = columns.findIndex((c) => c.id === prev.columnId);
+        const targetColIndex = columns.findIndex((c) => c.id === targetColumnId);
+        const isRework =
+          sourceColIndex >= 0 && targetColIndex >= 0 && targetColIndex < sourceColIndex;
+        const currentDuration =
+          typeof prev.activeStageDuration === 'number' && Number.isFinite(prev.activeStageDuration)
+            ? prev.activeStageDuration
+            : 0;
+        const prevStageDurations =
+          prev.stageDurations && typeof prev.stageDurations === 'object'
+            ? prev.stageDurations
+            : {};
+        const merged: KanbanTask = {
+          ...mapped,
+          persona: targetColDef?.persona || prev.persona,
+          verdict: backendTask.verdict ? mapped.verdict : prev.verdict,
+          verdictNote: prev.verdictNote,
+          priority: prev.priority,
+          fastTrack: prev.fastTrack,
+          attachments: mapped.attachments ?? prev.attachments,
+          activeStageDuration: 0,
+          stageDurations: {
+            ...prevStageDurations,
+            [prev.columnId]: (prevStageDurations[prev.columnId] || 0) + currentDuration,
+          },
+          totalElapsed: prev.totalElapsed,
+          isTimerRunning: mapped.status === 'running',
+          returnsCount: isRework ? prev.returnsCount + 1 : prev.returnsCount,
+        };
+        const updatedTasks = get().tasks.map((t) => (t.id === taskId ? merged : t));
+        set({ tasks: updatedTasks });
+        persistTasksToLocalStorage(updatedTasks);
+        // NOTE: no syncTasksBackend here — backend already persisted the move;
+        // pushing local state via save_tasks would clobber hook-assigned worktree.
+        if (targetColDef?.autoRun ?? !!targetColDef?.persona) {
+          await triggerRunAgent(taskId, merged.description);
+        }
+        return;
+      }
+      throw new Error('move_task_stage returned empty task');
+    } catch (err) {
+      console.info('Backend move_task_stage failed, falling back to local move:', err);
+    }
+
+    // Fallback path (web mode / IPC error): old local computation + save_tasks.
+    const fb = get();
+    const fbTask = fb.tasks.find((t) => t.id === taskId);
+    if (!fbTask || fbTask.columnId === targetColumnId) return;
+    const fbTargetColDef = fb.columns.find((c) => c.id === targetColumnId);
+
     // Generic rework detection: board order only, no hardcoded stages
-    const sourceColIndex = columns.findIndex((c) => c.id === task.columnId);
-    const targetColIndex = columns.findIndex((c) => c.id === targetColumnId);
+    const sourceColIndex = fb.columns.findIndex((c) => c.id === fbTask.columnId);
+    const targetColIndex = fb.columns.findIndex((c) => c.id === targetColumnId);
 
     // Check if task is being returned / reworked backwards
     const isRework =
       sourceColIndex >= 0 && targetColIndex >= 0 && targetColIndex < sourceColIndex;
-    const newReturnsCount = isRework ? task.returnsCount + 1 : task.returnsCount;
+    const newReturnsCount = isRework ? fbTask.returnsCount + 1 : fbTask.returnsCount;
 
     // Freeze current stage duration (legacy tasks may lack duration fields)
-    const currentStage = task.columnId;
-    const currentDuration = typeof task.activeStageDuration === 'number' && Number.isFinite(task.activeStageDuration)
-      ? task.activeStageDuration
+    const currentStage = fbTask.columnId;
+    const currentDuration = typeof fbTask.activeStageDuration === 'number' && Number.isFinite(fbTask.activeStageDuration)
+      ? fbTask.activeStageDuration
       : 0;
-    const prevStageDurations = task.stageDurations && typeof task.stageDurations === 'object'
-      ? task.stageDurations
+    const prevStageDurations = fbTask.stageDurations && typeof fbTask.stageDurations === 'object'
+      ? fbTask.stageDurations
       : {};
     const updatedStageDurations = {
       ...prevStageDurations,
@@ -650,20 +723,19 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     // NOTE: fastTrack (noReview/noRetro) is intentionally ignored —
     // the task always lands in the requested target column.
 
-    const targetColDef = columns.find((c) => c.id === targetColumnId);
     // terminal → done, persona column → running, otherwise idle
-    const newStatus: TaskStatus = targetColDef?.terminal
+    const newStatus: TaskStatus = fbTargetColDef?.terminal
       ? 'done'
-      : targetColDef?.persona
+      : fbTargetColDef?.persona
       ? 'running'
       : 'idle';
 
-    const updatedTasks = tasks.map((t) => {
+    const updatedTasks = fb.tasks.map((t) => {
       if (t.id !== taskId) return t;
       return {
         ...t,
         columnId: targetColumnId,
-        persona: targetColDef?.persona || t.persona,
+        persona: fbTargetColDef?.persona || t.persona,
         status: newStatus,
         activeStageDuration: 0,
         stageDurations: updatedStageDurations,
@@ -674,19 +746,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
     set({ tasks: updatedTasks });
     persistTasksToLocalStorage(updatedTasks);
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('move_task_stage', {
-        taskId,
-        targetStageId: targetColumnId,
-      });
-    } catch (err) {
-      console.info('Backend move_task_stage failed or in web mode:', err);
-    }
     await syncTasksBackend(updatedTasks);
 
     // Column = agent: autoRun triggers run_agent on entry (default: !!persona)
-    if (targetColDef?.autoRun ?? !!targetColDef?.persona) {
+    if (fbTargetColDef?.autoRun ?? !!fbTargetColDef?.persona) {
       const targetTask = updatedTasks.find((t) => t.id === taskId);
       await triggerRunAgent(taskId, targetTask?.description);
     }
@@ -701,23 +764,90 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     });
   },
 
-  addTask: async (task) => {
-    const activeBoardId = get().activeBoardId || 'development';
-    const taskWithBoard: KanbanTask = {
-      ...task,
-      boardId: task.boardId || activeBoardId,
-    };
-    const updatedTasks = [taskWithBoard, ...get().tasks];
-    set({ tasks: updatedTasks });
-    persistTasksToLocalStorage(updatedTasks);
-    // Keep the monotonic counter ahead of any explicitly assigned id.
-    syncTaskSeqWithTasks(updatedTasks);
-    await syncTasksBackend(updatedTasks);
+  addTask: async (input) => {
+    const state = get();
+    const targetColumnId =
+      input.stageId ||
+      (state.columns.some((c) => c.id === 'backlog') ? 'backlog' : (state.columns[0]?.id ?? 'backlog'));
+    const boardId = input.boardId || state.activeBoardId || 'development';
+    const skipWorktree = input.skipWorktree ?? false;
+    const title = input.title.trim();
+    if (!title) return null;
+    const description = input.description?.trim() || '';
 
-    const targetColDef = get().columns.find((c) => c.id === taskWithBoard.columnId);
-    if (targetColDef?.autoRun ?? !!targetColDef?.persona) {
-      await triggerRunAgent(taskWithBoard.id, taskWithBoard.description);
+    // Preferred path: backend owns creation (IDs, on_enter hooks + worktree).
+    // Backend already persisted to disk — syncTasksBackend MUST NOT be called
+    // here (it would clobber hook-assigned worktreePath/branch via save_tasks).
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const backendTask = await invoke<any>('create_task', {
+        title,
+        description,
+        stageId: targetColumnId,
+        boardId: boardId,
+        skipWorktree,
+      });
+      if (backendTask && typeof backendTask.id === 'string') {
+        const mapped = mapBackendTaskToKanban(backendTask);
+        const merged: KanbanTask = {
+          ...mapped,
+          model: mapped.model || input.model || undefined,
+        };
+        const updatedTasks = [merged, ...get().tasks];
+        set({ tasks: updatedTasks });
+        persistTasksToLocalStorage(updatedTasks);
+        // Keep the monotonic counter ahead of the backend-issued id.
+        syncTaskSeqWithTasks(updatedTasks);
+        const targetColDef = get().columns.find((c) => c.id === merged.columnId);
+        if (targetColDef?.autoRun ?? !!targetColDef?.persona) {
+          await triggerRunAgent(merged.id, merged.description);
+        }
+        return merged;
+      }
+      throw new Error('create_task returned empty task');
+    } catch (err) {
+      console.info('Backend create_task failed, falling back to local creation:', err);
     }
+
+    // Fallback path (web mode / IPC error): local ID + save_tasks.
+    const fb = get();
+    const paddedId = formatTaskId(allocateNextTaskNum(fb.tasks));
+    const fbTargetCol = fb.columns.find((c) => c.id === targetColumnId);
+    const status: TaskStatus = fbTargetCol?.terminal
+      ? 'done'
+      : fbTargetCol?.persona
+        ? 'running'
+        : 'idle';
+    const fallbackTask: KanbanTask = {
+      id: paddedId,
+      title,
+      description: description || undefined,
+      priority: 'high',
+      columnId: targetColumnId,
+      boardId,
+      persona: fbTargetCol?.persona ?? 'developer',
+      branch: `feat/${paddedId.toLowerCase()}`,
+      worktreePath: `.cvh/worktrees/${paddedId.toLowerCase()}`,
+      status,
+      activeStageDuration: 0,
+      stageDurations: {},
+      totalElapsed: 0,
+      isTimerRunning: status === 'running',
+      returnsCount: 0,
+      verdict: 'NONE',
+      model: input.model,
+    };
+    const finalTasks = [fallbackTask, ...fb.tasks];
+    set({ tasks: finalTasks });
+    persistTasksToLocalStorage(finalTasks);
+    syncTaskSeqWithTasks(finalTasks);
+    await syncTasksBackend(finalTasks);
+
+    const fbTargetDef = get().columns.find((c) => c.id === fallbackTask.columnId);
+    if (fbTargetDef?.autoRun ?? !!fbTargetDef?.persona) {
+      await triggerRunAgent(fallbackTask.id, fallbackTask.description);
+    }
+    return fallbackTask;
   },
 
   createSubtask: async (parentId: string, targetColumnId?: string) => {

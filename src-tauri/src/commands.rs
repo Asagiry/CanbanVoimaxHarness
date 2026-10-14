@@ -116,41 +116,40 @@ fn persona_placeholder_template(role: &str) -> String {
     )
 }
 
-/// Сканирует `<root>/.cvh/agents/*.md` (только `.md`, сортировка по имени).
-/// Пустая/отсутствующая папка → пустой vec, не ошибка.
+/// Сканирует `<root>/.cvh/agents/*.md` (ЕДИНСТВЕННЫЙ путь персоны, flat;
+/// сортировка по роли). Пустая/отсутствующая папка → пустой vec, не ошибка.
+/// Подкаталоги `agents/*/` игнорируются (персона там не читается).
 pub async fn list_agent_personas_in(root: &Path) -> Vec<AgentPersonaInfo> {
     let agents_dir = root.join(".cvh").join("agents");
-    let mut out = Vec::new();
     let Ok(mut entries) = tokio::fs::read_dir(&agents_dir).await else {
-        return out;
+        return Vec::new();
     };
+    let mut roles = HashSet::new();
     while let Ok(Some(entry)) = entries.next_entry().await {
-        let name = entry.file_name().to_string_lossy().to_string();
-        if !name.ends_with(".md") {
+        let p = entry.path();
+        if !p.is_file() {
             continue;
         }
-        let Ok(ft) = entry.file_type().await else {
-            continue;
-        };
-        if !ft.is_file() {
+        if p.extension().and_then(|e| e.to_str()) != Some("md") {
             continue;
         }
-        if let Some(role) = name.strip_suffix(".md") {
-            if role.is_empty() {
-                continue;
+        if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+            if !stem.is_empty() {
+                roles.insert(stem.to_string());
             }
-            out.push(AgentPersonaInfo {
-                role: role.to_string(),
-                has_prompt: true,
-            });
         }
     }
+    let mut out: Vec<AgentPersonaInfo> = roles
+        .into_iter()
+        .map(|role| AgentPersonaInfo { role, has_prompt: true })
+        .collect();
     out.sort_by(|a, b| a.role.cmp(&b.role));
     out
 }
 
-/// Создаёт `.cvh/agents/<role>.md` с плейсхолдер-шаблоном.
-/// Возвращает относительный путь `.cvh/agents/<role>.md`.
+/// Создаёт flat-персону `.cvh/agents/<role>.md` с плейсхолдер-шаблоном плюс
+/// пустые per-role aux-директории `agents/<role>/{rules,hooks}` + `setting`
+/// (`{}`). Возвращает относительный путь `.cvh/agents/<role>.md`.
 pub async fn create_agent_persona_file(root: &Path, role: &str) -> Result<String, String> {
     if !is_valid_persona_role(role) {
         return Err(format!(
@@ -159,17 +158,30 @@ pub async fn create_agent_persona_file(root: &Path, role: &str) -> Result<String
         ));
     }
     let agents_dir = root.join(".cvh").join("agents");
-    let target = agents_dir.join(format!("{}.md", role));
-    if target.exists() {
+    let flat = agents_dir.join(format!("{}.md", role));
+    let role_dir = agents_dir.join(role);
+    if flat.exists() || role_dir.join("agent.md").exists() {
         return Err(format!(
             "Персона '{}' уже существует: .cvh/agents/{}.md",
             role, role
         ));
     }
+    tokio::fs::create_dir_all(role_dir.join("rules"))
+        .await
+        .map_err(|e| format!("Не удалось создать rules для персоны '{}': {}", role, e))?;
+    tokio::fs::create_dir_all(role_dir.join("hooks"))
+        .await
+        .map_err(|e| format!("Не удалось создать hooks для персоны '{}': {}", role, e))?;
     let content = persona_placeholder_template(role);
-    atomic_write_file(&target, &content)
+    atomic_write_file(&flat, &content)
         .await
         .map_err(|e| format!("Не удалось создать персону '{}': {}", role, e))?;
+    let setting_path = role_dir.join("setting");
+    if !setting_path.exists() {
+        atomic_write_file(&setting_path, "{}")
+            .await
+            .map_err(|e| format!("Не удалось создать setting для персоны '{}': {}", role, e))?;
+    }
     Ok(format!(".cvh/agents/{}.md", role))
 }
 
@@ -883,12 +895,108 @@ pub async fn clear_task_dialog(
     Ok(())
 }
 
+/// Маркер встроенного создания worktree на старте (on_enter).
+/// Значение `col.hooks["on_enter"]`, при котором бэкенд сам вызывает
+/// `create_worktree` вместо запуска shell-хука.
+pub const BUILTIN_CREATE_WORKTREE_MARKER: &str = "builtin:create_worktree";
+
+/// Явный builtin-маркер в `col.hooks["on_enter"]`.
+pub fn is_builtin_worktree_hook(col: &crate::config::PipelineColumn) -> bool {
+    col.hooks.get("on_enter").map(|s| s.as_str()) == Some(BUILTIN_CREATE_WORKTREE_MARKER)
+}
+
+/// Нужен ли builtin на старте для колонки:
+/// явный маркер ИЛИ дефолт бэклога (id == "backlog" без явного on_enter).
+pub fn should_builtin_on_enter(col: &crate::config::PipelineColumn) -> bool {
+    if is_builtin_worktree_hook(col) {
+        return true;
+    }
+    col.id == "backlog" && !col.hooks.contains_key("on_enter")
+}
+
+pub fn task_has_worktree(task: &Task) -> bool {
+    task.worktree_path
+        .as_deref()
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false)
+}
+
+/// Парсинг stdout хука формата `CVH_WORKTREE=<path>` (+ опционально
+/// `CVH_BRANCH=<branch>`): пишется в task.worktree_path (+branch если пуст).
+/// Общая для on_enter и on_finish.
+pub fn apply_worktree_from_hook_stdout(task: &mut Task, stdout: &str) {
+    for line in stdout.lines() {
+        let t = line.trim();
+        if let Some(v) = t.strip_prefix("CVH_WORKTREE=") {
+            let v = v.trim();
+            if !v.is_empty() {
+                task.worktree_path = Some(v.to_string());
+            }
+        } else if let Some(v) = t.strip_prefix("CVH_BRANCH=") {
+            let v = v.trim();
+            let branch_empty = task
+                .branch
+                .as_deref()
+                .map(|s| s.trim().is_empty())
+                .unwrap_or(true);
+            if !v.is_empty() && branch_empty {
+                task.branch = Some(v.to_string());
+            }
+        }
+    }
+}
+
+/// Чистое решение «нужен ли builtin сейчас»: skip-флаг и уже имеющийся
+/// worktree (в т.ч. данный shell-хуком через stdout) отключают builtin.
+pub fn needs_builtin_worktree(
+    col: &crate::config::PipelineColumn,
+    task: &Task,
+    skip_worktree: bool,
+) -> bool {
+    if skip_worktree {
+        return false;
+    }
+    if task_has_worktree(task) {
+        return false;
+    }
+    should_builtin_on_enter(col)
+}
+
+/// Best-effort builtin: `create_worktree(root, lowercase(task.id), "HEAD")`
+/// + branch `feat/<slug>` если пуст. Ошибки только варнят в лог.
+pub async fn ensure_builtin_worktree(root: &Path, task: &mut Task) {
+    if task_has_worktree(task) {
+        return;
+    }
+    let slug = task.id.to_lowercase();
+    match create_worktree(root, &slug, "HEAD").await {
+        Ok(wt_abs) => {
+            task.worktree_path = Some(wt_abs.to_string_lossy().to_string());
+            let branch_empty = task
+                .branch
+                .as_deref()
+                .map(|s| s.trim().is_empty())
+                .unwrap_or(true);
+            if branch_empty {
+                task.branch = Some(format!("feat/{}", slug));
+            }
+        }
+        Err(e) => {
+            eprintln!(
+                "CVH [builtin_worktree]: creation failed for {}: {}",
+                task.id, e
+            );
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn create_task(
     title: String,
     description: String,
     stage_id: String,
     board_id: Option<String>,
+    skip_worktree: Option<bool>,
     state: State<'_, AppState>,
 ) -> Result<Task, String> {
     let root = state.get_root();
@@ -910,25 +1018,21 @@ pub async fn create_task(
     // history from .cvh/dialogs/ and localStorage).
     let task_num = next_task_num(&tasks);
     let task_id = format!("CVH-{:03}", task_num);
-    let task_slug = task_id.to_lowercase();
     let now = Utc::now().timestamp_millis();
 
-    // Create worktree if entering dev or active stage
-    let worktree_dir = create_worktree(&root, &task_slug, "main")
-        .await
-        .map_err(|e| format!("Failed to create worktree: {}", e))?;
-
-    let worktree_path = worktree_dir.to_string_lossy().to_string();
-    let branch = format!("feat/{}", task_slug);
-
-    let new_task = Task {
+    // Ворктри выделяется на СТАРТЕ (on_enter): shell-хук через execute_hook
+    // (stdout `CVH_WORKTREE=`/`CVH_BRANCH=`), иначе builtin create_worktree
+    // при маркере `builtin:create_worktree` или дефолте бэклога.
+    // `skip_worktree=true` (чекбокс в модалке) отключает только builtin.
+    // Новая задача без worktree/branch до хуков.
+    let mut new_task = Task {
         id: task_id.clone(),
         title: title.clone(),
         description: description.clone(),
         stage_id: stage_id.clone(),
         board_id: Some(effective_board_id.clone()),
-        worktree_path: Some(worktree_path.clone()),
-        branch: Some(branch.clone()),
+        worktree_path: None,
+        branch: None,
         verdict: None,
         custom_flow: None,
         status: None,
@@ -943,26 +1047,77 @@ pub async fn create_task(
         updated_at: now,
     };
 
-    // Check pipeline config for stage hooks
-    if let Ok(pipeline) = load_pipeline_config(&root).await {
-        if let Some(col) = pipeline.columns.iter().find(|c| c.id == stage_id) {
-            trigger_column_on_enter_script(col, &new_task, &stage_id, None, &root).await;
-            if let Some(hook_rel) = col.hooks.get("on_enter") {
-                let hook_path = root.join(hook_rel);
-                if hook_path.exists() {
-                    let ctx = HookContext {
-                        task_id: task_id.clone(),
-                        task_title: title.clone(),
-                        worktree_path: worktree_path.clone(),
-                        branch: branch.clone(),
-                        verdict: None,
-                        stage_id: Some(stage_id.clone()),
-                        board_id: Some(effective_board_id.clone()),
-                        extra_env: HashMap::new(),
-                    };
-                    let _ = execute_hook(hook_path, &root, &ctx, None).await;
+    // Check pipeline config for stage hooks (board-aware: сначала колонки
+    // доски effective_board_id, затем pipeline.json как фолбэк).
+    let skip = skip_worktree.unwrap_or(false);
+    {
+        let boards_cfg = load_boards_config(&root).await.ok();
+        let col_from_board = boards_cfg.as_ref().and_then(|bc| {
+            let b = bc.boards.iter().find(|b| b.id == effective_board_id)
+                .or_else(|| bc.boards.iter().find(|b| b.id == bc.active_board_id));
+            b.and_then(|b| b.columns.iter().find(|c| c.id == stage_id).cloned())
+        });
+        let col_opt: Option<crate::config::PipelineColumn> = match col_from_board {
+            Some(c) => Some(c),
+            None => load_pipeline_config(&root)
+                .await
+                .ok()
+                .and_then(|p| p.columns.into_iter().find(|c| c.id == stage_id)),
+        };
+        if let Some(col) = col_opt {
+            trigger_column_on_enter_script(&col, &new_task, &stage_id, None, &root).await;
+            let hook_rel_opt = col.hooks.get("on_enter").cloned();
+            match hook_rel_opt {
+                Some(hook_rel) if hook_rel == BUILTIN_CREATE_WORKTREE_MARKER => {
+                    // Встроенный маркер: shell не запускаем, builtin ниже.
                 }
+                Some(hook_rel) => {
+                    // Configured path first; missing file falls back to
+                    // `.cvh/agents/<persona>/hooks/<basename>`.
+                    let hook_path = crate::config::resolve_hook_path(
+                        &root,
+                        col.persona.as_deref(),
+                        &hook_rel,
+                    );
+                    if hook_path.exists() {
+                        let ctx = HookContext {
+                            task_id: task_id.clone(),
+                            task_title: title.clone(),
+                            worktree_path: new_task.worktree_path.clone().unwrap_or_default(),
+                            branch: new_task.branch.clone().unwrap_or_default(),
+                            verdict: None,
+                            stage_id: Some(stage_id.clone()),
+                            board_id: Some(effective_board_id.clone()),
+                            extra_env: HashMap::new(),
+                        };
+                        match execute_hook(&hook_path, &root, &ctx, None).await {
+                            Ok(res) => {
+                                if !res.success {
+                                    eprintln!(
+                                        "CVH [on_enter]: hook {:?} failed for new task {} (exit code {:?}):\nSTDOUT: {}\nSTDERR: {}",
+                                        hook_path, task_id, res.exit_code, res.stdout, res.stderr
+                                    );
+                                }
+                                // Shell-приоритет: путь из stdout отключает builtin.
+                                apply_worktree_from_hook_stdout(&mut new_task, &res.stdout);
+                            }
+                            Err(e) => {
+                                eprintln!(
+                                    "CVH [on_enter]: error executing hook {:?} for new task {}: {}",
+                                    hook_path, task_id, e
+                                );
+                            }
+                        }
+                    }
+                }
+                None => {}
             }
+            if needs_builtin_worktree(&col, &new_task, skip) {
+                ensure_builtin_worktree(&root, &mut new_task).await;
+            }
+        } else if stage_id == "backlog" && !skip {
+            // Колонка не найдена, но stage — backlog: дефолт бэклога.
+            ensure_builtin_worktree(&root, &mut new_task).await;
         }
     }
 
@@ -1258,6 +1413,69 @@ pub async fn move_task_stage(
 
     let current_task = &mut tasks[task_idx];
 
+    // --- on_finish-хуки SOURCE-колонки (выход из колонки) ---
+    // Только shell-хуки (best-effort, переход не блокируют). stdout формата
+    // `CVH_WORKTREE=<path>` (опционально `CVH_BRANCH=<branch>`) пишется в
+    // task.worktree_path (+branch если пуст). Builtin здесь больше НЕ создаётся.
+    let source_stage_id = current_task.stage_id.clone();
+    let source_col: Option<crate::config::PipelineColumn> = {
+        let boards_cfg = load_boards_config(&root).await.ok();
+        let from_board = boards_cfg.as_ref().and_then(|bc| {
+            let b = if let Some(ref bid) = current_task.board_id {
+                bc.boards.iter().find(|b| &b.id == bid)
+            } else {
+                bc.boards.iter().find(|b| b.id == bc.active_board_id)
+            };
+            b.and_then(|b| b.columns.iter().find(|c| c.id == source_stage_id).cloned())
+        });
+        match from_board {
+            Some(c) => Some(c),
+            None => load_pipeline_config(&root)
+                .await
+                .ok()
+                .and_then(|p| p.columns.into_iter().find(|c| c.id == source_stage_id)),
+        }
+    };
+
+    if let Some(ref scol) = source_col {
+        if let Some(hook_rel) = scol.hooks.get("on_finish") {
+            let hook_path = crate::config::resolve_hook_path(
+                &root,
+                scol.persona.as_deref(),
+                hook_rel,
+            );
+            if hook_path.exists() {
+                let ctx = HookContext {
+                    task_id: current_task.id.clone(),
+                    task_title: current_task.title.clone(),
+                    worktree_path: current_task.worktree_path.clone().unwrap_or_default(),
+                    branch: current_task.branch.clone().unwrap_or_default(),
+                    verdict: verdict.clone().or_else(|| current_task.verdict.clone()),
+                    stage_id: Some(scol.id.clone()),
+                    board_id: current_task.board_id.clone(),
+                    extra_env: HashMap::new(),
+                };
+                match execute_hook(&hook_path, &root, &ctx, None).await {
+                    Ok(res) => {
+                        if !res.success {
+                            eprintln!(
+                                "CVH [on_finish]: hook {:?} failed for task {} leaving stage {} (exit code {:?}):\nSTDOUT: {}\nSTDERR: {}",
+                                hook_path, current_task.id, scol.id, res.exit_code, res.stdout, res.stderr
+                            );
+                        }
+                        apply_worktree_from_hook_stdout(current_task, &res.stdout);
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "CVH [on_finish]: error executing hook {:?} for task {}: {}",
+                            hook_path, current_task.id, e
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     let target_col = {
         let boards_cfg = load_boards_config(&root).await.ok();
         let col_from_board = boards_cfg.as_ref().and_then(|bc| {
@@ -1303,31 +1521,50 @@ pub async fn move_task_stage(
         }
     }
 
-    // Trigger on_enter hook if configured
-    if let Some(hook_rel) = target_col.hooks.get("on_enter") {
-        let hook_path = root.join(hook_rel);
-        if hook_path.exists() {
-            let ctx = HookContext {
-                task_id: current_task.id.clone(),
-                task_title: current_task.title.clone(),
-                worktree_path: current_task.worktree_path.clone().unwrap_or_default(),
-                branch: current_task.branch.clone().unwrap_or_default(),
-                verdict: verdict.clone().or_else(|| current_task.verdict.clone()),
-                stage_id: Some(target_stage_id.clone()),
-                board_id: current_task.board_id.clone(),
-                extra_env: HashMap::new(),
-            };
-            let hook_res = execute_hook(hook_path, &root, &ctx, None)
-                .await
-                .map_err(|e| format!("Stage transition hook failed: {}", e))?;
+    // Trigger on_enter hook if configured (configured path first, then
+    // `.cvh/agents/<persona>/hooks/<basename>` fallback).
+    // Маркер `builtin:create_worktree` — не shell, а встроенное создание ниже.
+    // Shell-приоритет: путь из stdout on_enter отключает builtin.
+    // Builtin на старте: маркер ИЛИ дефолт бэклога (backlog без on_enter).
+    let target_hook_rel = target_col.hooks.get("on_enter").cloned();
+    match target_hook_rel {
+        Some(hook_rel) if hook_rel == BUILTIN_CREATE_WORKTREE_MARKER => {
+            // Только builtin ниже, shell не запускаем.
+        }
+        Some(hook_rel) => {
+            let hook_path = crate::config::resolve_hook_path(
+                &root,
+                target_col.persona.as_deref(),
+                &hook_rel,
+            );
+            if hook_path.exists() {
+                let ctx = HookContext {
+                    task_id: current_task.id.clone(),
+                    task_title: current_task.title.clone(),
+                    worktree_path: current_task.worktree_path.clone().unwrap_or_default(),
+                    branch: current_task.branch.clone().unwrap_or_default(),
+                    verdict: verdict.clone().or_else(|| current_task.verdict.clone()),
+                    stage_id: Some(target_stage_id.clone()),
+                    board_id: current_task.board_id.clone(),
+                    extra_env: HashMap::new(),
+                };
+                let hook_res = execute_hook(&hook_path, &root, &ctx, None)
+                    .await
+                    .map_err(|e| format!("Stage transition hook failed: {}", e))?;
 
-            if !hook_res.success {
-                return Err(format!(
-                    "Stage transition hook rejected transition (Exit code: {:?}):\n{}",
-                    hook_res.exit_code, hook_res.stderr
-                ));
+                if !hook_res.success {
+                    return Err(format!(
+                        "Stage transition hook rejected transition (Exit code: {:?}):\n{}",
+                        hook_res.exit_code, hook_res.stderr
+                    ));
+                }
+                apply_worktree_from_hook_stdout(current_task, &hook_res.stdout);
             }
         }
+        None => {}
+    }
+    if needs_builtin_worktree(&target_col, current_task, false) {
+        ensure_builtin_worktree(&root, current_task).await;
     }
 
     // Trigger on_enter_script if configured on target column
@@ -1494,39 +1731,37 @@ pub async fn run_agent(
         .await
         .unwrap_or_default();
 
+    // Per-agent overrides (best-effort: missing/broken setting → defaults).
+    let agent_setting = crate::config::load_agent_setting(&root, &persona_role).await;
+    if let Some(cw) = agent_setting.context_window {
+        eprintln!(
+            "CVH [run_agent]: task_id={} persona='{}' context_window={}",
+            task.id, persona_role, cw
+        );
+    }
+
+    fn non_empty_opt(v: &Option<String>) -> Option<String> {
+        v.as_ref()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+    }
+
     // Model resolution precedence:
     // 1. Task-specific model override (task.model)
     // 2. Global LLM settings model (llm_settings.model)
-    // 3. Pipeline column model override (col.model_override)
-    // 4. Project default model (proj_cfg.default_model)
-    let model = if let Some(ref tm) = task.model {
-        if !tm.trim().is_empty() {
-            tm.trim().to_string()
-        } else if !llm_settings.model.trim().is_empty() {
-            llm_settings.model.trim().to_string()
-        } else if let Some(ref m) = col.model_override {
-            if !m.trim().is_empty() {
-                m.trim().to_string()
-            } else {
-                proj_cfg.default_model.clone().unwrap_or_else(|| "gemini-3.8-flash-high".to_string())
-            }
-        } else {
-            proj_cfg.default_model.clone().unwrap_or_else(|| "gemini-3.8-flash-high".to_string())
-        }
-    } else if !llm_settings.model.trim().is_empty() {
-        llm_settings.model.trim().to_string()
-    } else if let Some(ref m) = col.model_override {
-        if !m.trim().is_empty() {
-            m.trim().to_string()
-        } else {
-            proj_cfg.default_model.clone().unwrap_or_else(|| "gemini-3.8-flash-high".to_string())
-        }
-    } else {
-        proj_cfg
-            .default_model
-            .clone()
-            .unwrap_or_else(|| "gemini-3.8-flash-high".to_string())
+    // 3. Per-agent setting model (agents/<role>/setting → model)
+    // 4. Pipeline column model override (col.model_override)
+    // 5. Project default model (proj_cfg.default_model)
+    let llm_model = {
+        let m = llm_settings.model.trim();
+        if m.is_empty() { None } else { Some(m.to_string()) }
     };
+    let model = non_empty_opt(&task.model)
+        .or(llm_model)
+        .or_else(|| non_empty_opt(&agent_setting.model))
+        .or_else(|| non_empty_opt(&col.model_override))
+        .or_else(|| non_empty_opt(&proj_cfg.default_model))
+        .unwrap_or_else(|| "gemini-3.8-flash-high".to_string());
 
     let mut base_url = if !llm_settings.base_url.trim().is_empty() {
         llm_settings.base_url.trim().to_string()
@@ -1555,81 +1790,41 @@ pub async fn run_agent(
         api_key.is_some()
     );
 
-    let temperature = llm_settings.temperature.or(col.temperature);
+    // Temperature precedence: llm_settings → agent setting → column.
+    let temperature = llm_settings
+        .temperature
+        .or(agent_setting.temperature)
+        .or(col.temperature);
 
-    // If task.worktree_path is None or doesn't exist on disk, create or scaffold cleanly
+    // Ворктри выделяется ТОЛЬКО на СТАРТЕ (on_enter в create_task /
+    // move_task_stage: shell-хук или builtin). Создавать ворктри здесь
+    // ЗАПРЕЩЕНО: нет пути / не существует на диске → fallback корень репо.
     let worktree_dir = match &task.worktree_path {
         Some(p) if !p.trim().is_empty() => {
-            let pb = Path::new(p);
-            let exists = if pb.is_absolute() {
-                pb.exists()
+            let pb = Path::new(p.trim());
+            let abs = if pb.is_absolute() {
+                pb.to_path_buf()
             } else {
-                root.join(pb).exists()
+                root.join(pb)
             };
-            if exists {
-                if pb.is_absolute() {
-                    pb.to_path_buf()
-                } else {
-                    root.join(pb)
-                }
+            if abs.exists() {
+                abs
             } else {
-                let task_slug = task.id.to_lowercase();
-                match create_worktree(&root, &task_slug, "main").await {
-                    Ok(wt_abs) => {
-                        let wt_str = wt_abs.to_string_lossy().to_string();
-                        let branch_name = format!("feat/{}", task_slug);
-                        let mut all_tasks = load_tasks_from_disk(&root).await;
-                        if let Some(t) = all_tasks.iter_mut().find(|t| t.id == task_id) {
-                            t.worktree_path = Some(wt_str.clone());
-                            if t.branch.is_none() {
-                                t.branch = Some(branch_name);
-                            }
-                            t.updated_at = Utc::now().timestamp_millis();
-                            let _ = save_tasks_to_disk(&root, &all_tasks).await;
-                        }
-                        wt_abs
-                    }
-                    Err(e) => {
-                        eprintln!(
-                            "Worktree creation error for {}: {}, falling back to repo root",
-                            task_id, e
-                        );
-                        root.clone()
-                    }
-                }
+                eprintln!(
+                    "CVH [run_agent]: WARN task {} worktree {:?} does not exist — creating is forbidden, falling back to repo root {:?}",
+                    task_id, p, root
+                );
+                root.clone()
             }
         }
         _ => {
-            let task_slug = task.id.to_lowercase();
-            match create_worktree(&root, &task_slug, "main").await {
-                Ok(wt_abs) => {
-                    let wt_str = wt_abs.to_string_lossy().to_string();
-                    let branch_name = format!("feat/{}", task_slug);
-                    let mut all_tasks = load_tasks_from_disk(&root).await;
-                    if let Some(t) = all_tasks.iter_mut().find(|t| t.id == task_id) {
-                        t.worktree_path = Some(wt_str.clone());
-                        if t.branch.is_none() {
-                            t.branch = Some(branch_name);
-                        }
-                        t.updated_at = Utc::now().timestamp_millis();
-                        let _ = save_tasks_to_disk(&root, &all_tasks).await;
-                    }
-                    wt_abs
-                }
-                Err(e) => {
-                    eprintln!(
-                        "Worktree creation error for {}: {}, falling back to repo root",
-                        task_id, e
-                    );
-                    root.clone()
-                }
-            }
+            eprintln!(
+                "CVH [run_agent]: WARN task {} has no worktree_path — creating is forbidden, falling back to repo root {:?}",
+                task_id, root
+            );
+            root.clone()
         }
     };
-
-    if !worktree_dir.exists() {
-        let _ = tokio::fs::create_dir_all(&worktree_dir).await;
-    }
 
     let abort_flag = Arc::new(AtomicBool::new(false));
 
@@ -1662,6 +1857,21 @@ pub async fn run_agent(
         serde_json::json!({ "taskId": task.id, "status": "running" }),
     );
 
+    // Initial user prompt: когда у задачи есть worktree_path — сообщить агенту
+    // его изолированный workdir.
+    let mut initial_description = task.description.clone();
+    if task
+        .worktree_path
+        .as_deref()
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false)
+    {
+        initial_description.push_str(&format!(
+            "\n\n[HOOK] worktree: {} — твой изолированный workdir, работаешь тут.",
+            worktree_dir.to_string_lossy()
+        ));
+    }
+
     let agent_cfg = AgentSessionConfig {
         repo_root: root.clone(),
         worktree_path: worktree_dir,
@@ -1669,7 +1879,7 @@ pub async fn run_agent(
         stage_id: task.stage_id.clone(),
         task_id: task.id.clone(),
         task_title: task.title.clone(),
-        task_description: task.description.clone(),
+        task_description: initial_description,
         steer_prompt,
         base_url,
         api_key,
@@ -3240,34 +3450,39 @@ mod tests {
         let bad = create_agent_persona_file(&base, "Bad_Name").await;
         assert!(bad.is_err());
 
-        // valid create → relative path + placeholder content
+        // valid create → single flat `.cvh/agents/<role>.md`
         let rel = create_agent_persona_file(&base, "my-role")
             .await
             .expect("create failed");
         assert_eq!(rel, ".cvh/agents/my-role.md");
-        let content = tokio::fs::read_to_string(base.join(".cvh").join("agents").join("my-role.md"))
+        let agents_dir = base.join(".cvh").join("agents");
+        let content = tokio::fs::read_to_string(agents_dir.join("my-role.md"))
             .await
             .expect("read created file");
         assert!(content.contains("# Роль: my-role"));
+        // per-role aux dirs still seeded alongside the flat persona
+        let role_dir = agents_dir.join("my-role");
+        assert!(role_dir.join("rules").is_dir(), "rules/ must exist");
+        assert!(role_dir.join("hooks").is_dir(), "hooks/ must exist");
+        let setting = tokio::fs::read_to_string(role_dir.join("setting"))
+            .await
+            .expect("read setting");
+        assert_eq!(setting.trim(), "{}");
 
         // duplicate → Err mentioning существование
         let dup = create_agent_persona_file(&base, "my-role").await;
         assert!(dup.is_err());
         assert!(dup.unwrap_err().contains("уже существует"));
 
-        // list sees it, sorted, .md only
-        tokio::fs::write(
-            base.join(".cvh").join("agents").join("aaa.md"),
-            "# Роль: aaa\n",
-        )
-        .await
-        .expect("seed aaa");
-        tokio::fs::write(
-            base.join(".cvh").join("agents").join("notes.txt"),
-            "ignore me",
-        )
-        .await
-        .expect("seed txt");
+        // existing flat file also blocks creation (same role)
+        tokio::fs::write(agents_dir.join("aaa.md"), "# Роль: aaa\n")
+            .await
+            .expect("seed aaa");
+        let dup_flat = create_agent_persona_file(&base, "aaa").await;
+        assert!(dup_flat.is_err());
+        tokio::fs::write(agents_dir.join("notes.txt"), "ignore me")
+            .await
+            .expect("seed txt");
         let listed = list_agent_personas_in(&base).await;
         let roles: Vec<String> = listed.iter().map(|p| p.role.clone()).collect();
         assert_eq!(roles, vec!["aaa".to_string(), "my-role".to_string()]);
@@ -3282,6 +3497,35 @@ mod tests {
 
         let _ = tokio::fs::remove_dir_all(&base).await;
         let _ = tokio::fs::remove_dir_all(&empty_base).await;
+    }
+
+    #[tokio::test]
+    async fn test_list_personas_flat_only() {
+        // Single flat path: only top-level `*.md` files are personas, sorted.
+        // Subdirectories (even with agent.md) are ignored.
+        let base =
+            PathBuf::from("target").join(format!("cvh_persona_mix_{}", uuid::Uuid::new_v4()));
+        let agents = base.join(".cvh").join("agents");
+        tokio::fs::create_dir_all(&agents).await.expect("test dir");
+        tokio::fs::write(agents.join("b-role.md"), "# b\n")
+            .await
+            .expect("seed b");
+        tokio::fs::write(agents.join("a-role.md"), "# a\n")
+            .await
+            .expect("seed a");
+        // Dir with agent.md is NOT a persona (single flat path only).
+        tokio::fs::create_dir_all(agents.join("ghost")).await.expect("ghost dir");
+        tokio::fs::write(agents.join("ghost").join("agent.md"), "# ghost\n")
+            .await
+            .expect("seed ghost agent.md");
+        tokio::fs::write(agents.join("junk.txt"), "ignore").await.expect("seed txt");
+
+        let listed = list_agent_personas_in(&base).await;
+        let roles: Vec<String> = listed.iter().map(|p| p.role.clone()).collect();
+        assert_eq!(roles, vec!["a-role".to_string(), "b-role".to_string()]);
+        assert!(listed.iter().all(|p| p.has_prompt));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
     }
 
     #[test]
@@ -3437,10 +3681,10 @@ mod tests {
             "stageId": "dev"
         }"#;
 
-        let legacy_task: Task = serde_json::from_str(json_without_board).expect("deserialize legacy task");
-        assert!(legacy_task.board_id.is_none());
+        let task_without_board: Task = serde_json::from_str(json_without_board).expect("deserialize task without board");
+        assert!(task_without_board.board_id.is_none());
 
-        let fixed = ensure_task_board_id(vec![legacy_task]);
+        let fixed = ensure_task_board_id(vec![task_without_board]);
         assert_eq!(fixed[0].board_id.as_deref(), Some("development"));
     }
 
@@ -3575,6 +3819,118 @@ mod tests {
 
         let _ = tokio::fs::remove_dir_all(&base).await;
         let _ = tokio::fs::remove_dir_all(&empty_base).await;
+    }
+
+    fn hook_col(id: &str, on_enter: Option<&str>) -> PipelineColumn {
+        let mut col = test_col(id);
+        if let Some(v) = on_enter {
+            col.hooks.insert("on_enter".to_string(), v.to_string());
+        }
+        col
+    }
+
+    fn task_with_wt(id: &str, wt: Option<&str>) -> Task {
+        let mut t: Task = serde_json::from_value(serde_json::json!({
+            "id": id, "title": "t", "stageId": "backlog"
+        }))
+        .expect("deserialize task");
+        t.worktree_path = wt.map(|s| s.to_string());
+        t
+    }
+
+    #[test]
+    fn test_builtin_marker_detected() {
+        let col = hook_col("dev", Some("builtin:create_worktree"));
+        assert!(is_builtin_worktree_hook(&col));
+        assert!(should_builtin_on_enter(&col));
+        let plain = hook_col("dev", Some(".cvh/hooks/on_enter_dev.bat"));
+        assert!(!is_builtin_worktree_hook(&plain));
+        assert!(!should_builtin_on_enter(&plain));
+    }
+
+    #[test]
+    fn test_backlog_default_without_explicit_on_enter() {
+        let col = hook_col("backlog", None);
+        assert!(should_builtin_on_enter(&col));
+        // Явный shell-хук у бэклога отменяет дефолт.
+        let col_shell = hook_col("backlog", Some(".cvh/hooks/custom.sh"));
+        assert!(!should_builtin_on_enter(&col_shell));
+        // Не-backlog без хука — не builtin.
+        let ready = hook_col("ready", None);
+        assert!(!should_builtin_on_enter(&ready));
+    }
+
+    #[test]
+    fn test_skip_flag_disables_builtin() {
+        let col = hook_col("backlog", None);
+        let task = task_with_wt("CVH-001", None);
+        assert!(needs_builtin_worktree(&col, &task, false));
+        assert!(!needs_builtin_worktree(&col, &task, true));
+    }
+
+    #[test]
+    fn test_shell_priority_existing_worktree_skips_builtin() {
+        let col = hook_col("backlog", None);
+        // Shell дал путь через stdout → worktree уже есть → builtin скипается.
+        let mut task = task_with_wt("CVH-001", None);
+        apply_worktree_from_hook_stdout(
+            &mut task,
+            "some log\nCVH_WORKTREE=/tmp/wt-cvh-001\nCVH_BRANCH=feat/cvh-001\n",
+        );
+        assert_eq!(task.worktree_path.as_deref(), Some("/tmp/wt-cvh-001"));
+        assert_eq!(task.branch.as_deref(), Some("feat/cvh-001"));
+        assert!(!needs_builtin_worktree(&col, &task, false));
+        // CVH_BRANCH не затирает непустой branch.
+        let mut task2 = task_with_wt("CVH-002", None);
+        task2.branch = Some("feat/keep".to_string());
+        apply_worktree_from_hook_stdout(&mut task2, "CVH_BRANCH=feat/other");
+        assert_eq!(task2.branch.as_deref(), Some("feat/keep"));
+        // Пустой stdout ничего не меняет → builtin всё ещё нужен.
+        let mut task3 = task_with_wt("CVH-003", None);
+        apply_worktree_from_hook_stdout(&mut task3, "plain log, no markers\n");
+        assert!(task3.worktree_path.is_none());
+        assert!(needs_builtin_worktree(&col, &task3, false));
+    }
+
+    #[tokio::test]
+    async fn test_scaffold_backlog_hook_with_and_without_git() {
+        // С .git → backlog получает builtin-маркер.
+        let with_git =
+            PathBuf::from("target").join(format!("cvh_scaffold_git_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(with_git.join(".git")).await.expect("git dir");
+        crate::config::scaffold_cvh_project(&with_git).await.expect("scaffold");
+        let raw = tokio::fs::read_to_string(with_git.join(".cvh").join("pipeline.json"))
+            .await
+            .expect("read pipeline");
+        let pipe: crate::config::PipelineConfig =
+            serde_json::from_str(&raw).expect("parse pipeline");
+        let backlog = pipe.columns.iter().find(|c| c.id == "backlog").expect("backlog");
+        assert_eq!(
+            backlog.hooks.get("on_enter").map(|s| s.as_str()),
+            Some("builtin:create_worktree")
+        );
+        // Повторный скаффолд не затирает существующий pipeline.json.
+        crate::config::scaffold_cvh_project(&with_git).await.expect("rescaffold");
+        let raw2 = tokio::fs::read_to_string(with_git.join(".cvh").join("pipeline.json"))
+            .await
+            .expect("reread");
+        assert_eq!(raw, raw2);
+
+        // Без .git → hooks пустые.
+        let no_git =
+            PathBuf::from("target").join(format!("cvh_scaffold_nogit_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&no_git).await.expect("plain dir");
+        crate::config::scaffold_cvh_project(&no_git).await.expect("scaffold");
+        let raw_n = tokio::fs::read_to_string(no_git.join(".cvh").join("pipeline.json"))
+            .await
+            .expect("read pipeline");
+        let pipe_n: crate::config::PipelineConfig =
+            serde_json::from_str(&raw_n).expect("parse pipeline");
+        let backlog_n = pipe_n.columns.iter().find(|c| c.id == "backlog").expect("backlog");
+        assert!(backlog_n.hooks.is_empty());
+
+        let _ = tokio::fs::remove_dir_all(&with_git).await;
+        let _ = tokio::fs::remove_dir_all(&no_git).await;
     }
 }
 

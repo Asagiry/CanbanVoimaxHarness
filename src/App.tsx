@@ -13,11 +13,27 @@ import { useProjectStore } from './stores/projectStore';
 import { useDrawerStore } from './stores/drawerStore';
 import { useUiZoom } from './hooks/useUiZoom';
 
+// Микробатчинг SSE-текста: один Zustand set() на пачку токенов вместо set() на токен.
+const TEXT_FLUSH_MS = 150;
+
+interface TextBuffer {
+  thought: string;
+  output: string;
+  thoughtTimer?: ReturnType<typeof setTimeout>;
+  outputTimer?: ReturnType<typeof setTimeout>;
+}
+
 export default function App() {
   const { rootStyle, zoomPercent, showIndicator, resetZoom } = useUiZoom();
-  const { loadColumns, loadTasks, runTaskAgent, loadBoards } = useBoardStore();
-  const { loadProjects } = useProjectStore();
-  const { appendThought, appendOutput, addToolExecution, updateToolExecution, updateTelemetry, setThinkingStartTime } = useDrawerStore();
+  const loadColumns = useBoardStore((s) => s.loadColumns);
+  const loadTasks = useBoardStore((s) => s.loadTasks);
+  const runTaskAgent = useBoardStore((s) => s.runTaskAgent);
+  const loadBoards = useBoardStore((s) => s.loadBoards);
+  const loadProjects = useProjectStore((s) => s.loadProjects);
+  const addToolExecution = useDrawerStore((s) => s.addToolExecution);
+  const updateToolExecution = useDrawerStore((s) => s.updateToolExecution);
+  const updateTelemetry = useDrawerStore((s) => s.updateTelemetry);
+  const setThinkingStartTime = useDrawerStore((s) => s.setThinkingStartTime);
 
   const [isDataReady, setIsDataReady] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
@@ -40,6 +56,85 @@ export default function App() {
 
   useEffect(() => {
     let unlisteners: (() => void)[] = [];
+    // Текстовые буферы per taskId, отдельно для thought и output каналов.
+    // Склеиваются только соседние чанки одного типа; tool-события идут мимо буфера.
+    const textBuffers = new Map<string, TextBuffer>();
+
+    const getBuf = (taskId: string): TextBuffer => {
+      let b = textBuffers.get(taskId);
+      if (!b) {
+        b = { thought: '', output: '' };
+        textBuffers.set(taskId, b);
+      }
+      return b;
+    };
+
+    const flushThought = (taskId: string) => {
+      const b = textBuffers.get(taskId);
+      if (!b) return;
+      if (b.thoughtTimer) {
+        clearTimeout(b.thoughtTimer);
+        b.thoughtTimer = undefined;
+      }
+      if (b.thought) {
+        const chunk = b.thought;
+        b.thought = '';
+        try {
+          useDrawerStore.getState().appendThought(taskId, chunk);
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    const flushOutput = (taskId: string) => {
+      const b = textBuffers.get(taskId);
+      if (!b) return;
+      if (b.outputTimer) {
+        clearTimeout(b.outputTimer);
+        b.outputTimer = undefined;
+      }
+      if (b.output) {
+        const chunk = b.output;
+        b.output = '';
+        try {
+          useDrawerStore.getState().appendOutput(taskId, chunk, 'output');
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    const flushTask = (taskId: string) => {
+      flushThought(taskId);
+      flushOutput(taskId);
+    };
+
+    const flushAll = () => {
+      for (const id of Array.from(textBuffers.keys())) {
+        flushTask(id);
+      }
+    };
+
+    const queueThought = (taskId: string, text: string) => {
+      const b = getBuf(taskId);
+      b.thought += text;
+      if (!b.thoughtTimer) {
+        b.thoughtTimer = setTimeout(() => {
+          flushThought(taskId);
+        }, TEXT_FLUSH_MS);
+      }
+    };
+
+    const queueOutput = (taskId: string, text: string) => {
+      const b = getBuf(taskId);
+      b.output += text;
+      if (!b.outputTimer) {
+        b.outputTimer = setTimeout(() => {
+          flushOutput(taskId);
+        }, TEXT_FLUSH_MS);
+      }
+    };
 
     const setupListeners = async () => {
       try {
@@ -48,7 +143,7 @@ export default function App() {
         const u1 = await listen<any>('agent:thought', (event) => {
           const { taskId, thought, delta } = event.payload || {};
           if (taskId && (thought || delta)) {
-            appendThought(taskId, thought || delta);
+            queueThought(taskId, thought || delta);
           }
         });
         unlisteners.push(u1);
@@ -57,13 +152,15 @@ export default function App() {
           const { taskId, output, content, token } = event.payload || {};
           const text = output || content || token;
           if (taskId && text) {
-            appendOutput(taskId, text, 'output');
+            queueOutput(taskId, text);
           }
         });
         unlisteners.push(u2);
 
         const u3 = await listen<any>('agent:tool_call', (event) => {
           const { taskId, id, name, arguments: args } = event.payload || {};
+          // Flush текста перед tool-событием, чтобы сохранить хронологию ленты.
+          if (taskId) flushTask(taskId);
           if (taskId && name) {
             let parsedParams: Record<string, unknown> = {};
             try {
@@ -85,6 +182,7 @@ export default function App() {
 
         const uToolResult = await listen<any>('agent:tool_result', (event) => {
           const { taskId, id, result, success } = event.payload || {};
+          if (taskId) flushTask(taskId);
           if (taskId && id) {
             const outStr = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
             updateToolExecution(taskId, id, {
@@ -118,6 +216,7 @@ export default function App() {
         const uTurnStart = await listen<any>('agent:turn_start', (event) => {
           const { taskId } = event.payload || {};
           if (taskId) {
+            flushTask(taskId);
             useDrawerStore.getState().setFinalTps(taskId, null);
             setThinkingStartTime(taskId, Date.now());
           }
@@ -132,6 +231,9 @@ export default function App() {
         const u5 = await listen<any>('agent:finished', (event) => {
           const { taskId, response } = event.payload || {};
           if (taskId) {
+            // Принудительный flush буферов перед финальной обработкой,
+            // иначе дедуп ниже не увидит забутченные токены.
+            flushTask(taskId);
             // Заморозка TPS на финише: те же источники, что в ContextGauge
             try {
               const st = useDrawerStore.getState();
@@ -154,7 +256,7 @@ export default function App() {
               const last = feed?.[feed.length - 1];
               const lastContent = last?.content || '';
               if (!lastContent.endsWith(response)) {
-                appendOutput(taskId, response, 'output');
+                useDrawerStore.getState().appendOutput(taskId, response, 'output');
               }
             }
             // Immediately flush task activity feed to disk upon turn finish
@@ -164,9 +266,22 @@ export default function App() {
         });
         unlisteners.push(u5);
 
+        const uErr = await listen<any>('agent:error', (event) => {
+          const { taskId } = event.payload || {};
+          if (taskId) {
+            flushTask(taskId);
+            useDrawerStore.getState().flushSaveDialog(taskId);
+          } else {
+            flushAll();
+          }
+          loadTasks();
+        });
+        unlisteners.push(uErr);
+
         const u6 = await listen<any>('agent:status', (event) => {
           const { taskId, status } = event.payload || {};
           if (taskId && (status === 'finished' || status === 'aborted' || status === 'error')) {
+            flushTask(taskId);
             useDrawerStore.getState().flushSaveDialog(taskId);
           }
           loadTasks();
@@ -185,6 +300,11 @@ export default function App() {
 
         const uTaskUpdated = await listen<{ taskId?: string; todos?: any[] }>('task:updated', (event) => {
           const { taskId, todos } = event.payload || {};
+          if (taskId) {
+            flushTask(taskId);
+          } else {
+            flushAll();
+          }
           if (taskId && todos) {
             useBoardStore.getState().updateTask(taskId, { todos });
           } else {
@@ -194,6 +314,7 @@ export default function App() {
         unlisteners.push(uTaskUpdated);
 
         const uTasksUpdated = await listen<any>('tasks:updated', () => {
+          flushAll();
           loadTasks();
         });
         unlisteners.push(uTasksUpdated);
@@ -219,9 +340,15 @@ export default function App() {
     setupListeners();
 
     return () => {
+      flushAll();
+      for (const b of textBuffers.values()) {
+        if (b.thoughtTimer) clearTimeout(b.thoughtTimer);
+        if (b.outputTimer) clearTimeout(b.outputTimer);
+      }
+      textBuffers.clear();
       unlisteners.forEach((u) => u());
     };
-  }, [loadColumns, loadTasks, appendThought, appendOutput, addToolExecution, updateToolExecution, updateTelemetry, setThinkingStartTime]);
+  }, [loadColumns, loadTasks, addToolExecution, updateToolExecution, updateTelemetry, setThinkingStartTime]);
 
   return (
     <>

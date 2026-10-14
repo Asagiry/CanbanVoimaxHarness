@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { CompactionReport } from '../../types';
 
@@ -23,41 +23,118 @@ export default function ContextGauge({
 }: ContextGaugeProps) {
   const effectiveLimit = contextWindow || stageLimit;
 
-  const {
-    streamEntries,
-    toolExecutions,
-    tokenOverrides,
-    taskTelemetry,
-    thinkingStartTime,
-    finalTps,
-    setTaskTokens,
-    evaporateClientToolLogs,
-  } = useDrawerStore();
+  // Селективные подписки per taskId: гейдж чужой задачи не пересчитывается
+  // при стриме активной (раньше подписка на весь стор дёргала все гейджи).
+  const thoughts = useDrawerStore((s) => s.streamEntries[taskId]?.thoughts);
+  const outputs = useDrawerStore((s) => s.streamEntries[taskId]?.outputs);
+  const tools = useDrawerStore((s) => s.toolExecutions[taskId]);
+  const tokenOverride = useDrawerStore((s) => s.tokenOverrides[taskId]);
+  const telemetry = useDrawerStore((s) => s.taskTelemetry[taskId]);
+  const thinkingStart = useDrawerStore((s) => s.thinkingStartTime[taskId] ?? null);
+  const frozenTps = useDrawerStore((s) => s.finalTps[taskId] ?? null);
+  const setTaskTokens = useDrawerStore((s) => s.setTaskTokens);
+  const evaporateClientToolLogs = useDrawerStore((s) => s.evaporateClientToolLogs);
 
   const [isCompacting, setIsCompacting] = useState(false);
   const [savingsBadge, setSavingsBadge] = useState<string | null>(null);
 
+  // Инкрементальный кэш суммы длин thought/output: горячий путь стрима —
+  // та же длина ленты + вырос только последний элемент — досчитываем дельту
+  // вместо O(n) прохода по всей ленте. Формулы и цифры не меняются.
+  const textCache = useRef<{
+    valid: boolean;
+    thoughtsLen: number;
+    outputsLen: number;
+    lastThoughtId?: string;
+    lastOutputId?: string;
+    lastThoughtLen: number;
+    lastOutputLen: number;
+    textChars: number;
+  }>({ valid: false, thoughtsLen: 0, outputsLen: 0, lastThoughtLen: 0, lastOutputLen: 0, textChars: 0 });
+
   // Dynamic token calculations
   const { totalUsedTokens, systemPromptTokens, toolDefTokens, messageTokens } = useMemo(() => {
-    // 1. Calculate dynamic message characters (legacy entries may miss fields)
-    let messageChars = 0;
-    const streams = streamEntries?.[taskId];
-    if (streams) {
-      for (const th of streams.thoughts ?? []) {
-        messageChars += (th?.content ?? '').length;
-      }
-      for (const out of streams.outputs ?? []) {
-        messageChars += (out?.content ?? '').length;
+    const thoughtsArr = thoughts ?? [];
+    const outputsArr = outputs ?? [];
+    const toolsArr = tools ?? [];
+
+    const tLen = thoughtsArr.length;
+    const oLen = outputsArr.length;
+    const lastTh = tLen > 0 ? thoughtsArr[tLen - 1] : undefined;
+    const lastOut = oLen > 0 ? outputsArr[oLen - 1] : undefined;
+    const lastThLen = (lastTh?.content ?? '').length;
+    const lastOutLen = (lastOut?.content ?? '').length;
+
+    const fullTextRecalc = () => {
+      let sum = 0;
+      for (const th of thoughtsArr) sum += (th?.content ?? '').length;
+      for (const out of outputsArr) sum += (out?.content ?? '').length;
+      return sum;
+    };
+    const commitCache = (textChars: number) => {
+      const c = textCache.current;
+      c.valid = true;
+      c.thoughtsLen = tLen;
+      c.outputsLen = oLen;
+      c.lastThoughtId = lastTh?.id;
+      c.lastOutputId = lastOut?.id;
+      c.lastThoughtLen = lastThLen;
+      c.lastOutputLen = lastOutLen;
+      c.textChars = textChars;
+    };
+
+    let textChars: number;
+    const c = textCache.current;
+    if (!c.valid) {
+      textChars = fullTextRecalc();
+      commitCache(textChars);
+    } else if (tLen < c.thoughtsLen || oLen < c.outputsLen) {
+      // Лента ужалась (clear/reload/evict) — полный пересчёт
+      textChars = fullTextRecalc();
+      commitCache(textChars);
+    } else {
+      // Проверка append-only префикса по id граничных элементов (O(1))
+      const thoughtStable =
+        c.thoughtsLen === 0 || thoughtsArr[c.thoughtsLen - 1]?.id === c.lastThoughtId;
+      const outputStable =
+        c.outputsLen === 0 || outputsArr[c.outputsLen - 1]?.id === c.lastOutputId;
+      if (!thoughtStable || !outputStable) {
+        // Перезагрузка с той же/большей длиной, но другим содержимым
+        textChars = fullTextRecalc();
+        commitCache(textChars);
+      } else {
+        // Дельта: подрастание старого последнего + только новые хвосты
+        let delta = 0;
+        let valid = true;
+        if (c.thoughtsLen > 0) {
+          const grow = (thoughtsArr[c.thoughtsLen - 1]?.content ?? '').length - c.lastThoughtLen;
+          if (grow < 0) valid = false;
+          else delta += grow;
+        }
+        if (c.outputsLen > 0) {
+          const grow = (outputsArr[c.outputsLen - 1]?.content ?? '').length - c.lastOutputLen;
+          if (grow < 0) valid = false;
+          else delta += grow;
+        }
+        if (valid) {
+          for (let i = c.thoughtsLen; i < tLen; i++) delta += (thoughtsArr[i]?.content ?? '').length;
+          for (let i = c.outputsLen; i < oLen; i++) delta += (outputsArr[i]?.content ?? '').length;
+          textChars = c.textChars + delta;
+          commitCache(textChars);
+        } else {
+          textChars = fullTextRecalc();
+          commitCache(textChars);
+        }
       }
     }
 
-    const tools = toolExecutions?.[taskId] ?? [];
-    if (tools) {
-      for (const t of tools) {
-        messageChars += (t?.stdout?.length || 0);
-        messageChars += (t?.stderr?.length || 0);
-        messageChars += JSON.stringify(t?.params || {}).length;
-      }
+    // Tool-вклады пересчитываем полностью: тулов мало, это дёшево,
+    // а updateToolExecution меняет stdout на месте (дельта-кэш по длине не поймает).
+    let messageChars = textChars;
+    for (const t of toolsArr) {
+      messageChars += (t?.stdout?.length || 0);
+      messageChars += (t?.stderr?.length || 0);
+      messageChars += JSON.stringify(t?.params || {}).length;
     }
 
     const dynamicMsgTokens = Math.max(300, Math.round(messageChars / 4));
@@ -67,8 +144,8 @@ export default function ContextGauge({
 
     const total = currentEstimatedTokens !== undefined
       ? currentEstimatedTokens
-      : tokenOverrides?.[taskId] !== undefined
-      ? tokenOverrides[taskId]
+      : tokenOverride !== undefined
+      ? tokenOverride
       : estimatedTotal;
 
     // Segment token allocation:
@@ -89,7 +166,8 @@ export default function ContextGauge({
       toolDefTokens: tool,
       messageTokens: msg,
     };
-  }, [taskId, currentEstimatedTokens, tokenOverrides, streamEntries, toolExecutions]);
+    // Лёгкие deps: только слайсы текущей задачи, а не весь стор
+  }, [taskId, currentEstimatedTokens, tokenOverride, thoughts, outputs, tools]);
 
   const percent = Math.min(100, Math.max(0, Math.round((totalUsedTokens / effectiveLimit) * 100)));
 
@@ -104,16 +182,14 @@ export default function ContextGauge({
   const maxTokensK = Math.round(effectiveLimit / 1000);
 
   const calculatedTurns = useMemo(() => {
-    const tools = toolExecutions?.[taskId]?.length || 0;
-    const thoughts = streamEntries?.[taskId]?.thoughts?.length || 0;
-    const outputs = streamEntries?.[taskId]?.outputs?.length || 0;
-    return Math.max(tools + outputs, thoughts, 0);
-  }, [taskId, toolExecutions, streamEntries]);
+    const toolsCount = tools?.length || 0;
+    const thoughtsCount = thoughts?.length || 0;
+    const outputsCount = outputs?.length || 0;
+    return Math.max(toolsCount + outputsCount, thoughtsCount, 0);
+  }, [tools, thoughts, outputs]);
   const effectiveTurns = turns !== undefined ? turns : calculatedTurns;
 
   // Telemetry: cache hit % + output throughput (TPS) for the current measurement
-  const telemetry = taskTelemetry?.[taskId];
-  const thinkingStart = thinkingStartTime?.[taskId] ?? null;
 
   const cacheText = telemetry ? `${Math.round(telemetry.cacheHitRate)}%` : '—';
   const cacheTitle = telemetry
@@ -122,7 +198,6 @@ export default function ContextGauge({
 
   const elapsedSec = thinkingStart != null ? (Date.now() - thinkingStart) / 1000 : null;
   const outputTokens = telemetry?.outputTokens ?? 0;
-  const frozenTps = finalTps?.[taskId] ?? null;
   const liveTps =
     elapsedSec != null && elapsedSec > 0 && outputTokens > 0 ? outputTokens / elapsedSec : null;
   // После финиша показываем замороженное значение, чтобы TPS не «таял»

@@ -1,7 +1,10 @@
 pub mod compactor;
 pub use compactor::*;
 
-use crate::config::{is_tool_allowed, load_tool_policies, ToolPolicyConfig};
+use crate::config::{
+    agent_allows_tool, is_tool_allowed, load_agent_setting, load_tool_policies,
+    ToolPolicyConfig,
+};
 use crate::hooks::kill_process_tree;
 use crate::llm::{ChatMessage, LlmClient, OpenAIChatRequest, StreamChunk, ToolCall, ToolDefinition};
 use anyhow::{bail, Context, Result};
@@ -113,11 +116,12 @@ pub enum AgentEvent {
 }
 
 /// Zero-Turn Memory Priming: compiles strictly static SystemMessage from the
-/// role Persona (`.cvh/agents/<role>.md` + fallback) and Tool Instructions.
+/// role Persona (flat `.cvh/agents/<role>.md` → built-in fallback), per-role
+/// `.cvh/agents/<role>/rules/*.md` (alphabetical) and Tool Instructions.
 /// Strictly static System Prompt: Zero dynamic timestamps, zero random UUIDs in the System prompt to prevent cache invalidation.
 /// Dynamic context (task ID, title, description, worktree path) belongs exclusively in the user message.
 /// NOTE: root-level `AGENTS.md` and `.agents/skills` are deliberately NOT
-/// injected here — the model receives only `.cvh` persona + tool instructions
+/// injected here — the model receives only `.cvh` persona + rules + tool instructions
 /// (custom tools themselves still load from `.cvh/tools` via get_all_tools).
 pub async fn compile_primed_system_prompt(
     repo_root: &Path,
@@ -125,14 +129,41 @@ pub async fn compile_primed_system_prompt(
 ) -> Result<String> {
     let mut sections = Vec::new();
 
-    // 1. Role Persona
-    let persona_file = repo_root.join(".cvh").join("agents").join(format!("{}.md", role));
-    if persona_file.exists() {
-        if let Ok(persona_text) = tokio::fs::read_to_string(&persona_file).await {
+    // 1. Role Persona: single flat path → built-in fallback.
+    let persona_path = crate::config::agent_persona_path(repo_root, role);
+    if persona_path.exists() {
+        if let Ok(persona_text) = tokio::fs::read_to_string(&persona_path).await {
             sections.push(format!("# Role Persona: {}\n\n{}", role, persona_text.trim()));
+        } else {
+            sections.push(format!("# Role Persona: {}\nYou are an expert AI agent in {}.", role, role));
         }
     } else {
         sections.push(format!("# Role Persona: {}\nYou are an expert AI agent in {}.", role, role));
+    }
+
+    // 1b. Per-agent rules: `.cvh/agents/<role>/rules/*.md`, alphabetical.
+    let rules_dir = crate::config::agent_rules_dir(repo_root, role);
+    if rules_dir.is_dir() {
+        if let Ok(mut entries) = tokio::fs::read_dir(&rules_dir).await {
+            let mut rules: Vec<(String, String)> = Vec::new();
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                let path = entry.path();
+                if !path.is_file() {
+                    continue;
+                }
+                if path.extension().and_then(|e| e.to_str()) != Some("md") {
+                    continue;
+                }
+                let fname = entry.file_name().to_string_lossy().to_string();
+                if let Ok(content) = tokio::fs::read_to_string(&path).await {
+                    rules.push((fname, content));
+                }
+            }
+            rules.sort_by(|a, b| a.0.cmp(&b.0));
+            for (fname, content) in rules {
+                sections.push(format!("## Rule: {}\n\n{}", fname, content.trim()));
+            }
+        }
     }
 
     // 2. Tool Instructions (SWE-bench Industrial Suite)
@@ -443,7 +474,8 @@ fn string_similarity(a: &str, b: &str) -> f32 {
     inter as f32 / union as f32
 }
 
-/// Executes a tool within the safe boundary of `worktree_dir` with zero-trust policy checks.
+/// Executes a tool within the safe boundary of `worktree_dir` with zero-trust policy checks
+/// (global/stage matrix AND optional per-agent `allowed_tools` intersection).
 pub async fn execute_tool(
     repo_root: &Path,
     worktree_dir: &Path,
@@ -453,6 +485,7 @@ pub async fn execute_tool(
     abort_handle: Arc<AtomicBool>,
     tool_policy: &ToolPolicyConfig,
     task_id: Option<&str>,
+    agent_allowed_tools: Option<&[String]>,
 ) -> Result<String> {
     if abort_handle.load(Ordering::SeqCst) {
         bail!("Operation aborted");
@@ -471,6 +504,15 @@ pub async fn execute_tool(
             "PermissionDenied: Инструмент '{}' отключен политикой безопасности для колонки '{}'",
             normalized_tool_name,
             stage_id.unwrap_or("global")
+        );
+    }
+
+    // Per-agent intersection: when the agent `setting` defines allowed_tools,
+    // a tool outside that list is denied even if the matrix allows it.
+    if !agent_allows_tool(agent_allowed_tools, normalized_tool_name) {
+        bail!(
+            "PermissionDenied: Инструмент '{}' запрещён настройками агента (setting.allowed_tools)",
+            normalized_tool_name
         );
     }
 
@@ -1397,15 +1439,24 @@ where
         }
     }
 
-    // Tool Policy Matrix: filter out disabled tools when building schema array (saving tokens!)
+    // Tool Policy Matrix + per-agent intersection: filter out disabled tools
+    // when building schema array (saving tokens!). Effective set =
+    // policy lookup ∩ agent setting.allowed_tools (absent → unrestricted).
     let tool_policy = load_tool_policies(&config.repo_root)
         .await
         .unwrap_or_default();
 
+    // Best-effort per-agent overrides (missing/broken → defaults).
+    let agent_setting = load_agent_setting(&config.repo_root, &config.role).await;
+    let agent_allowed = agent_setting.allowed_tools.clone();
+
     let all_tools = get_all_tools(&config.repo_root).await;
     let mut active_tools: Vec<ToolDefinition> = all_tools
         .into_iter()
-        .filter(|t| is_tool_allowed(&tool_policy, Some(&config.stage_id), &t.function.name))
+        .filter(|t| {
+            is_tool_allowed(&tool_policy, Some(&config.stage_id), &t.function.name)
+                && agent_allows_tool(agent_allowed.as_deref(), &t.function.name)
+        })
         .collect();
 
     // Deterministic sorting of tool definitions for prefix caching
@@ -1632,6 +1683,7 @@ where
                 Arc::clone(&abort_flag),
                 &tool_policy,
                 Some(&config.task_id),
+                agent_allowed.as_deref(),
             )
             .await;
 
@@ -1751,5 +1803,148 @@ mod tests {
         );
 
         let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_system_prompt_flat_persona_rules_alphabetical() {
+        // Single flat persona `.cvh/agents/<role>.md` + rules/*.md (alphabetical)
+        // + tool instructions.
+        let base =
+            std::path::PathBuf::from("target").join(format!("cvh_rules_{}", uuid::Uuid::new_v4()));
+        let agents = base.join(".cvh").join("agents");
+        let role_dir = agents.join("dev");
+        tokio::fs::create_dir_all(role_dir.join("rules"))
+            .await
+            .expect("test dirs");
+        tokio::fs::write(agents.join("dev.md"), "FLAT_PERSONA_MARKER")
+            .await
+            .expect("persona seed");
+        // Seed out of order: b before a — prompt must order a, b.
+        tokio::fs::write(role_dir.join("rules").join("b_second.md"), "RULE_B_MARKER")
+            .await
+            .expect("rule b");
+        tokio::fs::write(role_dir.join("rules").join("a_first.md"), "RULE_A_MARKER")
+            .await
+            .expect("rule a");
+        tokio::fs::write(role_dir.join("rules").join("notes.txt"), "IGNORED")
+            .await
+            .expect("non-md seed");
+
+        let prompt = compile_primed_system_prompt(&base, "dev")
+            .await
+            .expect("prompt failed");
+
+        assert!(prompt.contains("FLAT_PERSONA_MARKER"));
+        assert!(prompt.contains("RULE_A_MARKER"));
+        assert!(prompt.contains("RULE_B_MARKER"));
+        assert!(!prompt.contains("IGNORED"), "non-md rules must be skipped");
+        let pos_a = prompt.find("RULE_A_MARKER").expect("rule a pos");
+        let pos_b = prompt.find("RULE_B_MARKER").expect("rule b pos");
+        assert!(pos_a < pos_b, "rules must be alphabetical: a_first before b_second");
+        assert!(prompt.contains("Scoped Tool Execution Mandate"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_system_prompt_flat_persona_and_builtin_fallback() {
+        // Single flat persona path: present → used; absent → built-in fallback.
+        // No dual-path, no per-agent dir persona reads.
+        let base =
+            std::path::PathBuf::from("target").join(format!("cvh_fb_{}", uuid::Uuid::new_v4()));
+        let agents = base.join(".cvh").join("agents");
+        tokio::fs::create_dir_all(&agents)
+            .await
+            .expect("test dirs");
+        tokio::fs::write(agents.join("dev.md"), "FLATMARKER")
+            .await
+            .expect("flat seed");
+
+        let with_persona = compile_primed_system_prompt(&base, "dev")
+            .await
+            .expect("prompt failed");
+        assert!(with_persona.contains("FLATMARKER"), "flat persona must be used");
+
+        // Per-agent dir agent.md must NOT be picked up (single flat path only).
+        tokio::fs::create_dir_all(agents.join("dev").join("rules"))
+            .await
+            .expect("role dir");
+        tokio::fs::write(agents.join("dev").join("agent.md"), "DIRMARKER")
+            .await
+            .expect("dir seed");
+        let still_flat = compile_primed_system_prompt(&base, "dev")
+            .await
+            .expect("prompt failed");
+        assert!(still_flat.contains("FLATMARKER"));
+        assert!(!still_flat.contains("DIRMARKER"), "agents/<role>/agent.md must be ignored");
+
+        // Removed → built-in fallback.
+        tokio::fs::remove_file(agents.join("dev.md"))
+            .await
+            .expect("remove flat");
+        let builtin = compile_primed_system_prompt(&base, "ghost")
+            .await
+            .expect("prompt failed");
+        assert!(
+            builtin.contains("You are an expert AI agent in ghost."),
+            "built-in fallback must fire, got: {}",
+            &builtin[..builtin.len().min(200)]
+        );
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_agent_tool_intersection_with_policy() {
+        // Effective tool set = policy lookup ∩ agent allowed_tools.
+        use crate::config::{is_tool_allowed, ToolPolicyConfig};
+        let policy = ToolPolicyConfig::default();
+
+        // Agent restricts to read-only: schema filter must drop the rest
+        // even though the matrix allows them.
+        let agent_allowed = Some(vec!["read_file".to_string(), "glob".to_string()]);
+        let all = get_all_tools(&std::path::PathBuf::from("target")).await;
+        assert!(!all.is_empty());
+        let active: Vec<String> = all
+            .iter()
+            .filter(|t| {
+                is_tool_allowed(&policy, Some("dev"), &t.function.name)
+                    && agent_allows_tool(agent_allowed.as_deref(), &t.function.name)
+            })
+            .map(|t| t.function.name.clone())
+            .collect();
+        assert!(active.contains(&"read_file".to_string()));
+        assert!(active.contains(&"glob".to_string()));
+        assert!(!active.contains(&"execute_command".to_string()));
+        assert!(!active.contains(&"write_file".to_string()));
+
+        // No agent restriction → matrix alone decides.
+        let open: Vec<String> = all
+            .iter()
+            .filter(|t| {
+                is_tool_allowed(&policy, Some("dev"), &t.function.name)
+                    && agent_allows_tool(None, &t.function.name)
+            })
+            .map(|t| t.function.name.clone())
+            .collect();
+        assert!(open.len() > active.len());
+
+        // Zero-trust gate: agent-denied tool errors even when policy allows.
+        let flag = Arc::new(AtomicBool::new(false));
+        let workdir = std::env::temp_dir();
+        let err = execute_tool(
+            &std::path::PathBuf::from("target"),
+            &workdir,
+            Some("dev"),
+            "write_file",
+            &serde_json::json!({"file_path": "x.txt", "content": "y"}),
+            flag,
+            &policy,
+            None,
+            agent_allowed.as_deref(),
+        )
+        .await
+        .expect_err("agent-denied tool must be rejected");
+        assert!(err.to_string().contains("PermissionDenied"), "unexpected: {}", err);
     }
 }

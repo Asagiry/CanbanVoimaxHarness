@@ -1,15 +1,15 @@
 [
   {
-    "id": "CVH-003",
-    "title": "Инициализация",
-    "description": "Инициализируй в этом репо в папке .cvh агента developer и распиши ему persona и rules /home/vepishin/Projects/CanbanVoimaxHarness/docs по гайду отсюда",
-    "stageId": "dev",
+    "id": "CVH-001",
+    "title": "Изучение",
+    "description": "Изучить проект рассказать в чем суть",
+    "stageId": "backlog",
     "boardId": "development",
-    "worktreePath": "/home/vepishin/Projects/CanbanVoimaxHarness/.cvh/worktrees/cvh-003",
-    "branch": "feat/cvh-003",
+    "worktreePath": "worktrees/cvh-001",
+    "branch": "feat/cvh-001",
     "verdict": null,
     "customFlow": null,
-    "status": "paused",
+    "status": "idle",
     "model": "gemini-3.8-flash-high",
     "parentId": null,
     "subtaskIndex": null,
@@ -17,7 +17,7 @@
     "coverImage": null,
     "attachments": null,
     "todos": null,
-    "createdAt": 1791984064620,
-    "updatedAt": 1791984470199
+    "createdAt": 1791987743931,
+    "updatedAt": 1791988745760
   }
 ]

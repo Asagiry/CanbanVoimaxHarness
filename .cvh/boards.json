@@ -44,6 +44,24 @@
           "terminal": null
         },
         {
+          "id": "testirovanie",
+          "title": "Тестирование",
+          "color": "#0284c7",
+          "icon": "Layers",
+          "persona": "developer",
+          "onEnterScript": null,
+          "contextWindow": 128000,
+          "modelOverride": null,
+          "reasoningEffort": null,
+          "temperature": null,
+          "gatekeeperSensor": null,
+          "allowedTools": null,
+          "hooks": {},
+          "routes": null,
+          "autoRun": null,
+          "terminal": null
+        },
+        {
           "id": "ready",
           "title": "Готово",
           "color": "#10b981",
