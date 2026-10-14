@@ -18,10 +18,19 @@ interface KanbanColumnProps {
   column: PipelineColumn;
   tasks: KanbanTask[];
   index: number;
+  totalColumns?: number;
+  isPinned?: boolean;
   onDeleteColumn?: (columnId: string) => void;
 }
 
-export default function KanbanColumn({ column, tasks, index, onDeleteColumn }: KanbanColumnProps) {
+export default function KanbanColumn({
+  column,
+  tasks,
+  index,
+  totalColumns,
+  isPinned: isPinnedProp,
+  onDeleteColumn,
+}: KanbanColumnProps) {
   const { focusStage, focusedStageId } = useCortexStore();
   const isFocused = focusedStageId === column.id;
   const isDoneColumn = Boolean(
@@ -34,6 +43,16 @@ export default function KanbanColumn({ column, tasks, index, onDeleteColumn }: K
   const displayTasks = isDoneColumn ? tasks.filter((t) => !t.parentId) : tasks;
   const isAtWipLimit = column.wipLimit ? displayTasks.length >= column.wipLimit : false;
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
+
+  const isPinned = Boolean(
+    isPinnedProp ?? (
+      index === 0 ||
+      (totalColumns !== undefined ? index === totalColumns - 1 : false) ||
+      column.id === 'backlog' ||
+      column.id === 'ready' ||
+      column.terminal
+    )
+  );
 
   const getColumnIcon = (iconName: string) => {
     const props = { className: 'h-3.5 w-3.5 shrink-0 text-[#171717]' };
@@ -56,12 +75,17 @@ export default function KanbanColumn({ column, tasks, index, onDeleteColumn }: K
   };
 
   return (
-    <Draggable draggableId={column.id} index={index}>
+    <Draggable draggableId={column.id} index={index} isDragDisabled={isPinned}>
       {(colProvided, colSnapshot) => (
     <div
       ref={colProvided.innerRef}
       {...colProvided.draggableProps}
-      className={`flex flex-col w-72 shrink-0 h-full rounded-lg bg-[#f9f9f9] border transition-all duration-150 select-none overflow-hidden ${
+      style={
+        isPinned
+          ? { ...colProvided.draggableProps.style, transform: 'none' }
+          : colProvided.draggableProps.style
+      }
+      className={`flex flex-col w-72 shrink-0 h-full rounded-lg bg-[#f9f9f9] border select-none overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
         colSnapshot.isDragging
           ? 'border-[#171717] shadow-md opacity-90'
           : isFocused
@@ -77,15 +101,21 @@ export default function KanbanColumn({ column, tasks, index, onDeleteColumn }: K
 
       {/* Column Header (drag handle для смены порядка колонок; ПКМ — действия с колонкой) */}
       <div
-        {...colProvided.dragHandleProps}
+        {...(!isPinned ? colProvided.dragHandleProps : {})}
         onClick={() => focusStage(column.id)}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
           setMenuPos({ x: e.clientX, y: e.clientY });
         }}
-        title="Перетащите для смены порядка колонок. Правая кнопка — действия с колонкой"
-        className="flex items-center h-9 px-3 border-b border-[#ebebeb] bg-white hover:bg-[#fafafa] transition cursor-grab active:cursor-grabbing group overflow-hidden"
+        title={
+          isPinned
+            ? 'Колонка закреплена. Правая кнопка — действия с колонкой'
+            : 'Перетащите для смены порядка колонок. Правая кнопка — действия с колонкой'
+        }
+        className={`flex items-center h-9 px-3 border-b border-[#ebebeb] bg-white hover:bg-[#fafafa] transition-colors ${
+          isPinned ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
+        } group overflow-hidden`}
       >
         <div className="flex items-center gap-2 min-w-0 w-full overflow-hidden">
           {getColumnIcon(column.icon)}

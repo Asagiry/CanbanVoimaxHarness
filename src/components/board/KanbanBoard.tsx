@@ -305,7 +305,22 @@ export default function KanbanBoard() {
     }
 
     if (type === 'COLUMN') {
-      void handleReorderColumns(source.index, destination.index);
+      const lastIndex = columns.length - 1;
+
+      // Pinned terminal columns cannot be dragged or reordered:
+      // If source.index === 0 or destination.index === 0, reject the drop.
+      // If source.index === columns.length - 1 or destination.index >= columns.length - 1, reject the drop.
+      if (source.index === 0 || destination.index === 0) {
+        return;
+      }
+      if (source.index === lastIndex || destination.index >= lastIndex) {
+        return;
+      }
+
+      // Clamp destination strictly between index 1 and columns.length - 2
+      const clampedDestinationIndex = Math.max(1, Math.min(destination.index, columns.length - 2));
+
+      void handleReorderColumns(source.index, clampedDestinationIndex);
       return;
     }
 
@@ -323,6 +338,12 @@ export default function KanbanBoard() {
   };
 
   const handleReorderColumns = async (sourceIndex: number, destinationIndex: number) => {
+    if (sourceIndex === destinationIndex) return;
+    if (columns.length <= 2) return;
+    const lastIndex = columns.length - 1;
+    if (sourceIndex <= 0 || sourceIndex >= lastIndex) return;
+    if (destinationIndex <= 0 || destinationIndex >= lastIndex) return;
+
     const prev = columns;
     const reordered = Array.from(prev);
     const [moved] = reordered.splice(sourceIndex, 1);
@@ -330,10 +351,10 @@ export default function KanbanBoard() {
     reordered.splice(destinationIndex, 0, moved);
 
     // backlog строго первая, ready строго последняя, остальные — в drop-порядке.
-    const backlog = reordered.find((c) => c.id === 'backlog');
-    const ready = reordered.find((c) => c.id === 'ready');
-    const middle = reordered.filter((c) => c.id !== 'backlog' && c.id !== 'ready');
-    const next = [...(backlog ? [backlog] : []), ...middle, ...(ready ? [ready] : [])];
+    const backlog = reordered.find((c) => c.id === 'backlog') ?? prev[0];
+    const ready = reordered.find((c) => c.id === 'ready') ?? prev[lastIndex];
+    const middle = reordered.filter((c) => c.id !== backlog.id && c.id !== ready.id);
+    const next = [backlog, ...middle, ready];
 
     if (prev.length === next.length && prev.every((c, i) => c.id === next[i]?.id)) return;
 
@@ -918,13 +939,22 @@ export default function KanbanBoard() {
           <div className="flex items-start space-x-3.5 h-full min-w-max pb-1">
             {columns.map((column, index) => {
               const columnTasks = filteredTasks.filter((t) => t.columnId === column.id);
+              const isPinned =
+                index === 0 ||
+                index === columns.length - 1 ||
+                column.id === 'backlog' ||
+                column.id === 'ready' ||
+                Boolean(column.terminal);
+
               return (
                 <KanbanColumn
                   key={column.id}
                   column={column}
                   tasks={columnTasks}
                   index={index}
-                  onDeleteColumn={columns.length > 1 ? handleDeleteColumn : undefined}
+                  totalColumns={columns.length}
+                  isPinned={isPinned}
+                  onDeleteColumn={columns.length > 1 && !isPinned ? handleDeleteColumn : undefined}
                 />
               );
             })}
