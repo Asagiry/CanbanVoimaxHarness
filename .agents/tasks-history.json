@@ -306,5 +306,21 @@
     ],
     "ftrScore": "100%",
     "timestamp": 1792000000000
+  },
+  "CVH-023": {
+    "taskId": "CVH-023",
+    "title": "Eliminate React Rules of Hooks violation in AgentConsoleDrawer and wrap in root ErrorBoundary",
+    "author": "react-tailwind-artisan",
+    "verdict": "APPROVED",
+    "commitHash": "74ea7a5",
+    "mergeCommitHash": "96347cb",
+    "commitMessage": "fix(drawer): eliminate React rules of hooks violation and wrap drawer in root ErrorBoundary",
+    "summary": "Resolved fatal React White Screen of Death on Kanban card click caused by conditional execution of useSettingsStore, useMemo(selectableModels), and useMemo(turns) below `if (!isOpen || !task) return null;` in AgentConsoleDrawer.tsx. Hoisted all hooks unconditionally to the top of the component with safe null-coalescing fallbacks. Wrapped <AgentConsoleDrawer /> in a root <ErrorBoundary scopeLabel=\"Консоль задачи\" onClose={() => useDrawerStore.getState().closeDrawer()}> in src/App.tsx to defensively isolate child render errors.",
+    "files": [
+      "src/App.tsx",
+      "src/components/drawer/AgentConsoleDrawer.tsx"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1792050000000
   }
 }
