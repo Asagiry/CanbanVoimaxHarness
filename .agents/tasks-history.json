@@ -322,5 +322,21 @@
     ],
     "ftrScore": "100%",
     "timestamp": 1792050000000
+  },
+  "CVH-024": {
+    "taskId": "CVH-024",
+    "title": "Configure instant HMR dev workflow with IPv4 127.0.0.1 binding for Vite and Tauri devUrl",
+    "author": "agent-developer",
+    "verdict": "APPROVED",
+    "commitHash": "9698ee6",
+    "mergeCommitHash": "5f4b34a",
+    "commitMessage": "feat(dev): bind Vite and Tauri devUrl to IPv4 127.0.0.1 for instant HMR dev mode",
+    "summary": "Eliminated Windows dual-stack IPv6/IPv4 dev server hang where Vite defaulted to IPv6 ::1 while Tauri CLI checked IPv4 127.0.0.1:5173. Explicitly bound Vite server.host to '127.0.0.1' in vite.config.ts and synchronized build.devUrl to 'http://127.0.0.1:5173' in src-tauri/tauri.conf.json. Verified clean production bundle via npm run build and verified Level 2 review APPROVED.",
+    "files": [
+      "vite.config.ts",
+      "src-tauri/tauri.conf.json"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1792100000000
   }
 }
