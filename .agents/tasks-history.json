@@ -367,5 +367,29 @@
     ],
     "ftrScore": "100%",
     "timestamp": 1792200000000
+  },
+  "CVH-028": {
+    "taskId": "CVH-028",
+    "title": "Interactive To-Dos Execution Plan Widget (DSH-Style) and todo_write protocol",
+    "author": "agent-developer",
+    "verdict": "APPROVED",
+    "commitHash": "5749089",
+    "mergeCommitHash": "c48fe04",
+    "commitMessage": "feat(agent): implement DSH-style interactive To-Dos plan widget and todo_write protocol",
+    "summary": "Implemented authentic, interactive To-Dos plan widget and protocol directly inspired by DeepSeek Harness (DSH) and Harness Engineering § 17. Added TodoItem and KanbanTask.todos in TypeScript and Rust, created DSH-authentic TaskTodoWidget with obsidian styling and interactive status cycling, anchored it above the feed obeying § 2.13 Viewport Overlay & Flex Boundary Invariants, and added todo_write agent tool in Rust with atomic persistence and task:updated event emission.",
+    "files": [
+      "src/types/kanban.ts",
+      "src/types/index.ts",
+      "src/stores/kanbanStore.ts",
+      "src/stores/boardStore.ts",
+      "src/components/drawer/TaskTodoWidget.tsx",
+      "src/components/drawer/AgentConsoleDrawer.tsx",
+      "src/App.tsx",
+      "src-tauri/src/agent.rs",
+      "src-tauri/src/commands.rs",
+      ".cvh/settings/tool-policy.json"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1792300000000
   }
 }

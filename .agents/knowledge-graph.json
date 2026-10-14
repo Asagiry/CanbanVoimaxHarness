@@ -186,6 +186,15 @@
       "observations": [
         "Interactive mid-flight steering mechanism: aborts active task execution, appends steering directive to task description and compaction context on disk, emits agent:steer, and re-invokes run_agent."
       ]
+    },
+    {
+      "name": "InteractiveTodoPlanWidget",
+      "entityType": "Subsystem",
+      "observations": [
+        "Authentic DSH-style interactive To-Dos plan widget (TaskTodoWidget) anchored above Activity Stream in AgentConsoleDrawer.",
+        "Obeying § 2.13 Viewport Overlay & Flex Boundary Invariants (min-h-0, shrink-0 header, defensive flex bounds).",
+        "Includes todo_write tool protocol in Rust backend agent loop with atomic persistence to tasks.json and task:updated event emission."
+      ]
     }
   ],
   "relations": [
@@ -338,6 +347,11 @@
       "from": "SteerAgentExecution",
       "to": "BackendAgentRunner",
       "relationType": "triggers"
+    },
+    {
+      "from": "FrontendControlPlane",
+      "to": "InteractiveTodoPlanWidget",
+      "relationType": "contains"
     }
   ]
 }
