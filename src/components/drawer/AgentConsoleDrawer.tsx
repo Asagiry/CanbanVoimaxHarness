@@ -350,7 +350,7 @@ export default function AgentConsoleDrawer() {
   } = useDrawerStore();
 
   const { tasks, columns, updateTask } = useBoardStore();
-  const { settings } = useSettingsStore();
+  const { settings, availableModels } = useSettingsStore();
 
   const [interactiveInput, setInteractiveInput] = useState('');
   const [runError, setRunError] = useState<string | null>(null);
@@ -551,12 +551,7 @@ export default function AgentConsoleDrawer() {
     }
   }, [unifiedActivities]);
 
-  if (!isOpen || !task) return null;
-
-  const isRunning = task.status === 'running';
-  const effectiveModel = task.model || settings.model || 'gemini-3.8-flash-high';
-
-  const { availableModels } = useSettingsStore();
+  const effectiveModel = task?.model || settings.model || 'gemini-3.8-flash-high';
   const selectableModels = useMemo(() => {
     return Array.from(
       new Set([
@@ -571,12 +566,17 @@ export default function AgentConsoleDrawer() {
   }, [effectiveModel, availableModels]);
 
   const turns = useMemo(() => {
+    if (!task) return 0;
     const feed = activityFeed[task.id] || [];
     const feedCount = (feed ?? []).filter((a) => a?.type === 'tool' || a?.type === 'thought' || a?.type === 'output').length;
     const toolsCount = toolExecutions[task.id]?.length || 0;
     const outputsCount = streamEntries[task.id]?.outputs?.filter((o) => o?.type === 'output').length || 0;
     return Math.max(feedCount, toolsCount + outputsCount, 0);
-  }, [task.id, activityFeed, toolExecutions, streamEntries]);
+  }, [task, activityFeed, toolExecutions, streamEntries]);
+
+  if (!isOpen || !task) return null;
+
+  const isRunning = task.status === 'running';
 
   const adjustTextareaHeight = (el: HTMLTextAreaElement) => {
     el.style.height = 'auto';

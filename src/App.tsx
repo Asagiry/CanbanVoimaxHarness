@@ -3,6 +3,7 @@ import Topbar from './components/layout/Topbar';
 import CortexExplorer from './components/cortex/CortexExplorer';
 import KanbanBoard from './components/board/KanbanBoard';
 import AgentConsoleDrawer from './components/drawer/AgentConsoleDrawer';
+import ErrorBoundary from './components/common/ErrorBoundary';
 import SplashScreen from './components/splash/SplashScreen';
 import RuleEditorModal from './components/cortex/RuleEditorModal';
 import ToolPolicyModal from './components/settings/ToolPolicyModal';
@@ -258,7 +259,9 @@ export default function App() {
       </div>
 
       {/* Fullscreen Modal: Real-Time Agent Console (rendered at root level outside zoomed container to avoid position: fixed breakage and clipping) */}
-      <AgentConsoleDrawer />
+      <ErrorBoundary scopeLabel="Консоль задачи" onClose={() => useDrawerStore.getState().closeDrawer()}>
+        <AgentConsoleDrawer />
+      </ErrorBoundary>
 
       {/* Terminal Bootloader Splash Screen */}
       {showSplash && (
