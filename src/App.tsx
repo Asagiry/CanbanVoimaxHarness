@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Topbar from './components/layout/Topbar';
 import CortexExplorer from './components/cortex/CortexExplorer';
 import KanbanBoard from './components/board/KanbanBoard';
 import AgentConsoleDrawer from './components/drawer/AgentConsoleDrawer';
+import SplashScreen from './components/splash/SplashScreen';
 import RuleEditorModal from './components/cortex/RuleEditorModal';
 import ToolPolicyModal from './components/settings/ToolPolicyModal';
 import SettingsModal from './components/settings/SettingsModal';
@@ -17,6 +18,9 @@ export default function App() {
   const { loadProjects } = useProjectStore();
   const { appendThought, appendOutput, addToolExecution, updateToolExecution, updateTelemetry, setThinkingStartTime } = useDrawerStore();
 
+  const [isDataReady, setIsDataReady] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
+
   useEffect(() => {
     const init = async () => {
       try {
@@ -26,6 +30,8 @@ export default function App() {
         await loadTasks();
       } catch (e) {
         console.warn('Initialization error:', e);
+      } finally {
+        setIsDataReady(true);
       }
     };
     void init();
@@ -207,50 +213,60 @@ export default function App() {
   }, [loadColumns, loadTasks, appendThought, appendOutput, addToolExecution, updateToolExecution, updateTelemetry, setThinkingStartTime]);
 
   return (
-    <div
-      style={rootStyle}
-      className="flex flex-col overflow-hidden bg-[#fafafa] text-[#171717] select-none relative"
-    >
-      {/* Top Navigation Bar */}
-      <Topbar />
+    <>
+      <div
+        style={rootStyle}
+        className="flex flex-col h-screen w-screen overflow-hidden bg-[#fafafa] text-[#171717] select-none relative"
+      >
+        {/* Top Navigation Bar */}
+        <Topbar />
 
-      {/* Main Workspace Area */}
-      <div className="flex-1 flex flex-row overflow-hidden relative">
-        {/* Left Sidebar: Cortex Explorer */}
-        <CortexExplorer />
+        {/* Main Workspace Area */}
+        <div className="flex-1 flex flex-row min-h-0 min-w-0 overflow-hidden relative">
+          {/* Left Sidebar: Cortex Explorer */}
+          <CortexExplorer />
 
-        {/* Center: Kanban Board Control Plane */}
-        <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <KanbanBoard />
-        </main>
+          {/* Center: Kanban Board Control Plane */}
+          <main className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+            <KanbanBoard />
+          </main>
+        </div>
 
-        {/* Fullscreen Modal: Real-Time Agent Console */}
-        <AgentConsoleDrawer />
+        {/* Mind / Rule Editor Modal */}
+        <RuleEditorModal />
+
+        {/* Global Tool Policy Matrix Modal */}
+        <ToolPolicyModal />
+
+        {/* LLM Settings Modal */}
+        <SettingsModal />
+
+        {/* Zoom Indicator Toast */}
+        {showIndicator && (
+          <div className="fixed bottom-4 right-4 z-50 flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-[#171717]/90 text-white font-mono text-xs shadow-lg backdrop-blur-xs transition-opacity duration-150 animate-in fade-in select-none">
+            <span>Масштаб: {zoomPercent}%</span>
+            {zoomPercent !== 100 && (
+              <button
+                onClick={resetZoom}
+                className="text-[#a1a1aa] hover:text-white underline text-[11px] ml-1 cursor-pointer"
+              >
+                Сброс
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Mind / Rule Editor Modal */}
-      <RuleEditorModal />
+      {/* Fullscreen Modal: Real-Time Agent Console (rendered at root level outside zoomed container to avoid position: fixed breakage and clipping) */}
+      <AgentConsoleDrawer />
 
-      {/* Global Tool Policy Matrix Modal */}
-      <ToolPolicyModal />
-
-      {/* LLM Settings Modal */}
-      <SettingsModal />
-
-      {/* Zoom Indicator Toast */}
-      {showIndicator && (
-        <div className="fixed bottom-4 right-4 z-50 flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-[#171717]/90 text-white font-mono text-xs shadow-lg backdrop-blur-xs transition-opacity duration-150 animate-in fade-in select-none">
-          <span>Масштаб: {zoomPercent}%</span>
-          {zoomPercent !== 100 && (
-            <button
-              onClick={resetZoom}
-              className="text-[#a1a1aa] hover:text-white underline text-[11px] ml-1 cursor-pointer"
-            >
-              Сброс
-            </button>
-          )}
-        </div>
+      {/* Terminal Bootloader Splash Screen */}
+      {showSplash && (
+        <SplashScreen
+          isReady={isDataReady}
+          onFinish={() => setShowSplash(false)}
+        />
       )}
-    </div>
+    </>
   );
 }

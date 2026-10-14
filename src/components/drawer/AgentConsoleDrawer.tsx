@@ -748,9 +748,9 @@ export default function AgentConsoleDrawer() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-white text-[#171717] select-none animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex flex-col h-screen max-h-screen overflow-hidden bg-white text-[#171717] select-none animate-in fade-in duration-150">
       {/* Fullscreen Header: Clean Vercel / Claude Code Aesthetic */}
-      <header className="border-b border-[#ebebeb] bg-white px-4 py-2.5 shrink-0 shadow-xs">
+      <header className="border-b border-[#ebebeb] bg-white px-4 py-2.5 shrink-0 z-10 shadow-xs">
         <div className="flex items-center justify-between">
           {/* Left: "Назад к доске", Task ID, Stage badge, Model badge & Title */}
           <div className="flex items-center space-x-2.5 min-w-0">
@@ -918,11 +918,11 @@ export default function AgentConsoleDrawer() {
       {/* Two-Column Layout: Left (Feed + Steer Bar) | Right (GitDiffSidebar) */}
       <div className="flex-1 flex flex-row min-h-0 min-w-0 overflow-hidden">
         {/* Left Column: Activity Feed + Steer Bar */}
-        <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa]">
+        <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] overflow-hidden">
         <ErrorBoundary scopeLabel="чат задачи" onClose={closeDrawer}>
           {/* Main Unified Activity Feed Area */}
-          <div className="relative flex-1 flex flex-col min-h-0 bg-[#fafafa]">
-        <div ref={scrollRef} onScroll={handleFeedScroll} className="flex-1 overflow-y-auto p-4 md:p-6">
+          <div className="relative flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] overflow-hidden">
+        <div ref={scrollRef} onScroll={handleFeedScroll} className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6">
         <div className="max-w-4xl mx-auto space-y-3.5">
           {/* a) Task Goal / User Objective Card */}
           <div className="rounded-lg border border-[#ebebeb] bg-white p-4 shadow-xs">
@@ -1093,7 +1093,7 @@ export default function AgentConsoleDrawer() {
       </div>
 
       {/* f) Interactive Input & Steer Bar: Floating Light Card & Bottom Status Bar */}
-      <footer className="border-t border-[#ebebeb] bg-[#fafafa]/80 backdrop-blur-xs p-3 shrink-0 shadow-xs">
+      <footer className="border-t border-[#ebebeb] bg-[#fafafa]/80 backdrop-blur-xs p-3 shrink-0 shadow-xs z-10">
         <div className="max-w-4xl mx-auto">
           {/* Floating Modern Light Card */}
           <div
