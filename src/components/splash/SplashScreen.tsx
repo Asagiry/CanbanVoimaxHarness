@@ -61,16 +61,19 @@ export default function SplashScreen({
 
     const elapsed = Date.now() - startTimeRef.current;
     const remaining = Math.max(0, minDisplayTimeMs - elapsed);
+    let finishTimer: ReturnType<typeof setTimeout> | undefined;
 
     const fadeTimer = setTimeout(() => {
       setIsFading(true);
-      const finishTimer = setTimeout(() => {
+      finishTimer = setTimeout(() => {
         onFinish?.();
       }, 500); // 500ms fade transition
-      return () => clearTimeout(finishTimer);
     }, remaining);
 
-    return () => clearTimeout(fadeTimer);
+    return () => {
+      clearTimeout(fadeTimer);
+      if (finishTimer) clearTimeout(finishTimer);
+    };
   }, [stepIndex, isReady, minDisplayTimeMs, onFinish]);
 
   return (
