@@ -338,5 +338,34 @@
     ],
     "ftrScore": "100%",
     "timestamp": 1792100000000
+  },
+  "CVH-025": {
+    "taskId": "CVH-025",
+    "title": "Non-admin WebView2 user-data permission inheritance and stale lock recovery",
+    "author": "tauri-rust-engineer",
+    "verdict": "APPROVED",
+    "commitHash": "d35a418",
+    "mergeCommitHash": "0a15c39",
+    "commitMessage": "fix(windows): non-admin WebView2 permission inheritance and stale lock recovery",
+    "summary": "Resolved WebView2 initialization failures (0x80070005 Access Denied and 0x800700AA ERROR_BUSY) on non-admin Windows accounts by recursively granting Full Control to current user and AppContainer via icacls, and purging stale lockfiles from previous ungraceful exits.",
+    "files": [
+      "src-tauri/src/main.rs"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1792150000000
+  },
+  "CVH-026": {
+    "taskId": "CVH-026",
+    "title": "Eliminate msedgewebview2 STATUS_BREAKPOINT (0x80000003) crash in msedge_elf.dll via --no-sandbox and --disable-gpu",
+    "author": "tauri-rust-engineer",
+    "verdict": "APPROVED",
+    "commitHash": "710ff49",
+    "commitMessage": "fix(windows): eliminate msedgewebview2 STATUS_BREAKPOINT crash in msedge_elf.dll via --no-sandbox and --disable-gpu",
+    "summary": "Resolved fatal desktop crash on launch where msedgewebview2.exe tripped STATUS_BREAKPOINT (0x80000003) in msedge_elf.dll during Chromium early loader process-integrity and sandbox checks on non-admin accounts or with local proxies present. Injected --disable-features=RendererCodeIntegrity --no-sandbox --disable-gpu into WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS at the entry point of main.rs.",
+    "files": [
+      "src-tauri/src/main.rs"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1792200000000
   }
 }
