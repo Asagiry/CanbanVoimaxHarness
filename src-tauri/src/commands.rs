@@ -292,10 +292,11 @@ pub fn slugify_board_name(name: &str) -> String {
             slug.push(lower);
         } else if let Some((_, lat)) = cyrillic_map.iter().find(|(cyr, _)| *cyr == lower) {
             slug.push_str(lat);
-        } else if lower == ' ' || lower == '-' || lower == '_' {
-            if !slug.ends_with('-') && !slug.is_empty() {
-                slug.push('-');
-            }
+        } else if (lower == ' ' || lower == '-' || lower == '_')
+            && !slug.ends_with('-')
+            && !slug.is_empty()
+        {
+            slug.push('-');
         }
     }
     let trimmed = slug.trim_matches('-').to_string();
@@ -2184,89 +2185,90 @@ pub async fn run_agent(
 
                             let is_terminal = next_stage_col.as_ref().map(|c| c.terminal == Some(true)).unwrap_or(true);
 
-                            if !is_terminal && next_stage_col.is_some() {
-                                let next_col = next_stage_col.unwrap();
-                                // Create NEXT subtask (e.g. CVH-012.2 in retro)
-                                let next_subtask_idx = get_next_subtask_index(&tasks, &pid);
-                                let next_subtask_id = format!("{}.{}", pid, next_subtask_idx);
-                                let now = Utc::now().timestamp_millis();
+                            if !is_terminal {
+                                if let Some(next_col) = next_stage_col {
+                                    // Create NEXT subtask (e.g. CVH-012.2 in retro)
+                                    let next_subtask_idx = get_next_subtask_index(&tasks, &pid);
+                                    let next_subtask_id = format!("{}.{}", pid, next_subtask_idx);
+                                    let now = Utc::now().timestamp_millis();
 
-                                let (parent_title, parent_wt, parent_br, parent_model) = if let Some(p_idx) = tasks.iter().position(|t| t.id == pid) {
-                                    tasks[p_idx].waiting_for_subtask_id = Some(next_subtask_id.clone());
-                                    tasks[p_idx].status = Some("waiting_subtask".to_string());
-                                    tasks[p_idx].updated_at = now;
-                                    (
-                                        tasks[p_idx].title.clone(),
-                                        tasks[p_idx].worktree_path.clone(),
-                                        tasks[p_idx].branch.clone(),
-                                        tasks[p_idx].model.clone(),
-                                    )
-                                } else {
-                                    (pid.clone(), None, None, None)
-                                };
+                                    let (parent_title, parent_wt, parent_br, parent_model) = if let Some(p_idx) = tasks.iter().position(|t| t.id == pid) {
+                                        tasks[p_idx].waiting_for_subtask_id = Some(next_subtask_id.clone());
+                                        tasks[p_idx].status = Some("waiting_subtask".to_string());
+                                        tasks[p_idx].updated_at = now;
+                                        (
+                                            tasks[p_idx].title.clone(),
+                                            tasks[p_idx].worktree_path.clone(),
+                                            tasks[p_idx].branch.clone(),
+                                            tasks[p_idx].model.clone(),
+                                        )
+                                    } else {
+                                        (pid.clone(), None, None, None)
+                                    };
 
-                                let subtask_title = format!("{} ({})", parent_title, next_col.title);
-                                let subtask_desc = format!(
-                                    "### Подзадача этапа: {}
+                                    let subtask_title = format!("{} ({})", parent_title, next_col.title);
+                                    let subtask_desc = format!(
+                                        "### Подзадача этапа: {}
 Родитель: {}
 
 ---
 **Контекст предыдущего этапа:**
 {}",
-                                    next_col.title, pid, final_response
-                                );
+                                        next_col.title, pid, final_response
+                                    );
 
-                                let new_subtask = Task {
-                                    id: next_subtask_id.clone(),
-                                    title: subtask_title,
-                                    description: subtask_desc.clone(),
-                                    stage_id: next_col.id.clone(),
-                                    board_id: tasks.iter().find(|t| t.id == pid).and_then(|t| t.board_id.clone()),
-                                    worktree_path: parent_wt,
-                                    branch: parent_br,
-                                    verdict: None,
-                                    custom_flow: None,
-                                    status: Some("running".to_string()),
-                                    model: next_col.model_override.clone().or(parent_model),
-                                    parent_id: Some(pid.clone()),
-                                    subtask_index: Some(next_subtask_idx),
-                                    waiting_for_subtask_id: None,
-                                    cover_image: None,
-                                    attachments: None,
-                                    todos: None,
-                                    created_at: now,
-                                    updated_at: now,
-                                };
+                                    let new_subtask = Task {
+                                        id: next_subtask_id.clone(),
+                                        title: subtask_title,
+                                        description: subtask_desc.clone(),
+                                        stage_id: next_col.id.clone(),
+                                        board_id: tasks.iter().find(|t| t.id == pid).and_then(|t| t.board_id.clone()),
+                                        worktree_path: parent_wt,
+                                        branch: parent_br,
+                                        verdict: None,
+                                        custom_flow: None,
+                                        status: Some("running".to_string()),
+                                        model: next_col.model_override.clone().or(parent_model),
+                                        parent_id: Some(pid.clone()),
+                                        subtask_index: Some(next_subtask_idx),
+                                        waiting_for_subtask_id: None,
+                                        cover_image: None,
+                                        attachments: None,
+                                        todos: None,
+                                        created_at: now,
+                                        updated_at: now,
+                                    };
 
-                                tasks.push(new_subtask.clone());
-                                let _ = save_tasks_to_disk(&root_task, &tasks).await;
-                                if let Some(state_ref) = app.try_state::<AppState>() {
-                                    if let Ok(mut guard) = state_ref.tasks.lock() {
-                                        *guard = tasks.clone();
+                                    tasks.push(new_subtask.clone());
+                                    let _ = save_tasks_to_disk(&root_task, &tasks).await;
+                                    if let Some(state_ref) = app.try_state::<AppState>() {
+                                        if let Ok(mut guard) = state_ref.tasks.lock() {
+                                            *guard = tasks.clone();
+                                        }
                                     }
-                                }
 
-                                let _ = app.emit("task:created", serde_json::json!({ "task": &new_subtask }));
-                                let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
-                                let _ = app.emit(
-                                    "task:moved",
-                                    serde_json::json!({
-                                        "taskId": pid,
-                                        "status": "waiting_subtask",
-                                        "waitingForSubtaskId": &next_subtask_id,
-                                    }),
-                                );
+                                    let _ = app.emit("task:created", serde_json::json!({ "task": &new_subtask }));
+                                    let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+                                    let _ = app.emit(
+                                        "task:moved",
+                                        serde_json::json!({
+                                            "taskId": pid,
+                                            "status": "waiting_subtask",
+                                            "waitingForSubtaskId": &next_subtask_id,
+                                        }),
+                                    );
 
-                                if next_col.persona.is_some() || next_col.auto_run == Some(true) {
-                                    trigger_column_on_enter_script(
-                                        &next_col,
-                                        &new_subtask,
-                                        &next_col.id,
-                                        None,
-                                        &root_task,
-                                    )
-                                    .await;
-                                    let _ = app.emit("agent:autorun", serde_json::json!({ "taskId": &next_subtask_id }));
+                                    if next_col.persona.is_some() || next_col.auto_run == Some(true) {
+                                        trigger_column_on_enter_script(
+                                            &next_col,
+                                            &new_subtask,
+                                            &next_col.id,
+                                            None,
+                                            &root_task,
+                                        )
+                                        .await;
+                                        let _ = app.emit("agent:autorun", serde_json::json!({ "taskId": &next_subtask_id }));
+                                    }
                                 }
                             } else {
                                 // Terminal stage: all subtasks complete! Move root parent task to Done!
@@ -2681,9 +2683,7 @@ pub async fn get_task_git_diff(
             continue;
         }
 
-        let status = if xy == "??" {
-            "A".to_string()
-        } else if xy.contains('A') {
+        let status = if xy == "??" || xy.contains('A') {
             "A".to_string()
         } else if xy.contains('D') {
             "D".to_string()

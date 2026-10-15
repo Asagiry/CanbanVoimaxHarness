@@ -531,19 +531,33 @@ fn string_similarity(a: &str, b: &str) -> f32 {
     inter as f32 / union as f32
 }
 
+/// Execution context for tool calls, bundling path roots, policy, and abort handle.
+#[derive(Clone)]
+pub struct ToolContext<'a> {
+    pub repo_root: &'a Path,
+    pub worktree_dir: &'a Path,
+    pub stage_id: Option<&'a str>,
+    pub abort_handle: Arc<AtomicBool>,
+    pub tool_policy: &'a ToolPolicyConfig,
+    pub task_id: Option<&'a str>,
+    pub agent_allowed_tools: Option<&'a [String]>,
+}
+
 /// Executes a tool within the safe boundary of `worktree_dir` with zero-trust policy checks
 /// (global/stage matrix AND optional per-agent `allowed_tools` intersection).
 pub async fn execute_tool(
-    repo_root: &Path,
-    worktree_dir: &Path,
-    stage_id: Option<&str>,
+    ctx: &ToolContext<'_>,
     tool_name: &str,
     args: &serde_json::Value,
-    abort_handle: Arc<AtomicBool>,
-    tool_policy: &ToolPolicyConfig,
-    task_id: Option<&str>,
-    agent_allowed_tools: Option<&[String]>,
 ) -> Result<String> {
+    let repo_root = ctx.repo_root;
+    let worktree_dir = ctx.worktree_dir;
+    let stage_id = ctx.stage_id;
+    let abort_handle = Arc::clone(&ctx.abort_handle);
+    let tool_policy = ctx.tool_policy;
+    let task_id = ctx.task_id;
+    let agent_allowed_tools = ctx.agent_allowed_tools;
+
     if abort_handle.load(Ordering::SeqCst) {
         bail!("Operation aborted");
     }
@@ -1726,21 +1740,25 @@ where
             Some(turn_tool_calls.clone()),
         ));
 
+        let tool_ctx = ToolContext {
+            repo_root: &config.repo_root,
+            worktree_dir: &config.worktree_path,
+            stage_id: Some(&config.stage_id),
+            abort_handle: Arc::clone(&abort_flag),
+            tool_policy: &tool_policy,
+            task_id: Some(&config.task_id),
+            agent_allowed_tools: agent_allowed.as_deref(),
+        };
+
         // Execute each tool call and record response
         for tc in turn_tool_calls {
             let parsed_args: serde_json::Value =
                 serde_json::from_str(&tc.function.arguments).unwrap_or_else(|_| serde_json::json!({}));
 
             let exec_result = execute_tool(
-                &config.repo_root,
-                &config.worktree_path,
-                Some(&config.stage_id),
+                &tool_ctx,
                 &tc.function.name,
                 &parsed_args,
-                Arc::clone(&abort_flag),
-                &tool_policy,
-                Some(&config.task_id),
-                agent_allowed.as_deref(),
             )
             .await;
 
@@ -2037,16 +2055,20 @@ mod tests {
         // Zero-trust gate: agent-denied tool errors even when policy allows.
         let flag = Arc::new(AtomicBool::new(false));
         let workdir = std::env::temp_dir();
+        let target_root = std::path::PathBuf::from("target");
+        let tool_ctx = ToolContext {
+            repo_root: &target_root,
+            worktree_dir: &workdir,
+            stage_id: Some("dev"),
+            abort_handle: flag,
+            tool_policy: &policy,
+            task_id: None,
+            agent_allowed_tools: agent_allowed.as_deref(),
+        };
         let err = execute_tool(
-            &std::path::PathBuf::from("target"),
-            &workdir,
-            Some("dev"),
+            &tool_ctx,
             "write_file",
             &serde_json::json!({"file_path": "x.txt", "content": "y"}),
-            flag,
-            &policy,
-            None,
-            agent_allowed.as_deref(),
         )
         .await
         .expect_err("agent-denied tool must be rejected");
