@@ -1,0 +1,20 @@
+{
+  "taskId": "CVH-UI-FIXES",
+  "task": "ui-fixes",
+  "title": "Fix unassigned column disappearance in Cortex, elevate modal z-indexes, and render brand app icon in splash screen",
+  "branch": "feat/fix-ui-bugs",
+  "mergeSha": "8f04a09cc0cb18f6c1d6f9922052eafaf834874d",
+  "verdict": "APPROVED",
+  "sensors": {
+    "cargo_check": "pass",
+    "frontend_build_pnpm": "pass"
+  },
+  "files": [
+    "src/stores/cortexStore.ts",
+    "src/components/cortex/CortexExplorer.tsx",
+    "src/components/splash/SplashScreen.tsx",
+    "src/components/settings/SettingsModal.tsx",
+    "src/components/settings/ToolPolicyModal.tsx"
+  ],
+  "summary": "1. Retained columns without persona in cortexStore boardStages with personaName 'без агента' and preserved stage rules/hooks; enabled AgentField re-selection in CortexExplorer. 2. Replaced text delta in SplashScreen with authentic Obsidian Badge SVG matching public/favicon.svg. 3. Raised SettingsModal and ToolPolicyModal backdrops to z-[80] (and nested to z-[90]) so modals open above the AgentConsoleDrawer chat overlay (z-50)."
+}
