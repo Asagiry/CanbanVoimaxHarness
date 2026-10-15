@@ -99,6 +99,7 @@ export interface CortexAgentStage {
   personaName: string;
   files: CortexAgentFile[];
   isExpanded: boolean;
+  isBuiltin?: boolean;
 }
 
 export interface ToolExecution {

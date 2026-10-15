@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { PipelineColumn, PipelineConfig } from '../../types';
 import { useBoardStore } from '../../stores/boardStore';
+import { useCortexStore } from '../../stores/cortexStore';
 import { slugifyTitle } from '../../lib/slug';
 
 interface ColumnContextMenuProps {
@@ -14,6 +15,10 @@ interface ColumnContextMenuProps {
 
 interface AgentPersonaOption {
   role: string;
+  hasPrompt?: boolean;
+  has_prompt?: boolean;
+  isBuiltin?: boolean;
+  is_builtin?: boolean;
 }
 
 const MENU_WIDTH = 264;
@@ -198,6 +203,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke('create_agent_persona', { role });
+        await useCortexStore.getState().loadAgentPersonas();
       } catch (err) {
         setPersonaError(err instanceof Error ? err.message : String(err));
         return;
@@ -383,11 +389,14 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
               {selectedPersona && !selectedKnown && (
                 <option value={selectedPersona}>{selectedPersona}</option>
               )}
-              {personas.map((p) => (
-                <option key={p.role} value={p.role}>
-                  {p.role}
-                </option>
-              ))}
+              {personas.map((p) => {
+                const isBuiltin = p.role === 'cvh-dev' || Boolean(p.isBuiltin || p.is_builtin);
+                return (
+                  <option key={p.role} value={p.role}>
+                    {isBuiltin ? `${p.role} (Встроенный)` : p.role}
+                  </option>
+                );
+              })}
               <option value={NEW_AGENT_OPTION}>+ Новый агент</option>
             </select>
           ) : (

@@ -56,12 +56,15 @@ export type CortexHookExt = 'bat' | 'ps1' | 'py' | 'sh';
 export interface AgentPersonaInfo {
   role: string;
   hasPrompt: boolean;
+  isBuiltin?: boolean;
 }
 
 interface RawAgentPersona {
   role: string;
   hasPrompt?: boolean;
   has_prompt?: boolean;
+  isBuiltin?: boolean;
+  is_builtin?: boolean;
 }
 
 // Каталог агента по новой схеме. Роль = persona колонки; фолбэк — stageId,
@@ -398,6 +401,7 @@ export const useCortexStore = create<CortexState>((set, get) => ({
       personas.push({
         role,
         hasPrompt: item.hasPrompt ?? item.has_prompt ?? true,
+        isBuiltin: item.isBuiltin ?? item.is_builtin ?? (role === 'cvh-dev'),
       });
     }
     personas.sort((a, b) => a.role.localeCompare(b.role));
@@ -414,25 +418,24 @@ export const useCortexStore = create<CortexState>((set, get) => ({
       const settingsId = `${stageId}-settings`;
       const prevPersona = prevById.get(personaId);
       const prevSettings = prevById.get(settingsId);
-      // Ранее созданные файлы агента (правила/хуки) — пережить перезагрузку списка.
+      // Ранее созданные файлы агента (только правила — хуки исключены из секции «Агенты»).
       const extras = prevFiles
         .filter(
           (f) =>
             f.id !== personaId &&
             f.id !== settingsId &&
-            (f.type === 'rule' || f.type === 'hook'),
+            f.type === 'rule',
         )
-        .sort((a, b) => {
-          const order = (t: string) => (t === 'rule' ? 0 : 1);
-          return order(a.type) - order(b.type) || a.name.localeCompare(b.name);
-        });
+        .sort((a, b) => a.name.localeCompare(b.name));
+      const isBuiltin = p.role === 'cvh-dev' || Boolean(p.isBuiltin);
       return {
         stageId,
         stageTitle: p.role,
-        color: '#171717',
-        icon: 'User',
+        color: isBuiltin ? '#4f46e5' : '#171717',
+        icon: isBuiltin ? 'Cpu' : 'User',
         personaName: p.role,
         isExpanded: prevStage?.isExpanded ?? false,
+        isBuiltin,
         files: [
           {
             id: personaId,
@@ -578,6 +581,7 @@ export const useCortexStore = create<CortexState>((set, get) => ({
           fileMissing: nextMissing,
         };
       });
+      await get().loadAgentPersonas();
       return;
     }
   },

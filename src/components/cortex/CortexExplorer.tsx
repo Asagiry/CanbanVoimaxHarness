@@ -14,6 +14,7 @@ import {
   User,
   Plus,
   Zap,
+  Cpu,
 } from 'lucide-react';
 import type { CortexAgentFile, CortexAgentStage } from '../../types';
 
@@ -325,7 +326,6 @@ export default function CortexExplorer() {
                   isSearching={isSearching}
                   onToggleStage={() => toggleStageExpand(stage.stageId)}
                   onToggleRules={() => toggleRulesFolder(stage.stageId)}
-                  onToggleHooks={() => toggleHooksFolder(stage.stageId)}
                   onOpenFile={handleOpenFile}
                   onCreatePersona={handleCreatePersona}
                   onCreateSetting={handleCreateSetting}
@@ -394,6 +394,7 @@ function StageHeaderButton({
   onToggle: () => void;
   onPlus?: () => void;
 }) {
+  const isBuiltin = stage.personaName === 'cvh-dev' || Boolean(stage.isBuiltin);
   return (
     <div className="group flex items-center gap-0.5 px-1">
       <button
@@ -407,17 +408,27 @@ function StageHeaderButton({
             <ChevronRight className="h-3.5 w-3.5 text-[#666666] shrink-0" />
           )}
 
-          <span
-            className="w-2 h-2 rounded-full shrink-0"
-            style={{ backgroundColor: stage.color || '#171717' }}
-          />
+          {isBuiltin ? (
+            <Cpu className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+          ) : (
+            <span
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{ backgroundColor: stage.color || '#171717' }}
+            />
+          )}
 
           <span className="font-sans text-xs font-semibold text-[#171717] truncate">
             {stage.stageTitle}
           </span>
+
+          {isBuiltin && (
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-sans font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0">
+              Встроенный
+            </span>
+          )}
         </div>
 
-        {hint !== '' && (
+        {hint !== '' && !isBuiltin && (
           <span className="text-[10px] font-mono text-[#666666] truncate ml-1">
             {hint}
           </span>
@@ -430,8 +441,8 @@ function StageHeaderButton({
             e.stopPropagation();
             onPlus();
           }}
-          title="Новый файл (правило/хук)"
-          aria-label="Новый файл (правило/хук)"
+          title="Новое правило"
+          aria-label="Новое правило"
           className="p-1 rounded-md text-[#8f8f8f] hover:text-[#171717] hover:bg-[#ebebeb]/60 transition cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shrink-0"
         >
           <Plus className="h-3.5 w-3.5" />
@@ -558,7 +569,7 @@ function ColumnStageCard({
   );
 }
 
-// Секция 2: агент целиком — agent.md, rules/, hooks/ с бейджами, setting.
+// Секция 2: агент целиком — agent.md, rules/, setting (хуки строго в колонках).
 function AgentStageCard({
   stage,
   shared,
@@ -568,7 +579,6 @@ function AgentStageCard({
   isSearching,
   onToggleStage,
   onToggleRules,
-  onToggleHooks,
   onOpenFile,
   onCreatePersona,
   onCreateSetting,
@@ -584,22 +594,20 @@ function AgentStageCard({
   isSearching: boolean;
   onToggleStage: () => void;
   onToggleRules: () => void;
-  onToggleHooks: () => void;
   onOpenFile: (fileId: string) => void;
   onCreatePersona: (fileId: string) => void;
   onCreateSetting: (fileId: string) => void;
-  onOpenCreateForm: (kind: 'rule' | 'hook') => void;
+  onOpenCreateForm: (kind: 'rule') => void;
   onPlusHeader: () => void;
   onCloseCreate: () => void;
 }) {
   const personaFile = stage.files.find((f) => f.type === 'persona');
   const ruleFiles = stage.files.filter((f) => f.type === 'rule');
-  const hookFiles = stage.files.filter((f) => f.type === 'hook');
   const settingsFile = stage.files.find((f) => f.type === 'settings');
   const areRulesOpen = shared.openRulesFolders[stage.stageId] ?? true;
-  const areHooksOpen = shared.openHooksFolders[stage.stageId] ?? true;
   const personaIsMissing = personaFile ? !!fileMissing[personaFile.id] : false;
   const settingsIsMissing = settingsFile ? !!fileMissing[settingsFile.id] : false;
+  const isBuiltin = stage.personaName === 'cvh-dev' || Boolean(stage.isBuiltin);
 
   return (
     <div
@@ -621,7 +629,7 @@ function AgentStageCard({
       {shared.creatingStageId === stage.stageId && (
         <NewCortexFileForm
           stage={stage}
-          initialKind={shared.creatingKind}
+          initialKind="rule"
           fixedKind="rule"
           onClose={onCloseCreate}
         />
@@ -636,7 +644,13 @@ function AgentStageCard({
               file={personaFile}
               displayName="agent.md"
               isActive={activeFileId === personaFile.id}
-              icon={<User className="h-3.5 w-3.5 text-[#666666] shrink-0" />}
+              icon={
+                isBuiltin ? (
+                  <Cpu className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+                ) : (
+                  <User className="h-3.5 w-3.5 text-[#666666] shrink-0" />
+                )
+              }
               onSelect={() => onOpenFile(personaFile.id)}
             />
           )}
@@ -658,6 +672,7 @@ function AgentStageCard({
             </div>
           )}
 
+          {/* 2. Правила: .cvh/agents/<role>/rules/ */}
           <RulesFolderBlock
             files={ruleFiles}
             isOpen={areRulesOpen}
@@ -668,16 +683,7 @@ function AgentStageCard({
             onOpen={onOpenFile}
           />
 
-          <HooksFolderBlock
-            files={hookFiles}
-            isOpen={areHooksOpen}
-            isSearching={isSearching}
-            activeFileId={activeFileId}
-            onToggle={onToggleHooks}
-            onOpen={onOpenFile}
-          />
-
-          {/* 4. Настройки: .cvh/agents/<role>/setting */}
+          {/* 3. Настройки: .cvh/agents/<role>/setting */}
           {settingsFile && !settingsIsMissing && (
             <FileTreeItem
               file={settingsFile}
@@ -741,11 +747,14 @@ function AgentField({
             {currentValue && !known && (
               <option value={currentValue}>{currentValue}</option>
             )}
-            {personas.map((p) => (
-              <option key={p.role} value={p.role}>
-                {p.role}
-              </option>
-            ))}
+            {personas.map((p) => {
+              const isBuiltin = p.role === 'cvh-dev' || Boolean(p.isBuiltin);
+              return (
+                <option key={p.role} value={p.role}>
+                  {isBuiltin ? `${p.role} (Встроенный)` : p.role}
+                </option>
+              );
+            })}
           </select>
         ) : (
           <input

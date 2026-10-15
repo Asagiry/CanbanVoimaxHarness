@@ -11,6 +11,7 @@ import SettingsModal from './components/settings/SettingsModal';
 import { useBoardStore } from './stores/boardStore';
 import { useProjectStore } from './stores/projectStore';
 import { useDrawerStore } from './stores/drawerStore';
+import { useCortexStore } from './stores/cortexStore';
 import { useUiZoom } from './hooks/useUiZoom';
 
 // Микробатчинг SSE-текста: один Zustand set() на пачку токенов вместо set() на токен.
@@ -332,6 +333,12 @@ export default function App() {
           loadTasks();
         });
         unlisteners.push(uProj);
+
+        const uPersonasUpdated = await listen<any>('agent:personas_updated', async () => {
+          await useCortexStore.getState().loadAgentPersonas();
+          useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
+        });
+        unlisteners.push(uPersonasUpdated);
       } catch (e) {
         console.info('Tauri event listeners not active in web mode:', e);
       }

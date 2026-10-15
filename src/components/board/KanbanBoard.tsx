@@ -3,6 +3,7 @@ import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
 import { useBoardStore } from '../../stores/boardStore';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useCortexStore } from '../../stores/cortexStore';
 import KanbanColumn from './KanbanColumn';
 import { PipelineColumn, BoardDef } from '../../types';
 import { Plus, X, Layout, Pencil, Trash2, Search } from 'lucide-react';
@@ -24,6 +25,8 @@ interface AgentPersonaOption {
   role: string;
   hasPrompt?: boolean;
   has_prompt?: boolean;
+  isBuiltin?: boolean;
+  is_builtin?: boolean;
 }
 
 const NEW_AGENT_OPTION = '__new__';
@@ -445,6 +448,8 @@ export default function KanbanBoard() {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke('create_agent_persona', { role });
+        await useCortexStore.getState().loadAgentPersonas();
+        await loadAgentPersonas();
       } catch (err) {
         setColumnFormError(err instanceof Error ? err.message : String(err));
         return;
@@ -479,9 +484,11 @@ export default function KanbanBoard() {
     const next = [...prev.slice(0, insertIdx), newCol, ...prev.slice(insertIdx)];
 
     setColumns(next);
+    useCortexStore.getState().syncStagesFromColumns(next);
     const saved = await savePipelineConfig(next);
     if (!saved) {
       setColumns(prev);
+      useCortexStore.getState().syncStagesFromColumns(prev);
       setColumnFormError('Не удалось сохранить колонку. Изменения откачены.');
       return;
     }
@@ -731,11 +738,14 @@ export default function KanbanBoard() {
                   disabled={personasLoading}
                   className="w-44 px-2.5 py-1.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[#171717] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono transition cursor-pointer"
                 >
-                  {agentPersonas.map((p) => (
-                    <option key={p.role} value={p.role}>
-                      {p.role}
-                    </option>
-                  ))}
+                  {agentPersonas.map((p) => {
+                    const isBuiltin = p.role === 'cvh-dev' || Boolean(p.isBuiltin || p.is_builtin);
+                    return (
+                      <option key={p.role} value={p.role}>
+                        {isBuiltin ? `${p.role} (Встроенный)` : p.role}
+                      </option>
+                    );
+                  })}
                   <option value={NEW_AGENT_OPTION}>+ Новый агент</option>
                 </select>
               ) : (
