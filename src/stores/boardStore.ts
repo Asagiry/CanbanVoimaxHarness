@@ -515,6 +515,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       await invoke('save_board', { board });
     } catch (err) {
       console.info('save_board IPC failed or in web mode:', err);
+      throw err instanceof Error ? err : new Error(String(err));
     }
   },
 

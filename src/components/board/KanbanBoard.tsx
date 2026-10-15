@@ -219,6 +219,7 @@ export default function KanbanBoard() {
   const [isNewAgentSelected, setIsNewAgentSelected] = useState(false);
   const [newAgentName, setNewAgentName] = useState('');
   const [columnFormError, setColumnFormError] = useState<string | null>(null);
+  const [columnsError, setColumnsError] = useState<string | null>(null);
 
   // Board tab context menu and inline renaming state
   interface BoardContextMenuState {
@@ -250,7 +251,11 @@ export default function KanbanBoard() {
     const trimmed = renamingBoardName.trim();
     setRenamingBoardId(null);
     if (!trimmed || trimmed === board.name) return;
-    await saveBoard({ ...board, name: trimmed });
+    try {
+      await saveBoard({ ...board, name: trimmed });
+    } catch (err) {
+      console.info('saveBoard failed for rename:', err);
+    }
   };
 
   const handleTabContextMenu = (e: React.MouseEvent, boardId: string) => {
@@ -280,20 +285,29 @@ export default function KanbanBoard() {
     }
 
     if (type === 'COLUMN') {
-      const lastIndex = columns.length - 1;
-
-      // Pinned terminal columns cannot be dragged or reordered:
-      // If source.index === 0 or destination.index === 0, reject the drop.
-      // If source.index === columns.length - 1 or destination.index >= columns.length - 1, reject the drop.
-      if (source.index === 0 || destination.index === 0) {
+      const sourceCol = columns[source.index];
+      if (!sourceCol) return;
+      // Закреплены только backlog/ready/terminal по id/флагу (без привязки к индексу).
+      if (
+        sourceCol.id === 'backlog' ||
+        sourceCol.id === 'ready' ||
+        Boolean(sourceCol.terminal)
+      ) {
         return;
       }
-      if (source.index === lastIndex || destination.index >= lastIndex) {
-        return;
-      }
+      // Бэклог строго первый.
+      if (destination.index === 0) return;
 
-      // Clamp destination strictly between index 1 and columns.length - 2
-      const clampedDestinationIndex = Math.max(1, Math.min(destination.index, columns.length - 2));
+      // Хвост закреплённых: первая terminal-колонка, иначе ready, иначе конец.
+      // Бэкенд нормализует ready-last по id — фронт совпадает до сейва.
+      const terminalIdx = columns.findIndex((c) => Boolean(c.terminal));
+      const readyIdx = columns.findIndex((c) => c.id === 'ready');
+      const tailStart =
+        terminalIdx !== -1 ? terminalIdx : readyIdx !== -1 ? readyIdx : columns.length;
+      // Источник в хвосте быть не должен (закреплён выше), назначение в хвост — зажать.
+      if (source.index >= tailStart) return;
+      const maxDest = Math.max(1, tailStart - 1);
+      const clampedDestinationIndex = Math.max(1, Math.min(destination.index, maxDest));
 
       void handleReorderColumns(source.index, clampedDestinationIndex);
       return;
@@ -315,19 +329,34 @@ export default function KanbanBoard() {
   const handleReorderColumns = async (sourceIndex: number, destinationIndex: number) => {
     if (sourceIndex === destinationIndex) return;
     if (columns.length <= 2) return;
-    const lastIndex = columns.length - 1;
-    if (sourceIndex <= 0 || sourceIndex >= lastIndex) return;
-    if (destinationIndex <= 0 || destinationIndex >= lastIndex) return;
 
     const prev = columns;
+    const sourceCol = prev[sourceIndex];
+    if (!sourceCol) return;
+    // Закреплены только backlog/ready/terminal по id/флагу.
+    if (sourceCol.id === 'backlog' || sourceCol.id === 'ready' || Boolean(sourceCol.terminal)) {
+      return;
+    }
+    if (destinationIndex <= 0) return;
+
+    setColumnsError(null);
     const reordered = Array.from(prev);
     const [moved] = reordered.splice(sourceIndex, 1);
     if (!moved) return;
-    reordered.splice(destinationIndex, 0, moved);
+    // Назначение в хвост закреплённых — зажать перед хвостом, нормализация ниже всё равно удержит ready последней.
+    const terminalIdx = prev.findIndex((c) => Boolean(c.terminal));
+    const readyIdx = prev.findIndex((c) => c.id === 'ready');
+    const tailStart =
+      terminalIdx !== -1 ? terminalIdx : readyIdx !== -1 ? readyIdx : prev.length;
+    const maxDest = Math.max(1, tailStart - 1);
+    const safeDest = Math.max(1, Math.min(destinationIndex, maxDest));
+    reordered.splice(safeDest, 0, moved);
 
     // backlog строго первая, ready строго последняя, остальные — в drop-порядке.
+    // Совпадает с бэкенд-нормализацией (backlog-first/ready-last по id) до сейва.
+    const prevLast = prev[prev.length - 1];
     const backlog = reordered.find((c) => c.id === 'backlog') ?? prev[0];
-    const ready = reordered.find((c) => c.id === 'ready') ?? prev[lastIndex];
+    const ready = reordered.find((c) => c.id === 'ready') ?? prevLast;
     const middle = reordered.filter((c) => c.id !== backlog.id && c.id !== ready.id);
     const next = [backlog, ...middle, ready];
 
@@ -337,6 +366,7 @@ export default function KanbanBoard() {
     const saved = await savePipelineConfig(next);
     if (!saved) {
       setColumns(prev);
+      setColumnsError('Не удалось сохранить порядок колонок. Изменения откачены.');
     }
   };
 
@@ -431,23 +461,28 @@ export default function KanbanBoard() {
       title,
       color: COLUMN_PALETTE[columns.length % COLUMN_PALETTE.length],
       icon: 'Layers',
-      persona: personaName || null,
+      // Persona обязана сохраняться (select и свободный ввод): пустая подменяется значением по умолчанию,
+      // чтобы колонка гарантированно попадала в проводник.
+      persona: personaName || 'developer',
       contextWindow: 128000,
       modelOverride: null,
       hooks: {},
     };
 
     const prev = columns;
-    const terminalIdx = prev.findIndex((c) => c.terminal);
-    const next =
-      terminalIdx === -1
-        ? [...prev, newCol]
-        : [...prev.slice(0, terminalIdx), newCol, ...prev.slice(terminalIdx)];
+    // Вставка ПЕРЕД первой terminal-колонкой; fallback — перед id 'ready', иначе в конец.
+    // Совпадает с бэкенд-нормализацией ready-last по id до сейва.
+    const terminalIdx = prev.findIndex((c) => Boolean(c.terminal));
+    const readyIdx = prev.findIndex((c) => c.id === 'ready');
+    const insertIdx =
+      terminalIdx !== -1 ? terminalIdx : readyIdx !== -1 ? readyIdx : prev.length;
+    const next = [...prev.slice(0, insertIdx), newCol, ...prev.slice(insertIdx)];
 
     setColumns(next);
     const saved = await savePipelineConfig(next);
     if (!saved) {
       setColumns(prev);
+      setColumnFormError('Не удалось сохранить колонку. Изменения откачены.');
       return;
     }
     setNewColumnTitle('');
@@ -482,6 +517,7 @@ export default function KanbanBoard() {
     const saved = await savePipelineConfig(next);
     if (!saved) {
       setColumns(prev);
+      setColumnsError('Не удалось сохранить удаление колонки. Изменения откачены.');
       return;
     }
     for (const t of doomedTasks) {
@@ -771,6 +807,20 @@ export default function KanbanBoard() {
         </div>
       )}
 
+      {columnsError && (
+        <div className="mx-3.5 mt-2 flex items-center justify-between gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-sans text-red-700">
+          <span>{columnsError}</span>
+          <button
+            type="button"
+            onClick={() => setColumnsError(null)}
+            className="p-1 rounded-md hover:bg-red-100 transition cursor-pointer"
+            title="Закрыть"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Kanban Columns Horizontal Container with Mouse Wheel Scroll */}
       <DragDropContext onDragEnd={handleDragEnd}>
         <Droppable droppableId="board-columns" direction="horizontal" type="COLUMN">
@@ -911,12 +961,17 @@ export default function KanbanBoard() {
           <div className="flex items-start space-x-3.5 h-full min-w-max pb-1">
             {columns.map((column, index) => {
               const columnTasks = filteredTasks.filter((t) => t.columnId === column.id);
-              const isPinned =
-                index === 0 ||
-                index === columns.length - 1 ||
+              // Закреплены только backlog/ready/terminal по id/флагу.
+              // index===0 — лишь fallback, когда id бэклога неизвестен (нет колонки backlog).
+              const pinnedById =
                 column.id === 'backlog' ||
                 column.id === 'ready' ||
                 Boolean(column.terminal);
+              const isBacklogFallback =
+                index === 0 &&
+                !pinnedById &&
+                !columns.some((c) => c.id === 'backlog');
+              const isPinned = pinnedById || isBacklogFallback;
 
               return (
                 <KanbanColumn

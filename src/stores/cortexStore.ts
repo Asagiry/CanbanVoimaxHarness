@@ -216,7 +216,6 @@ export const useCortexStore = create<CortexState>((set, get) => ({
   },
 
   syncStagesFromColumns: (columns) => {
-    const seenPersonas = new Set<string>();
     const prevStages = get().stages;
     const prevStageById = new Map(prevStages.map((st) => [st.stageId, st]));
     const prevFileById = new Map(prevStages.flatMap((st) => st.files.map((f) => [f.id, f])));
@@ -230,18 +229,19 @@ export const useCortexStore = create<CortexState>((set, get) => ({
       }
     }
 
-    // Уникальные persona в порядке колонок; колонки без персоны пропускаются,
+    // Каждая колонка с persona — отдельная стадия (дедупа по persona здесь нет:
+    // дедуп живёт только в секции агентов). Колонки без персоны пропускаются,
     // КРОМЕ системных узлов (backlog + ready/terminal без персоны):
     // показывают свои hooks из колонки (чтобы вешать on_finish вроде коммит+пуш).
     // rules/setting у системных узлов НЕТ.
     const boardStages: CortexAgentStage[] = [];
     for (const col of columns) {
+      const persona = col.persona?.trim() ?? '';
       const isSystemNode =
-        (col.persona == null || col.persona.trim() === '') &&
+        persona === '' &&
         (col.id === 'backlog' || col.id === 'ready' || col.terminal === true);
       if (!isSystemNode) {
-        if (col.persona == null || seenPersonas.has(col.persona)) continue;
-        seenPersonas.add(col.persona);
+        if (persona === '') continue;
       }
       const dir = cortexAgentDir(col.persona ?? '', col.id);
       if (isSystemNode) {
@@ -310,7 +310,7 @@ export const useCortexStore = create<CortexState>((set, get) => ({
         stageTitle: col.title,
         color: col.color,
         icon: col.icon,
-        personaName: col.persona ?? '',
+        personaName: persona,
         isExpanded: prevStageById.get(col.id)?.isExpanded ?? true,
         files: [
           {

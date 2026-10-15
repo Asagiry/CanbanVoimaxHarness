@@ -277,11 +277,6 @@ export default function CortexExplorer() {
                     onOpenCreateForm={(kind) =>
                       openCreateForm(stage.stageId, kind, stage.isExpanded, () => toggleStageExpand(stage.stageId))
                     }
-                    onPlusHeader={() => {
-                      if (!stage.isExpanded) toggleStageExpand(stage.stageId);
-                      setCreatingKind(backlog ? 'rule' : 'hook');
-                      setCreatingStageId((prev) => (prev === stage.stageId ? null : stage.stageId));
-                    }}
                     onCloseCreate={() => setCreatingStageId(null)}
                   />
                 );
@@ -307,9 +302,6 @@ export default function CortexExplorer() {
                   </div>
                   <div className="text-[11px] font-sans text-[#666666] leading-relaxed">
                     Агенты берутся из списка персон проекта
-                  </div>
-                  <div className="text-[10px] font-mono text-[#8f8f8f]">
-                    .cvh/agents
                   </div>
                 </div>
               )}
@@ -400,7 +392,7 @@ function StageHeaderButton({
   stage: CortexAgentStage;
   hint: string;
   onToggle: () => void;
-  onPlus: () => void;
+  onPlus?: () => void;
 }) {
   return (
     <div className="group flex items-center gap-0.5 px-1">
@@ -425,28 +417,35 @@ function StageHeaderButton({
           </span>
         </div>
 
-        <span className="text-[10px] font-mono text-[#666666] truncate ml-1">
-          {hint}
-        </span>
+        {hint !== '' && (
+          <span className="text-[10px] font-mono text-[#666666] truncate ml-1">
+            {hint}
+          </span>
+        )}
       </button>
 
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onPlus();
-        }}
-        title="Новый файл (правило/хук)"
-        aria-label="Новый файл (правило/хук)"
-        className="p-1 rounded-md text-[#8f8f8f] hover:text-[#171717] hover:bg-[#ebebeb]/60 transition cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shrink-0"
-      >
-        <Plus className="h-3.5 w-3.5" />
-      </button>
+      {onPlus && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onPlus();
+          }}
+          title="Новый файл (правило/хук)"
+          aria-label="Новый файл (правило/хук)"
+          className="p-1 rounded-md text-[#8f8f8f] hover:text-[#171717] hover:bg-[#ebebeb]/60 transition cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shrink-0"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      )}
     </div>
   );
 }
 
-// Секция 1: стадия колонки — только хуки + поле АГЕНТ (правил и setting нет,
+// Секция 1: стадия колонки — только хуки (правил и setting нет,
 // кроме системного backlog-узла, который рендерится как раньше).
+// Кнопки + на заголовке стадии нет: создание только через + папки Хуки.
+// Поле АГЕНТ — только у колонок с persona, внутри сворачиваемого контента;
+// смена агента у остальных — через ПКМ-меню колонки на доске.
 function ColumnStageCard({
   stage,
   isBacklogSystem,
@@ -465,7 +464,6 @@ function ColumnStageCard({
   onOpenFile,
   onCreateSetting,
   onOpenCreateForm,
-  onPlusHeader,
   onCloseCreate,
 }: {
   stage: CortexAgentStage;
@@ -485,13 +483,13 @@ function ColumnStageCard({
   onOpenFile: (fileId: string) => void;
   onCreateSetting: (fileId: string) => void;
   onOpenCreateForm: (kind: 'rule' | 'hook') => void;
-  onPlusHeader: () => void;
   onCloseCreate: () => void;
 }) {
   const hookFiles = stage.files.filter((f) => f.type === 'hook');
   const settingsFile = stage.files.find((f) => f.type === 'settings');
   const areHooksOpen = shared.openHooksFolders[stage.stageId] ?? true;
   const settingsIsMissing = settingsFile ? !!fileMissing[settingsFile.id] : false;
+  const hasPersona = (column?.persona?.trim() ?? '') !== '';
 
   return (
     <div
@@ -506,19 +504,7 @@ function ColumnStageCard({
         stage={stage}
         hint={stage.personaName}
         onToggle={onToggleStage}
-        onPlus={onPlusHeader}
       />
-
-      {!isBacklogSystem && column && (
-        <AgentField
-          columnId={column.id}
-          current={column.persona}
-          personas={personas}
-          saving={agentSaving}
-          error={agentSaveError}
-          onChange={onAgentChange}
-        />
-      )}
 
       {/* Инлайн-форма создания файла новой схемы */}
       {shared.creatingStageId === stage.stageId && (
@@ -533,6 +519,16 @@ function ColumnStageCard({
       {/* Children */}
       {stage.isExpanded && (
         <div className="pl-4 pr-1 py-0.5 space-y-0.5 border-l border-[#ebebeb] ml-3 my-0.5">
+          {hasPersona && column && (
+            <AgentField
+              columnId={column.id}
+              current={column.persona}
+              personas={personas}
+              saving={agentSaving}
+              error={agentSaveError}
+              onChange={onAgentChange}
+            />
+          )}
           <HooksFolderBlock
             files={hookFiles}
             isOpen={areHooksOpen}
@@ -554,7 +550,7 @@ function ColumnStageCard({
           )}
 
           {isBacklogSystem && settingsFile && settingsIsMissing && (
-            <SettingMissingBlock file={settingsFile} onCreate={() => onCreateSetting(settingsFile.id)} />
+            <SettingMissingBlock onCreate={() => onCreateSetting(settingsFile.id)} />
           )}
         </div>
       )}
@@ -616,16 +612,17 @@ function AgentStageCard({
     >
       <StageHeaderButton
         stage={stage}
-        hint={`.cvh/agents/${stage.personaName}`}
+        hint=""
         onToggle={onToggleStage}
         onPlus={onPlusHeader}
       />
 
-      {/* Инлайн-форма создания файла новой схемы */}
+      {/* Инлайн-форма создания файла новой схемы (у агентов только правила) */}
       {shared.creatingStageId === stage.stageId && (
         <NewCortexFileForm
           stage={stage}
           initialKind={shared.creatingKind}
+          fixedKind="rule"
           onClose={onCloseCreate}
         />
       )}
@@ -649,12 +646,6 @@ function AgentStageCard({
             <div className="px-2 py-1.5 rounded-md border border-dashed border-[#d4d4d4] bg-white space-y-1">
               <div className="text-[11px] font-sans text-[#666666]">
                 Персона не настроена — нет файла
-              </div>
-              <div
-                className="text-[10px] font-mono text-[#8f8f8f] truncate"
-                title={personaFile.path}
-              >
-                {personaFile.path}
               </div>
               <button
                 onClick={() => onCreatePersona(personaFile.id)}
@@ -683,7 +674,6 @@ function AgentStageCard({
             isSearching={isSearching}
             activeFileId={activeFileId}
             onToggle={onToggleHooks}
-            onNew={() => onOpenCreateForm('hook')}
             onOpen={onOpenFile}
           />
 
@@ -699,7 +689,7 @@ function AgentStageCard({
           )}
 
           {settingsFile && settingsIsMissing && (
-            <SettingMissingBlock file={settingsFile} onCreate={() => onCreateSetting(settingsFile.id)} />
+            <SettingMissingBlock onCreate={() => onCreateSetting(settingsFile.id)} />
           )}
         </div>
       )}
@@ -734,56 +724,56 @@ function AgentField({
   const known = personas.some((p) => p.role === currentValue);
 
   return (
-    <div className="px-2.5 py-1.5 space-y-1">
+    <div className="px-2 py-1">
       <div className="flex items-center gap-1.5">
-        <span className="text-[10px] font-sans font-semibold uppercase tracking-wide text-[#8f8f8f]">
+        <span className="text-[10px] font-sans font-semibold uppercase tracking-wide text-[#8f8f8f] shrink-0">
           Агент
         </span>
+        {personas.length > 0 ? (
+          <select
+            value={currentValue}
+            disabled={saving}
+            onChange={(e) => onChange(columnId, e.target.value)}
+            title="Агент колонки"
+            className="flex-1 min-w-0 px-1.5 py-0.5 rounded-md bg-white border border-[#ebebeb] text-[#171717] font-mono text-[11px] focus:outline-hidden focus:border-[#171717] cursor-pointer disabled:opacity-50 transition truncate"
+          >
+            <option value="">без агента</option>
+            {currentValue && !known && (
+              <option value={currentValue}>{currentValue}</option>
+            )}
+            {personas.map((p) => (
+              <option key={p.role} value={p.role}>
+                {p.role}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            type="text"
+            value={draft}
+            disabled={saving}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => {
+              if (draft !== currentValue) onChange(columnId, draft);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+              if (e.key === 'Escape') {
+                setDraft(currentValue);
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+            placeholder="developer"
+            title="Агент колонки"
+            className="flex-1 min-w-0 px-1.5 py-0.5 rounded-md bg-white border border-[#ebebeb] text-[#171717] font-mono text-[11px] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] transition disabled:opacity-50"
+          />
+        )}
         {saving && (
-          <span className="text-[10px] font-mono text-[#8f8f8f]">сохранение...</span>
+          <span className="text-[10px] font-mono text-[#8f8f8f] shrink-0">...</span>
         )}
       </div>
-      {personas.length > 0 ? (
-        <select
-          value={currentValue}
-          disabled={saving}
-          onChange={(e) => onChange(columnId, e.target.value)}
-          title="Агент колонки"
-          className="w-full px-1.5 py-1 rounded-md bg-white border border-[#ebebeb] text-[#171717] font-mono text-xs focus:outline-hidden focus:border-[#171717] cursor-pointer disabled:opacity-50 transition"
-        >
-          <option value="">без агента</option>
-          {currentValue && !known && (
-            <option value={currentValue}>{currentValue}</option>
-          )}
-          {personas.map((p) => (
-            <option key={p.role} value={p.role}>
-              {p.role}
-            </option>
-          ))}
-        </select>
-      ) : (
-        <input
-          type="text"
-          value={draft}
-          disabled={saving}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => {
-            if (draft !== currentValue) onChange(columnId, draft);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-            if (e.key === 'Escape') {
-              setDraft(currentValue);
-              (e.target as HTMLInputElement).blur();
-            }
-          }}
-          placeholder="developer"
-          title="Агент колонки"
-          className="w-full px-1.5 py-1 rounded-md bg-white border border-[#ebebeb] text-[#171717] font-mono text-xs placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] transition disabled:opacity-50"
-        />
-      )}
       {error && (
-        <div className="text-[11px] font-sans text-red-600">{error}</div>
+        <div className="mt-1 text-[11px] font-sans text-red-600">{error}</div>
       )}
     </div>
   );
@@ -869,7 +859,7 @@ function HooksFolderBlock({
   isSearching: boolean;
   activeFileId: string | null;
   onToggle: () => void;
-  onNew: () => void;
+  onNew?: () => void;
   onOpen: (fileId: string) => void;
 }) {
   if (files.length === 0 && isSearching) return null;
@@ -889,18 +879,20 @@ function HooksFolderBlock({
           <span className="text-[10px] font-mono text-[#8f8f8f]">hooks/</span>
           <span className="text-[10px] text-[#8f8f8f] tabular-nums">({files.length})</span>
         </button>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onNew();
-          }}
-          title="Новый хук"
-          aria-label="Новый хук"
-          className="p-1 rounded-md text-[#8f8f8f] hover:text-[#171717] hover:bg-[#ebebeb]/60 transition cursor-pointer opacity-0 group-hover/folder:opacity-100 focus:opacity-100 focus-visible:opacity-100 shrink-0"
-        >
-          <Plus className="h-3 w-3" />
-        </button>
+        {onNew && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onNew();
+            }}
+            title="Новый хук"
+            aria-label="Новый хук"
+            className="p-1 rounded-md text-[#8f8f8f] hover:text-[#171717] hover:bg-[#ebebeb]/60 transition cursor-pointer opacity-0 group-hover/folder:opacity-100 focus:opacity-100 focus-visible:opacity-100 shrink-0"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+        )}
       </div>
 
       {isOpen && files.length > 0 && (
@@ -926,22 +918,14 @@ function HooksFolderBlock({
 }
 
 function SettingMissingBlock({
-  file,
   onCreate,
 }: {
-  file: CortexAgentFile;
   onCreate: () => void;
 }) {
   return (
     <div className="px-2 py-1.5 rounded-md border border-dashed border-[#d4d4d4] bg-white space-y-1">
       <div className="text-[11px] font-sans text-[#666666]">
         Настройки не заданы — нет файла
-      </div>
-      <div
-        className="text-[10px] font-mono text-[#8f8f8f] truncate"
-        title={file.path}
-      >
-        {file.path}
       </div>
       <button
         onClick={onCreate}

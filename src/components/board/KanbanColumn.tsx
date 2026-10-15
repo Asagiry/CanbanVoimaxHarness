@@ -27,7 +27,6 @@ export default function KanbanColumn({
   column,
   tasks,
   index,
-  totalColumns,
   isPinned: isPinnedProp,
   onDeleteColumn,
 }: KanbanColumnProps) {
@@ -46,13 +45,14 @@ export default function KanbanColumn({
   const isAtWipLimit = column.wipLimit ? displayTasks.length >= column.wipLimit : false;
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
 
+  // Закреплены только backlog/ready/terminal по id/флагу (без привязки к индексу).
+  // index===0 — лишь fallback, когда id бэклога неизвестен. По index===last не пиним.
   const isPinned = Boolean(
     isPinnedProp ?? (
-      index === 0 ||
-      (totalColumns !== undefined ? index === totalColumns - 1 : false) ||
       column.id === 'backlog' ||
       column.id === 'ready' ||
-      column.terminal
+      Boolean(column.terminal) ||
+      index === 0
     )
   );
 
