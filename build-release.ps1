@@ -89,13 +89,65 @@ Write-Host "  root: $((Get-Location).Path)"
 if ([string]::IsNullOrEmpty($Bundles)) { Write-Host "  bundles: (tauri.conf.json defaults)" } else { Write-Host "  bundles: $Bundles" }
 Write-Host ""
 
-Write-Host "[1/5] Preflight: checking pnpm, node, cargo..."
-foreach ($tool in @("pnpm", "node", "cargo")) {
+Write-Host "[1/5] Preflight: checking cargo, node, pnpm..."
+
+# Auto-add cargo to PATH if missing
+if ($null -eq (Get-Command cargo -ErrorAction SilentlyContinue)) {
+  $cargoCandidates = @(
+    Join-Path $env:USERPROFILE ".cargo\bin\cargo.exe",
+    Join-Path $HOME ".cargo/bin/cargo"
+  )
+  foreach ($c in $cargoCandidates) {
+    if (Test-Path -LiteralPath $c -PathType Leaf) {
+      $cargoDir = Split-Path -Parent $c
+      $env:PATH = "$cargoDir;$env:PATH"
+      Write-Host "  notice: added $cargoDir to PATH"
+      break
+    }
+  }
+}
+
+# Auto-add node to PATH if missing
+if ($null -eq (Get-Command node -ErrorAction SilentlyContinue)) {
+  $nodeCandidates = @(
+    (Join-Path $env:LOCALAPPDATA "Programs\nodejs\node.exe"),
+    (Join-Path $env:ProgramFiles "nodejs\node.exe"),
+    "C:\Program Files\nodejs\node.exe"
+  )
+  foreach ($cand in $nodeCandidates) {
+    if (Test-Path -LiteralPath $cand -PathType Leaf) {
+      $nodeDir = Split-Path -Parent $cand
+      $env:PATH = "$nodeDir;$env:PATH"
+      Write-Host "  notice: added $nodeDir to PATH"
+      break
+    }
+  }
+}
+
+# Auto-add pnpm to PATH if missing
+if ($null -eq (Get-Command pnpm -ErrorAction SilentlyContinue)) {
+  $pnpmCandidates = @(
+    (Join-Path $env:APPDATA "npm\pnpm.cmd"),
+    (Join-Path $env:LOCALAPPDATA "Programs\nodejs\pnpm.cmd"),
+    (Join-Path $env:LOCALAPPDATA "pnpm\pnpm.exe"),
+    (Join-Path $env:LOCALAPPDATA "Programs\nodejs\pnpm.ps1")
+  )
+  foreach ($cand in $pnpmCandidates) {
+    if (Test-Path -LiteralPath $cand -PathType Leaf) {
+      $pnpmDir = Split-Path -Parent $cand
+      $env:PATH = "$pnpmDir;$env:PATH"
+      Write-Host "  notice: added $pnpmDir to PATH"
+      break
+    }
+  }
+}
+
+foreach ($tool in @("cargo", "node", "pnpm")) {
   if ($null -eq (Get-Command $tool -ErrorAction SilentlyContinue)) {
     Fail "$tool not found in PATH. Install Node.js 20 + pnpm and the Rust stable toolchain."
   }
 }
-Write-Host "  ok: pnpm, node, cargo found."
+Write-Host "  ok: cargo, node, pnpm found."
 Write-Host ""
 
 Write-Host "[2/5] Installing frontend dependencies..."

@@ -5,6 +5,11 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag name (e.g. v0.1.0; empty = fallback to v<package.json>-nightly or ref tag)"
+        required: false
+        default: ""
 
 jobs:
   build-tauri:
@@ -28,7 +33,7 @@ jobs:
         if: startsWith(matrix.platform, 'ubuntu')
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libsoup-3.0-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf pkg-config libsoup-3.0-dev javascriptcoregtk-4.1 libjavascriptcoregtk-4.1-dev libnm-dev xdg-utils
 
       - name: "Setup pnpm"
         uses: pnpm/action-setup@v4
@@ -67,23 +72,36 @@ jobs:
         run: |
           mkdir -p artifacts-out
 
-          VER_CLEAN="${{ github.ref_name }}"
-          VER_CLEAN="${VER_CLEAN#v}"
+          TAG="${{ inputs.tag_name }}"
+          if [ -z "$TAG" ]; then
+            if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+              TAG="${{ github.ref_name }}"
+            else
+              PKG_VER=$(node -p "require('./package.json').version" 2>/dev/null || echo "0.1.0")
+              TAG="v${PKG_VER}-nightly"
+            fi
+          fi
+          VER_CLEAN="${TAG#v}"
 
-          # Windows: NSIS setup + portable exe
+          # Windows: NSIS setup + MSI + portable exe
           if [[ "${{ matrix.platform }}" == *"windows"* ]]; then
             find src-tauri/target -name "*setup.exe" -exec cp {} artifacts-out/CanbanVoimaxHarness_${VER_CLEAN}_x64-setup.exe \; 2>/dev/null || true
+            find src-tauri/target -name "*.msi" -exec cp {} artifacts-out/CanbanVoimaxHarness_${VER_CLEAN}_x64.msi \; 2>/dev/null || true
             cp src-tauri/target/release/canban-voimax-harness.exe artifacts-out/CanbanVoimaxHarness_${VER_CLEAN}_x64_portable.exe 2>/dev/null || true
           fi
 
-          # Linux: AppImage + deb (bundle targets land here once tauri.conf.json enables them)
+          # Linux: AppImage + deb + portable binary
           if [[ "${{ matrix.platform }}" == *"ubuntu"* ]]; then
             find src-tauri/target -name "*.AppImage" -exec cp {} artifacts-out/CanbanVoimaxHarness_${VER_CLEAN}_amd64.AppImage \; 2>/dev/null || true
             find src-tauri/target -name "*.deb" -exec cp {} artifacts-out/CanbanVoimaxHarness_${VER_CLEAN}_amd64.deb \; 2>/dev/null || true
+            if [ -f src-tauri/target/release/canban-voimax-harness ]; then
+              cp src-tauri/target/release/canban-voimax-harness artifacts-out/CanbanVoimaxHarness_${VER_CLEAN}_amd64_portable 2>/dev/null || true
+              chmod +x artifacts-out/CanbanVoimaxHarness_${VER_CLEAN}_amd64_portable 2>/dev/null || true
+            fi
           fi
 
           echo "Contents of artifacts-out:"
-          ls -R artifacts-out/
+          ls -la artifacts-out/
 
       - name: "Upload Artifacts"
         uses: actions/upload-artifact@v4
@@ -94,13 +112,28 @@ jobs:
 
   publish-release:
     needs: build-tauri
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - name: "Checkout repository"
         uses: actions/checkout@v4
+
+      - name: "Determine Release Tag"
+        id: tag
+        shell: bash
+        run: |
+          TAG="${{ inputs.tag_name }}"
+          if [ -z "$TAG" ]; then
+            if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+              TAG="${{ github.ref_name }}"
+            else
+              PKG_VER=$(node -p "require('./package.json').version" 2>/dev/null || echo "0.1.0")
+              TAG="v${PKG_VER}-nightly"
+            fi
+          fi
+          echo "tag_name=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: "Download all artifacts"
         uses: actions/download-artifact@v4
@@ -113,8 +146,9 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
-          name: "CanbanVoimaxHarness ${{ github.ref_name }}"
-          body: "Release ${{ github.ref_name }}"
+          tag: ${{ steps.tag.outputs.tag_name }}
+          name: "CanbanVoimaxHarness ${{ steps.tag.outputs.tag_name }}"
+          body: "Release ${{ steps.tag.outputs.tag_name }}"
           token: ${{ secrets.GITHUB_TOKEN }}
           artifacts: "all-artifacts/**/*"
           artifactErrorsFailBuild: false

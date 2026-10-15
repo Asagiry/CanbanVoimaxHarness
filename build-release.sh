@@ -74,11 +74,39 @@ echo "  root: $PWD"
 if [[ -z "$BUNDLES" ]]; then echo "  bundles: (tauri.conf.json defaults)"; else echo "  bundles: $BUNDLES"; fi
 echo ""
 
-echo "[1/5] Preflight: checking pnpm, node, cargo..."
-command -v pnpm >/dev/null 2>&1 || fail "pnpm not found in PATH. Install Node.js 20 + pnpm."
-command -v node >/dev/null 2>&1 || fail "node not found in PATH. Install Node.js 20."
+echo "[1/5] Preflight: checking cargo, node, pnpm..."
+
+if ! command -v cargo >/dev/null 2>&1; then
+  if [[ -x "$HOME/.cargo/bin/cargo" ]]; then
+    export PATH="$HOME/.cargo/bin:$PATH"
+    echo "  notice: added $HOME/.cargo/bin to PATH"
+  fi
+fi
+
+if ! command -v node >/dev/null 2>&1; then
+  for cand in "/usr/local/bin" "$HOME/.nvm/versions/node/$(ls -1 "$HOME/.nvm/versions/node" 2>/dev/null | tail -n 1 2>/dev/null)/bin"; do
+    if [[ -x "$cand/node" ]]; then
+      export PATH="$cand:$PATH"
+      echo "  notice: added $cand to PATH"
+      break
+    fi
+  done
+fi
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  for cand in "$HOME/.local/share/pnpm" "$HOME/.npm-global/bin" "$HOME/.cargo/bin" "/usr/local/bin"; do
+    if [[ -x "$cand/pnpm" ]]; then
+      export PATH="$cand:$PATH"
+      echo "  notice: added $cand to PATH"
+      break
+    fi
+  done
+fi
+
 command -v cargo >/dev/null 2>&1 || fail "cargo not found in PATH. Install the Rust stable toolchain."
-echo "  ok: pnpm, node, cargo found."
+command -v node >/dev/null 2>&1 || fail "node not found in PATH. Install Node.js 20."
+command -v pnpm >/dev/null 2>&1 || fail "pnpm not found in PATH. Install Node.js 20 + pnpm."
+echo "  ok: cargo, node, pnpm found."
 echo ""
 
 echo "[2/5] Installing frontend dependencies..."
