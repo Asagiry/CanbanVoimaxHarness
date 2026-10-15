@@ -475,5 +475,37 @@
       "src/components/drawer/ToolExecutionCard.tsx"
     ],
     "timestamp": 1792092193529
+  },
+  "CVH-DEV-RULES-UTF8": {
+    "taskId": "CVH-DEV-RULES-UTF8",
+    "task": "cvh-dev-rules-utf8",
+    "title": "Windows cmd.exe UTF-8 fix, modular cvh-dev rules (progressive disclosure), rich developer fallback persona, and Backlog-to-Ready Invariant enforcement",
+    "branch": "feat/cvh-dev-rules-utf8",
+    "commitHash": "99053fd",
+    "mergeCommitHash": "1dba66b",
+    "commitMessage": "feat(agent): fix Windows cmd UTF-8, modular cvh-dev rules, developer fallback, and enforce backlog-to-ready invariant",
+    "author": "tauri-rust-engineer / agent-developer",
+    "verdict": "APPROVED",
+    "sensors": {
+      "cargo_check": "pass (0 errors, target x86_64-pc-windows-gnu)",
+      "cargo_clippy": "pass (0 warnings, -D warnings, target x86_64-pc-windows-gnu)",
+      "frontend_build": "pass (tsc && vite build, 0 errors)"
+    },
+    "files": [
+      "src-tauri/src/agent.rs",
+      "src-tauri/src/config.rs",
+      "src-tauri/src/commands.rs",
+      "src-tauri/src/lib.rs",
+      "src/stores/cortexStore.ts",
+      "src/components/cortex/CortexExplorer.tsx",
+      ".gitignore",
+      ".cvh/agents/cvh-dev/persona.md",
+      ".cvh/agents/cvh-dev/setting",
+      ".cvh/agents/cvh-dev/rules/boards.md",
+      ".cvh/agents/cvh-dev/rules/agents.md",
+      ".cvh/agents/cvh-dev/rules/hooks.md"
+    ],
+    "summary": "Eliminated Windows cmd.exe CP866 black diamonds by prepending 'chcp 65001 >nul && ' in run_scoped_command. Implemented modular progressive-disclosure rules for cvh-dev (.cvh/agents/cvh-dev/rules/boards.md, agents.md, hooks.md) and seeded them in project scaffolding. Added rich BUILTIN_DEVELOPER_PROMPT fallback for the developer role. Enforced strict directory-only agent persona architecture (.cvh/agents/<role>/persona.md) with real disk listing via new list_cortex_agent_files IPC command. Enforced Backlog-to-Ready Invariant across all boards and pipeline configurations (backlog at index 0, ready with terminal:true at final index, auto-re-injecting and forbidding deletion).",
+    "timestamp": 1792094128123
   }
 }
