@@ -48,6 +48,7 @@ pub fn run() {
             get_cortex_tree,
             read_cortex_file,
             save_cortex_file,
+            list_cortex_agent_files,
             list_tasks,
             save_tasks,
             save_task_dialog,

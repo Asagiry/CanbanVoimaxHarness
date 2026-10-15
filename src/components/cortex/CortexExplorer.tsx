@@ -637,11 +637,11 @@ function AgentStageCard({
       {/* Children */}
       {stage.isExpanded && (
         <div className="pl-4 pr-1 py-0.5 space-y-0.5 border-l border-[#ebebeb] ml-3 my-0.5">
-          {/* 1. Персона: .cvh/agents/<role>/agent.md */}
+          {/* 1. Персона: .cvh/agents/<role>/persona.md */}
           {personaFile && !personaIsMissing && (
             <FileTreeItem
               file={personaFile}
-              displayName="agent.md"
+              displayName={personaFile.name}
               isActive={activeFileId === personaFile.id}
               icon={
                 isBuiltin ? (

@@ -57,6 +57,9 @@ export interface AgentPersonaInfo {
   role: string;
   hasPrompt: boolean;
   isBuiltin?: boolean;
+  personaFile?: string;
+  rules?: string[];
+  hooks?: string[];
 }
 
 interface RawAgentPersona {
@@ -65,6 +68,10 @@ interface RawAgentPersona {
   has_prompt?: boolean;
   isBuiltin?: boolean;
   is_builtin?: boolean;
+  personaFile?: string;
+  persona_file?: string;
+  rules?: string[];
+  hooks?: string[];
 }
 
 // Каталог агента по новой схеме. Роль = persona колонки; фолбэк — stageId,
@@ -330,6 +337,32 @@ export const useCortexStore = create<CortexState>((set, get) => ({
           const order = (t: string) => (t === 'rule' ? 0 : 1);
           return order(a.type) - order(b.type) || a.name.localeCompare(b.name);
         });
+      const personaInfo = get().agentPersonas.find((ap) => ap.role === col.persona?.trim());
+      const personaFileName = personaInfo?.personaFile ?? 'persona.md';
+
+      const diskRules = (personaInfo?.rules ?? []).map((ruleName) => {
+        const ruleId = `${col.id}-rule-${ruleName}`;
+        const prevRule = prevFileById.get(ruleId);
+        return {
+          id: ruleId,
+          name: ruleName,
+          stageId: col.id,
+          type: 'rule' as const,
+          path: `${dir}/rules/${ruleName}`,
+          content: prevRule?.content ?? '',
+          isDirty: prevRule?.isDirty ?? false,
+        };
+      });
+
+      const inMemoryExtras = extras.filter(
+        (f) => f.type !== 'rule' || !diskRules.some((dr) => dr.name === f.name),
+      );
+
+      const allExtras = [...diskRules, ...inMemoryExtras].sort((a, b) => {
+        const order = (t: string) => (t === 'rule' ? 0 : 1);
+        return order(a.type) - order(b.type) || a.name.localeCompare(b.name);
+      });
+
       boardStages.push({
         stageId: col.id,
         stageTitle: col.title,
@@ -340,15 +373,15 @@ export const useCortexStore = create<CortexState>((set, get) => ({
         files: [
           {
             id: personaId,
-            name: 'agent.md',
+            name: personaFileName,
             stageId: col.id,
             type: 'persona',
-            path: `${dir}/agent.md`,
+            path: `${dir}/${personaFileName}`,
             content: prevPersona?.content ?? '',
             isDirty: prevPersona?.isDirty ?? false,
           },
           ...hookFiles,
-          ...extras,
+          ...allExtras,
           {
             id: settingsId,
             name: 'setting',
@@ -425,6 +458,9 @@ export const useCortexStore = create<CortexState>((set, get) => ({
         role,
         hasPrompt: item.hasPrompt ?? item.has_prompt ?? true,
         isBuiltin: item.isBuiltin ?? item.is_builtin ?? (role === 'cvh-dev'),
+        personaFile: item.personaFile ?? item.persona_file ?? 'persona.md',
+        rules: Array.isArray(item.rules) ? item.rules : [],
+        hooks: Array.isArray(item.hooks) ? item.hooks : [],
       });
     }
     personas.sort((a, b) => a.role.localeCompare(b.role));
@@ -437,19 +473,40 @@ export const useCortexStore = create<CortexState>((set, get) => ({
       const prevStage = prevByRole.get(p.role);
       const prevFiles = prevStage?.files ?? [];
       const prevById = new Map(prevFiles.map((f) => [f.id, f]));
+      const personaFileName = p.personaFile ?? 'persona.md';
       const personaId = `${stageId}-persona`;
       const settingsId = `${stageId}-settings`;
       const prevPersona = prevById.get(personaId);
       const prevSettings = prevById.get(settingsId);
-      // Ранее созданные файлы агента (только правила — хуки исключены из секции «Агенты»).
-      const extras = prevFiles
-        .filter(
-          (f) =>
-            f.id !== personaId &&
-            f.id !== settingsId &&
-            f.type === 'rule',
-        )
-        .sort((a, b) => a.name.localeCompare(b.name));
+
+      // Real rules from disk!
+      const diskRules = (p.rules ?? []).map((ruleName) => {
+        const ruleId = `${stageId}-rule-${ruleName}`;
+        const prevRule = prevById.get(ruleId);
+        return {
+          id: ruleId,
+          name: ruleName,
+          stageId,
+          type: 'rule' as const,
+          path: `${dir}/rules/${ruleName}`,
+          content: prevRule?.content ?? '',
+          isDirty: prevRule?.isDirty ?? false,
+        };
+      });
+
+      // Extra in-memory rules not yet on disk or newly added
+      const inMemoryExtras = prevFiles.filter(
+        (f) =>
+          f.id !== personaId &&
+          f.id !== settingsId &&
+          f.type === 'rule' &&
+          !diskRules.some((dr) => dr.name === f.name),
+      );
+
+      const allRules = [...diskRules, ...inMemoryExtras].sort((a, b) =>
+        a.name.localeCompare(b.name),
+      );
+
       const isBuiltin = p.role === 'cvh-dev' || Boolean(p.isBuiltin);
       return {
         stageId,
@@ -462,14 +519,14 @@ export const useCortexStore = create<CortexState>((set, get) => ({
         files: [
           {
             id: personaId,
-            name: 'agent.md',
+            name: personaFileName,
             stageId,
             type: 'persona',
-            path: `${dir}/agent.md`,
+            path: `${dir}/${personaFileName}`,
             content: prevPersona?.content ?? '',
             isDirty: prevPersona?.isDirty ?? false,
           },
-          ...extras,
+          ...allRules,
           {
             id: settingsId,
             name: 'setting',
