@@ -3,6 +3,7 @@ import { useDrawerStore, DrawerActivityItem } from '../../stores/drawerStore';
 import { useBoardStore, syncTasksBackend } from '../../stores/boardStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import ToolExecutionCard from './ToolExecutionCard';
+import ThinkingCard from './ThinkingCard';
 import ContextGauge from './ContextGauge';
 import GitDiffSidebar from './GitDiffSidebar';
 import TaskTodoWidget from './TaskTodoWidget';
@@ -18,14 +19,12 @@ import {
   X,
   GitBranch,
   FolderGit2,
-  Brain,
   Play,
   Square,
   Target,
   ChevronDown,
   ChevronRight,
   Sparkles,
-  Clock,
   User,
   AlertTriangle,
   Info,
@@ -272,65 +271,7 @@ function MarkdownContent({ content }: { content?: string }) {
   return <div className="space-y-1 select-text font-sans">{elements}</div>;
 }
 
-// Collapsible Live Thinking Card
-function ThinkingCard({
-  thought,
-  isTaskRunning,
-  taskId,
-}: {
-  thought: DrawerActivityItem;
-  isTaskRunning: boolean;
-  taskId: string;
-}) {
-  const [isExpanded, setIsExpanded] = useState(true);
-  const thinkingStart = useDrawerStore((s) => s.thinkingStartTime[taskId] ?? null);
 
-  // Живой таймер без setInterval: обновляется на ре-рендерах от чанков.
-  // Пока задача running — от thinkingStartTime, после финиша — финал из thought.durationMs.
-  let timerText: string;
-  if (isTaskRunning && thinkingStart != null) {
-    timerText = `${((Date.now() - thinkingStart) / 1000).toFixed(1)}с`;
-  } else if (thought?.durationMs) {
-    timerText = `${Math.round(thought.durationMs / 1000)}с`;
-  } else {
-    timerText = '0с';
-  }
-
-  return (
-    <div className="rounded-md border border-[#ebebeb] bg-[#fcfcfc] overflow-hidden shadow-xs transition duration-150">
-      <div
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center justify-between px-3 py-2 bg-[#f8f8f9] hover:bg-[#f4f4f5] cursor-pointer transition select-none border-l-2 border-l-[#171717]"
-      >
-        <div className="flex items-center space-x-2">
-          {isExpanded ? (
-            <ChevronDown className="h-3.5 w-3.5 text-[#666666]" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-[#666666]" />
-          )}
-          <Brain className="h-3.5 w-3.5 text-[#171717]" />
-          <span className="font-mono text-xs font-semibold text-[#171717]">
-            &lt;thinking&gt;
-          </span>
-        </div>
-
-        <div className="flex items-center space-x-2 text-[10px] font-mono text-[#666666]">
-          <span className="flex items-center space-x-1 tabular-nums">
-            <Clock className="h-3 w-3" />
-            <span>{timerText}</span>
-          </span>
-          <span className="tabular-nums">{thought?.timestamp ?? ''}</span>
-        </div>
-      </div>
-
-      {isExpanded && (
-        <div className="p-3 border-t border-[#ebebeb] bg-[#ffffff] font-mono text-[13px] leading-relaxed text-[#333333] whitespace-pre-wrap select-text max-h-96 overflow-y-auto">
-          {thought?.content ?? ''}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // Clean prompt helper: strips legacy appended [USER STEER] or [USER]: blocks for pure prompt display
 function getCleanPrompt(description?: string, title?: string): string {
@@ -767,50 +708,80 @@ export default function AgentConsoleDrawer() {
       <header
         data-tauri-drag-region
         onDoubleClick={handleHeaderDoubleClick}
-        className="h-10 border-b border-[#ebebeb] bg-white pl-4 pr-0 shrink-0 z-10 shadow-xs flex items-center"
+        className="h-10 border-b border-[#ebebeb] bg-white pl-4 pr-0 shrink-0 z-10 shadow-xs flex items-center select-none"
       >
-        <div className="flex items-center justify-between w-full h-full">
-          {/* Left: Logo + Back (mirrors the main topbar: folder picker replaced by Back) */}
-          <div className="flex items-center space-x-2 shrink-0" data-tauri-drag-region>
-            <div className="flex items-center space-x-2" data-no-drag>
-              <Logo size={18} className="shrink-0" />
-              <button
-                data-no-drag
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={closeDrawer}
-                className="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-white hover:bg-[#f9f9f9] text-[#171717] border border-[#ebebeb] transition font-sans text-xs font-medium cursor-pointer shadow-xs active:scale-[0.98]"
-                title="Назад к доске (Esc)"
-              >
-                <ArrowLeft className="h-4 w-4 text-[#171717]" />
-                <span>Назад</span>
-              </button>
-            </div>
+        <div className="flex items-center justify-between w-full h-full" data-tauri-drag-region>
+          {/* Left: Logo + Back */}
+          <div className="flex items-center space-x-2 shrink-0 select-none pointer-events-auto" data-no-drag>
+            <Logo size={18} className="shrink-0 select-none" />
+            <button
+              data-no-drag
+              type="button"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={closeDrawer}
+              className="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-white hover:bg-[#f9f9f9] text-[#171717] border border-[#ebebeb] transition font-sans text-xs font-medium cursor-pointer shadow-xs active:scale-[0.98] select-none pointer-events-auto"
+              title="Назад к доске (Esc)"
+            >
+              <ArrowLeft className="h-4 w-4 text-[#171717]" />
+              <span>Назад</span>
+            </button>
+          </div>
+
+          {/* Center: Stage and Task badges, draggable empty area */}
+          <div
+            className="flex-1 flex items-center justify-center space-x-2 px-4 overflow-hidden select-none"
+            data-tauri-drag-region
+          >
+            {task?.id && (
+              <span className="font-mono text-xs font-semibold text-[#171717] px-2 py-0.5 rounded bg-[#f4f4f5] border border-[#ebebeb] shrink-0 select-none pointer-events-auto">
+                {task.id}
+              </span>
+            )}
+            {task?.columnId && (
+              <span className="font-mono text-[11px] text-[#666666] px-2 py-0.5 rounded bg-[#fcfcfc] border border-[#ebebeb] shrink-0 select-none pointer-events-auto">
+                {task.columnId}
+              </span>
+            )}
+            {effectiveModel && (
+              <span className="hidden sm:inline-block font-mono text-[10px] text-[#8f8f8f] px-1.5 py-0.5 rounded bg-[#fafafa] border border-[#ebebeb] shrink-0 select-none pointer-events-auto truncate max-w-[140px]">
+                {effectiveModel}
+              </span>
+            )}
+            {task?.title && (
+              <span className="text-xs text-[#666666] truncate max-w-[220px] select-none pointer-events-none">
+                {task.title}
+              </span>
+            )}
           </div>
 
           {/* Right: same triggers + window controls as the main topbar */}
-          <div className="flex items-center h-full space-x-1 shrink-0" data-tauri-drag-region>
-            <div className="flex items-center space-x-1.5 pr-2" data-no-drag>
+          <div className="flex items-center h-full space-x-1 shrink-0 select-none pointer-events-auto" data-tauri-drag-region>
+            <div className="flex items-center space-x-1.5 pr-2 select-none pointer-events-auto" data-no-drag>
               <button
                 data-no-drag
+                type="button"
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={openToolPolicyModal}
-                className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] border border-[#ebebeb] text-[#666666] hover:text-[#171717] transition cursor-pointer"
+                className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] border border-[#ebebeb] text-[#666666] hover:text-[#171717] transition cursor-pointer select-none pointer-events-auto"
                 title="Матрица инструментов — доступ тулов по агентам"
               >
                 <Wrench className="h-3.5 w-3.5" />
               </button>
               <button
                 data-no-drag
+                type="button"
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={openSettings}
-                className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] border border-[#ebebeb] text-[#666666] hover:text-[#171717] transition cursor-pointer"
+                className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] border border-[#ebebeb] text-[#666666] hover:text-[#171717] transition cursor-pointer select-none pointer-events-auto"
                 title="Настройки LLM"
               >
                 <Settings className="h-3.5 w-3.5" />
               </button>
             </div>
             <div className="h-4 w-px bg-[#ebebeb] mx-1" />
-            <WindowControls />
+            <div className="select-none pointer-events-auto" data-no-drag>
+              <WindowControls />
+            </div>
           </div>
         </div>
       </header>

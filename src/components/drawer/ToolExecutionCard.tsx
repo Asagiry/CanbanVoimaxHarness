@@ -181,19 +181,102 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   const extraInfo = getExtraInfo();
   const durationText = formatDuration(tool.durationMs);
 
+  const renderToolParams = (paramsObj: Record<string, unknown>) => {
+    const entries = Object.entries(paramsObj);
+    if (entries.length === 0) return null;
+
+    return (
+      <div className="space-y-1.5">
+        <span className="text-[10px] text-[#666666] block font-mono">
+          Параметры вызова
+        </span>
+        <div className="space-y-2">
+          {entries.map(([key, value]) => {
+            // String values: preserve real newlines, format multiline strings cleanly
+            if (typeof value === 'string') {
+              const isMultiline = value.includes('\n');
+              const isCodeLike =
+                key === 'content' ||
+                key === 'code' ||
+                key === 'command' ||
+                key === 'cmd' ||
+                key === 'old_string' ||
+                key === 'new_string' ||
+                key === 'prompt' ||
+                key === 'script' ||
+                key === 'patch' ||
+                isMultiline;
+
+              if (isCodeLike || isMultiline) {
+                const lineCount = value.split('\n').length;
+                return (
+                  <div key={key} className="space-y-1">
+                    <div className="flex items-center justify-between text-[10px] text-[#666666]">
+                      <span className="font-semibold text-[#171717] font-mono">{key}:</span>
+                      <span className="text-[#8f8f8f] tabular-nums font-mono text-[10px]">
+                        {lineCount > 1 ? `${lineCount} строк` : `${value.length} симв.`}
+                      </span>
+                    </div>
+                    <pre className="p-2.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[11px] text-[#171717] overflow-x-auto leading-relaxed max-h-64 whitespace-pre select-text font-mono">
+                      {value}
+                    </pre>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={key} className="flex items-baseline space-x-2 py-0.5 text-[11px] font-mono">
+                  <span className="text-[#666666] font-semibold shrink-0">{key}:</span>
+                  <span className="text-[#171717] select-text break-all">{value}</span>
+                </div>
+              );
+            }
+
+            // Object / array values
+            if (typeof value === 'object' && value !== null) {
+              return (
+                <div key={key} className="space-y-1">
+                  <span className="text-[10px] font-semibold text-[#171717] font-mono">{key}:</span>
+                  <pre className="p-2 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[11px] text-[#171717] overflow-x-auto leading-relaxed max-h-48 whitespace-pre-wrap select-text font-mono">
+                    {JSON.stringify(value, null, 2)}
+                  </pre>
+                </div>
+              );
+            }
+
+            // Primitives (number, boolean, null)
+            return (
+              <div key={key} className="flex items-baseline space-x-2 py-0.5 text-[11px] font-mono">
+                <span className="text-[#666666] font-semibold shrink-0">{key}:</span>
+                <span className="text-[#171717] select-text">{String(value)}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   const handleCopyLogs = (e: React.MouseEvent) => {
     e.stopPropagation();
+    const formattedParams =
+      tool.params && Object.keys(tool.params).length > 0
+        ? Object.entries(tool.params as Record<string, unknown>)
+            .map(([k, v]) => {
+              if (typeof v === 'string') {
+                return v.includes('\n') ? `${k}:\n${v}` : `${k}: ${v}`;
+              }
+              return `${k}: ${JSON.stringify(v, null, 2)}`;
+            })
+            .join('\n\n')
+        : '';
+
     const content = [
       `Инструмент: ${tool.toolName}`,
       `Статус: ${tool.status} (код ${tool.exitCode ?? 0})`,
-      tool.params && Object.keys(tool.params).length > 0
-        ? `ПАРАМЕТРЫ:
-${JSON.stringify(tool.params, null, 2)}`
-        : '',
-      tool.stdout ? `STDOUT:
-${tool.stdout}` : '',
-      tool.stderr ? `STDERR:
-${tool.stderr}` : '',
+      formattedParams ? `ПАРАМЕТРЫ:\n${formattedParams}` : '',
+      tool.stdout ? `STDOUT:\n${tool.stdout}` : '',
+      tool.stderr ? `STDERR:\n${tool.stderr}` : '',
     ]
       .filter(Boolean)
       .join('\n\n');
@@ -374,24 +457,23 @@ ${tool.stderr}` : '',
       {isExpanded && (
         <div className="p-3 border-t border-[#ebebeb] space-y-2.5 font-mono text-xs bg-white">
           {isDiffTool && (oldString !== undefined || newString !== undefined) ? (
-            <div>
-              <span className="text-[10px] text-[#666666] block mb-1">
-                Изменения файлов (Diff)
-              </span>
-              {renderUnifiedDiff()}
+            <div className="space-y-2">
+              {filePath && (
+                <div className="flex items-baseline space-x-2 py-0.5 text-[11px] font-mono">
+                  <span className="text-[#666666] font-semibold shrink-0">Файл:</span>
+                  <span className="text-[#171717] select-text break-all">{filePath}</span>
+                </div>
+              )}
+              <div>
+                <span className="text-[10px] text-[#666666] block mb-1">
+                  Изменения файлов (Diff)
+                </span>
+                {renderUnifiedDiff()}
+              </div>
             </div>
           ) : (
             tool.params &&
-            Object.keys(tool.params).length > 0 && (
-              <div>
-                <span className="text-[10px] text-[#666666] block mb-1">
-                  Параметры вызова
-                </span>
-                <pre className="p-2.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[11px] text-[#171717] overflow-x-auto leading-relaxed">
-                  {JSON.stringify(tool.params, null, 2)}
-                </pre>
-              </div>
-            )
+            Object.keys(tool.params).length > 0 && renderToolParams(params)
           )}
 
           {tool.stdout && (
