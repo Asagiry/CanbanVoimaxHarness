@@ -428,5 +428,25 @@
     ],
     "ftrScore": "100%",
     "timestamp": 1792400000000
+  },
+  "LOCAL-RELEASE": {
+    "taskId": "LOCAL-RELEASE",
+    "title": "One-button local Release scripts (Task C)",
+    "author": "agent-developer",
+    "verdict": "APPROVED_WITH_CAVEATS",
+    "commitHash": "91d19fd44ef6cb8e9a64663902dee0efeac05fcc",
+    "commitMessage": "feat(build): one-button local Release scripts (bat/ps1/sh) + Release layout (Task C)",
+    "summary": "Task C: one-button local Release build (bat for cmd.exe, ps1 mirror for PS 5.1+, sh mirror for bash). Deterministic layout Release/Windows/{bin,installer} + Release/Linux/{bin,installer}; flags --skip-install/--skip-checks/--bundles/--pause/--help; ERROR: prefix + nonzero exits; no blocking pause. Load-bearing discoveries: (1) pnpm 9 refused all commands (workspace without packages field) — fixed identically upstream by Task A 0ae3b56, rebase kept main's version; (2) .gitattributes eol=lf for *.sh proven to survive fresh checkout; (3) ps1 exit codes propagate via -File/Bypass, usage notes the Bypass invocation. Sensors: bat/ps1/sh --help exit 0, usage errors exit 2, pnpm install + build exit 0, cargo check exit 0. Pre-existing clippy debt (agent.rs:536, commands.rs:295/2188/2684) untouched per single-task ceiling; scripts expose --skip-checks. Reviewer verdict: APPROVED_WITH_CAVEATS (non-blocking).",
+    "files": [
+      "build-release.bat",
+      "build-release.ps1",
+      "build-release.sh",
+      ".gitattributes",
+      ".gitignore",
+      "Release/.gitkeep",
+      ".agents/task-history/local-release.json"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1792061609398
   }
 }
