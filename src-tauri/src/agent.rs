@@ -132,8 +132,8 @@ When NOT: not a coder for feature logic; not a reviewer (separate clean context)
 Paths (repo-root relative, single source of truth):
 - `.cvh/boards.json {activeBoardId, boards[{id,name,columns}]}` defines `development` + `kanban` boards; `activeBoardId` selects one.
 - `.cvh/pipeline.json {id,title,columns[{id,title,persona,contextWindow,gatekeeperSensor,allowedTools,terminal}]}` mirrors active board columns.
-- `.cvh/settings/tool-policy.json {globalEnabled, stageOverrides}` is the only policy file; `.cvh/agents/<role>.md + <role>/rules/*.md` hold personas; `.cvh/tools/<tool>.json` custom tools; `.cvh/hooks/` transition scripts; task work only in `worktrees/<slug>`.
-Frontmatter template for every generated `.cvh/agents/<role>.md` (keep ≤30 lines, link detail, never copypaste):
+- `.cvh/settings/tool-policy.json {globalEnabled, stageOverrides}` is the only policy file; `.cvh/agents/<role>/persona.md` (directory structure; legacy `.cvh/agents/<role>.md` replaced) + `<role>/rules/*.md` hold personas; `.cvh/tools/<tool>.json` custom tools; `.cvh/hooks/` transition scripts; task work only in `worktrees/<slug>`.
+Frontmatter template for every generated `.cvh/agents/<role>/persona.md` (keep ≤30 lines, link detail, never copypaste):
 ---
 name: <role>
 description: Use PROACTIVELY when <trigger condition for this role>
@@ -144,6 +144,9 @@ activation: on-enter <column-id> runs run_agent(<task-id>)
 ---
 Identity: 3 bullets max (who, does, refuses).
 Load: rules/<topic>.md (progressive disclosure, each rule file ≤8KB).
+- If asked to configure boards: read rules/boards.md (.cvh/agents/cvh-dev/rules/boards.md).
+- If asked to configure agents/personas: read rules/agents.md (.cvh/agents/cvh-dev/rules/agents.md).
+- If asked to configure hooks: read rules/hooks.md (.cvh/agents/cvh-dev/rules/hooks.md).
 Boards skeleton (2 boards, minimal):
 {"activeBoardId":"development","boards":[{"id":"development","name":"Development","columns":[]},{"id":"kanban","name":"Kanban","columns":[]}]}
 Pipeline skeleton (ids/order must match board; backlog first, ready last):
@@ -167,12 +170,33 @@ Key patterns/recipes: scaffold-then-sense; sensor-first promotion (gatekeeperSen
 Pitfalls: monolith agent.md (>30 lines); copypaste instead of Load-link; writing outside worktree; re-enabling globally-disabled tool; stale board/pipeline drift.
 What to ask when blocked: stack + build cmd, target board template, allowed tools per stage, sensor to gate on.
 Red Flags: prompt >150 lines; any rule telling you to read root AGENTS.md/.agents/skills/docs into context; absolute path outside worktree; `terminal:true` missing on ready; duplicate column id.
-Verification[evidence]: paste `cargo check` + `cargo clippy -- -D warnings` tails, changed files as `path:line`, verdict token; no evidence = no APPROVED.
+Verification[evidence]: paste `cargo check`, `cargo clippy -- -D warnings`, changed files as `path:line`, verdict token; no evidence = no APPROVED.
 Instructions for Empty & New Projects: run Initializer flow above; Columns = Agents invariant holds from turn 1.
 "#;
 
+pub const BUILTIN_DEVELOPER_PROMPT: &str = r#"# Role Persona: developer (Software Engineer)
+Identity & Core Directives:
+- Specialized software engineer working strictly inside isolated git worktree (`worktrees/<task-slug>`).
+- Absolute Invariant: NEVER write or edit code outside the active worktree directory.
+- Ponytail Minimalism & Anti-Slop: zero dead code, no unused imports, no placeholder functions, clean idiomatic architecture.
+- Strict Error Handling: zero naked unwraps in production paths; use typed errors (`Result<T, AppError>`, `anyhow`, or `thiserror`).
+
+Workflow (Explore -> Plan -> Code -> Verify -> Commit):
+1. Explore: locate relevant files using `glob` and `grep`. Never assume paths or API signatures.
+2. Plan: formulate targeted checklist with `path:line` targets before editing.
+3. Code: execute surgical edits inside `worktrees/<task-slug>`.
+4. Verify with Ground Truth Sensors:
+   - Backend/Rust: `cargo check` and `cargo clippy -- -D warnings` must exit 0.
+   - Frontend/TS: `pnpm run build` (`tsc && vite build`) must exit 0.
+   - Subprocesses: test real subprocesses and verify stdout/stderr without assuming success.
+5. Commit: 1 atomic task = 1 feature commit. Never commit broken or unverified code.
+
+Rationalization vs Reality:
+- State only what runtime sensors prove. If a sensor fails, report the exact error and fix root causes immediately.
+"#;
+
 /// Zero-Turn Memory Priming: compiles strictly static SystemMessage from the
-/// role Persona (flat `.cvh/agents/<role>.md` → built-in fallback), per-role
+/// role Persona (directory `.cvh/agents/<role>/persona.md` → built-in fallback), per-role
 /// `.cvh/agents/<role>/rules/*.md` (alphabetical) and Tool Instructions.
 /// Strictly static System Prompt: Zero dynamic timestamps, zero random UUIDs in the System prompt to prevent cache invalidation.
 /// Dynamic context (task ID, title, description, worktree path) belongs exclusively in the user message.
@@ -185,18 +209,22 @@ pub async fn compile_primed_system_prompt(
 ) -> Result<String> {
     let mut sections = Vec::new();
 
-    // 1. Role Persona: single flat path → built-in fallback.
+    // 1. Role Persona: directory path (.cvh/agents/<role>/persona.md) → built-in fallback.
     let persona_path = crate::config::agent_persona_path(repo_root, role);
-    if persona_path.exists() {
+    if persona_path.is_file() {
         if let Ok(persona_text) = tokio::fs::read_to_string(&persona_path).await {
             sections.push(format!("# Role Persona: {}\n\n{}", role, persona_text.trim()));
         } else if role == "cvh-dev" {
             sections.push(BUILTIN_CVH_DEV_PROMPT.to_string());
+        } else if role == "developer" {
+            sections.push(BUILTIN_DEVELOPER_PROMPT.to_string());
         } else {
             sections.push(format!("# Role Persona: {}\nYou are an expert AI agent in {}.", role, role));
         }
     } else if role == "cvh-dev" {
         sections.push(BUILTIN_CVH_DEV_PROMPT.to_string());
+    } else if role == "developer" {
+        sections.push(BUILTIN_DEVELOPER_PROMPT.to_string());
     } else {
         sections.push(format!("# Role Persona: {}\nYou are an expert AI agent in {}.", role, role));
     }
@@ -911,7 +939,7 @@ async fn run_scoped_command(
     #[cfg(target_os = "windows")]
     let mut cmd = {
         let mut c = Command::new("cmd.exe");
-        c.args(["/C", cmd_str]);
+        c.args(["/C", &format!("chcp 65001 >nul && {}", cmd_str)]);
         c
     };
 
@@ -1929,40 +1957,57 @@ mod tests {
 
     #[tokio::test]
     async fn test_system_prompt_flat_persona_and_builtin_fallback() {
-        // Single flat persona path: present → used; absent → built-in fallback.
-        // No dual-path, no per-agent dir persona reads.
+        // Directory-only persona path: <role>/persona.md or <role>/agent.md.
+        // Flat .md files are strictly ignored.
         let base =
             std::path::PathBuf::from("target").join(format!("cvh_fb_{}", uuid::Uuid::new_v4()));
         let agents = base.join(".cvh").join("agents");
         tokio::fs::create_dir_all(&agents)
             .await
             .expect("test dirs");
+
+        // 1. persona.md in role directory
+        let custom_dir = agents.join("custom");
+        tokio::fs::create_dir_all(&custom_dir).await.expect("custom dir");
+        tokio::fs::write(custom_dir.join("persona.md"), "PERSONAMARKER")
+            .await
+            .expect("persona seed");
+        let with_persona = compile_primed_system_prompt(&base, "custom")
+            .await
+            .expect("prompt failed");
+        assert!(with_persona.contains("PERSONAMARKER"), "custom persona.md must be used");
+
+        // 2. agent.md in role directory
+        let alt_dir = agents.join("alt");
+        tokio::fs::create_dir_all(&alt_dir).await.expect("alt dir");
+        tokio::fs::write(alt_dir.join("agent.md"), "AGENTMARKER")
+            .await
+            .expect("agent seed");
+        let with_agent = compile_primed_system_prompt(&base, "alt")
+            .await
+            .expect("prompt failed");
+        assert!(with_agent.contains("AGENTMARKER"), "alt agent.md must be used");
+
+        // 3. Flat dev.md must NOT be picked up (directory-only structure)
         tokio::fs::write(agents.join("dev.md"), "FLATMARKER")
             .await
             .expect("flat seed");
-
-        let with_persona = compile_primed_system_prompt(&base, "dev")
+        let fallback_dev = compile_primed_system_prompt(&base, "dev")
             .await
             .expect("prompt failed");
-        assert!(with_persona.contains("FLATMARKER"), "flat persona must be used");
+        assert!(!fallback_dev.contains("FLATMARKER"), "flat dev.md must be ignored");
 
-        // Per-agent dir agent.md must NOT be picked up (single flat path only).
-        tokio::fs::create_dir_all(agents.join("dev").join("rules"))
-            .await
-            .expect("role dir");
-        tokio::fs::write(agents.join("dev").join("agent.md"), "DIRMARKER")
-            .await
-            .expect("dir seed");
-        let still_flat = compile_primed_system_prompt(&base, "dev")
+        // 4. developer role without persona on disk → rich built-in developer fallback
+        let dev_builtin = compile_primed_system_prompt(&base, "developer")
             .await
             .expect("prompt failed");
-        assert!(still_flat.contains("FLATMARKER"));
-        assert!(!still_flat.contains("DIRMARKER"), "agents/<role>/agent.md must be ignored");
+        assert!(
+            dev_builtin.contains("developer (Software Engineer)") && dev_builtin.contains("Ground Truth Sensors"),
+            "rich developer fallback must fire, got: {}",
+            &dev_builtin[..dev_builtin.len().min(200)]
+        );
 
-        // Removed → built-in fallback.
-        tokio::fs::remove_file(agents.join("dev.md"))
-            .await
-            .expect("remove flat");
+        // 5. ghost role without persona on disk → generic expert AI agent
         let builtin = compile_primed_system_prompt(&base, "ghost")
             .await
             .expect("prompt failed");

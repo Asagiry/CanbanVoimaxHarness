@@ -701,17 +701,102 @@ pub async fn load_boards_config(root_path: impl AsRef<Path>) -> Result<BoardsCon
     Ok(default_boards_config())
 }
 
+/// Canonical normalization of Kanban columns:
+/// - Enforces that `backlog` (id: "backlog") MUST always exist at index 0.
+/// - Enforces that `ready` (id: "ready", terminal: true) MUST always exist at the final index.
+/// - Preserves relative order of middle columns.
+/// - Duplicate IDs return an error.
+pub fn normalize_pipeline_columns(
+    columns: Vec<PipelineColumn>,
+) -> Result<Vec<PipelineColumn>, String> {
+    let mut seen = std::collections::HashSet::new();
+    for c in &columns {
+        if !seen.insert(c.id.clone()) {
+            return Err(format!(
+                "Дублирующийся id колонки: '{}' — id колонок должны быть уникальными",
+                c.id
+            ));
+        }
+    }
+    let mut backlog: Option<PipelineColumn> = None;
+    let mut ready: Option<PipelineColumn> = None;
+    let mut middle = Vec::with_capacity(columns.len());
+    for col in columns {
+        if col.id == "backlog" && backlog.is_none() {
+            backlog = Some(col);
+        } else if col.id == "ready" && ready.is_none() {
+            ready = Some(col);
+        } else {
+            middle.push(col);
+        }
+    }
+
+    // Invariant: 'backlog' (id: "backlog") MUST always exist at index 0.
+    let backlog = backlog.unwrap_or_else(|| PipelineColumn {
+        id: "backlog".to_string(),
+        title: "Backlog".to_string(),
+        color: None,
+        icon: None,
+        persona: None,
+        on_enter_script: None,
+        context_window: None,
+        model_override: None,
+        reasoning_effort: None,
+        temperature: None,
+        gatekeeper_sensor: None,
+        allowed_tools: None,
+        hooks: HashMap::new(),
+        routes: None,
+        auto_run: None,
+        terminal: None,
+    });
+
+    // Invariant: 'ready' (id: "ready", terminal: true) MUST always exist at the final index.
+    let mut ready = ready.unwrap_or_else(|| PipelineColumn {
+        id: "ready".to_string(),
+        title: "Ready".to_string(),
+        color: None,
+        icon: None,
+        persona: None,
+        on_enter_script: None,
+        context_window: None,
+        model_override: None,
+        reasoning_effort: None,
+        temperature: None,
+        gatekeeper_sensor: None,
+        allowed_tools: None,
+        hooks: HashMap::new(),
+        routes: None,
+        auto_run: None,
+        terminal: Some(true),
+    });
+    if ready.terminal != Some(true) {
+        ready.terminal = Some(true);
+    }
+
+    let mut out = Vec::with_capacity(1 + middle.len() + 1);
+    out.push(backlog);
+    out.extend(middle);
+    out.push(ready);
+    Ok(out)
+}
+
 pub async fn save_boards_config(root_path: impl AsRef<Path>, config: &BoardsConfig) -> Result<()> {
     let root = root_path.as_ref();
+    let mut normalized_config = config.clone();
+    for board in &mut normalized_config.boards {
+        board.columns = normalize_pipeline_columns(std::mem::take(&mut board.columns))
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+    }
     let boards_file = root.join(".cvh").join("boards.json");
-    let serialized_boards = serde_json::to_string_pretty(config)
+    let serialized_boards = serde_json::to_string_pretty(&normalized_config)
         .context("Failed to serialize BoardsConfig")?;
     atomic_write_file(&boards_file, &serialized_boards).await?;
 
     let mut pipeline = load_pipeline_config(root).await.unwrap_or_else(|_| default_pipeline_config());
-    pipeline.boards = Some(config.boards.clone());
-    pipeline.active_board_id = Some(config.active_board_id.clone());
-    if let Some(active_board) = config.boards.iter().find(|b| b.id == config.active_board_id) {
+    pipeline.boards = Some(normalized_config.boards.clone());
+    pipeline.active_board_id = Some(normalized_config.active_board_id.clone());
+    if let Some(active_board) = normalized_config.boards.iter().find(|b| b.id == normalized_config.active_board_id) {
         pipeline.columns = active_board.columns.clone();
         pipeline.title = active_board.name.clone();
     }
@@ -798,12 +883,24 @@ pub fn agent_dir(repo_root: &Path, role: &str) -> PathBuf {
     repo_root.join(".cvh").join("agents").join(role)
 }
 
-/// Persona location (ЕДИНСТВЕННЫЙ путь): `<root>/.cvh/agents/<role>.md`
+/// Persona location (directory-only structure: `<root>/.cvh/agents/<role>/persona.md` or `agent.md`):
+///
+/// 1. `<root>/.cvh/agents/<role>/persona.md`
+/// 2. `<root>/.cvh/agents/<role>/agent.md`
+///
+/// Defaults to `<root>/.cvh/agents/<role>/persona.md` if neither exists.
+/// (NO flat file fallback!)
 pub fn agent_persona_path(repo_root: &Path, role: &str) -> PathBuf {
-    repo_root
-        .join(".cvh")
-        .join("agents")
-        .join(format!("{}.md", role))
+    let base = agent_dir(repo_root, role);
+    let persona = base.join("persona.md");
+    if persona.is_file() {
+        return persona;
+    }
+    let agent = base.join("agent.md");
+    if agent.is_file() {
+        return agent;
+    }
+    persona
 }
 
 /// `<root>/.cvh/agents/<role>/rules`
@@ -963,6 +1060,120 @@ pub fn minimal_pipeline_config() -> PipelineConfig {
     }
 }
 
+pub const DEFAULT_CVH_DEV_PERSONA_MD: &str = r#"---
+name: cvh-dev
+description: Use PROACTIVELY when setting up or repairing boards, pipelines, personas, or hooks.
+model: inherit
+tools: [read_file, glob, grep, execute_command, edit_file, write_file]
+scope: gated-writes
+activation: on-enter dev runs run_agent(taskId)
+---
+# Role Persona: cvh-dev (Harness Router)
+- Boots, repairs, and configures CanbanVoimaxHarness infrastructure.
+- Progressive disclosure: consult modular guides in `rules/boards.md`, `rules/agents.md`, `rules/hooks.md`.
+- Backlog-to-Ready Invariant: always maintain `backlog` at 0 and `ready` (terminal: true) at final index.
+"#;
+
+pub const DEFAULT_RULE_BOARDS_MD: &str = r#"# Guide: Boards and Pipelines Configuration
+
+Authoritative rules for `.cvh/boards.json` and `.cvh/pipeline.json`.
+
+## 1. Boards as Application Control Plane
+In CanbanVoimaxHarness, the Kanban board IS the runtime control plane.
+Columns represent autonomous stages. Moving a card triggers stage automations and agents.
+
+## 2. Canonical Ordering Invariant
+- **Backlog**: id `"backlog"` MUST ALWAYS exist at index 0 (the first column).
+- **Ready**: id `"ready"` (with `terminal: true`) MUST ALWAYS exist at the final index.
+- **Middle stages**: Preserve relative pipeline order (e.g. `dev` -> `review` -> `qa`).
+- Deleting `backlog` or `ready` is strictly prohibited on all boards. If omitted in a payload, the harness automatically re-injects them.
+
+## 3. Configuration Files
+- `.cvh/boards.json`:
+  ```json
+  {
+    "activeBoardId": "development",
+    "boards": [
+      {
+        "id": "development",
+        "name": "Development",
+        "columns": [ ... ]
+      }
+    ]
+  }
+  ```
+- `.cvh/pipeline.json`:
+  Mirrors the active board's columns and lifecycle settings.
+  Stage properties: `id`, `title`, `persona`, `contextWindow`, `gatekeeperSensor`, `allowedTools`, `terminal`, `hooks`, `routes`.
+"#;
+
+pub const DEFAULT_RULE_AGENTS_MD: &str = r#"# Guide: Agent Personas and Modular Rules
+
+Authoritative rules for `.cvh/agents/<role>/`.
+
+## 1. Directory-Only Structure
+All agent definitions reside in dedicated directories under `.cvh/agents/<role>/`:
+```text
+.cvh/agents/<role>/
+├── persona.md       # Primary persona prompt with YAML frontmatter (or agent.md)
+├── setting          # Optional JSON settings ({})
+└── rules/           # Modular rule files loaded during zero-turn priming
+    ├── rule1.md
+    └── ...
+```
+Flat persona files (`.cvh/agents/<role>.md`) are deprecated and ignored.
+
+## 2. Persona YAML Frontmatter
+Every `persona.md` must start with clean YAML frontmatter:
+```yaml
+---
+name: <role>
+description: Use PROACTIVELY when <trigger conditions>
+model: inherit
+tools: [read_file, glob, grep, execute_command, edit_file, write_file]
+scope: gated-writes
+activation: on-enter <column-id> runs run_agent(<task-id>)
+---
+```
+
+## 3. Two-Level Tool Policy Matrix (AND-Semantics)
+- Global Switches: `.cvh/settings/tool-policy.json` (`globalEnabled`).
+- Stage Overrides: `stageOverrides.<stage_id>` or column `allowedTools`.
+- `effective(tool, stage) = globalEnabled[tool] && stageOverride[stage][tool]`.
+- If a tool is globally disabled, a stage cannot re-enable it.
+
+## 4. Progressive Disclosure
+- Keep `persona.md` concise (≤30-50 lines).
+- Offload domain-specific guides to modular files in `.cvh/agents/<role>/rules/*.md`.
+"#;
+
+pub const DEFAULT_RULE_HOOKS_MD: &str = r#"# Guide: Transition Scripts and Lifecycle Hooks
+
+Authoritative rules for `.cvh/hooks/` and column lifecycle scripts.
+
+## 1. Lifecycle Triggers
+Columns declare transition hooks in their column configuration:
+- `hooks.on_enter`: Triggered when a card enters the stage.
+- `hooks.on_finish`: Triggered when an agent finishes execution in the stage.
+- Built-in hook: `"builtin:create_worktree"` automatically provisions an isolated git worktree upon entering backlog.
+
+## 2. Supported Formats
+Hook runner supports `.bat`, `.cmd`, `.ps1`, `.py`, `.sh`, and native binaries.
+
+## 3. Injected Environment Variables
+All hook processes receive the full task execution context:
+- `CVH_TASK_ID`: Unique task identifier (e.g. `CVH-042`).
+- `CVH_TASK_TITLE`: Human-readable task title.
+- `CVH_WORKTREE_PATH`: Absolute path to the isolated worktree directory.
+- `CVH_BRANCH`: Feature branch name (`feat/<task-slug>`).
+- `CVH_STAGE_ID`: Target stage identifier.
+- `CVH_VERDICT`: Reviewer verdict when leaving review (`APPROVED`, `APPROVED_WITH_CAVEATS`, `CHANGES_REQUESTED`).
+
+## 4. Gatekeeper Sensors
+Columns may define `gatekeeperSensor` (e.g. `cargo check` or `pnpm run build`).
+Gatekeeper sensors execute inside `CVH_WORKTREE_PATH` before any card advance. If exit code != 0, transition is blocked.
+"#;
+
 /// Automatically scaffold the minimal .cvh workspace structure if missing.
 /// Creates: empty `.cvh/agents/`, `.cvh/dialogs/`, `.cvh/worktrees/`,
 /// `.cvh/skills/`, `.cvh/settings/`, `.cvh/hooks/` and default
@@ -1021,9 +1232,34 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
         atomic_write_file(&pipeline_path, &serde_json::to_string_pretty(&minimal_pipeline)?).await?;
     }
 
-    // Note: agents/ stays intentionally empty on fresh scaffolds — no persona
-    // files are seeded. The first agent is created by the user via UI
-    // (create_agent_persona → `.cvh/agents/<role>/agent.md`).
+    // Seed modular cvh-dev router persona, settings, and progressive disclosure rules
+    // so any newly scaffolded project immediately has these guides available on disk.
+    let cvh_dev_dir = agents_dir.join("cvh-dev");
+    let cvh_dev_rules_dir = cvh_dev_dir.join("rules");
+    let cvh_dev_hooks_dir = cvh_dev_dir.join("hooks");
+    tokio::fs::create_dir_all(&cvh_dev_rules_dir).await?;
+    tokio::fs::create_dir_all(&cvh_dev_hooks_dir).await?;
+
+    let persona_path = cvh_dev_dir.join("persona.md");
+    if !persona_path.exists() {
+        atomic_write_file(&persona_path, DEFAULT_CVH_DEV_PERSONA_MD).await?;
+    }
+    let setting_path = cvh_dev_dir.join("setting");
+    if !setting_path.exists() {
+        atomic_write_file(&setting_path, "{}").await?;
+    }
+    let boards_md_path = cvh_dev_rules_dir.join("boards.md");
+    if !boards_md_path.exists() {
+        atomic_write_file(&boards_md_path, DEFAULT_RULE_BOARDS_MD).await?;
+    }
+    let agents_md_path = cvh_dev_rules_dir.join("agents.md");
+    if !agents_md_path.exists() {
+        atomic_write_file(&agents_md_path, DEFAULT_RULE_AGENTS_MD).await?;
+    }
+    let hooks_md_path = cvh_dev_rules_dir.join("hooks.md");
+    if !hooks_md_path.exists() {
+        atomic_write_file(&hooks_md_path, DEFAULT_RULE_HOOKS_MD).await?;
+    }
 
     // 3. Default tasks.json if not present
     let tasks_path = cvh_dir.join("tasks.json");
@@ -1178,14 +1414,23 @@ pub async fn load_pipeline_config(root_path: impl AsRef<Path>) -> Result<Pipelin
 
 pub async fn save_pipeline_config(root_path: impl AsRef<Path>, config: &PipelineConfig) -> Result<()> {
     let root = root_path.as_ref();
+    let mut normalized = config.clone();
+    normalized.columns = normalize_pipeline_columns(std::mem::take(&mut normalized.columns))
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    if let Some(ref mut boards) = normalized.boards {
+        for b in boards.iter_mut() {
+            b.columns = normalize_pipeline_columns(std::mem::take(&mut b.columns))
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+        }
+    }
     let pipeline_path = root.join(".cvh").join("pipeline.json");
-    let serialized = serde_json::to_string_pretty(config)
+    let serialized = serde_json::to_string_pretty(&normalized)
         .context("Failed to serialize PipelineConfig to JSON")?;
     atomic_write_file(&pipeline_path, &serialized).await?;
 
-    if let Some(ref boards) = config.boards {
+    if let Some(ref boards) = normalized.boards {
         let boards_cfg = BoardsConfig {
-            active_board_id: config.active_board_id.clone().unwrap_or_else(default_board_id),
+            active_board_id: normalized.active_board_id.clone().unwrap_or_else(default_board_id),
             boards: boards.clone(),
         };
         let boards_file = root.join(".cvh").join("boards.json");
@@ -1449,10 +1694,18 @@ mod tests {
         assert!(cvh.join("skills").is_dir());
         assert!(cvh.join("settings").is_dir());
 
-        // Verify agents folder is strictly empty (no auto-generated persona files)
+        // Verify cvh-dev modular rules are seeded
+        let cvh_dev = cvh.join("agents").join("cvh-dev");
+        assert!(cvh_dev.join("persona.md").is_file());
+        assert!(cvh_dev.join("rules").join("boards.md").is_file());
+        assert!(cvh_dev.join("rules").join("agents.md").is_file());
+        assert!(cvh_dev.join("rules").join("hooks.md").is_file());
+
+        // Ensure no legacy flat persona files exist in agents/
         let mut read_agents = tokio::fs::read_dir(cvh.join("agents")).await.expect("Read dir failed");
-        let first_entry = read_agents.next_entry().await.expect("Next entry failed");
-        assert!(first_entry.is_none(), "Expected agents/ to be completely empty per user mandate");
+        while let Ok(Some(entry)) = read_agents.next_entry().await {
+            assert!(entry.path().is_dir(), "Expected only directories in agents/, found: {:?}", entry.path());
+        }
 
         let _ = tokio::fs::remove_dir_all(&base_dir).await;
     }
@@ -1478,9 +1731,14 @@ mod tests {
         assert_eq!(pipe.columns[1].id, "ready");
         assert_eq!(pipe.columns[1].terminal, Some(true), "ready must be terminal last");
 
-        // agents/ strictly empty
+        // cvh-dev seeded with modular rules, no flat personas
+        let cvh_dev = cvh.join("agents").join("cvh-dev");
+        assert!(cvh_dev.join("persona.md").is_file());
+        assert!(cvh_dev.join("rules").join("boards.md").is_file());
         let mut rd = tokio::fs::read_dir(cvh.join("agents")).await.expect("agents dir");
-        assert!(rd.next_entry().await.expect("read").is_none(), "agents/ must be empty");
+        while let Ok(Some(entry)) = rd.next_entry().await {
+            assert!(entry.path().is_dir(), "Expected only directories in agents/, found: {:?}", entry.path());
+        }
 
         // remaining scaffold files/dirs in place
         assert!(cvh.join("dialogs").is_dir());

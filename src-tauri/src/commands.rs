@@ -35,6 +35,8 @@ pub struct CortexNode {
     pub children: Option<Vec<CortexNode>>,
 }
 
+pub use crate::config::normalize_pipeline_columns;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentPersonaInfo {
@@ -42,46 +44,20 @@ pub struct AgentPersonaInfo {
     pub has_prompt: bool,
     #[serde(default)]
     pub is_builtin: bool,
+    #[serde(default)]
+    pub persona_file: String,
+    #[serde(default)]
+    pub rules: Vec<String>,
+    #[serde(default)]
+    pub hooks: Vec<String>,
 }
 
-/// Stable-нормализация порядка колонок канбана:
-/// `backlog` — всегда первая (если есть), `ready` — всегда последняя (если есть),
-/// остальные сохраняют относительный порядок. Дублирующиеся id — ошибка.
-pub fn normalize_pipeline_columns(
-    columns: Vec<crate::config::PipelineColumn>,
-) -> Result<Vec<crate::config::PipelineColumn>, String> {
-    let mut seen = HashSet::new();
-    for c in &columns {
-        if !seen.insert(c.id.clone()) {
-            return Err(format!(
-                "Дублирующийся id колонки: '{}' — id колонок должны быть уникальными",
-                c.id
-            ));
-        }
-    }
-    let mut backlog: Option<crate::config::PipelineColumn> = None;
-    let mut ready: Option<crate::config::PipelineColumn> = None;
-    let mut middle = Vec::with_capacity(columns.len());
-    for col in columns {
-        if col.id == "backlog" && backlog.is_none() {
-            backlog = Some(col);
-        } else if col.id == "ready" && ready.is_none() {
-            ready = Some(col);
-        } else {
-            middle.push(col);
-        }
-    }
-    let mut out = Vec::with_capacity(
-        backlog.is_some() as usize + middle.len() + ready.is_some() as usize,
-    );
-    if let Some(b) = backlog {
-        out.push(b);
-    }
-    out.extend(middle);
-    if let Some(r) = ready {
-        out.push(r);
-    }
-    Ok(out)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CortexDiskFile {
+    pub name: String,
+    pub path: String,
+    pub file_type: String,
 }
 
 /// Валидация имени персоны: ^[a-z0-9][a-z0-9-]*$
@@ -121,25 +97,25 @@ fn persona_placeholder_template(role: &str) -> String {
     )
 }
 
-/// Сканирует `<root>/.cvh/agents/*.md` (ЕДИНСТВЕННЫЙ путь персоны, flat;
-/// сортировка по роли). Всегда включает встроенную персону `cvh-dev` (is_builtin = true).
-/// Пустая/отсутствующая папка всё равно возвращает встроенную персону `cvh-dev`.
-/// Подкаталоги `agents/*/` игнорируются (персона там не читается).
+/// Сканирует subдиректории `<root>/.cvh/agents/<role>/` (СТРОГО директории, flat .md файлы игнорируются).
+/// Проверяет наличие `persona.md` или `agent.md`.
+/// Считывает правила из `<root>/.cvh/agents/<role>/rules/*.md` и хуки из `<root>/.cvh/agents/<role>/hooks/*`.
+/// Всегда включает встроенную персону `cvh-dev` (is_builtin = true).
 pub async fn list_agent_personas_in(root: &Path) -> Vec<AgentPersonaInfo> {
     let agents_dir = root.join(".cvh").join("agents");
     let mut roles = HashSet::new();
     if let Ok(mut entries) = tokio::fs::read_dir(&agents_dir).await {
         while let Ok(Some(entry)) = entries.next_entry().await {
             let p = entry.path();
-            if !p.is_file() {
+            if !p.is_dir() {
                 continue;
             }
-            if p.extension().and_then(|e| e.to_str()) != Some("md") {
-                continue;
-            }
-            if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
-                if !stem.is_empty() {
-                    roles.insert(stem.to_string());
+            if let Some(role_name) = entry.file_name().to_str() {
+                if !role_name.is_empty()
+                    && is_valid_persona_role(role_name)
+                    && (p.join("persona.md").is_file() || p.join("agent.md").is_file())
+                {
+                    roles.insert(role_name.to_string());
                 }
             }
         }
@@ -147,41 +123,82 @@ pub async fn list_agent_personas_in(root: &Path) -> Vec<AgentPersonaInfo> {
     // Always include the builtin cvh-dev agent
     roles.insert("cvh-dev".to_string());
 
-    let mut out: Vec<AgentPersonaInfo> = roles
-        .into_iter()
-        .map(|role| {
-            let is_builtin = role == "cvh-dev";
-            AgentPersonaInfo {
-                role,
-                has_prompt: true,
-                is_builtin,
+    let mut out: Vec<AgentPersonaInfo> = Vec::with_capacity(roles.len());
+    for role in roles {
+        let is_builtin = role == "cvh-dev";
+        let role_dir = agents_dir.join(&role);
+
+        let persona_file = if role_dir.join("persona.md").is_file() {
+            "persona.md".to_string()
+        } else if role_dir.join("agent.md").is_file() {
+            "agent.md".to_string()
+        } else {
+            "persona.md".to_string()
+        };
+
+        let has_prompt = role_dir.join("persona.md").is_file()
+            || role_dir.join("agent.md").is_file()
+            || role == "cvh-dev"
+            || role == "developer";
+
+        let mut rules = Vec::new();
+        let rules_dir = role_dir.join("rules");
+        if let Ok(mut r_entries) = tokio::fs::read_dir(&rules_dir).await {
+            while let Ok(Some(r_entry)) = r_entries.next_entry().await {
+                let rp = r_entry.path();
+                if rp.is_file() && rp.extension().and_then(|e| e.to_str()) == Some("md") {
+                    if let Some(name) = r_entry.file_name().to_str() {
+                        rules.push(name.to_string());
+                    }
+                }
             }
-        })
-        .collect();
+        }
+        rules.sort();
+
+        let mut hooks = Vec::new();
+        let hooks_dir = role_dir.join("hooks");
+        if let Ok(mut h_entries) = tokio::fs::read_dir(&hooks_dir).await {
+            while let Ok(Some(h_entry)) = h_entries.next_entry().await {
+                let hp = h_entry.path();
+                if hp.is_file() {
+                    if let Some(name) = h_entry.file_name().to_str() {
+                        hooks.push(name.to_string());
+                    }
+                }
+            }
+        }
+        hooks.sort();
+
+        out.push(AgentPersonaInfo {
+            role,
+            has_prompt,
+            is_builtin,
+            persona_file,
+            rules,
+            hooks,
+        });
+    }
     out.sort_by(|a, b| a.role.cmp(&b.role));
     out
 }
 
-/// Удаляет персону `.cvh/agents/<role>.md` и её вспомогательный каталог `.cvh/agents/<role>`.
+/// Удаляет персону: каталог `.cvh/agents/<role>`.
 /// Удаление встроенной персоны `cvh-dev` строго запрещено.
 pub async fn delete_agent_persona_file(root: &Path, role: &str) -> Result<(), String> {
     if role == "cvh-dev" {
         return Err("Запрещено удалять встроенную персону 'cvh-dev'".to_string());
     }
-    let agents_dir = root.join(".cvh").join("agents");
-    let flat = agents_dir.join(format!("{}.md", role));
-    let role_dir = agents_dir.join(role);
+    let role_dir = crate::config::agent_dir(root, role);
+    let flat = root.join(".cvh").join("agents").join(format!("{}.md", role));
     let mut deleted = false;
-    if flat.exists() {
-        tokio::fs::remove_file(&flat)
-            .await
-            .map_err(|e| format!("Не удалось удалить персону '{}': {}", role, e))?;
-        deleted = true;
-    }
     if role_dir.exists() {
         tokio::fs::remove_dir_all(&role_dir)
             .await
             .map_err(|e| format!("Не удалось удалить каталог персоны '{}': {}", role, e))?;
+        deleted = true;
+    }
+    if flat.exists() {
+        let _ = tokio::fs::remove_file(&flat).await;
         deleted = true;
     }
     if !deleted {
@@ -190,9 +207,9 @@ pub async fn delete_agent_persona_file(root: &Path, role: &str) -> Result<(), St
     Ok(())
 }
 
-/// Создаёт flat-персону `.cvh/agents/<role>.md` с плейсхолдер-шаблоном плюс
-/// пустые per-role aux-директории `agents/<role>/{rules,hooks}` + `setting`
-/// (`{}`). Возвращает относительный путь `.cvh/agents/<role>.md`.
+/// Создаёт директорию `.cvh/agents/<role>/` с `persona.md`,
+/// пустыми per-role aux-директориями `rules/`, `hooks/` и `setting` (`{}`).
+/// Возвращает относительный путь `.cvh/agents/<role>/persona.md`.
 pub async fn create_agent_persona_file(root: &Path, role: &str) -> Result<String, String> {
     if !is_valid_persona_role(role) {
         return Err(format!(
@@ -200,12 +217,12 @@ pub async fn create_agent_persona_file(root: &Path, role: &str) -> Result<String
             role
         ));
     }
-    let agents_dir = root.join(".cvh").join("agents");
-    let flat = agents_dir.join(format!("{}.md", role));
-    let role_dir = agents_dir.join(role);
-    if flat.exists() || role_dir.join("agent.md").exists() {
+    let role_dir = crate::config::agent_dir(root, role);
+    let persona_file = role_dir.join("persona.md");
+    let agent_file = role_dir.join("agent.md");
+    if persona_file.exists() || agent_file.exists() {
         return Err(format!(
-            "Персона '{}' уже существует: .cvh/agents/{}.md",
+            "Персона '{}' уже существует: .cvh/agents/{}/persona.md",
             role, role
         ));
     }
@@ -216,7 +233,7 @@ pub async fn create_agent_persona_file(root: &Path, role: &str) -> Result<String
         .await
         .map_err(|e| format!("Не удалось создать hooks для персоны '{}': {}", role, e))?;
     let content = persona_placeholder_template(role);
-    atomic_write_file(&flat, &content)
+    atomic_write_file(&persona_file, &content)
         .await
         .map_err(|e| format!("Не удалось создать персону '{}': {}", role, e))?;
     let setting_path = role_dir.join("setting");
@@ -225,7 +242,7 @@ pub async fn create_agent_persona_file(root: &Path, role: &str) -> Result<String
             .await
             .map_err(|e| format!("Не удалось создать setting для персоны '{}': {}", role, e))?;
     }
-    Ok(format!(".cvh/agents/{}.md", role))
+    Ok(format!(".cvh/agents/{}/persona.md", role))
 }
 
 pub struct AppState {
@@ -711,6 +728,64 @@ pub async fn get_cortex_tree(state: State<'_, AppState>) -> Result<Vec<CortexNod
 }
 
 #[tauri::command]
+pub async fn list_cortex_agent_files(
+    role: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<CortexDiskFile>, String> {
+    let root = state.get_root();
+    let role_dir = crate::config::agent_dir(&root, &role);
+    let mut files = Vec::new();
+
+    let persona_p = role_dir.join("persona.md");
+    let agent_p = role_dir.join("agent.md");
+    if persona_p.is_file() {
+        files.push(CortexDiskFile {
+            name: "persona.md".to_string(),
+            path: format!(".cvh/agents/{}/persona.md", role),
+            file_type: "persona".to_string(),
+        });
+    } else if agent_p.is_file() {
+        files.push(CortexDiskFile {
+            name: "agent.md".to_string(),
+            path: format!(".cvh/agents/{}/agent.md", role),
+            file_type: "persona".to_string(),
+        });
+    }
+
+    let rules_dir = role_dir.join("rules");
+    if let Ok(mut entries) = tokio::fs::read_dir(&rules_dir).await {
+        let mut r_files = Vec::new();
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let p = entry.path();
+            if p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("md") {
+                if let Some(name) = entry.file_name().to_str() {
+                    r_files.push(name.to_string());
+                }
+            }
+        }
+        r_files.sort();
+        for r in r_files {
+            files.push(CortexDiskFile {
+                name: r.clone(),
+                path: format!(".cvh/agents/{}/rules/{}", role, r),
+                file_type: "rule".to_string(),
+            });
+        }
+    }
+
+    let setting_p = role_dir.join("setting");
+    if setting_p.is_file() {
+        files.push(CortexDiskFile {
+            name: "setting".to_string(),
+            path: format!(".cvh/agents/{}/setting", role),
+            file_type: "settings".to_string(),
+        });
+    }
+
+    Ok(files)
+}
+
+#[tauri::command]
 pub async fn read_cortex_file(path: String, state: State<'_, AppState>) -> Result<String, String> {
     let root = state.get_root();
     let target = if Path::new(&path).is_absolute() {
@@ -719,8 +794,12 @@ pub async fn read_cortex_file(path: String, state: State<'_, AppState>) -> Resul
         root.join(&path)
     };
 
-    if !target.exists() && path.contains("cvh-dev") && (path.ends_with("agent.md") || path.ends_with("cvh-dev.md")) {
+    if !target.exists() && path.contains("cvh-dev") && (path.ends_with("agent.md") || path.ends_with("persona.md") || path.ends_with("cvh-dev.md")) {
         return Ok(crate::agent::BUILTIN_CVH_DEV_PROMPT.to_string());
+    }
+
+    if !target.exists() && path.contains("developer") && (path.ends_with("agent.md") || path.ends_with("persona.md") || path.ends_with("developer.md")) {
+        return Ok(crate::agent::BUILTIN_DEVELOPER_PROMPT.to_string());
     }
 
     tokio::fs::read_to_string(&target)
@@ -3471,10 +3550,11 @@ mod tests {
     }
 
     #[test]
-    fn test_normalize_without_specials_keeps_order() {
+    fn test_normalize_without_specials_reinjects_backlog_and_ready() {
         let cols = vec![test_col("a"), test_col("b"), test_col("c")];
         let out = normalize_pipeline_columns(cols).expect("normalize failed");
-        assert_eq!(ids(&out), vec!["a", "b", "c"]);
+        assert_eq!(ids(&out), vec!["backlog", "a", "b", "c", "ready"]);
+        assert_eq!(out.last().unwrap().terminal, Some(true));
     }
 
     #[test]
@@ -3518,11 +3598,15 @@ mod tests {
             role: "developer".to_string(),
             has_prompt: true,
             is_builtin: false,
+            persona_file: "persona.md".to_string(),
+            rules: vec!["r1.md".to_string()],
+            hooks: vec![],
         };
         let v = serde_json::to_value(&info).expect("serialize");
         assert_eq!(v.get("role").and_then(|x| x.as_str()), Some("developer"));
         assert_eq!(v.get("hasPrompt").and_then(|x| x.as_bool()), Some(true));
         assert_eq!(v.get("isBuiltin").and_then(|x| x.as_bool()), Some(false));
+        assert_eq!(v.get("personaFile").and_then(|x| x.as_str()), Some("persona.md"));
         assert!(v.get("has_prompt").is_none());
         assert!(v.get("is_builtin").is_none());
 
@@ -3530,6 +3614,9 @@ mod tests {
             role: "cvh-dev".to_string(),
             has_prompt: true,
             is_builtin: true,
+            persona_file: "persona.md".to_string(),
+            rules: vec!["boards.md".to_string()],
+            hooks: vec![],
         };
         let vb = serde_json::to_value(&builtin).expect("serialize");
         assert_eq!(vb.get("isBuiltin").and_then(|x| x.as_bool()), Some(true));
@@ -3545,18 +3632,17 @@ mod tests {
         let bad = create_agent_persona_file(&base, "Bad_Name").await;
         assert!(bad.is_err());
 
-        // valid create → single flat `.cvh/agents/<role>.md`
+        // valid create → directory `.cvh/agents/<role>/persona.md`
         let rel = create_agent_persona_file(&base, "my-role")
             .await
             .expect("create failed");
-        assert_eq!(rel, ".cvh/agents/my-role.md");
+        assert_eq!(rel, ".cvh/agents/my-role/persona.md");
         let agents_dir = base.join(".cvh").join("agents");
-        let content = tokio::fs::read_to_string(agents_dir.join("my-role.md"))
+        let role_dir = agents_dir.join("my-role");
+        let content = tokio::fs::read_to_string(role_dir.join("persona.md"))
             .await
             .expect("read created file");
         assert!(content.contains("# Роль: my-role"));
-        // per-role aux dirs still seeded alongside the flat persona
-        let role_dir = agents_dir.join("my-role");
         assert!(role_dir.join("rules").is_dir(), "rules/ must exist");
         assert!(role_dir.join("hooks").is_dir(), "hooks/ must exist");
         let setting = tokio::fs::read_to_string(role_dir.join("setting"))
@@ -3569,12 +3655,8 @@ mod tests {
         assert!(dup.is_err());
         assert!(dup.unwrap_err().contains("уже существует"));
 
-        // existing flat file also blocks creation (same role)
-        tokio::fs::write(agents_dir.join("aaa.md"), "# Роль: aaa\n")
-            .await
-            .expect("seed aaa");
-        let dup_flat = create_agent_persona_file(&base, "aaa").await;
-        assert!(dup_flat.is_err());
+        // creating another role in directory
+        create_agent_persona_file(&base, "aaa").await.expect("create aaa");
         tokio::fs::write(agents_dir.join("notes.txt"), "ignore me")
             .await
             .expect("seed txt");
@@ -3600,24 +3682,33 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_list_personas_flat_only() {
-        // Single flat path: only top-level `*.md` files are personas, sorted.
-        // Subdirectories (even with agent.md) are ignored. cvh-dev is always included.
+    async fn test_list_personas_dir_only() {
+        // Directory-only structure: subdirectories with persona.md/agent.md are listed.
+        // Flat *.md files in agents/ are strictly ignored. cvh-dev is always included.
         let base =
             PathBuf::from("target").join(format!("cvh_persona_mix_{}", uuid::Uuid::new_v4()));
         let agents = base.join(".cvh").join("agents");
         tokio::fs::create_dir_all(&agents).await.expect("test dir");
-        tokio::fs::write(agents.join("b-role.md"), "# b\n")
+        // Flat files should be ignored
+        tokio::fs::write(agents.join("ignored.md"), "# flat ignored
+")
             .await
-            .expect("seed b");
-        tokio::fs::write(agents.join("a-role.md"), "# a\n")
+            .expect("seed flat");
+        // Directories with persona.md or agent.md
+        let a_dir = agents.join("a-role");
+        tokio::fs::create_dir_all(&a_dir).await.expect("a-role dir");
+        tokio::fs::write(a_dir.join("persona.md"), "# a-role
+")
             .await
-            .expect("seed a");
-        // Dir with agent.md is NOT a persona (single flat path only).
-        tokio::fs::create_dir_all(agents.join("ghost")).await.expect("ghost dir");
-        tokio::fs::write(agents.join("ghost").join("agent.md"), "# ghost\n")
+            .expect("seed a-role persona.md");
+
+        let b_dir = agents.join("b-role");
+        tokio::fs::create_dir_all(&b_dir).await.expect("b-role dir");
+        tokio::fs::write(b_dir.join("agent.md"), "# b-role
+")
             .await
-            .expect("seed ghost agent.md");
+            .expect("seed b-role agent.md");
+
         tokio::fs::write(agents.join("junk.txt"), "ignore").await.expect("seed txt");
 
         let listed = list_agent_personas_in(&base).await;
@@ -3641,11 +3732,9 @@ mod tests {
         // Creating and then deleting a custom persona succeeds
         create_agent_persona_file(&base, "temp-agent").await.expect("create temp-agent");
         let agents_dir = base.join(".cvh").join("agents");
-        assert!(agents_dir.join("temp-agent.md").is_file());
-        assert!(agents_dir.join("temp-agent").is_dir());
+        assert!(agents_dir.join("temp-agent").join("persona.md").is_file());
 
         delete_agent_persona_file(&base, "temp-agent").await.expect("delete temp-agent");
-        assert!(!agents_dir.join("temp-agent.md").exists());
         assert!(!agents_dir.join("temp-agent").exists());
 
         // Deleting non-existent persona returns error
