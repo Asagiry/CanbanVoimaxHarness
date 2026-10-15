@@ -444,5 +444,19 @@
       "src-tauri/tauri.conf.json"
     ],
     "timestamp": 1792091130907
+  },
+  "CVH-TODO-OVERLAY-FIX": {
+    "taskId": "CVH-TODO-OVERLAY-FIX",
+    "title": "Redesign TaskTodoWidget as non-displacing overlay popover pill to eliminate chat displacement and divider stripes",
+    "author": "agent-developer (react-tailwind-artisan)",
+    "verdict": "APPROVED",
+    "commitHash": "f249cd1",
+    "commitMessage": "feat(ui): redesign TaskTodoWidget as non-displacing overlay popover pill",
+    "summary": "Redesigned TaskTodoWidget so the plan list floats as an overlay popover (z-30 shadow-xl rounded-xl border border-[#ebebeb] bg-white) with outside-click and Escape listeners, completely preventing chat feed displacement. Removed the full-width divider stripe ('border-t border-[#ebebeb] bg-[#fafafa]') above the input area, anchoring a compact pill trigger ('To-dos X/Y') in the steer bar toolbar adjacent to the input controls.",
+    "files": [
+      "src/components/drawer/AgentConsoleDrawer.tsx",
+      "src/components/drawer/TaskTodoWidget.tsx"
+    ],
+    "timestamp": 1792091253086
   }
 }

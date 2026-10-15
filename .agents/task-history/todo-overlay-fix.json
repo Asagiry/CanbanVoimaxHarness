@@ -1,0 +1,18 @@
+{
+  "taskId": "CVH-TODO-OVERLAY-FIX",
+  "task": "todo-overlay-fix",
+  "title": "Redesign TaskTodoWidget as non-displacing overlay popover pill to eliminate chat displacement and divider stripes",
+  "branch": "feat/todo-overlay-fix",
+  "mergeSha": "e2893bf8c549e478f223a86988f27459557dbaa7",
+  "commitHash": "f249cd1",
+  "verdict": "APPROVED",
+  "sensors": {
+    "frontend_build_npm": "pass (tsc && vite build 0 errors)",
+    "l2_reviewer": "APPROVED"
+  },
+  "files": [
+    "src/components/drawer/AgentConsoleDrawer.tsx",
+    "src/components/drawer/TaskTodoWidget.tsx"
+  ],
+  "summary": "Redesigned TaskTodoWidget so the plan list floats as an overlay popover (z-30 shadow-xl rounded-xl border border-[#ebebeb] bg-white) with outside-click and Escape listeners, completely preventing chat feed displacement. Removed the full-width divider stripe ('border-t border-[#ebebeb] bg-[#fafafa]') above the input area, anchoring a compact pill trigger ('To-dos X/Y') in the steer bar toolbar adjacent to the input controls."
+}
