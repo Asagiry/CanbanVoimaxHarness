@@ -1,0 +1,23 @@
+{
+  "task": "release-automation",
+  "taskId": "CVH-RELEASE-AUTO",
+  "title": "Bulletproof 1-button local release scripts + manual workflow_dispatch CI/CD for Windows & Linux",
+  "branch": "feat/release-automation",
+  "base": "e4bb51875c26dc5ae3afe2f8256f1dda7e1d9a4a",
+  "merge_sha": "d4d510ea970beed00ad37de9d0e61c23c7da5c81",
+  "changed_files": [
+    ".github/workflows/release.yml",
+    "build-release.bat",
+    "build-release.ps1",
+    "build-release.sh"
+  ],
+  "diff_summary": "1. build-release.bat: fixed cmd.exe syntax crash (. was unexpected at this time); added preflight auto-detection of %USERPROFILE%\\.cargo\\bin, %APPDATA%\\npm, and %LOCALAPPDATA%\\Programs\\nodejs to PATH; collected artifacts into Release\\Windows\\bin and Release\\Windows\\installer. 2. build-release.ps1 & build-release.sh: added automated tool PATH detection for cargo, node, and pnpm. 3. .github/workflows/release.yml: enabled 1-click CI/CD release publishing via workflow_dispatch with optional tag_name input (publish-release no longer skipped); aligned Linux build dependencies with Antigravity-Tools-LS; automated matrix publishing of NSIS setup, MSI, Windows portable exe, Linux AppImage, deb, and Linux portable binary.",
+  "sensors": {
+    "cmd_build_release_help": "pass (exit code 0)",
+    "cargo_check": "pass (Finished dev profile)",
+    "cargo_clippy_D_warnings": "pass (Finished dev profile, 0 warnings/errors)",
+    "pnpm_run_build": "pass (tsc && vite build in 8.63s)"
+  },
+  "verdict": "APPROVED",
+  "notes": "Eliminates build environment failures for agents and local runs. Releases build to Release/Windows/installer, Release/Windows/bin, Release/Linux/installer, Release/Linux/bin."
+}
