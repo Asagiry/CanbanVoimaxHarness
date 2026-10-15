@@ -1,23 +1,52 @@
 import { useState, useEffect } from 'react';
 import { X, Layers, ArrowRight } from 'lucide-react';
 import { useBoardStore } from '../../stores/boardStore';
+import { useCortexStore } from '../../stores/cortexStore';
 
 interface CreateBoardModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+interface PersonaOption {
+  role: string;
+  isBuiltin?: boolean;
+}
+
 export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalProps) {
-  const { createBoard } = useBoardStore();
+  const { createBoard, saveBoard } = useBoardStore();
   const [boardName, setBoardName] = useState('');
+  const [selectedPersona, setSelectedPersona] = useState('developer');
+  const [personas, setPersonas] = useState<PersonaOption[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       setBoardName('');
+      setSelectedPersona('developer');
       setError(null);
       setIsSubmitting(false);
+
+      const fetchPersonas = async () => {
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          const list = await invoke<Array<{ role: string; isBuiltin?: boolean; is_builtin?: boolean }>>('list_agent_personas');
+          if (Array.isArray(list)) {
+            const mapped = list.map((p) => ({
+              role: p.role,
+              isBuiltin: p.isBuiltin ?? p.is_builtin ?? (p.role === 'cvh-dev'),
+            }));
+            setPersonas(mapped);
+          }
+        } catch {
+          setPersonas([
+            { role: 'cvh-dev', isBuiltin: true },
+            { role: 'developer', isBuiltin: false },
+          ]);
+        }
+      };
+      void fetchPersonas();
     }
   }, [isOpen]);
 
@@ -47,6 +76,13 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
     try {
       const created = await createBoard(trimmed);
       if (created) {
+        if (selectedPersona && selectedPersona !== 'developer') {
+          const updatedColumns = created.columns.map((c) =>
+            c.id === 'dev' ? { ...c, persona: selectedPersona } : c
+          );
+          await saveBoard({ ...created, columns: updatedColumns });
+          useCortexStore.getState().syncStagesFromColumns(updatedColumns);
+        }
         setBoardName('');
         onClose();
       } else {
@@ -117,6 +153,27 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
             />
           </div>
 
+          {/* Persona selector for development column */}
+          <div>
+            <label className="block text-xs font-medium text-[#171717] mb-1.5">
+              Агент разработки
+            </label>
+            <select
+              value={selectedPersona}
+              onChange={(e) => setSelectedPersona(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-[#fafafa] border border-[#ebebeb] text-[#171717] text-xs font-mono focus:outline-hidden focus:border-[#171717] focus:bg-white transition cursor-pointer"
+            >
+              {personas.map((p) => {
+                const isBuiltin = p.role === 'cvh-dev' || Boolean(p.isBuiltin);
+                return (
+                  <option key={p.role} value={p.role}>
+                    {isBuiltin ? `${p.role} (Встроенный)` : p.role}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
           {/* Invariant Visual Preview */}
           <div className="p-3 rounded-lg bg-[#fafafa] border border-[#ebebeb] space-y-2">
             <span className="block text-[11px] font-medium text-[#71717a]">
@@ -136,7 +193,7 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
               <div className="flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-md bg-white border border-[#f59e0b]/30 shadow-2xs text-center">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#f59e0b] mb-1" />
                 <span className="font-medium text-[#171717] text-[11px]">В разработке</span>
-                <span className="text-[9px] text-[#f59e0b] font-mono">@developer</span>
+                <span className="text-[9px] text-[#f59e0b] font-mono">@{selectedPersona}</span>
               </div>
 
               <ArrowRight className="h-3 w-3 text-[#a1a1aa] shrink-0" />

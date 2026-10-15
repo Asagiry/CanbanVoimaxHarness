@@ -37,6 +37,8 @@ pub struct CortexNode {
 pub struct AgentPersonaInfo {
     pub role: String,
     pub has_prompt: bool,
+    #[serde(default)]
+    pub is_builtin: bool,
 }
 
 /// Stable-нормализация порядка колонок канбана:
@@ -117,34 +119,72 @@ fn persona_placeholder_template(role: &str) -> String {
 }
 
 /// Сканирует `<root>/.cvh/agents/*.md` (ЕДИНСТВЕННЫЙ путь персоны, flat;
-/// сортировка по роли). Пустая/отсутствующая папка → пустой vec, не ошибка.
+/// сортировка по роли). Всегда включает встроенную персону `cvh-dev` (is_builtin = true).
+/// Пустая/отсутствующая папка всё равно возвращает встроенную персону `cvh-dev`.
 /// Подкаталоги `agents/*/` игнорируются (персона там не читается).
 pub async fn list_agent_personas_in(root: &Path) -> Vec<AgentPersonaInfo> {
     let agents_dir = root.join(".cvh").join("agents");
-    let Ok(mut entries) = tokio::fs::read_dir(&agents_dir).await else {
-        return Vec::new();
-    };
     let mut roles = HashSet::new();
-    while let Ok(Some(entry)) = entries.next_entry().await {
-        let p = entry.path();
-        if !p.is_file() {
-            continue;
-        }
-        if p.extension().and_then(|e| e.to_str()) != Some("md") {
-            continue;
-        }
-        if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
-            if !stem.is_empty() {
-                roles.insert(stem.to_string());
+    if let Ok(mut entries) = tokio::fs::read_dir(&agents_dir).await {
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let p = entry.path();
+            if !p.is_file() {
+                continue;
+            }
+            if p.extension().and_then(|e| e.to_str()) != Some("md") {
+                continue;
+            }
+            if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+                if !stem.is_empty() {
+                    roles.insert(stem.to_string());
+                }
             }
         }
     }
+    // Always include the builtin cvh-dev agent
+    roles.insert("cvh-dev".to_string());
+
     let mut out: Vec<AgentPersonaInfo> = roles
         .into_iter()
-        .map(|role| AgentPersonaInfo { role, has_prompt: true })
+        .map(|role| {
+            let is_builtin = role == "cvh-dev";
+            AgentPersonaInfo {
+                role,
+                has_prompt: true,
+                is_builtin,
+            }
+        })
         .collect();
     out.sort_by(|a, b| a.role.cmp(&b.role));
     out
+}
+
+/// Удаляет персону `.cvh/agents/<role>.md` и её вспомогательный каталог `.cvh/agents/<role>`.
+/// Удаление встроенной персоны `cvh-dev` строго запрещено.
+pub async fn delete_agent_persona_file(root: &Path, role: &str) -> Result<(), String> {
+    if role == "cvh-dev" {
+        return Err("Запрещено удалять встроенную персону 'cvh-dev'".to_string());
+    }
+    let agents_dir = root.join(".cvh").join("agents");
+    let flat = agents_dir.join(format!("{}.md", role));
+    let role_dir = agents_dir.join(role);
+    let mut deleted = false;
+    if flat.exists() {
+        tokio::fs::remove_file(&flat)
+            .await
+            .map_err(|e| format!("Не удалось удалить персону '{}': {}", role, e))?;
+        deleted = true;
+    }
+    if role_dir.exists() {
+        tokio::fs::remove_dir_all(&role_dir)
+            .await
+            .map_err(|e| format!("Не удалось удалить каталог персоны '{}': {}", role, e))?;
+        deleted = true;
+    }
+    if !deleted {
+        return Err(format!("Персона '{}' не найдена", role));
+    }
+    Ok(())
 }
 
 /// Создаёт flat-персону `.cvh/agents/<role>.md` с плейсхолдер-шаблоном плюс
@@ -528,9 +568,26 @@ pub async fn list_agent_personas(
 pub async fn create_agent_persona(
     role: String,
     state: State<'_, AppState>,
+    app: AppHandle,
 ) -> Result<String, String> {
     let root = state.get_root();
-    create_agent_persona_file(&root, &role).await
+    let res = create_agent_persona_file(&root, &role).await?;
+    let list = list_agent_personas_in(&root).await;
+    let _ = app.emit("agent:personas_updated", &list);
+    Ok(res)
+}
+
+#[tauri::command]
+pub async fn delete_agent_persona(
+    role: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let root = state.get_root();
+    delete_agent_persona_file(&root, &role).await?;
+    let list = list_agent_personas_in(&root).await;
+    let _ = app.emit("agent:personas_updated", &list);
+    Ok(())
 }
 
 #[tauri::command]
@@ -653,10 +710,14 @@ pub async fn get_cortex_tree(state: State<'_, AppState>) -> Result<Vec<CortexNod
 pub async fn read_cortex_file(path: String, state: State<'_, AppState>) -> Result<String, String> {
     let root = state.get_root();
     let target = if Path::new(&path).is_absolute() {
-        PathBuf::from(path)
+        PathBuf::from(path.clone())
     } else {
-        root.join(path)
+        root.join(&path)
     };
+
+    if !target.exists() && path.contains("cvh-dev") && (path.ends_with("agent.md") || path.ends_with("cvh-dev.md")) {
+        return Ok(crate::agent::BUILTIN_CVH_DEV_PROMPT.to_string());
+    }
 
     tokio::fs::read_to_string(&target)
         .await
@@ -3433,11 +3494,22 @@ mod tests {
         let info = AgentPersonaInfo {
             role: "developer".to_string(),
             has_prompt: true,
+            is_builtin: false,
         };
         let v = serde_json::to_value(&info).expect("serialize");
         assert_eq!(v.get("role").and_then(|x| x.as_str()), Some("developer"));
         assert_eq!(v.get("hasPrompt").and_then(|x| x.as_bool()), Some(true));
+        assert_eq!(v.get("isBuiltin").and_then(|x| x.as_bool()), Some(false));
         assert!(v.get("has_prompt").is_none());
+        assert!(v.get("is_builtin").is_none());
+
+        let builtin = AgentPersonaInfo {
+            role: "cvh-dev".to_string(),
+            has_prompt: true,
+            is_builtin: true,
+        };
+        let vb = serde_json::to_value(&builtin).expect("serialize");
+        assert_eq!(vb.get("isBuiltin").and_then(|x| x.as_bool()), Some(true));
     }
 
     #[tokio::test]
@@ -3485,15 +3557,20 @@ mod tests {
             .expect("seed txt");
         let listed = list_agent_personas_in(&base).await;
         let roles: Vec<String> = listed.iter().map(|p| p.role.clone()).collect();
-        assert_eq!(roles, vec!["aaa".to_string(), "my-role".to_string()]);
+        assert_eq!(roles, vec!["aaa".to_string(), "cvh-dev".to_string(), "my-role".to_string()]);
         assert!(listed.iter().all(|p| p.has_prompt));
+        let cvh_dev_info = listed.iter().find(|p| p.role == "cvh-dev").unwrap();
+        assert!(cvh_dev_info.is_builtin);
 
-        // missing folder → empty vec, not error
+        // missing folder → still always contains builtin cvh-dev
         let empty_base =
             PathBuf::from("target").join(format!("cvh_persona_empty_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&empty_base).await.expect("empty dir");
         let empty = list_agent_personas_in(&empty_base).await;
-        assert!(empty.is_empty());
+        assert_eq!(empty.len(), 1);
+        assert_eq!(empty[0].role, "cvh-dev");
+        assert!(empty[0].is_builtin);
+        assert!(empty[0].has_prompt);
 
         let _ = tokio::fs::remove_dir_all(&base).await;
         let _ = tokio::fs::remove_dir_all(&empty_base).await;
@@ -3502,7 +3579,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_personas_flat_only() {
         // Single flat path: only top-level `*.md` files are personas, sorted.
-        // Subdirectories (even with agent.md) are ignored.
+        // Subdirectories (even with agent.md) are ignored. cvh-dev is always included.
         let base =
             PathBuf::from("target").join(format!("cvh_persona_mix_{}", uuid::Uuid::new_v4()));
         let agents = base.join(".cvh").join("agents");
@@ -3522,8 +3599,35 @@ mod tests {
 
         let listed = list_agent_personas_in(&base).await;
         let roles: Vec<String> = listed.iter().map(|p| p.role.clone()).collect();
-        assert_eq!(roles, vec!["a-role".to_string(), "b-role".to_string()]);
+        assert_eq!(roles, vec!["a-role".to_string(), "b-role".to_string(), "cvh-dev".to_string()]);
         assert!(listed.iter().all(|p| p.has_prompt));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_delete_agent_persona_protection() {
+        let base =
+            PathBuf::from("target").join(format!("cvh_persona_del_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        // Deleting cvh-dev must be strictly forbidden
+        let err = delete_agent_persona_file(&base, "cvh-dev").await.unwrap_err();
+        assert!(err.contains("Запрещено удалять встроенную персону 'cvh-dev'"));
+
+        // Creating and then deleting a custom persona succeeds
+        create_agent_persona_file(&base, "temp-agent").await.expect("create temp-agent");
+        let agents_dir = base.join(".cvh").join("agents");
+        assert!(agents_dir.join("temp-agent.md").is_file());
+        assert!(agents_dir.join("temp-agent").is_dir());
+
+        delete_agent_persona_file(&base, "temp-agent").await.expect("delete temp-agent");
+        assert!(!agents_dir.join("temp-agent.md").exists());
+        assert!(!agents_dir.join("temp-agent").exists());
+
+        // Deleting non-existent persona returns error
+        let missing_err = delete_agent_persona_file(&base, "non-existent").await.unwrap_err();
+        assert!(missing_err.contains("не найдена"));
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
