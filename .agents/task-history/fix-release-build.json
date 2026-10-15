@@ -1,0 +1,34 @@
+{
+  "taskId": "CVH-RELEASE-BUILD-FIX",
+  "title": "Fix Windows GNU release bundling and bundle WebView2Loader.dll in portable and NSIS artifacts",
+  "task": "fix-release-build",
+  "branch": "feat/fix-release-build",
+  "commitHash": "8e2efe2",
+  "mergeCommitHash": "1990a9c",
+  "commitMessage": "feat(build): fix Windows GNU release bundling and include WebView2Loader.dll in portable and NSIS artifacts",
+  "author": "tauri-rust-engineer (Level 1)",
+  "verdict": "APPROVED",
+  "summary": "Diagnosed and resolved release build and bundling failure on Windows under x86_64-pc-windows-gnu toolchain (llvm-mingw). Fixed runtime 'WebView2Loader.dll not found' error by copying the target WebView2Loader.dll into Release/Windows/bin/ alongside canban-voimax-harness.exe, and created src-tauri/nsis-hooks.nsh to embed WebView2Loader.dll into the NSIS installer. Pruned bundle targets in tauri.conf.json to ['nsis'] to eliminate WiX v3 stalls, and hardened build-release.ps1 and build-release.bat with automatic toolchain discovery, short temp directory redirect, and multi-candidate artifact collection.",
+  "files": [
+    "build-release.bat",
+    "build-release.ps1",
+    "src-tauri/nsis-hooks.nsh",
+    "src-tauri/tauri.conf.json"
+  ],
+  "sensors": {
+    "frontend_build": "pass",
+    "cargo_check_gnu": "pass",
+    "cargo_clippy_gnu": "pass",
+    "release_build_ps1": "pass",
+    "release_build_bat": "pass"
+  },
+  "artifacts": {
+    "portable_exe": "Release/Windows/bin/canban-voimax-harness.exe",
+    "portable_exe_size": 30721536,
+    "webview2_dll": "Release/Windows/bin/WebView2Loader.dll",
+    "webview2_dll_size": 160880,
+    "nsis_installer": "Release/Windows/installer/CanbanVoimaxHarness_0.1.0_x64-setup.exe",
+    "nsis_installer_size": 5957665
+  },
+  "timestamp": 1792091130907
+}
