@@ -18,6 +18,9 @@ use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 use tokio::sync::mpsc;
 
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TodoItem {
     #[serde(default = "default_todo_id")]
@@ -923,6 +926,9 @@ async fn run_scoped_command(
     cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
+
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
 
     let mut child = cmd.spawn().with_context(|| format!("Failed to spawn command: {}", cmd_str))?;
     let pid = child.id();

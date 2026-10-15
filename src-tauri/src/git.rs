@@ -2,6 +2,9 @@ use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 use tokio::process::Command;
 
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct WorktreeInfo {
     pub path: String,
@@ -10,9 +13,11 @@ pub struct WorktreeInfo {
 }
 
 async fn run_git(repo_root: &Path, args: &[&str]) -> Result<String> {
-    let output = Command::new("git")
-        .current_dir(repo_root)
-        .args(args)
+    let mut cmd = Command::new("git");
+    cmd.current_dir(repo_root).args(args);
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    let output = cmd
         .output()
         .await
         .with_context(|| format!("Failed to execute 'git {}' in {:?}", args.join(" "), repo_root))?;
@@ -50,11 +55,13 @@ pub async fn create_worktree(
     }
 
     // Check if branch already exists
-    let branch_check = Command::new("git")
+    let mut branch_cmd = Command::new("git");
+    branch_cmd
         .current_dir(repo_path)
-        .args(["rev-parse", "--verify", &branch_name])
-        .output()
-        .await;
+        .args(["rev-parse", "--verify", &branch_name]);
+    #[cfg(windows)]
+    branch_cmd.creation_flags(CREATE_NO_WINDOW);
+    let branch_check = branch_cmd.output().await;
 
     let branch_exists = match branch_check {
         Ok(out) => out.status.success(),
@@ -72,11 +79,13 @@ pub async fn create_worktree(
         .with_context(|| format!("Failed to attach existing branch '{}' to worktree '{}'", branch_name, worktree_str))?;
     } else {
         // Verify base branch exists; if not, fallback to "HEAD" so it works on any repo/branch
-        let base_check = Command::new("git")
+        let mut base_cmd = Command::new("git");
+        base_cmd
             .current_dir(repo_path)
-            .args(["rev-parse", "--verify", base_branch])
-            .output()
-            .await;
+            .args(["rev-parse", "--verify", base_branch]);
+        #[cfg(windows)]
+        base_cmd.creation_flags(CREATE_NO_WINDOW);
+        let base_check = base_cmd.output().await;
         let effective_base = match base_check {
             Ok(out) if out.status.success() => base_branch,
             _ => "HEAD",
