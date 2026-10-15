@@ -43,3 +43,7 @@ llm.json
 *.local
 .cvh/worktrees/
 package-lock.json
+
+# Local release bundles (binaries stay untracked)
+Release/*
+!Release/.gitkeep
