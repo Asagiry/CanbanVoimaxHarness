@@ -16,6 +16,9 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::process::Command;
 use std::sync::{Arc, Mutex, RwLock};
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
@@ -2651,9 +2654,13 @@ pub async fn get_task_git_diff(
         _ => task.branch.unwrap_or_else(|| "main".to_string()),
     };
 
-    let status_output = Command::new("git")
+    let mut status_cmd = Command::new("git");
+    status_cmd
         .current_dir(&workdir)
-        .args(["status", "--porcelain=v1", "-uall"])
+        .args(["status", "--porcelain=v1", "-uall"]);
+    #[cfg(windows)]
+    status_cmd.creation_flags(CREATE_NO_WINDOW);
+    let status_output = status_cmd
         .output()
         .await
         .map_err(|e| format!("Failed to run git status in {:?}: {}", workdir, e))?;
@@ -2703,9 +2710,13 @@ pub async fn get_task_git_diff(
         });
     }
 
-    let head_exists = Command::new("git")
+    let mut head_cmd = Command::new("git");
+    head_cmd
         .current_dir(&workdir)
-        .args(["rev-parse", "--verify", "HEAD"])
+        .args(["rev-parse", "--verify", "HEAD"]);
+    #[cfg(windows)]
+    head_cmd.creation_flags(CREATE_NO_WINDOW);
+    let head_exists = head_cmd
         .output()
         .await
         .map(|o| o.status.success())
@@ -2717,9 +2728,13 @@ pub async fn get_task_git_diff(
         vec!["diff"]
     };
 
-    let git_diff_out = Command::new("git")
+    let mut diff_cmd = Command::new("git");
+    diff_cmd
         .current_dir(&workdir)
-        .args(&diff_args)
+        .args(&diff_args);
+    #[cfg(windows)]
+    diff_cmd.creation_flags(CREATE_NO_WINDOW);
+    let git_diff_out = diff_cmd
         .output()
         .await;
 
@@ -2737,9 +2752,13 @@ pub async fn get_task_git_diff(
 
     for (file_path, status) in file_entries {
         let patch = if status == "A" && (!head_exists || !diff_blocks.contains_key(&file_path)) {
-            let untracked_diff = Command::new("git")
+            let mut untracked_cmd = Command::new("git");
+            untracked_cmd
                 .current_dir(&workdir)
-                .args(["diff", "--no-index", "--", "/dev/null", &file_path])
+                .args(["diff", "--no-index", "--", "/dev/null", &file_path]);
+            #[cfg(windows)]
+            untracked_cmd.creation_flags(CREATE_NO_WINDOW);
+            let untracked_diff = untracked_cmd
                 .output()
                 .await;
 
@@ -2767,9 +2786,13 @@ pub async fn get_task_git_diff(
         } else if let Some(p) = diff_blocks.remove(&file_path) {
             p
         } else {
-            let file_diff = Command::new("git")
+            let mut file_cmd = Command::new("git");
+            file_cmd
                 .current_dir(&workdir)
-                .args(["diff", "HEAD", "--", &file_path])
+                .args(["diff", "HEAD", "--", &file_path]);
+            #[cfg(windows)]
+            file_cmd.creation_flags(CREATE_NO_WINDOW);
+            let file_diff = file_cmd
                 .output()
                 .await;
             match file_diff {

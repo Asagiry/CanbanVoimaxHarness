@@ -6,6 +6,9 @@ use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct HookContext {
     pub task_id: String,
@@ -33,10 +36,11 @@ pub struct HookExecutionResult {
 pub async fn kill_process_tree(pid: u32) {
     #[cfg(target_os = "windows")]
     {
-        let _ = Command::new("taskkill")
-            .args(["/F", "/T", "/PID", &pid.to_string()])
-            .output()
-            .await;
+        let mut cmd = Command::new("taskkill");
+        cmd.args(["/F", "/T", "/PID", &pid.to_string()]);
+        #[cfg(windows)]
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        let _ = cmd.output().await;
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -118,6 +122,9 @@ pub async fn execute_hook(
         cmd.env(k, v);
     }
 
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
     let mut child = cmd.spawn().with_context(|| format!("Failed to spawn hook script {:?}", script))?;
     let pid = child.id();
 
@@ -187,6 +194,9 @@ pub async fn execute_sensor_command(
     cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
+
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
 
     let mut child = cmd.spawn().with_context(|| format!("Failed to spawn sensor command: {}", command_str))?;
     let pid = child.id();
