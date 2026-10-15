@@ -458,5 +458,22 @@
       "src/components/drawer/TaskTodoWidget.tsx"
     ],
     "timestamp": 1792091253086
+  },
+  "CVH-UI-DIFF-THINKING-POLISH": {
+    "taskId": "CVH-UI-DIFF-THINKING-POLISH",
+    "title": "Diff accordion with noise stripping, real newlines in tool params, window dragging by chat header, and typewriter thinking",
+    "author": "agent-developer (react-tailwind-artisan)",
+    "verdict": "APPROVED",
+    "commitHash": "20aeb04",
+    "mergeCommitHash": "b5f8ebd",
+    "commitMessage": "feat(ui): diff accordion, noise stripping, real newlines in tool params, and typewriter thinking",
+    "summary": "Refactored GitDiffSidebar into a clean per-file accordion with additions/deletions badges and stripped git noise headers (diff --git, index, --- /dev/null, +++ b/..., new file mode). Refactored ToolExecutionCard to render multiline string parameters (content, command, old_string, new_string, patch) with real newlines in dedicated scrollable pre blocks instead of escaped \\n in raw JSON.stringify. Extracted ThinkingCard and implemented smooth streaming typewriter effect via requestAnimationFrame with adaptive cadence, live timer, and blinking cursor. Added data-tauri-drag-region to AgentConsoleDrawer header with selective pointer-event isolation for buttons and badges.",
+    "files": [
+      "src/components/drawer/AgentConsoleDrawer.tsx",
+      "src/components/drawer/GitDiffSidebar.tsx",
+      "src/components/drawer/ThinkingCard.tsx",
+      "src/components/drawer/ToolExecutionCard.tsx"
+    ],
+    "timestamp": 1792092193529
   }
 }
