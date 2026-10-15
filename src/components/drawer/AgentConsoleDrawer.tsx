@@ -1081,15 +1081,7 @@ export default function AgentConsoleDrawer() {
         )}
       </div>
 
-        {/* Agent plan strip flush against the send box (read-only, filled by agent
-            via todo_write). Hidden when the tool is disabled in policy. */}
-        {isToolAllowed('todo_write', task.columnId) && (
-          <div className="px-4 md:px-6 pt-2 pb-1 shrink-0 border-t border-[#ebebeb] bg-[#fafafa]">
-            <div className="max-w-3xl mx-auto">
-              <TaskTodoWidget task={task} />
-            </div>
-          </div>
-        )}
+
 
       {/* f) Interactive Input & Steer Bar: Floating Light Card & Bottom Status Bar */}
         <footer className="border-t border-[#ebebeb] bg-[#fafafa]/80 backdrop-blur-xs px-3 pb-3 pt-1 shrink-0 shadow-xs z-10">
@@ -1168,6 +1160,10 @@ export default function AgentConsoleDrawer() {
                   onChange={handleChatFileSelect}
                 />
 
+                {/* Compact TaskTodoWidget pill & overlay popover */}
+                {(isToolAllowed('todo_write', task.columnId) || (task.todos && task.todos.length > 0)) && (
+                  <TaskTodoWidget task={task} align="left" />
+                )}
               </div>
 
               {/* Right Toolbar Items */}
