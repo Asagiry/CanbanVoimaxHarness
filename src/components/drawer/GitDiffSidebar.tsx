@@ -6,10 +6,13 @@ import {
   PanelRightClose,
   PanelRightOpen,
   CheckCircle2,
-  FileCode,
   Copy,
   Check,
   AlertCircle,
+  ChevronDown,
+  ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
 } from 'lucide-react';
 import { DiffFile, TaskGitDiff } from '../../types';
 
@@ -21,42 +24,64 @@ interface GitDiffSidebarProps {
 }
 
 interface ParsedDiffLine {
-  type: 'meta' | 'hunk' | 'add' | 'del' | 'context';
+  type: 'hunk' | 'add' | 'del' | 'context';
   text: string;
   oldNum: number | null;
   newNum: number | null;
 }
 
-function parseUnifiedPatch(patch?: string | null): ParsedDiffLine[] {
+/**
+ * Parses unified diff into clean hunks, stripping all git metadata noise
+ * (diff --git, index, --- /dev/null, +++ b/..., new file mode, etc.)
+ */
+function parseCleanDiff(patch?: string | null): ParsedDiffLine[] {
   if (!patch || typeof patch !== 'string') return [];
   const lines = patch.split('\n');
   const result: ParsedDiffLine[] = [];
   let oldLine = 0;
   let newLine = 0;
+  let seenFirstHunk = false;
 
   for (const line of lines) {
+    // 1. Hunk header: starts with @@
     if (line.startsWith('@@')) {
+      seenFirstHunk = true;
       const match = line.match(/@@\s+-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@/);
       if (match) {
         oldLine = parseInt(match[1], 10);
         newLine = parseInt(match[2], 10);
       }
       result.push({ type: 'hunk', text: line, oldNum: null, newNum: null });
-    } else if (line.startsWith('+') && !line.startsWith('+++')) {
-      result.push({ type: 'add', text: line.slice(1), oldNum: null, newNum: newLine });
-      newLine++;
-    } else if (line.startsWith('-') && !line.startsWith('---')) {
-      result.push({ type: 'del', text: line.slice(1), oldNum: oldLine, newNum: null });
-      oldLine++;
-    } else if (
+      continue;
+    }
+
+    // 2. Ignore any git metadata noise before or between hunks
+    if (!seenFirstHunk) {
+      continue;
+    }
+
+    if (
       line.startsWith('diff --git') ||
       line.startsWith('index ') ||
       line.startsWith('--- ') ||
       line.startsWith('+++ ') ||
       line.startsWith('new file ') ||
-      line.startsWith('deleted file ')
+      line.startsWith('deleted file ') ||
+      line.startsWith('similarity index') ||
+      line.startsWith('rename from') ||
+      line.startsWith('rename to') ||
+      line.startsWith('\\ No newline')
     ) {
-      result.push({ type: 'meta', text: line, oldNum: null, newNum: null });
+      continue;
+    }
+
+    // 3. Diff content lines
+    if (line.startsWith('+')) {
+      result.push({ type: 'add', text: line.slice(1), oldNum: null, newNum: newLine });
+      newLine++;
+    } else if (line.startsWith('-')) {
+      result.push({ type: 'del', text: line.slice(1), oldNum: oldLine, newNum: null });
+      oldLine++;
     } else {
       const text = line.startsWith(' ') ? line.slice(1) : line;
       result.push({ type: 'context', text, oldNum: oldLine, newNum: newLine });
@@ -77,6 +102,183 @@ function formatFilesCount(count: number): string {
   return `${count} файлов`;
 }
 
+interface AccordionFileItemProps {
+  file: DiffFile;
+  isExpanded: boolean;
+  onToggle: () => void;
+}
+
+function AccordionFileItem({ file, isExpanded, onToggle }: AccordionFileItemProps) {
+  const [copied, setCopied] = useState(false);
+
+  const parsedLines = useMemo(() => {
+    return parseCleanDiff(file.patch);
+  }, [file.patch]);
+
+  const lastSlashIndex = file.path.lastIndexOf('/');
+  const dirPart = lastSlashIndex !== -1 ? file.path.slice(0, lastSlashIndex + 1) : '';
+  const filePart = lastSlashIndex !== -1 ? file.path.slice(lastSlashIndex + 1) : file.path;
+
+  const statusColor =
+    file.status === 'A'
+      ? 'bg-[#f0fdf4] text-[#15803d] border-[#bbf7d0]'
+      : file.status === 'D'
+      ? 'bg-[#fef2f2] text-[#b91c1c] border-[#fecaca]'
+      : 'bg-[#fffbeb] text-[#b45309] border-[#fde68a]';
+
+  const handleCopyPatch = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!file.patch) return;
+    try {
+      await navigator.clipboard.writeText(file.patch);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // ignore
+    }
+  };
+
+  return (
+    <div className="rounded-md border border-[#ebebeb] bg-white overflow-hidden shadow-xs transition duration-150">
+      {/* File Header Row (Clickable Accordion Trigger) */}
+      <div
+        onClick={onToggle}
+        className="flex items-center justify-between px-3 py-2 bg-[#fcfcfc] hover:bg-[#f4f4f5] cursor-pointer transition select-none"
+      >
+        <div className="flex items-center space-x-2 min-w-0 mr-2">
+          {isExpanded ? (
+            <ChevronDown className="h-3.5 w-3.5 text-[#666666] shrink-0" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 text-[#666666] shrink-0" />
+          )}
+
+          <span
+            className={`px-1.5 py-0.2 rounded text-[10px] font-bold border shrink-0 font-mono ${statusColor}`}
+          >
+            {file.status}
+          </span>
+
+          <span className="truncate text-xs font-mono" title={file.path}>
+            {dirPart && <span className="text-[#8f8f8f]">{dirPart}</span>}
+            <span className="font-semibold text-[#171717]">{filePart}</span>
+          </span>
+        </div>
+
+        <div className="flex items-center space-x-2 shrink-0 font-mono text-[11px] tabular-nums">
+          {(file.additions ?? 0) > 0 && (
+            <span className="text-[#15803d] font-medium">+{file.additions}</span>
+          )}
+          {(file.deletions ?? 0) > 0 && (
+            <span className="text-[#b91c1c] font-medium">-{file.deletions}</span>
+          )}
+
+          <button
+            type="button"
+            onClick={handleCopyPatch}
+            className="p-1 rounded text-[#8f8f8f] hover:text-[#171717] hover:bg-[#ebebeb] transition cursor-pointer"
+            title="Скопировать patch этого файла"
+          >
+            {copied ? (
+              <Check className="h-3 w-3 text-emerald-600" />
+            ) : (
+              <Copy className="h-3 w-3" />
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Expanded Clean Diff View */}
+      {isExpanded && (
+        <div className="border-t border-[#ebebeb] bg-white font-mono text-[11px] leading-relaxed select-text overflow-x-auto max-h-[460px] overflow-y-auto">
+          {parsedLines.length === 0 ? (
+            <div className="p-3 text-center text-[#8f8f8f] text-xs">
+              Нет текстовых изменений (бинарный файл или пустой diff)
+            </div>
+          ) : (
+            parsedLines.map((line, idx) => {
+              if (line.type === 'hunk') {
+                return (
+                  <div
+                    key={idx}
+                    className="bg-[#f4f4f5] text-[#666666] border-y border-[#ebebeb] my-0.5 py-0.5 px-2 text-[10px] font-semibold select-text"
+                  >
+                    {line.text}
+                  </div>
+                );
+              }
+
+              if (line.type === 'add') {
+                return (
+                  <div
+                    key={idx}
+                    className="flex items-start bg-[#f0fdf4] text-[#166534] hover:bg-[#dcfce7] border-l-2 border-[#22c55e] py-0.5"
+                  >
+                    <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] select-none text-[10px]">
+                      {/* empty old line */}
+                    </span>
+                    <span className="w-8 shrink-0 text-right pr-2 text-[#16a34a] select-none text-[10px] tabular-nums font-mono">
+                      {line.newNum}
+                    </span>
+                    <span className="w-4 shrink-0 text-center text-[#16a34a] font-bold select-none">
+                      +
+                    </span>
+                    <span className="flex-1 whitespace-pre-wrap break-all pr-2">
+                      {line.text}
+                    </span>
+                  </div>
+                );
+              }
+
+              if (line.type === 'del') {
+                return (
+                  <div
+                    key={idx}
+                    className="flex items-start bg-[#fef2f2] text-[#991b1b] hover:bg-[#fee2e2] border-l-2 border-[#ef4444] py-0.5"
+                  >
+                    <span className="w-8 shrink-0 text-right pr-2 text-[#ef4444] select-none text-[10px] tabular-nums font-mono">
+                      {line.oldNum}
+                    </span>
+                    <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] select-none text-[10px]">
+                      {/* empty new line */}
+                    </span>
+                    <span className="w-4 shrink-0 text-center text-[#ef4444] font-bold select-none">
+                      -
+                    </span>
+                    <span className="flex-1 whitespace-pre-wrap break-all pr-2">
+                      {line.text}
+                    </span>
+                  </div>
+                );
+              }
+
+              // Context line
+              return (
+                <div
+                  key={idx}
+                  className="flex items-start hover:bg-[#f9f9f9] py-0.5 text-[#171717]"
+                >
+                  <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] select-none text-[10px] tabular-nums font-mono">
+                    {line.oldNum}
+                  </span>
+                  <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] select-none text-[10px] tabular-nums font-mono">
+                    {line.newNum}
+                  </span>
+                  <span className="w-4 shrink-0 text-center text-[#8f8f8f] select-none">
+                    {' '}
+                  </span>
+                  <span className="flex-1 whitespace-pre-wrap break-all pr-2">
+                    {line.text}
+                  </span>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function GitDiffSidebar({
   taskId,
   isCollapsed,
@@ -84,10 +286,9 @@ export default function GitDiffSidebar({
   className = '',
 }: GitDiffSidebarProps) {
   const [diff, setDiff] = useState<TaskGitDiff | null>(null);
-  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(() => new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -99,12 +300,20 @@ export default function GitDiffSidebar({
       const { invoke } = await import('@tauri-apps/api/core');
       const data = await invoke<TaskGitDiff | null>('get_task_git_diff', { taskId });
       setDiff(data ?? null);
-      setSelectedFilePath((prev) => {
-        const files = data?.files ?? [];
-        if (!files || files.length === 0) return null;
-        if (prev && files.some((f) => f?.path === prev)) return prev;
-        return files[0]?.path || null;
-      });
+      // Auto-expand first file on initial load if none expanded
+      if (data?.files && data.files.length > 0) {
+        setExpandedFiles((prev) => {
+          if (prev.size > 0) return prev;
+          const next = new Set<string>();
+          // If 1 or 2 files, expand both; otherwise expand first
+          if (data.files.length <= 2) {
+            data.files.forEach((f) => next.add(f.path));
+          } else if (data.files[0]?.path) {
+            next.add(data.files[0].path);
+          }
+          return next;
+        });
+      }
     } catch (err: any) {
       console.info('get_task_git_diff invoke failed or web mode:', err);
       const msg = err?.message || (typeof err === 'string' ? err : 'Ошибка загрузки Git Diff');
@@ -165,25 +374,25 @@ export default function GitDiffSidebar({
     };
   }, [taskId, scheduleFetch]);
 
-  const activeFile = useMemo<DiffFile | null>(() => {
-    const files = diff?.files ?? [];
-    if (!files || files.length === 0) return null;
-    return files.find((f) => f?.path === selectedFilePath) || files[0] || null;
-  }, [diff, selectedFilePath]);
+  const toggleFile = (path: string) => {
+    setExpandedFiles((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  };
 
-  const parsedLines = useMemo(() => {
-    return activeFile ? parseUnifiedPatch(activeFile.patch ?? '') : [];
-  }, [activeFile]);
+  const handleExpandAll = () => {
+    if (!diff?.files) return;
+    setExpandedFiles(new Set(diff.files.map((f) => f.path)));
+  };
 
-  const handleCopyPatch = async () => {
-    if (!activeFile?.patch) return;
-    try {
-      await navigator.clipboard.writeText(activeFile.patch);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // ignore
-    }
+  const handleCollapseAll = () => {
+    setExpandedFiles(new Set());
   };
 
   const totalAdditions = diff?.totalAdditions ?? (diff as any)?.total_additions ?? 0;
@@ -238,12 +447,12 @@ export default function GitDiffSidebar({
     );
   }
 
-  // Expanded Sidebar View (440px wide)
+  // Expanded Sidebar View (440px wide) with File Accordion List
   return (
     <aside
-      className={`w-[440px] shrink-0 border-l border-[#ebebeb] bg-white flex flex-col h-full text-[#171717] overflow-hidden select-none ${className}`}
+      className={`w-[440px] shrink-0 border-l border-[#ebebeb] bg-[#fafafa] flex flex-col h-full text-[#171717] overflow-hidden select-none ${className}`}
     >
-      {/* 1. Header: Title, Badges, Refresh, Collapse */}
+      {/* 1. Header: Title, Badges, Expand/Collapse All, Refresh, Panel Collapse */}
       <header className="px-3.5 py-2.5 border-b border-[#ebebeb] bg-white flex items-center justify-between shrink-0 shadow-xs">
         <div className="flex items-center space-x-2 min-w-0">
           <GitCompare className="h-4 w-4 text-[#8f8f8f] shrink-0" />
@@ -251,7 +460,7 @@ export default function GitDiffSidebar({
             Git Diff
           </span>
 
-          {/* Changed files badge */}
+          {/* Changed files count badge */}
           <span className="px-2 py-0.5 rounded-md text-[11px] font-mono bg-[#f4f4f5] text-[#666666] border border-[#ebebeb] whitespace-nowrap">
             {formatFilesCount(filesCount)}
           </span>
@@ -273,11 +482,34 @@ export default function GitDiffSidebar({
           {/* Branch badge */}
           {diff?.branch && (
             <div
-              className="flex items-center space-x-1 px-2 py-0.5 rounded-md bg-[#f9f9f9] border border-[#ebebeb] text-[10px] font-mono text-[#666666] max-w-[130px] truncate"
+              className="flex items-center space-x-1 px-2 py-0.5 rounded-md bg-[#f9f9f9] border border-[#ebebeb] text-[10px] font-mono text-[#666666] max-w-[110px] truncate"
               title={`Текущая ветка: ${diff.branch}`}
             >
               <GitBranch className="h-3 w-3 text-[#8f8f8f] shrink-0" />
               <span className="truncate">{diff.branch}</span>
+            </div>
+          )}
+
+          {/* Expand / Collapse All Quick Actions */}
+          {filesCount > 1 && (
+            <div className="flex items-center border border-[#ebebeb] rounded-md overflow-hidden bg-white">
+              <button
+                type="button"
+                onClick={handleExpandAll}
+                className="p-1 text-[#8f8f8f] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
+                title="Развернуть все файлы"
+              >
+                <ChevronsUpDown className="h-3.5 w-3.5" />
+              </button>
+              <div className="w-px h-3.5 bg-[#ebebeb]" />
+              <button
+                type="button"
+                onClick={handleCollapseAll}
+                className="p-1 text-[#8f8f8f] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
+                title="Свернуть все файлы"
+              >
+                <ChevronsDownUp className="h-3.5 w-3.5" />
+              </button>
             </div>
           )}
 
@@ -294,7 +526,7 @@ export default function GitDiffSidebar({
             />
           </button>
 
-          {/* Collapse button */}
+          {/* Collapse sidebar button */}
           <button
             type="button"
             onClick={onToggleCollapse}
@@ -321,7 +553,7 @@ export default function GitDiffSidebar({
         </div>
       )}
 
-      {/* 2. Main Content Area */}
+      {/* 2. Main Content Area: Accordion File List */}
       {filesCount === 0 ? (
         // Clean empty state placeholder
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center bg-[#fafafa]">
@@ -340,206 +572,19 @@ export default function GitDiffSidebar({
           )}
         </div>
       ) : (
-        <div className="flex-1 flex flex-col min-h-0">
-          {/* File list cards */}
-          <div className="max-h-[220px] overflow-y-auto p-2 space-y-1.5 border-b border-[#ebebeb] bg-[#fafafa] shrink-0">
-            <div className="px-1 text-[10px] font-mono text-[#8f8f8f] uppercase tracking-wider font-semibold">
-              Изменённые файлы ({filesCount})
-            </div>
-            {files.map((file) => {
-              if (!file?.path) return null;
-              const isActive = file.path === activeFile?.path;
-              const lastSlashIndex = file.path.lastIndexOf('/');
-              const dirPart =
-                lastSlashIndex !== -1 ? file.path.slice(0, lastSlashIndex + 1) : '';
-              const filePart =
-                lastSlashIndex !== -1 ? file.path.slice(lastSlashIndex + 1) : file.path;
-
-              const statusColor =
-                file.status === 'A'
-                  ? 'bg-[#f0fdf4] text-[#15803d] border-[#bbf7d0]'
-                  : file.status === 'D'
-                  ? 'bg-[#fef2f2] text-[#b91c1c] border-[#fecaca]'
-                  : 'bg-[#fffbeb] text-[#b45309] border-[#fde68a]';
-
-              return (
-                <button
-                  key={file.path}
-                  type="button"
-                  onClick={() => setSelectedFilePath(file.path)}
-                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-left text-xs font-mono transition cursor-pointer border ${
-                    isActive
-                      ? 'bg-white text-[#171717] border-[#171717] shadow-xs'
-                      : 'bg-white hover:bg-[#f9f9f9] text-[#4d4d4d] border-[#ebebeb]'
-                  }`}
-                >
-                  <div className="flex items-center space-x-2 min-w-0 mr-2">
-                    <span
-                      className={`px-1.5 py-0.2 rounded text-[10px] font-bold border shrink-0 ${statusColor}`}
-                    >
-                      {file.status}
-                    </span>
-                    <span className="truncate text-xs">
-                      {dirPart && <span className="text-[#8f8f8f]">{dirPart}</span>}
-                      <span className="font-medium text-[#171717]">{filePart}</span>
-                    </span>
-                  </div>
-
-                  <div className="flex items-center space-x-1 text-[11px] tabular-nums shrink-0 font-mono">
-                    {(file.additions ?? 0) > 0 && (
-                      <span className="text-[#15803d]">+{file.additions}</span>
-                    )}
-                    {(file.deletions ?? 0) > 0 && (
-                      <span className="text-[#b91c1c]">-{file.deletions}</span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* 3. Diff Viewer of Selected File */}
-          <div className="flex-1 flex flex-col min-h-0 bg-white">
-            {activeFile ? (
-              <>
-                {/* Active file toolbar */}
-                <div className="px-3 py-1.5 border-b border-[#ebebeb] bg-[#f9f9f9] flex items-center justify-between text-xs font-mono shrink-0">
-                  <div className="flex items-center space-x-1.5 min-w-0 mr-2">
-                    <FileCode className="h-3.5 w-3.5 text-[#8f8f8f] shrink-0" />
-                    <span className="truncate text-[#171717] font-medium" title={activeFile.path}>
-                      {activeFile.path}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center space-x-2 shrink-0">
-                    <div className="flex items-center space-x-1 text-[11px] tabular-nums">
-                      {(activeFile.additions ?? 0) > 0 && (
-                        <span className="text-[#15803d]">+{activeFile.additions}</span>
-                      )}
-                      {(activeFile.deletions ?? 0) > 0 && (
-                        <span className="text-[#b91c1c]">-{activeFile.deletions}</span>
-                      )}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleCopyPatch}
-                      className="p-1 rounded hover:bg-[#f4f4f5] text-[#8f8f8f] hover:text-[#171717] transition cursor-pointer"
-                      title="Скопировать patch"
-                    >
-                      {copied ? (
-                        <Check className="h-3.5 w-3.5 text-emerald-600" />
-                      ) : (
-                        <Copy className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Diff lines view (эстетика ToolExecutionCard) */}
-                <div className="flex-1 overflow-auto p-2 font-mono text-[11px] leading-relaxed select-text bg-white">
-                  {parsedLines.length === 0 ? (
-                    <div className="p-4 text-center text-[#8f8f8f] text-xs">
-                      Нет изменений в данном файле
-                    </div>
-                  ) : (
-                    parsedLines.map((line, idx) => {
-                      if (line.type === 'meta') {
-                        return (
-                          <div
-                            key={idx}
-                            className="text-[#8f8f8f] text-[10px] py-0.5 px-1 truncate select-text"
-                          >
-                            {line.text}
-                          </div>
-                        );
-                      }
-
-                      if (line.type === 'hunk') {
-                        return (
-                          <div
-                            key={idx}
-                            className="bg-[#f4f4f5] text-[#666666] border-y border-[#ebebeb] my-1 py-0.5 px-2 text-[10px] font-semibold select-text"
-                          >
-                            {line.text}
-                          </div>
-                        );
-                      }
-
-                      if (line.type === 'add') {
-                        return (
-                          <div
-                            key={idx}
-                            className="flex items-start bg-[#f0fdf4] text-[#166534] hover:bg-[#dcfce7] border-l-2 border-[#22c55e] py-0.5"
-                          >
-                            <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] select-none text-[10px]">
-                              {/* no old line */}
-                            </span>
-                            <span className="w-8 shrink-0 text-right pr-2 text-[#16a34a] select-none text-[10px] tabular-nums">
-                              {line.newNum}
-                            </span>
-                            <span className="w-4 shrink-0 text-center text-[#16a34a] font-bold select-none">
-                              +
-                            </span>
-                            <span className="flex-1 whitespace-pre-wrap break-all pr-2">
-                              {line.text}
-                            </span>
-                          </div>
-                        );
-                      }
-
-                      if (line.type === 'del') {
-                        return (
-                          <div
-                            key={idx}
-                            className="flex items-start bg-[#fef2f2] text-[#991b1b] hover:bg-[#fee2e2] border-l-2 border-[#ef4444] py-0.5"
-                          >
-                            <span className="w-8 shrink-0 text-right pr-2 text-[#ef4444] select-none text-[10px] tabular-nums">
-                              {line.oldNum}
-                            </span>
-                            <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] select-none text-[10px]">
-                              {/* no new line */}
-                            </span>
-                            <span className="w-4 shrink-0 text-center text-[#ef4444] font-bold select-none">
-                              -
-                            </span>
-                            <span className="flex-1 whitespace-pre-wrap break-all pr-2">
-                              {line.text}
-                            </span>
-                          </div>
-                        );
-                      }
-
-                      // Context line
-                      return (
-                        <div
-                          key={idx}
-                          className="flex items-start hover:bg-[#f9f9f9] py-0.5 text-[#171717]"
-                        >
-                          <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] select-none text-[10px] tabular-nums">
-                            {line.oldNum}
-                          </span>
-                          <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] select-none text-[10px] tabular-nums">
-                            {line.newNum}
-                          </span>
-                          <span className="w-4 shrink-0 text-center text-[#8f8f8f] select-none">
-                            {' '}
-                          </span>
-                          <span className="flex-1 whitespace-pre-wrap break-all pr-2">
-                            {line.text}
-                          </span>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </>
-            ) : (
-              <div className="flex-1 flex items-center justify-center text-xs text-[#8f8f8f]">
-                Выберите файл для просмотра изменений
-              </div>
-            )}
-          </div>
+        <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0 bg-[#fafafa]">
+          {files.map((file) => {
+            if (!file?.path) return null;
+            const isExpanded = expandedFiles.has(file.path);
+            return (
+              <AccordionFileItem
+                key={file.path}
+                file={file}
+                isExpanded={isExpanded}
+                onToggle={() => toggleFile(file.path)}
+              />
+            );
+          })}
         </div>
       )}
     </aside>
