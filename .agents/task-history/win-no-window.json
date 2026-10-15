@@ -1,0 +1,20 @@
+{
+  "taskId": "CVH-WIN-NO-WINDOW",
+  "task": "win-no-window",
+  "title": "Apply CREATE_NO_WINDOW to tokio::process::Command on Windows to eliminate popup console windows",
+  "branch": "feat/win-no-window",
+  "mergeSha": "99097f3bcfeb9ca1a38fc288fb9e0e5a97ddc3ee",
+  "verdict": "APPROVED",
+  "sensors": {
+    "cargo_check": "pass",
+    "clippy": "pass (0 warnings)",
+    "frontend_build_pnpm": "pass"
+  },
+  "files": [
+    "src-tauri/src/agent.rs",
+    "src-tauri/src/commands.rs",
+    "src-tauri/src/git.rs",
+    "src-tauri/src/hooks.rs"
+  ],
+  "summary": "Eliminated popup cmd.exe console windows on Windows across git diff queries, agent command execution, hook lifecycle scripts, and sensor checks by applying CREATE_NO_WINDOW (0x08000000) via #[cfg(windows)] to all tokio::process::Command instances."
+}
