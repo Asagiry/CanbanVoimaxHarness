@@ -41,7 +41,7 @@ llm.json
 .env.*
 .env.local
 *.local
-.cvh/worktrees/
+.cvh/
 package-lock.json
 
 # Local release bundles (binaries stay untracked)
