@@ -500,7 +500,6 @@ function ColumnStageCard({
   const settingsFile = stage.files.find((f) => f.type === 'settings');
   const areHooksOpen = shared.openHooksFolders[stage.stageId] ?? true;
   const settingsIsMissing = settingsFile ? !!fileMissing[settingsFile.id] : false;
-  const hasPersona = (column?.persona?.trim() ?? '') !== '';
 
   return (
     <div
@@ -530,7 +529,7 @@ function ColumnStageCard({
       {/* Children */}
       {stage.isExpanded && (
         <div className="pl-4 pr-1 py-0.5 space-y-0.5 border-l border-[#ebebeb] ml-3 my-0.5">
-          {hasPersona && column && (
+          {!isBacklogSystem && column && (
             <AgentField
               columnId={column.id}
               current={column.persona}

@@ -74,7 +74,11 @@ interface RawAgentPersona {
 export function cortexAgentDir(personaName: string, stageId: string): string {
   const trimmed = (personaName ?? '').trim();
   const role =
-    !trimmed || trimmed === 'система' || trimmed.toLowerCase() === 'system'
+    !trimmed ||
+    trimmed === 'система' ||
+    trimmed.toLowerCase() === 'system' ||
+    trimmed === 'без агента' ||
+    trimmed === 'колонка'
       ? stageId
       : trimmed;
   return `.cvh/agents/${role}`;
@@ -232,20 +236,19 @@ export const useCortexStore = create<CortexState>((set, get) => ({
       }
     }
 
-    // Каждая колонка с persona — отдельная стадия (дедупа по persona здесь нет:
-    // дедуп живёт только в секции агентов). Колонки без персоны пропускаются,
-    // КРОМЕ системных узлов (backlog + ready/terminal без персоны):
-    // показывают свои hooks из колонки (чтобы вешать on_finish вроде коммит+пуш).
-    // rules/setting у системных узлов НЕТ.
+    // Каждая колонка — стадия в проводнике разума. Все колонки из columns
+    // остаются в boardStages проводника разума (дедупа по persona здесь нет:
+    // дедуп живёт только в секции агентов).
+    // Системные узлы (backlog + ready/terminal без персоны) показывают свои hooks
+    // из колонки и personaName: 'система'.
+    // Колонки без выбранного агента отображаются со статусом personaName: 'без агента',
+    // сохраняя файлы хуков/правил стадии.
     const boardStages: CortexAgentStage[] = [];
     for (const col of columns) {
       const persona = col.persona?.trim() ?? '';
       const isSystemNode =
         persona === '' &&
         (col.id === 'backlog' || col.id === 'ready' || col.terminal === true);
-      if (!isSystemNode) {
-        if (persona === '') continue;
-      }
       const dir = cortexAgentDir(col.persona ?? '', col.id);
       if (isSystemNode) {
         // Хуки колонки (on_enter/on_finish) как узлы типа hook.
@@ -293,16 +296,35 @@ export const useCortexStore = create<CortexState>((set, get) => ({
       const settingsId = `${col.id}-settings`;
       const prevPersona = prevFileById.get(personaId);
       const prevSettings = prevFileById.get(settingsId);
+      // Хуки колонки (on_enter/on_finish) как узлы типа hook
+      const hookMoments = Object.entries(col.hooks ?? {})
+        .filter(([moment]) => moment === 'on_enter' || moment === 'on_finish')
+        .sort(([a], [b]) => a.localeCompare(b));
+      const hookFiles = hookMoments.map(([moment, target]) => {
+        const hookId = `${col.id}-hook-${moment}`;
+        const prev = prevFileById.get(hookId);
+        return {
+          id: hookId,
+          name: moment,
+          stageId: col.id,
+          type: 'hook' as const,
+          path: target,
+          content: prev?.content ?? '',
+          isDirty: false,
+        };
+      });
       // Ранее созданные файлы стадии (правила/хуки новой схемы) — пережить пересборку.
       // Фильтр по префиксу каталога агента: файлы чужой роли и старой схемы
       // (`.cvh/rules/...`, `.cvh/agents/<role>.md`) в дерево НЕ возвращаются.
+      // Если персона снята, сохраняем хуки и правила этой стадии.
       const extras = (prevExtrasByStage.get(col.id) ?? [])
         .filter(
           (f) =>
             f.id !== personaId &&
             f.id !== settingsId &&
+            !hookFiles.some((h) => h.id === f.id) &&
             (f.type === 'rule' || f.type === 'hook') &&
-            f.path.startsWith(`${dir}/`),
+            (f.path.startsWith(`${dir}/`) || f.type === 'hook' || !persona),
         )
         .sort((a, b) => {
           const order = (t: string) => (t === 'rule' ? 0 : 1);
@@ -313,7 +335,7 @@ export const useCortexStore = create<CortexState>((set, get) => ({
         stageTitle: col.title,
         color: col.color,
         icon: col.icon,
-        personaName: persona,
+        personaName: col.persona?.trim() || 'без агента',
         isExpanded: prevStageById.get(col.id)?.isExpanded ?? true,
         files: [
           {
@@ -325,6 +347,7 @@ export const useCortexStore = create<CortexState>((set, get) => ({
             content: prevPersona?.content ?? '',
             isDirty: prevPersona?.isDirty ?? false,
           },
+          ...hookFiles,
           ...extras,
           {
             id: settingsId,

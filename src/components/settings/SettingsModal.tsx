@@ -112,7 +112,7 @@ export default function SettingsModal() {
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-100">
+      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-100">
         <div className="relative flex flex-col w-[500px] max-w-full rounded-lg border border-[#ebebeb] bg-white shadow-2xl p-5 text-[#171717]">
           {/* Header */}
           <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb]">
@@ -299,7 +299,7 @@ export default function SettingsModal() {
 
       {/* Modal Dialog: "Choose models to add" */}
       {isChooseModelsModalOpen && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-100">
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-100">
           <div className="relative flex flex-col w-[520px] max-w-full rounded-lg border border-[#ebebeb] bg-white shadow-2xl p-5 text-[#171717]">
             {/* Header */}
             <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb]">

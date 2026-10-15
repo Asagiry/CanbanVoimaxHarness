@@ -166,7 +166,7 @@ export default function ToolPolicyModal() {
   if (!isModalOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-3">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 backdrop-blur-xs p-3">
       <div className="w-full max-w-4xl rounded-lg border border-[#ebebeb] bg-white shadow-xl overflow-hidden flex flex-col max-h-[85vh]">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#ebebeb] px-4 py-3 bg-white">
