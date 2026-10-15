@@ -414,5 +414,19 @@
     ],
     "ftrScore": "100%",
     "timestamp": 1792350000000
+  },
+  "CVH-007": {
+    "taskId": "CVH-007",
+    "title": "Lean cvh-dev router prompt (progressive disclosure, 48 lines) + marker test",
+    "author": "agent-developer",
+    "verdict": "APPROVED",
+    "commitHash": "847cc9e653c8da6535217ff7132f1c51c338799b",
+    "commitMessage": "feat(agent): lean cvh-dev router prompt (48 lines, progressive disclosure) + marker test",
+    "summary": "Rewrote BUILTIN_CVH_DEV_PROMPT as lean harness router (48/150 lines): identity/triggers/paths/frontmatter/boards+pipeline+tool-policy skeletons/guards; full detail lazy via .cvh/agents/<role>/rules/*.md. Added ground-truth test asserting line cap + 24 markers. Recovered hung worktree feat/cvh-dev-router-prompt: reverted auto-generated gen/schemas LF/CRLF noise. Sensors: cargo check green, target test green; clippy baseline shows 5 pre-existing errors outside diff hunks (commands.rs x3 + agent.rs:536 too-many-args), zero new from this diff — left untouched per single-task ceiling.",
+    "files": [
+      "src-tauri/src/agent.rs"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1792400000000
   }
 }
