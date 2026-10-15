@@ -1,122 +1,243 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   ListTodo,
   CheckCircle2,
   Circle,
   ChevronDown,
-  ChevronRight,
+  X,
 } from 'lucide-react';
 import { KanbanTask, TodoItem } from '../../types';
 
 interface TaskTodoWidgetProps {
   task: KanbanTask;
+  align?: 'left' | 'right';
+  className?: string;
 }
 
-// Read-only plan strip: ONLY the agent fills it via the todo_write tool.
-// Manual editing is intentionally disabled — user interactions removed.
-export const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({ task }) => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+// Floating overlay popover todo widget:
+// - Pill trigger sits compactly adjacent to steer bar / input controls with zero vertical layout shift
+// - Collapsible plan floats as an overlay popover (z-30 shadow-xl) above the steer bar without displacing chat feed
+// - Read-only plan strip: ONLY the agent fills it via todo_write tool
+export const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
+  task,
+  align = 'left',
+  className = '',
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const todos: TodoItem[] = task.todos ?? [];
-
   const completedCount = todos.filter((t) => t.status === 'completed').length;
   const inProgressCount = todos.filter((t) => t.status === 'in_progress').length;
   const pendingCount = todos.filter((t) => t.status === 'pending').length;
+  const hasTodos = todos.length > 0;
+
+  // Handle click outside & Escape key to smoothly close popover
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
 
   return (
-    <div className="rounded-lg border border-[#ebebeb] bg-white shadow-xs text-[#171717] overflow-hidden min-w-0 transition-colors">
-      {/* Header with collapse/expand toggle */}
-      <div
-        onClick={() => setIsCollapsed((prev) => !prev)}
-        className="px-3.5 py-2.5 bg-[#f9f9f9] hover:bg-[#f4f4f5] transition-colors flex items-center justify-between cursor-pointer select-none border-b border-[#ebebeb]"
-        title={isCollapsed ? 'Развернуть план (To-dos)' : 'Свернуть план'}
+    <div ref={containerRef} className={`relative inline-flex items-center ${className}`}>
+      {/* Compact Pill Trigger */}
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        aria-expanded={isOpen}
+        aria-label="План выполнения задач агента"
+        className={`group px-2.5 py-1 rounded-full text-xs font-sans transition-all cursor-pointer flex items-center gap-1.5 select-none border ${
+          isOpen
+            ? 'bg-[#e4e4e7] border-[#d4d4d8] text-[#171717] shadow-xs'
+            : hasTodos
+            ? 'bg-[#f4f4f5] hover:bg-[#ececee] border-[#ebebeb] text-[#171717]'
+            : 'bg-[#f4f4f5]/60 hover:bg-[#f4f4f5] border-[#ebebeb] text-[#737373]'
+        }`}
+        title={
+          hasTodos
+            ? `To-dos: ${completedCount}/${todos.length} готово${inProgressCount > 0 ? `, ${inProgressCount} в работе` : ''}`
+            : 'To-dos: план задач пуст'
+        }
       >
-        <div className="flex items-center space-x-2.5 min-w-0">
-          <ListTodo className="h-4 w-4 text-[#666666] shrink-0" />
-          <span className="text-xs font-semibold text-[#171717] tracking-wide font-sans shrink-0">
-            To-dos
-          </span>
-          <div className="text-[11px] font-sans text-[#8f8f8f] flex items-center space-x-1.5 truncate">
-            <span className="font-mono tabular-nums text-[#15803d] font-medium">
+        <ListTodo
+          className={`h-3.5 w-3.5 shrink-0 transition-colors ${
+            hasTodos ? 'text-[#171717]' : 'text-[#8f8f8f]'
+          }`}
+        />
+        <span className="font-medium text-xs tracking-tight">To-dos</span>
+
+        {hasTodos ? (
+          <div className="flex items-center space-x-1 pl-0.5">
+            <span className="font-mono tabular-nums text-[11px] font-semibold text-[#15803d]">
               {completedCount}
             </span>
-            <span>completed</span>
-            <span className="text-[#d4d4d8]">·</span>
-            <span className="font-mono tabular-nums text-[#b45309] font-medium">
-              {inProgressCount}
+            <span className="font-mono tabular-nums text-[11px] text-[#a1a1aa]">/</span>
+            <span className="font-mono tabular-nums text-[11px] font-medium text-[#52525b]">
+              {todos.length}
             </span>
-            <span>in progress</span>
-            <span className="text-[#d4d4d8]">·</span>
-            <span className="font-mono tabular-nums text-[#8f8f8f] font-medium">
-              {pendingCount}
-            </span>
-            <span>pending</span>
           </div>
-        </div>
+        ) : (
+          <span className="font-mono tabular-nums text-[11px] text-[#8f8f8f]">0</span>
+        )}
 
-        <div className="flex items-center space-x-1.5 shrink-0 ml-2">
-          <span className="text-[#8f8f8f] p-0.5">
-            {isCollapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
-            )}
+        {/* Pulsing indicator when an item is currently in progress */}
+        {inProgressCount > 0 && (
+          <span className="relative flex h-1.5 w-1.5 ml-0.5" title="Выполняется шаг...">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#b45309] opacity-75" />
+            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#b45309]" />
           </span>
-        </div>
-      </div>
+        )}
 
-      {/* Collapsible Body (read-only) */}
-      {!isCollapsed && (
-        <div className="min-h-0 min-w-0">
-          {todos.length === 0 ? (
-            <div className="p-3 text-center text-xs text-[#8f8f8f] font-sans">
-              Агент ещё не составил план. Шаги появятся здесь, когда агент вызовет todo_write.
+        <ChevronDown
+          className={`h-3 w-3 text-[#8f8f8f] group-hover:text-[#171717] transition-transform duration-200 shrink-0 ${
+            isOpen ? 'rotate-180 text-[#171717]' : ''
+          }`}
+        />
+      </button>
+
+      {/* Floating Overlay Popover */}
+      {isOpen && (
+        <div
+          role="dialog"
+          aria-label="Список задач агента"
+          className={`absolute bottom-full mb-2 ${
+            align === 'right' ? 'right-0' : 'left-0'
+          } w-[340px] sm:w-[420px] max-w-[calc(100vw-2rem)] z-30 bg-white rounded-xl border border-[#ebebeb] overflow-hidden select-text font-sans`}
+          style={{
+            boxShadow: '0 12px 32px -4px rgba(0, 0, 0, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.08)',
+          }}
+        >
+          {/* Popover Header */}
+          <div className="px-3.5 py-2.5 bg-[#fafafa] border-b border-[#ebebeb] flex items-center justify-between gap-2 select-none">
+            <div className="flex items-center space-x-2 min-w-0">
+              <ListTodo className="h-4 w-4 text-[#171717] shrink-0" />
+              <span className="text-xs font-semibold text-[#171717] tracking-tight shrink-0">
+                План выполнения (To-dos)
+              </span>
+              {hasTodos && (
+                <span className="font-mono tabular-nums text-[11px] text-[#15803d] bg-[#f0fdf4] border border-[#dcfce7] px-1.5 py-0.5 rounded-full font-medium shrink-0">
+                  {completedCount}/{todos.length}
+                </span>
+              )}
             </div>
-          ) : (
-            <div className="max-h-56 overflow-y-auto divide-y divide-[#ebebeb] min-h-0">
-              {todos.map((item) => {
-                const isCompleted = item.status === 'completed';
-                const isInProgress = item.status === 'in_progress';
 
-                return (
-                  <div
-                    key={item.id}
-                    className={`flex items-start gap-2.5 px-3.5 py-2 min-w-0 ${
-                      isInProgress ? 'bg-[#fffbeb]/50' : ''
-                    }`}
-                  >
-                    {/* Static status icon (no interaction) */}
-                    <span className="mt-0.5 shrink-0" title={`Статус: ${item.status}`}>
-                      {isCompleted ? (
-                        <CheckCircle2 className="h-4 w-4 text-[#15803d]" />
-                      ) : isInProgress ? (
-                        <span className="h-4 w-4 flex items-center justify-center">
-                          <span className="h-1.5 w-1.5 rounded-full bg-[#b45309] animate-pulse" />
-                        </span>
-                      ) : (
-                        <Circle className="h-4 w-4 text-[#d4d4d4]" />
-                      )}
-                    </span>
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              className="h-6 w-6 rounded-md hover:bg-[#f4f4f5] text-[#8f8f8f] hover:text-[#171717] flex items-center justify-center transition cursor-pointer"
+              title="Закрыть (Esc)"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
 
-                    {/* Content */}
-                    <div className="flex-1 min-w-0 py-0.5">
-                      <p
-                        className={`text-xs leading-relaxed break-words font-sans select-text ${
-                          isCompleted
-                            ? 'line-through text-[#8f8f8f]'
-                            : isInProgress
-                            ? 'text-[#171717] font-medium'
-                            : 'text-[#4d4d4d]'
-                        }`}
-                      >
-                        {item.content}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
+          {/* Subheader summary strip */}
+          {hasTodos && (
+            <div className="px-3.5 py-1.5 bg-white border-b border-[#f4f4f5] flex items-center space-x-3 text-[11px] text-[#737373] select-none">
+              <div className="flex items-center space-x-1">
+                <span className="font-mono tabular-nums text-[#15803d] font-semibold">
+                  {completedCount}
+                </span>
+                <span>готово</span>
+              </div>
+              <span className="text-[#e4e4e7]">·</span>
+              <div className="flex items-center space-x-1">
+                <span className="font-mono tabular-nums text-[#b45309] font-semibold">
+                  {inProgressCount}
+                </span>
+                <span>в работе</span>
+              </div>
+              <span className="text-[#e4e4e7]">·</span>
+              <div className="flex items-center space-x-1">
+                <span className="font-mono tabular-nums text-[#737373] font-semibold">
+                  {pendingCount}
+                </span>
+                <span>в очереди</span>
+              </div>
             </div>
           )}
+
+          {/* Popover Body: Scrollable Task List */}
+          <div className="min-h-0 min-w-0">
+            {!hasTodos ? (
+              <div className="p-4 text-center text-xs text-[#8f8f8f] font-sans leading-relaxed">
+                План пока пуст. Шаги появятся здесь, когда агент вызовет инструмент{' '}
+                <code className="px-1.5 py-0.5 bg-[#f4f4f5] rounded border border-[#ebebeb] text-[11px] font-mono text-[#171717]">
+                  todo_write
+                </code>
+                .
+              </div>
+            ) : (
+              <div className="max-h-64 sm:max-h-72 overflow-y-auto divide-y divide-[#f4f4f5] min-h-0">
+                {todos.map((item) => {
+                  const isCompleted = item.status === 'completed';
+                  const isInProgress = item.status === 'in_progress';
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`flex items-start gap-2.5 px-3.5 py-2.5 min-w-0 transition-colors ${
+                        isInProgress ? 'bg-[#fffbeb]/50' : 'hover:bg-[#fafafa]'
+                      }`}
+                    >
+                      {/* Status indicator icon */}
+                      <span className="mt-0.5 shrink-0" title={`Статус: ${item.status}`}>
+                        {isCompleted ? (
+                          <CheckCircle2 className="h-4 w-4 text-[#15803d]" />
+                        ) : isInProgress ? (
+                          <span className="h-4 w-4 flex items-center justify-center">
+                            <span className="h-1.5 w-1.5 rounded-full bg-[#b45309] animate-pulse" />
+                          </span>
+                        ) : (
+                          <Circle className="h-4 w-4 text-[#d4d4d8]" />
+                        )}
+                      </span>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0 py-0.5">
+                        <p
+                          className={`text-xs leading-relaxed break-words font-sans ${
+                            isCompleted
+                              ? 'line-through text-[#8f8f8f]'
+                              : isInProgress
+                              ? 'text-[#171717] font-medium'
+                              : 'text-[#374151]'
+                          }`}
+                        >
+                          {item.content}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Popover Footer: Read-only hint & Esc */}
+          <div className="px-3.5 py-1.5 bg-[#fafafa] border-t border-[#ebebeb] flex items-center justify-between text-[10.5px] text-[#8f8f8f] select-none">
+            <span>Только чтение · обновляется агентом</span>
+            <span className="font-mono tabular-nums text-[10px]">Esc закрыть</span>
+          </div>
         </div>
       )}
     </div>
