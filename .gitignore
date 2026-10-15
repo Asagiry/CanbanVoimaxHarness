@@ -28,6 +28,7 @@ Thumbs.db
 *.swp
 *.swo
 *.tmp
+.tmp/
 *.log
 .xwin-cache/
 # LLM Settings & Secrets (API Keys)
