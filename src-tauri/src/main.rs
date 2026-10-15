@@ -2,17 +2,41 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    // Mitigate msedgewebview2.exe STATUS_BREAKPOINT (0x80000003) crashes in msedge_elf.dll:
-    // On non-admin Windows accounts or with local proxies/software present, Chromium's
-    // sandbox and GPU process trip STATUS_BREAKPOINT (0x80000003) in msedge_elf.dll.
-    // Providing --no-sandbox, --disable-features=RendererCodeIntegrity, and --disable-gpu
-    // prevents the early crash and guarantees stable desktop webview execution.
+    // Mitigate msedgewebview2.exe crashes:
+    // third-party DLL injectors (antivirus, recording tools, proxies) trip Chromium's
+    // RendererCodeIntegrity guard. Disabling RendererCodeIntegrity prevents the crash.
     #[cfg(target_os = "windows")]
     {
-        let required_flags = "--disable-features=RendererCodeIntegrity --no-sandbox --disable-gpu";
+        // Workaround for Microsoft Edge WebView2 regression in build 155.0.4283.45 (which asserts and crashes in msedge_elf.dll at offset 0x281a5b):
+        // If the stable 154 runtime (154.0.4258.62) is installed on the machine, bind directly to it via WEBVIEW2_BROWSER_EXECUTABLE_FOLDER.
+        if std::env::var("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER").is_err() {
+            let app_dir = std::path::Path::new(r"C:\Program Files (x86)\Microsoft\EdgeWebView\Application");
+            if app_dir.exists() {
+                let candidate_154 = app_dir.join("154.0.4258.62");
+                if candidate_154.exists() {
+                    std::env::set_var(
+                        "WEBVIEW2_BROWSER_EXECUTABLE_FOLDER",
+                        candidate_154.to_string_lossy().as_ref(),
+                    );
+                }
+            }
+        }
+
+        // Dedicated, unpolluted WebView2 User Data Folder (prevents legacy 0x800700AA / 0x8000FFFF UDF corruption):
+        if std::env::var("WEBVIEW2_USER_DATA_FOLDER").is_err() {
+            if let Ok(localappdata) = std::env::var("LOCALAPPDATA") {
+                let udf = std::path::PathBuf::from(&localappdata)
+                    .join("com.voimax.cvh")
+                    .join("webview_data");
+                let _ = std::fs::create_dir_all(&udf);
+                std::env::set_var("WEBVIEW2_USER_DATA_FOLDER", udf.to_string_lossy().as_ref());
+            }
+        }
+
+        let required_flags = "--disable-features=RendererCodeIntegrity";
         match std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS") {
             Ok(existing) => {
-                if !existing.contains("--no-sandbox") {
+                if !existing.contains("RendererCodeIntegrity") {
                     std::env::set_var(
                         "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
                         format!("{existing} {required_flags}"),
@@ -38,51 +62,37 @@ fn main() {
         eprintln!("{msg}");
     }));
 
-    // WebView2 user-data folder (UDF) resilience & non-admin permission inheritance:
-    // If com.voimax.cvh was created/touched during an elevated (admin) run, normal user tokens
-    // hit 0x80070005 (Access Denied). Stale lockfiles also trigger 0x800700AA (ERROR_BUSY).
+    // WebView2 user-data folder (UDF) resilience:
+    // Stale lock recovery: Recursively search and remove all unheld LevelDB and UDF LOCK files.
+    // If the app was closed abruptly or crashed, stale locks cause WebView2 0x800700AA (ERROR_BUSY).
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-
         if let Ok(localappdata) = std::env::var("LOCALAPPDATA") {
             let base = std::path::PathBuf::from(&localappdata).join("com.voimax.cvh");
             let _ = std::fs::create_dir_all(&base);
 
-            // Recursively ensure current user and AppContainer have Full Control
-            if let Some(path_str) = base.to_str() {
-                let username = std::env::var("USERNAME").unwrap_or_else(|_| "Users".to_string());
-                let _ = std::process::Command::new("icacls")
-                    .args([
-                        path_str,
-                        "/grant",
-                        &format!("{username}:(OI)(CI)F"),
-                        "/grant",
-                        "*S-1-15-2-1:(OI)(CI)F",
-                        "/T",
-                        "/Q",
-                        "/C",
-                    ])
-                    .creation_flags(CREATE_NO_WINDOW)
-                    .output();
-            }
-
-            // Stale lock recovery: If EBWebView\Default\LOCK or EBWebView\EBWebView.lock exist
-            // from a previous ungraceful exit or crash, attempt to remove them so WebView2 doesn't hit 0x800700AA
-            let eb_dir = base.join("EBWebView");
-            if eb_dir.exists() {
-                let lock_paths = [
-                    eb_dir.join("EBWebView.lock"),
-                    eb_dir.join("Default").join("LOCK"),
-                    eb_dir.join("Default").join("Local Storage").join("leveldb").join("LOCK"),
-                    eb_dir.join("Default").join("Session Storage").join("LOCK"),
-                ];
-                for lock in &lock_paths {
-                    if lock.exists() {
-                        let _ = std::fs::remove_file(lock);
+            fn remove_stale_locks_recursive(dir: &std::path::Path) {
+                if let Ok(entries) = std::fs::read_dir(dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_dir() {
+                            remove_stale_locks_recursive(&path);
+                        } else if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                            if name == "LOCK" || name.ends_with(".lock") {
+                                let _ = std::fs::remove_file(&path);
+                            }
+                        }
                     }
                 }
+            }
+
+            let eb_dir = base.join("EBWebView");
+            if eb_dir.exists() {
+                remove_stale_locks_recursive(&eb_dir);
+            }
+            let webview_data = base.join("webview_data");
+            if webview_data.exists() {
+                remove_stale_locks_recursive(&webview_data);
             }
         }
     }

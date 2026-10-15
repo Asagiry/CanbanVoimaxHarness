@@ -391,5 +391,28 @@
     ],
     "ftrScore": "100%",
     "timestamp": 1792300000000
+  },
+  "CVH-006": {
+    "taskId": "CVH-006",
+    "title": "Implement builtin cvh-dev agent, prune hooks from Cortex Explorer agents section, and fix reactive updates",
+    "author": "agent-developer",
+    "verdict": "APPROVED",
+    "commitHash": "8fae343419d9069ace4556f465c9408097f192e0",
+    "commitMessage": "feat(agent): builtin cvh-dev agent, cortex explorer hooks pruning, and reactive updates",
+    "summary": "Implemented builtin immutable cvh-dev agent with virtual fallback prompt (BUILTIN_CVH_DEV_PROMPT) and deletion protection in Rust backend and React UI; pruned hooks/ from Agents section in Cortex Explorer so agents strictly represent minds while hooks belong to stages; added reactive updates via Tauri event agent:personas_updated and reactive store listeners.",
+    "files": [
+      "src-tauri/src/agent.rs",
+      "src-tauri/src/commands.rs",
+      "src-tauri/src/lib.rs",
+      "src/App.tsx",
+      "src/components/board/ColumnContextMenu.tsx",
+      "src/components/board/CreateBoardModal.tsx",
+      "src/components/board/KanbanBoard.tsx",
+      "src/components/cortex/CortexExplorer.tsx",
+      "src/stores/cortexStore.ts",
+      "src/types/index.ts"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1792350000000
   }
 }
