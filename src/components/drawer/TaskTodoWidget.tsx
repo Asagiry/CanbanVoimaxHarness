@@ -233,11 +233,6 @@ export const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
             )}
           </div>
 
-          {/* Popover Footer: Read-only hint & Esc */}
-          <div className="px-3.5 py-1.5 bg-[#fafafa] border-t border-[#ebebeb] flex items-center justify-between text-[10.5px] text-[#8f8f8f] select-none">
-            <span>Только чтение · обновляется агентом</span>
-            <span className="font-mono tabular-nums text-[10px]">Esc закрыть</span>
-          </div>
         </div>
       )}
     </div>
