@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Draggable, Droppable } from '@hello-pangea/dnd';
+import { ChevronDown } from 'lucide-react';
 import { PipelineColumn, KanbanTask } from '../../types';
 import KanbanCard from '../card/KanbanCard';
 import ColumnContextMenu from './ColumnContextMenu';
 import { useCortexStore } from '../../stores/cortexStore';
 import AgentIcon from '../common/AgentIcon';
+
+const PAGE_SIZE = 10;
 
 interface KanbanColumnProps {
   column: PipelineColumn;
@@ -39,6 +42,28 @@ export default function KanbanColumn({
   const isAtWipLimit = column.wipLimit ? displayTasks.length >= column.wipLimit : false;
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
 
+  // Progressive card loading state
+  const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
+
+  // Track tasks to detect newly inserted items at or beyond the visible boundary
+  const prevTasksRef = useRef<KanbanTask[]>(tasks);
+  useEffect(() => {
+    const prevIds = new Set(prevTasksRef.current.map((t) => t.id));
+    const addedTask = displayTasks.find((t) => !prevIds.has(t.id));
+    if (addedTask) {
+      const addedIndex = displayTasks.findIndex((t) => t.id === addedTask.id);
+      if (addedIndex >= visibleCount) {
+        setVisibleCount((prev) => Math.max(prev, Math.ceil((addedIndex + 1) / PAGE_SIZE) * PAGE_SIZE));
+      }
+    }
+    prevTasksRef.current = tasks;
+  }, [tasks, displayTasks, visibleCount]);
+
+  const visibleTasks = displayTasks.slice(0, visibleCount);
+  const hasMore = visibleCount < displayTasks.length;
+  const remaining = displayTasks.length - visibleCount;
+  const nextCount = Math.min(PAGE_SIZE, remaining);
+
   // Закреплены только backlog/ready/terminal по id/флагу (без привязки к индексу).
   // index===0 — лишь fallback, когда id бэклога неизвестен. По index===last не пиним.
   const isPinned = Boolean(
@@ -49,8 +74,6 @@ export default function KanbanColumn({
       index === 0
     )
   );
-
-
 
   return (
     <Draggable draggableId={column.id} index={index} isDragDisabled={isPinned}>
@@ -116,16 +139,26 @@ export default function KanbanColumn({
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className={`flex-1 p-2 overflow-y-auto min-h-[140px] transition-colors ${
+            className={`flex-1 min-h-0 p-2 overflow-y-auto transition-colors ${
               snapshot.isDraggingOver
                 ? 'bg-[#f4f4f5] border border-dashed border-[#171717]/30 rounded-b-lg'
                 : 'bg-transparent'
             }`}
           >
-            {displayTasks.map((task, index) => (
+            {visibleTasks.map((task, index) => (
               <KanbanCard key={task.id} task={task} index={index} />
             ))}
             {provided.placeholder}
+            {hasMore && (
+              <button
+                type="button"
+                onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
+                className="w-full mt-1 mb-2 py-2 px-3 flex items-center justify-center gap-1.5 rounded-[6px] border border-[#ebebeb] bg-white hover:bg-[#f9f9f9] text-[#0d0d0d] font-mono text-xs font-medium transition-all duration-150 cursor-pointer shadow-xs active:bg-[#f4f4f5] select-none"
+              >
+                <ChevronDown className="h-3.5 w-3.5 text-[#8f8f8f] transition-transform duration-150" />
+                <span>Загрузить еще (еще {nextCount} из {remaining})</span>
+              </button>
+            )}
           </div>
         )}
       </Droppable>

@@ -51,6 +51,7 @@ export default function KanbanBoard() {
     tasks,
     searchQuery,
     setSearchQuery,
+    setTasks,
     moveTask,
     addTask,
     tickTimers,
@@ -310,7 +311,98 @@ export default function KanbanBoard() {
       return;
     }
 
-    moveTask(draggableId, destination.droppableId);
+    const task = tasks.find((t) => t.id === draggableId);
+    if (!task) return;
+
+    const sourceColId = source.droppableId;
+    const destColId = destination.droppableId;
+    const sourceIndex = source.index;
+    const destIndex = destination.index;
+
+    const isDoneCol = (colId: string) => {
+      const col = columns.find((c) => c.id === colId);
+      return Boolean(
+        col?.terminal ||
+        colId === 'ready' ||
+        col?.title.toLowerCase().includes('готов') ||
+        col?.title.toLowerCase().includes('done')
+      );
+    };
+
+    const getColumnDisplayTasks = (colId: string) => {
+      const isDone = isDoneCol(colId);
+      const baseTasks = searchQuery ? filteredTasks : currentBoardTasks;
+      const colTasks = baseTasks.filter((t) => t.columnId === colId);
+      return isDone ? colTasks.filter((t) => !t.parentId) : colTasks;
+    };
+
+    if (sourceColId === destColId) {
+      if (sourceIndex === destIndex) return;
+
+      const colDisplayTasks = getColumnDisplayTasks(destColId);
+      const otherTasks = colDisplayTasks.filter((t) => t.id !== draggableId);
+      const nextTasks = [...tasks];
+      const taskPos = nextTasks.findIndex((t) => t.id === draggableId);
+      if (taskPos === -1) return;
+      const [movedTask] = nextTasks.splice(taskPos, 1);
+
+      if (destIndex < otherTasks.length) {
+        const refTask = otherTasks[destIndex];
+        const refPos = nextTasks.findIndex((t) => t.id === refTask.id);
+        if (refPos !== -1) {
+          nextTasks.splice(refPos, 0, movedTask);
+        } else {
+          nextTasks.push(movedTask);
+        }
+      } else {
+        if (otherTasks.length > 0) {
+          const lastTask = otherTasks[otherTasks.length - 1];
+          const lastPos = nextTasks.findIndex((t) => t.id === lastTask.id);
+          if (lastPos !== -1) {
+            nextTasks.splice(lastPos + 1, 0, movedTask);
+          } else {
+            nextTasks.push(movedTask);
+          }
+        } else {
+          nextTasks.push(movedTask);
+        }
+      }
+
+      setTasks(nextTasks);
+      return;
+    }
+
+    // Moving between columns with target placement
+    const destDisplayTasks = getColumnDisplayTasks(destColId);
+    const nextTasks = [...tasks];
+    const taskPos = nextTasks.findIndex((t) => t.id === draggableId);
+    if (taskPos === -1) return;
+    const [movedTask] = nextTasks.splice(taskPos, 1);
+
+    if (destIndex < destDisplayTasks.length) {
+      const refTask = destDisplayTasks[destIndex];
+      const refPos = nextTasks.findIndex((t) => t.id === refTask.id);
+      if (refPos !== -1) {
+        nextTasks.splice(refPos, 0, movedTask);
+      } else {
+        nextTasks.push(movedTask);
+      }
+    } else {
+      if (destDisplayTasks.length > 0) {
+        const lastTask = destDisplayTasks[destDisplayTasks.length - 1];
+        const lastPos = nextTasks.findIndex((t) => t.id === lastTask.id);
+        if (lastPos !== -1) {
+          nextTasks.splice(lastPos + 1, 0, movedTask);
+        } else {
+          nextTasks.push(movedTask);
+        }
+      } else {
+        nextTasks.push(movedTask);
+      }
+    }
+
+    setTasks(nextTasks);
+    void moveTask(draggableId, destColId);
   };
 
   const savePipelineConfig = async (next: PipelineColumn[]): Promise<boolean> => {
@@ -972,7 +1064,7 @@ export default function KanbanBoard() {
 
               return (
                 <KanbanColumn
-                  key={column.id}
+                  key={`${activeBoardId}-${column.id}`}
                   column={column}
                   tasks={columnTasks}
                   index={index}
