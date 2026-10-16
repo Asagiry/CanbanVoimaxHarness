@@ -43,6 +43,7 @@ pub fn run() {
             list_agent_personas,
             create_agent_persona,
             delete_agent_persona,
+            rename_agent_persona,
             get_project_config_cmd,
             get_registry,
             get_cortex_tree,

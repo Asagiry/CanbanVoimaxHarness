@@ -184,6 +184,7 @@ pub async fn list_agent_personas_in(root: &Path) -> Vec<AgentPersonaInfo> {
 
 /// Удаляет персону: каталог `.cvh/agents/<role>`.
 /// Удаление встроенной персоны `cvh-dev` строго запрещено.
+/// При удалении сбрасывает ссылки на персону у колонок в boards.json и pipeline.json.
 pub async fn delete_agent_persona_file(root: &Path, role: &str) -> Result<(), String> {
     if role == "cvh-dev" {
         return Err("Запрещено удалять встроенную персону 'cvh-dev'".to_string());
@@ -204,6 +205,129 @@ pub async fn delete_agent_persona_file(root: &Path, role: &str) -> Result<(), St
     if !deleted {
         return Err(format!("Персона '{}' не найдена", role));
     }
+
+    // Сброс ссылок на persona в boards.json и pipeline.json
+    if let Ok(mut boards_cfg) = crate::config::load_boards_config(root).await {
+        let mut changed = false;
+        for board in &mut boards_cfg.boards {
+            for col in &mut board.columns {
+                if col.persona.as_deref() == Some(role) {
+                    col.persona = None;
+                    changed = true;
+                }
+            }
+        }
+        if changed {
+            let _ = crate::config::save_boards_config(root, &boards_cfg).await;
+        }
+    }
+    if let Ok(mut pipeline_cfg) = crate::config::load_pipeline_config(root).await {
+        let mut changed = false;
+        for col in &mut pipeline_cfg.columns {
+            if col.persona.as_deref() == Some(role) {
+                col.persona = None;
+                changed = true;
+            }
+        }
+        if let Some(boards) = &mut pipeline_cfg.boards {
+            for board in boards {
+                for col in &mut board.columns {
+                    if col.persona.as_deref() == Some(role) {
+                        col.persona = None;
+                        changed = true;
+                    }
+                }
+            }
+        }
+        if changed {
+            let _ = crate::config::save_pipeline_config(root, &pipeline_cfg).await;
+        }
+    }
+
+    Ok(())
+}
+
+/// Переименовывает персону из `old_role` в `new_role`:
+/// 1. Валидирует `new_role` через `is_valid_persona_role`.
+/// 2. Запрещает переименование `cvh-dev`.
+/// 3. Переименовывает директорию `.cvh/agents/<old_role>` в `.cvh/agents/<new_role>` (и flat-файл, если был).
+/// 4. Обновляет ссылки на persona в boards.json и pipeline.json с old_role на new_role.
+pub async fn rename_agent_persona_file(root: &Path, old_role: &str, new_role: &str) -> Result<(), String> {
+    if old_role == "cvh-dev" {
+        return Err("Запрещено переименовывать встроенную персону 'cvh-dev'".to_string());
+    }
+    if !is_valid_persona_role(new_role) {
+        return Err(format!(
+            "Недопустимое имя роли '{}': разрешены только строчные латинские буквы, цифры и дефис (шаблон ^[a-z0-9][a-z0-9-]*$)",
+            new_role
+        ));
+    }
+    if old_role == new_role {
+        return Ok(());
+    }
+
+    let old_dir = crate::config::agent_dir(root, old_role);
+    let old_flat = root.join(".cvh").join("agents").join(format!("{}.md", old_role));
+    if !old_dir.exists() && !old_flat.exists() {
+        return Err(format!("Персона '{}' не найдена", old_role));
+    }
+
+    let new_dir = crate::config::agent_dir(root, new_role);
+    let new_flat = root.join(".cvh").join("agents").join(format!("{}.md", new_role));
+    if new_dir.exists() || new_flat.exists() {
+        return Err(format!("Персона '{}' уже существует", new_role));
+    }
+
+    // Переименование каталога или файла
+    if old_dir.exists() {
+        tokio::fs::rename(&old_dir, &new_dir)
+            .await
+            .map_err(|e| format!("Не удалось переименовать каталог персоны '{}' в '{}': {}", old_role, new_role, e))?;
+    }
+    if old_flat.exists() {
+        tokio::fs::rename(&old_flat, &new_flat)
+            .await
+            .map_err(|e| format!("Не удалось переименовать файл персоны '{}.md' в '{}.md': {}", old_role, new_role, e))?;
+    }
+
+    // Обновление ссылок на persona в boards.json и pipeline.json
+    if let Ok(mut boards_cfg) = crate::config::load_boards_config(root).await {
+        let mut changed = false;
+        for board in &mut boards_cfg.boards {
+            for col in &mut board.columns {
+                if col.persona.as_deref() == Some(old_role) {
+                    col.persona = Some(new_role.to_string());
+                    changed = true;
+                }
+            }
+        }
+        if changed {
+            let _ = crate::config::save_boards_config(root, &boards_cfg).await;
+        }
+    }
+    if let Ok(mut pipeline_cfg) = crate::config::load_pipeline_config(root).await {
+        let mut changed = false;
+        for col in &mut pipeline_cfg.columns {
+            if col.persona.as_deref() == Some(old_role) {
+                col.persona = Some(new_role.to_string());
+                changed = true;
+            }
+        }
+        if let Some(boards) = &mut pipeline_cfg.boards {
+            for board in boards {
+                for col in &mut board.columns {
+                    if col.persona.as_deref() == Some(old_role) {
+                        col.persona = Some(new_role.to_string());
+                        changed = true;
+                    }
+                }
+            }
+        }
+        if changed {
+            let _ = crate::config::save_pipeline_config(root, &pipeline_cfg).await;
+        }
+    }
+
     Ok(())
 }
 
@@ -606,6 +730,20 @@ pub async fn delete_agent_persona(
 ) -> Result<(), String> {
     let root = state.get_root();
     delete_agent_persona_file(&root, &role).await?;
+    let list = list_agent_personas_in(&root).await;
+    let _ = app.emit("agent:personas_updated", &list);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn rename_agent_persona(
+    old_role: String,
+    new_role: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let root = state.get_root();
+    rename_agent_persona_file(&root, &old_role, &new_role).await?;
     let list = list_agent_personas_in(&root).await;
     let _ = app.emit("agent:personas_updated", &list);
     Ok(())
@@ -3788,6 +3926,81 @@ mod tests {
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
+    #[tokio::test]
+    async fn test_rename_agent_persona_and_boards_sync() {
+        let base =
+            PathBuf::from("target").join(format!("cvh_persona_ren_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        // Renaming cvh-dev must be strictly forbidden
+        let err = rename_agent_persona_file(&base, "cvh-dev", "new-dev").await.unwrap_err();
+        assert!(err.contains("Запрещено переименовывать встроенную персону 'cvh-dev'"));
+
+        // Invalid name
+        let bad_err = rename_agent_persona_file(&base, "agent-a", "Bad_Name!").await.unwrap_err();
+        assert!(bad_err.contains("Недопустимое имя роли"));
+
+        // Non-existent persona
+        let notfound_err = rename_agent_persona_file(&base, "non-existent", "new-role").await.unwrap_err();
+        assert!(notfound_err.contains("не найдена"));
+
+        // Create persona
+        create_agent_persona_file(&base, "agent-a").await.expect("create agent-a");
+        let agents_dir = base.join(".cvh").join("agents");
+        assert!(agents_dir.join("agent-a").join("persona.md").is_file());
+
+        // Create board and pipeline referencing agent-a
+        let backlog_col: crate::config::PipelineColumn = serde_json::from_value(serde_json::json!({
+            "id": "backlog",
+            "title": "Backlog"
+        })).unwrap();
+        let dev_col: crate::config::PipelineColumn = serde_json::from_value(serde_json::json!({
+            "id": "dev",
+            "title": "Dev",
+            "persona": "agent-a"
+        })).unwrap();
+        let ready_col: crate::config::PipelineColumn = serde_json::from_value(serde_json::json!({
+            "id": "ready",
+            "title": "Ready",
+            "terminal": true
+        })).unwrap();
+
+        let boards_cfg = crate::config::BoardsConfig {
+            active_board_id: "test-board".to_string(),
+            boards: vec![crate::config::BoardDef {
+                id: "test-board".to_string(),
+                name: "Test Board".to_string(),
+                columns: vec![backlog_col, dev_col, ready_col],
+            }],
+        };
+        crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
+
+        // Rename agent-a to agent-b
+        rename_agent_persona_file(&base, "agent-a", "agent-b").await.expect("rename agent-a to agent-b");
+        assert!(!agents_dir.join("agent-a").exists());
+        assert!(agents_dir.join("agent-b").join("persona.md").is_file());
+
+        // Check boards.json updated
+        let loaded_boards = crate::config::load_boards_config(&base).await.expect("load boards");
+        let dev_col = loaded_boards.boards[0].columns.iter().find(|c| c.id == "dev").unwrap();
+        assert_eq!(dev_col.persona.as_deref(), Some("agent-b"));
+
+        // Check pipeline.json updated
+        let loaded_pipe = crate::config::load_pipeline_config(&base).await.expect("load pipeline");
+        let pipe_dev_col = loaded_pipe.columns.iter().find(|c| c.id == "dev").unwrap();
+        assert_eq!(pipe_dev_col.persona.as_deref(), Some("agent-b"));
+
+        // Delete agent-b and verify references reset to None
+        delete_agent_persona_file(&base, "agent-b").await.expect("delete agent-b");
+        assert!(!agents_dir.join("agent-b").exists());
+
+        let loaded_boards_after_del = crate::config::load_boards_config(&base).await.expect("load boards after del");
+        let dev_col_del = loaded_boards_after_del.boards[0].columns.iter().find(|c| c.id == "dev").unwrap();
+        assert_eq!(dev_col_del.persona, None);
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
 
     #[test]
     fn test_next_task_num_never_reuses_ids() {

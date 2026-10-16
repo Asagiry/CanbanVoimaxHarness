@@ -15,6 +15,9 @@ import {
   Plus,
   Zap,
   Cpu,
+  Pencil,
+  Trash2,
+  X,
 } from 'lucide-react';
 import type { CortexAgentFile, CortexAgentStage } from '../../types';
 
@@ -69,9 +72,11 @@ export default function CortexExplorer() {
     createPersonaTemplate,
     createSettingTemplate,
     loadAgentPersonas,
+    renameAgentPersona,
+    deleteAgentPersona,
   } = useCortexStore();
   const syncStagesFromColumns = useCortexStore((s) => s.syncStagesFromColumns);
-  const { columns } = useBoardStore();
+  const { columns, boards } = useBoardStore();
   const setColumns = useBoardStore((s) => s.setColumns);
   const [filterQuery, setFilterQuery] = useState('');
   const [openSections, setOpenSections] = useState({ columns: true, agents: true });
@@ -81,6 +86,74 @@ export default function CortexExplorer() {
   const [creatingKind, setCreatingKind] = useState<'rule' | 'hook'>('rule');
   const [agentSaving, setAgentSaving] = useState<Record<string, boolean>>({});
   const [agentError, setAgentError] = useState<Record<string, string | null>>({});
+
+  interface AgentContextMenuState {
+    x: number;
+    y: number;
+    role: string;
+    isBuiltin: boolean;
+  }
+  const [agentContextMenu, setAgentContextMenu] = useState<AgentContextMenuState | null>(null);
+  const [renamingAgentRole, setRenamingAgentRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!agentContextMenu) return;
+    const handleClose = () => setAgentContextMenu(null);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setAgentContextMenu(null);
+    };
+    window.addEventListener('click', handleClose);
+    window.addEventListener('contextmenu', handleClose);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('click', handleClose);
+      window.removeEventListener('contextmenu', handleClose);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [agentContextMenu]);
+
+  const handleAgentContextMenu = (e: React.MouseEvent, stage: CortexAgentStage) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setAgentContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      role: stage.personaName,
+      isBuiltin: stage.personaName === 'cvh-dev' || Boolean(stage.isBuiltin),
+    });
+  };
+
+  const handleDeleteAgent = async (role: string) => {
+    if (role === 'cvh-dev') {
+      alert("Запрещено удалять встроенную персону 'cvh-dev'");
+      return;
+    }
+
+    const assignedList: string[] = [];
+    for (const b of boards) {
+      for (const c of b.columns) {
+        if (c.persona === role) {
+          assignedList.push(`Доска «${b.name}» → колонка «${c.title}»`);
+        }
+      }
+    }
+
+    let confirmMsg = `Удалить агента «${role}»?`;
+    if (assignedList.length > 0) {
+      confirmMsg += `\n\nВнимание: агент назначен на колонки:\n- ${assignedList.join('\n- ')}\n\nНазначение персоны у этих колонок будет сброшено.`;
+    }
+
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+
+    try {
+      await deleteAgentPersona(role);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`Ошибка при удалении агента: ${msg}`);
+    }
+  };
 
   const openCreateForm = (stageId: string, kind: 'rule' | 'hook', isExpanded: boolean, expand: () => void) => {
     if (!isExpanded) expand();
@@ -338,12 +411,75 @@ export default function CortexExplorer() {
                     setCreatingStageId((prev) => (prev === stage.stageId ? null : stage.stageId));
                   }}
                   onCloseCreate={() => setCreatingStageId(null)}
+                  onContextMenu={(e) => handleAgentContextMenu(e, stage)}
                 />
               ))}
             </div>
           )}
         </section>
       </div>
+
+      {/* Контекстное меню агента (ПКМ) */}
+      {agentContextMenu && (
+        <div
+          className="fixed z-50 min-w-[190px] bg-white rounded-lg shadow-xl border border-[#ebebeb] p-1 text-xs font-sans animate-in fade-in zoom-in-95 duration-100"
+          style={{
+            top: Math.min(agentContextMenu.y, window.innerHeight - 120),
+            left: Math.min(agentContextMenu.x, window.innerWidth - 210),
+          }}
+          onClick={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <div className="px-3 py-1.5 text-[10px] font-semibold text-[#a1a1aa] uppercase tracking-wider border-b border-[#f4f4f5] mb-1 truncate">
+            Агент: {agentContextMenu.role}
+          </div>
+          <button
+            onClick={() => {
+              const role = agentContextMenu.role;
+              setAgentContextMenu(null);
+              setRenamingAgentRole(role);
+            }}
+            disabled={agentContextMenu.isBuiltin}
+            className={`w-full flex items-center space-x-2 px-3 py-1.5 text-left transition rounded-sm ${
+              agentContextMenu.isBuiltin
+                ? 'text-[#a1a1aa] cursor-not-allowed opacity-50'
+                : 'text-[#171717] hover:bg-[#f4f4f5] cursor-pointer'
+            }`}
+            title={agentContextMenu.isBuiltin ? 'Нельзя переименовать встроенного агента' : undefined}
+          >
+            <Pencil className="h-3.5 w-3.5 text-[#71717a]" />
+            <span>Переименовать агента</span>
+          </button>
+          <button
+            onClick={() => {
+              const role = agentContextMenu.role;
+              setAgentContextMenu(null);
+              if (agentContextMenu.isBuiltin) return;
+              void handleDeleteAgent(role);
+            }}
+            disabled={agentContextMenu.isBuiltin}
+            className={`w-full flex items-center space-x-2 px-3 py-1.5 text-left transition rounded-sm ${
+              agentContextMenu.isBuiltin
+                ? 'text-[#a1a1aa] cursor-not-allowed opacity-50'
+                : 'text-red-600 hover:bg-red-50 hover:text-red-700 cursor-pointer'
+            }`}
+            title={agentContextMenu.isBuiltin ? 'Нельзя удалить встроенного агента' : undefined}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span>Удалить агента</span>
+          </button>
+        </div>
+      )}
+
+      {/* Диалог переименования агента */}
+      <RenameAgentModal
+        isOpen={Boolean(renamingAgentRole)}
+        role={renamingAgentRole}
+        onClose={() => setRenamingAgentRole(null)}
+        onRename={async (oldRole, newRole) => {
+          await renameAgentPersona(oldRole, newRole);
+        }}
+      />
     </aside>
   );
 }
@@ -584,6 +720,7 @@ function AgentStageCard({
   onOpenCreateForm,
   onPlusHeader,
   onCloseCreate,
+  onContextMenu,
 }: {
   stage: CortexAgentStage;
   shared: SharedFolderState;
@@ -599,6 +736,7 @@ function AgentStageCard({
   onOpenCreateForm: (kind: 'rule') => void;
   onPlusHeader: () => void;
   onCloseCreate: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
 }) {
   const personaFile = stage.files.find((f) => f.type === 'persona');
   const ruleFiles = stage.files.filter((f) => f.type === 'rule');
@@ -611,6 +749,7 @@ function AgentStageCard({
   return (
     <div
       id={`cortex-agent-${stage.personaName}`}
+      onContextMenu={onContextMenu}
       className={`rounded-md transition-colors ${
         isFocused
           ? 'bg-white border border-[#ebebeb] shadow-xs'
@@ -1186,5 +1325,128 @@ function FileTreeItem({
         <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" title="Несохраненные изменения" />
       )}
     </button>
+  );
+}
+
+interface RenameAgentModalProps {
+  isOpen: boolean;
+  role: string | null;
+  onClose: () => void;
+  onRename: (oldRole: string, newRole: string) => Promise<void>;
+}
+
+function RenameAgentModal({ isOpen, role, onClose, onRename }: RenameAgentModalProps) {
+  const [newName, setNewName] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && role) {
+      setNewName(role);
+      setError(null);
+      setIsSubmitting(false);
+    }
+  }, [isOpen, role]);
+
+  if (!isOpen || !role) return null;
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = newName.trim().toLowerCase();
+    if (!trimmed) {
+      setError('Имя агента не может быть пустым');
+      return;
+    }
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(trimmed)) {
+      setError('Разрешены только строчные латинские буквы, цифры и дефис (^[a-z0-9][a-z0-9-]*$)');
+      return;
+    }
+    if (trimmed === role) {
+      onClose();
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await onRename(role, trimmed);
+      onClose();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-xl border border-[#e4e4e7] bg-white p-5 shadow-2xl space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-[#f4f4f5] pb-3">
+          <div className="flex items-center space-x-2">
+            <Pencil className="h-4 w-4 text-[#171717]" />
+            <h3 className="font-semibold text-sm text-[#171717]">Переименовать агента</h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-md text-[#71717a] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-[#52525b] mb-1">
+              Текущая роль: <span className="font-mono text-[#171717] font-semibold">{role}</span>
+            </label>
+            <input
+              type="text"
+              autoFocus
+              value={newName}
+              onChange={(e) => {
+                setNewName(e.target.value);
+                setError(null);
+              }}
+              placeholder="новое-имя-агента"
+              className="w-full px-3 py-1.5 rounded-lg border border-[#d4d4d8] text-xs font-mono focus:border-[#171717] focus:outline-hidden transition"
+            />
+            <p className="mt-1 text-[11px] text-[#71717a]">
+              Только строчные латинские буквы, цифры и дефис
+            </p>
+          </div>
+
+          {error && (
+            <div className="text-xs text-red-600 bg-red-50 p-2 rounded-md border border-red-200">
+              {error}
+            </div>
+          )}
+
+          <div className="flex items-center justify-end space-x-2 pt-2 border-t border-[#f4f4f5]">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="px-3 py-1.5 rounded-md text-xs font-medium text-[#71717a] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-3 py-1.5 rounded-md text-xs font-medium bg-[#171717] hover:bg-[#262626] text-white transition cursor-pointer disabled:opacity-50"
+            >
+              {isSubmitting ? 'Сохранение...' : 'Сохранить'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }

@@ -28,6 +28,8 @@ interface CortexState {
   // Загрузить доступных агентов (`list_agent_personas`) и перестроить секцию «Агенты».
   // Ошибка IPC → пустой список, секция показывает подсказку. Колонки не трогает.
   loadAgentPersonas: () => Promise<void>;
+  renameAgentPersona: (oldRole: string, newRole: string) => Promise<void>;
+  deleteAgentPersona: (role: string) => Promise<void>;
   openFile: (fileId: string) => Promise<void>;
   createPersonaTemplate: (fileId: string) => Promise<void>;
   createSettingTemplate: (fileId: string) => Promise<void>;
@@ -711,6 +713,40 @@ export const useCortexStore = create<CortexState>((set, get) => ({
       if (alive.has(id)) prunedMissing[id] = value;
     }
     set({ agentPersonas: personas, agentStages: nextStages, fileMissing: prunedMissing });
+  },
+
+  renameAgentPersona: async (oldRole: string, newRole: string) => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('rename_agent_persona', { oldRole, newRole });
+    } catch (err) {
+      console.info('rename_agent_persona IPC not available or failed:', err);
+      throw err;
+    }
+    await get().loadAgentPersonas();
+    try {
+      const { useBoardStore } = await import('./boardStore');
+      await useBoardStore.getState().loadBoards();
+    } catch (err) {
+      console.info('Failed to reload boards after agent rename:', err);
+    }
+  },
+
+  deleteAgentPersona: async (role: string) => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('delete_agent_persona', { role });
+    } catch (err) {
+      console.info('delete_agent_persona IPC not available or failed:', err);
+      throw err;
+    }
+    await get().loadAgentPersonas();
+    try {
+      const { useBoardStore } = await import('./boardStore');
+      await useBoardStore.getState().loadBoards();
+    } catch (err) {
+      console.info('Failed to reload boards after agent delete:', err);
+    }
   },
 
   openFile: async (fileId) => {

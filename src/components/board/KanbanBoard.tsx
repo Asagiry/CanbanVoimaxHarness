@@ -640,24 +640,7 @@ export default function KanbanBoard() {
                     </span>
                   </button>
                 )}
-                {!isRenaming && boards.length > 1 && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (
-                        window.confirm(
-                          `Удалить доску «${b.name}»? Все задачи этой доски будут перенесены на активную доску.`
-                        )
-                      ) {
-                        void deleteBoard(b.id);
-                      }
-                    }}
-                    title={`Удалить доску «${b.name}»`}
-                    className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-500 text-[#a1a1aa] transition cursor-pointer -ml-1 mr-0.5"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                )}
+
               </div>
             );
           })}
