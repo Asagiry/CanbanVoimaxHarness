@@ -124,7 +124,7 @@ export interface LiveStreamEntry {
   images?: string[];
 }
 
-export type ActivityType = 'thought' | 'output' | 'tool' | 'steer' | 'system' | 'error' | 'user';
+export type ActivityType = 'thought' | 'output' | 'tool' | 'steer' | 'system' | 'error' | 'user' | 'compacted';
 
 export interface ActivityItem {
   id: string;
@@ -149,6 +149,8 @@ export interface CompactionReport {
   tokens_after: number;
   evaporated_count: number;
   saved_tokens: number;
+  compacted_messages_count?: number;
+  summary?: string;
 }
 
 export interface DiffFile {

@@ -213,6 +213,8 @@ pub struct LlmSettings {
     pub model: String,
     #[serde(default)]
     pub temperature: Option<f32>,
+    #[serde(rename = "compactorModel", alias = "compactor_model", default = "default_compactor_model")]
+    pub compactor_model: String,
 }
 
 fn default_llm_provider() -> String {
@@ -231,6 +233,10 @@ fn default_llm_model() -> String {
     "gemini-3.8-flash-high".to_string()
 }
 
+fn default_compactor_model() -> String {
+    "inherit".to_string()
+}
+
 impl Default for LlmSettings {
     fn default() -> Self {
         Self {
@@ -239,6 +245,7 @@ impl Default for LlmSettings {
             base_url: default_llm_base_url(),
             model: default_llm_model(),
             temperature: Some(0.2),
+            compactor_model: default_compactor_model(),
         }
     }
 }
@@ -811,7 +818,16 @@ pub fn get_app_llm_settings_path() -> PathBuf {
 }
 
 pub async fn load_llm_settings(repo_root: &Path) -> Result<LlmSettings> {
-    // 1. Project-local .cvh/llm.json (if present)
+    // 1. Project-local .cvh/settings/llm.json or .cvh/llm.json (if present)
+    let settings_dir_path = repo_root.join(".cvh").join("settings").join("llm.json");
+    if settings_dir_path.exists() {
+        if let Ok(content) = tokio::fs::read_to_string(&settings_dir_path).await {
+            if let Ok(settings) = serde_json::from_str::<LlmSettings>(&content) {
+                return Ok(settings);
+            }
+        }
+    }
+
     let local_path = repo_root.join(".cvh").join("llm.json");
     if local_path.exists() {
         if let Ok(content) = tokio::fs::read_to_string(&local_path).await {
@@ -845,11 +861,17 @@ pub async fn save_llm_settings_to_disk(repo_root: &Path, settings: &LlmSettings)
         .await
         .with_context(|| format!("Failed to write global LLM settings to {:?}", global_path))?;
 
-    // If repo has .cvh directory, also mirror to .cvh/llm.json
+    // If repo has .cvh directory, also mirror to .cvh/llm.json and .cvh/settings/llm.json
     let repo_cvh = repo_root.join(".cvh");
     if repo_cvh.exists() {
         let local_path = repo_cvh.join("llm.json");
         let _ = atomic_write_file(&local_path, &serialized).await;
+
+        let settings_dir = repo_cvh.join("settings");
+        if settings_dir.exists() {
+            let settings_path = settings_dir.join("llm.json");
+            let _ = atomic_write_file(&settings_path, &serialized).await;
+        }
     }
 
     Ok(())

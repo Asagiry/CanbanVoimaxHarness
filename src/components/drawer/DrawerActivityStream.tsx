@@ -3,6 +3,7 @@ import type { KanbanTask } from '../../types';
 import type { DrawerActivityItem } from '../../stores/drawerStore';
 import ToolExecutionCard from './ToolExecutionCard';
 import ThinkingCard from './ThinkingCard';
+import CompactedContextCard from './CompactedContextCard';
 import {
   ArrowDown,
   ChevronDown,
@@ -460,6 +461,16 @@ export default function DrawerActivityStream({
           {/* Unified Chronological Activity Stream */}
           {(unifiedActivities ?? []).map((activity, idx) => {
             const key = activity?.id ?? `activity-${idx}`;
+
+            // Compacted context accordion card
+            if (activity?.type === 'compacted') {
+              return (
+                <CompactedContextCard
+                  key={key}
+                  activity={activity}
+                />
+              );
+            }
 
             // b) Live Streaming Thinking Block
             if (activity?.type === 'thought') {
