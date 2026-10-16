@@ -27,6 +27,7 @@ interface AgentPersonaOption {
   has_prompt?: boolean;
   isBuiltin?: boolean;
   is_builtin?: boolean;
+  icon?: string;
 }
 
 const NEW_AGENT_OPTION = '__new__';
@@ -461,14 +462,16 @@ export default function KanbanBoard() {
 
     const taken = new Set(columns.map((c) => c.id));
     const id = uniqueColumnId(slugifyTitle(title), taken);
+    const targetPersona = personaName || 'developer';
+    const matchedPersona = agentPersonas.find((p) => p.role === targetPersona);
     const newCol: PipelineColumn = {
       id,
       title,
       color: COLUMN_PALETTE[columns.length % COLUMN_PALETTE.length],
-      icon: 'Layers',
+      icon: matchedPersona?.icon || 'Layers',
       // Persona обязана сохраняться (select и свободный ввод): пустая подменяется значением по умолчанию,
       // чтобы колонка гарантированно попадала в проводник.
-      persona: personaName || 'developer',
+      persona: targetPersona,
       contextWindow: 128000,
       modelOverride: null,
       hooks: {},
@@ -723,9 +726,10 @@ export default function KanbanBoard() {
                 >
                   {agentPersonas.map((p) => {
                     const isBuiltin = p.role === 'cvh-dev' || Boolean(p.isBuiltin || p.is_builtin);
+                    const iconLabel = p.icon ? ` [${p.icon}]` : '';
                     return (
                       <option key={p.role} value={p.role}>
-                        {isBuiltin ? `${p.role} (Встроенный)` : p.role}
+                        {isBuiltin ? `${p.role} (Встроенный)${iconLabel}` : `${p.role}${iconLabel}`}
                       </option>
                     );
                   })}

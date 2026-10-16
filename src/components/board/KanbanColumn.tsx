@@ -4,15 +4,7 @@ import { PipelineColumn, KanbanTask } from '../../types';
 import KanbanCard from '../card/KanbanCard';
 import ColumnContextMenu from './ColumnContextMenu';
 import { useCortexStore } from '../../stores/cortexStore';
-import {
-  Inbox,
-  ListTodo,
-  Code2,
-  ShieldCheck,
-  Sparkles,
-  CheckCircle2,
-  Layers,
-} from 'lucide-react';
+import AgentIcon from '../common/AgentIcon';
 
 interface KanbanColumnProps {
   column: PipelineColumn;
@@ -32,7 +24,9 @@ export default function KanbanColumn({
 }: KanbanColumnProps) {
   // Клик по шапке больше не подсвечивает колонку и не трогает проводник
   // (фокус из проводника в доску оставлен, обратного нет).
-  const { focusedStageId } = useCortexStore();
+  const { focusedStageId, agentPersonas } = useCortexStore();
+  const assignedPersona = column.persona ? agentPersonas.find((p) => p.role === column.persona) : undefined;
+  const effectiveIcon = column.icon || assignedPersona?.icon || 'Layers';
   const isFocused = focusedStageId === column.id;
   const isDoneColumn = Boolean(
     column.terminal ||
@@ -56,25 +50,7 @@ export default function KanbanColumn({
     )
   );
 
-  const getColumnIcon = (iconName: string) => {
-    const props = { className: 'h-3.5 w-3.5 shrink-0 text-[#171717]' };
-    switch (iconName) {
-      case 'Inbox':
-        return <Inbox {...props} />;
-      case 'ListTodo':
-        return <ListTodo {...props} />;
-      case 'Code2':
-        return <Code2 {...props} />;
-      case 'ShieldCheck':
-        return <ShieldCheck {...props} />;
-      case 'Sparkles':
-        return <Sparkles {...props} />;
-      case 'CheckCircle2':
-        return <CheckCircle2 {...props} />;
-      default:
-        return <Layers {...props} />;
-    }
-  };
+
 
   return (
     <Draggable draggableId={column.id} index={index} isDragDisabled={isPinned}>
@@ -119,7 +95,7 @@ export default function KanbanColumn({
         } group overflow-hidden`}
       >
         <div className="flex items-center gap-2 min-w-0 w-full overflow-hidden">
-          {getColumnIcon(column.icon)}
+          <AgentIcon name={effectiveIcon} className="h-3.5 w-3.5 shrink-0 text-[#171717]" />
           <h3 className="text-[13px] font-semibold text-[#171717] truncate leading-none">
             {column.title}
           </h3>

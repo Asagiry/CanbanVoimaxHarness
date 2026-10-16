@@ -63,6 +63,7 @@ export interface AgentPersonaInfo {
   personaFile?: string;
   rules?: string[];
   hooks?: string[];
+  icon?: string;
 }
 
 interface RawAgentPersona {
@@ -75,6 +76,7 @@ interface RawAgentPersona {
   persona_file?: string;
   rules?: string[];
   hooks?: string[];
+  icon?: string;
 }
 
 // Каталог агента по новой схеме. Роль = persona колонки; фолбэк — stageId,
@@ -625,6 +627,7 @@ export const useCortexStore = create<CortexState>((set, get) => ({
         personaFile: item.personaFile ?? item.persona_file ?? 'persona.md',
         rules: Array.isArray(item.rules) ? item.rules : [],
         hooks: Array.isArray(item.hooks) ? item.hooks : [],
+        icon: item.icon,
       });
     }
     personas.sort((a, b) => a.role.localeCompare(b.role));
@@ -676,7 +679,7 @@ export const useCortexStore = create<CortexState>((set, get) => ({
         stageId,
         stageTitle: p.role,
         color: isBuiltin ? '#4f46e5' : '#171717',
-        icon: isBuiltin ? 'Cpu' : 'User',
+        icon: p.icon || (isBuiltin ? 'Cpu' : 'Bot'),
         personaName: p.role,
         isExpanded: prevStage?.isExpanded ?? false,
         isBuiltin,

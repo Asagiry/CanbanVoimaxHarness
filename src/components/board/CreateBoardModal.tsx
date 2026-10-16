@@ -11,6 +11,7 @@ interface CreateBoardModalProps {
 interface PersonaOption {
   role: string;
   isBuiltin?: boolean;
+  icon?: string;
 }
 
 export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalProps) {
@@ -31,11 +32,12 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
       const fetchPersonas = async () => {
         try {
           const { invoke } = await import('@tauri-apps/api/core');
-          const list = await invoke<Array<{ role: string; isBuiltin?: boolean; is_builtin?: boolean }>>('list_agent_personas');
+          const list = await invoke<Array<{ role: string; isBuiltin?: boolean; is_builtin?: boolean; icon?: string }>>('list_agent_personas');
           if (Array.isArray(list)) {
             const mapped = list.map((p) => ({
               role: p.role,
               isBuiltin: p.isBuiltin ?? p.is_builtin ?? (p.role === 'cvh-dev'),
+              icon: p.icon,
             }));
             setPersonas(mapped);
           }
@@ -77,8 +79,11 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
       const created = await createBoard(trimmed);
       if (created) {
         if (selectedPersona && selectedPersona !== 'developer') {
+          const matched = personas.find((p) => p.role === selectedPersona);
           const updatedColumns = created.columns.map((c) =>
-            c.id === 'dev' ? { ...c, persona: selectedPersona } : c
+            c.id === 'dev'
+              ? { ...c, persona: selectedPersona, icon: matched?.icon || c.icon }
+              : c,
           );
           await saveBoard({ ...created, columns: updatedColumns });
           useCortexStore.getState().syncStagesFromColumns(updatedColumns);
@@ -165,9 +170,10 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
             >
               {personas.map((p) => {
                 const isBuiltin = p.role === 'cvh-dev' || Boolean(p.isBuiltin);
+                const iconLabel = p.icon ? ` [${p.icon}]` : '';
                 return (
                   <option key={p.role} value={p.role}>
-                    {isBuiltin ? `${p.role} (Встроенный)` : p.role}
+                    {isBuiltin ? `${p.role} (Встроенный)${iconLabel}` : `${p.role}${iconLabel}`}
                   </option>
                 );
               })}

@@ -4,6 +4,7 @@ import type { PipelineColumn, PipelineConfig } from '../../types';
 import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import { slugifyTitle } from '../../lib/slug';
+import { getDefaultColumnIcon } from '../../lib/columnIcons';
 
 interface ColumnContextMenuProps {
   column: PipelineColumn;
@@ -19,6 +20,7 @@ interface AgentPersonaOption {
   has_prompt?: boolean;
   isBuiltin?: boolean;
   is_builtin?: boolean;
+  icon?: string;
 }
 
 const MENU_WIDTH = 264;
@@ -219,14 +221,26 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
       return;
     }
 
+    const matchedPersona = personas.find((p) => p.role === nextPersona);
+    let nextIcon = column.icon;
+    if (nextPersona && matchedPersona?.icon) {
+      nextIcon = matchedPersona.icon;
+    } else if (!nextPersona) {
+      nextIcon = getDefaultColumnIcon(column.id, column.icon);
+    }
+
     setPersonaSaving(true);
     const prev = columns;
-    const next = prev.map((c) => (c.id === column.id ? { ...c, persona: nextPersona } : c));
+    const next = prev.map((c) =>
+      c.id === column.id ? { ...c, persona: nextPersona, icon: nextIcon } : c,
+    );
     setColumns(next);
+    useCortexStore.getState().syncStagesFromColumns(next);
     const saved = await savePipelineConfig(next);
     setPersonaSaving(false);
     if (!saved) {
       setColumns(prev);
+      useCortexStore.getState().syncStagesFromColumns(prev);
       setPersonaError('Не удалось сохранить. Изменения откачены.');
       return;
     }
@@ -391,9 +405,10 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
               )}
               {personas.map((p) => {
                 const isBuiltin = p.role === 'cvh-dev' || Boolean(p.isBuiltin || p.is_builtin);
+                const iconLabel = p.icon ? ` [${p.icon}]` : '';
                 return (
                   <option key={p.role} value={p.role}>
-                    {isBuiltin ? `${p.role} (Встроенный)` : p.role}
+                    {isBuiltin ? `${p.role} (Встроенный)${iconLabel}` : `${p.role}${iconLabel}`}
                   </option>
                 );
               })}

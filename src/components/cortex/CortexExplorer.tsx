@@ -3,6 +3,8 @@ import { useCortexStore, cortexAgentDir, previewCortexFileName } from '../../sto
 import type { CortexHookExt, CortexHookMoment, AgentPersonaInfo } from '../../stores/cortexStore';
 import { useBoardStore } from '../../stores/boardStore';
 import type { PipelineColumn, PipelineConfig } from '../../types';
+import AgentIcon from '../common/AgentIcon';
+import { getDefaultColumnIcon } from '../../lib/columnIcons';
 import {
   ChevronDown,
   ChevronRight,
@@ -226,13 +228,24 @@ export default function CortexExplorer() {
     if ((col.persona ?? null) === nextPersona) return;
     setAgentError((prev) => ({ ...prev, [columnId]: null }));
     setAgentSaving((prev) => ({ ...prev, [columnId]: true }));
+    const matchedPersona = agentPersonas.find((p) => p.role === nextPersona);
+    let nextIcon = col.icon;
+    if (nextPersona && matchedPersona?.icon) {
+      nextIcon = matchedPersona.icon;
+    } else if (!nextPersona) {
+      nextIcon = getDefaultColumnIcon(col.id, col.icon);
+    }
     const prev = columns;
-    const next = prev.map((c) => (c.id === columnId ? { ...c, persona: nextPersona } : c));
+    const next = prev.map((c) =>
+      c.id === columnId ? { ...c, persona: nextPersona, icon: nextIcon } : c,
+    );
     setColumns(next);
+    syncStagesFromColumns(next);
     const saved = await savePipelineConfig(next);
     setAgentSaving((prevMap) => ({ ...prevMap, [columnId]: false }));
     if (!saved) {
       setColumns(prev);
+      syncStagesFromColumns(prev);
       setAgentError((prevMap) => ({ ...prevMap, [columnId]: 'Не удалось сохранить. Изменения откачены.' }));
     }
   };
@@ -574,7 +587,12 @@ function StageHeaderButton({
             <ChevronRight className="h-3.5 w-3.5 text-[#666666] shrink-0" />
           )}
 
-          {isBuiltin ? (
+          {stage.icon ? (
+            <AgentIcon
+              name={stage.icon}
+              className={`h-3.5 w-3.5 shrink-0 ${isBuiltin ? 'text-indigo-600' : 'text-[#171717]'}`}
+            />
+          ) : isBuiltin ? (
             <Cpu className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
           ) : (
             <span
@@ -917,9 +935,10 @@ function AgentField({
             )}
             {personas.map((p) => {
               const isBuiltin = p.role === 'cvh-dev' || Boolean(p.isBuiltin);
+              const iconLabel = p.icon ? ` [${p.icon}]` : '';
               return (
                 <option key={p.role} value={p.role}>
-                  {isBuiltin ? `${p.role} (Встроенный)` : p.role}
+                  {isBuiltin ? `${p.role} (Встроенный)${iconLabel}` : `${p.role}${iconLabel}`}
                 </option>
               );
             })}

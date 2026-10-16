@@ -37,6 +37,170 @@ pub struct CortexNode {
 
 pub use crate::config::normalize_pipeline_columns;
 
+/// Канонический пак имен SVG-иконок для агентов
+pub const AGENT_ICONS: &[&str] = &[
+    "Bot", "Brain", "Cpu", "Code2", "ShieldCheck", "Sparkles",
+    "Terminal", "Zap", "Flame", "Radar", "Workflow", "Boxes",
+    "Wrench", "Rocket", "Fingerprint", "Compass", "Crosshair", "Layers",
+];
+
+/// Дефолтная иконка для колонки по её идентификатору
+pub fn default_column_icon(col_id: &str) -> String {
+    match col_id {
+        "backlog" => "Inbox".to_string(),
+        "dev" => "Code2".to_string(),
+        "review" => "ShieldCheck".to_string(),
+        "retro" => "Sparkles".to_string(),
+        "ready" => "CheckCircle2".to_string(),
+        _ => "Layers".to_string(),
+    }
+}
+
+/// Извлекает иконку из YAML frontmatter (между первыми `---` и вторыми `---`)
+pub fn extract_persona_icon_from_text(content: &str) -> Option<String> {
+    let trimmed = content.trim_start();
+    let rest = trimmed.strip_prefix("---")?;
+    let end_idx = rest.find("\n---")?;
+    let fm_block = &rest[..end_idx];
+    for line in fm_block.lines() {
+        let trimmed_line = line.trim();
+        if let Some(val) = trimmed_line.strip_prefix("icon:") {
+            let cleaned = val.trim().trim_matches(|c| c == '\'' || c == '"').trim();
+            if !cleaned.is_empty() {
+                return Some(cleaned.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Извлекает иконку из JSON файла (например, persona.json или setting)
+pub fn extract_persona_icon_from_json(content: &str) -> Option<String> {
+    if let Ok(val) = serde_json::from_str::<serde_json::Value>(content) {
+        if let Some(icon) = val.get("icon").and_then(|v| v.as_str()) {
+            let cleaned = icon.trim();
+            if !cleaned.is_empty() {
+                return Some(cleaned.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Считывает иконку персоны из каталога (persona.md -> agent.md -> persona.json -> setting).
+/// Для встроенного агента `cvh-dev` по умолчанию возвращает "Cpu".
+pub async fn read_persona_icon_from_dir(role_dir: &Path, role: &str) -> Option<String> {
+    let persona_file = role_dir.join("persona.md");
+    if let Ok(content) = tokio::fs::read_to_string(&persona_file).await {
+        if let Some(icon) = extract_persona_icon_from_text(&content) {
+            return Some(icon);
+        }
+    }
+    let agent_file = role_dir.join("agent.md");
+    if let Ok(content) = tokio::fs::read_to_string(&agent_file).await {
+        if let Some(icon) = extract_persona_icon_from_text(&content) {
+            return Some(icon);
+        }
+    }
+    let json_file = role_dir.join("persona.json");
+    if let Ok(content) = tokio::fs::read_to_string(&json_file).await {
+        if let Some(icon) = extract_persona_icon_from_json(&content) {
+            return Some(icon);
+        }
+    }
+    let setting_file = role_dir.join("setting");
+    if let Ok(content) = tokio::fs::read_to_string(&setting_file).await {
+        if let Some(icon) = extract_persona_icon_from_json(&content) {
+            return Some(icon);
+        }
+    }
+    if role == "cvh-dev" {
+        return Some("Cpu".to_string());
+    }
+    None
+}
+
+/// Вставляет или обновляет `icon: <icon>` в YAML frontmatter текста.
+pub fn insert_or_update_frontmatter_icon(content: &str, icon: &str) -> String {
+    let trimmed_start = content.trim_start();
+    if let Some(rest) = trimmed_start.strip_prefix("---") {
+        if let Some(end_idx) = rest.find("\n---") {
+            let fm_block = &rest[..end_idx];
+            let after_closing_dash = &rest[end_idx..]; // начинается с "\n---"
+            let mut found = false;
+            let mut new_lines = Vec::new();
+            for line in fm_block.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("icon:") {
+                    new_lines.push(format!("icon: {}", icon));
+                    found = true;
+                } else {
+                    new_lines.push(line.to_string());
+                }
+            }
+            if !found {
+                new_lines.push(format!("icon: {}", icon));
+            }
+            let leading_ws = &content[..content.len() - trimmed_start.len()];
+            return format!("{}---\n{}{}", leading_ws, new_lines.join("\n"), after_closing_dash);
+        }
+    }
+    format!("---\nicon: {}\n---\n\n{}", icon, content)
+}
+
+/// Сохраняет иконку персоны в `persona.md` (или `agent.md`).
+pub async fn save_persona_icon(role_dir: &Path, icon: &str) -> Result<(), String> {
+    let persona_file = role_dir.join("persona.md");
+    let agent_file = role_dir.join("agent.md");
+    let target_file = if persona_file.exists() {
+        persona_file
+    } else if agent_file.exists() {
+        agent_file
+    } else {
+        persona_file
+    };
+
+    if target_file.exists() {
+        let content = tokio::fs::read_to_string(&target_file)
+            .await
+            .map_err(|e| format!("Не удалось прочитать {}: {}", target_file.display(), e))?;
+        let updated = insert_or_update_frontmatter_icon(&content, icon);
+        atomic_write_file(&target_file, &updated)
+            .await
+            .map_err(|e| format!("Не удалось записать {}: {}", target_file.display(), e))?;
+    } else {
+        tokio::fs::create_dir_all(role_dir)
+            .await
+            .map_err(|e| format!("Не удалось создать каталог {}: {}", role_dir.display(), e))?;
+        let new_content = format!("---\nicon: {}\n---\n", icon);
+        atomic_write_file(&target_file, &new_content)
+            .await
+            .map_err(|e| format!("Не удалось записать {}: {}", target_file.display(), e))?;
+    }
+    Ok(())
+}
+
+/// Детерминированный выбор иконки для роли из пака AGENT_ICONS (предпочтительно не занятой)
+pub fn deterministic_icon_for_role(role: &str, used_icons: &HashSet<String>) -> String {
+    if role == "cvh-dev" {
+        return "Cpu".to_string();
+    }
+    let unused: Vec<&'static str> = AGENT_ICONS
+        .iter()
+        .copied()
+        .filter(|&icon| !used_icons.contains(icon))
+        .collect();
+    let pool = if !unused.is_empty() {
+        &unused[..]
+    } else {
+        AGENT_ICONS
+    };
+    let hash: usize = role.bytes().fold(5381usize, |acc, b| {
+        acc.wrapping_mul(33).wrapping_add(b as usize)
+    });
+    pool[hash % pool.len()].to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentPersonaInfo {
@@ -50,6 +214,8 @@ pub struct AgentPersonaInfo {
     pub rules: Vec<String>,
     #[serde(default)]
     pub hooks: Vec<String>,
+    #[serde(default)]
+    pub icon: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -78,10 +244,9 @@ pub fn is_valid_persona_role(role: &str) -> bool {
     true
 }
 
-fn persona_placeholder_template(role: &str) -> String {
+fn persona_placeholder_template(role: &str, icon: &str) -> String {
     format!(
-        "# Роль: {role}\n\n\
-        > Этот файл создан автоматически командой `create_agent_persona`. \
+        "---\n        name: {role}\n        icon: {icon}\n        ---\n\n        # Роль: {role}\n\n        > Этот файл создан автоматически командой `create_agent_persona`. \
         > Заполните его под свою персону — все секции ниже помечены TODO.\n\n\
         ## TODO: цель персоны\n\n\
         - Опишите, за что отвечает эта персона и какие задачи решает.\n\n\
@@ -122,6 +287,16 @@ pub async fn list_agent_personas_in(root: &Path) -> Vec<AgentPersonaInfo> {
     }
     // Always include the builtin cvh-dev agent
     roles.insert("cvh-dev".to_string());
+
+    // Первый проход: собираем уже назначенные иконки
+    let mut used_icons = HashSet::new();
+    for r in &roles {
+        let r_dir = agents_dir.join(r);
+        if let Some(ic) = read_persona_icon_from_dir(&r_dir, r).await {
+            used_icons.insert(ic);
+        }
+    }
+    used_icons.insert("Cpu".to_string());
 
     let mut out: Vec<AgentPersonaInfo> = Vec::with_capacity(roles.len());
     for role in roles {
@@ -169,6 +344,19 @@ pub async fn list_agent_personas_in(root: &Path) -> Vec<AgentPersonaInfo> {
         }
         hooks.sort();
 
+        // Считываем иконку или детерминированно назначаем и сохраняем
+        let icon = match read_persona_icon_from_dir(&role_dir, &role).await {
+            Some(ic) => ic,
+            None => {
+                let assigned = deterministic_icon_for_role(&role, &used_icons);
+                used_icons.insert(assigned.clone());
+                if role_dir.exists() {
+                    let _ = save_persona_icon(&role_dir, &assigned).await;
+                }
+                assigned
+            }
+        };
+
         out.push(AgentPersonaInfo {
             role,
             has_prompt,
@@ -176,6 +364,7 @@ pub async fn list_agent_personas_in(root: &Path) -> Vec<AgentPersonaInfo> {
             persona_file,
             rules,
             hooks,
+            icon: Some(icon),
         });
     }
     out.sort_by(|a, b| a.role.cmp(&b.role));
@@ -206,13 +395,14 @@ pub async fn delete_agent_persona_file(root: &Path, role: &str) -> Result<(), St
         return Err(format!("Персона '{}' не найдена", role));
     }
 
-    // Сброс ссылок на persona в boards.json и pipeline.json
+    // Сброс ссылок на persona в boards.json и pipeline.json с возвратом дефолтной иконки колонки
     if let Ok(mut boards_cfg) = crate::config::load_boards_config(root).await {
         let mut changed = false;
         for board in &mut boards_cfg.boards {
             for col in &mut board.columns {
                 if col.persona.as_deref() == Some(role) {
                     col.persona = None;
+                    col.icon = Some(default_column_icon(&col.id));
                     changed = true;
                 }
             }
@@ -226,6 +416,7 @@ pub async fn delete_agent_persona_file(root: &Path, role: &str) -> Result<(), St
         for col in &mut pipeline_cfg.columns {
             if col.persona.as_deref() == Some(role) {
                 col.persona = None;
+                col.icon = Some(default_column_icon(&col.id));
                 changed = true;
             }
         }
@@ -234,6 +425,7 @@ pub async fn delete_agent_persona_file(root: &Path, role: &str) -> Result<(), St
                 for col in &mut board.columns {
                     if col.persona.as_deref() == Some(role) {
                         col.persona = None;
+                        col.icon = Some(default_column_icon(&col.id));
                         changed = true;
                     }
                 }
@@ -350,13 +542,44 @@ pub async fn create_agent_persona_file(root: &Path, role: &str) -> Result<String
             role, role
         ));
     }
+
+    // Собираем уже занятые иконки у существующих персон
+    let mut used_icons = HashSet::new();
+    let agents_dir = root.join(".cvh").join("agents");
+    if let Ok(mut entries) = tokio::fs::read_dir(&agents_dir).await {
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let p = entry.path();
+            if p.is_dir() {
+                if let Some(r_name) = entry.file_name().to_str() {
+                    if let Some(ic) = read_persona_icon_from_dir(&p, r_name).await {
+                        used_icons.insert(ic);
+                    }
+                }
+            }
+        }
+    }
+    used_icons.insert("Cpu".to_string());
+
+    // Выбираем случайную иконку из свободных (или из всех, если свободных не осталось)
+    let available: Vec<&'static str> = AGENT_ICONS
+        .iter()
+        .copied()
+        .filter(|&icon| !used_icons.contains(icon))
+        .collect();
+    let pool = if !available.is_empty() {
+        &available[..]
+    } else {
+        AGENT_ICONS
+    };
+    let chosen_icon = pool[(uuid::Uuid::new_v4().as_u128() as usize) % pool.len()];
+
     tokio::fs::create_dir_all(role_dir.join("rules"))
         .await
         .map_err(|e| format!("Не удалось создать rules для персоны '{}': {}", role, e))?;
     tokio::fs::create_dir_all(role_dir.join("hooks"))
         .await
         .map_err(|e| format!("Не удалось создать hooks для персоны '{}': {}", role, e))?;
-    let content = persona_placeholder_template(role);
+    let content = persona_placeholder_template(role, chosen_icon);
     atomic_write_file(&persona_file, &content)
         .await
         .map_err(|e| format!("Не удалось создать персону '{}': {}", role, e))?;
@@ -3513,7 +3736,9 @@ mod tests {
 
     #[test]
     fn test_persona_placeholder_template_ru() {
-        let t = persona_placeholder_template("reviewer");
+        let t = persona_placeholder_template("reviewer", "ShieldCheck");
+        assert!(t.contains("name: reviewer"));
+        assert!(t.contains("icon: ShieldCheck"));
         assert!(t.contains("# Роль: reviewer"));
         assert!(t.contains("TODO"));
         assert!(t.contains("создан автоматически"));
@@ -3528,12 +3753,14 @@ mod tests {
             persona_file: "persona.md".to_string(),
             rules: vec!["r1.md".to_string()],
             hooks: vec![],
+            icon: Some("Code2".to_string()),
         };
         let v = serde_json::to_value(&info).expect("serialize");
         assert_eq!(v.get("role").and_then(|x| x.as_str()), Some("developer"));
         assert_eq!(v.get("hasPrompt").and_then(|x| x.as_bool()), Some(true));
         assert_eq!(v.get("isBuiltin").and_then(|x| x.as_bool()), Some(false));
         assert_eq!(v.get("personaFile").and_then(|x| x.as_str()), Some("persona.md"));
+        assert_eq!(v.get("icon").and_then(|x| x.as_str()), Some("Code2"));
         assert!(v.get("has_prompt").is_none());
         assert!(v.get("is_builtin").is_none());
 
@@ -3544,9 +3771,50 @@ mod tests {
             persona_file: "persona.md".to_string(),
             rules: vec!["boards.md".to_string()],
             hooks: vec![],
+            icon: Some("Cpu".to_string()),
         };
         let vb = serde_json::to_value(&builtin).expect("serialize");
         assert_eq!(vb.get("isBuiltin").and_then(|x| x.as_bool()), Some(true));
+        assert_eq!(vb.get("icon").and_then(|x| x.as_str()), Some("Cpu"));
+    }
+
+    #[tokio::test]
+    async fn test_agent_svg_icons_generation_and_persistence() {
+        assert_eq!(default_column_icon("backlog"), "Inbox");
+        assert_eq!(default_column_icon("ready"), "CheckCircle2");
+        assert_eq!(default_column_icon("other"), "Layers");
+
+        let text_with_icon = "---\nname: foo\nicon: Rocket\n---\n# Body";
+        assert_eq!(extract_persona_icon_from_text(text_with_icon), Some("Rocket".to_string()));
+
+        let text_no_icon = "# Just Title";
+        let updated = insert_or_update_frontmatter_icon(text_no_icon, "Flame");
+        assert!(updated.contains("icon: Flame"));
+        assert_eq!(extract_persona_icon_from_text(&updated), Some("Flame".to_string()));
+
+        let text_update_icon = "---\nname: bar\nicon: Zap\n---\n# Bar";
+        let updated2 = insert_or_update_frontmatter_icon(text_update_icon, "Radar");
+        assert!(updated2.contains("icon: Radar"));
+        assert!(!updated2.contains("icon: Zap"));
+        assert_eq!(extract_persona_icon_from_text(&updated2), Some("Radar".to_string()));
+
+        let base = PathBuf::from("target").join(format!("cvh_persona_icon_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        // Создаем персону через create_agent_persona_file — она должна сразу получить иконку
+        let rel = create_agent_persona_file(&base, "bot-agent").await.expect("create bot-agent");
+        let content = tokio::fs::read_to_string(base.join(&rel)).await.expect("read created");
+        let icon_opt = extract_persona_icon_from_text(&content);
+        assert!(icon_opt.is_some(), "Созданная персона должна содержать иконку в frontmatter");
+        let icon = icon_opt.unwrap();
+        assert!(AGENT_ICONS.contains(&icon.as_str()), "Иконка должна быть из канонического пака");
+
+        // Проверяем листинг персон
+        let listed = list_agent_personas_in(&base).await;
+        let bot_info = listed.iter().find(|p| p.role == "bot-agent").expect("bot-agent in list");
+        assert_eq!(bot_info.icon.as_deref(), Some(icon.as_str()));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
     }
 
     #[tokio::test]
