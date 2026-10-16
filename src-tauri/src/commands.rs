@@ -1307,6 +1307,18 @@ pub async fn load_subagent_dialog(
     crate::db::load_dialog_items(&root, &safe_id)
 }
 
+#[tauri::command]
+pub async fn retry_subagent(
+    parent_task_id: String,
+    subagent_id: String,
+    message: Option<String>,
+) -> Result<(), String> {
+    let _ = parent_task_id;
+    crate::agent::retry_subagent_execution(&subagent_id, message)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// Receives renderer-side JS errors so white-screen crashes land in the backend log.
 #[tauri::command]
 pub async fn log_ui_error(message: String) -> Result<(), String> {

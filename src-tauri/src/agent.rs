@@ -410,13 +410,17 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "collect_subagent",
-            "Await the completion of a background subagent (launched via subagent_bg) and retrieve its final report without polling.",
+            "Await the completion of one or multiple background subagents (launched via subagent_bg) and retrieve their final reports without polling. Accepts either 'subagent_id' (string) or 'subagent_ids' (array of strings).",
             serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "subagent_id": { "type": "string", "description": "The unique subagent_id returned by subagent_bg." }
-                },
-                "required": ["subagent_id"]
+                    "subagent_id": { "type": "string", "description": "Single subagent_id to await." },
+                    "subagent_ids": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "List of subagent_ids to await."
+                    }
+                }
             }),
         ),
         ToolDefinition::function(
@@ -679,10 +683,30 @@ impl<'a> ToolContext<'a> {
     }
 }
 
-pub type SubagentReceiver = oneshot::Receiver<Result<String, String>>;
-pub type SubagentMap = HashMap<String, SubagentReceiver>;
+pub type SubagentReceiver = oneshot::Receiver<String>;
 
-pub static SUBAGENT_REGISTRY: LazyLock<tokio::sync::Mutex<SubagentMap>> =
+#[derive(Clone)]
+pub struct SubagentRetryInfo {
+    pub parent_task_id: String,
+    pub subagent_id: String,
+    pub title: String,
+    pub role: String,
+    pub prompt: String,
+    pub requested_tools: Option<Vec<String>>,
+    pub ctx: OwnedToolContext,
+    pub status: String,
+    pub last_error: Option<String>,
+}
+
+#[derive(Clone)]
+pub struct SubagentSession {
+    pub sender: Arc<tokio::sync::Mutex<Option<oneshot::Sender<String>>>>,
+    pub retry_info: Arc<tokio::sync::Mutex<SubagentRetryInfo>>,
+}
+
+pub static SUBAGENT_RECEIVERS: LazyLock<tokio::sync::Mutex<HashMap<String, SubagentReceiver>>> =
+    LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
+pub static SUBAGENT_SESSIONS: LazyLock<tokio::sync::Mutex<HashMap<String, SubagentSession>>> =
     LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
 
 /// Executes a tool within the safe boundary of `worktree_dir` with zero-trust policy checks
@@ -912,15 +936,59 @@ pub async fn execute_tool(
                 arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect()
             });
 
+            let parent_id = ctx.task_id.unwrap_or("unknown");
+            let subagent_suffix = format!(
+                "{}-{}",
+                chrono::Utc::now().timestamp_millis(),
+                uuid::Uuid::new_v4().to_string().chars().take(4).collect::<String>()
+            );
+            let subagent_id = format!("{}.sub-{}", parent_id, subagent_suffix);
+
+            let (tx, rx) = oneshot::channel::<String>();
+            let retry_info = SubagentRetryInfo {
+                parent_task_id: parent_id.to_string(),
+                subagent_id: subagent_id.clone(),
+                title: title.to_string(),
+                role: role.to_string(),
+                prompt: prompt.to_string(),
+                requested_tools: requested_tools.clone(),
+                ctx: ctx.to_owned(),
+                status: "running".to_string(),
+                last_error: None,
+            };
+
+            let session = SubagentSession {
+                sender: Arc::new(tokio::sync::Mutex::new(Some(tx))),
+                retry_info: Arc::new(tokio::sync::Mutex::new(retry_info)),
+            };
+
+            {
+                let mut sessions = SUBAGENT_SESSIONS.lock().await;
+                sessions.insert(subagent_id.clone(), session);
+            }
+
             let owned_ctx = ctx.to_owned();
-            run_inprocess_subagent(
-                owned_ctx,
-                title.to_string(),
-                role.to_string(),
-                prompt.to_string(),
-                requested_tools,
-                None,
-            ).await?
+            let sub_id = subagent_id.clone();
+            let title_s = title.to_string();
+            let role_s = role.to_string();
+            let prompt_s = prompt.to_string();
+
+            tokio::spawn(async move {
+                let _ = run_inprocess_subagent(
+                    owned_ctx,
+                    title_s,
+                    role_s,
+                    prompt_s,
+                    requested_tools,
+                    Some(sub_id),
+                ).await;
+            });
+
+            // Parent agent blocks synchronously awaiting clean report from channel (Zero-Pollution Invariant!)
+            match rx.await {
+                Ok(clean_report) => clean_report,
+                Err(_) => bail!("Subagent channel closed before completion"),
+            }
         }
 
         "subagent_bg" => {
@@ -948,10 +1016,29 @@ pub async fn execute_tool(
             );
             let subagent_id = format!("{}.sub-{}", parent_id, subagent_suffix);
 
-            let (tx, rx) = oneshot::channel::<Result<String, String>>();
+            let (tx, rx) = oneshot::channel::<String>();
+            let retry_info = SubagentRetryInfo {
+                parent_task_id: parent_id.to_string(),
+                subagent_id: subagent_id.clone(),
+                title: title.to_string(),
+                role: role.to_string(),
+                prompt: prompt.to_string(),
+                requested_tools: requested_tools.clone(),
+                ctx: ctx.to_owned(),
+                status: "running".to_string(),
+                last_error: None,
+            };
+
+            let session = SubagentSession {
+                sender: Arc::new(tokio::sync::Mutex::new(Some(tx))),
+                retry_info: Arc::new(tokio::sync::Mutex::new(retry_info)),
+            };
+
             {
-                let mut reg = SUBAGENT_REGISTRY.lock().await;
-                reg.insert(subagent_id.clone(), rx);
+                let mut receivers = SUBAGENT_RECEIVERS.lock().await;
+                receivers.insert(subagent_id.clone(), rx);
+                let mut sessions = SUBAGENT_SESSIONS.lock().await;
+                sessions.insert(subagent_id.clone(), session);
             }
 
             let owned_ctx = ctx.to_owned();
@@ -961,7 +1048,7 @@ pub async fn execute_tool(
             let prompt_s = prompt.to_string();
 
             tokio::spawn(async move {
-                let res = run_inprocess_subagent(
+                let _ = run_inprocess_subagent(
                     owned_ctx,
                     title_s,
                     role_s,
@@ -969,7 +1056,6 @@ pub async fn execute_tool(
                     requested_tools,
                     Some(sub_id),
                 ).await;
-                let _ = tx.send(res.map_err(|e| e.to_string()));
             });
 
             serde_json::to_string(&serde_json::json!({
@@ -979,23 +1065,70 @@ pub async fn execute_tool(
         }
 
         "collect_subagent" => {
-            let subagent_id = args
-                .get("subagent_id")
-                .and_then(|v| v.as_str())
-                .context("Missing required parameter 'subagent_id'")?;
+            let mut ids: Vec<String> = Vec::new();
+            if let Some(id) = args.get("subagent_id").and_then(|v| v.as_str()) {
+                if !id.trim().is_empty() {
+                    ids.push(id.trim().to_string());
+                }
+            }
+            if let Some(arr) = args.get("subagent_ids").and_then(|v| v.as_array()) {
+                for v in arr {
+                    if let Some(s) = v.as_str() {
+                        let trimmed = s.trim();
+                        if !trimmed.is_empty() && !ids.iter().any(|existing| existing == trimmed) {
+                            ids.push(trimmed.to_string());
+                        }
+                    }
+                }
+            }
 
-            let rx_opt = {
-                let mut reg = SUBAGENT_REGISTRY.lock().await;
-                reg.remove(subagent_id)
-            };
+            if ids.is_empty() {
+                bail!("Missing required parameter: provide either 'subagent_id' or 'subagent_ids'");
+            }
 
-            match rx_opt {
-                Some(rx) => match rx.await {
-                    Ok(Ok(report)) => report,
-                    Ok(Err(err)) => bail!("Subagent [{}] error: {}", subagent_id, err),
-                    Err(_) => bail!("Subagent [{}] channel dropped or task panicked", subagent_id),
-                },
-                None => bail!("Subagent [{}] not found in background registry (already collected or invalid ID)", subagent_id),
+            if ids.len() == 1 {
+                let subagent_id = &ids[0];
+                let rx_opt = {
+                    let mut reg = SUBAGENT_RECEIVERS.lock().await;
+                    reg.remove(subagent_id)
+                };
+
+                match rx_opt {
+                    Some(rx) => match rx.await {
+                        Ok(report) => report,
+                        Err(_) => bail!("Subagent [{}] channel closed before completion", subagent_id),
+                    },
+                    None => bail!("Subagent [{}] not found in background registry (already collected or invalid ID)", subagent_id),
+                }
+            } else {
+                let mut receivers = Vec::new();
+                {
+                    let mut reg = SUBAGENT_RECEIVERS.lock().await;
+                    for id in &ids {
+                        if let Some(rx) = reg.remove(id) {
+                            receivers.push((id.clone(), rx));
+                        }
+                    }
+                }
+
+                if receivers.is_empty() {
+                    bail!("None of the requested subagents {:?} were found in background registry", ids);
+                }
+
+                let mut reports = Vec::new();
+                for (id, rx) in receivers {
+                    match rx.await {
+                        Ok(report) => reports.push(format!("### Subagent [{}]
+{}", id, report)),
+                        Err(_) => reports.push(format!("### Subagent [{}]
+Channel closed before completion", id)),
+                    }
+                }
+                reports.join("
+
+---
+
+")
             }
         }
 
@@ -1417,6 +1550,7 @@ pub fn run_inprocess_subagent(
     let llm_client = LlmClient::new();
     let mut sub_turn = 0;
     let mut final_sub_response = String::new();
+    let mut sub_error: Option<String> = None;
 
     loop {
         sub_turn += 1;
@@ -1512,6 +1646,7 @@ pub fn run_inprocess_subagent(
                 StreamChunk::Done => break,
                 StreamChunk::Error(e) => {
                     eprintln!("CVH [subagent]: error: {}", e);
+                    sub_error = Some(e);
                     break;
                 }
                 _ => {}
@@ -1680,15 +1815,38 @@ pub fn run_inprocess_subagent(
         }
     }
 
-    if let Some(ref app) = ctx.app_handle {
-        let _ = app.emit(
-            "subagent:finished",
-            serde_json::json!({
-                "parentTaskId": parent_id,
+    // Zero-Pollution of Parent Context on Subagent Failure (§ Directive 1):
+    // If the subagent encountered an error, record error, emit subagent:error,
+    // and keep parent channel pending so parent context is never polluted!
+    if let Some(err_msg) = sub_error {
+        let err_item = ActivityItem {
+            id: format!("sub-err-{}", uuid::Uuid::new_v4()),
+            item_type: "error".to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            content: Some(err_msg.clone()),
+            tool: None,
+            duration_ms: None,
+            images: None,
+        };
+        let _ = crate::db::append_dialog_items(&ctx.repo_root, &subagent_dialog_id, std::slice::from_ref(&err_item));
+        if let Some(ref app) = ctx.app_handle {
+            let _ = app.emit("subagent:error", serde_json::json!({
+                "parentTaskId": &parent_id,
                 "subagentId": &subagent_id,
-                "response": &final_sub_response,
-            }),
-        );
+                "error": &err_msg,
+            }));
+        }
+
+        if let Some(session) = {
+            let lock = SUBAGENT_SESSIONS.lock().await;
+            lock.get(&subagent_id).cloned()
+        } {
+            let mut info = session.retry_info.lock().await;
+            info.status = "error".to_string();
+            info.last_error = Some(err_msg.clone());
+        }
+
+        bail!("Subagent [{}] error: {}", subagent_id, err_msg);
     }
 
     let report = if final_sub_response.trim().is_empty() {
@@ -1707,8 +1865,90 @@ Subagent [{}] '{}' report:
         )
     };
 
+    // Subagent completed cleanly: deliver report to waiting parent channel!
+    if let Some(session) = {
+        let lock = SUBAGENT_SESSIONS.lock().await;
+        lock.get(&subagent_id).cloned()
+    } {
+        let mut info = session.retry_info.lock().await;
+        info.status = "finished".to_string();
+        info.last_error = None;
+        if let Some(sender) = session.sender.lock().await.take() {
+            let _ = sender.send(report.clone());
+        }
+    }
+
+    if let Some(ref app) = ctx.app_handle {
+        let _ = app.emit(
+            "subagent:finished",
+            serde_json::json!({
+                "parentTaskId": parent_id,
+                "subagentId": &subagent_id,
+                "response": &final_sub_response,
+            }),
+        );
+    }
+
     Ok(report)
     })
+}
+
+pub async fn retry_subagent_execution(
+    subagent_id: &str,
+    additional_prompt: Option<String>,
+) -> Result<()> {
+    let session = {
+        let sessions = SUBAGENT_SESSIONS.lock().await;
+        sessions.get(subagent_id).cloned()
+    };
+
+    let session = session.context("Subagent session not found in registry")?;
+
+    let (mut info, tx_is_available) = {
+        let info = session.retry_info.lock().await.clone();
+        let tx_opt = session.sender.lock().await;
+        (info, tx_opt.is_some())
+    };
+
+    if !tx_is_available {
+        bail!("Subagent [{}] has already completed and delivered its report", subagent_id);
+    }
+
+    if let Some(msg) = additional_prompt {
+        let trimmed = msg.trim();
+        if !trimmed.is_empty() {
+            info.prompt = format!("{}
+
+[USER GUIDANCE]: {}", info.prompt, trimmed);
+        }
+    }
+    info.status = "running".to_string();
+    info.last_error = None;
+
+    {
+        let mut session_info = session.retry_info.lock().await;
+        *session_info = info.clone();
+    }
+
+    let owned_ctx = info.ctx.clone();
+    let title_s = info.title.clone();
+    let role_s = info.role.clone();
+    let prompt_s = info.prompt.clone();
+    let requested_tools = info.requested_tools.clone();
+    let sub_id = info.subagent_id.clone();
+
+    tokio::spawn(async move {
+        let _ = run_inprocess_subagent(
+            owned_ctx,
+            title_s,
+            role_s,
+            prompt_s,
+            requested_tools,
+            Some(sub_id),
+        ).await;
+    });
+
+    Ok(())
 }
 
 fn normalize_path(path: &Path) -> PathBuf {
