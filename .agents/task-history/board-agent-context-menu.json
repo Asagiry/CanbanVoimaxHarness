@@ -1,0 +1,23 @@
+{
+  "taskId": "CVH-BOARD-AGENT-CONTEXT-MENU",
+  "task": "board-agent-context-menu",
+  "branch": "feat/board-agent-context-menu",
+  "title": "Remove Board Deletion Cross & Add Agent Right-Click Context Menu with Rename/Delete",
+  "summary": "1) Removed accidental board deletion cross button from KanbanBoard.tsx board tabs (deletion strictly kept on right-click context menu). 2) Added right-click context menu (onContextMenu) to agent cards in CortexExplorer.tsx Section 2 'Агенты' with 'Переименовать агента' (Pencil icon, RenameAgentModal) and 'Удалить агента' (Trash2 icon, red, confirmation with column assignment warning). 3) Added rename_agent_persona command in src-tauri/src/commands.rs and registered in lib.rs, which validates name, renames .cvh/agents/<old_role> to .cvh/agents/<new_role>, and synchronizes references in boards.json and pipeline.json. 4) Updated delete_agent_persona_file to reset persona references to None in boards.json and pipeline.json. 5) Added renameAgentPersona and deleteAgentPersona methods to cortexStore.ts with auto-reloading of boards and personas.",
+  "verdict": "APPROVED",
+  "commitHash": "2d15047511e9d08e498d008ee85f714f086bf23e",
+  "sensors": {
+    "cargo_check": "pass (0 warnings)",
+    "cargo_clippy": "pass (0 warnings, -D warnings)",
+    "pnpm_build": "pass (0 errors, 1643 modules transformed)",
+    "cargo_test": "pass (test_rename_agent_persona_and_boards_sync: 1 passed, 0 failed)"
+  },
+  "files": [
+    "src/components/board/KanbanBoard.tsx",
+    "src/components/cortex/CortexExplorer.tsx",
+    "src/stores/cortexStore.ts",
+    "src-tauri/src/commands.rs",
+    "src-tauri/src/lib.rs"
+  ],
+  "notes": "Verified with cargo check, cargo clippy -- -D warnings, pnpm run build, and cargo test. Autonomously merged to main, pushed to origin main, and worktree cleaned up."
+}
