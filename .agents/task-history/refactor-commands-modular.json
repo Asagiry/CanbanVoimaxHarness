@@ -1,0 +1,28 @@
+{
+  "taskId": "CVH-REFACTOR-COMMANDS-MODULAR",
+  "task": "refactor-commands-modular",
+  "title": "Decompose monolithic commands.rs into modular submodules under src-tauri/src/commands/",
+  "branch": "feat/refactor-commands-modular",
+  "commitHash": "8698a07",
+  "author": "tauri-rust-engineer",
+  "verdict": "APPROVED",
+  "sensors": {
+    "cargo_check": "pass (cargo check --tests, 0 errors)",
+    "cargo_clippy": "pass (cargo clippy --tests -- -D warnings, 0 warnings)"
+  },
+  "files": [
+    "src-tauri/src/commands/mod.rs",
+    "src-tauri/src/commands/state.rs",
+    "src-tauri/src/commands/boards.rs",
+    "src-tauri/src/commands/tasks.rs",
+    "src-tauri/src/commands/dialogs.rs",
+    "src-tauri/src/commands/git.rs",
+    "src-tauri/src/commands/cortex.rs",
+    "src-tauri/src/commands/tools.rs",
+    "src-tauri/src/commands/llm.rs",
+    "src-tauri/src/commands/projects.rs",
+    "src-tauri/src/commands/tests.rs"
+  ],
+  "summary": "Decomposed monolithic commands.rs (5209 lines) into 10 decoupled domain submodules under src-tauri/src/commands/. Re-exported all symbols in commands/mod.rs ensuring 100% backward compatibility for lib.rs generate_handler! and agent.rs. Replaced hardcoded stage names for git worktree creation with configurable hook engine (builtin:create_worktree). All Ground Truth Sensors (cargo check --tests, cargo clippy -- -D warnings) passed with zero warnings/errors.",
+  "timestamp": 1792185313298
+}
