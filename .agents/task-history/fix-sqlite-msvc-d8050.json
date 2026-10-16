@@ -1,0 +1,19 @@
+{
+  "task": "fix-sqlite-msvc-d8050",
+  "taskId": "CVH-FIX-SQLITE-MSVC-D8050",
+  "title": "Fix MSVC D8050 error in libsqlite3-sys compilation by disabling debug info in dev and release profiles",
+  "branch": "feat/fix-sqlite-msvc-d8050",
+  "merge_sha": "1200998",
+  "changed_files": [
+    "src-tauri/Cargo.toml",
+    "src-tauri/.cargo/config.toml"
+  ],
+  "diff_summary": "1. src-tauri/Cargo.toml: Added [profile.dev.package.libsqlite3-sys] debug = false and [profile.release.package.libsqlite3-sys] debug = false. This disables passing the -Z7 debug flag to MSVC cl.exe when building sqlite3.c with its massive list of -DSQLITE_ defines, completely eliminating error D8050 ('cannot execute c1.dll: failed to put command line into debug record'). 2. src-tauri/.cargo/config.toml: Deleted obsolete file containing ineffective CRATE_CC_NO_DEFAULTS = '1'.",
+  "sensors": {
+    "cargo_check": "green (exit code 0)",
+    "cargo_clippy_D_warnings": "green (0 warnings/errors, exit code 0)",
+    "pnpm_run_build": "green (tsc && vite build, exit code 0)"
+  },
+  "verdict": "APPROVED",
+  "notes": "Verified compilation of libsqlite3-sys and the whole backend in isolated worktree with MSVC toolchain; full cargo check and clippy run clean with zero warnings; React frontend builds cleanly."
+}
