@@ -1067,3 +1067,28 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     }
   },
 }));
+
+let boardListenersInitialized = false;
+export async function initBoardEventListeners(): Promise<() => void> {
+  if (boardListenersInitialized) return () => {};
+  try {
+    const { listen } = await import('@tauri-apps/api/event');
+    const uBoards = await listen<any>('boards:updated', async () => {
+      await useBoardStore.getState().loadBoards();
+      await useBoardStore.getState().loadTasks();
+    });
+    const uPipeline = await listen<any>('pipeline:updated', async () => {
+      await useBoardStore.getState().loadBoards();
+      await useBoardStore.getState().loadTasks();
+    });
+    boardListenersInitialized = true;
+    return () => {
+      uBoards();
+      uPipeline();
+      boardListenersInitialized = false;
+    };
+  } catch (e) {
+    console.info('initBoardEventListeners not active in web mode:', e);
+    return () => {};
+  }
+}

@@ -8,10 +8,10 @@ import SplashScreen from './components/splash/SplashScreen';
 import RuleEditorModal from './components/cortex/RuleEditorModal';
 import ToolPolicyModal from './components/settings/ToolPolicyModal';
 import SettingsModal from './components/settings/SettingsModal';
-import { useBoardStore } from './stores/boardStore';
+import { useBoardStore, initBoardEventListeners } from './stores/boardStore';
 import { useProjectStore } from './stores/projectStore';
 import { useDrawerStore } from './stores/drawerStore';
-import { useCortexStore } from './stores/cortexStore';
+import { useCortexStore, initCortexEventListeners } from './stores/cortexStore';
 import { useUiZoom } from './hooks/useUiZoom';
 
 // Микробатчинг SSE-текста: один Zustand set() на пачку токенов вместо set() на токен.
@@ -344,6 +344,25 @@ export default function App() {
           useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
         });
         unlisteners.push(uPersonasUpdated);
+
+        const uBoardsUpdated = await listen<any>('boards:updated', async () => {
+          await loadBoards();
+          await loadTasks();
+          useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
+        });
+        unlisteners.push(uBoardsUpdated);
+
+        const uPipelineUpdated = await listen<any>('pipeline:updated', async () => {
+          await loadBoards();
+          await loadTasks();
+          useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
+        });
+        unlisteners.push(uPipelineUpdated);
+
+        const unlistenBoardStore = await initBoardEventListeners();
+        unlisteners.push(unlistenBoardStore);
+        const unlistenCortexStore = await initCortexEventListeners();
+        unlisteners.push(unlistenCortexStore);
       } catch (e) {
         console.info('Tauri event listeners not active in web mode:', e);
       }

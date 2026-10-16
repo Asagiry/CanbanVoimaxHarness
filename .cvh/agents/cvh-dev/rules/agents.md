@@ -19,6 +19,16 @@ Flat persona files (`.cvh/agents/<role>.md`) are deprecated and ignored.
 - **No Column ID Duplication**: Never create duplicate persona directories based on column IDs. For example, if a column has `id: "review"` and `persona: "reviewer"`, create strictly `.cvh/agents/reviewer/`, never `.cvh/agents/review/`.
 - **Reusable Personas**: Multiple pipeline columns across different boards can reference the same `persona` without directory duplication.
 
+### 1.2 Ironclad 1:1 Invariants
+1. **column.persona strictly matches directory & frontmatter**:
+   `column.persona` in `.cvh/boards.json` and `.cvh/pipeline.json` MUST STRICTLY MATCH:
+   - The directory name `.cvh/agents/<role>/`
+   - The frontmatter `name: <role>` inside `.cvh/agents/<role>/persona.md`
+   Any mismatch breaks role resolution, file mapping, and runtime agent dispatch.
+
+2. **stageOverrides.<stage_id> strictly matches column.id**:
+   `stageOverrides.<stage_id>` in `.cvh/settings/tool-policy.json` MUST STRICTLY MATCH `column.id` in `boards.json` and `pipeline.json`.
+
 ## 2. Persona YAML Frontmatter
 Every `persona.md` must start with clean YAML frontmatter:
 ```yaml

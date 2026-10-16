@@ -95,6 +95,7 @@ pub fn run() {
             create_task,
             create_subtask,
             move_task_stage,
+            advance_task,
             run_agent,
             abort_agent,
             cleanup_task_worktree,

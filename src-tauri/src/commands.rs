@@ -760,12 +760,22 @@ pub async fn get_pipeline(state: State<'_, AppState>) -> Result<PipelineConfig, 
 pub async fn save_pipeline(
     mut pipeline: PipelineConfig,
     state: State<'_, AppState>,
+    app: AppHandle,
 ) -> Result<(), String> {
     pipeline.columns = normalize_pipeline_columns(pipeline.columns)?;
     let root = state.get_root();
     save_pipeline_config(&root, &pipeline)
         .await
-        .map_err(|e| format!("Failed to save pipeline: {}", e))
+        .map_err(|e| format!("Failed to save pipeline: {}", e))?;
+
+    let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipeline }));
+    if let Ok(boards_cfg) = load_boards_config(&root).await {
+        let _ = app.emit(
+            "boards:updated",
+            serde_json::json!({ "boards": &boards_cfg.boards, "activeBoardId": &boards_cfg.active_board_id }),
+        );
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -791,6 +801,7 @@ pub async fn create_board(
     name: String,
     template: Option<String>,
     state: State<'_, AppState>,
+    app: AppHandle,
 ) -> Result<BoardDef, String> {
     let trimmed_name = name.trim();
     if trimmed_name.is_empty() {
@@ -826,6 +837,14 @@ pub async fn create_board(
         .await
         .map_err(|e| format!("Failed to save new board: {}", e))?;
 
+    let _ = app.emit(
+        "boards:updated",
+        serde_json::json!({ "boards": &config.boards, "activeBoardId": &config.active_board_id }),
+    );
+    if let Ok(pipe) = load_pipeline_config(&root).await {
+        let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipe }));
+    }
+
     Ok(new_board)
 }
 
@@ -833,6 +852,7 @@ pub async fn create_board(
 pub async fn save_board(
     mut board: BoardDef,
     state: State<'_, AppState>,
+    app: AppHandle,
 ) -> Result<(), String> {
     let trimmed_name = board.name.trim();
     if trimmed_name.is_empty() {
@@ -856,6 +876,14 @@ pub async fn save_board(
         .await
         .map_err(|e| format!("Failed to save board: {}", e))?;
 
+    let _ = app.emit(
+        "boards:updated",
+        serde_json::json!({ "boards": &config.boards, "activeBoardId": &config.active_board_id }),
+    );
+    if let Ok(pipe) = load_pipeline_config(&root).await {
+        let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipe }));
+    }
+
     Ok(())
 }
 
@@ -863,6 +891,7 @@ pub async fn save_board(
 pub async fn delete_board(
     board_id: String,
     state: State<'_, AppState>,
+    app: AppHandle,
 ) -> Result<(), String> {
     let root = state.get_root();
     let mut config = load_boards_config(&root)
@@ -889,6 +918,14 @@ pub async fn delete_board(
         .await
         .map_err(|e| format!("Failed to save boards after deletion: {}", e))?;
 
+    let _ = app.emit(
+        "boards:updated",
+        serde_json::json!({ "boards": &config.boards, "activeBoardId": &config.active_board_id }),
+    );
+    if let Ok(pipe) = load_pipeline_config(&root).await {
+        let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipe }));
+    }
+
     let mut tasks = load_tasks_from_disk(&root).await;
     let mut tasks_modified = false;
     for t in &mut tasks {
@@ -911,6 +948,7 @@ pub async fn delete_board(
 pub async fn set_active_board(
     board_id: String,
     state: State<'_, AppState>,
+    app: AppHandle,
 ) -> Result<(), String> {
     let root = state.get_root();
     let mut config = load_boards_config(&root)
@@ -926,6 +964,14 @@ pub async fn set_active_board(
     save_boards_config(&root, &config)
         .await
         .map_err(|e| format!("Failed to set active board: {}", e))?;
+
+    let _ = app.emit(
+        "boards:updated",
+        serde_json::json!({ "boards": &config.boards, "activeBoardId": &config.active_board_id }),
+    );
+    if let Ok(pipe) = load_pipeline_config(&root).await {
+        let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipe }));
+    }
 
     Ok(())
 }
@@ -961,6 +1007,15 @@ pub async fn delete_agent_persona(
     delete_agent_persona_file(&root, &role).await?;
     let list = list_agent_personas_in(&root).await;
     let _ = app.emit("agent:personas_updated", &list);
+    if let Ok(bc) = load_boards_config(&root).await {
+        let _ = app.emit(
+            "boards:updated",
+            serde_json::json!({ "boards": &bc.boards, "activeBoardId": &bc.active_board_id }),
+        );
+    }
+    if let Ok(pipe) = load_pipeline_config(&root).await {
+        let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipe }));
+    }
     Ok(())
 }
 
@@ -975,6 +1030,15 @@ pub async fn rename_agent_persona(
     rename_agent_persona_file(&root, &old_role, &new_role).await?;
     let list = list_agent_personas_in(&root).await;
     let _ = app.emit("agent:personas_updated", &list);
+    if let Ok(bc) = load_boards_config(&root).await {
+        let _ = app.emit(
+            "boards:updated",
+            serde_json::json!({ "boards": &bc.boards, "activeBoardId": &bc.active_board_id }),
+        );
+    }
+    if let Ok(pipe) = load_pipeline_config(&root).await {
+        let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipe }));
+    }
     Ok(())
 }
 
@@ -1179,17 +1243,46 @@ pub async fn save_cortex_file(
     path: String,
     content: String,
     state: State<'_, AppState>,
+    app: AppHandle,
 ) -> Result<(), String> {
     let root = state.get_root();
     let target = if Path::new(&path).is_absolute() {
-        PathBuf::from(path)
+        PathBuf::from(&path)
     } else {
-        root.join(path)
+        root.join(&path)
     };
 
     atomic_write_file(&target, &content)
         .await
-        .map_err(|e| format!("Failed to save cortex file {:?}: {}", target, e))
+        .map_err(|e| format!("Failed to save cortex file {:?}: {}", target, e))?;
+
+    let norm_path = path.replace('\\', "/");
+    if norm_path.ends_with("boards.json") {
+        if let Ok(bc) = load_boards_config(&root).await {
+            let _ = app.emit(
+                "boards:updated",
+                serde_json::json!({ "boards": &bc.boards, "activeBoardId": &bc.active_board_id }),
+            );
+        }
+        if let Ok(pipe) = load_pipeline_config(&root).await {
+            let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipe }));
+        }
+    } else if norm_path.ends_with("pipeline.json") {
+        if let Ok(pipe) = load_pipeline_config(&root).await {
+            let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipe }));
+        }
+        if let Ok(bc) = load_boards_config(&root).await {
+            let _ = app.emit(
+                "boards:updated",
+                serde_json::json!({ "boards": &bc.boards, "activeBoardId": &bc.active_board_id }),
+            );
+        }
+    } else if norm_path.contains(".cvh/agents") || norm_path.contains("/agents/") {
+        let list = list_agent_personas_in(&root).await;
+        let _ = app.emit("agent:personas_updated", &list);
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -1885,47 +1978,57 @@ pub async fn internal_move_task_stage(
     let mut effective_board: Option<crate::config::BoardDef> = None;
 
     if let Some(ref bc) = boards_cfg {
+        let active_board = bc.boards.iter().find(|b| b.id == bc.active_board_id).cloned();
+        let board_switched = current_task.board_id.as_deref().map_or(false, |bid| bid != bc.active_board_id);
+
         let current_board = current_task.board_id.as_deref().and_then(|bid| {
             bc.boards.iter().find(|b| b.id == bid).cloned()
         });
 
-        let current_board_has_target = current_board
-            .as_ref()
-            .map(|b| b.columns.iter().any(|c| stage_id_matches(&c.id, target_stage_id)))
-            .unwrap_or(false);
-
-        if current_board_has_target {
-            effective_board = current_board;
+        if board_switched {
+            // Active board changed during task execution: target board is the active board!
+            effective_board = active_board.or_else(|| bc.boards.first().cloned());
+            if let Some(ref b) = effective_board {
+                current_task.board_id = Some(b.id.clone());
+            }
         } else {
-            // Fallback:
-            // 1. Try active board if it has target_stage_id
-            let active_board = bc.boards.iter().find(|b| b.id == bc.active_board_id).cloned();
-            let active_has_target = active_board
+            let current_board_has_target = current_board
                 .as_ref()
                 .map(|b| b.columns.iter().any(|c| stage_id_matches(&c.id, target_stage_id)))
                 .unwrap_or(false);
 
-            if active_has_target {
-                effective_board = active_board;
+            if current_board_has_target {
+                effective_board = current_board;
             } else {
-                // 2. Find any board that has target_stage_id
-                let any_with_target = bc.boards.iter().find(|b| {
-                    b.columns.iter().any(|c| stage_id_matches(&c.id, target_stage_id))
-                }).cloned();
+                // Fallback:
+                // 1. Try active board if it has target_stage_id
+                let active_has_target = active_board
+                    .as_ref()
+                    .map(|b| b.columns.iter().any(|c| stage_id_matches(&c.id, target_stage_id)))
+                    .unwrap_or(false);
 
-                if any_with_target.is_some() {
-                    effective_board = any_with_target;
+                if active_has_target {
+                    effective_board = active_board;
                 } else {
-                    // 3. Fallback to active board, or first board
-                    effective_board = active_board.or_else(|| bc.boards.first().cloned());
-                }
-            }
+                    // 2. Find any board that has target_stage_id
+                    let any_with_target = bc.boards.iter().find(|b| {
+                        b.columns.iter().any(|c| stage_id_matches(&c.id, target_stage_id))
+                    }).cloned();
 
-            // Update current_task.board_id to the valid board
-            if let Some(ref b) = effective_board {
-                current_task.board_id = Some(b.id.clone());
-            } else {
-                current_task.board_id = Some(bc.active_board_id.clone());
+                    if any_with_target.is_some() {
+                        effective_board = any_with_target;
+                    } else {
+                        // 3. Fallback to active board, or first board
+                        effective_board = active_board.or_else(|| bc.boards.first().cloned());
+                    }
+                }
+
+                // Update current_task.board_id to the valid board
+                if let Some(ref b) = effective_board {
+                    current_task.board_id = Some(b.id.clone());
+                } else {
+                    current_task.board_id = Some(bc.active_board_id.clone());
+                }
             }
         }
     }
@@ -1991,14 +2094,41 @@ pub async fn internal_move_task_stage(
         match col_from_board {
             Some(c) => c,
             None => {
-                let pipeline = load_pipeline_config(root)
-                    .await
-                    .map_err(|e| format!("Failed to load pipeline: {}", e))?;
-                pipeline
-                    .columns
-                    .into_iter()
-                    .find(|c| stage_id_matches(&c.id, target_stage_id))
-                    .ok_or_else(|| format!("Target stage {} not found in pipeline or board", target_stage_id))?
+                // If board switched or target_stage_id is not found on target board,
+                // fall back to terminal column of target board so task transitions to 'done' cleanly
+                let terminal_fallback = effective_board.as_ref().and_then(|b| {
+                    b.columns.iter().find(|c| c.terminal == Some(true) || stage_id_matches(&c.id, "ready") || stage_id_matches(&c.id, "done")).cloned()
+                        .or_else(|| b.columns.last().cloned())
+                });
+                if let Some(term) = terminal_fallback {
+                    term
+                } else {
+                    let pipeline = load_pipeline_config(root)
+                        .await
+                        .map_err(|e| format!("Failed to load pipeline: {}", e))?;
+                    pipeline
+                        .columns
+                        .iter()
+                        .find(|c| stage_id_matches(&c.id, target_stage_id))
+                        .cloned()
+                        .or_else(|| {
+                            pipeline
+                                .columns
+                                .iter()
+                                .find(|c| {
+                                    c.terminal == Some(true)
+                                        || stage_id_matches(&c.id, "ready")
+                                        || stage_id_matches(&c.id, "done")
+                                })
+                                .cloned()
+                        })
+                        .ok_or_else(|| {
+                            format!(
+                                "Target stage {} not found in pipeline or board",
+                                target_stage_id
+                            )
+                        })?
+                }
             }
         }
     };
@@ -2112,9 +2242,12 @@ pub async fn internal_move_task_stage(
     if let Some(summary) = handover_summary {
         current_task.handover_summary = Some(summary);
     }
+    let is_terminal_col = target_col.terminal == Some(true)
+        || stage_id_matches(&canonical_target_stage_id, "ready")
+        || stage_id_matches(&canonical_target_stage_id, "done");
     if let Some(st) = status_override {
         current_task.status = Some(st);
-    } else if target_col.terminal == Some(true) || stage_id_matches(&canonical_target_stage_id, "ready") {
+    } else if is_terminal_col {
         current_task.status = Some("done".to_string());
     } else if target_col.persona.is_some() || target_col.auto_run == Some(true) {
         current_task.status = Some("running".to_string());
@@ -2166,6 +2299,180 @@ pub async fn move_task_stage(
 ) -> Result<Task, String> {
     let root = state.get_root();
     internal_move_task_stage(&root, &task_id, &target_stage_id, verdict, None, handover_summary, Some(&app_handle)).await
+}
+
+pub async fn internal_advance_task(
+    root: &Path,
+    task_id: &str,
+    summary: &str,
+    app_handle: Option<&AppHandle>,
+) -> Result<String, String> {
+    let tasks = load_tasks_from_disk(root).await;
+    let current_task = tasks
+        .iter()
+        .find(|t| t.id == task_id)
+        .ok_or_else(|| format!("Task {} not found", task_id))?;
+
+    let boards_cfg = load_boards_config(root).await.ok();
+    let active_board_id = boards_cfg
+        .as_ref()
+        .map(|b| b.active_board_id.clone())
+        .unwrap_or_else(|| "development".to_string());
+
+    // Check if active board changed during task execution
+    let board_switched = current_task
+        .board_id
+        .as_deref()
+        .map_or(false, |b| b != active_board_id);
+
+    if board_switched {
+        // Active board changed: finalize task directly to terminal column ('ready') of target active board
+        let target_board = boards_cfg.as_ref().and_then(|bc| {
+            bc.boards.iter().find(|b| b.id == active_board_id).cloned()
+        });
+
+        let target_columns = match target_board {
+            Some(ref b) => b.columns.clone(),
+            None => {
+                let pipeline = load_pipeline_config(root)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                pipeline.columns
+            }
+        };
+
+        let terminal_col = target_columns
+            .iter()
+            .find(|c| {
+                c.terminal == Some(true)
+                    || stage_id_matches(&c.id, "ready")
+                    || stage_id_matches(&c.id, "done")
+            })
+            .cloned()
+            .or_else(|| target_columns.last().cloned())
+            .ok_or_else(|| format!("Target board '{}' has no columns", active_board_id))?;
+
+        let updated_task = internal_move_task_stage(
+            root,
+            task_id,
+            &terminal_col.id,
+            Some("APPROVED".to_string()),
+            Some("done".to_string()),
+            Some(summary.to_string()),
+            app_handle,
+        )
+        .await?;
+
+        let summary_content = format!(
+            "### Саммари финализации (смена доски -> {}): {}\n\n{}",
+            active_board_id, terminal_col.title, summary
+        );
+        let _ = append_task_dialog_activity(
+            root,
+            task_id,
+            "summary",
+            &summary_content,
+            app_handle,
+        )
+        .await;
+
+        return Ok(format!(
+            "УСПЕШНО: Задача {} финализирована на активной доске '{}' в терминальной колонке '{}' ({}), статус: {}",
+            task_id,
+            active_board_id,
+            terminal_col.id,
+            terminal_col.title,
+            updated_task.status.as_deref().unwrap_or("done")
+        ));
+    }
+
+    // Normal progression within same board
+    let columns = {
+        let from_board = boards_cfg.as_ref().and_then(|bc| {
+            let b = if let Some(ref bid) = current_task.board_id {
+                bc.boards.iter().find(|b| &b.id == bid)
+            } else {
+                bc.boards.iter().find(|b| b.id == bc.active_board_id)
+            };
+            b.map(|b| b.columns.clone())
+        });
+        match from_board {
+            Some(cols) => cols,
+            None => {
+                let pipeline = load_pipeline_config(root)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                pipeline.columns
+            }
+        }
+    };
+
+    let curr_idx = columns
+        .iter()
+        .position(|c| stage_id_matches(&c.id, &current_task.stage_id))
+        .ok_or_else(|| {
+            format!(
+                "Current column '{}' not found in pipeline",
+                current_task.stage_id
+            )
+        })?;
+
+    if curr_idx + 1 >= columns.len() {
+        return Err(format!(
+            "Задача {} уже находится на последнем этапе пайплайна ({})",
+            task_id, columns[curr_idx].title
+        ));
+    }
+
+    let next_col = &columns[curr_idx + 1];
+    let is_terminal = next_col.terminal == Some(true)
+        || stage_id_matches(&next_col.id, "ready")
+        || stage_id_matches(&next_col.id, "done");
+    let status_override = if is_terminal {
+        Some("done".to_string())
+    } else {
+        None
+    };
+
+    let updated_task = internal_move_task_stage(
+        root,
+        task_id,
+        &next_col.id,
+        Some("APPROVED".to_string()),
+        status_override,
+        Some(summary.to_string()),
+        app_handle,
+    )
+    .await?;
+
+    let summary_content = format!("### Саммари этапа: {}\n\n{}", next_col.title, summary);
+    let _ = append_task_dialog_activity(
+        root,
+        task_id,
+        "summary",
+        &summary_content,
+        app_handle,
+    )
+    .await;
+
+    Ok(format!(
+        "УСПЕШНО: Задача {} переведена на этап '{}' ({}), статус: {}",
+        task_id,
+        next_col.id,
+        next_col.title,
+        updated_task.status.as_deref().unwrap_or("idle")
+    ))
+}
+
+#[tauri::command]
+pub async fn advance_task(
+    task_id: String,
+    summary: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<String, String> {
+    let root = state.get_root();
+    internal_advance_task(&root, &task_id, &summary, Some(&app)).await
 }
 
 #[tauri::command]
@@ -2477,6 +2784,10 @@ pub async fn run_agent(
     let app = app_handle.clone();
     let root_task = root.clone();
     let abort_flag_task = Arc::clone(&abort_flag);
+    let initial_active_board_id = {
+        let boards_cfg = load_boards_config(&root).await.ok();
+        boards_cfg.map(|b| b.active_board_id)
+    };
 
     let handle = tokio::spawn(async move {
         let app_inner = app.clone();
@@ -2627,10 +2938,29 @@ pub async fn run_agent(
                 // Reload tasks from disk in case advance_task, reject_task, or todo_write modified them
                 let mut tasks = load_tasks_from_disk(&root_task).await;
                 if let Some(task_idx) = tasks.iter().position(|t| t.id == tid) {
-                    // Invariant: Card only moves via advance_task / reject_task tool calls.
-                    // If the agent finishes normally without moving the card, it remains in its current column
-                    // and its status becomes 'idle' (unless already marked 'done' by advance_task into a terminal stage).
-                    if tasks[task_idx].status.as_deref() == Some("running") {
+                    let end_boards_cfg = load_boards_config(&root_task).await.ok();
+                    let end_active_board_id = end_boards_cfg.as_ref().map(|b| b.active_board_id.clone());
+                    let board_changed = end_active_board_id.is_some() && (
+                        end_active_board_id != initial_active_board_id ||
+                        end_active_board_id.as_deref() != tasks[task_idx].board_id.as_deref()
+                    );
+
+                    if board_changed {
+                        // If active board changed during task execution, finalize and transition to 'done' in terminal column ('ready') of target board
+                        let active_id = end_active_board_id.unwrap();
+                        let target_board = end_boards_cfg.as_ref().and_then(|bc| {
+                            bc.boards.iter().find(|b| b.id == active_id).cloned()
+                        });
+                        let terminal_col_id = target_board.as_ref().and_then(|b| {
+                            b.columns.iter().find(|c| c.terminal == Some(true) || stage_id_matches(&c.id, "ready") || stage_id_matches(&c.id, "done")).map(|c| c.id.clone())
+                                .or_else(|| b.columns.last().map(|c| c.id.clone()))
+                        }).unwrap_or_else(|| "ready".to_string());
+
+                        tasks[task_idx].board_id = Some(active_id);
+                        tasks[task_idx].stage_id = terminal_col_id;
+                        tasks[task_idx].status = Some("done".to_string());
+                        tasks[task_idx].updated_at = Utc::now().timestamp_millis();
+                    } else if tasks[task_idx].status.as_deref() == Some("running") {
                         tasks[task_idx].status = Some("idle".to_string());
                         tasks[task_idx].updated_at = Utc::now().timestamp_millis();
                     }
@@ -4422,6 +4752,218 @@ mod tests {
 
         let _ = tokio::fs::remove_dir_all(&with_git).await;
         let _ = tokio::fs::remove_dir_all(&no_git).await;
+    }
+    #[tokio::test]
+    async fn test_advance_task_and_board_switch_finalization() {
+        let base = PathBuf::from("target").join(format!("cvh_adv_switch_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        let b1_cols = vec![
+            crate::config::PipelineColumn {
+                id: "backlog".to_string(),
+                title: "Backlog".to_string(),
+                color: None,
+                icon: None,
+                persona: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            crate::config::PipelineColumn {
+                id: "dev".to_string(),
+                title: "Dev".to_string(),
+                color: None,
+                icon: None,
+                persona: Some("developer".to_string()),
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            crate::config::PipelineColumn {
+                id: "ready".to_string(),
+                title: "Ready".to_string(),
+                color: None,
+                icon: None,
+                persona: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: Some(true),
+            },
+        ];
+
+        let b2_cols = vec![
+            crate::config::PipelineColumn {
+                id: "todo".to_string(),
+                title: "Todo".to_string(),
+                color: None,
+                icon: None,
+                persona: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            crate::config::PipelineColumn {
+                id: "in_progress".to_string(),
+                title: "In Progress".to_string(),
+                color: None,
+                icon: None,
+                persona: Some("developer".to_string()),
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            crate::config::PipelineColumn {
+                id: "done".to_string(),
+                title: "Done".to_string(),
+                color: None,
+                icon: None,
+                persona: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: Some(true),
+            },
+        ];
+
+        let mut boards_cfg = crate::config::BoardsConfig {
+            active_board_id: "dev-board".to_string(),
+            boards: vec![
+                crate::config::BoardDef {
+                    id: "dev-board".to_string(),
+                    name: "Development".to_string(),
+                    columns: b1_cols,
+                },
+                crate::config::BoardDef {
+                    id: "kanban-board".to_string(),
+                    name: "Kanban".to_string(),
+                    columns: b2_cols,
+                },
+            ],
+        };
+        crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
+
+        // Seed task on dev-board in stage dev
+        let task1 = Task {
+            id: "CVH-001".to_string(),
+            title: "Task 1".to_string(),
+            description: "Desc 1".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("dev-board".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("running".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            todos: None,
+            created_at: 0,
+            updated_at: 0,
+            handover_summary: None,
+            attachments: None,
+            cover_image: None,
+        };
+        save_tasks_to_disk(&base, &[task1]).await.expect("save task1");
+
+        // 1. Normal advance on same board -> transitions to 'ready' with status 'done'
+        let adv_res = internal_advance_task(&base, "CVH-001", "Summary for task 1", None).await.expect("advance task1");
+        assert!(adv_res.contains("УСПЕШНО"));
+        let loaded = load_tasks_from_disk(&base).await;
+        let t1 = loaded.iter().find(|t| t.id == "CVH-001").unwrap();
+        assert_eq!(t1.stage_id, "ready");
+        assert_eq!(t1.status.as_deref(), Some("done"));
+
+        // 2. Board switch scenario:
+        // Seed task 2 on dev-board in stage dev
+        let task2 = Task {
+            id: "CVH-002".to_string(),
+            title: "Task 2".to_string(),
+            description: "Desc 2".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("dev-board".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("running".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            todos: None,
+            created_at: 0,
+            updated_at: 0,
+            handover_summary: None,
+            attachments: None,
+            cover_image: None,
+        };
+        save_tasks_to_disk(&base, &[t1.clone(), task2]).await.expect("save task2");
+
+        // Now active board switches to kanban-board
+        boards_cfg.active_board_id = "kanban-board".to_string();
+        crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards switch");
+
+        // Advance task 2: active board changed -> task finalizes to terminal column ('done') on kanban-board
+        let adv_switch_res = internal_advance_task(&base, "CVH-002", "Summary after board switch", None).await.expect("advance task2 switch");
+        assert!(adv_switch_res.contains("УСПЕШНО"));
+        assert!(adv_switch_res.contains("финализирована"));
+
+        let loaded2 = load_tasks_from_disk(&base).await;
+        let t2 = loaded2.iter().find(|t| t.id == "CVH-002").unwrap();
+        assert_eq!(t2.board_id.as_deref(), Some("kanban-board"));
+        assert_eq!(t2.stage_id, "done");
+        assert_eq!(t2.status.as_deref(), Some("done"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
     }
 }
 

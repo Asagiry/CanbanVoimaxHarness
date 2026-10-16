@@ -160,6 +160,8 @@ Rules (apply to every step):
 - Hooks/policy live outside prompt: read them from disk, never inline full dumps; tiers: files-only (glob/read), read-only (+grep/fetch), gated-writes (+edit/write/execute inside worktree after sensor).
 - Normalize (commands.rs:47): backlog always first if present, ready always last, middle keeps order; duplicate column id returns Err and blocks move.
 - Sync boards<->pipeline: same column ids/order; boards.json is index, pipeline.json is active execution copy.
+- 1:1 Invariants: column.persona in boards/pipeline MUST STRICTLY MATCH directory name .cvh/agents/<role>/ and frontmatter name.
+- 1:1 Invariants: stageOverrides.<stage_id> in tool-policy.json MUST STRICTLY MATCH column.id.
 - Write ONLY inside `worktrees/<slug>`; from repo root you may touch only `.cvh/` (boards/pipeline/personas/tools/hooks); never write outside worktree; every file op goes via `resolve_safe_path` (strip leading /\, deny `:` drive-absolute, deny `..` escape).
 - Rationalization vs Reality: state only what sensors prove; no invented files, no assumed green build.
 Initializer flow (empty project):
@@ -693,6 +695,7 @@ pub async fn execute_tool(
 
             let target = resolve_safe_path(worktree_dir, rel_path)?;
             crate::config::atomic_write_file(&target, content).await?;
+            emit_file_change_events(ctx, rel_path).await;
             format!("Successfully wrote {} bytes to {:?}", content.len(), rel_path)
         }
 
@@ -738,6 +741,7 @@ pub async fn execute_tool(
             };
 
             crate::config::atomic_write_file(&target, &updated).await?;
+            emit_file_change_events(ctx, rel_path).await;
             format!("Successfully updated {:?}", rel_path)
         }
 
@@ -906,81 +910,14 @@ pub async fn execute_tool(
 
             let task_id = task_id.context("No active task ID for advance_task")?;
 
-            // 1. Determine active board and find current column
-            let tasks = crate::commands::load_tasks_from_disk(repo_root).await;
-            let current_task = tasks
-                .iter()
-                .find(|t| t.id == task_id)
-                .ok_or_else(|| anyhow::anyhow!("Task {} not found", task_id))?;
-
-            let boards_cfg = crate::config::load_boards_config(repo_root).await.ok();
-            let columns = {
-                let from_board = boards_cfg.as_ref().and_then(|bc| {
-                    let b = if let Some(ref bid) = current_task.board_id {
-                        bc.boards.iter().find(|b| &b.id == bid)
-                    } else {
-                        bc.boards.iter().find(|b| b.id == bc.active_board_id)
-                    };
-                    b.map(|b| b.columns.clone())
-                });
-                match from_board {
-                    Some(cols) => cols,
-                    None => {
-                        let pipeline = crate::config::load_pipeline_config(repo_root).await
-                            .context("Failed to load pipeline configuration")?;
-                        pipeline.columns
-                    }
-                }
-            };
-
-            let curr_idx = columns
-                .iter()
-                .position(|c| c.id == current_task.stage_id)
-                .ok_or_else(|| anyhow::anyhow!("Current column '{}' not found in pipeline", current_task.stage_id))?;
-
-            if curr_idx + 1 >= columns.len() {
-                bail!("Задача {} уже находится на последнем этапе пайплайна ({})", task_id, columns[curr_idx].title);
-            }
-
-            let next_col = &columns[curr_idx + 1];
-            let is_terminal = next_col.terminal == Some(true) || next_col.id == "ready" || next_col.id == "done";
-            let status_override = if is_terminal {
-                Some("done".to_string())
-            } else {
-                None
-            };
-
-            // 2. Execute move_task_stage logic (gatekeeper sensor, hooks, updates tasks.json and emits task:moved)
-            let updated_task = crate::commands::internal_move_task_stage(
+            crate::commands::internal_advance_task(
                 repo_root,
                 task_id,
-                &next_col.id,
-                Some("APPROVED".to_string()),
-                status_override,
-                Some(summary.to_string()),
+                summary,
                 ctx.app_handle.as_ref(),
             )
             .await
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
-
-            // 3. Save summary to task dialog/history
-            let summary_content = format!("### Саммари этапа: {}\n\n{}", next_col.title, summary);
-            let _ = crate::commands::append_task_dialog_activity(
-                repo_root,
-                task_id,
-                "summary",
-                &summary_content,
-                ctx.app_handle.as_ref(),
-            )
-            .await;
-
-            format!(
-                "УСПЕШНО: Задача {} переведена на этап '{}' ({}), статус: {}",
-                task_id,
-                next_col.title,
-                next_col.id,
-                updated_task.status.unwrap_or_else(|| "idle".to_string())
-            )
+            .map_err(|e| anyhow::anyhow!("{}", e))?
         }
 
         "reject_task" => {
@@ -1113,6 +1050,36 @@ pub async fn execute_tool(
     };
 
     maybe_spill_output(repo_root, normalized_tool_name, raw_result).await
+}
+
+async fn emit_file_change_events(ctx: &ToolContext<'_>, rel_path: &str) {
+    if let Some(app) = &ctx.app_handle {
+        let norm = rel_path.replace('\\', "/");
+        if norm.ends_with("boards.json") {
+            if let Ok(bc) = crate::config::load_boards_config(ctx.repo_root).await {
+                let _ = app.emit(
+                    "boards:updated",
+                    serde_json::json!({ "boards": &bc.boards, "activeBoardId": &bc.active_board_id }),
+                );
+            }
+            if let Ok(pipe) = crate::config::load_pipeline_config(ctx.repo_root).await {
+                let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipe }));
+            }
+        } else if norm.ends_with("pipeline.json") {
+            if let Ok(pipe) = crate::config::load_pipeline_config(ctx.repo_root).await {
+                let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipe }));
+            }
+            if let Ok(bc) = crate::config::load_boards_config(ctx.repo_root).await {
+                let _ = app.emit(
+                    "boards:updated",
+                    serde_json::json!({ "boards": &bc.boards, "activeBoardId": &bc.active_board_id }),
+                );
+            }
+        } else if norm.contains(".cvh/agents") || norm.contains("/agents/") {
+            let list = crate::commands::list_agent_personas_in(ctx.repo_root).await;
+            let _ = app.emit("agent:personas_updated", &list);
+        }
+    }
 }
 
 fn normalize_path(path: &Path) -> PathBuf {

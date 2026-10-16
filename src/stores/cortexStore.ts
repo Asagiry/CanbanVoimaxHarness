@@ -1200,3 +1200,31 @@ export const useCortexStore = create<CortexState>((set, get) => ({
     });
   },
 }));
+
+let cortexListenersInitialized = false;
+export async function initCortexEventListeners(): Promise<() => void> {
+  if (cortexListenersInitialized) return () => {};
+  try {
+    const { listen } = await import('@tauri-apps/api/event');
+    const uPersonas = await listen<any>('agent:personas_updated', async () => {
+      await useCortexStore.getState().loadAgentPersonas();
+      useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
+    });
+    const uBoards = await listen<any>('boards:updated', async () => {
+      useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
+    });
+    const uPipeline = await listen<any>('pipeline:updated', async () => {
+      useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
+    });
+    cortexListenersInitialized = true;
+    return () => {
+      uPersonas();
+      uBoards();
+      uPipeline();
+      cortexListenersInitialized = false;
+    };
+  } catch (e) {
+    console.info('initCortexEventListeners not active in web mode:', e);
+    return () => {};
+  }
+}

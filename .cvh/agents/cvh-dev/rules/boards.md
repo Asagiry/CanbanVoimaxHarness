@@ -34,3 +34,9 @@ Columns represent autonomous stages. Moving a card triggers stage automations an
 - **Single Source of Truth**: Exactly 1 persona corresponds to 1 directory under `.cvh/agents/<persona>/`.
 - **Decoupled Column IDs and Personas**: Columns define stages (`id`), while `persona` defines the autonomous agent role executing in that stage.
 - **No Duplication by Column ID**: Never create duplicate persona directories based on column IDs. For example, if a column has `id: "review"` and `persona: "reviewer"`, create strictly `.cvh/agents/reviewer/`, never `.cvh/agents/review/`. Multiple columns can reference the same persona without duplicating directories.
+
+## 5. Ironclad 1:1 Invariants
+- **column.persona strictly matches directory name & frontmatter name**:
+  `column.persona` in `boards.json` and `pipeline.json` MUST STRICTLY MATCH the directory name `.cvh/agents/<role>/` and frontmatter `name: <role>`.
+- **stageOverrides.<stage_id> strictly matches column.id**:
+  `stageOverrides.<stage_id>` in `.cvh/settings/tool-policy.json` MUST STRICTLY MATCH `column.id` in `boards.json` and `pipeline.json`.
