@@ -1,0 +1,160 @@
+{
+  "id": "default-engineering",
+  "title": "Engineering Pipeline",
+  "toolPermissions": null,
+  "columns": [
+    {
+      "id": "backlog",
+      "title": "Backlog",
+      "color": "#64748b",
+      "icon": "Inbox",
+      "persona": null,
+      "onEnterScript": null,
+      "contextWindow": 128000,
+      "modelOverride": null,
+      "reasoningEffort": null,
+      "temperature": null,
+      "gatekeeperSensor": null,
+      "allowedTools": [
+        "read_file",
+        "glob",
+        "grep",
+        "web_search",
+        "web_fetch"
+      ],
+      "hooks": {},
+      "routes": null,
+      "autoRun": null,
+      "terminal": null
+    },
+    {
+      "id": "dev",
+      "title": "In Development",
+      "color": "#f59e0b",
+      "icon": "Code2",
+      "persona": null,
+      "onEnterScript": null,
+      "contextWindow": 400000,
+      "modelOverride": "gemini-3.8-flash-high",
+      "reasoningEffort": null,
+      "temperature": 0.2,
+      "gatekeeperSensor": null,
+      "allowedTools": [
+        "execute_command",
+        "read_file",
+        "edit_file",
+        "write_file",
+        "glob",
+        "grep",
+        "subagent"
+      ],
+      "hooks": {},
+      "routes": null,
+      "autoRun": null,
+      "terminal": null
+    },
+    {
+      "id": "ready",
+      "title": "Ready / Done",
+      "color": "#10b981",
+      "icon": "CheckCircle2",
+      "persona": null,
+      "onEnterScript": null,
+      "contextWindow": 64000,
+      "modelOverride": null,
+      "reasoningEffort": null,
+      "temperature": null,
+      "gatekeeperSensor": null,
+      "allowedTools": [
+        "read_file",
+        "glob",
+        "grep"
+      ],
+      "hooks": {},
+      "routes": null,
+      "autoRun": null,
+      "terminal": null
+    }
+  ],
+  "boards": [
+    {
+      "id": "development",
+      "name": "Engineering Pipeline",
+      "columns": [
+        {
+          "id": "backlog",
+          "title": "Backlog",
+          "color": "#64748b",
+          "icon": "Inbox",
+          "persona": null,
+          "onEnterScript": null,
+          "contextWindow": 128000,
+          "modelOverride": null,
+          "reasoningEffort": null,
+          "temperature": null,
+          "gatekeeperSensor": null,
+          "allowedTools": [
+            "read_file",
+            "glob",
+            "grep",
+            "web_search",
+            "web_fetch"
+          ],
+          "hooks": {},
+          "routes": null,
+          "autoRun": null,
+          "terminal": null
+        },
+        {
+          "id": "dev",
+          "title": "In Development",
+          "color": "#f59e0b",
+          "icon": "Code2",
+          "persona": null,
+          "onEnterScript": null,
+          "contextWindow": 400000,
+          "modelOverride": "gemini-3.8-flash-high",
+          "reasoningEffort": null,
+          "temperature": 0.2,
+          "gatekeeperSensor": null,
+          "allowedTools": [
+            "execute_command",
+            "read_file",
+            "edit_file",
+            "write_file",
+            "glob",
+            "grep",
+            "subagent"
+          ],
+          "hooks": {},
+          "routes": null,
+          "autoRun": null,
+          "terminal": null
+        },
+        {
+          "id": "ready",
+          "title": "Ready / Done",
+          "color": "#10b981",
+          "icon": "CheckCircle2",
+          "persona": null,
+          "onEnterScript": null,
+          "contextWindow": 64000,
+          "modelOverride": null,
+          "reasoningEffort": null,
+          "temperature": null,
+          "gatekeeperSensor": null,
+          "allowedTools": [
+            "read_file",
+            "glob",
+            "grep"
+          ],
+          "hooks": {},
+          "routes": null,
+          "autoRun": null,
+          "terminal": null
+        }
+      ]
+    }
+  ],
+  "activeBoardId": "development"
+}
