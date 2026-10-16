@@ -26,7 +26,6 @@ interface TextBuffer {
 
 export default function App() {
   const { rootStyle, zoomPercent, showIndicator, resetZoom } = useUiZoom();
-  const loadColumns = useBoardStore((s) => s.loadColumns);
   const loadTasks = useBoardStore((s) => s.loadTasks);
   const runTaskAgent = useBoardStore((s) => s.runTaskAgent);
   const loadBoards = useBoardStore((s) => s.loadBoards);
@@ -360,7 +359,7 @@ export default function App() {
       textBuffers.clear();
       unlisteners.forEach((u) => u());
     };
-  }, [loadBoards, loadColumns, loadTasks, addToolExecution, updateToolExecution, updateTelemetry, setThinkingStartTime]);
+  }, [loadBoards, loadTasks, addToolExecution, updateToolExecution, updateTelemetry, setThinkingStartTime]);
 
   return (
     <>

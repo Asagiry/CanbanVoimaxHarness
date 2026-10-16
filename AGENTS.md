@@ -63,11 +63,15 @@
   ├── src-tauri/             # Rust Desktop Backend
   │   ├── src/
   │   │   ├── main.rs        # Tauri entrypoint & plugin setup
+  │   │   ├── lib.rs         # Tauri plugin & IPC wiring
+  │   │   ├── db.rs          # SQLite dialogue persistence (.cvh/harness.db)
   │   │   ├── config.rs      # .cvh/ project, boards, and tool-policy parser
   │   │   ├── git.rs         # Native worktree & branch manager
   │   │   ├── hooks.rs       # Transition scripts (.bat/.ps1/.sh) runner
   │   │   ├── llm/           # Universal SSE streaming client & model registry
   │   │   ├── agent.rs       # ReAct loop, zero-turn memory priming, custom tools
+  │   │   ├── agent/
+  │   │   │   └── compactor.rs # State-Preserving Context Compactor
   │   │   └── commands.rs    # Tauri IPC commands & event emitters
   │   └── Cargo.toml
   ├── src/                   # React 19 Tactical Frontend
@@ -79,20 +83,21 @@
   │   ├── stores/            # Zustand reactive stores
   │   └── App.tsx
   ├── .cvh/                  # Project Harness Configuration
-  │   ├── agents/            # Persona markdown prompts (<role>.md)
+  │   ├── harness.db         # High-performance SQLite database (WAL mode)
   │   ├── boards.json        # Multi-board definitions & active board
   │   ├── pipeline.json      # Pipeline columns, routing, sensors, & hooks
+  │   ├── agents/            # Modular persona folders (<role>/persona.md, setting, rules/)
   │   ├── settings/          # Enforced settings (tool-policy.json)
   │   ├── tools/             # Custom executable tools (<tool>.json)
   │   ├── hooks/             # Stage transition scripts (.bat/.ps1)
-  │   ├── dialogs/           # Persisted task activity items (<taskId>.json)
   │   └── spill/             # Spilled large tool outputs (>100 lines / >8KB)
   └── .agents/               # Skills catalog and task history ledgers
   ```
 
 ### 2.2 Board-As-Control-Plane: Columns = Agents Invariant
 - **Columns Represent Agents**: In CanbanVoimaxHarness, columns are not passive status holders; they represent specialized autonomous roles. When a column declares `persona: "<role>"`, entering this column automatically triggers the agent loop initialized with that persona.
-- **Backlog-to-Ready Invariant**: Tasks flow deterministically from an intake column (`backlog`) to a completion column (`ready` / `done`).
+- **Backlog-to-Ready Invariant**: Tasks flow deterministically from an intake column (`backlog`) to a completion column (`ready` / `done`). Columns `backlog` (index 0) and `ready` (`terminal: true`, final index) are structurally immutable—they cannot be deleted or renamed, and self-heal automatically on startup.
+- **SVG Persona Icons**: Each persona declares its canonical SVG icon in YAML frontmatter (`icon: <IconName>`), JSON setting, or column definition. Supported icons map directly to Lucide icons (`Bot`, `Brain`, `Cpu`, `Code2`, `ShieldCheck`, `Sparkles`, `Terminal`, `Zap`, `Flame`, `Radar`, `Workflow`, `Boxes`, `Wrench`, `Rocket`, etc.) and are dynamically persisted by the backend.
 - **Subtask Execution Hierarchy**: When a task advances to an audit/review column, the root parent card remains pinned in its active stage while an isolated child subtask (`<task-id>.<subtask-index>`, e.g. `CVH-012.1`) executes the review persona.
 - **Stage Auto-Run Invariant**: Moving a task card into an active stage immediately emits `agent:autorun` and executes `run_agent(taskId)`.
 - **Tactile Stage Stepper Navigation**: Cards on the Kanban board and the `AgentConsoleDrawer` header feature an interactive tactile stage stepper with 1-click stage switching, current stage pulse, and passed stage checkmarks, executing `move_task_stage` through gatekeeper sensors.
@@ -106,12 +111,11 @@
   - `kanban`: Lean 3-stage agile workflow (`todo` → `in_progress` → `ready`).
   - `empty`: Minimal 2-stage sandbox (`backlog` → `ready`).
 
-### 2.4 Three-Tier Disk-Based Dialogue Storage Invariant
-- **Atomic 3-Tier Redundancy**: Task chat messages and activity feed items are persisted on disk upon every step and streaming delta to eliminate memory loss:
-  1. Primary: `<repo_root>/.cvh/dialogs/<taskId>.json`
-  2. Secondary: `<repo_root>/.cvh/tasks/<taskId>/dialog.json`
-  3. Global Fallback: `%LOCALAPPDATA%/com.voimax.cvh/dialogs/<taskId>.json`
-- **Restoration Hierarchy**: On task selection or application launch, `load_task_dialog` queries the primary path first, falling back gracefully to secondary and global stores.
+### 2.4 High-Performance SQLite Dialogue Storage Invariant (`.cvh/harness.db`)
+- **SQLite Engine with WAL Mode**: Task dialogue messages and activity feed items are persisted in SQLite at `<repo_root>/.cvh/harness.db` with `PRAGMA journal_mode = WAL` and `PRAGMA synchronous = NORMAL`.
+- **Indexed Schema**: Table `dialog_items` (`id` TEXT PRIMARY KEY, `task_id` TEXT NOT NULL, `type` TEXT NOT NULL, `content` TEXT, `images_json` TEXT, `timestamp` TEXT, `created_at` INTEGER NOT NULL, `tool_json` TEXT, `duration_ms` REAL) with index `idx_dialog_task(task_id, created_at)`.
+- **Atomic Upserts**: Streaming chunks, thoughts, tool invocations, and responses are upserted atomically in sub-millisecond transactions without lock contention, eliminating legacy flat JSON serialization overhead and file corruption.
+- **Restoration**: On task selection or drawer launch, `load_task_dialog` retrieves ordered dialogue history directly from SQLite via `load_dialog_items`.
 
 ### 2.5 Two-Level Tool Policy Matrix: Strict AND-Semantics
 - **Two-Tier Enforcement**:
