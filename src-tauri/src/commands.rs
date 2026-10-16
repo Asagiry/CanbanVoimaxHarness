@@ -44,6 +44,40 @@ pub const AGENT_ICONS: &[&str] = &[
     "Wrench", "Rocket", "Fingerprint", "Compass", "Crosshair", "Layers",
 ];
 
+/// Каноническая палитра цветов для агентов.
+/// Серый (#64748b, #6b7280) и зеленый (#10b981, #22c55e) исключены,
+/// так как они навсегда зарезервированы за Backlog и Ready.
+pub const AGENT_PALETTE: &[&str] = &[
+    "#f59e0b", "#a855f7", "#0284c7", "#ef4444", "#6366f1",
+    "#14b8a6", "#ec4899", "#f97316", "#06b6d4", "#8b5cf6",
+];
+
+/// Цвета, навсегда зарезервированные за Backlog (#64748b) и Ready (#10b981).
+pub const FORBIDDEN_AGENT_COLORS: &[&str] = &[
+    "#64748b", "#6b7280", "#10b981", "#22c55e",
+];
+
+/// Детерминированный выбор цвета для роли агента из AGENT_PALETTE.
+pub fn deterministic_color_for_role(role: &str) -> String {
+    let trimmed = role.trim();
+    if trimmed == "cvh-dev" {
+        return "#6366f1".to_string();
+    }
+    if trimmed == "developer" || trimmed == "dev" {
+        return "#0284c7".to_string();
+    }
+    if trimmed == "reviewer" || trimmed == "review" {
+        return "#a855f7".to_string();
+    }
+    if trimmed == "retro" {
+        return "#f59e0b".to_string();
+    }
+    let hash: usize = trimmed.bytes().fold(5381usize, |acc, b| {
+        acc.wrapping_mul(33).wrapping_add(b as usize)
+    });
+    AGENT_PALETTE[hash % AGENT_PALETTE.len()].to_string()
+}
+
 /// Дефолтная иконка для колонки по её идентификатору
 pub fn default_column_icon(col_id: &str) -> String {
     match col_id {
@@ -180,6 +214,130 @@ pub async fn save_persona_icon(role_dir: &Path, icon: &str) -> Result<(), String
     Ok(())
 }
 
+/// Извлекает цвет из YAML frontmatter (между первыми `---` и вторыми `---`)
+pub fn extract_persona_color_from_text(content: &str) -> Option<String> {
+    let trimmed = content.trim_start();
+    let rest = trimmed.strip_prefix("---")?;
+    let end_idx = rest.find("\n---")?;
+    let fm_block = &rest[..end_idx];
+    for line in fm_block.lines() {
+        let trimmed_line = line.trim();
+        if let Some(val) = trimmed_line.strip_prefix("color:") {
+            let cleaned = val.trim().trim_matches(|c| c == '\'' || c == '"').trim();
+            if !cleaned.is_empty() {
+                return Some(cleaned.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Извлекает цвет из JSON файла (например, persona.json или setting)
+pub fn extract_persona_color_from_json(content: &str) -> Option<String> {
+    if let Ok(val) = serde_json::from_str::<serde_json::Value>(content) {
+        if let Some(color) = val.get("color").and_then(|v| v.as_str()) {
+            let cleaned = color.trim();
+            if !cleaned.is_empty() {
+                return Some(cleaned.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Считывает цвет персоны из каталога (persona.md -> agent.md -> persona.json -> setting).
+/// Для встроенного агента `cvh-dev` по умолчанию возвращает "#6366f1".
+pub async fn read_persona_color_from_dir(role_dir: &Path, role: &str) -> Option<String> {
+    let persona_file = role_dir.join("persona.md");
+    if let Ok(content) = tokio::fs::read_to_string(&persona_file).await {
+        if let Some(color) = extract_persona_color_from_text(&content) {
+            return Some(color);
+        }
+    }
+    let agent_file = role_dir.join("agent.md");
+    if let Ok(content) = tokio::fs::read_to_string(&agent_file).await {
+        if let Some(color) = extract_persona_color_from_text(&content) {
+            return Some(color);
+        }
+    }
+    let json_file = role_dir.join("persona.json");
+    if let Ok(content) = tokio::fs::read_to_string(&json_file).await {
+        if let Some(color) = extract_persona_color_from_json(&content) {
+            return Some(color);
+        }
+    }
+    let setting_file = role_dir.join("setting");
+    if let Ok(content) = tokio::fs::read_to_string(&setting_file).await {
+        if let Some(color) = extract_persona_color_from_json(&content) {
+            return Some(color);
+        }
+    }
+    if role == "cvh-dev" {
+        return Some("#6366f1".to_string());
+    }
+    None
+}
+
+/// Вставляет или обновляет `color: <color>` в YAML frontmatter текста.
+pub fn insert_or_update_frontmatter_color(content: &str, color: &str) -> String {
+    let trimmed_start = content.trim_start();
+    if let Some(rest) = trimmed_start.strip_prefix("---") {
+        if let Some(end_idx) = rest.find("\n---") {
+            let fm_block = &rest[..end_idx];
+            let after_closing_dash = &rest[end_idx..]; // начинается с "\n---"
+            let mut found = false;
+            let mut new_lines = Vec::new();
+            for line in fm_block.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("color:") {
+                    new_lines.push(format!("color: {}", color));
+                    found = true;
+                } else {
+                    new_lines.push(line.to_string());
+                }
+            }
+            if !found {
+                new_lines.push(format!("color: {}", color));
+            }
+            let leading_ws = &content[..content.len() - trimmed_start.len()];
+            return format!("{}---\n{}{}", leading_ws, new_lines.join("\n"), after_closing_dash);
+        }
+    }
+    format!("---\ncolor: {}\n---\n\n{}", color, content)
+}
+
+/// Сохраняет цвет персоны в `persona.md` (или `agent.md`).
+pub async fn save_persona_color(role_dir: &Path, color: &str) -> Result<(), String> {
+    let persona_file = role_dir.join("persona.md");
+    let agent_file = role_dir.join("agent.md");
+    let target_file = if persona_file.exists() {
+        persona_file
+    } else if agent_file.exists() {
+        agent_file
+    } else {
+        persona_file
+    };
+
+    if target_file.exists() {
+        let content = tokio::fs::read_to_string(&target_file)
+            .await
+            .map_err(|e| format!("Не удалось прочитать {}: {}", target_file.display(), e))?;
+        let updated = insert_or_update_frontmatter_color(&content, color);
+        atomic_write_file(&target_file, &updated)
+            .await
+            .map_err(|e| format!("Не удалось записать {}: {}", target_file.display(), e))?;
+    } else {
+        tokio::fs::create_dir_all(role_dir)
+            .await
+            .map_err(|e| format!("Не удалось создать каталог {}: {}", role_dir.display(), e))?;
+        let new_content = format!("---\ncolor: {}\n---\n", color);
+        atomic_write_file(&target_file, &new_content)
+            .await
+            .map_err(|e| format!("Не удалось записать {}: {}", target_file.display(), e))?;
+    }
+    Ok(())
+}
+
 /// Детерминированный выбор иконки для роли из пака AGENT_ICONS (предпочтительно не занятой)
 pub fn deterministic_icon_for_role(role: &str, used_icons: &HashSet<String>) -> String {
     if role == "cvh-dev" {
@@ -216,6 +374,8 @@ pub struct AgentPersonaInfo {
     pub hooks: Vec<String>,
     #[serde(default)]
     pub icon: Option<String>,
+    #[serde(default)]
+    pub color: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -244,21 +404,9 @@ pub fn is_valid_persona_role(role: &str) -> bool {
     true
 }
 
-fn persona_placeholder_template(role: &str, icon: &str) -> String {
+fn persona_placeholder_template(role: &str, icon: &str, color: &str) -> String {
     format!(
-        "---\n        name: {role}\n        icon: {icon}\n        ---\n\n        # Роль: {role}\n\n        > Этот файл создан автоматически командой `create_agent_persona`. \
-        > Заполните его под свою персону — все секции ниже помечены TODO.\n\n\
-        ## TODO: цель персоны\n\n\
-        - Опишите, за что отвечает эта персона и какие задачи решает.\n\n\
-        ## TODO: стиль\n\n\
-        - Опишите стиль общения и работы: тон, детальность, формат ответов.\n\n\
-        ## TODO: запреты\n\n\
-        - Перечислите, что персоне запрещено делать.\n\n\
-        ## TODO: чеклист настройки\n\n\
-        - [ ] Заполнена цель персоны\n\
-        - [ ] Описан стиль\n\
-        - [ ] Перечислены запреты\n\
-        - [ ] Проверена работа персоны на тестовой задаче\n"
+        "---\nname: {role}\nicon: {icon}\ncolor: {color}\n---\n\n# Роль: {role}\n\n> Этот файл создан автоматически командой `create_agent_persona`. Заполните его под свою персону — все секции ниже помечены TODO.\n\n## TODO: цель персоны\n\n- Опишите, за что отвечает эта персона и какие задачи решает.\n\n## TODO: стиль\n\n- Опишите стиль общения и работы: тон, детальность, формат ответов.\n\n## TODO: запреты\n\n- Перечислите, что персоне запрещено делать.\n\n## TODO: чеклист настройки\n\n- [ ] Заполнена цель персоны\n- [ ] Описан стиль\n- [ ] Перечислены запреты\n- [ ] Проверена работа персоны на тестовой задаче\n"
     )
 }
 
@@ -357,6 +505,29 @@ pub async fn list_agent_personas_in(root: &Path) -> Vec<AgentPersonaInfo> {
             }
         };
 
+        // Считываем цвет или детерминированно назначаем и сохраняем (исключая серый и зеленый)
+        let color = match read_persona_color_from_dir(&role_dir, &role).await {
+            Some(c) => {
+                let norm = c.trim().to_lowercase();
+                if FORBIDDEN_AGENT_COLORS.contains(&norm.as_str()) {
+                    let assigned = deterministic_color_for_role(&role);
+                    if role_dir.exists() {
+                        let _ = save_persona_color(&role_dir, &assigned).await;
+                    }
+                    assigned
+                } else {
+                    c
+                }
+            }
+            None => {
+                let assigned = deterministic_color_for_role(&role);
+                if role_dir.exists() {
+                    let _ = save_persona_color(&role_dir, &assigned).await;
+                }
+                assigned
+            }
+        };
+
         out.push(AgentPersonaInfo {
             role,
             has_prompt,
@@ -365,6 +536,7 @@ pub async fn list_agent_personas_in(root: &Path) -> Vec<AgentPersonaInfo> {
             rules,
             hooks,
             icon: Some(icon),
+            color: Some(color),
         });
     }
     out.sort_by(|a, b| a.role.cmp(&b.role));
@@ -572,6 +744,7 @@ pub async fn create_agent_persona_file(root: &Path, role: &str) -> Result<String
         AGENT_ICONS
     };
     let chosen_icon = pool[(uuid::Uuid::new_v4().as_u128() as usize) % pool.len()];
+    let chosen_color = deterministic_color_for_role(role);
 
     tokio::fs::create_dir_all(role_dir.join("rules"))
         .await
@@ -579,7 +752,7 @@ pub async fn create_agent_persona_file(root: &Path, role: &str) -> Result<String
     tokio::fs::create_dir_all(role_dir.join("hooks"))
         .await
         .map_err(|e| format!("Не удалось создать hooks для персоны '{}': {}", role, e))?;
-    let content = persona_placeholder_template(role, chosen_icon);
+    let content = persona_placeholder_template(role, chosen_icon, &chosen_color);
     atomic_write_file(&persona_file, &content)
         .await
         .map_err(|e| format!("Не удалось создать персону '{}': {}", role, e))?;
@@ -1040,6 +1213,46 @@ pub async fn rename_agent_persona(
         let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipe }));
     }
     Ok(())
+}
+
+#[tauri::command]
+pub async fn set_agent_persona_color(
+    role: String,
+    color: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Vec<AgentPersonaInfo>, String> {
+    if !is_valid_persona_role(&role) {
+        return Err(format!("Некорректное имя роли персоны '{}'", role));
+    }
+    let norm_color = color.trim().to_lowercase();
+    if FORBIDDEN_AGENT_COLORS.contains(&norm_color.as_str()) {
+        return Err("Серый и зеленый цвета зарезервированы за Backlog и Ready и запрещены для агентов".to_string());
+    }
+    let root = state.get_root();
+    let role_dir = crate::config::agent_dir(&root, &role);
+    save_persona_color(&role_dir, &color).await?;
+    let list = list_agent_personas_in(&root).await;
+    let _ = app.emit("agent:personas_updated", &list);
+    Ok(list)
+}
+
+#[tauri::command]
+pub async fn set_agent_persona_icon(
+    role: String,
+    icon: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Vec<AgentPersonaInfo>, String> {
+    if !is_valid_persona_role(&role) {
+        return Err(format!("Некорректное имя роли персоны '{}'", role));
+    }
+    let root = state.get_root();
+    let role_dir = crate::config::agent_dir(&root, &role);
+    save_persona_icon(&role_dir, &icon).await?;
+    let list = list_agent_personas_in(&root).await;
+    let _ = app.emit("agent:personas_updated", &list);
+    Ok(list)
 }
 
 #[tauri::command]
@@ -4066,9 +4279,10 @@ mod tests {
 
     #[test]
     fn test_persona_placeholder_template_ru() {
-        let t = persona_placeholder_template("reviewer", "ShieldCheck");
+        let t = persona_placeholder_template("reviewer", "ShieldCheck", "#a855f7");
         assert!(t.contains("name: reviewer"));
         assert!(t.contains("icon: ShieldCheck"));
+        assert!(t.contains("color: #a855f7"));
         assert!(t.contains("# Роль: reviewer"));
         assert!(t.contains("TODO"));
         assert!(t.contains("создан автоматически"));
@@ -4084,6 +4298,7 @@ mod tests {
             rules: vec!["r1.md".to_string()],
             hooks: vec![],
             icon: Some("Code2".to_string()),
+            color: Some("#0284c7".to_string()),
         };
         let v = serde_json::to_value(&info).expect("serialize");
         assert_eq!(v.get("role").and_then(|x| x.as_str()), Some("developer"));
@@ -4091,6 +4306,7 @@ mod tests {
         assert_eq!(v.get("isBuiltin").and_then(|x| x.as_bool()), Some(false));
         assert_eq!(v.get("personaFile").and_then(|x| x.as_str()), Some("persona.md"));
         assert_eq!(v.get("icon").and_then(|x| x.as_str()), Some("Code2"));
+        assert_eq!(v.get("color").and_then(|x| x.as_str()), Some("#0284c7"));
         assert!(v.get("has_prompt").is_none());
         assert!(v.get("is_builtin").is_none());
 
@@ -4102,10 +4318,33 @@ mod tests {
             rules: vec!["boards.md".to_string()],
             hooks: vec![],
             icon: Some("Cpu".to_string()),
+            color: Some("#6366f1".to_string()),
         };
         let vb = serde_json::to_value(&builtin).expect("serialize");
         assert_eq!(vb.get("isBuiltin").and_then(|x| x.as_bool()), Some(true));
         assert_eq!(vb.get("icon").and_then(|x| x.as_str()), Some("Cpu"));
+        assert_eq!(vb.get("color").and_then(|x| x.as_str()), Some("#6366f1"));
+    }
+
+    #[tokio::test]
+    async fn test_agent_colors_palette_and_forbidden_invariants() {
+        // Серый (#64748b) и зеленый (#10b981) не должны быть в AGENT_PALETTE
+        for color in AGENT_PALETTE {
+            assert_ne!(*color, "#64748b", "Backlog gray is strictly forbidden in agent palette");
+            assert_ne!(*color, "#6b7280", "Gray is strictly forbidden in agent palette");
+            assert_ne!(*color, "#10b981", "Ready green is strictly forbidden in agent palette");
+            assert_ne!(*color, "#22c55e", "Green is strictly forbidden in agent palette");
+        }
+
+        let dev_col = deterministic_color_for_role("developer");
+        assert!(!FORBIDDEN_AGENT_COLORS.contains(&dev_col.as_str()));
+
+        let text_with_color = "---\nname: foo\ncolor: #f59e0b\n---\n# Body";
+        assert_eq!(extract_persona_color_from_text(text_with_color), Some("#f59e0b".to_string()));
+
+        let updated = insert_or_update_frontmatter_color("# Title", "#a855f7");
+        assert!(updated.contains("color: #a855f7"));
+        assert_eq!(extract_persona_color_from_text(&updated), Some("#a855f7".to_string()));
     }
 
     #[tokio::test]

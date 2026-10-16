@@ -2,6 +2,13 @@ import { create } from 'zustand';
 import { CortexAgentFile, CortexAgentStage, PipelineColumn } from '../types';
 import { INITIAL_CORTEX_STAGES } from './mockData';
 import { useBoardStore } from './boardStore';
+import { getDefaultColumnIcon } from '../lib/columnIcons';
+import {
+  BACKLOG_COLOR,
+  READY_COLOR,
+  getDeterministicAgentColor,
+  isAllowedAgentColor,
+} from '../lib/agentPalette';
 
 interface CortexState {
   stages: CortexAgentStage[];
@@ -31,6 +38,8 @@ interface CortexState {
   loadAgentPersonas: () => Promise<void>;
   renameAgentPersona: (oldRole: string, newRole: string) => Promise<void>;
   deleteAgentPersona: (role: string) => Promise<void>;
+  setAgentPersonaColor: (role: string, color: string) => Promise<void>;
+  setAgentPersonaIcon: (role: string, icon: string) => Promise<void>;
   openFile: (fileId: string) => Promise<void>;
   createPersonaTemplate: (fileId: string) => Promise<void>;
   createSettingTemplate: (fileId: string) => Promise<void>;
@@ -64,6 +73,7 @@ export interface AgentPersonaInfo {
   rules?: string[];
   hooks?: string[];
   icon?: string;
+  color?: string;
 }
 
 interface RawAgentPersona {
@@ -77,6 +87,7 @@ interface RawAgentPersona {
   rules?: string[];
   hooks?: string[];
   icon?: string;
+  color?: string;
 }
 
 // Каталог агента по новой схеме. Роль = persona колонки; фолбэк — stageId,
@@ -529,11 +540,40 @@ export const useCortexStore = create<CortexState>((set, get) => ({
         return order(a.type) - order(b.type) || a.name.localeCompare(b.name);
       });
 
+      // Четкая стилизация Backlog (#64748b) и Ready (#10b981) + реактивная иконка и цвет персоны
+      let stageColor = col.color;
+      let stageIcon = col.icon;
+      if (col.id === 'backlog') {
+        stageColor = BACKLOG_COLOR;
+        stageIcon = col.icon || getDefaultColumnIcon('backlog');
+      } else if (col.id === 'ready') {
+        stageColor = READY_COLOR;
+        stageIcon = col.icon || getDefaultColumnIcon('ready');
+      } else {
+        if (col.persona) {
+          if (personaInfo?.icon) {
+            stageIcon = personaInfo.icon;
+          } else if (!stageIcon) {
+            stageIcon = getDefaultColumnIcon(col.id);
+          }
+          if (personaInfo?.color && isAllowedAgentColor(personaInfo.color)) {
+            stageColor = personaInfo.color;
+          } else if (col.color && isAllowedAgentColor(col.color)) {
+            stageColor = col.color;
+          } else {
+            stageColor = getDeterministicAgentColor(col.persona);
+          }
+        } else {
+          stageIcon = col.icon || getDefaultColumnIcon(col.id);
+          stageColor = isAllowedAgentColor(col.color) ? col.color : '#171717';
+        }
+      }
+
       boardStages.push({
         stageId: col.id,
         stageTitle: col.title,
-        color: col.color,
-        icon: col.icon,
+        color: stageColor,
+        icon: stageIcon,
         personaName: col.persona?.trim() || 'без агента',
         isExpanded: prevStageById.get(col.id)?.isExpanded ?? true,
         files: [
@@ -620,6 +660,9 @@ export const useCortexStore = create<CortexState>((set, get) => ({
       const role = item.role.trim();
       if (!role || seen.has(role)) continue;
       seen.add(role);
+      const roleColor = isAllowedAgentColor(item.color)
+        ? item.color!
+        : getDeterministicAgentColor(role);
       personas.push({
         role,
         hasPrompt: item.hasPrompt ?? item.has_prompt ?? true,
@@ -628,6 +671,7 @@ export const useCortexStore = create<CortexState>((set, get) => ({
         rules: Array.isArray(item.rules) ? item.rules : [],
         hooks: Array.isArray(item.hooks) ? item.hooks : [],
         icon: item.icon,
+        color: roleColor,
       });
     }
     personas.sort((a, b) => a.role.localeCompare(b.role));
@@ -678,7 +722,7 @@ export const useCortexStore = create<CortexState>((set, get) => ({
       return {
         stageId,
         stageTitle: p.role,
-        color: isBuiltin ? '#4f46e5' : '#171717',
+        color: p.color || getDeterministicAgentColor(p.role),
         icon: p.icon || (isBuiltin ? 'Cpu' : 'Bot'),
         personaName: p.role,
         isExpanded: prevStage?.isExpanded ?? false,
@@ -717,6 +761,84 @@ export const useCortexStore = create<CortexState>((set, get) => ({
       if (alive.has(id)) prunedMissing[id] = value;
     }
     set({ agentPersonas: personas, agentStages: nextStages, fileMissing: prunedMissing });
+
+    // Реактивно синхронизировать колонки сразу при загрузке агентов (иконка и цвет персоны)
+    get().syncStagesFromColumns(useBoardStore.getState().columns);
+  },
+
+  setAgentPersonaColor: async (role: string, color: string) => {
+    if (!isAllowedAgentColor(color)) {
+      throw new Error("Серый и зеленый цвета зарезервированы за Backlog и Ready и запрещены для агентов");
+    }
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('set_agent_persona_color', { role, color });
+    } catch (err) {
+      console.info('set_agent_persona_color IPC not available or failed:', err);
+    }
+    set((state) => ({
+      agentPersonas: state.agentPersonas.map((p) =>
+        p.role === role ? { ...p, color } : p
+      ),
+      agentStages: state.agentStages.map((st) =>
+        st.personaName === role ? { ...st, color } : st
+      ),
+    }));
+
+    // Автоматическое наследование цвета колонками, на которые назначен этот агент (если не backlog и не ready)
+    const boardStore = useBoardStore.getState();
+    const prevCols = boardStore.columns;
+    let changed = false;
+    const nextCols = prevCols.map((c) => {
+      if (c.persona === role && c.id !== 'backlog' && c.id !== 'ready') {
+        changed = true;
+        return { ...c, color };
+      }
+      return c;
+    });
+    if (changed) {
+      boardStore.setColumns(nextCols);
+      get().syncStagesFromColumns(nextCols);
+      void boardStore.saveCurrentBoard(nextCols);
+    } else {
+      get().syncStagesFromColumns(prevCols);
+    }
+  },
+
+  setAgentPersonaIcon: async (role: string, icon: string) => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('set_agent_persona_icon', { role, icon });
+    } catch (err) {
+      console.info('set_agent_persona_icon IPC not available or failed:', err);
+    }
+    set((state) => ({
+      agentPersonas: state.agentPersonas.map((p) =>
+        p.role === role ? { ...p, icon } : p
+      ),
+      agentStages: state.agentStages.map((st) =>
+        st.personaName === role ? { ...st, icon } : st
+      ),
+    }));
+
+    // Автоматическое наследование иконки колонками, на которые назначен этот агент
+    const boardStore = useBoardStore.getState();
+    const prevCols = boardStore.columns;
+    let changed = false;
+    const nextCols = prevCols.map((c) => {
+      if (c.persona === role) {
+        changed = true;
+        return { ...c, icon };
+      }
+      return c;
+    });
+    if (changed) {
+      boardStore.setColumns(nextCols);
+      get().syncStagesFromColumns(nextCols);
+      void boardStore.saveCurrentBoard(nextCols);
+    } else {
+      get().syncStagesFromColumns(prevCols);
+    }
   },
 
   renameAgentPersona: async (oldRole: string, newRole: string) => {

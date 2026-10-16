@@ -1,6 +1,8 @@
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useToolPolicyStore, AVAILABLE_TOOLS } from '../../stores/toolPolicyStore';
 import { useBoardStore } from '../../stores/boardStore';
+import { useCortexStore } from '../../stores/cortexStore';
+import AgentIcon from '../common/AgentIcon';
 import { X, ChevronDown, Trash2 } from 'lucide-react';
 
 interface CustomTool {
@@ -72,9 +74,59 @@ export default function ToolPolicyModal() {
     isToolAllowed,
   } = useToolPolicyStore();
 
+  const { agentPersonas, loadAgentPersonas } = useCortexStore();
   const { columns } = useBoardStore();
-  // В матрице только агенты: backlog/ready без persona не имеют тул-контекста.
-  const agentColumns = columns.filter((col) => col.persona != null);
+
+  interface AgentMatrixItem {
+    role: string;
+    icon?: string;
+    color?: string;
+    isBuiltin: boolean;
+  }
+
+  // В матрице отображаются именно АГЕНТЫ (персоны), а не колонки доски:
+  // пользователь управляет правами тулов для агентов (developer, reviewer, cvh-dev, red-team-reviewer и т.д.)
+  const agents = useMemo<AgentMatrixItem[]>(() => {
+    const map = new Map<string, AgentMatrixItem>();
+
+    // 1. Персоны из реестра CortexStore
+    for (const p of agentPersonas) {
+      if (p.role) {
+        map.set(p.role, {
+          role: p.role,
+          icon: p.icon,
+          color: p.color,
+          isBuiltin: p.role === 'cvh-dev' || Boolean(p.isBuiltin),
+        });
+      }
+    }
+
+    // 2. Персоны, назначенные на колонки досок
+    for (const col of columns) {
+      if (col.persona && !map.has(col.persona)) {
+        map.set(col.persona, {
+          role: col.persona,
+          icon: col.icon,
+          color: col.color,
+          isBuiltin: col.persona === 'cvh-dev',
+        });
+      }
+    }
+
+    // 3. Fallback, если реестр пуст
+    if (map.size === 0) {
+      map.set('cvh-dev', { role: 'cvh-dev', icon: 'Cpu', isBuiltin: true });
+      map.set('developer', { role: 'developer', icon: 'Code2', isBuiltin: false });
+      map.set('reviewer', { role: 'reviewer', icon: 'ShieldCheck', isBuiltin: false });
+    }
+
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.isBuiltin && !b.isBuiltin) return -1;
+      if (!a.isBuiltin && b.isBuiltin) return 1;
+      return a.role.localeCompare(b.role);
+    });
+  }, [agentPersonas, columns]);
+
   const [activeTab, setActiveTab] = useState<'matrix' | 'global'>('matrix');
   const [expandedToolId, setExpandedToolId] = useState<string | null>(null);
 
@@ -113,8 +165,9 @@ export default function ToolPolicyModal() {
       setExpandedToolId(null);
       setCustomFormError(null);
       void loadCustomTools();
+      void loadAgentPersonas();
     }
-  }, [isModalOpen, loadCustomTools]);
+  }, [isModalOpen, loadCustomTools, loadAgentPersonas]);
 
   const handleAddCustomTool = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -236,11 +289,24 @@ export default function ToolPolicyModal() {
                   <tr className="border-b border-[#ebebeb] bg-[#f9f9f9] text-[#666666] text-[10px] uppercase">
                     <th className="py-2.5 px-3 font-medium">Инструмент</th>
                     <th className="py-2.5 px-2 text-right font-medium">Вес</th>
-                    {agentColumns.map((col) => (
-                      <th key={col.id} className="py-2.5 px-2 text-center font-medium border-l border-[#ebebeb]">
-                        <span className="truncate max-w-[80px] block">
-                          {col.title}
-                        </span>
+                    {agents.map((agent) => (
+                      <th key={agent.role} className="py-2.5 px-2 text-center font-medium border-l border-[#ebebeb] min-w-[95px]">
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="flex items-center gap-1.5 justify-center max-w-[110px]">
+                            <AgentIcon
+                              name={agent.icon || (agent.isBuiltin ? 'Cpu' : 'Bot')}
+                              className={`h-3.5 w-3.5 shrink-0 ${agent.isBuiltin ? 'text-indigo-600' : 'text-[#171717]'}`}
+                            />
+                            <span className="truncate block font-mono font-semibold text-[#171717]" title={agent.role}>
+                              {agent.role}
+                            </span>
+                          </div>
+                          {agent.isBuiltin && (
+                            <span className="px-1 py-0.2 rounded text-[9px] font-sans font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
+                              встроенный
+                            </span>
+                          )}
+                        </div>
                       </th>
                     ))}
                   </tr>
@@ -254,7 +320,7 @@ export default function ToolPolicyModal() {
                       <Fragment key={`cat-grp-${catKey}`}>
                         <tr className="bg-[#f4f4f5]/90 border-y border-[#ebebeb]">
                           <td
-                            colSpan={2 + agentColumns.length}
+                            colSpan={2 + agents.length}
                             className="py-1.5 px-3 text-[10px] font-semibold text-[#52525b] uppercase tracking-wider"
                           >
                             {CATEGORY_LABELS[catKey] || catKey}
@@ -296,11 +362,11 @@ export default function ToolPolicyModal() {
                                 {tool.tokenWeight}
                               </td>
 
-                              {agentColumns.map((col) => {
-                                const isAllowed = isToolAllowed(tool.id, col.id);
+                              {agents.map((agent) => {
+                                const isAllowed = isToolAllowed(tool.id, agent.role);
 
                                 return (
-                                  <td key={col.id} className="py-2 px-2 text-center border-l border-[#ebebeb]">
+                                  <td key={agent.role} className="py-2 px-2 text-center border-l border-[#ebebeb]">
                                     {!isGloballyActive ? (
                                       <span className="text-[10px] text-[#8f8f8f] select-none">
                                         Выкл
@@ -309,8 +375,15 @@ export default function ToolPolicyModal() {
                                       <span className="inline-flex justify-center">
                                         <Toggle
                                           enabled={isAllowed}
-                                          onToggle={() => setStageTool(col.id, tool.id, !isAllowed)}
-                                          title={`${tool.label} для ${col.title}: ${isAllowed ? 'включено' : 'выключено'}`}
+                                          onToggle={() => {
+                                            setStageTool(agent.role, tool.id, !isAllowed);
+                                            for (const col of columns) {
+                                              if (col.persona === agent.role && col.id !== agent.role) {
+                                                setStageTool(col.id, tool.id, !isAllowed);
+                                              }
+                                            }
+                                          }}
+                                          title={`${tool.label} для агента ${agent.role}: ${isAllowed ? 'включено' : 'выключено'}`}
                                         />
                                       </span>
                                     )}
@@ -360,11 +433,11 @@ export default function ToolPolicyModal() {
                           —
                         </td>
 
-                        {agentColumns.map((col) => {
-                          const isCustomAllowed = isToolAllowed(customTool.name, col.id);
+                        {agents.map((agent) => {
+                          const isCustomAllowed = isToolAllowed(customTool.name, agent.role);
 
                           return (
-                            <td key={col.id} className="py-2 px-2 text-center border-l border-[#ebebeb]">
+                            <td key={agent.role} className="py-2 px-2 text-center border-l border-[#ebebeb]">
                               {!isCustomGloballyActive ? (
                                 <span className="text-[10px] text-[#8f8f8f] select-none">
                                   Выкл
@@ -373,8 +446,15 @@ export default function ToolPolicyModal() {
                                 <span className="inline-flex justify-center">
                                   <Toggle
                                     enabled={isCustomAllowed}
-                                    onToggle={() => setStageTool(col.id, customTool.name, !isCustomAllowed)}
-                                    title={`${customTool.name} для ${col.title}: ${isCustomAllowed ? 'включено' : 'выключено'}`}
+                                    onToggle={() => {
+                                      setStageTool(agent.role, customTool.name, !isCustomAllowed);
+                                      for (const col of columns) {
+                                        if (col.persona === agent.role && col.id !== agent.role) {
+                                          setStageTool(col.id, customTool.name, !isCustomAllowed);
+                                        }
+                                      }
+                                    }}
+                                    title={`${customTool.name} для агента ${agent.role}: ${isCustomAllowed ? 'включено' : 'выключено'}`}
                                   />
                                 </span>
                               )}

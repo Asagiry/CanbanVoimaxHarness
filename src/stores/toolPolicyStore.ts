@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useBoardStore } from './boardStore';
 
 export interface ToolMeta {
   id: string;
@@ -215,10 +216,30 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
     get().saveToTauri();
   },
 
-  isToolAllowed: (toolId, stageId) => {
+  isToolAllowed: (toolId, stageOrAgentId) => {
     const { globalEnabled, stageOverrides } = get();
-    if (stageId && stageOverrides[stageId] && typeof stageOverrides[stageId][toolId] === 'boolean') {
-      return stageOverrides[stageId][toolId];
+    if (stageOrAgentId) {
+      if (stageOverrides[stageOrAgentId] && typeof stageOverrides[stageOrAgentId][toolId] === 'boolean') {
+        return stageOverrides[stageOrAgentId][toolId];
+      }
+      try {
+        const columns = useBoardStore.getState().columns;
+        // 1. Если передан агент (роль), проверяем колонку с этой персоной
+        const colForPersona = columns.find((c) => c.persona === stageOrAgentId);
+        if (colForPersona && stageOverrides[colForPersona.id] && typeof stageOverrides[colForPersona.id][toolId] === 'boolean') {
+          return stageOverrides[colForPersona.id][toolId];
+        }
+        // 2. Если передан id колонки, проверяем назначенную персону
+        const colById = columns.find((c) => c.id === stageOrAgentId);
+        if (colById?.persona && stageOverrides[colById.persona] && typeof stageOverrides[colById.persona][toolId] === 'boolean') {
+          return stageOverrides[colById.persona][toolId];
+        }
+      } catch {
+        // ignore
+      }
+      if (DEFAULT_OVERRIDES[stageOrAgentId] && typeof DEFAULT_OVERRIDES[stageOrAgentId][toolId] === 'boolean') {
+        return DEFAULT_OVERRIDES[stageOrAgentId][toolId];
+      }
     }
     return globalEnabled[toolId] ?? true;
   },

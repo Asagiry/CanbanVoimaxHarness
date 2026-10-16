@@ -6,6 +6,14 @@ import type { PipelineColumn, PipelineConfig } from '../../types';
 import AgentIcon from '../common/AgentIcon';
 import { getDefaultColumnIcon } from '../../lib/columnIcons';
 import {
+  BACKLOG_COLOR,
+  READY_COLOR,
+  AGENT_PALETTE,
+  AGENT_ICONS,
+  getDeterministicAgentColor,
+  isAllowedAgentColor,
+} from '../../lib/agentPalette';
+import {
   ChevronDown,
   ChevronRight,
   Folder,
@@ -21,6 +29,8 @@ import {
   Trash2,
   X,
   RotateCw,
+  Palette,
+  Check,
 } from 'lucide-react';
 import type { CortexAgentFile, CortexAgentStage } from '../../types';
 
@@ -77,6 +87,8 @@ export default function CortexExplorer() {
     loadAgentPersonas,
     renameAgentPersona,
     deleteAgentPersona,
+    setAgentPersonaColor,
+    setAgentPersonaIcon,
   } = useCortexStore();
   const syncStagesFromColumns = useCortexStore((s) => s.syncStagesFromColumns);
   const { columns, boards } = useBoardStore();
@@ -107,9 +119,10 @@ export default function CortexExplorer() {
     y: number;
     role: string;
     isBuiltin: boolean;
+    persona: AgentPersonaInfo;
   }
   const [agentContextMenu, setAgentContextMenu] = useState<AgentContextMenuState | null>(null);
-  const [renamingAgentRole, setRenamingAgentRole] = useState<string | null>(null);
+  const [editingAgentPersona, setEditingAgentPersona] = useState<AgentPersonaInfo | null>(null);
 
   useEffect(() => {
     if (!agentContextMenu) return;
@@ -130,11 +143,19 @@ export default function CortexExplorer() {
   const handleAgentContextMenu = (e: React.MouseEvent, stage: CortexAgentStage) => {
     e.preventDefault();
     e.stopPropagation();
+    const persona = agentPersonas.find((p) => p.role === stage.personaName) || {
+      role: stage.personaName,
+      hasPrompt: true,
+      isBuiltin: stage.personaName === 'cvh-dev' || Boolean(stage.isBuiltin),
+      icon: stage.icon,
+      color: stage.color,
+    };
     setAgentContextMenu({
       x: e.clientX,
       y: e.clientY,
       role: stage.personaName,
       isBuiltin: stage.personaName === 'cvh-dev' || Boolean(stage.isBuiltin),
+      persona,
     });
   };
 
@@ -235,9 +256,19 @@ export default function CortexExplorer() {
     } else if (!nextPersona) {
       nextIcon = getDefaultColumnIcon(col.id, col.icon);
     }
+    // Автоматическое наследование цвета агента колонкой (если не backlog и не ready)
+    let nextColor = col.color;
+    if (col.id !== 'backlog' && col.id !== 'ready') {
+      if (nextPersona) {
+        const personaColor = matchedPersona?.color || getDeterministicAgentColor(nextPersona);
+        if (personaColor && isAllowedAgentColor(personaColor)) {
+          nextColor = personaColor;
+        }
+      }
+    }
     const prev = columns;
     const next = prev.map((c) =>
-      c.id === columnId ? { ...c, persona: nextPersona, icon: nextIcon } : c,
+      c.id === columnId ? { ...c, persona: nextPersona, icon: nextIcon, color: nextColor } : c,
     );
     setColumns(next);
     syncStagesFromColumns(next);
@@ -469,9 +500,20 @@ export default function CortexExplorer() {
           </div>
           <button
             onClick={() => {
-              const role = agentContextMenu.role;
+              const persona = agentContextMenu.persona;
               setAgentContextMenu(null);
-              setRenamingAgentRole(role);
+              setEditingAgentPersona(persona);
+            }}
+            className="w-full flex items-center space-x-2 px-3 py-1.5 text-left transition rounded-sm text-[#171717] hover:bg-[#f4f4f5] cursor-pointer"
+          >
+            <Palette className="h-3.5 w-3.5 text-[#71717a]" />
+            <span>Настроить агента (цвет и иконка)</span>
+          </button>
+          <button
+            onClick={() => {
+              const persona = agentContextMenu.persona;
+              setAgentContextMenu(null);
+              setEditingAgentPersona(persona);
             }}
             disabled={agentContextMenu.isBuiltin}
             className={`w-full flex items-center space-x-2 px-3 py-1.5 text-left transition rounded-sm ${
@@ -505,13 +547,19 @@ export default function CortexExplorer() {
         </div>
       )}
 
-      {/* Диалог переименования агента */}
-      <RenameAgentModal
-        isOpen={Boolean(renamingAgentRole)}
-        role={renamingAgentRole}
-        onClose={() => setRenamingAgentRole(null)}
+      {/* Диалог настройки / переименования агента */}
+      <EditAgentPersonaModal
+        isOpen={Boolean(editingAgentPersona)}
+        persona={editingAgentPersona}
+        onClose={() => setEditingAgentPersona(null)}
         onRename={async (oldRole, newRole) => {
           await renameAgentPersona(oldRole, newRole);
+        }}
+        onColorChange={async (role, color) => {
+          await setAgentPersonaColor(role, color);
+        }}
+        onIconChange={async (role, icon) => {
+          await setAgentPersonaIcon(role, icon);
         }}
       />
     </aside>
@@ -565,15 +613,28 @@ interface SharedFolderState {
 function StageHeaderButton({
   stage,
   hint,
+  overrideIcon,
+  overrideColor,
   onToggle,
   onPlus,
 }: {
   stage: CortexAgentStage;
   hint: string;
+  overrideIcon?: string;
+  overrideColor?: string;
   onToggle: () => void;
   onPlus?: () => void;
 }) {
   const isBuiltin = stage.personaName === 'cvh-dev' || Boolean(stage.isBuiltin);
+  const isBacklog = stage.stageId === 'backlog';
+  const isReady = stage.stageId === 'ready';
+  const iconName = overrideIcon || stage.icon || getDefaultColumnIcon(stage.stageId);
+  const stageColor = isBacklog
+    ? BACKLOG_COLOR
+    : isReady
+    ? READY_COLOR
+    : (overrideColor || stage.color || (stage.personaName ? getDeterministicAgentColor(stage.personaName) : '#171717'));
+
   return (
     <div className="group flex items-center gap-0.5 px-1">
       <button
@@ -587,23 +648,36 @@ function StageHeaderButton({
             <ChevronRight className="h-3.5 w-3.5 text-[#666666] shrink-0" />
           )}
 
-          {stage.icon ? (
+          {iconName ? (
             <AgentIcon
-              name={stage.icon}
-              className={`h-3.5 w-3.5 shrink-0 ${isBuiltin ? 'text-indigo-600' : 'text-[#171717]'}`}
+              name={iconName}
+              className={`h-3.5 w-3.5 shrink-0 ${isBuiltin ? 'text-indigo-600' : ''}`}
+              style={!isBuiltin ? { color: stageColor } : undefined}
             />
           ) : isBuiltin ? (
             <Cpu className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
           ) : (
             <span
               className="w-2 h-2 rounded-full shrink-0"
-              style={{ backgroundColor: stage.color || '#171717' }}
+              style={{ backgroundColor: stageColor }}
             />
           )}
 
           <span className="font-sans text-xs font-semibold text-[#171717] truncate">
             {stage.stageTitle}
           </span>
+
+          {isBacklog && (
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-sans font-medium bg-slate-100 text-[#64748b] border border-[#64748b]/30 shrink-0 self-center leading-tight">
+              backlog
+            </span>
+          )}
+
+          {isReady && (
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-sans font-medium bg-emerald-50 text-[#10b981] border border-[#10b981]/30 shrink-0 self-center leading-tight">
+              ready
+            </span>
+          )}
 
           {isBuiltin && (
             <span className="px-1.5 py-0.5 rounded text-[10px] font-sans font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0 self-center translate-y-[0.5px] leading-tight">
@@ -685,6 +759,20 @@ function ColumnStageCard({
   const areHooksOpen = shared.openHooksFolders[stage.stageId] ?? true;
   const settingsIsMissing = settingsFile ? !!fileMissing[settingsFile.id] : false;
 
+  const isBacklog = stage.stageId === 'backlog';
+  const isReady = stage.stageId === 'ready';
+  const assignedPersona = column?.persona ? personas.find((p) => p.role === column.persona) : undefined;
+  const effectiveIcon = isBacklog
+    ? (column?.icon || stage.icon || getDefaultColumnIcon('backlog'))
+    : isReady
+    ? (column?.icon || stage.icon || getDefaultColumnIcon('ready'))
+    : (assignedPersona?.icon || column?.icon || stage.icon || getDefaultColumnIcon(stage.stageId));
+  const effectiveColor = isBacklog
+    ? BACKLOG_COLOR
+    : isReady
+    ? READY_COLOR
+    : (assignedPersona?.color || (column?.color && isAllowedAgentColor(column.color) ? column.color : (column?.persona ? getDeterministicAgentColor(column.persona) : stage.color)));
+
   return (
     <div
       id={`cortex-stage-${stage.stageId}`}
@@ -697,6 +785,8 @@ function ColumnStageCard({
       <StageHeaderButton
         stage={stage}
         hint={stage.personaName}
+        overrideIcon={effectiveIcon}
+        overrideColor={effectiveColor}
         onToggle={onToggleStage}
       />
 
@@ -807,6 +897,8 @@ function AgentStageCard({
       <StageHeaderButton
         stage={stage}
         hint=""
+        overrideIcon={stage.icon}
+        overrideColor={stage.color || getDeterministicAgentColor(stage.personaName)}
         onToggle={onToggleStage}
         onPlus={onPlusHeader}
       />
@@ -1377,27 +1469,52 @@ function FileTreeItem({
   );
 }
 
-interface RenameAgentModalProps {
+interface EditAgentPersonaModalProps {
   isOpen: boolean;
-  role: string | null;
+  persona: AgentPersonaInfo | null;
   onClose: () => void;
   onRename: (oldRole: string, newRole: string) => Promise<void>;
+  onColorChange: (role: string, color: string) => Promise<void>;
+  onIconChange: (role: string, icon: string) => Promise<void>;
 }
 
-function RenameAgentModal({ isOpen, role, onClose, onRename }: RenameAgentModalProps) {
-  const [newName, setNewName] = useState('');
+function EditAgentPersonaModal({
+  isOpen,
+  persona,
+  onClose,
+  onRename,
+  onColorChange,
+  onIconChange,
+}: EditAgentPersonaModalProps) {
+  const role = persona?.role ?? '';
+  const isBuiltin = role === 'cvh-dev' || Boolean(persona?.isBuiltin);
+  const [newName, setNewName] = useState(role);
+  const [selectedColor, setSelectedColor] = useState(
+    persona?.color && isAllowedAgentColor(persona.color)
+      ? persona.color
+      : getDeterministicAgentColor(role)
+  );
+  const [selectedIcon, setSelectedIcon] = useState(
+    persona?.icon || (isBuiltin ? 'Cpu' : 'Bot')
+  );
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (isOpen && role) {
-      setNewName(role);
+    if (isOpen && persona) {
+      setNewName(persona.role);
+      setSelectedColor(
+        persona.color && isAllowedAgentColor(persona.color)
+          ? persona.color
+          : getDeterministicAgentColor(persona.role)
+      );
+      setSelectedIcon(persona.icon || (persona.isBuiltin ? 'Cpu' : 'Bot'));
       setError(null);
       setIsSubmitting(false);
     }
-  }, [isOpen, role]);
+  }, [isOpen, persona]);
 
-  if (!isOpen || !role) return null;
+  if (!isOpen || !persona) return null;
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -1410,15 +1527,26 @@ function RenameAgentModal({ isOpen, role, onClose, onRename }: RenameAgentModalP
       setError('Разрешены только строчные латинские буквы, цифры и дефис (^[a-z0-9][a-z0-9-]*$)');
       return;
     }
-    if (trimmed === role) {
-      onClose();
+
+    if (!isAllowedAgentColor(selectedColor)) {
+      setError('Серый и зеленый цвета зарезервированы за Backlog и Ready и запрещены для агентов');
       return;
     }
 
     setIsSubmitting(true);
     setError(null);
     try {
-      await onRename(role, trimmed);
+      let currentRole = role;
+      if (trimmed !== role && !isBuiltin) {
+        await onRename(role, trimmed);
+        currentRole = trimmed;
+      }
+      if (selectedColor !== (persona.color ?? '')) {
+        await onColorChange(currentRole, selectedColor);
+      }
+      if (selectedIcon !== (persona.icon ?? '')) {
+        await onIconChange(currentRole, selectedIcon);
+      }
       onClose();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1434,13 +1562,13 @@ function RenameAgentModal({ isOpen, role, onClose, onRename }: RenameAgentModalP
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm rounded-xl border border-[#e4e4e7] bg-white p-5 shadow-2xl space-y-4"
+        className="w-full max-w-md rounded-xl border border-[#e4e4e7] bg-white p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[#f4f4f5] pb-3">
           <div className="flex items-center space-x-2">
-            <Pencil className="h-4 w-4 text-[#171717]" />
-            <h3 className="font-semibold text-sm text-[#171717]">Переименовать агента</h3>
+            <Palette className="h-4 w-4 text-[#171717]" />
+            <h3 className="font-semibold text-sm text-[#171717]">Настройка агента: {role}</h3>
           </div>
           <button
             onClick={onClose}
@@ -1450,25 +1578,102 @@ function RenameAgentModal({ isOpen, role, onClose, onRename }: RenameAgentModalP
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Имя роли */}
           <div>
             <label className="block text-xs font-medium text-[#52525b] mb-1">
-              Текущая роль: <span className="font-mono text-[#171717] font-semibold">{role}</span>
+              Имя агента (роль)
             </label>
             <input
               type="text"
-              autoFocus
+              disabled={isBuiltin}
               value={newName}
               onChange={(e) => {
                 setNewName(e.target.value);
                 setError(null);
               }}
-              placeholder="новое-имя-агента"
-              className="w-full px-3 py-1.5 rounded-lg border border-[#d4d4d8] text-xs font-mono focus:border-[#171717] focus:outline-hidden transition"
+              placeholder="имя-агента"
+              className="w-full px-3 py-1.5 rounded-lg border border-[#d4d4d8] text-xs font-mono focus:border-[#171717] focus:outline-hidden transition disabled:opacity-50 disabled:bg-[#f4f4f5]"
             />
-            <p className="mt-1 text-[11px] text-[#71717a]">
-              Только строчные латинские буквы, цифры и дефис
-            </p>
+            {isBuiltin && (
+              <p className="mt-1 text-[11px] text-[#71717a]">
+                Встроенного агента 'cvh-dev' нельзя переименовать
+              </p>
+            )}
+          </div>
+
+          {/* Палитра цветов агента */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-medium text-[#52525b]">
+                Цвет агента
+              </label>
+              <span className="text-[10px] font-mono text-[#71717a]">
+                {selectedColor}
+              </span>
+            </div>
+            <div className="p-2.5 rounded-lg border border-[#ebebeb] bg-[#fafafa] space-y-2">
+              <div className="flex flex-wrap gap-2 items-center">
+                {AGENT_PALETTE.map((c) => {
+                  const isSelected = selectedColor.toLowerCase() === c.toLowerCase();
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setSelectedColor(c)}
+                      title={c}
+                      className={`h-7 w-7 rounded-full transition-transform cursor-pointer flex items-center justify-center shadow-xs ${
+                        isSelected ? 'scale-110 ring-2 ring-offset-2 ring-[#171717]' : 'hover:scale-105'
+                      }`}
+                      style={{ backgroundColor: c }}
+                    >
+                      {isSelected && <Check className="h-3.5 w-3.5 text-white drop-shadow" />}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] font-sans text-[#71717a] leading-tight">
+                Серый (#64748b) и зеленый (#10b981) зарезервированы за Backlog и Ready и исключены из палитры агентов.
+              </p>
+            </div>
+          </div>
+
+          {/* Выбор SVG иконки */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-medium text-[#52525b]">
+                SVG Иконка агента
+              </label>
+              <span className="text-[10px] font-mono text-[#71717a]">
+                [{selectedIcon}]
+              </span>
+            </div>
+            <div className="p-2 rounded-lg border border-[#ebebeb] bg-[#fafafa]">
+              <div className="grid grid-cols-6 gap-1.5 max-h-36 overflow-y-auto p-1">
+                {AGENT_ICONS.map((ic) => {
+                  const isSelected = selectedIcon === ic;
+                  return (
+                    <button
+                      key={ic}
+                      type="button"
+                      onClick={() => setSelectedIcon(ic)}
+                      title={ic}
+                      className={`flex flex-col items-center justify-center p-2 rounded-md transition cursor-pointer ${
+                        isSelected
+                          ? 'bg-white border-2 border-[#171717] shadow-xs'
+                          : 'hover:bg-white/80 border border-transparent text-[#71717a] hover:text-[#171717]'
+                      }`}
+                    >
+                      <AgentIcon
+                        name={ic}
+                        className="h-4 w-4"
+                        style={{ color: isSelected ? selectedColor : undefined }}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
           {error && (
@@ -1489,9 +1694,9 @@ function RenameAgentModal({ isOpen, role, onClose, onRename }: RenameAgentModalP
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-3 py-1.5 rounded-md text-xs font-medium bg-[#171717] hover:bg-[#262626] text-white transition cursor-pointer disabled:opacity-50"
+              className="px-3.5 py-1.5 rounded-md text-xs font-medium bg-[#171717] hover:bg-[#262626] text-white transition cursor-pointer disabled:opacity-50 flex items-center space-x-1.5"
             >
-              {isSubmitting ? 'Сохранение...' : 'Сохранить'}
+              {isSubmitting ? <span>Сохранение...</span> : <span>Сохранить</span>}
             </button>
           </div>
         </form>

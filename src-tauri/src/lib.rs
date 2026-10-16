@@ -80,6 +80,8 @@ pub fn run() {
             create_agent_persona,
             delete_agent_persona,
             rename_agent_persona,
+            set_agent_persona_color,
+            set_agent_persona_icon,
             get_project_config_cmd,
             get_registry,
             get_cortex_tree,

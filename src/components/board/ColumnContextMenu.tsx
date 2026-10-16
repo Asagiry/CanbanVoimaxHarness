@@ -5,6 +5,7 @@ import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import { slugifyTitle } from '../../lib/slug';
 import { getDefaultColumnIcon } from '../../lib/columnIcons';
+import { getDeterministicAgentColor, isAllowedAgentColor } from '../../lib/agentPalette';
 
 interface ColumnContextMenuProps {
   column: PipelineColumn;
@@ -21,6 +22,7 @@ interface AgentPersonaOption {
   isBuiltin?: boolean;
   is_builtin?: boolean;
   icon?: string;
+  color?: string;
 }
 
 const MENU_WIDTH = 264;
@@ -229,10 +231,21 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
       nextIcon = getDefaultColumnIcon(column.id, column.icon);
     }
 
+    // Автоматическое наследование цвета агента колонкой (если не backlog и не ready)
+    let nextColor = column.color;
+    if (column.id !== 'backlog' && column.id !== 'ready') {
+      if (nextPersona) {
+        const personaColor = matchedPersona?.color || getDeterministicAgentColor(nextPersona);
+        if (personaColor && isAllowedAgentColor(personaColor)) {
+          nextColor = personaColor;
+        }
+      }
+    }
+
     setPersonaSaving(true);
     const prev = columns;
     const next = prev.map((c) =>
-      c.id === column.id ? { ...c, persona: nextPersona, icon: nextIcon } : c,
+      c.id === column.id ? { ...c, persona: nextPersona, icon: nextIcon, color: nextColor } : c,
     );
     setColumns(next);
     useCortexStore.getState().syncStagesFromColumns(next);

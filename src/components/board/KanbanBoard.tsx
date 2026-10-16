@@ -9,17 +9,9 @@ import { PipelineColumn, BoardDef } from '../../types';
 import { Plus, X, Layout, Pencil, Trash2, Search } from 'lucide-react';
 import CreateBoardModal from './CreateBoardModal';
 import { slugifyTitle, uniqueColumnId } from '../../lib/slug';
+import { AGENT_PALETTE, getDeterministicAgentColor, isAllowedAgentColor } from '../../lib/agentPalette';
 
-const COLUMN_PALETTE = [
-  '#64748b',
-  '#f59e0b',
-  '#a855f7',
-  '#0284c7',
-  '#10b981',
-  '#ef4444',
-  '#6366f1',
-  '#14b8a6',
-];
+const COLUMN_PALETTE = AGENT_PALETTE;
 
 interface AgentPersonaOption {
   role: string;
@@ -28,6 +20,7 @@ interface AgentPersonaOption {
   isBuiltin?: boolean;
   is_builtin?: boolean;
   icon?: string;
+  color?: string;
 }
 
 const NEW_AGENT_OPTION = '__new__';
@@ -464,10 +457,17 @@ export default function KanbanBoard() {
     const id = uniqueColumnId(slugifyTitle(title), taken);
     const targetPersona = personaName || 'developer';
     const matchedPersona = agentPersonas.find((p) => p.role === targetPersona);
+    let columnColor = COLUMN_PALETTE[columns.length % COLUMN_PALETTE.length];
+    if (id !== 'backlog' && id !== 'ready') {
+      const personaColor = matchedPersona?.color || getDeterministicAgentColor(targetPersona);
+      if (personaColor && isAllowedAgentColor(personaColor)) {
+        columnColor = personaColor;
+      }
+    }
     const newCol: PipelineColumn = {
       id,
       title,
-      color: COLUMN_PALETTE[columns.length % COLUMN_PALETTE.length],
+      color: columnColor,
       icon: matchedPersona?.icon || 'Layers',
       // Persona обязана сохраняться (select и свободный ввод): пустая подменяется значением по умолчанию,
       // чтобы колонка гарантированно попадала в проводник.
