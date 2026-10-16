@@ -593,6 +593,7 @@ pub struct ToolContext<'a> {
     pub repo_root: &'a Path,
     pub worktree_dir: &'a Path,
     pub stage_id: Option<&'a str>,
+    pub role: Option<&'a str>,
     pub abort_handle: Arc<AtomicBool>,
     pub tool_policy: &'a ToolPolicyConfig,
     pub task_id: Option<&'a str>,
@@ -626,13 +627,22 @@ pub async fn execute_tool(
         other => other,
     };
 
-    // Zero-Trust Iron Barrier: verify tool permission for current stage
+    // Zero-Trust Iron Barrier: verify tool permission for current stage & role
     if !is_tool_allowed(tool_policy, stage_id, normalized_tool_name) {
         bail!(
             "PermissionDenied: Инструмент '{}' отключен политикой безопасности для колонки '{}'",
             normalized_tool_name,
             stage_id.unwrap_or("global")
         );
+    }
+    if let Some(role) = ctx.role {
+        if !is_tool_allowed(tool_policy, Some(role), normalized_tool_name) {
+            bail!(
+                "PermissionDenied: Инструмент '{}' отключен политикой безопасности для агента '{}'",
+                normalized_tool_name,
+                role
+            );
+        }
     }
 
     // Per-agent intersection: when the agent `setting` defines allowed_tools,
@@ -1796,6 +1806,7 @@ where
         .into_iter()
         .filter(|t| {
             is_tool_allowed(&tool_policy, Some(&config.stage_id), &t.function.name)
+                && is_tool_allowed(&tool_policy, Some(&config.role), &t.function.name)
                 && agent_allows_tool(agent_allowed.as_deref(), &t.function.name)
         })
         .collect();
@@ -2014,6 +2025,7 @@ where
             repo_root: &config.repo_root,
             worktree_dir: &config.worktree_path,
             stage_id: Some(&config.stage_id),
+            role: Some(&config.role),
             abort_handle: Arc::clone(&abort_flag),
             tool_policy: &tool_policy,
             task_id: Some(&config.task_id),
@@ -2348,6 +2360,7 @@ mod tests {
             repo_root: &target_root,
             worktree_dir: &workdir,
             stage_id: Some("dev"),
+            role: Some("developer"),
             abort_handle: flag,
             tool_policy: &policy,
             task_id: None,
