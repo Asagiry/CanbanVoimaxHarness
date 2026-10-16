@@ -1038,23 +1038,6 @@ pub async fn append_task_dialog_activity(
     app_handle: Option<&AppHandle>,
 ) -> Result<(), String> {
     let safe_id = sanitize_task_id(task_id)?;
-    let (p_dialogs, p_tasks, p_global) = get_dialog_paths(root, &safe_id);
-
-    let mut items: Vec<ActivityItem> = Vec::new();
-    if p_dialogs.exists() {
-        if let Ok(c) = tokio::fs::read_to_string(&p_dialogs).await {
-            if let Ok(parsed) = serde_json::from_str::<Vec<ActivityItem>>(&c) {
-                items = parsed;
-            }
-        }
-    } else if p_tasks.exists() {
-        if let Ok(c) = tokio::fs::read_to_string(&p_tasks).await {
-            if let Ok(parsed) = serde_json::from_str::<Vec<ActivityItem>>(&c) {
-                items = parsed;
-            }
-        }
-    }
-
     let new_item = ActivityItem {
         id: uuid::Uuid::new_v4().to_string(),
         item_type: item_type.to_string(),
@@ -1062,14 +1045,10 @@ pub async fn append_task_dialog_activity(
         content: Some(content.to_string()),
         tool: None,
         duration_ms: None,
+        images: None,
     };
-    items.push(new_item.clone());
 
-    let serialized = serde_json::to_string_pretty(&items)
-        .map_err(|e| format!("Failed to serialize dialog: {}", e))?;
-    let _ = atomic_write_file(&p_dialogs, &serialized).await;
-    let _ = atomic_write_file(&p_tasks, &serialized).await;
-    let _ = atomic_write_file(&p_global, &serialized).await;
+    crate::db::append_dialog_items(root, &safe_id, std::slice::from_ref(&new_item))?;
 
     if let Some(app) = app_handle {
         let _ = app.emit("task:dialog", serde_json::json!({
