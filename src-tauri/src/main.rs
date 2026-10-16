@@ -69,9 +69,23 @@ fn main() {
             }
 
             // Stale lock recovery: If EBWebView\Default\LOCK or EBWebView\EBWebView.lock exist
-            // from a previous ungraceful exit or crash, attempt to remove them so WebView2 doesn't hit 0x800700AA
+            // from a previous ungraceful exit or crash, attempt to remove them so WebView2 doesn't hit 0x800700AA.
+            // NOTE: deleting LOCK while a zombie msedgewebview2 still holds the UDF handle
+            // is a silent no-op (ERROR_BUSY persists). So first reap ONLY our own zombies
+            // (cmdline contains com.voimax.cvh) — never touch foreign WebView2 hosts.
             let eb_dir = base.join("EBWebView");
             if eb_dir.exists() {
+                let _ = std::process::Command::new("powershell")
+                    .args([
+                        "-NoProfile",
+                        "-NonInteractive",
+                        "-Command",
+                        "Get-CimInstance Win32_Process -Filter \"Name='msedgewebview2.exe'\" | Where-Object { $_.CommandLine -like '*com.voimax.cvh*' } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch { } }",
+                    ])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .output();
+                std::thread::sleep(std::time::Duration::from_millis(500));
+
                 let lock_paths = [
                     eb_dir.join("EBWebView.lock"),
                     eb_dir.join("Default").join("LOCK"),
@@ -80,7 +94,9 @@ fn main() {
                 ];
                 for lock in &lock_paths {
                     if lock.exists() {
-                        let _ = std::fs::remove_file(lock);
+                        if let Err(e) = std::fs::remove_file(lock) {
+                            eprintln!("[cvh] WebView2 LOCK cleanup failed for {}: {e}", lock.display());
+                        }
                     }
                 }
             }
