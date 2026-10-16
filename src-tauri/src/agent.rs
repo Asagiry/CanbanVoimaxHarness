@@ -5,7 +5,7 @@ use crate::config::{
     agent_allows_tool, is_tool_allowed, load_agent_setting, load_tool_policies,
     ToolPolicyConfig,
 };
-use crate::hooks::kill_process_tree;
+use crate::hooks::{build_windows_cmd_args, kill_process_tree};
 use crate::llm::{ChatMessage, LlmClient, OpenAIChatRequest, StreamChunk, ToolCall, ToolDefinition};
 use anyhow::{bail, Context, Result};
 use tauri::{AppHandle, Emitter};
@@ -1138,7 +1138,7 @@ async fn run_scoped_command(
     #[cfg(target_os = "windows")]
     let mut cmd = {
         let mut c = Command::new("cmd.exe");
-        c.args(["/C", &format!("chcp 65001 >nul && {}", cmd_str)]);
+        c.args(build_windows_cmd_args(cmd_str));
         c
     };
 

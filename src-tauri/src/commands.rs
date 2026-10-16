@@ -2192,7 +2192,7 @@ pub async fn internal_move_task_stage(
 
     if let Some(ref bc) = boards_cfg {
         let active_board = bc.boards.iter().find(|b| b.id == bc.active_board_id).cloned();
-        let board_switched = current_task.board_id.as_deref().map_or(false, |bid| bid != bc.active_board_id);
+        let board_switched = current_task.board_id.as_deref().is_some_and(|bid| bid != bc.active_board_id);
 
         let current_board = current_task.board_id.as_deref().and_then(|bid| {
             bc.boards.iter().find(|b| b.id == bid).cloned()
@@ -2536,7 +2536,7 @@ pub async fn internal_advance_task(
     let board_switched = current_task
         .board_id
         .as_deref()
-        .map_or(false, |b| b != active_board_id);
+        .is_some_and(|b| b != active_board_id);
 
     if board_switched {
         // Active board changed: finalize task directly to terminal column ('ready') of target active board
