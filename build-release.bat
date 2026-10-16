@@ -319,7 +319,7 @@ if not "%TARGET%"=="" (
     )
   )
 )
-set "BUILD_CMD=pnpm tauri build"
+set "BUILD_CMD=pnpm tauri build --no-before-build"
 if not "%TARGET%"=="" set "BUILD_CMD=%BUILD_CMD% --target %TARGET%"
 if not "%BUNDLES%"=="" set "BUILD_CMD=%BUILD_CMD% --bundles %BUNDLES%"
 

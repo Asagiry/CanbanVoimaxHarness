@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { CortexAgentFile, CortexAgentStage, PipelineColumn } from '../types';
 import { INITIAL_CORTEX_STAGES } from './mockData';
+import { useBoardStore } from './boardStore';
 
 interface CortexState {
   stages: CortexAgentStage[];
@@ -725,7 +726,6 @@ export const useCortexStore = create<CortexState>((set, get) => ({
     }
     await get().loadAgentPersonas();
     try {
-      const { useBoardStore } = await import('./boardStore');
       await useBoardStore.getState().loadBoards();
     } catch (err) {
       console.info('Failed to reload boards after agent rename:', err);
@@ -742,7 +742,6 @@ export const useCortexStore = create<CortexState>((set, get) => ({
     }
     await get().loadAgentPersonas();
     try {
-      const { useBoardStore } = await import('./boardStore');
       await useBoardStore.getState().loadBoards();
     } catch (err) {
       console.info('Failed to reload boards after agent delete:', err);

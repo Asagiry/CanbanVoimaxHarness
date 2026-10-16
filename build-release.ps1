@@ -281,7 +281,7 @@ if ($OnWindows) {
     }
   }
 }
-$tauriArgs = @("tauri", "build")
+$tauriArgs = @("tauri", "build", "--no-before-build")
 if (-not [string]::IsNullOrEmpty($Target)) {
   $tauriArgs += @("--target", $Target)
 }

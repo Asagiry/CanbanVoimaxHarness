@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { KanbanTask, PipelineColumn, PipelineConfig, TaskStatus, TaskVerdict, TaskPriority, BoardDef } from '../types';
 import { INITIAL_COLUMNS } from './mockData';
 import { useProjectStore } from './projectStore';
+import { useDrawerStore } from './drawerStore';
 
 export const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
   {
@@ -1005,17 +1006,12 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     // (б) Dialog history cleanup via the drawer store action:
     // localStorage `cvh_dialog_<id>` + invoke clear_task_dialog (.cvh/dialogs/,
     // .cvh/tasks/<id>/, global fallback).
-    try {
-      const { useDrawerStore } = await import('./drawerStore');
-      for (const id of ids) {
-        try {
-          await useDrawerStore.getState().clearTaskLogs(id);
-        } catch (err) {
-          console.info('clearTaskLogs error for task:', id, err);
-        }
+    for (const id of ids) {
+      try {
+        await useDrawerStore.getState().clearTaskLogs(id);
+      } catch (err) {
+        console.info('clearTaskLogs error for task:', id, err);
       }
-    } catch (err) {
-      console.info('drawerStore clearTaskLogs unavailable:', err);
     }
 
     // (в) Remove from store + persist + sync.
