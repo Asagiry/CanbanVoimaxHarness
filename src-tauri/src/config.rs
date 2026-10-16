@@ -256,31 +256,9 @@ pub fn get_app_config_dir() -> PathBuf {
 }
 
 pub fn discover_project_root() -> PathBuf {
-    let current = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-
-    // a) Check std::env::current_dir(). If it has .cvh or .git, return it.
-    if current.join(".cvh").exists() || current.join(".git").exists() {
-        eprintln!(
-            "CVH [discover_project_root]: Found .cvh or .git in current_dir: {:?}",
-            current
-        );
-        return current;
-    }
-
-    // b) Traverse parent directories (current_dir.ancestors()) looking for .cvh or .git.
-    // If found (e.g. going up from src-tauri/target/release to CanbanVoimaxHarness), return that ancestor directory!
-    for ancestor in current.ancestors() {
-        if ancestor.join(".cvh").exists() || ancestor.join(".git").exists() {
-            eprintln!(
-                "CVH [discover_project_root]: Found project root in ancestor: {:?}",
-                ancestor
-            );
-            return ancestor.to_path_buf();
-        }
-    }
-
-    // c) If not found in ancestors, check %LOCALAPPDATA%\com.voimax.cvh\active_project.txt.
-    // If it contains a valid directory path that exists, return it.
+    // a) FIRST: Check %LOCALAPPDATA%\com.voimax.cvh\active_project.txt.
+    // If this file exists, is not empty, and points to an existing directory,
+    // return that path as the active project!
     let active_project_file = get_app_config_dir().join("active_project.txt");
     if active_project_file.exists() {
         if let Ok(content) = std::fs::read_to_string(&active_project_file) {
@@ -295,6 +273,29 @@ pub fn discover_project_root() -> PathBuf {
                     return p;
                 }
             }
+        }
+    }
+
+    let current = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+    // b) Check std::env::current_dir(). If it has .cvh or .git, return it.
+    if current.join(".cvh").exists() || current.join(".git").exists() {
+        eprintln!(
+            "CVH [discover_project_root]: Found .cvh or .git in current_dir: {:?}",
+            current
+        );
+        return current;
+    }
+
+    // c) Traverse parent directories (current_dir.ancestors()) looking for .cvh or .git.
+    // If found (e.g. going up from src-tauri/target/release to CanbanVoimaxHarness), return that ancestor directory!
+    for ancestor in current.ancestors() {
+        if ancestor.join(".cvh").exists() || ancestor.join(".git").exists() {
+            eprintln!(
+                "CVH [discover_project_root]: Found project root in ancestor: {:?}",
+                ancestor
+            );
+            return ancestor.to_path_buf();
         }
     }
 

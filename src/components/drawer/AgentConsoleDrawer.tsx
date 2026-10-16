@@ -1032,25 +1032,25 @@ export default function AgentConsoleDrawer() {
             return (
               <div
                 key={key}
-                className="rounded-lg border border-[#ebebeb] bg-white shadow-xs overflow-hidden"
+                className="rounded-lg border border-[#e4e4e7] bg-white shadow-xs overflow-hidden my-2"
               >
                 <div
                   onClick={() => toggleOutput(key)}
-                  className="flex items-center justify-between px-4 py-2.5 hover:bg-[#f9f9f9] cursor-pointer transition select-none text-[10px] font-mono text-[#666666]"
+                  className="flex items-center justify-between px-4 py-3 hover:bg-[#fafafa] cursor-pointer transition select-none"
                 >
-                  <div className="flex items-center space-x-1.5 text-[#171717] font-medium">
+                  <div className="flex items-center space-x-2 text-[#171717]">
                     {isOutputExpanded ? (
-                      <ChevronDown className="h-3.5 w-3.5 text-[#666666]" />
+                      <ChevronDown className="h-4 w-4 text-[#71717a] shrink-0" />
                     ) : (
-                      <ChevronRight className="h-3.5 w-3.5 text-[#666666]" />
+                      <ChevronRight className="h-4 w-4 text-[#71717a] shrink-0" />
                     )}
-                    <Sparkles className="h-3 w-3 text-[#171717]" />
-                    <span>Ответ агента</span>
+                    <Sparkles className="h-4 w-4 text-[#171717] shrink-0" />
+                    <span className="text-sm font-semibold text-[#171717] font-sans">Ответ агента</span>
                   </div>
-                  <span className="tabular-nums">{activity?.timestamp ?? ''}</span>
+                  <span className="text-xs font-mono text-[#71717a] tabular-nums">{activity?.timestamp ?? ''}</span>
                 </div>
                 {isOutputExpanded && (
-                  <div className="px-4 pb-4 pt-2.5 border-t border-[#ebebeb]">
+                  <div className="px-4 pb-4 pt-3 border-t border-[#f4f4f5]">
                     {activity?.content ? (
                       <MarkdownContent content={activity.content} />
                     ) : (

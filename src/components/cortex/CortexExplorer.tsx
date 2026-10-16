@@ -18,6 +18,7 @@ import {
   Pencil,
   Trash2,
   X,
+  RotateCw,
 } from 'lucide-react';
 import type { CortexAgentFile, CortexAgentStage } from '../../types';
 
@@ -86,6 +87,18 @@ export default function CortexExplorer() {
   const [creatingKind, setCreatingKind] = useState<'rule' | 'hook'>('rule');
   const [agentSaving, setAgentSaving] = useState<Record<string, boolean>>({});
   const [agentError, setAgentError] = useState<Record<string, string | null>>({});
+  const [isRefreshingPersonas, setIsRefreshingPersonas] = useState(false);
+
+  const handleRefreshPersonas = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isRefreshingPersonas) return;
+    setIsRefreshingPersonas(true);
+    try {
+      await loadAgentPersonas();
+    } finally {
+      setTimeout(() => setIsRefreshingPersonas(false), 500);
+    }
+  };
 
   interface AgentContextMenuState {
     x: number;
@@ -366,6 +379,16 @@ export default function CortexExplorer() {
             count={agentStages.length}
             open={openSections.agents}
             onToggle={() => toggleSection('agents')}
+            action={
+              <button
+                type="button"
+                onClick={handleRefreshPersonas}
+                title="Обновить агентов"
+                className="p-1 rounded hover:bg-[#e4e4e7] text-[#71717a] hover:text-[#171717] transition cursor-pointer"
+              >
+                <RotateCw className={`h-3 w-3 ${isRefreshingPersonas ? 'animate-spin' : ''}`} />
+              </button>
+            }
           />
           {openSections.agents && (
             <div className="space-y-1">
@@ -489,26 +512,35 @@ function SectionHeader({
   count,
   open,
   onToggle,
+  action,
 }: {
   title: string;
   count: number;
   open: boolean;
   onToggle: () => void;
+  action?: React.ReactNode;
 }) {
   return (
-    <button
-      onClick={onToggle}
-      aria-expanded={open}
-      className="w-full flex items-center gap-1.5 px-1.5 py-2 rounded-md text-left text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
-    >
-      {open ? (
-        <ChevronDown className="h-3.5 w-3.5 text-[#666666] shrink-0" />
-      ) : (
-        <ChevronRight className="h-3.5 w-3.5 text-[#666666] shrink-0" />
+    <div className="w-full flex items-center justify-between px-1.5 py-1 rounded-md text-[#171717] hover:bg-[#f4f4f5] transition group">
+      <button
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex-1 flex items-center gap-1.5 py-1 text-left cursor-pointer"
+      >
+        {open ? (
+          <ChevronDown className="h-3.5 w-3.5 text-[#666666] shrink-0" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 text-[#666666] shrink-0" />
+        )}
+        <span className="font-sans text-xs font-semibold">{title}</span>
+        <span className="text-[10px] font-mono text-[#8f8f8f] tabular-nums">({count})</span>
+      </button>
+      {action && (
+        <div className="shrink-0 flex items-center" onClick={(e) => e.stopPropagation()}>
+          {action}
+        </div>
       )}
-      <span className="font-sans text-xs font-semibold">{title}</span>
-      <span className="text-[10px] font-mono text-[#8f8f8f] tabular-nums">({count})</span>
-    </button>
+    </div>
   );
 }
 

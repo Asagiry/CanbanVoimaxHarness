@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { ProjectInfo } from '../types';
 import { useBoardStore } from './boardStore';
+import { useCortexStore } from './cortexStore';
 
 interface ProjectState {
   activeProject: ProjectInfo;
@@ -75,10 +76,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       }
     }
 
-    // When switching projects, clear and reload board tasks
+    // When switching projects, clear and reload board, tasks, and cortex agents
     const board = useBoardStore.getState();
     board.setTasks([]);
+    await board.loadBoards();
     await board.loadTasks();
+    await useCortexStore.getState().loadAgentPersonas();
+    useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
   },
 
   updateActiveProject: (partial: Partial<ProjectInfo>) => {
@@ -94,6 +98,15 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         availableProjects: stored,
         activeProject: stored[0],
       });
+
+      if (get().isTauriEnvironment && stored[0]?.rootPath) {
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          await invoke('set_active_project', { path: stored[0].rootPath });
+        } catch (err) {
+          console.warn('Failed to invoke set_active_project on loadProjects:', err);
+        }
+      }
     } else {
       set({
         availableProjects: [],
@@ -157,9 +170,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     });
     persistStoredProjects(updatedProjects);
 
-    // Call useBoardStore.getState().loadTasks() to load that project's tasks
+    // When setting active project by path, reload board, tasks, and cortex agents
     const board = useBoardStore.getState();
     board.setTasks([]);
+    await board.loadBoards();
     await board.loadTasks();
+    await useCortexStore.getState().loadAgentPersonas();
+    useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
   },
 }));

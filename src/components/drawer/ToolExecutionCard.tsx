@@ -14,6 +14,61 @@ interface ToolExecutionCardProps {
   tool: ToolExecution;
 }
 
+interface LangBadgeConfig {
+  label: string;
+  bg: string;
+  text: string;
+  border: string;
+}
+
+function getLanguageBadge(ext?: string): LangBadgeConfig | null {
+  if (!ext) return null;
+  switch (ext.toLowerCase()) {
+    case 'cs':
+      return { label: 'C#', bg: 'bg-[#ecfeff]', text: 'text-[#0891b2]', border: 'border-[#a5f3fc]' };
+    case 'ts':
+    case 'tsx':
+      return { label: 'TS', bg: 'bg-[#eff6ff]', text: 'text-[#2563eb]', border: 'border-[#bfdbfe]' };
+    case 'js':
+    case 'jsx':
+      return { label: 'JS', bg: 'bg-[#fefce8]', text: 'text-[#ca8a04]', border: 'border-[#fef08a]' };
+    case 'py':
+      return { label: 'PY', bg: 'bg-[#f0f9ff]', text: 'text-[#0284c7]', border: 'border-[#bae6fd]' };
+    case 'rs':
+      return { label: 'RS', bg: 'bg-[#fff7ed]', text: 'text-[#ea580c]', border: 'border-[#fed7aa]' };
+    case 'json':
+      return { label: 'JSON', bg: 'bg-[#f4f4f5]', text: 'text-[#52525b]', border: 'border-[#e4e4e7]' };
+    case 'html':
+      return { label: 'HTML', bg: 'bg-[#fff1f2]', text: 'text-[#e11d48]', border: 'border-[#fecdd3]' };
+    case 'css':
+    case 'scss':
+      return { label: 'CSS', bg: 'bg-[#f0fdf4]', text: 'text-[#16a34a]', border: 'border-[#bbf7d0]' };
+    case 'go':
+      return { label: 'GO', bg: 'bg-[#ecfeff]', text: 'text-[#06b6d4]', border: 'border-[#a5f3fc]' };
+    case 'cpp':
+    case 'c':
+    case 'h':
+    case 'hpp':
+      return { label: 'C++', bg: 'bg-[#fdf2f8]', text: 'text-[#db2777]', border: 'border-[#fbcfe8]' };
+    case 'sh':
+    case 'bash':
+    case 'ps1':
+    case 'bat':
+    case 'cmd':
+      return { label: 'SH', bg: 'bg-[#f8fafc]', text: 'text-[#475569]', border: 'border-[#cbd5e1]' };
+    case 'md':
+      return { label: 'MD', bg: 'bg-[#fafafa]', text: 'text-[#71717a]', border: 'border-[#e4e4e7]' };
+    case 'toml':
+    case 'yaml':
+    case 'yml':
+      return { label: 'CFG', bg: 'bg-[#f4f4f5]', text: 'text-[#52525b]', border: 'border-[#e4e4e7]' };
+    case 'sql':
+      return { label: 'SQL', bg: 'bg-[#faf5ff]', text: 'text-[#9333ea]', border: 'border-[#e9d5ff]' };
+    default:
+      return null;
+  }
+}
+
 export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -33,6 +88,12 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
     toolName === 'edit_file' ||
     toolName === 'edit' ||
     toolName === 'str_replace';
+
+  // Check if tool is a file read operation
+  const isReadOp =
+    toolName === 'read_file' ||
+    toolName === 'read' ||
+    toolName === 'fetch_file';
 
   const isEditTool =
     toolName === 'edit_file' ||
@@ -111,6 +172,39 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   const ext = fileName.includes('.') ? fileName.split('.').pop()?.toLowerCase() : '';
   const isCode = ['ts', 'tsx', 'js', 'jsx', 'rs', 'py', 'json', 'toml', 'yaml', 'yml', 'xaml', 'xml', 'html', 'css', 'scss', 'sh', 'ps1', 'bat'].includes(ext || '');
   const DocIcon = isCode ? FileCode2 : FileText;
+  const langBadge = getLanguageBadge(ext);
+
+  // Line range calculations for read operations
+  const offsetVal =
+    params?.offset !== undefined && params?.offset !== null
+      ? Number(params.offset)
+      : undefined;
+  const limitVal =
+    params?.limit !== undefined && params?.limit !== null
+      ? Number(params.limit)
+      : undefined;
+  const startLine =
+    offsetVal !== undefined && !isNaN(offsetVal)
+      ? Math.max(1, offsetVal)
+      : limitVal !== undefined && !isNaN(limitVal)
+      ? 1
+      : undefined;
+  const endLine =
+    startLine !== undefined && limitVal !== undefined && !isNaN(limitVal)
+      ? startLine + limitVal - 1
+      : undefined;
+
+  let lineRangeBadge: string | null = null;
+  if (startLine !== undefined && endLine !== undefined) {
+    lineRangeBadge = `#L${startLine}-${endLine}`;
+  } else if (startLine !== undefined) {
+    lineRangeBadge = `#L${startLine}+`;
+  } else if (tool.stdout) {
+    const stdoutLines = tool.stdout.split('\n').filter((l) => l.trim().length > 0).length;
+    lineRangeBadge = `· ${stdoutLines} lines`;
+  } else if (limitVal !== undefined) {
+    lineRangeBadge = `· ${limitVal} lines`;
+  }
 
   const getTarget = (): { target: string; fullTarget: string } => {
     const p = params ?? {};
@@ -386,6 +480,58 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
     );
   };
 
+  const renderReadContent = () => {
+    if (!tool.stdout) return null;
+    const rawLines = tool.stdout.split('\n');
+    if (rawLines.length > 0 && rawLines[rawLines.length - 1] === '') {
+      rawLines.pop();
+    }
+    if (rawLines.length === 0) return null;
+
+    const baseLineNumber = startLine ?? 1;
+
+    return (
+      <div className="rounded-md border border-[#ebebeb] bg-[#fafafa] overflow-hidden font-mono text-[11px]">
+        {rawFilePath && (
+          <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#f4f4f5] border-b border-[#ebebeb] text-[#666666] text-[10px]">
+            <span className="truncate max-w-[340px] text-[#171717] font-semibold" title={rawFilePath}>
+              {rawFilePath}
+            </span>
+            <span className="text-[#8f8f8f] tabular-nums font-mono">
+              {lineRangeBadge || `${rawLines.length} строк`}
+            </span>
+          </div>
+        )}
+        <div className="divide-y divide-[#f0f0f0] select-text overflow-x-auto max-h-80 font-mono bg-white">
+          {rawLines.map((line, idx) => {
+            const prefixMatch = line.match(/^(\d+)[:|]\s?(.*)$/);
+            let displayLineNum: number | string = baseLineNumber + idx;
+            let displayContent = line;
+
+            if (prefixMatch) {
+              displayLineNum = parseInt(prefixMatch[1], 10);
+              displayContent = prefixMatch[2];
+            }
+
+            return (
+              <div
+                key={`readline-${idx}`}
+                className="flex items-start px-2 py-0.5 leading-relaxed hover:bg-[#fafafa]"
+              >
+                <span className="w-10 shrink-0 text-[#a1a1aa] select-none text-right pr-2.5 tabular-nums text-[10px]">
+                  {displayLineNum}
+                </span>
+                <span className="whitespace-pre-wrap break-all text-[#171717]">
+                  {displayContent || ' '}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   const renderToolParams = (paramsObj: Record<string, unknown>) => {
     const entries = Object.entries(paramsObj);
     if (entries.length === 0) return null;
@@ -466,7 +612,73 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
         onClick={() => setIsExpanded(!isExpanded)}
         className="flex items-center justify-between px-2.5 py-1.5 hover:bg-[#f4f4f5] cursor-pointer transition select-none gap-2 text-xs min-h-[30px]"
       >
-        {isFileOp ? (
+        {isReadOp ? (
+          /* Read operation tactile card: [Analyzed C# Transit.cs #L4270-4300] */
+          <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
+            <button
+              type="button"
+              className="p-0.5 text-[#8f8f8f] hover:text-[#171717] rounded shrink-0 transition cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsExpanded(!isExpanded);
+              }}
+              title={isExpanded ? 'Свернуть подробности' : 'Развернуть подробности'}
+            >
+              <ChevronRight
+                className={`h-3 w-3 transition-transform duration-150 ${
+                  isExpanded ? 'rotate-90 text-[#171717]' : ''
+                }`}
+              />
+            </button>
+
+            {/* Label: Analyzed (cyan/teal tactile badge) */}
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold uppercase tracking-wider shrink-0 select-none bg-[#ecfeff] text-[#0e7490] border border-[#a5f3fc]">
+              Analyzed
+            </span>
+
+            {/* Language badge or document icon */}
+            {langBadge ? (
+              <span
+                className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold uppercase tracking-wider shrink-0 select-none ${langBadge.bg} ${langBadge.text} border ${langBadge.border}`}
+              >
+                {langBadge.label}
+              </span>
+            ) : (
+              <DocIcon className="h-3.5 w-3.5 text-[#52525b] shrink-0" />
+            )}
+
+            {/* Clean filename with muted path */}
+            <div
+              className="flex items-center min-w-0 font-mono text-xs overflow-hidden"
+              title={rawFilePath}
+            >
+              {dirPath && (
+                <span className="text-[#8f8f8f] truncate max-w-[120px] sm:max-w-[180px] shrink-0">
+                  {dirPath}/
+                </span>
+              )}
+              <span className="font-semibold text-[#171717] truncate">
+                {fileName || rawFilePath || 'file'}
+              </span>
+            </div>
+
+            {/* Line range badge (#L4270-4300 or · 61 lines) */}
+            {lineRangeBadge && (
+              <span className="font-mono text-[11px] text-[#71717a] tabular-nums shrink-0 ml-1">
+                {lineRangeBadge}
+              </span>
+            )}
+
+            {durationText && (
+              <>
+                <span className="text-[#a1a1aa] select-none text-[10px]">•</span>
+                <span className="font-mono text-[#71717a] shrink-0 tabular-nums text-[11px]">
+                  {durationText}
+                </span>
+              </>
+            )}
+          </div>
+        ) : isFileOp ? (
           /* File operation card in screenshot style: [Edited 📄 MainWindow.xaml +4 -2] */
           <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
             <button
@@ -621,7 +833,27 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       {/* Expanded Details */}
       {isExpanded && (
         <div className="p-3 border-t border-[#ebebeb] space-y-2.5 font-mono text-xs bg-white">
-          {isFileOp ? (
+          {isReadOp ? (
+            <div className="space-y-2">
+              {rawFilePath && (
+                <div className="flex items-baseline space-x-2 py-0.5 text-[11px] font-mono">
+                  <span className="text-[#666666] font-semibold shrink-0">Файл:</span>
+                  <span className="text-[#171717] select-text break-all">{rawFilePath}</span>
+                </div>
+              )}
+              {tool.stdout ? (
+                <div>
+                  <span className="text-[10px] text-[#666666] block mb-1">
+                    Прочитанные строки {lineRangeBadge ? `(${lineRangeBadge})` : ''}
+                  </span>
+                  {renderReadContent()}
+                </div>
+              ) : (
+                tool.params &&
+                Object.keys(tool.params).length > 0 && renderToolParams(params)
+              )}
+            </div>
+          ) : isFileOp ? (
             <div className="space-y-2">
               {rawFilePath && (
                 <div className="flex items-baseline space-x-2 py-0.5 text-[11px] font-mono">

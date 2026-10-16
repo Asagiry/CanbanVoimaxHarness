@@ -46,6 +46,8 @@ export default function App() {
         // Boards and columns first: task mapping (columnId fallback, persona, status) resolves via columns
         await loadBoards();
         await loadTasks();
+        await useCortexStore.getState().loadAgentPersonas();
+        useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
       } catch (e) {
         console.warn('Initialization error:', e);
       } finally {
@@ -335,8 +337,10 @@ export default function App() {
         unlisteners.push(uAutoRun);
 
         const uProj = await listen<any>('project:changed', async () => {
-          await loadColumns();
-          loadTasks();
+          await loadBoards();
+          await loadTasks();
+          await useCortexStore.getState().loadAgentPersonas();
+          useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
         });
         unlisteners.push(uProj);
 
@@ -361,7 +365,7 @@ export default function App() {
       textBuffers.clear();
       unlisteners.forEach((u) => u());
     };
-  }, [loadColumns, loadTasks, addToolExecution, updateToolExecution, updateTelemetry, setThinkingStartTime]);
+  }, [loadBoards, loadColumns, loadTasks, addToolExecution, updateToolExecution, updateTelemetry, setThinkingStartTime]);
 
   return (
     <>
