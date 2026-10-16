@@ -1,0 +1,21 @@
+{
+  "taskId": "CVH-BACKEND-STATUS-SETTINGS",
+  "task": "backend-status-settings",
+  "branch": "feat/backend-status-settings",
+  "title": "Backend Task Status Finalization & Default Agent Setting JSON",
+  "summary": "Fixed run_agent task status finalization: added missing else branch when next_stage_col is None (or remains in current column) to transition task status from running to idle (or done if terminal), save to disk, update AppState, and emit tasks:updated, task:moved, and agent:status ('finished'). Populated default agent setting JSON ({ model, context_window, temperature, max_tokens }) on agent persona creation and project scaffolding. Documented 1 persona = exactly 1 directory invariant across rule files and embedded constants.",
+  "verdict": "APPROVED",
+  "commitHash": "05f18972b2e8570b382ba1ae4e7bb4ddc55a695a",
+  "sensors": {
+    "cargo_check": "pass (0 warnings)",
+    "cargo_clippy": "pass (0 warnings, -D warnings)"
+  },
+  "files": [
+    "src-tauri/src/commands.rs",
+    "src-tauri/src/config.rs",
+    ".cvh/agents/cvh-dev/rules/boards.md",
+    ".cvh/agents/cvh-dev/rules/agents.md",
+    ".cvh/agents/cvh-dev/setting"
+  ],
+  "notes": "Verified with cargo check and cargo clippy -- -D warnings in src-tauri. Autonomously merged into main, worktree cleaned up."
+}
