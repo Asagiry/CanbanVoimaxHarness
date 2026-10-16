@@ -1,0 +1,22 @@
+{
+  "taskId": "CVH-FIX-STEER-ZOMBIE-LOCKS",
+  "task": "fix-steer-zombie-locks",
+  "title": "Fix WebView2 Stale Lock Race, Steer Zombie Agent, and Async Worktree State Sync",
+  "branch": "feat/fix-steer-zombie-locks",
+  "verdict": "APPROVED",
+  "commitHash": "ba452bd",
+  "summary": "Fixed Red Team audit issues 1.2, 1.4, 1.5: 1) eliminated premature %LOCALAPPDATA% lock deletion and removed hardcoded 154 WebView2 path, moving stale lock recovery to primary instance setup hook; 2) eliminated race condition and zombie agent in steer_agent by tracking ActiveAgentHandle with JoinHandle and atomic pointer equality cleanup; 3) replaced synchronous std::fs calls with tokio::fs during worktree .cvh runtime state synchronization.",
+  "files": [
+    "src-tauri/src/main.rs",
+    "src-tauri/src/lib.rs",
+    "src-tauri/src/commands.rs",
+    "src-tauri/src/git.rs"
+  ],
+  "sensors": {
+    "cargo_check": "pass",
+    "cargo_clippy": "pass",
+    "cargo_test": "pass (4 passed in git::tests)",
+    "pnpm_build": "pass"
+  },
+  "notes": "Verified on Windows with MSVC toolchain. Unit tests updated to #[tokio::test] async fn and passing cleanly."
+}
