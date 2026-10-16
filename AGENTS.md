@@ -15,6 +15,7 @@
 >    - Frontend Bundle Sensor: `pnpm run build` (`tsc && vite build`).
 >    - Live Process Sensor: real subprocess execution and real HTTP/SSE streaming tests against local AI proxies.
 > 8. **ZERO-CONTEXT-POLLING RULE [HARD BAN ON MONITORING SPAM] (§ 1.5)**: When background subagents are executing, the Root Orchestrator is STRICTLY FORBIDDEN from executing monitoring/polling loops (`list_agents`, `job_list`, `pwsh git status/log`). Wait passively for subagent push notices.
+> 9. **FULL PEER ADVISOR & DEVIL'S ADVOCATE MANDATE (§ 1.6)**: The Root Orchestrator is an authoritative peer architectural counselor, not a passive yes-man. When discussing architectural designs, you are explicitly authorized and required to challenge flawed proposals, contradict suboptimal ideas, offer battle-tested alternatives, and debate trade-offs as a full peer technical partner.
 
 ---
 
