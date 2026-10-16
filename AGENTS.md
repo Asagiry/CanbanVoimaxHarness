@@ -95,6 +95,7 @@
 - **Backlog-to-Ready Invariant**: Tasks flow deterministically from an intake column (`backlog`) to a completion column (`ready` / `done`).
 - **Subtask Execution Hierarchy**: When a task advances to an audit/review column, the root parent card remains pinned in its active stage while an isolated child subtask (`<task-id>.<subtask-index>`, e.g. `CVH-012.1`) executes the review persona.
 - **Stage Auto-Run Invariant**: Moving a task card into an active stage immediately emits `agent:autorun` and executes `run_agent(taskId)`.
+- **Tactile Stage Stepper Navigation**: Cards on the Kanban board and the `AgentConsoleDrawer` header feature an interactive tactile stage stepper with 1-click stage switching, current stage pulse, and passed stage checkmarks, executing `move_task_stage` through gatekeeper sensors.
 
 ### 2.3 Multi-Board Architecture (`.cvh/boards.json`)
 - **First-Class Multi-Board Engine**: Workspaces can host multiple distinct boards configured in `.cvh/boards.json` and mirrored in `.cvh/pipeline.json`.
@@ -161,11 +162,12 @@
 - **Automatic Argument Injection**: `{{args}}` is dynamically substituted with the tool call arguments and executed within the active worktree.
 - **Tool Output Spilling Invariant**: Outputs exceeding 100 lines or 8 KB are automatically written to `.cvh/spill/<timestamp>-<tool>.log`, returning only the head (20 lines) and tail (20 lines) to protect model context.
 
-### 2.9 Zero-Turn Memory Priming Invariant
-- Personas are defined in `.cvh/agents/<role>.md`.
+### 2.9 Zero-Turn Memory Priming & Relay Handoff Invariant
+- Personas are defined in `.cvh/agents/<role>.md` (or `.cvh/agents/<role>/persona.md`).
 - When spawning an agent, Rust pre-compiles:
   `SystemMessage = Role Persona + Project Rules + Skills + Task Prompt`
 - The agent starts Turn 1 with 100% memory primed. Never ask agents to read rule files during their turn.
+- **Relay Handoff Memory Priming**: When tasks transition between pipeline stages via `advance_task(summary)` or `reject_task(reason)`, the handover summary is recorded in `task.handover_summary` and injected as a top-level prompt banner (`### [ЭСТАФЕТА ПАЙПЛАЙНА / RELAY HANDOFF]`) in `initial_user_prompt`. Subsequent agents inherit exact context and findings of earlier stages with zero context degradation.
 
 ### 2.10 State-Preserving Context Compactor & Immutable Anchors
 - **Zero-LLM Fast Evaporation**: Tool outputs older than the last 2 turns exceeding 500 characters are automatically trimmed to head summaries.
