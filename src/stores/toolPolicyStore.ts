@@ -7,6 +7,8 @@ export interface ToolMeta {
   description: string;
   category: 'system' | 'fs' | 'web' | 'agent' | 'workflow';
   tokenWeight: number;
+  parentTool?: string;
+  isSubagentMaster?: boolean;
 }
 
 export const AVAILABLE_TOOLS: ToolMeta[] = [
@@ -93,10 +95,29 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
   {
     id: 'subagent',
     name: 'subagent',
-    label: 'Делегирование подагентам',
-    description: 'Запуск специализированных изолированных подагентов.',
+    label: "Вызов субагентов (мастер-тул: 'subagent')",
+    description: "Мастер-переключатель вызова субагентов. Если отключен, запуск как ваншот, так и фоновых субагентов заблокирован.",
     category: 'agent',
     tokenWeight: 310,
+    isSubagentMaster: true,
+  },
+  {
+    id: 'subagent_sync',
+    name: 'subagent',
+    label: 'subagent (Ваншот)',
+    description: 'Синхронный запуск субагента с блокировкой на стороне Rust до получения финального отчёта.',
+    category: 'agent',
+    tokenWeight: 290,
+    parentTool: 'subagent',
+  },
+  {
+    id: 'subagent_bg',
+    name: 'subagent_bg',
+    label: 'subagent_bg (Фоновый)',
+    description: 'Асинхронный запуск субагента в фоне с последующим получением результата через collect_subagent без поллинга.',
+    category: 'agent',
+    tokenWeight: 290,
+    parentTool: 'subagent',
   },
   {
     id: 'todo_write',
@@ -137,6 +158,8 @@ const DEFAULT_GLOBAL: Record<string, boolean> = {
   web_search: true,
   web_fetch: true,
   subagent: true,
+  subagent_sync: true,
+  subagent_bg: true,
   todo_write: true,
 };
 
@@ -153,6 +176,8 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     web_search: true,
     web_fetch: true,
     subagent: true,
+    subagent_sync: true,
+    subagent_bg: true,
     todo_write: true,
   },
   dev: {
@@ -167,6 +192,8 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     web_search: false,
     web_fetch: true,
     subagent: true,
+    subagent_sync: true,
+    subagent_bg: true,
     todo_write: true,
   },
   retro: {
@@ -181,6 +208,8 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     web_search: false,
     web_fetch: false,
     subagent: false,
+    subagent_sync: false,
+    subagent_bg: false,
     todo_write: true,
   },
 };
@@ -217,10 +246,27 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
 
   isToolAllowed: (toolId, stageId) => {
     const { globalEnabled, stageOverrides } = get();
-    if (stageId && stageOverrides[stageId] && typeof stageOverrides[stageId][toolId] === 'boolean') {
-      return stageOverrides[stageId][toolId];
+
+    // Hierarchical rule for subagent sub-options
+    if (toolId === 'subagent_sync' || toolId === 'subagent_bg') {
+      const masterGlobal = globalEnabled['subagent'] ?? true;
+      if (!masterGlobal) return false;
+      if (stageId) {
+        const stageMaster = stageOverrides[stageId]?.['subagent'];
+        if (stageMaster === false) return false;
+      }
+      const selfGlobal = globalEnabled[toolId] ?? true;
+      if (!selfGlobal) return false;
+      if (stageId) {
+        return stageOverrides[stageId]?.[toolId] ?? true;
+      }
+      return true;
     }
-    return globalEnabled[toolId] ?? true;
+
+    const isGloballyAllowed = globalEnabled[toolId] ?? true;
+    if (!isGloballyAllowed) return false;
+    if (!stageId) return true;
+    return stageOverrides[stageId]?.[toolId] ?? true;
   },
 
   calculateSavedTokens: (stageId) => {

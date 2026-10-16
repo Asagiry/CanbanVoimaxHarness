@@ -294,6 +294,11 @@ export default function AgentConsoleDrawer() {
     closeDrawer,
     openDrawer,
     appendOutput,
+    activeSubagentId,
+    activeSubagentTitle,
+    activeSubagentRole,
+    activeSubagentPrompt,
+    closeSubagent,
   } = useDrawerStore();
 
   const { tasks, updateTask, columns } = useBoardStore();
@@ -473,8 +478,13 @@ export default function AgentConsoleDrawer() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, closeDrawer]);
 
-  // Unified Chronological Activity List
+  // Unified Chronological Activity List (Parent stream or Nested Subagent stream)
   const unifiedActivities = useMemo(() => {
+    if (activeSubagentId) {
+      const subFeed = activityFeed[activeSubagentId] || [];
+      return subFeed.filter((item) => item.type !== 'prompt');
+    }
+
     if (!task) return [];
 
     const feed = activityFeed[task.id];
@@ -511,7 +521,7 @@ export default function AgentConsoleDrawer() {
     ];
 
     return merged;
-  }, [task, activityFeed, streamEntries, toolExecutions]);
+  }, [task, activeSubagentId, activityFeed, streamEntries, toolExecutions]);
 
   // Умный автоскролл: вниз только если пользователь уже внизу или это первое событие.
   // Позиция до вставки нового контента отслеживается в nearBottomRef через onScroll,
@@ -766,87 +776,121 @@ export default function AgentConsoleDrawer() {
             </button>
           </div>
 
-          {/* Center: Stage Stepper & Task badges, draggable empty area */}
+          {/* Center: Stage Stepper & Task badges, or Nested Subagent Breadcrumbs */}
           <div
             className="flex-1 flex items-center justify-center space-x-2 px-4 overflow-hidden select-none"
             data-tauri-drag-region
           >
-            {task?.id && (
-              <span className="font-mono text-xs font-semibold text-[#171717] px-2 py-0.5 rounded bg-[#f4f4f5] border border-[#ebebeb] shrink-0 select-none pointer-events-auto">
-                {task.id}
-              </span>
-            )}
-
-            {/* Elegant Stage Stepper for Console Header */}
-            {task && workingColumns.length > 0 && (
+            {activeSubagentId ? (
+              /* Subagent Breadcrumbs: <Parent Task Title> / <Subagent Task Title> */
               <div
                 data-no-drag
-                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg bg-[#f9fafb] border border-[#ebebeb] shrink-0 select-none pointer-events-auto shadow-2xs overflow-x-auto no-scrollbar max-w-[500px]"
+                className="flex items-center space-x-2 px-3 py-1 rounded-lg bg-[#f4f4f5] border border-[#ebebeb] text-xs font-mono min-w-0 max-w-[650px] overflow-hidden select-none pointer-events-auto shadow-2xs"
               >
-                {workingColumns.map((col, idx) => {
-                  const matchingSubtask = subtasks.find(
-                    (s) => s.columnId === col.id || (s as any).stageId === col.id
-                  );
-                  const isRootStage = rootTask ? rootTask.columnId === col.id : false;
-                  const targetTaskId = matchingSubtask
-                    ? matchingSubtask.id
-                    : isRootStage && rootTask
-                    ? rootTask.id
-                    : null;
-
-                  const isCurrent =
-                    col.id === task.columnId ||
-                    (targetTaskId != null && targetTaskId === activeTaskId);
-                  const isRunningStage = isCurrent && isRunning;
-                  const isPassed =
-                    Boolean(targetTaskId) &&
-                    (matchingSubtask?.status === 'done' ||
-                      (currentStageIdx >= 0 &&
-                        columns.findIndex((c) => c.id === col.id) < currentStageIdx));
-
-                  return (
-                    <div key={col.id} className="flex items-center shrink-0">
-                      {idx > 0 && (
-                        <ChevronRight className="h-3 w-3 text-[#d4d4d8] mx-0.5 shrink-0" />
-                      )}
-                      <button
-                        data-no-drag
-                        type="button"
-                        disabled={isCurrent || !targetTaskId}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (targetTaskId && targetTaskId !== activeTaskId) {
-                            openDrawer(targetTaskId);
-                          }
-                        }}
-                        title={
-                          isCurrent
-                            ? `Текущий этап: ${col.title}`
-                            : targetTaskId
-                            ? `Перейти к этапу: ${col.title}`
-                            : 'Этап еще не начат'
-                        }
-                        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono transition-all duration-150 tabular-nums ${
-                          isCurrent
-                            ? 'bg-[#171717] text-white font-semibold shadow-xs ring-1 ring-[#171717] cursor-default'
-                            : targetTaskId
-                            ? isPassed
-                              ? 'bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0] hover:bg-[#dcfce7] cursor-pointer active:scale-95'
-                              : 'bg-white text-[#71717a] border border-[#ebebeb] hover:bg-[#f4f4f5] hover:text-[#171717] hover:border-[#d4d4d8] cursor-pointer active:scale-95'
-                            : 'bg-[#fafafa] text-[#a1a1aa] border border-[#ebebeb]/60 cursor-default select-none opacity-60'
-                        }`}
-                      >
-                        {isPassed && <Check className="h-3 w-3 text-[#15803d] shrink-0" />}
-                        {isRunningStage && (
-                          <span className="h-2 w-2 rounded-full bg-[#22c55e] animate-pulse shrink-0" />
-                        )}
-                        <span className="truncate max-w-[85px]">{col.title}</span>
-                      </button>
-                    </div>
-                  );
-                })}
+                <button
+                  type="button"
+                  onClick={closeSubagent}
+                  className="flex items-center space-x-1.5 text-[#52525b] hover:text-[#171717] hover:underline cursor-pointer truncate max-w-[240px] font-medium transition"
+                  title={`Вернуться к задаче: ${task?.title || task?.id || 'Родительская задача'}`}
+                >
+                  <ArrowLeft className="h-3.5 w-3.5 shrink-0 text-[#171717]" />
+                  <span className="truncate">{task?.title || task?.id || 'Задача'}</span>
+                </button>
+                <span className="text-[#a1a1aa] shrink-0 font-sans">/</span>
+                <span className="flex items-center space-x-1.5 font-semibold text-[#171717] truncate max-w-[320px]">
+                  <span className="text-[#58a6ff] shrink-0 text-xs">■</span>
+                  <span className="truncate">{activeSubagentTitle || 'Субагент'}</span>
+                </span>
+                <span className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold uppercase tracking-wider border select-none shrink-0 ${
+                  activeSubagentRole?.toUpperCase().includes('DEV')
+                    ? 'bg-[#238636]/20 text-[#15803d] border-[#bbf7d0]'
+                    : activeSubagentRole?.toUpperCase().includes('REV')
+                    ? 'bg-[#d29922]/20 text-[#b45309] border-[#fde68a]'
+                    : 'bg-[#1f6feb]/20 text-[#1d4ed8] border-[#bfdbfe]'
+                }`}>
+                  {(activeSubagentRole || 'general').toUpperCase()}
+                </span>
               </div>
+            ) : (
+              <>
+                {task?.id && (
+                  <span className="font-mono text-xs font-semibold text-[#171717] px-2 py-0.5 rounded bg-[#f4f4f5] border border-[#ebebeb] shrink-0 select-none pointer-events-auto">
+                    {task.id}
+                  </span>
+                )}
+
+                {/* Elegant Stage Stepper for Console Header */}
+                {task && workingColumns.length > 0 && (
+                  <div
+                    data-no-drag
+                    className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg bg-[#f9fafb] border border-[#ebebeb] shrink-0 select-none pointer-events-auto shadow-2xs overflow-x-auto no-scrollbar max-w-[500px]"
+                  >
+                    {workingColumns.map((col, idx) => {
+                      const matchingSubtask = subtasks.find(
+                        (s) => s.columnId === col.id || (s as any).stageId === col.id
+                      );
+                      const isRootStage = rootTask ? rootTask.columnId === col.id : false;
+                      const targetTaskId = matchingSubtask
+                        ? matchingSubtask.id
+                        : isRootStage && rootTask
+                        ? rootTask.id
+                        : null;
+
+                      const isCurrent =
+                        col.id === task.columnId ||
+                        (targetTaskId != null && targetTaskId === activeTaskId);
+                      const isRunningStage = isCurrent && isRunning;
+                      const isPassed =
+                        Boolean(targetTaskId) &&
+                        (matchingSubtask?.status === 'done' ||
+                          (currentStageIdx >= 0 &&
+                            columns.findIndex((c) => c.id === col.id) < currentStageIdx));
+
+                      return (
+                        <div key={col.id} className="flex items-center shrink-0">
+                          {idx > 0 && (
+                            <ChevronRight className="h-3 w-3 text-[#d4d4d8] mx-0.5 shrink-0" />
+                          )}
+                          <button
+                            data-no-drag
+                            type="button"
+                            disabled={isCurrent || !targetTaskId}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (targetTaskId && targetTaskId !== activeTaskId) {
+                                openDrawer(targetTaskId);
+                              }
+                            }}
+                            title={
+                              isCurrent
+                                ? `Текущий этап: ${col.title}`
+                                : targetTaskId
+                                ? `Перейти к этапу: ${col.title}`
+                                : 'Этап еще не начат'
+                            }
+                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono transition-all duration-150 tabular-nums ${
+                              isCurrent
+                                ? 'bg-[#171717] text-white font-semibold shadow-xs ring-1 ring-[#171717] cursor-default'
+                                : targetTaskId
+                                ? isPassed
+                                ? 'bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0] hover:bg-[#dcfce7] cursor-pointer active:scale-95'
+                                : 'bg-white text-[#71717a] border border-[#ebebeb] hover:bg-[#f4f4f5] hover:text-[#171717] hover:border-[#d4d4d8] cursor-pointer active:scale-95'
+                                : 'bg-[#fafafa] text-[#a1a1aa] border border-[#ebebeb]/60 cursor-default select-none opacity-60'
+                            }`}
+                          >
+                            {isPassed && <Check className="h-3 w-3 text-[#15803d] shrink-0" />}
+                            {isRunningStage && (
+                              <span className="h-2 w-2 rounded-full bg-[#22c55e] animate-pulse shrink-0" />
+                            )}
+                            <span className="truncate max-w-[85px]">{col.title}</span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -980,42 +1024,87 @@ export default function AgentConsoleDrawer() {
           <div className="relative flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] overflow-hidden">
         <div ref={scrollRef} onScroll={handleFeedScroll} className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6">
         <div className="max-w-4xl mx-auto space-y-3.5">
-          {/* a) Task Goal / User Objective Card */}
-          <div className="rounded-lg border border-[#ebebeb] bg-white p-4 shadow-xs">
-            <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#ebebeb]">
-              <div className="flex items-center space-x-2">
-                <Target className="h-4 w-4 text-[#171717]" />
-                <span className="text-xs font-semibold text-[#171717] font-sans">
-                  Цель задачи / Prompt
-                </span>
-              </div>
-              <span className="text-[10px] font-mono text-[#8f8f8f]">
-                Постановка задачи
-              </span>
-            </div>
-            <div className="text-sm text-[#171717] leading-relaxed whitespace-pre-wrap select-text font-sans">
-              {getCleanPrompt(task.description, task.title)}
-            </div>
-          </div>
-
-          {/* a2) Relay Handoff / Zero-Turn Memory Priming Card */}
-          {task.handoverSummary && (
-            <div className="rounded-lg border border-[#c7d2fe] bg-[#f5f7ff] p-4 shadow-xs">
-              <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#e0e7ff]">
-                <div className="flex items-center space-x-2">
-                  <Sparkles className="h-4 w-4 text-[#6366f1]" />
-                  <span className="text-xs font-semibold text-[#4338ca] font-sans">
-                    Эстафета пайплайна / Relay Handoff (Zero-Turn Memory Priming)
+          {activeSubagentId ? (
+            /* Top instruction card: Screenshot 3 style */
+            <div className="rounded-xl border border-[#27272a] bg-[#0d1117] p-4 shadow-sm text-xs font-mono space-y-3 my-2">
+              <div className="flex items-center justify-between border-b border-[#21262d] pb-2.5">
+                <div className="flex items-center space-x-2 min-w-0">
+                  <span className="text-[#58a6ff] text-sm leading-none shrink-0 select-none">■</span>
+                  <span className="text-[11px] font-bold tracking-wider text-[#8b949e] uppercase select-none">
+                    АТОМАРНАЯ ЗАДАЧА СУБАГЕНТА:
+                  </span>
+                  <span className="font-semibold text-[#f0f6fc] truncate text-xs">
+                    {activeSubagentTitle || 'Без названия'}
                   </span>
                 </div>
-                <span className="text-[10px] font-mono text-[#6366f1] bg-[#eef2ff] px-2 py-0.5 rounded border border-[#c7d2fe]">
-                  Передано предыдущим этапом
-                </span>
+                <div className="flex items-center space-x-2 shrink-0">
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider border select-none ${
+                    activeSubagentRole?.toUpperCase().includes('DEV')
+                      ? 'bg-[#238636]/20 text-[#3fb950] border-[#238636]/40'
+                      : activeSubagentRole?.toUpperCase().includes('REV')
+                      ? 'bg-[#d29922]/20 text-[#e3b341] border-[#d29922]/40'
+                      : 'bg-[#1f6feb]/20 text-[#58a6ff] border-[#1f6feb]/40'
+                  }`}>
+                    {(activeSubagentRole || 'general').toUpperCase()}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={closeSubagent}
+                    className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono text-[#8b949e] hover:text-[#f0f6fc] hover:bg-[#21262d] transition cursor-pointer border border-[#30363d]"
+                    title="Вернуться к родительской задаче"
+                  >
+                    <ArrowLeft className="h-3 w-3" />
+                    <span>К родителю</span>
+                  </button>
+                </div>
               </div>
-              <div className="text-sm text-[#1e1b4b] leading-relaxed whitespace-pre-wrap select-text font-sans">
-                {task.handoverSummary}
-              </div>
+
+              {activeSubagentPrompt && (
+                <div className="rounded-lg bg-[#161b22] border border-[#30363d] p-3 text-[#c9d1d9] font-sans text-xs leading-relaxed whitespace-pre-wrap select-text">
+                  {activeSubagentPrompt}
+                </div>
+              )}
             </div>
+          ) : (
+            <>
+              {/* a) Task Goal / User Objective Card */}
+              <div className="rounded-lg border border-[#ebebeb] bg-white p-4 shadow-xs">
+                <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#ebebeb]">
+                  <div className="flex items-center space-x-2">
+                    <Target className="h-4 w-4 text-[#171717]" />
+                    <span className="text-xs font-semibold text-[#171717] font-sans">
+                      Цель задачи / Prompt
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-[#8f8f8f]">
+                    Постановка задачи
+                  </span>
+                </div>
+                <div className="text-sm text-[#171717] leading-relaxed whitespace-pre-wrap select-text font-sans">
+                  {getCleanPrompt(task.description, task.title)}
+                </div>
+              </div>
+
+              {/* a2) Relay Handoff / Zero-Turn Memory Priming Card */}
+              {task.handoverSummary && (
+                <div className="rounded-lg border border-[#c7d2fe] bg-[#f5f7ff] p-4 shadow-xs">
+                  <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#e0e7ff]">
+                    <div className="flex items-center space-x-2">
+                      <Sparkles className="h-4 w-4 text-[#6366f1]" />
+                      <span className="text-xs font-semibold text-[#4338ca] font-sans">
+                        Эстафета пайплайна / Relay Handoff (Zero-Turn Memory Priming)
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-mono text-[#6366f1] bg-[#eef2ff] px-2 py-0.5 rounded border border-[#c7d2fe]">
+                      Передано предыдущим этапом
+                    </span>
+                  </div>
+                  <div className="text-sm text-[#1e1b4b] leading-relaxed whitespace-pre-wrap select-text font-sans">
+                    {task.handoverSummary}
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* Unified Chronological Activity Stream */}
@@ -1172,7 +1261,25 @@ export default function AgentConsoleDrawer() {
 
 
 
-      {/* f) Interactive Input & Steer Bar: Floating Light Card & Bottom Status Bar */}
+      {/* f) Interactive Input & Steer Bar or Nested Subagent Back Bar */}
+      {activeSubagentId ? (
+        <footer className="border-t border-[#ebebeb] bg-[#fafafa]/90 backdrop-blur-xs px-4 py-3 shrink-0 shadow-xs z-10">
+          <div className="max-w-4xl mx-auto flex items-center justify-between">
+            <div className="flex items-center space-x-2 font-mono text-xs text-[#52525b]">
+              <span className="text-[#58a6ff]">■</span>
+              <span>Вложенный чат субагента: <strong className="text-[#171717]">{activeSubagentTitle}</strong></span>
+            </div>
+            <button
+              type="button"
+              onClick={closeSubagent}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-[#171717] text-white hover:bg-[#262626] transition cursor-pointer text-xs font-sans font-medium shadow-xs active:scale-95"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span>Вернуться к родительской задаче</span>
+            </button>
+          </div>
+        </footer>
+      ) : (
         <footer className="border-t border-[#ebebeb] bg-[#fafafa]/80 backdrop-blur-xs px-3 pb-3 pt-1 shrink-0 shadow-xs z-10">
         <div className="max-w-4xl mx-auto">
           {/* Floating Modern Light Card */}
@@ -1320,6 +1427,7 @@ export default function AgentConsoleDrawer() {
           <ContextGauge taskId={task.id} turns={turns} />
         </div>
       </footer>
+      )}
         </ErrorBoundary>
     </div>
 

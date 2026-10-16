@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ToolExecution } from '../../types';
+import { useDrawerStore } from '../../stores/drawerStore';
 import {
   ChevronRight,
   Copy,
@@ -80,6 +81,92 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
     (tool as ToolExecution)?.params && typeof (tool as ToolExecution).params === 'object'
       ? ((tool as ToolExecution).params as Record<string, unknown>)
       : {};
+
+  const openSubagent = useDrawerStore((s) => s.openSubagent);
+
+  // Subagent interactive card (OpenCode style per specifications)
+  if (toolName === 'subagent' || toolName === 'subagent_bg') {
+    const rawRole = (params?.role as string) || 'general';
+    const roleUpper = rawRole.toUpperCase();
+    const title = (params?.title as string) || (params?.prompt as string)?.slice(0, 60) || 'Делегированная задача субагента';
+    const prompt = (params?.prompt as string) || '';
+
+    // Extract subagent_id from params, or parsed JSON stdout (subagent_bg), or stdout regex (subagent)
+    let subagentId = typeof params?.subagent_id === 'string' && params.subagent_id ? params.subagent_id : '';
+    if (!subagentId && tool.stdout) {
+      try {
+        const parsed = JSON.parse(tool.stdout);
+        if (parsed.subagent_id) subagentId = parsed.subagent_id;
+      } catch {}
+      if (!subagentId) {
+        const match = tool.stdout.match(/\[Subagent ID:\s*([^\s\]]+)\]/);
+        if (match && match[1]) subagentId = match[1];
+      }
+    }
+    if (!subagentId) {
+      subagentId = tool.id;
+    }
+
+    let roleBadgeClass = 'bg-[#1f6feb]/20 text-[#58a6ff] border-[#1f6feb]/40';
+    if (roleUpper.includes('DEV')) {
+      roleBadgeClass = 'bg-[#238636]/20 text-[#3fb950] border-[#238636]/40';
+    } else if (roleUpper.includes('REV')) {
+      roleBadgeClass = 'bg-[#d29922]/20 text-[#e3b341] border-[#d29922]/40';
+    } else if (roleUpper.includes('EXP') || roleUpper.includes('ARCH')) {
+      roleBadgeClass = 'bg-[#a371f7]/20 text-[#bc8cff] border-[#a371f7]/40';
+    }
+
+    const isRunning = tool.status === 'running';
+    const isSuccess = tool.status === 'success';
+
+    return (
+      <div
+        onClick={() => openSubagent(subagentId, title, rawRole, prompt)}
+        className="group rounded-xl border border-[#27272a] bg-[#0d1117] hover:bg-[#161b22] hover:border-[#58a6ff]/50 p-3.5 shadow-sm transition cursor-pointer select-none my-2.5"
+        title="Нажмите, чтобы открыть вложенный чат субагента"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center space-x-2.5 min-w-0 flex-1 overflow-hidden">
+            <span className="text-[#58a6ff] shrink-0 font-mono text-sm leading-none select-none">
+              ■
+            </span>
+
+            <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider border shrink-0 select-none ${roleBadgeClass}`}>
+              {roleUpper}
+            </span>
+
+            <span className="font-sans font-medium text-xs md:text-sm text-[#f0f6fc] group-hover:text-[#58a6ff] transition-colors truncate">
+              {title}
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-2.5 shrink-0">
+            {isRunning ? (
+              <div className="flex items-center space-x-1.5">
+                <span className="relative flex h-2.5 w-2.5 shrink-0" title="Субагент выполняется...">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" />
+                </span>
+                <span className="text-[11px] font-mono text-[#8b949e]">Running</span>
+              </div>
+            ) : isSuccess ? (
+              <div className="flex items-center space-x-1.5">
+                <Check className="h-4 w-4 text-[#3fb950] stroke-[2.5]" />
+                <span className="text-[11px] font-mono text-[#7ee787]">Done</span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-1.5">
+                <X className="h-4 w-4 text-[#f85149] stroke-[2.5]" />
+                <span className="text-[11px] font-mono text-[#f85149]">Error</span>
+              </div>
+            )}
+
+            <ChevronRight className="h-4 w-4 text-[#8b949e] group-hover:text-[#58a6ff] transition-colors shrink-0" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Check if tool is a file modification/creation operation
   const isFileOp =

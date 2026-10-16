@@ -1234,7 +1234,9 @@ fn sanitize_task_id(task_id: &str) -> Result<String, String> {
     if trimmed.contains("..") || trimmed.contains('/') || trimmed.contains('\\') {
         return Err(format!("Invalid task ID: '{}'", trimmed));
     }
-    if trimmed.chars().any(|c| matches!(c, '<' | '>' | ':' | '"' | '|' | '?' | '*')) {
+    // Allow ':' strictly when part of the subagent delimiter ":sub:"
+    let without_sub = trimmed.replace(":sub:", "");
+    if without_sub.chars().any(|c| matches!(c, '<' | '>' | ':' | '"' | '|' | '?' | '*')) {
         return Err(format!("Task ID contains invalid characters: '{}'", trimmed));
     }
     Ok(trimmed.to_string())
@@ -1289,6 +1291,18 @@ pub async fn load_task_dialog(
     state: State<'_, AppState>,
 ) -> Result<Vec<ActivityItem>, String> {
     let safe_id = sanitize_task_id(&task_id)?;
+    let root = state.get_root();
+    crate::db::load_dialog_items(&root, &safe_id)
+}
+
+#[tauri::command]
+pub async fn load_subagent_dialog(
+    parent_task_id: String,
+    subagent_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<ActivityItem>, String> {
+    let sub_key = format!("{}:sub:{}", parent_task_id.trim(), subagent_id.trim());
+    let safe_id = sanitize_task_id(&sub_key)?;
     let root = state.get_root();
     crate::db::load_dialog_items(&root, &safe_id)
 }
@@ -4058,6 +4072,7 @@ mod tests {
         assert!(sanitize_task_id("task:1").is_err());
         assert!(sanitize_task_id("task*1").is_err());
         assert!(sanitize_task_id("task?1").is_err());
+        assert!(sanitize_task_id("CVH-001:sub:CVH-001.sub-1234").is_ok());
     }
 
     #[test]

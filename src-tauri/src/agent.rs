@@ -5,19 +5,21 @@ use crate::config::{
     agent_allows_tool, is_tool_allowed, load_agent_setting, load_tool_policies,
     ToolPolicyConfig,
 };
+use crate::db::ActivityItem;
 use crate::hooks::kill_process_tree;
 use crate::llm::{ChatMessage, LlmClient, OpenAIChatRequest, StreamChunk, ToolCall, ToolDefinition};
 use anyhow::{bail, Context, Result};
 use tauri::{AppHandle, Emitter};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -372,14 +374,49 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "subagent",
-            "Delegate a focused, independent sub-task to a specialized subagent.",
+            "Delegate a focused, independent sub-task to a specialized subagent synchronously (Oneshot). Blocks until completion and returns the final report directly. Subagents run in-process inside the current directory without moving cards or creating worktrees.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "role": { "type": "string", "description": "Role persona for subagent (e.g. 'reviewer', 'developer')." },
-                    "prompt": { "type": "string", "description": "Detailed task instructions." }
+                    "title": { "type": "string", "description": "Short task description (e.g. 'Analyze project architecture', 'Find memory leak')." },
+                    "role": { "type": "string", "description": "Subagent role persona (e.g. 'general', 'developer', 'reviewer', 'explorer'). Default: 'general'." },
+                    "prompt": { "type": "string", "description": "Detailed task instructions." },
+                    "tools": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Optional list of tools allowed for this subagent. If omitted, defaults to ALL tools available to the parent agent."
+                    }
                 },
-                "required": ["role", "prompt"]
+                "required": ["title", "prompt"]
+            }),
+        ),
+        ToolDefinition::function(
+            "subagent_bg",
+            "Launch a specialized subagent in the background (asynchronous). Returns immediately with a subagent_id and status 'running'. Use collect_subagent with subagent_id to retrieve the report when needed.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "title": { "type": "string", "description": "Short task description (e.g. 'Run long benchmark', 'Deep search repo')." },
+                    "role": { "type": "string", "description": "Subagent role persona (e.g. 'general', 'developer', 'reviewer', 'explorer'). Default: 'general'." },
+                    "prompt": { "type": "string", "description": "Detailed task instructions." },
+                    "tools": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Optional list of tools allowed for this subagent. If omitted, defaults to ALL tools available to the parent agent."
+                    }
+                },
+                "required": ["title", "prompt"]
+            }),
+        ),
+        ToolDefinition::function(
+            "collect_subagent",
+            "Await the completion of a background subagent (launched via subagent_bg) and retrieve its final report without polling.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "subagent_id": { "type": "string", "description": "The unique subagent_id returned by subagent_bg." }
+                },
+                "required": ["subagent_id"]
             }),
         ),
         ToolDefinition::function(
@@ -598,7 +635,55 @@ pub struct ToolContext<'a> {
     pub task_id: Option<&'a str>,
     pub agent_allowed_tools: Option<&'a [String]>,
     pub app_handle: Option<AppHandle>,
+    pub base_url: Option<&'a str>,
+    pub api_key: Option<&'a str>,
+    pub model: Option<&'a str>,
+    pub temperature: Option<f32>,
+    pub reasoning_effort: Option<&'a str>,
 }
+
+#[derive(Clone)]
+pub struct OwnedToolContext {
+    pub repo_root: PathBuf,
+    pub worktree_dir: PathBuf,
+    pub stage_id: Option<String>,
+    pub abort_handle: Arc<AtomicBool>,
+    pub tool_policy: ToolPolicyConfig,
+    pub task_id: Option<String>,
+    pub agent_allowed_tools: Option<Vec<String>>,
+    pub app_handle: Option<AppHandle>,
+    pub base_url: Option<String>,
+    pub api_key: Option<String>,
+    pub model: Option<String>,
+    pub temperature: Option<f32>,
+    pub reasoning_effort: Option<String>,
+}
+
+impl<'a> ToolContext<'a> {
+    pub fn to_owned(&self) -> OwnedToolContext {
+        OwnedToolContext {
+            repo_root: self.repo_root.to_path_buf(),
+            worktree_dir: self.worktree_dir.to_path_buf(),
+            stage_id: self.stage_id.map(|s| s.to_string()),
+            abort_handle: Arc::clone(&self.abort_handle),
+            tool_policy: self.tool_policy.clone(),
+            task_id: self.task_id.map(|s| s.to_string()),
+            agent_allowed_tools: self.agent_allowed_tools.map(|s| s.to_vec()),
+            app_handle: self.app_handle.clone(),
+            base_url: self.base_url.map(|s| s.to_string()),
+            api_key: self.api_key.map(|s| s.to_string()),
+            model: self.model.map(|s| s.to_string()),
+            temperature: self.temperature,
+            reasoning_effort: self.reasoning_effort.map(|s| s.to_string()),
+        }
+    }
+}
+
+pub type SubagentReceiver = oneshot::Receiver<Result<String, String>>;
+pub type SubagentMap = HashMap<String, SubagentReceiver>;
+
+pub static SUBAGENT_REGISTRY: LazyLock<tokio::sync::Mutex<SubagentMap>> =
+    LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
 
 /// Executes a tool within the safe boundary of `worktree_dir` with zero-trust policy checks
 /// (global/stage matrix AND optional per-agent `allowed_tools` intersection).
@@ -811,15 +896,107 @@ pub async fn execute_tool(
         }
 
         "subagent" => {
-            let role = args
-                .get("role")
+            let title = args
+                .get("title")
                 .and_then(|v| v.as_str())
-                .context("Missing required parameter 'role'")?;
+                .context("Missing required parameter 'title'")?;
             let prompt = args
                 .get("prompt")
                 .and_then(|v| v.as_str())
                 .context("Missing required parameter 'prompt'")?;
-            format!("Subagent [{}] dispatched with task: {}", role, prompt)
+            let role = args
+                .get("role")
+                .and_then(|v| v.as_str())
+                .unwrap_or("general");
+            let requested_tools: Option<Vec<String>> = args.get("tools").and_then(|v| v.as_array()).map(|arr| {
+                arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect()
+            });
+
+            let owned_ctx = ctx.to_owned();
+            run_inprocess_subagent(
+                owned_ctx,
+                title.to_string(),
+                role.to_string(),
+                prompt.to_string(),
+                requested_tools,
+                None,
+            ).await?
+        }
+
+        "subagent_bg" => {
+            let title = args
+                .get("title")
+                .and_then(|v| v.as_str())
+                .context("Missing required parameter 'title'")?;
+            let prompt = args
+                .get("prompt")
+                .and_then(|v| v.as_str())
+                .context("Missing required parameter 'prompt'")?;
+            let role = args
+                .get("role")
+                .and_then(|v| v.as_str())
+                .unwrap_or("general");
+            let requested_tools: Option<Vec<String>> = args.get("tools").and_then(|v| v.as_array()).map(|arr| {
+                arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect()
+            });
+
+            let parent_id = ctx.task_id.unwrap_or("unknown");
+            let subagent_suffix = format!(
+                "{}-{}",
+                chrono::Utc::now().timestamp_millis(),
+                uuid::Uuid::new_v4().to_string().chars().take(4).collect::<String>()
+            );
+            let subagent_id = format!("{}.sub-{}", parent_id, subagent_suffix);
+
+            let (tx, rx) = oneshot::channel::<Result<String, String>>();
+            {
+                let mut reg = SUBAGENT_REGISTRY.lock().await;
+                reg.insert(subagent_id.clone(), rx);
+            }
+
+            let owned_ctx = ctx.to_owned();
+            let sub_id = subagent_id.clone();
+            let title_s = title.to_string();
+            let role_s = role.to_string();
+            let prompt_s = prompt.to_string();
+
+            tokio::spawn(async move {
+                let res = run_inprocess_subagent(
+                    owned_ctx,
+                    title_s,
+                    role_s,
+                    prompt_s,
+                    requested_tools,
+                    Some(sub_id),
+                ).await;
+                let _ = tx.send(res.map_err(|e| e.to_string()));
+            });
+
+            serde_json::to_string(&serde_json::json!({
+                "subagent_id": subagent_id,
+                "status": "running"
+            }))?
+        }
+
+        "collect_subagent" => {
+            let subagent_id = args
+                .get("subagent_id")
+                .and_then(|v| v.as_str())
+                .context("Missing required parameter 'subagent_id'")?;
+
+            let rx_opt = {
+                let mut reg = SUBAGENT_REGISTRY.lock().await;
+                reg.remove(subagent_id)
+            };
+
+            match rx_opt {
+                Some(rx) => match rx.await {
+                    Ok(Ok(report)) => report,
+                    Ok(Err(err)) => bail!("Subagent [{}] error: {}", subagent_id, err),
+                    Err(_) => bail!("Subagent [{}] channel dropped or task panicked", subagent_id),
+                },
+                None => bail!("Subagent [{}] not found in background registry (already collected or invalid ID)", subagent_id),
+            }
         }
 
         "todo_write" => {
@@ -1113,6 +1290,425 @@ pub async fn execute_tool(
     };
 
     maybe_spill_output(repo_root, normalized_tool_name, raw_result).await
+}
+
+/// In-Process Subagent Execution Engine (§ 3 Architectural Invariants)
+/// ZERO WORKTREES, ZERO HOOKS: Runs strictly in-process inside parent's active worktree_dir.
+/// ZERO BOARD MOVEMENT: Subagents do not modify cards on the kanban board or move stages.
+pub fn run_inprocess_subagent(
+    ctx: OwnedToolContext,
+    title: String,
+    role: String,
+    prompt: String,
+    requested_tools: Option<Vec<String>>,
+    explicit_subagent_id: Option<String>,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String>> + Send>> {
+    Box::pin(async move {
+    let parent_id = ctx.task_id.as_deref().unwrap_or("unknown").to_string();
+    let subagent_suffix = format!(
+        "{}-{}",
+        chrono::Utc::now().timestamp_millis(),
+        uuid::Uuid::new_v4().to_string().chars().take(4).collect::<String>()
+    );
+    let subagent_id = explicit_subagent_id.unwrap_or_else(|| format!("{}.sub-{}", parent_id, subagent_suffix));
+    let subagent_dialog_id = format!("{}:sub:{}", parent_id, subagent_id);
+
+    // 1. Tool filtering (If tools is omitted, defaults to ALL tools available to the parent agent!)
+    let all_tools = get_all_tools(&ctx.repo_root).await;
+    let base_tools: Vec<String> = match requested_tools {
+        Some(t) if !t.is_empty() => t,
+        _ => all_tools.iter().map(|t| t.function.name.clone()).collect(),
+    };
+
+    let mut effective_sub_tools: Vec<String> = base_tools
+        .into_iter()
+        .filter(|t| {
+            t != "subagent"
+                && t != "subagent_bg"
+                && t != "collect_subagent"
+                && t != "advance_task"
+                && t != "reject_task"
+                && is_tool_allowed(&ctx.tool_policy, ctx.stage_id.as_deref(), t)
+                && agent_allows_tool(ctx.agent_allowed_tools.as_deref(), t)
+        })
+        .collect();
+    effective_sub_tools.sort();
+    effective_sub_tools.dedup();
+
+    // 2. Emit subagent:spawned
+    if let Some(ref app) = ctx.app_handle {
+        let _ = app.emit(
+            "subagent:spawned",
+            serde_json::json!({
+                "parentTaskId": &parent_id,
+                "subagentId": &subagent_id,
+                "title": &title,
+                "role": &role,
+                "prompt": &prompt,
+                "tools": &effective_sub_tools,
+            }),
+        );
+    }
+
+    // 3. Persist top instruction prompt into SQLite dialog
+    let prompt_item = ActivityItem {
+        id: format!("sub-p-{}", subagent_suffix),
+        item_type: "prompt".to_string(),
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        content: Some(prompt.to_string()),
+        tool: None,
+        duration_ms: None,
+        images: None,
+    };
+    let _ = crate::db::append_dialog_items(
+        &ctx.repo_root,
+        &subagent_dialog_id,
+        std::slice::from_ref(&prompt_item),
+    );
+
+    // 4. Resolve schemas for allowed subagent tools
+    let all_tools = get_all_tools(&ctx.repo_root).await;
+    let mut active_sub_tool_defs: Vec<ToolDefinition> = all_tools
+        .into_iter()
+        .filter(|t| effective_sub_tools.contains(&t.function.name))
+        .collect();
+    active_sub_tool_defs.sort_by(|a, b| a.function.name.cmp(&b.function.name));
+
+    // 5. System persona & initial messages
+    let persona_content = {
+        let persona_path = crate::config::agent_persona_path(&ctx.repo_root, &role);
+        if persona_path.is_file() {
+            tokio::fs::read_to_string(&persona_path).await.ok()
+        } else {
+            None
+        }
+    };
+
+    let system_prompt = format!(
+        "# Role Persona: {}
+{}
+
+        # Scoped Subagent Mandate
+        You are an in-process subagent executing an atomic subtask.
+        Working directory: {}
+        Task Title: {}
+        Allowed Tools: {:?}
+        Invariants: Do not attempt to move kanban stages or spawn nested subagents.         Execute the task thoroughly and verify results.         When done, output your comprehensive final report.",
+        role,
+        persona_content.as_deref().unwrap_or("You are a specialized autonomous subagent."),
+        ctx.worktree_dir.to_string_lossy(),
+        title,
+        effective_sub_tools
+    );
+
+    let mut sub_messages = vec![
+        ChatMessage::system(system_prompt).with_cache_control(crate::llm::CacheControl::ephemeral()),
+        ChatMessage::user(format!("# Objective: {}
+
+{}", title, prompt)).with_cache_control(crate::llm::CacheControl::ephemeral()),
+    ];
+
+    let base_url = ctx.base_url.as_deref().unwrap_or("http://127.0.0.1:8045/v1");
+    let model = ctx.model.as_deref().unwrap_or("gemini-3.8-flash-high");
+    let api_key = ctx.api_key.as_deref();
+    let temperature = ctx.temperature.or(Some(0.2));
+    let reasoning_effort = ctx.reasoning_effort.clone();
+
+    let llm_client = LlmClient::new();
+    let mut sub_turn = 0;
+    let mut final_sub_response = String::new();
+
+    loop {
+        sub_turn += 1;
+        if sub_turn > 15 || ctx.abort_handle.load(Ordering::SeqCst) {
+            break;
+        }
+
+        let req = OpenAIChatRequest {
+            model: model.to_string(),
+            messages: sub_messages.clone(),
+            temperature,
+            stream: true,
+            tools: if active_sub_tool_defs.is_empty() {
+                None
+            } else {
+                Some(active_sub_tool_defs.clone())
+            },
+            reasoning_effort: reasoning_effort.clone(),
+        };
+
+        let (tx, mut rx) = mpsc::channel::<StreamChunk>(100);
+        let cl = llm_client.clone();
+        let b_url = base_url.to_string();
+        let a_key = api_key.map(|s| s.to_string());
+
+        tokio::spawn(async move {
+            if let Err(e) = cl.stream_openai(&b_url, a_key.as_deref(), req, tx.clone()).await {
+                let _ = tx.send(StreamChunk::Error(format!("Subagent stream failed: {}", e))).await;
+            }
+        });
+
+        let mut turn_content = String::new();
+        let mut turn_tool_calls: Vec<ToolCall> = Vec::new();
+        let mut thinking_parser = ThinkingStreamParser::new();
+
+        while let Some(chunk) = rx.recv().await {
+            if ctx.abort_handle.load(Ordering::SeqCst) {
+                break;
+            }
+            match chunk {
+                StreamChunk::Token(token) => {
+                    let parsed = thinking_parser.push(&token);
+                    for (is_thought, text) in parsed {
+                        if is_thought {
+                            let th_item = ActivityItem {
+                                id: format!("sub-th-{}-{}", subagent_suffix, uuid::Uuid::new_v4().to_string().chars().take(4).collect::<String>()),
+                                item_type: "thought".to_string(),
+                                timestamp: chrono::Utc::now().to_rfc3339(),
+                                content: Some(text.clone()),
+                                tool: None,
+                                duration_ms: None,
+                                images: None,
+                            };
+                            let _ = crate::db::append_dialog_items(&ctx.repo_root, &subagent_dialog_id, std::slice::from_ref(&th_item));
+                            if let Some(ref app) = ctx.app_handle {
+                                let _ = app.emit("subagent:activity", serde_json::json!({
+                                    "parentTaskId": parent_id,
+                                    "subagentId": &subagent_id,
+                                    "activity": &th_item,
+                                }));
+                            }
+                        } else {
+                            turn_content.push_str(&text);
+                        }
+                    }
+                }
+                StreamChunk::Thought(thought) => {
+                    let th_item = ActivityItem {
+                        id: format!("sub-th-{}-{}", subagent_suffix, uuid::Uuid::new_v4().to_string().chars().take(4).collect::<String>()),
+                        item_type: "thought".to_string(),
+                        timestamp: chrono::Utc::now().to_rfc3339(),
+                        content: Some(thought.clone()),
+                        tool: None,
+                        duration_ms: None,
+                        images: None,
+                    };
+                    let _ = crate::db::append_dialog_items(&ctx.repo_root, &subagent_dialog_id, std::slice::from_ref(&th_item));
+                    if let Some(ref app) = ctx.app_handle {
+                        let _ = app.emit("subagent:activity", serde_json::json!({
+                            "parentTaskId": parent_id,
+                            "subagentId": &subagent_id,
+                            "activity": &th_item,
+                        }));
+                    }
+                }
+                StreamChunk::ToolCall { id, name, arguments } => {
+                    turn_tool_calls.push(ToolCall {
+                        id,
+                        call_type: "function".to_string(),
+                        function: crate::llm::FunctionCall { name, arguments },
+                    });
+                }
+                StreamChunk::Done => break,
+                StreamChunk::Error(e) => {
+                    eprintln!("CVH [subagent]: error: {}", e);
+                    break;
+                }
+                _ => {}
+            }
+        }
+
+        // Flush thinking parser
+        for (is_thought, text) in thinking_parser.flush() {
+            if is_thought {
+                let th_item = ActivityItem {
+                    id: format!("sub-th-{}-{}", subagent_suffix, uuid::Uuid::new_v4().to_string().chars().take(4).collect::<String>()),
+                    item_type: "thought".to_string(),
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    content: Some(text),
+                    tool: None,
+                    duration_ms: None,
+                    images: None,
+                };
+                let _ = crate::db::append_dialog_items(&ctx.repo_root, &subagent_dialog_id, std::slice::from_ref(&th_item));
+                if let Some(ref app) = ctx.app_handle {
+                    let _ = app.emit("subagent:activity", serde_json::json!({
+                        "parentTaskId": parent_id,
+                        "subagentId": &subagent_id,
+                        "activity": &th_item,
+                    }));
+                }
+            } else {
+                turn_content.push_str(&text);
+            }
+        }
+
+        if turn_tool_calls.is_empty() {
+            final_sub_response = turn_content.clone();
+            if !final_sub_response.is_empty() {
+                let out_item = ActivityItem {
+                    id: format!("sub-out-{}", subagent_suffix),
+                    item_type: "output".to_string(),
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    content: Some(final_sub_response.clone()),
+                    tool: None,
+                    duration_ms: None,
+                    images: None,
+                };
+                let _ = crate::db::append_dialog_items(&ctx.repo_root, &subagent_dialog_id, std::slice::from_ref(&out_item));
+                if let Some(ref app) = ctx.app_handle {
+                    let _ = app.emit("subagent:activity", serde_json::json!({
+                        "parentTaskId": parent_id,
+                        "subagentId": &subagent_id,
+                        "activity": &out_item,
+                    }));
+                }
+            }
+            break;
+        }
+
+        sub_messages.push(ChatMessage::assistant(
+            if turn_content.is_empty() { None } else { Some(turn_content.clone()) },
+            Some(turn_tool_calls.clone()),
+        ));
+
+        if !turn_content.is_empty() {
+            let out_item = ActivityItem {
+                id: format!("sub-msg-{}-{}", subagent_suffix, sub_turn),
+                item_type: "output".to_string(),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                content: Some(turn_content),
+                tool: None,
+                duration_ms: None,
+                images: None,
+            };
+            let _ = crate::db::append_dialog_items(&ctx.repo_root, &subagent_dialog_id, std::slice::from_ref(&out_item));
+            if let Some(ref app) = ctx.app_handle {
+                let _ = app.emit("subagent:activity", serde_json::json!({
+                    "parentTaskId": parent_id,
+                    "subagentId": &subagent_id,
+                    "activity": &out_item,
+                }));
+            }
+        }
+
+        // Execute subagent tool calls
+        for tc in turn_tool_calls {
+            let parsed_args: serde_json::Value =
+                serde_json::from_str(&tc.function.arguments).unwrap_or_else(|_| serde_json::json!({}));
+
+            let tool_item_id = format!("sub-tool-{}", tc.id);
+            let start_time = chrono::Utc::now().timestamp_millis();
+            let tool_exec_running = serde_json::json!({
+                "id": &tc.id,
+                "toolName": &tc.function.name,
+                "timestamp": chrono::Utc::now().to_rfc3339(),
+                "durationMs": 0,
+                "status": "running",
+                "params": &parsed_args,
+            });
+            let tool_act_running = ActivityItem {
+                id: tool_item_id.clone(),
+                item_type: "tool".to_string(),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                content: None,
+                tool: Some(tool_exec_running),
+                duration_ms: None,
+                images: None,
+            };
+            let _ = crate::db::append_dialog_items(&ctx.repo_root, &subagent_dialog_id, std::slice::from_ref(&tool_act_running));
+            if let Some(ref app) = ctx.app_handle {
+                let _ = app.emit("subagent:activity", serde_json::json!({
+                    "parentTaskId": parent_id,
+                    "subagentId": &subagent_id,
+                    "activity": &tool_act_running,
+                }));
+            }
+
+            let sub_tool_ctx = ToolContext {
+                repo_root: &ctx.repo_root,
+                worktree_dir: &ctx.worktree_dir,
+                stage_id: ctx.stage_id.as_deref(),
+                abort_handle: Arc::clone(&ctx.abort_handle),
+                tool_policy: &ctx.tool_policy,
+                task_id: Some(&subagent_id),
+                agent_allowed_tools: Some(&effective_sub_tools),
+                app_handle: ctx.app_handle.clone(),
+                base_url: ctx.base_url.as_deref(),
+                api_key: ctx.api_key.as_deref(),
+                model: ctx.model.as_deref(),
+                temperature: ctx.temperature,
+                reasoning_effort: ctx.reasoning_effort.as_deref(),
+            };
+
+            let exec_res = execute_tool(&sub_tool_ctx, &tc.function.name, &parsed_args).await;
+            let duration_ms = (chrono::Utc::now().timestamp_millis() - start_time) as f64;
+
+            let (res_str, is_success) = match exec_res {
+                Ok(s) => (s, true),
+                Err(e) => (format!("Error executing {}: {}", tc.function.name, e), false),
+            };
+
+            let tool_exec_done = serde_json::json!({
+                "id": &tc.id,
+                "toolName": &tc.function.name,
+                "timestamp": chrono::Utc::now().to_rfc3339(),
+                "durationMs": duration_ms,
+                "status": if is_success { "success" } else { "failed" },
+                "params": &parsed_args,
+                "stdout": &res_str,
+            });
+            let tool_act_done = ActivityItem {
+                id: tool_item_id,
+                item_type: "tool".to_string(),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                content: None,
+                tool: Some(tool_exec_done),
+                duration_ms: Some(duration_ms),
+                images: None,
+            };
+            let _ = crate::db::append_dialog_items(&ctx.repo_root, &subagent_dialog_id, std::slice::from_ref(&tool_act_done));
+            if let Some(ref app) = ctx.app_handle {
+                let _ = app.emit("subagent:activity", serde_json::json!({
+                    "parentTaskId": parent_id,
+                    "subagentId": &subagent_id,
+                    "activity": &tool_act_done,
+                }));
+            }
+
+            sub_messages.push(ChatMessage::tool_response(tc.id, res_str));
+        }
+    }
+
+    if let Some(ref app) = ctx.app_handle {
+        let _ = app.emit(
+            "subagent:finished",
+            serde_json::json!({
+                "parentTaskId": parent_id,
+                "subagentId": &subagent_id,
+                "response": &final_sub_response,
+            }),
+        );
+    }
+
+    let report = if final_sub_response.trim().is_empty() {
+        format!(
+            "[Subagent ID: {}]
+Subagent [{}] '{}' executed in-process. Work complete.",
+            subagent_id, role, title
+        )
+    } else {
+        format!(
+            "[Subagent ID: {}]
+Subagent [{}] '{}' report:
+
+{}",
+            subagent_id, role, title, final_sub_response.trim()
+        )
+    };
+
+    Ok(report)
+    })
 }
 
 fn normalize_path(path: &Path) -> PathBuf {
@@ -2019,6 +2615,11 @@ where
             task_id: Some(&config.task_id),
             agent_allowed_tools: agent_allowed.as_deref(),
             app_handle: config.app_handle.clone(),
+            base_url: Some(&config.base_url),
+            api_key: config.api_key.as_deref(),
+            model: Some(&config.model),
+            temperature: config.temperature,
+            reasoning_effort: config.reasoning_effort.as_deref(),
         };
 
         // Execute each tool call and record response
@@ -2353,6 +2954,11 @@ mod tests {
             task_id: None,
             agent_allowed_tools: agent_allowed.as_deref(),
             app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
         };
         let err = execute_tool(
             &tool_ctx,
