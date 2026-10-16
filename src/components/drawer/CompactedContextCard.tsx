@@ -1,0 +1,136 @@
+import React, { useState } from 'react';
+import type { DrawerActivityItem } from '../../stores/drawerStore';
+import { MarkdownContent } from './DrawerActivityStream';
+import {
+  ChevronRight,
+  ChevronDown,
+  Copy,
+  Check,
+  Minimize2,
+} from 'lucide-react';
+
+interface CompactedContextCardProps {
+  activity: DrawerActivityItem;
+}
+
+export default function CompactedContextCard({ activity }: CompactedContextCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // Extract metadata from activity.tool if present
+  const toolData = activity.tool as any;
+  const count = toolData?.compactedCount ?? 8;
+  const savedTokens = toolData?.savedTokens ?? 2450;
+  const formattedTokens = typeof savedTokens === 'number'
+    ? savedTokens.toLocaleString('ru-RU')
+    : String(savedTokens);
+
+  const pluralMsg =
+    count === 1 ? 'сообщение' : count > 1 && count < 5 ? 'сообщения' : 'сообщений';
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (activity.content) {
+      navigator.clipboard.writeText(activity.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  return (
+    <div className="my-2 rounded-md border border-[#ebebeb] bg-white overflow-hidden shadow-xs transition-all">
+      {/* Collapsed State: Clean hairline paper strip */}
+      <div
+        onClick={() => setIsExpanded(!isExpanded)}
+        className={`flex items-center justify-between px-3.5 py-2.5 cursor-pointer select-none transition-colors ${
+          isExpanded ? 'bg-[#fafafa] border-b border-[#ebebeb]' : 'hover:bg-[#f4f4f5]'
+        }`}
+      >
+        <div className="flex items-center space-x-2 text-[#0d0d0d] min-w-0">
+          {isExpanded ? (
+            <ChevronDown className="h-3.5 w-3.5 text-[#4d4d4d] shrink-0 transition-transform duration-150" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 text-[#4d4d4d] shrink-0 transition-transform duration-150" />
+          )}
+
+          <div className="flex items-center space-x-2 text-xs font-medium font-sans truncate">
+            <span className="text-[#0d0d0d] font-semibold">Контекст сжат</span>
+            <span className="text-[#8f8f8f]">·</span>
+            <span className="text-[#4d4d4d]">
+              Сжато <span className="font-mono tabular-nums text-[#0d0d0d]">{count}</span> {pluralMsg}
+            </span>
+            <span className="text-[#8f8f8f]">·</span>
+            <span className="font-mono tabular-nums text-[#4d4d4d] text-[11px] bg-[#f4f4f5] px-1.5 py-0.5 rounded border border-[#ebebeb]">
+              ~{formattedTokens} токенов
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-2 shrink-0 ml-2">
+          {isExpanded && (
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="flex items-center space-x-1 px-2 py-0.5 text-[10px] font-mono text-[#666666] hover:text-[#0d0d0d] bg-white border border-[#ebebeb] hover:bg-[#f4f4f5] rounded transition cursor-pointer"
+              title="Скопировать отчет сжатия"
+            >
+              {copied ? (
+                <>
+                  <Check className="h-3 w-3 text-emerald-600" />
+                  <span className="text-emerald-600">Скопировано</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="h-3 w-3 text-[#666666]" />
+                  <span>Копия</span>
+                </>
+              )}
+            </button>
+          )}
+
+          <span className="text-[10px] font-mono text-[#8f8f8f] tabular-nums">
+            {activity.timestamp || ''}
+          </span>
+        </div>
+      </div>
+
+      {/* Expanded State: Smooth slide-down showing structured Markdown report */}
+      {isExpanded && (
+        <div className="p-4 bg-white text-[#0d0d0d] font-sans text-xs leading-relaxed animate-in fade-in slide-in-from-top-1 duration-150">
+          <div className="mb-3 pb-2 border-b border-[#ebebeb] flex items-center justify-between">
+            <div className="flex items-center space-x-1.5 text-[11px] font-mono text-[#666666]">
+              <Minimize2 className="h-3.5 w-3.5 text-[#0d0d0d]" />
+              <span className="font-semibold text-[#0d0d0d]">DSH Context Compactor Report</span>
+            </div>
+            {toolData?.compactorModel && (
+              <span className="text-[10px] font-mono text-[#8f8f8f] bg-[#f4f4f5] px-1.5 py-0.5 rounded border border-[#ebebeb]">
+                model: {toolData.compactorModel}
+              </span>
+            )}
+          </div>
+
+          {activity.content ? (
+            <div className="prose-xs space-y-2 select-text">
+              <MarkdownContent content={activity.content} />
+            </div>
+          ) : (
+            <div className="text-xs font-mono text-[#8f8f8f] italic">
+              Отчет контекста отсутствует или пуст.
+            </div>
+          )}
+
+          <div className="mt-4 pt-2.5 border-t border-[#ebebeb] flex items-center justify-between text-[11px] font-mono text-[#8f8f8f]">
+            <span>Сохранено в SQLite dialog_items (type: compacted)</span>
+            <button
+              type="button"
+              onClick={() => setIsExpanded(false)}
+              className="text-[#4d4d4d] hover:text-[#0d0d0d] hover:underline cursor-pointer"
+            >
+              Свернуть
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

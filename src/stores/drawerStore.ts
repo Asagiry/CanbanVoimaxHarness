@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { LiveStreamEntry, ToolExecution, ActivityItem, ActivityType } from '../types';
+import { LiveStreamEntry, ToolExecution, ActivityItem, ActivityType, CompactionReport } from '../types';
 
 export type DrawerTab = 'thoughts' | 'output' | 'tools';
 
@@ -437,12 +437,15 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       try {
-        const res = await invoke<{ saved_tokens?: number; evaporated_count?: number }>(
+        const res = await invoke<CompactionReport>(
           'compact_context',
           { taskId }
         );
         if (res?.saved_tokens) savedTokens = res.saved_tokens;
         if (res?.evaporated_count) evaporatedCount = Math.max(evaporatedCount, res.evaporated_count);
+        if (res?.tokens_after) {
+          get().setTaskTokens(taskId, res.tokens_after);
+        }
       } catch {
         const res = await invoke<{ estimated_saved_tokens?: number; evaporated_tools_count?: number }>(
           'compact_task_context',
@@ -455,11 +458,12 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       // Keep local values
     }
 
-    get().appendOutput(
-      taskId,
-      `[СЖАТИЕ] Оптимизация контекста завершена. Сэкономлено ~${savedTokens} токенов.`,
-      'system'
-    );
+    // Refresh dialog feed from SQLite to load the persisted 'compacted' accordion card
+    try {
+      await get().loadTaskDialog(taskId);
+    } catch (e) {
+      console.warn('Failed to reload dialog after compaction:', e);
+    }
 
     return { savedTokens, evaporatedCount };
   },

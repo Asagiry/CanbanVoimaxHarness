@@ -41,6 +41,7 @@ export default function SettingsModal() {
   const gatewayId = useId();
   const apiKeyId = useId();
   const modelId = useId();
+  const compactorModelId = useId();
 
   // Filtered candidate models in "Choose models to add" modal
   const filteredCandidates = useMemo(() => {
@@ -267,6 +268,35 @@ export default function SettingsModal() {
                   {isCustomModelInput ? 'Выбрать из списка' : 'Ввести вручную'}
                 </button>
               </div>
+            </div>
+
+            {/* Compactor Model Section */}
+            <div className="space-y-1 pt-1 border-t border-[#f4f4f5]">
+              <label htmlFor={compactorModelId} className="block text-[#4d4d4d] font-sans text-xs font-medium">
+                Модель компактора контекста
+              </label>
+              <div className="relative flex items-center">
+                <Sparkles className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] pointer-events-none" />
+                <select
+                  id={compactorModelId}
+                  value={settings.compactorModel || 'inherit'}
+                  onChange={(e) => setSettings({ compactorModel: e.target.value })}
+                  className="w-full rounded-md bg-[#fafafa] border border-[#ebebeb] pl-8 pr-2.5 py-1.5 text-[#171717] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono text-xs transition cursor-pointer"
+                >
+                  <option value="inherit">Наследовать модель задачи (Рекомендуется)</option>
+                  {availableModels.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                  {settings.compactorModel && settings.compactorModel !== 'inherit' && !availableModels.includes(settings.compactorModel) && (
+                    <option value={settings.compactorModel}>{settings.compactorModel}</option>
+                  )}
+                </select>
+              </div>
+              <p className="text-[10px] text-[#666666] font-sans">
+                Модель для сжатия истории диалога и формирования структурированного отчета контекста.
+              </p>
             </div>
 
             {/* Action buttons */}

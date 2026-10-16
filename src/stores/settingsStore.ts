@@ -6,6 +6,7 @@ export interface LlmSettingsState {
   baseUrl?: string;
   apiKey: string;
   model: string;
+  compactorModel?: string;
 }
 
 interface SettingsStoreState {
@@ -32,6 +33,7 @@ const DEFAULT_SETTINGS: LlmSettingsState = {
   baseUrl: 'http://127.0.0.1:8045/v1',
   apiKey: '',
   model: 'gemini-3.8-flash-high',
+  compactorModel: 'inherit',
 };
 
 const PROVIDER_PRESETS: Record<string, { gatewayUrl: string; defaultModel: string }> = {
@@ -151,6 +153,7 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
           baseUrl: gUrl,
           apiKey: backendSettings.apiKey || backendSettings.api_key || '',
           model: backendSettings.model || DEFAULT_SETTINGS.model,
+          compactorModel: backendSettings.compactorModel || backendSettings.compactor_model || 'inherit',
         };
       }
     } catch {
@@ -170,6 +173,7 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
             baseUrl: gUrl,
             apiKey: parsed.apiKey || '',
             model: parsed.model || DEFAULT_SETTINGS.model,
+            compactorModel: parsed.compactorModel || 'inherit',
           };
         }
       } catch {
@@ -208,6 +212,7 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
           baseUrl: target.gatewayUrl,
           apiKey: target.apiKey.trim(),
           model: target.model.trim(),
+          compactorModel: (target.compactorModel || 'inherit').trim(),
         },
       });
       set({ settings: target, isSaving: false, saveStatus: 'saved' });

@@ -119,7 +119,8 @@ pub fn append_dialog_items(root: &Path, task_id: &str, items: &[ActivityItem]) -
     Ok(())
 }
 
-/// Loads all dialog items for a task ordered chronologically by created_at.
+/// Loads all dialog items for a task ordered chronologically by created_at,
+/// excluding compacted archived intermediate messages.
 pub fn load_dialog_items(root: &Path, task_id: &str) -> Result<Vec<ActivityItem>, String> {
     let conn = init_db(root).map_err(|e| format!("Failed to open database: {}", e))?;
 
@@ -127,7 +128,7 @@ pub fn load_dialog_items(root: &Path, task_id: &str) -> Result<Vec<ActivityItem>
         .prepare(
             "SELECT id, type, content, images_json, timestamp, tool_json, duration_ms
              FROM dialog_items
-             WHERE task_id = ?1
+             WHERE task_id = ?1 AND type != 'compacted_archived'
              ORDER BY created_at ASC",
         )
         .map_err(|e| format!("Failed to prepare select statement: {}", e))?;
@@ -166,6 +167,64 @@ pub fn load_dialog_items(root: &Path, task_id: &str) -> Result<Vec<ActivityItem>
     }
 
     Ok(items)
+}
+
+/// Persists a compacted summary item and marks old intermediate dialog items as 'compacted_archived'.
+pub fn persist_compacted_dialog(
+    root: &Path,
+    task_id: &str,
+    compacted_item: &ActivityItem,
+    ids_to_archive: &[String],
+) -> Result<(), String> {
+    let mut conn = init_db(root).map_err(|e| format!("Failed to open database: {}", e))?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| format!("Failed to start transaction: {}", e))?;
+
+    // 1. Mark intermediate items as compacted_archived
+    for id in ids_to_archive {
+        let _ = tx.execute(
+            "UPDATE dialog_items SET type = 'compacted_archived' WHERE task_id = ?1 AND id = ?2",
+            params![task_id, id],
+        );
+    }
+
+    // 2. Insert compacted item
+    let now_millis = chrono::Utc::now().timestamp_millis();
+    let tool_json = match &compacted_item.tool {
+        Some(val) => Some(serde_json::to_string(val).map_err(|e| e.to_string())?),
+        None => None,
+    };
+
+    tx.execute(
+        "INSERT INTO dialog_items (
+            id, task_id, type, content, images_json, timestamp, created_at, tool_json, duration_ms
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+        ON CONFLICT(id) DO UPDATE SET
+            type = excluded.type,
+            content = excluded.content,
+            images_json = excluded.images_json,
+            timestamp = excluded.timestamp,
+            tool_json = excluded.tool_json,
+            duration_ms = excluded.duration_ms",
+        params![
+            compacted_item.id,
+            task_id,
+            compacted_item.item_type,
+            compacted_item.content,
+            None::<String>,
+            compacted_item.timestamp,
+            now_millis,
+            tool_json,
+            compacted_item.duration_ms,
+        ],
+    )
+    .map_err(|e| format!("Failed to insert compacted item: {}", e))?;
+
+    tx.commit()
+        .map_err(|e| format!("Failed to commit transaction: {}", e))?;
+
+    Ok(())
 }
 
 /// Deletes all dialog items for a specific task.

@@ -4,6 +4,7 @@ import type { DrawerActivityItem } from '../../stores/drawerStore';
 import ToolExecutionCard from './ToolExecutionCard';
 import ThinkingCard from './ThinkingCard';
 import QuestionPromptCard from './QuestionPromptCard';
+import CompactedContextCard from './CompactedContextCard';
 import {
   ArrowDown,
   ChevronDown,
@@ -473,6 +474,16 @@ export default function DrawerActivityStream({
                   key={key}
                   activity={activity}
                   taskId={task.id}
+                />
+              );
+            }
+
+            // Compacted context accordion card
+            if (activity?.type === 'compacted') {
+              return (
+                <CompactedContextCard
+                  key={key}
+                  activity={activity}
                 />
               );
             }
