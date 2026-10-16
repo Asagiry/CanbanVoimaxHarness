@@ -136,11 +136,21 @@ fi
 echo ""
 
 echo "[5/5] Building Tauri release bundles..."
-if [[ -z "$BUNDLES" ]]; then
-  pnpm tauri build || fail "pnpm tauri build failed."
-else
-  pnpm tauri build --bundles "$BUNDLES" || fail "pnpm tauri build failed."
+TEMP_TAURI_CONFIG="$(mktemp "${TMPDIR:-/tmp}/tauri-skip-build-XXXXXX.json" 2>/dev/null || echo "${TMPDIR:-/tmp}/tauri-skip-build-$$.json")"
+echo '{"build":{"beforeBuildCommand":""}}' > "$TEMP_TAURI_CONFIG"
+trap 'rm -f "$TEMP_TAURI_CONFIG" >/dev/null 2>&1 || true' EXIT INT TERM
+
+tauri_args=(tauri build --config "$TEMP_TAURI_CONFIG")
+if [[ -n "$BUNDLES" ]]; then
+  tauri_args+=(--bundles "$BUNDLES")
 fi
+
+pnpm "${tauri_args[@]}" || {
+  rm -f "$TEMP_TAURI_CONFIG" >/dev/null 2>&1 || true
+  fail "pnpm tauri build failed."
+}
+rm -f "$TEMP_TAURI_CONFIG" >/dev/null 2>&1 || true
+trap - EXIT INT TERM
 echo ""
 
 echo "Collecting artifacts..."

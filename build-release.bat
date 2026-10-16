@@ -19,7 +19,7 @@ rem           --help, -h, /?    print this help and exit 0
 rem All errors are printed with an ERROR: prefix and exit with a nonzero code.
 rem Window stays open on completion or error unless --no-pause is passed.
 rem ==========================================================================
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 set "SKIP_INSTALL=0"
 set "SKIP_CHECKS=0"
 set "BUNDLES="
@@ -319,12 +319,16 @@ if not "%TARGET%"=="" (
     )
   )
 )
-set "BUILD_CMD=pnpm tauri build --no-before-build"
-if not "%TARGET%"=="" set "BUILD_CMD=%BUILD_CMD% --target %TARGET%"
-if not "%BUNDLES%"=="" set "BUILD_CMD=%BUILD_CMD% --bundles %BUNDLES%"
+set "TEMP_TAURI_CONFIG=%TEMP%\tauri-skip-build-%RANDOM%.json"
+echo {"build":{"beforeBuildCommand":""}} > "!TEMP_TAURI_CONFIG!"
+set "BUILD_CMD=pnpm tauri build --config "!TEMP_TAURI_CONFIG!""
+if not "%TARGET%"=="" set "BUILD_CMD=!BUILD_CMD! --target %TARGET%"
+if not "%BUNDLES%"=="" set "BUILD_CMD=!BUILD_CMD! --bundles %BUNDLES%"
 
-call %BUILD_CMD%
-if errorlevel 1 (
+call !BUILD_CMD!
+set "BUILD_ERR=!errorlevel!"
+if exist "!TEMP_TAURI_CONFIG!" del /q "!TEMP_TAURI_CONFIG!" >nul 2>nul
+if not "!BUILD_ERR!"=="0" (
   echo ERROR: tauri build failed. 1>&2
   goto error_exit
 )

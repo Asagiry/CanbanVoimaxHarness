@@ -281,15 +281,21 @@ if ($OnWindows) {
     }
   }
 }
-$tauriArgs = @("tauri", "build", "--no-before-build")
+$tempConfigFile = Join-Path $env:TEMP "tauri-skip-build-$PID.json"
+'{"build":{"beforeBuildCommand":""}}' | Set-Content -Path $tempConfigFile -Encoding Ascii
+$tauriArgs = @("tauri", "build", "--config", $tempConfigFile)
 if (-not [string]::IsNullOrEmpty($Target)) {
   $tauriArgs += @("--target", $Target)
 }
 if (-not [string]::IsNullOrEmpty($Bundles)) {
   $tauriArgs += @("--bundles", $Bundles)
 }
-pnpm @tauriArgs
-if ($LASTEXITCODE -ne 0) { Fail "pnpm tauri build failed." }
+try {
+  pnpm @tauriArgs
+  if ($LASTEXITCODE -ne 0) { Fail "pnpm tauri build failed." }
+} finally {
+  if (Test-Path $tempConfigFile) { Remove-Item -Force $tempConfigFile -ErrorAction SilentlyContinue }
+}
 Write-Host ""
 
 Write-Host "Collecting artifacts..."
