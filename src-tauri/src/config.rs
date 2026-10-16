@@ -863,6 +863,13 @@ pub async fn save_llm_settings_to_disk(repo_root: &Path, settings: &LlmSettings)
 //                       {model?, temperature?, context_window?, allowed_tools?}
 // ============================================================================
 
+pub const DEFAULT_AGENT_SETTING_JSON: &str = r#"{
+  "model": "gemini-3.8-flash-high",
+  "context_window": 128000,
+  "temperature": 0.2,
+  "max_tokens": 8192
+}"#;
+
 /// Per-agent overrides stored in `.cvh/agents/<role>/setting` (JSON, no
 /// extension). All fields optional; a missing/broken file falls back to
 /// defaults (see [`load_agent_setting`]).
@@ -874,6 +881,8 @@ pub struct AgentSetting {
     pub temperature: Option<f32>,
     #[serde(default, alias = "contextWindow")]
     pub context_window: Option<u64>,
+    #[serde(default, alias = "maxTokens")]
+    pub max_tokens: Option<u64>,
     #[serde(default, alias = "allowedTools")]
     pub allowed_tools: Option<Vec<String>>,
 }
@@ -1105,23 +1114,33 @@ Columns represent autonomous stages. Moving a card triggers stage automations an
 - `.cvh/pipeline.json`:
   Mirrors the active board's columns and lifecycle settings.
   Stage properties: `id`, `title`, `persona`, `contextWindow`, `gatekeeperSensor`, `allowedTools`, `terminal`, `hooks`, `routes`.
+
+## 4. Persona Mapping Invariant: 1 Persona = Exactly 1 Directory
+- **Single Source of Truth**: Exactly 1 persona corresponds to 1 directory under `.cvh/agents/<persona>/`.
+- **Decoupled Column IDs and Personas**: Columns define stages (`id`), while `persona` defines the autonomous agent role executing in that stage.
+- **No Duplication by Column ID**: Never create duplicate persona directories based on column IDs. For example, if a column has `id: "review"` and `persona: "reviewer"`, create strictly `.cvh/agents/reviewer/`, never `.cvh/agents/review/`. Multiple columns can reference the same persona without duplicating directories.
 "#;
 
 pub const DEFAULT_RULE_AGENTS_MD: &str = r#"# Guide: Agent Personas and Modular Rules
 
 Authoritative rules for `.cvh/agents/<role>/`.
 
-## 1. Directory-Only Structure
+## 1. Directory-Only Structure & Persona Invariant
 All agent definitions reside in dedicated directories under `.cvh/agents/<role>/`:
 ```text
 .cvh/agents/<role>/
 ├── persona.md       # Primary persona prompt with YAML frontmatter (or agent.md)
-├── setting          # Optional JSON settings ({})
+├── setting          # JSON settings ({ "model": "gemini-3.8-flash-high", "context_window": 128000, "temperature": 0.2, "max_tokens": 8192 })
 └── rules/           # Modular rule files loaded during zero-turn priming
     ├── rule1.md
     └── ...
 ```
 Flat persona files (`.cvh/agents/<role>.md`) are deprecated and ignored.
+
+### 1.1 Invariant: 1 Persona = Exactly 1 Directory
+- **1 Persona = 1 Directory**: Exactly one directory `.cvh/agents/<persona>/` per persona role.
+- **No Column ID Duplication**: Never create duplicate persona directories based on column IDs. For example, if a column has `id: "review"` and `persona: "reviewer"`, create strictly `.cvh/agents/reviewer/`, never `.cvh/agents/review/`.
+- **Reusable Personas**: Multiple pipeline columns across different boards can reference the same `persona` without directory duplication.
 
 ## 2. Persona YAML Frontmatter
 Every `persona.md` must start with clean YAML frontmatter:
@@ -1246,7 +1265,7 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
     }
     let setting_path = cvh_dev_dir.join("setting");
     if !setting_path.exists() {
-        atomic_write_file(&setting_path, "{}").await?;
+        atomic_write_file(&setting_path, DEFAULT_AGENT_SETTING_JSON).await?;
     }
     let boards_md_path = cvh_dev_rules_dir.join("boards.md");
     if !boards_md_path.exists() {

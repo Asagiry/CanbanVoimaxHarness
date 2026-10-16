@@ -238,7 +238,7 @@ pub async fn create_agent_persona_file(root: &Path, role: &str) -> Result<String
         .map_err(|e| format!("Не удалось создать персону '{}': {}", role, e))?;
     let setting_path = role_dir.join("setting");
     if !setting_path.exists() {
-        atomic_write_file(&setting_path, "{}")
+        atomic_write_file(&setting_path, crate::config::DEFAULT_AGENT_SETTING_JSON)
             .await
             .map_err(|e| format!("Не удалось создать setting для персоны '{}': {}", role, e))?;
     }
@@ -2398,9 +2398,11 @@ pub async fn run_agent(
                         // 2. ROOT TASK COMPLETED (e.g. CVH-012 in dev)
                         // ====================================================
                         let mut next_stage_col: Option<crate::config::PipelineColumn> = None;
+                        let mut is_curr_terminal = false;
                         if let Ok(pipeline) = load_pipeline_config(&root_task).await {
                             if let Some(curr_idx) = pipeline.columns.iter().position(|c| c.id == tasks[task_idx].stage_id) {
                                 let curr_col = &pipeline.columns[curr_idx];
+                                is_curr_terminal = curr_col.terminal == Some(true);
                                 let mut route_target: Option<String> = None;
                                 if parsed_verdict == Some("CHANGES_REQUESTED".to_string()) {
                                     if let Some(routes) = curr_col.routes.as_ref() {
@@ -2427,6 +2429,13 @@ pub async fn run_agent(
                                 } else if curr_idx + 1 < pipeline.columns.len() {
                                     next_stage_col = Some(pipeline.columns[curr_idx + 1].clone());
                                 }
+                            }
+                        }
+
+                        // If target column is the same as current stage, treat as staying in current column
+                        if let Some(ref col) = next_stage_col {
+                            if col.id == tasks[task_idx].stage_id {
+                                next_stage_col = None;
                             }
                         }
 
@@ -2543,6 +2552,37 @@ pub async fn run_agent(
                                     }),
                                 );
                             }
+                        } else {
+                            // No next stage column: task stays in current column (terminal or idle)
+                            let is_terminal = is_curr_terminal || tasks[task_idx].stage_id == "ready" || tasks[task_idx].stage_id == "done";
+                            tasks[task_idx].status = Some(if is_terminal { "done".to_string() } else { "idle".to_string() });
+                            tasks[task_idx].updated_at = Utc::now().timestamp_millis();
+                            let updated_task = tasks[task_idx].clone();
+                            let _ = save_tasks_to_disk(&root_task, &tasks).await;
+                            if let Some(state_ref) = app.try_state::<AppState>() {
+                                if let Ok(mut guard) = state_ref.tasks.lock() {
+                                    *guard = tasks.clone();
+                                }
+                            }
+                            let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+                            let _ = app.emit(
+                                "task:moved",
+                                serde_json::json!({
+                                    "taskId": tid,
+                                    "fromStage": old_stage,
+                                    "toStage": old_stage,
+                                    "stageId": old_stage,
+                                    "status": updated_task.status,
+                                    "task": updated_task
+                                }),
+                            );
+                            let _ = app.emit(
+                                "agent:status",
+                                serde_json::json!({
+                                    "taskId": tid,
+                                    "status": "finished"
+                                }),
+                            );
                         }
                     }
                 }
@@ -3648,7 +3688,12 @@ mod tests {
         let setting = tokio::fs::read_to_string(role_dir.join("setting"))
             .await
             .expect("read setting");
-        assert_eq!(setting.trim(), "{}");
+        let parsed_setting: crate::config::AgentSetting =
+            serde_json::from_str(&setting).expect("parse setting");
+        assert_eq!(parsed_setting.model.as_deref(), Some("gemini-3.8-flash-high"));
+        assert_eq!(parsed_setting.context_window, Some(128000));
+        assert_eq!(parsed_setting.temperature, Some(0.2));
+        assert_eq!(parsed_setting.max_tokens, Some(8192));
 
         // duplicate → Err mentioning существование
         let dup = create_agent_persona_file(&base, "my-role").await;

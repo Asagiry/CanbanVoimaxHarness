@@ -2,17 +2,22 @@
 
 Authoritative rules for `.cvh/agents/<role>/`.
 
-## 1. Directory-Only Structure
+## 1. Directory-Only Structure & Persona Invariant
 All agent definitions reside in dedicated directories under `.cvh/agents/<role>/`:
 ```text
 .cvh/agents/<role>/
 ├── persona.md       # Primary persona prompt with YAML frontmatter (or agent.md)
-├── setting          # Optional JSON settings ({})
+├── setting          # JSON settings ({ "model": "gemini-3.8-flash-high", "context_window": 128000, "temperature": 0.2, "max_tokens": 8192 })
 └── rules/           # Modular rule files loaded during zero-turn priming
     ├── rule1.md
     └── ...
 ```
 Flat persona files (`.cvh/agents/<role>.md`) are deprecated and ignored.
+
+### 1.1 Invariant: 1 Persona = Exactly 1 Directory
+- **1 Persona = 1 Directory**: Exactly one directory `.cvh/agents/<persona>/` per persona role.
+- **No Column ID Duplication**: Never create duplicate persona directories based on column IDs. For example, if a column has `id: "review"` and `persona: "reviewer"`, create strictly `.cvh/agents/reviewer/`, never `.cvh/agents/review/`.
+- **Reusable Personas**: Multiple pipeline columns across different boards can reference the same `persona` without directory duplication.
 
 ## 2. Persona YAML Frontmatter
 Every `persona.md` must start with clean YAML frontmatter:
