@@ -10,14 +10,20 @@ use crate::llm::{ChatMessage, LlmClient, OpenAIChatRequest, StreamChunk, ToolCal
 use anyhow::{bail, Context, Result};
 use tauri::{AppHandle, Emitter};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 use tokio::sync::mpsc;
+
+pub type QuestionSenderMap = HashMap<String, tokio::sync::oneshot::Sender<String>>;
+
+pub static QUESTION_REGISTRY: LazyLock<Arc<tokio::sync::Mutex<QuestionSenderMap>>> =
+    LazyLock::new(|| Arc::new(tokio::sync::Mutex::new(HashMap::new())));
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -427,6 +433,30 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
                 "required": ["reason"]
             }),
         ),
+        ToolDefinition::function(
+            "question",
+            "Задать интерактивный уточняющий вопрос пользователю и приостановить выполнение агента до получения ответа (Human-in-the-Loop). Алиас: 'ask_user'.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "text": { "type": "string", "description": "The specific question to ask the user." },
+                    "options": {
+                        "type": "array",
+                        "description": "Predefined choices for the user. If recommended, put '(Рекомендуется)' in label.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "label": { "type": "string", "description": "Short option label" },
+                                "description": { "type": "string", "description": "Clarifying subtitle or tradeoff" }
+                            },
+                            "required": ["label"]
+                        }
+                    },
+                    "multiple": { "type": "boolean", "description": "Whether multiple options can be chosen" }
+                },
+                "required": ["text"]
+            }),
+        ),
     ]
 }
 
@@ -626,6 +656,7 @@ pub async fn execute_tool(
     let normalized_tool_name = match tool_name {
         "bash" => "execute_command",
         "str_replace" => "edit_file",
+        "ask_user" => "question",
         other => other,
     };
 
@@ -1039,6 +1070,114 @@ pub async fn execute_tool(
                 prev_col.id,
                 reason
             )
+        }
+
+        "question" => {
+            let text = args
+                .get("text")
+                .and_then(|v| v.as_str())
+                .context("Missing required parameter 'text'")?;
+            let options = args.get("options").cloned();
+            let multiple = args.get("multiple").and_then(|v| v.as_bool()).unwrap_or(false);
+
+            let question_id = uuid::Uuid::new_v4().to_string();
+            let task_id_str = task_id.unwrap_or("unknown").to_string();
+
+            // 1. Thread-safe oneshot channel registration (zero-polling)
+            let (tx, mut rx) = tokio::sync::oneshot::channel::<String>();
+            {
+                let mut reg = QUESTION_REGISTRY.lock().await;
+                reg.insert(question_id.clone(), tx);
+            }
+
+            // 2. Persist activity item in SQLite dialog_items with type: "question"
+            let timestamp_str = chrono::Utc::now().to_rfc3339();
+            let question_payload = serde_json::json!({
+                "taskId": task_id_str,
+                "questionId": question_id,
+                "text": text,
+                "options": options,
+                "multiple": multiple,
+            });
+
+            let activity_item = crate::db::ActivityItem {
+                id: format!("q-{}", question_id),
+                item_type: "question".to_string(),
+                timestamp: timestamp_str,
+                content: Some(text.to_string()),
+                tool: Some(serde_json::json!({
+                    "id": question_id,
+                    "toolName": "question",
+                    "status": "running",
+                    "params": question_payload,
+                })),
+                duration_ms: None,
+                images: None,
+            };
+
+            if let Err(e) = crate::db::append_dialog_items(repo_root, &task_id_str, &[activity_item]) {
+                eprintln!("CVH [question]: Failed to persist question activity item: {}", e);
+            }
+
+            // 3. Emit Tauri event agent:question with { taskId, questionId, text, options, multiple }
+            if let Some(ref app) = ctx.app_handle {
+                let _ = app.emit(
+                    "agent:question",
+                    serde_json::json!({
+                        "taskId": task_id_str,
+                        "questionId": question_id,
+                        "text": text,
+                        "options": options,
+                        "multiple": multiple,
+                    }),
+                );
+            }
+
+            // 4. Zero-Polling Tokio Pause: wait on rx.await (with abort check)
+            let answer = loop {
+                tokio::select! {
+                    res = &mut rx => {
+                        match res {
+                            Ok(ans) => break ans,
+                            Err(_) => bail!("Question channel was closed without an answer"),
+                        }
+                    }
+                    _ = tokio::time::sleep(Duration::from_millis(250)) => {
+                        if abort_handle.load(Ordering::SeqCst) {
+                            let mut reg = QUESTION_REGISTRY.lock().await;
+                            reg.remove(&question_id);
+                            bail!("Agent execution was aborted while waiting for answer to question");
+                        }
+                    }
+                }
+            };
+
+            // 5. Update question activity item in SQLite dialog_items to locked/answered state
+            let answered_item = crate::db::ActivityItem {
+                id: format!("q-{}", question_id),
+                item_type: "question".to_string(),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                content: Some(text.to_string()),
+                tool: Some(serde_json::json!({
+                    "id": question_id,
+                    "toolName": "question",
+                    "status": "success",
+                    "selectedAnswer": &answer,
+                    "params": {
+                        "taskId": task_id_str,
+                        "questionId": question_id,
+                        "text": text,
+                        "options": options,
+                        "multiple": multiple,
+                        "selectedAnswer": &answer,
+                    }
+                })),
+                duration_ms: None,
+                images: None,
+            };
+            let _ = crate::db::append_dialog_items(repo_root, &task_id_str, &[answered_item]);
+
+            answer
         }
 
         custom_tool => {

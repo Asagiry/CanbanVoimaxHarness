@@ -2192,7 +2192,7 @@ pub async fn internal_move_task_stage(
 
     if let Some(ref bc) = boards_cfg {
         let active_board = bc.boards.iter().find(|b| b.id == bc.active_board_id).cloned();
-        let board_switched = current_task.board_id.as_deref().map_or(false, |bid| bid != bc.active_board_id);
+        let board_switched = current_task.board_id.as_deref().is_some_and(|bid| bid != bc.active_board_id);
 
         let current_board = current_task.board_id.as_deref().and_then(|bid| {
             bc.boards.iter().find(|b| b.id == bid).cloned()
@@ -2536,7 +2536,7 @@ pub async fn internal_advance_task(
     let board_switched = current_task
         .board_id
         .as_deref()
-        .map_or(false, |b| b != active_board_id);
+        .is_some_and(|b| b != active_board_id);
 
     if board_switched {
         // Active board changed: finalize task directly to terminal column ('ready') of target active board
@@ -3892,6 +3892,26 @@ pub async fn steer_agent(
 
     // Re-invoke agent loop with steering message
     run_agent(task_id, Some(message), app_handle).await
+}
+
+#[tauri::command]
+pub async fn answer_agent_question(
+    task_id: String,
+    question_id: String,
+    answer: String,
+) -> Result<(), String> {
+    let mut reg = crate::agent::QUESTION_REGISTRY.lock().await;
+    if let Some(sender) = reg.remove(&question_id) {
+        sender
+            .send(answer)
+            .map_err(|_| "Failed to send answer: agent question channel was dropped".to_string())?;
+        Ok(())
+    } else {
+        Err(format!(
+            "Question {} for task {} not found in registry (already answered or expired)",
+            question_id, task_id
+        ))
+    }
 }
 
 // ============================================================================

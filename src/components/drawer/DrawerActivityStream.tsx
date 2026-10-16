@@ -3,6 +3,7 @@ import type { KanbanTask } from '../../types';
 import type { DrawerActivityItem } from '../../stores/drawerStore';
 import ToolExecutionCard from './ToolExecutionCard';
 import ThinkingCard from './ThinkingCard';
+import QuestionPromptCard from './QuestionPromptCard';
 import {
   ArrowDown,
   ChevronDown,
@@ -460,6 +461,21 @@ export default function DrawerActivityStream({
           {/* Unified Chronological Activity Stream */}
           {(unifiedActivities ?? []).map((activity, idx) => {
             const key = activity?.id ?? `activity-${idx}`;
+
+            // e) Interactive Question Prompt Card (Human-in-the-Loop)
+            if (
+              activity?.type === 'question' ||
+              (activity?.type === 'tool' &&
+                (activity.tool?.toolName === 'question' || activity.tool?.toolName === 'ask_user'))
+            ) {
+              return (
+                <QuestionPromptCard
+                  key={key}
+                  activity={activity}
+                  taskId={task.id}
+                />
+              );
+            }
 
             // b) Live Streaming Thinking Block
             if (activity?.type === 'thought') {

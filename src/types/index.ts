@@ -124,7 +124,12 @@ export interface LiveStreamEntry {
   images?: string[];
 }
 
-export type ActivityType = 'thought' | 'output' | 'tool' | 'steer' | 'system' | 'error' | 'user';
+export type ActivityType = 'thought' | 'output' | 'tool' | 'steer' | 'system' | 'error' | 'user' | 'question';
+
+export interface QuestionOption {
+  label: string;
+  description?: string;
+}
 
 export interface ActivityItem {
   id: string;

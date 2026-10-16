@@ -6,11 +6,19 @@ export interface ToolMeta {
   name: string;
   label: string;
   description: string;
-  category: 'system' | 'fs' | 'web' | 'agent' | 'workflow';
+  category: 'system' | 'fs' | 'web' | 'agent' | 'workflow' | 'interactive';
   tokenWeight: number;
 }
 
 export const AVAILABLE_TOOLS: ToolMeta[] = [
+  {
+    id: 'question',
+    name: 'question',
+    label: 'Интерактивный вопрос (Human-in-the-Loop)',
+    description: 'Задать уточняющий вопрос пользователю и ожидать ответа в интерфейсе. Алиас: ask_user.',
+    category: 'interactive',
+    tokenWeight: 240,
+  },
   {
     id: 'advance_task',
     name: 'advance_task',
@@ -139,6 +147,7 @@ const DEFAULT_GLOBAL: Record<string, boolean> = {
   web_fetch: true,
   subagent: true,
   todo_write: true,
+  question: true,
 };
 
 const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
@@ -155,6 +164,7 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     web_fetch: true,
     subagent: true,
     todo_write: true,
+    question: true,
   },
   dev: {
     advance_task: true,
@@ -169,6 +179,7 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     web_fetch: true,
     subagent: true,
     todo_write: true,
+    question: true,
   },
   retro: {
     advance_task: true,
@@ -183,6 +194,7 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     web_fetch: false,
     subagent: false,
     todo_write: true,
+    question: true,
   },
 };
 
