@@ -7,7 +7,7 @@ import { useDrawerStore } from './drawerStore';
 export const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
   {
     id: 'backlog',
-    title: 'Бэклог',
+    title: 'Ожидание',
     color: '#64748b',
     icon: 'Inbox',
     persona: null,
@@ -637,9 +637,19 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   moveTask: async (taskId, targetColumnId) => {
     const { tasks, columns } = get();
     const task = tasks.find((t) => t.id === taskId);
-    if (!task || task.columnId === targetColumnId) return;
+    const targetStageId = (targetColumnId || '').trim();
+    if (!task) {
+      console.warn(`[moveTask] Task "${taskId}" not found in local store`);
+      return;
+    }
+    if (!targetStageId) {
+      console.warn(`[moveTask] Invalid empty targetColumnId for task "${taskId}"`);
+      return;
+    }
+    if (task.columnId === targetStageId) return;
 
-    const targetColDef = columns.find((c) => c.id === targetColumnId);
+    const targetColDef = columns.find((c) => c.id === targetStageId);
+    console.info(`[moveTask] Moving task "${taskId}" from "${task.columnId}" to "${targetStageId}"`);
 
     // Preferred path: backend owns the move (gatekeeper sensor, target on_enter
     // hooks, source on_finish hooks + worktree allocation). Local state is
@@ -649,14 +659,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       const { invoke } = await import('@tauri-apps/api/core');
       const backendTask = await invoke<any>('move_task_stage', {
         taskId,
-        targetStageId: targetColumnId,
+        targetStageId,
       });
       if (backendTask && typeof backendTask.id === 'string') {
         const mapped = mapBackendTaskToKanban(backendTask);
         const prev = get().tasks.find((t) => t.id === taskId) ?? task;
         // Local-only timer/UX bookkeeping (backend has no timer fields).
         const sourceColIndex = columns.findIndex((c) => c.id === prev.columnId);
-        const targetColIndex = columns.findIndex((c) => c.id === targetColumnId);
+        const targetColIndex = columns.findIndex((c) => c.id === targetStageId);
         const isRework =
           sourceColIndex >= 0 && targetColIndex >= 0 && targetColIndex < sourceColIndex;
         const currentDuration =
@@ -695,9 +705,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         }
         return;
       }
-      throw new Error('move_task_stage returned empty task');
+      throw new Error(`move_task_stage returned empty or invalid task for id "${taskId}"`);
     } catch (err: unknown) {
-      console.error('Backend move_task_stage failed (gatekeeper sensor or hook rejected):', err);
+      console.error(`[moveTask] Backend move_task_stage failed for task "${taskId}" -> stage "${targetStageId}":`, err);
       const msg = typeof err === 'string' ? err : err instanceof Error ? err.message : JSON.stringify(err);
       alert(`Перемещение задачи отклонено:\n${msg}`);
       // Откатить состояние / синхронизировать карточки с бэкенда

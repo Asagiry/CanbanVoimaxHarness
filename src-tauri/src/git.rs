@@ -54,6 +54,24 @@ pub async fn create_worktree(
         return Ok(worktree_abs);
     }
 
+    let alt_worktree_rel = PathBuf::from("worktrees").join(task_slug);
+    let alt_worktree_abs = repo_path.join(&alt_worktree_rel);
+    if alt_worktree_abs.exists() {
+        return Ok(alt_worktree_abs);
+    }
+
+    // Check if worktree or branch is already registered in git
+    if let Ok(existing_wts) = list_worktrees(repo_path).await {
+        for wt in existing_wts {
+            if wt.branch.as_deref() == Some(&branch_name) || wt.path.ends_with(task_slug) {
+                let p = PathBuf::from(&wt.path);
+                if p.exists() {
+                    return Ok(p);
+                }
+            }
+        }
+    }
+
     // Check if branch already exists
     let mut branch_cmd = Command::new("git");
     branch_cmd
@@ -71,12 +89,34 @@ pub async fn create_worktree(
     let worktree_str = worktree_rel.to_string_lossy().to_string();
 
     if branch_exists {
-        run_git(
+        let add_res = run_git(
             repo_path,
             &["worktree", "add", &worktree_str, &branch_name],
         )
-        .await
-        .with_context(|| format!("Failed to attach existing branch '{}' to worktree '{}'", branch_name, worktree_str))?;
+        .await;
+
+        if let Err(e) = add_res {
+            if worktree_abs.exists() {
+                sync_cvh_runtime_state(repo_path, &worktree_abs).await;
+                return Ok(worktree_abs);
+            }
+            if alt_worktree_abs.exists() {
+                sync_cvh_runtime_state(repo_path, &alt_worktree_abs).await;
+                return Ok(alt_worktree_abs);
+            }
+            if let Ok(existing_wts) = list_worktrees(repo_path).await {
+                for wt in existing_wts {
+                    if wt.branch.as_deref() == Some(&branch_name) || wt.path.ends_with(task_slug) {
+                        let p = PathBuf::from(&wt.path);
+                        if p.exists() {
+                            sync_cvh_runtime_state(repo_path, &p).await;
+                            return Ok(p);
+                        }
+                    }
+                }
+            }
+            return Err(e).with_context(|| format!("Failed to attach existing branch '{}' to worktree '{}'", branch_name, worktree_str));
+        }
     } else {
         // Verify base branch exists; if not, fallback to "HEAD" so it works on any repo/branch
         let mut base_cmd = Command::new("git");
@@ -91,12 +131,34 @@ pub async fn create_worktree(
             _ => "HEAD",
         };
 
-        run_git(
+        let add_res = run_git(
             repo_path,
             &["worktree", "add", "-b", &branch_name, &worktree_str, effective_base],
         )
-        .await
-        .with_context(|| format!("Failed to create worktree '{}' from branch '{}'", worktree_str, effective_base))?;
+        .await;
+
+        if let Err(e) = add_res {
+            if worktree_abs.exists() {
+                sync_cvh_runtime_state(repo_path, &worktree_abs).await;
+                return Ok(worktree_abs);
+            }
+            if alt_worktree_abs.exists() {
+                sync_cvh_runtime_state(repo_path, &alt_worktree_abs).await;
+                return Ok(alt_worktree_abs);
+            }
+            if let Ok(existing_wts) = list_worktrees(repo_path).await {
+                for wt in existing_wts {
+                    if wt.branch.as_deref() == Some(&branch_name) || wt.path.ends_with(task_slug) {
+                        let p = PathBuf::from(&wt.path);
+                        if p.exists() {
+                            sync_cvh_runtime_state(repo_path, &p).await;
+                            return Ok(p);
+                        }
+                    }
+                }
+            }
+            return Err(e).with_context(|| format!("Failed to create worktree '{}' from branch '{}'", worktree_str, effective_base));
+        }
     }
 
     // The fresh worktree carries the COMMITTED .cvh snapshot, which is stale by

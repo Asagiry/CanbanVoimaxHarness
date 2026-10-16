@@ -7,7 +7,7 @@
       "columns": [
         {
           "id": "backlog",
-          "title": "Backlog",
+          "title": "Ожидание",
           "color": "#64748b",
           "icon": "Inbox",
           "persona": null,
@@ -57,7 +57,7 @@
         },
         {
           "id": "ready",
-          "title": "Ready / Done",
+          "title": "Готово",
           "color": "#10b981",
           "icon": "CheckCircle2",
           "persona": null,

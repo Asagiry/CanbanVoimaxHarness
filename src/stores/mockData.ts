@@ -3,7 +3,7 @@ import { CortexAgentStage, PipelineColumn } from '../types';
 export const INITIAL_COLUMNS: PipelineColumn[] = [
   {
     id: 'backlog',
-    title: 'Бэклог',
+    title: 'Ожидание',
     color: '#64748b',
     icon: 'Inbox',
     persona: null,
@@ -80,7 +80,7 @@ export const INITIAL_COLUMNS: PipelineColumn[] = [
 export const INITIAL_CORTEX_STAGES: CortexAgentStage[] = [
   {
     stageId: 'backlog',
-    stageTitle: 'Бэклог / Архитектура',
+    stageTitle: 'Ожидание / Архитектура',
     color: '#64748b',
     icon: 'Inbox',
     personaName: 'Архитектор',

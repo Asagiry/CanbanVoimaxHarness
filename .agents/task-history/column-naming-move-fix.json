@@ -1,0 +1,25 @@
+{
+  "taskId": "CVH-COLUMN-NAMING-MOVE-FIX",
+  "task": "column-naming-move-fix",
+  "title": "Fix task move to development stage, enforce canonical column names (Ожидание / Готово), and remove card stage stepper",
+  "branch": "feat/column-naming-move-fix",
+  "verdict": "APPROVED",
+  "sensors": {
+    "cargo_check": "pass",
+    "cargo_clippy": "pass",
+    "frontend_build_pnpm": "pass"
+  },
+  "files": [
+    ".cvh/boards.json",
+    ".cvh/pipeline.json",
+    "src-tauri/Cargo.lock",
+    "src-tauri/src/commands.rs",
+    "src-tauri/src/config.rs",
+    "src-tauri/src/git.rs",
+    "src/components/board/CreateBoardModal.tsx",
+    "src/components/card/KanbanCard.tsx",
+    "src/stores/boardStore.ts",
+    "src/stores/mockData.ts"
+  ],
+  "summary": "1. In internal_move_task_stage and git.rs: supported stage aliases (dev/development), robust board_id resolution with fallback to active/matching boards, safe existing worktree pickup without crashing, and gatekeeper sensor bypass on initial move from backlog to dev. 2. In boardStore.ts: validated targetColumnId and enhanced transition logging. 3. Standardized canonical column titles to 'Ожидание' (backlog) and 'Готово' (ready) across all configurations, presets, and UI. 4. Stripped stage stepper tabs and unused icons from KanbanCard.tsx for a clean, compact tactile card."
+}

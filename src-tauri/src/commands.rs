@@ -1156,11 +1156,51 @@ pub fn needs_builtin_worktree(
 
 /// Best-effort builtin: `create_worktree(root, lowercase(task.id), "HEAD")`
 /// + branch `feat/<slug>` если пуст. Ошибки только варнят в лог.
+pub fn stage_id_matches(col_id: &str, target: &str) -> bool {
+    if col_id.eq_ignore_ascii_case(target) {
+        return true;
+    }
+    let c = col_id.to_ascii_lowercase();
+    let t = target.to_ascii_lowercase();
+    if (t == "dev" || t == "development") && (c == "dev" || c == "development") {
+        return true;
+    }
+    if (t == "backlog" || t == "waiting" || t == "ожидание") && (c == "backlog" || c == "waiting" || c == "ожидание") {
+        return true;
+    }
+    if (t == "ready" || t == "done" || t == "готово") && (c == "ready" || c == "done" || c == "готово") {
+        return true;
+    }
+    false
+}
+
 pub async fn ensure_builtin_worktree(root: &Path, task: &mut Task) {
-    if task_has_worktree(task) {
-        return;
+    if let Some(ref p) = task.worktree_path {
+        let pb = Path::new(p.trim());
+        let abs = if pb.is_absolute() {
+            pb.to_path_buf()
+        } else {
+            root.join(pb)
+        };
+        if abs.exists() {
+            return;
+        }
     }
     let slug = task.id.to_lowercase();
+    let candidates = [
+        root.join(".cvh").join("worktrees").join(&slug),
+        root.join("worktrees").join(&slug),
+    ];
+    for cand in &candidates {
+        if cand.exists() {
+            task.worktree_path = Some(cand.to_string_lossy().to_string());
+            if task.branch.as_deref().unwrap_or("").trim().is_empty() {
+                task.branch = Some(format!("feat/{}", slug));
+            }
+            return;
+        }
+    }
+
     match create_worktree(root, &slug, "HEAD").await {
         Ok(wt_abs) => {
             task.worktree_path = Some(wt_abs.to_string_lossy().to_string());
@@ -1178,6 +1218,15 @@ pub async fn ensure_builtin_worktree(root: &Path, task: &mut Task) {
                 "CVH [builtin_worktree]: creation failed for {}: {}",
                 task.id, e
             );
+            for cand in &candidates {
+                if cand.exists() {
+                    task.worktree_path = Some(cand.to_string_lossy().to_string());
+                    break;
+                }
+            }
+            if task.branch.as_deref().unwrap_or("").trim().is_empty() {
+                task.branch = Some(format!("feat/{}", slug));
+            }
         }
     }
 }
@@ -1608,24 +1657,68 @@ pub async fn internal_move_task_stage(
 
     let current_task = &mut tasks[task_idx];
 
+    // --- Board resolution & fallback (support alias and fallback when board_id missing/stale) ---
+    let boards_cfg = load_boards_config(root).await.ok();
+    let mut effective_board: Option<crate::config::BoardDef> = None;
+
+    if let Some(ref bc) = boards_cfg {
+        let current_board = current_task.board_id.as_deref().and_then(|bid| {
+            bc.boards.iter().find(|b| b.id == bid).cloned()
+        });
+
+        let current_board_has_target = current_board
+            .as_ref()
+            .map(|b| b.columns.iter().any(|c| stage_id_matches(&c.id, target_stage_id)))
+            .unwrap_or(false);
+
+        if current_board_has_target {
+            effective_board = current_board;
+        } else {
+            // Fallback:
+            // 1. Try active board if it has target_stage_id
+            let active_board = bc.boards.iter().find(|b| b.id == bc.active_board_id).cloned();
+            let active_has_target = active_board
+                .as_ref()
+                .map(|b| b.columns.iter().any(|c| stage_id_matches(&c.id, target_stage_id)))
+                .unwrap_or(false);
+
+            if active_has_target {
+                effective_board = active_board;
+            } else {
+                // 2. Find any board that has target_stage_id
+                let any_with_target = bc.boards.iter().find(|b| {
+                    b.columns.iter().any(|c| stage_id_matches(&c.id, target_stage_id))
+                }).cloned();
+
+                if any_with_target.is_some() {
+                    effective_board = any_with_target;
+                } else {
+                    // 3. Fallback to active board, or first board
+                    effective_board = active_board.or_else(|| bc.boards.first().cloned());
+                }
+            }
+
+            // Update current_task.board_id to the valid board
+            if let Some(ref b) = effective_board {
+                current_task.board_id = Some(b.id.clone());
+            } else {
+                current_task.board_id = Some(bc.active_board_id.clone());
+            }
+        }
+    }
+
     // --- on_finish / on_leave hooks of source column ---
     let source_stage_id = current_task.stage_id.clone();
     let source_col: Option<crate::config::PipelineColumn> = {
-        let boards_cfg = load_boards_config(root).await.ok();
-        let from_board = boards_cfg.as_ref().and_then(|bc| {
-            let b = if let Some(ref bid) = current_task.board_id {
-                bc.boards.iter().find(|b| &b.id == bid)
-            } else {
-                bc.boards.iter().find(|b| b.id == bc.active_board_id)
-            };
-            b.and_then(|b| b.columns.iter().find(|c| c.id == source_stage_id).cloned())
+        let from_board = effective_board.as_ref().and_then(|b| {
+            b.columns.iter().find(|c| stage_id_matches(&c.id, &source_stage_id)).cloned()
         });
         match from_board {
             Some(c) => Some(c),
             None => load_pipeline_config(root)
                 .await
                 .ok()
-                .and_then(|p| p.columns.into_iter().find(|c| c.id == source_stage_id)),
+                .and_then(|p| p.columns.into_iter().find(|c| stage_id_matches(&c.id, &source_stage_id))),
         }
     };
 
@@ -1651,9 +1744,7 @@ pub async fn internal_move_task_stage(
                     Ok(res) => {
                         if !res.success {
                             eprintln!(
-                                "CVH [on_finish]: hook {:?} failed for task {} leaving stage {} (exit code {:?}):
-STDOUT: {}
-STDERR: {}",
+                                "CVH [on_finish]: hook {:?} failed for task {} leaving stage {} (exit code {:?}):\nSTDOUT: {}\nSTDERR: {}",
                                 hook_path, current_task.id, scol.id, res.exit_code, res.stdout, res.stderr
                             );
                         }
@@ -1671,14 +1762,8 @@ STDERR: {}",
     }
 
     let target_col = {
-        let boards_cfg = load_boards_config(root).await.ok();
-        let col_from_board = boards_cfg.as_ref().and_then(|bc| {
-            let b = if let Some(ref bid) = current_task.board_id {
-                bc.boards.iter().find(|b| &b.id == bid)
-            } else {
-                bc.boards.iter().find(|b| b.id == bc.active_board_id)
-            };
-            b.and_then(|b| b.columns.iter().find(|c| c.id == target_stage_id).cloned())
+        let col_from_board = effective_board.as_ref().and_then(|b| {
+            b.columns.iter().find(|c| stage_id_matches(&c.id, target_stage_id)).cloned()
         });
         match col_from_board {
             Some(c) => c,
@@ -1689,31 +1774,57 @@ STDERR: {}",
                 pipeline
                     .columns
                     .into_iter()
-                    .find(|c| c.id == target_stage_id)
+                    .find(|c| stage_id_matches(&c.id, target_stage_id))
                     .ok_or_else(|| format!("Target stage {} not found in pipeline or board", target_stage_id))?
             }
         }
     };
+    let canonical_target_stage_id = target_col.id.clone();
 
-    // Gatekeeper Sensor Verification
+    // Worktree allocation: ensure worktree when moving to dev or when target column requires builtin
+    if needs_builtin_worktree(&target_col, current_task, false)
+        || stage_id_matches(&canonical_target_stage_id, "dev")
+    {
+        ensure_builtin_worktree(root, current_task).await;
+    }
+
+    // Gatekeeper Sensor Verification: do not block initial move from backlog to dev or new/empty worktree
     if let Some(sensor_cmd) = &target_col.gatekeeper_sensor {
-        let wt_path = current_task
-            .worktree_path
-            .as_deref()
-            .map(PathBuf::from)
-            .unwrap_or_else(|| root.to_path_buf());
+        let is_from_backlog = source_stage_id.is_empty()
+            || stage_id_matches(&source_stage_id, "backlog");
+        let is_to_dev = stage_id_matches(&canonical_target_stage_id, "dev");
+        let is_initial_move_to_dev = is_from_backlog && is_to_dev;
 
-        let sensor_res = execute_sensor_command(sensor_cmd, &wt_path, None)
-            .await
-            .map_err(|e| format!("Sensor execution failed: {}", e))?;
+        let wt_empty_or_new = match &current_task.worktree_path {
+            None => true,
+            Some(p) => {
+                let path = Path::new(p);
+                !path.exists() || path.read_dir().map(|mut it| it.next().is_none()).unwrap_or(true)
+            }
+        };
 
-        if !sensor_res.success {
-            return Err(format!(
-                "Gatekeeper Sensor '{}' rejected transition (Exit code: {:?}):
-STDOUT: {}
-STDERR: {}",
-                sensor_cmd, sensor_res.exit_code, sensor_res.stdout, sensor_res.stderr
-            ));
+        if is_initial_move_to_dev || wt_empty_or_new {
+            println!(
+                "CVH [gatekeeper]: skipping gatekeeper sensor '{}' for initial transition of task {} from '{}' to '{}' (initial move / empty worktree)",
+                sensor_cmd, current_task.id, source_stage_id, canonical_target_stage_id
+            );
+        } else {
+            let wt_path = current_task
+                .worktree_path
+                .as_deref()
+                .map(PathBuf::from)
+                .unwrap_or_else(|| root.to_path_buf());
+
+            let sensor_res = execute_sensor_command(sensor_cmd, &wt_path, None)
+                .await
+                .map_err(|e| format!("Sensor execution failed: {}", e))?;
+
+            if !sensor_res.success {
+                return Err(format!(
+                    "Gatekeeper Sensor '{}' rejected transition (Exit code: {:?}):\nSTDOUT: {}\nSTDERR: {}",
+                    sensor_cmd, sensor_res.exit_code, sensor_res.stdout, sensor_res.stderr
+                ));
+            }
         }
     }
 
@@ -1736,7 +1847,7 @@ STDERR: {}",
                     worktree_path: current_task.worktree_path.clone().unwrap_or_default(),
                     branch: current_task.branch.clone().unwrap_or_default(),
                     verdict: verdict.clone().or_else(|| current_task.verdict.clone()),
-                    stage_id: Some(target_stage_id.to_string()),
+                    stage_id: Some(canonical_target_stage_id.clone()),
                     board_id: current_task.board_id.clone(),
                     extra_env: HashMap::new(),
                 };
@@ -1746,8 +1857,7 @@ STDERR: {}",
 
                 if !hook_res.success {
                     return Err(format!(
-                        "Stage transition hook rejected transition (Exit code: {:?}):
-{}",
+                        "Stage transition hook rejected transition (Exit code: {:?}):\n{}",
                         hook_res.exit_code, hook_res.stderr
                     ));
                 }
@@ -1764,7 +1874,7 @@ STDERR: {}",
     trigger_column_on_enter_script(
         &target_col,
         current_task,
-        target_stage_id,
+        &canonical_target_stage_id,
         verdict.as_deref(),
         root,
     )
@@ -1772,7 +1882,7 @@ STDERR: {}",
 
     // Update task
     let old_stage = current_task.stage_id.clone();
-    current_task.stage_id = target_stage_id.to_string();
+    current_task.stage_id = canonical_target_stage_id.clone();
     if verdict.is_some() {
         current_task.verdict = verdict;
     }
@@ -1781,7 +1891,7 @@ STDERR: {}",
     }
     if let Some(st) = status_override {
         current_task.status = Some(st);
-    } else if target_col.terminal == Some(true) || target_stage_id == "ready" || target_stage_id == "done" {
+    } else if target_col.terminal == Some(true) || stage_id_matches(&canonical_target_stage_id, "ready") {
         current_task.status = Some("done".to_string());
     } else if target_col.persona.is_some() || target_col.auto_run == Some(true) {
         current_task.status = Some("running".to_string());
@@ -1807,8 +1917,8 @@ STDERR: {}",
             serde_json::json!({
                 "taskId": task_id,
                 "fromStage": old_stage,
-                "toStage": target_stage_id,
-                "stageId": target_stage_id,
+                "toStage": &canonical_target_stage_id,
+                "stageId": &canonical_target_stage_id,
                 "status": updated.status,
                 "verdict": updated.verdict,
                 "task": &updated

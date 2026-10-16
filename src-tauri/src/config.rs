@@ -342,7 +342,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
         columns: vec![
             PipelineColumn {
                 id: "backlog".to_string(),
-                title: "Backlog".to_string(),
+                title: "Ожидание".to_string(),
                 color: Some("#64748b".to_string()),
                 icon: Some("Inbox".to_string()),
                 persona: None,
@@ -2025,7 +2025,7 @@ mod tests {
         let cols = get_board_template_columns("canonical");
         assert_eq!(cols.len(), 3);
         assert_eq!(cols[0].id, "backlog");
-        assert_eq!(cols[0].title, "Бэклог");
+        assert_eq!(cols[0].title, "Ожидание");
         assert_eq!(cols[0].persona, None);
         assert_eq!(cols[1].id, "dev");
         assert_eq!(cols[1].title, "В разработке");

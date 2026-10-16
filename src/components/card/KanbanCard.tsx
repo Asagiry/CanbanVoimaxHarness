@@ -3,7 +3,7 @@ import { Draggable } from '@hello-pangea/dnd';
 import { KanbanTask, TaskStatus } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore, syncTasksBackend } from '../../stores/boardStore';
-import { Play, Clock, GitBranch, ChevronDown, MessageSquare, GitFork, Check, ChevronRight, Sparkles } from 'lucide-react';
+import { Play, Clock, GitBranch, ChevronDown, MessageSquare, GitFork, Sparkles } from 'lucide-react';
 import TaskContextMenu from './TaskContextMenu';
 
 function formatCardDate(ts?: number): string {
@@ -38,8 +38,7 @@ interface KanbanCardProps {
 
 export default function KanbanCard({ task, index }: KanbanCardProps) {
   const { openDrawer } = useDrawerStore();
-  const { runTaskAgent, columns, hoveredTaskId, setHoveredTaskId, tasks, moveTask } = useBoardStore();
-  const currentStageIdx = columns.findIndex((c) => c.id === task.columnId);
+  const { runTaskAgent, columns, hoveredTaskId, setHoveredTaskId, tasks } = useBoardStore();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [isSubtasksOpen, setIsSubtasksOpen] = useState(false);
 
@@ -200,59 +199,7 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
               {task.title}
             </h4>
 
-            {/* Tactical Stage Stepper / Tabs */}
-            <div
-              className="my-2 py-1 px-1 rounded-md bg-[#fafafa] border border-[#f0f0f0] select-none"
-              onClick={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-0.5 overflow-x-auto no-scrollbar py-0.5">
-                {columns.map((col, idx) => {
-                  const isCurrent = col.id === task.columnId;
-                  const isPassed = currentStageIdx >= 0 && idx < currentStageIdx;
-                  const isRunning = isCurrent && task.status === 'running';
 
-                  return (
-                    <div key={col.id} className="flex items-center shrink-0">
-                      {idx > 0 && (
-                        <ChevronRight className="h-2.5 w-2.5 text-[#d4d4d8] mx-0.5 shrink-0" />
-                      )}
-                      <button
-                        type="button"
-                        disabled={isCurrent}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          e.preventDefault();
-                          if (!isCurrent) {
-                            moveTask(task.id, col.id);
-                          }
-                        }}
-                        title={
-                          isCurrent
-                            ? `Текущий этап: ${col.title}`
-                            : isPassed
-                            ? `Пройденный этап: ${col.title} (клик для перемещения)`
-                            : `Переместить на этап: ${col.title}`
-                        }
-                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono transition-all duration-150 tabular-nums ${
-                          isCurrent
-                            ? 'bg-[#171717] text-white font-semibold shadow-xs ring-1 ring-[#171717]'
-                            : isPassed
-                            ? 'bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0] hover:bg-[#dcfce7] cursor-pointer active:scale-95'
-                            : 'bg-white text-[#71717a] border border-[#ebebeb] hover:bg-[#f4f4f5] hover:text-[#171717] hover:border-[#d4d4d8] cursor-pointer active:scale-95'
-                        }`}
-                      >
-                        {isPassed && <Check className="h-2.5 w-2.5 text-[#15803d] shrink-0" />}
-                        {isRunning && (
-                          <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e] animate-pulse shrink-0" />
-                        )}
-                        <span className="truncate max-w-[65px]">{col.title}</span>
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
 
             {/* Relay Handoff / Handover Summary Preview (if present) */}
             {task.handoverSummary && (

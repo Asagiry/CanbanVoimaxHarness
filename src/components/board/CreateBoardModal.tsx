@@ -115,7 +115,7 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
                 Новая доска
               </h2>
               <p className="text-[11px] text-[#71717a] font-sans">
-                Канонический цикл: Бэклог → В разработке → Готово
+                Канонический цикл: Ожидание → В разработке → Готово
               </p>
             </div>
           </div>
@@ -183,7 +183,7 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
               {/* Backlog */}
               <div className="flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-md bg-white border border-[#64748b]/30 shadow-2xs text-center">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#64748b] mb-1" />
-                <span className="font-medium text-[#171717] text-[11px]">Бэклог</span>
+                <span className="font-medium text-[#171717] text-[11px]">Ожидание</span>
                 <span className="text-[9px] text-[#71717a]">Вход</span>
               </div>
 
@@ -206,7 +206,7 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
               </div>
             </div>
             <p className="text-[10px] text-[#71717a] text-center pt-0.5">
-              Задачи всегда идут из Бэклога в Готово!
+              Задачи всегда идут из Ожидания в Готово!
             </p>
           </div>
 
