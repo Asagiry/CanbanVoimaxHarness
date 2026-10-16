@@ -1,0 +1,28 @@
+{
+  "taskId": "CVH-REACTIVE-BOARDS-PROMPT-HARDEN",
+  "task": "reactive-boards-prompt-harden",
+  "title": "Reactive board & agent updates, cross-board task completion, and prompt hardening",
+  "branch": "feat/reactive-boards-prompt-harden",
+  "commitHash": "34b7b6b",
+  "commitMessage": "feat(backend/ui): reactive board updates, cross-board task completion, and strict invariants prompt hardening",
+  "author": "Level 1 Systems Engineer (tauri-rust-engineer / agent-developer)",
+  "verdict": "APPROVED",
+  "sensors": {
+    "frontend_sensor": "pass (npx tsc --noEmit, 0 errors)",
+    "backend_sensor": "pass (cargo check --tests, 0 errors)",
+    "prompt_sensor": "pass (BUILTIN_CVH_DEV_PROMPT 54 lines <= 150 lines, all 23 markers intact)"
+  },
+  "files": [
+    "src-tauri/src/commands.rs",
+    "src-tauri/src/agent.rs",
+    "src-tauri/src/lib.rs",
+    "src/App.tsx",
+    "src/stores/boardStore.ts",
+    "src/stores/cortexStore.ts",
+    ".cvh/agents/cvh-dev/rules/agents.md",
+    ".cvh/agents/cvh-dev/rules/boards.md"
+  ],
+  "summary": "Implemented reactive board & persona updates (boards:updated, pipeline:updated, agent:personas_updated) across backend IPC commands and agent tools with frontend subscriptions in App.tsx, boardStore.ts, and cortexStore.ts. Implemented task finalization and clean transition to 'done' in the terminal column ('ready') upon active board change in advance_task, internal_move_task_stage, and run_agent. Hardened BUILTIN_CVH_DEV_PROMPT and modular rules (.cvh/agents/cvh-dev/rules/agents.md & boards.md) with strict 1:1 invariants for column.persona matching .cvh/agents/<role>/ directory & frontmatter name, and stageOverrides matching column.id.",
+  "diff_summary": "src-tauri/src/commands.rs (added advance_task command & internal_advance_task, event emits for save_pipeline, create_board, save_board, delete_board, set_active_board, delete_agent_persona, rename_agent_persona, save_cortex_file, board switch finalization in internal_move_task_stage and run_agent, unit test); src-tauri/src/agent.rs (advance_task delegation, emit_file_change_events for tool writes, 1:1 prompt invariants); src-tauri/src/lib.rs (registered advance_task); src/App.tsx & stores (reactive listeners); rules (agents.md & boards.md updated).",
+  "timestamp": 1792181246553
+}
