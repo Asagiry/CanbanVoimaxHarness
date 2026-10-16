@@ -71,25 +71,28 @@
 
 ```text
 .cvh/
+├── harness.db             # высокопроизводительная SQLite база (WAL-режим): диалоги и стриминг
 ├── config.json            # проект: имя, модель/endpoint по умолчанию, providers
 ├── pipeline.json          # пайплайн: columns (+зеркало boards/activeBoardId) — см. §2.2
 ├── boards.json            # мульти-доски: { activeBoardId, boards[] } — см. §2.3
 ├── tasks.json             # задачи: массив Task (CVH-001, CVH-002, …) — см. §2.4
 ├── agents/
-│   ├── <role>.md          # ПЕРСОНА — единственный читаемый бэкендом путь (flat!)
-│   └── <role>/            # aux-данные роли (персона здесь НЕ читается):
-│       ├── rules/*.md    # правила роли, в системник по алфавиту
-│       ├── hooks/        # on_enter.* / on_finish.* — fallback для hooks колонок
-│       └── setting       # JSON БЕЗ расширения: {model?, temperature?, context_window?, allowed_tools?}
+│   └── <role>/            # модульная папка роли (канонический путь):
+│       ├── persona.md    # системный промпт роли с YAML frontmatter (icon, description)
+│       ├── setting       # JSON: {model?, temperature?, context_window?, icon?}
+│       ├── rules/*.md    # правила роли, компилируемые в системник по алфавиту
+│       └── hooks/        # on_enter.* / on_finish.* — fallback для hooks колонок
 ├── settings/
 │   └── tool-policy.json   # ЕДИНСТВЕННЫЙ канонический файл матрицы тулов
 ├── tools/                 # кастомные тулы: .cvh/tools/<name>.json (может отсутствовать)
 ├── hooks/                 # общие скрипты переходов (может отсутствовать)
-├── dialogs/              # диалоги задач: <taskId>.json (primary)
-├── tasks/<id>/dialog.json # диалоги задач (secondary mirror)
-├── spill/                # spill-логи больших выводов тулов
+├── spill/                # spill-логи больших выводов тулов (>100 строк / >8KB)
 └── worktrees/            # git worktrees задач (в .gitignore)
 ```
+
+> **Диалоги и активность задач**: хранятся строго в SQLite-базе `.cvh/harness.db`
+> (таблица `dialog_items` с индексами и WAL-журналированием). Легаси-файлы `.cvh/dialogs/`
+> и `.cvh/tasks/<id>/dialog.json` ликвидированы в пользу атомарных ACID-транзакций.
 
 > Внимание: в этом репозитории прямо сейчас **нет** `.cvh/hooks/` и `.cvh/tools/`
 > (проверено листингом диска), хотя `pipeline.json` ссылается на `.cvh/hooks/on_enter_dev.bat`.
@@ -221,11 +224,10 @@ ID монотонные `max+1`, **никогда не переиспользу�
   команда бежит в `worktree` с таймаутом 60с — **работает**.
 - В матрице кастомные тулы участвуют наравне со стандартными (фильтр тот же), `todo_write`-исключений нет.
 
-### 2.9 `dialogs/`, `tasks/<id>/dialog.json`, `spill/`, `worktrees/` — **работает**
+### 2.9 `harness.db` (SQLite), `spill/`, `worktrees/` — **работает**
 
-- Диалоги задач — 3-tier: primary `.cvh/dialogs/<taskId>.json`, secondary `.cvh/tasks/<taskId>/dialog.json`,
-  global fallback `%LOCALAPPDATA%/com.voimax.cvh/dialogs/<taskId>.json`
-  (`save_task_dialog` / `load_task_dialog` / `clear_task_dialog`; `sanitize_task_id` режет `..`, `/`, `\`, `<>:"|?*`) — **работает**.
+- Диалоги задач — SQLite база данных `.cvh/harness.db` с WAL-журналированием (таблица `dialog_items` с композитным индексом по `task_id, created_at`).
+  Операции `save_task_dialog` / `load_task_dialog` / `clear_task_dialog` выполняются атомарно в транзакциях (`src-tauri/src/db.rs`); легаси-файлы `.cvh/dialogs/` и `.cvh/tasks/<taskId>/dialog.json` ликвидированы — **работает**.
 - `spill/` — см. §5 (порог 100 строк / 8 КБ, `HEAD 20 + TAIL 20`) — **работает**.
 - `worktrees/` — git worktrees задач; в `.gitignore` (скаффолд дописывает `.cvh/llm.json`, `llm.json`, `.cvh/worktrees/`) — **работает**.
   Удаление — `cleanup_task_worktree` (worktree + ветка `feat/<slug>`, best-effort) — **работает**;

@@ -13,16 +13,23 @@
    - Асинхронное исполнение на Tokio runtime.
    - Стриминг Server-Sent Events (SSE) в реальном времени через Tokio MPSC-каналы.
    - Разделение и коалесценция потоков: рассуждения (`thought` / `reasoning_content`) и контент ответов отображаются в единой хронологической ленте без лагов интерфейса.
-2. **Zero-Turn Memory Priming (Инвариант нулевого хода)**:
-   - Агент **никогда не тратит первый ход** на команды вроде `read AGENTS.md` или чтение системных инструкций.
+2. **Zero-Turn Memory Priming (Инвариант нулевого хода) и Эстафета Relay Handoff**:
+   - Агент **никогда не тратит первый ход** на чтение системных инструкций или правил.
    - Перед первым вызовом LLM бэкенд на Rust компилирует единый системный контекст:
      ```text
-     SystemMessage = Persona (.cvh/agents/<role>.md) 
+     SystemMessage = Persona (.cvh/agents/<role>/persona.md) 
+                   + Правила роли (.cvh/agents/<role>/rules/*.md)
                    + Архитектурные правила проекта (AGENTS.md) 
                    + Активные скиллы (.agents/skills/*) 
                    + Контекст задачи (Task Prompt)
      ```
-   - С первого же токена агент знает свою роль, правила безопасности, доступные сенсоры и задачу.
+   - **Relay Handoff Memory Priming**: При переходе карточки между этапами через `advance_task(summary)` или `reject_task(reason)`, итоговое саммари этапа автоматически встраивается в вершину промпта нового агента баннером:
+     ```markdown
+     ### [ЭСТАФЕТА ПАЙПЛАЙНА / RELAY HANDOFF]
+     Передано из этапа: <предыдущий_этап>
+     Саммари: <текст передачи>
+     ```
+     Это полностью исключает деградацию контекста и потерю инженерных находок предыдущих стадий.
 3. **Изолированные Git Worktrees (`worktrees/<task-slug>`)**:
    - Агенты этапа разработки работают исключительно внутри своей директории ворктри.
    - Защита от разрушения основного дерева: любые правки, тесты и сборки происходят в ветке задачи (`feat/<task-id>`).
@@ -36,14 +43,27 @@
 
 Каждая активная колонка доски связывается с файлом персоны через свойство `persona: "<role>"` в конфигурации пайплайна или доски.
 
-### 2.1 Расположение и структура файлов
-Файлы персон хранятся в папке:
+### 2.1 Каноническая модульная структура папок ролей
+Файлы агентов хранятся в изолированных подкаталогах в `.cvh/agents/<role>/`:
 ```text
 .cvh/agents/
-├── developer.md   # Ведущий разработчик (agent-developer)
-├── reviewer.md    # Критический ревьюер (agent-developer-reviewer)
-├── retro.md       # Ретроспективный аудитор (agent-retro-verifier)
-└── <custom>.md    # Любая кастомная роль (например, modeler.md, copywriter.md)
+├── cvh-dev/
+│   ├── persona.md       # Системный промпт роли с frontmatter-метаданными (icon, description)
+│   ├── setting          # JSON-параметры (context_window, model, temperature, icon)
+│   └── rules/           # Модульные правила по принципу Progressive Disclosure
+│       ├── agents.md    # Устройство персон и тулов
+│       ├── boards.md    # Архитектура и маршрутизация досок
+│       └── hooks.md     # Хуки жизненного цикла
+├── developer/
+│   ├── persona.md
+│   ├── setting
+│   └── rules/*.md
+├── reviewer/
+│   ├── persona.md
+│   └── rules/*.md
+└── retro/
+    ├── persona.md
+    └── rules/*.md
 ```
 
 ### 2.2 Пример персоны: Разработчик (`developer.md`)
@@ -72,6 +92,19 @@ Your mission is to implement robust features across the Rust/Tauri v2 desktop ba
   - `APPROVED`: Изменения безупречны, готовы к слиянию.
   - `APPROVED_WITH_CAVEATS`: Мелкие некритичные замечания.
   - `CHANGES_REQUESTED`: Найдены баги, нарушения инвариантов или регрессии.
+
+### 2.4 SVG-иконки персон (Persona Icons)
+Каждый агент связывается с наглядной векторной SVG-иконкой:
+- Указывается в YAML frontmatter `persona.md`:
+  ```yaml
+  ---
+  icon: ShieldCheck
+  ---
+  ```
+  или в файле `setting` в поле `"icon": "Code2"`.
+- Канонические поддерживаемые иконки (из библиотеки Lucide Icons):
+  `Bot`, `Brain`, `Cpu`, `Code2`, `ShieldCheck`, `Sparkles`, `Terminal`, `Zap`, `Flame`, `Radar`, `Workflow`, `Boxes`, `Wrench`, `Rocket`, `Fingerprint`, `Compass`, `Crosshair`, `Layers`, `Inbox`, `ListTodo`, `CheckCircle2`, `User`.
+- Бэкенд автоматически извлекает и синхронизирует иконки через IPC-команды `list_agent_personas`, `read_persona_icon_from_dir` и сохраняет их в frontmatter при обновлении в UI.
 
 ---
 

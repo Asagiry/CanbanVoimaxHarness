@@ -130,6 +130,12 @@ CanbanVoimaxHarness разработан для мгновенного разв�
 - **`web_search`**: DuckDuckGo search (zero API key required) with Google/Bing fallback.
 - **`web_fetch`**: HTTP GET converting HTML into clean Markdown.
 
+### 8. 🗄️ High-Performance SQLite Storage, SVG Icons & Relay Handoff
+- **SQLite Engine with WAL Mode (`.cvh/harness.db`)**: Chat messages and streaming deltas persist into an ACID SQLite database (`dialog_items` with index on `task_id, created_at`), replacing legacy flat JSON files.
+- **Relay Handoff Memory Priming**: Handover summaries from `advance_task` and `reject_task` are injected as top-level banners (`### [ЭСТАФЕТА ПАЙПЛАЙНА / RELAY HANDOFF]`), providing zero-degradation context across pipeline transitions.
+- **Backlog-to-Ready Invariant**: Inviolable board boundaries with immutable `backlog` (pos 0) and `ready` (terminal, last position) columns.
+- **SVG Persona Icons**: Full support for canonical SVG persona icons (`Bot`, `Brain`, `Cpu`, `Code2`, `ShieldCheck`, `Sparkles`, `Terminal`, `Zap`, `Flame`, `Radar`, etc.) persisted in frontmatter or JSON settings.
+
 ---
 
 ## 🚀 Quickstart & Development
@@ -173,14 +179,13 @@ CanbanVoimaxHarness/
 │   ├── board.md             # Board Control Plane, Invariants, Multi-Boards, Auto-Routing
 │   └── hooks.md             # Stage transition scripts, env vars, and worktree scaffolding
 ├── .cvh/                    # Project configuration for CVH
-│   ├── config.json          # Project endpoints & model definitions
+│   ├── harness.db           # SQLite database with WAL mode (dialogue & stream storage)
 │   ├── boards.json          # Multi-board definitions & active board
 │   ├── pipeline.json        # Dynamic pipeline columns & routing graph
-│   ├── agents/              # Persona system prompts (developer, reviewer, retro)
+│   ├── agents/              # Modular persona folders (<role>/persona.md, setting, rules/)
 │   ├── settings/            # Tool Policy Matrix (tool-policy.json)
 │   ├── tools/               # Dynamic custom tools (*.json)
 │   ├── hooks/               # Transition lifecycle scripts (.bat, .ps1)
-│   ├── dialogs/             # Persisted task activity dialogs (<taskId>.json)
 │   └── spill/               # Spilled tool execution logs (>100 lines / >8KB)
 ├── .agents/
 │   ├── skills/              # Specialized skills catalog
@@ -190,6 +195,7 @@ CanbanVoimaxHarness/
 │   ├── src/
 │   │   ├── main.rs          # App entrypoint
 │   │   ├── lib.rs           # Tauri builder & plugin wiring
+│   │   ├── db.rs            # SQLite connection pooling & dialogue persistence
 │   │   ├── config.rs        # Dynamic .cvh parser & atomic disk writes
 │   │   ├── git.rs           # Native worktree & branch manager
 │   │   ├── hooks.rs         # Transition scripts (.bat/.ps1) runner

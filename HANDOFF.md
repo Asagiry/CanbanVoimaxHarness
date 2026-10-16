@@ -88,6 +88,20 @@ npm run tauri dev
 - В `run_scoped_command` (`src-tauri/src/agent.rs`) для Windows добавлен префикс `chcp 65001 >nul &&`.
 - Консоль `cmd.exe` и все дочерние утилиты (`dir`, `tsc`, `git`, `python`) принудительно отдают вывод в кодировке UTF-8, полностью устраняя искажения русских букв.
 
+### 10. 🩺 Глобальный аудит здоровья и очистка репозитория (`CVH-DOCTOR-AUDIT-CLEANUP`)
+- **Очистка мусора и логов**: ликвидированы устаревшие дампы паники (`panic.log`) и устаревшие логи spill в `.cvh/spill/`.
+- **Санация кода (Ponytail Minimalism)**:
+  - Удалён неиспользуемый селектор и мёртвая зависимость хука `loadColumns` в `src/App.tsx`.
+  - Подтверждено отсутствие голых `.unwrap()` в критических путях Rust (все `.unwrap()` локализованы строго в тестах `#[cfg(test)]`).
+  - Проверено отсутствие циклических слушателей событий и утечек таймеров.
+- **Синхронизация документации**:
+  - `AGENTS.md`, `README.md`, `HANDOFF.md`, `docs/agents.md`, `docs/board.md`, `docs/GUIDE.md` приведены в полное соответствие с кодовой базой.
+  - Отражён переход на SQLite `.cvh/harness.db` (WAL-режим) вместо легаси плоских файлов `.cvh/dialogs/`.
+  - Задокументированы модульная структура ролей `.cvh/agents/<role>/`, векторные SVG-иконки персон, Relay Handoff эстафета и инвариант Backlog-to-Ready.
+- **Верификация сенсорами NASA Ground Truth**:
+  - TypeScript sensor (`npx tsc --noEmit`): **0 errors**.
+  - Cargo compiler & clippy (`cargo check`, `cargo clippy -- -D warnings`): **0 warnings, 0 errors**.
+
 ---
 
 ## 📦 3. Готовые релизные файлы
