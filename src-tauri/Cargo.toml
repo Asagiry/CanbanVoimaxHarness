@@ -30,3 +30,9 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+
+[profile.dev.package.libsqlite3-sys]
+debug = false
+
+[profile.release.package.libsqlite3-sys]
+debug = false
