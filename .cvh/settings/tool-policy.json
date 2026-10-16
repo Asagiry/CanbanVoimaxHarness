@@ -1,0 +1,63 @@
+﻿{
+  "globalEnabled": {
+    "execute_command": true,
+    "read_file": true,
+    "edit_file": true,
+    "write_file": true,
+    "glob": true,
+    "grep": true,
+    "web_search": true,
+    "web_fetch": true,
+    "subagent": true,
+    "todo_write": true,
+    "advance_task": true,
+    "reject_task": true,
+    "question": true
+  },
+  "stageOverrides": {
+    "dev": {
+      "execute_command": true,
+      "read_file": true,
+      "edit_file": true,
+      "write_file": true,
+      "glob": true,
+      "grep": true,
+      "web_search": false,
+      "web_fetch": true,
+      "subagent": true,
+      "todo_write": true,
+      "advance_task": true,
+      "reject_task": true,
+      "question": true
+    },
+    "review": {
+      "read_file": true,
+      "grep": true,
+      "glob": true,
+      "execute_command": true,
+      "edit_file": false,
+      "write_file": false,
+      "web_search": true,
+      "web_fetch": true,
+      "subagent": true,
+      "todo_write": true,
+      "advance_task": true,
+      "reject_task": true,
+      "question": true
+    },
+    "retro": {
+      "read_file": true,
+      "execute_command": true,
+      "write_file": true,
+      "glob": true,
+      "grep": true,
+      "web_search": false,
+      "web_fetch": false,
+      "subagent": false,
+      "todo_write": true,
+      "advance_task": true,
+      "reject_task": true,
+      "question": true
+    }
+  }
+}

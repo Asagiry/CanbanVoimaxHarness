@@ -19,6 +19,7 @@ export default function AgentConsoleDrawer() {
     closeDrawer,
     openDrawer,
     appendOutput,
+    activeSubagentId,
   } = useDrawerStore();
 
   const { tasks, updateTask, columns } = useBoardStore();
@@ -141,8 +142,13 @@ export default function AgentConsoleDrawer() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, closeDrawer]);
 
-  // Unified Chronological Activity List
+  // Unified Chronological Activity List (Parent stream or Nested Subagent stream)
   const unifiedActivities = useMemo(() => {
+    if (activeSubagentId) {
+      const subFeed = activityFeed[activeSubagentId] || [];
+      return subFeed.filter((item) => item.type !== 'prompt');
+    }
+
     if (!task) return [];
 
     const feed = activityFeed[task.id];
@@ -179,7 +185,7 @@ export default function AgentConsoleDrawer() {
     ];
 
     return merged;
-  }, [task, activityFeed, streamEntries, toolExecutions]);
+  }, [task, activeSubagentId, activityFeed, streamEntries, toolExecutions]);
 
   const effectiveModel = task?.model || settings.model || 'gemini-3.8-flash-high';
   const selectableModels = useMemo(() => {
@@ -343,6 +349,7 @@ export default function AgentConsoleDrawer() {
             />
           </ErrorBoundary>
         </div>
+
       </ErrorBoundary>
     </div>
   );

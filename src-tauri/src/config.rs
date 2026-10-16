@@ -970,7 +970,11 @@ pub fn agent_allows_tool(allowed: Option<&[String]>, tool_name: &str) -> bool {
         Some(list) => {
             let canonical = normalize_tool_name(tool_name);
             list.iter().any(|t| {
-                normalize_tool_name(t) == canonical || t == tool_name
+                let norm = normalize_tool_name(t);
+                norm == canonical
+                    || t == tool_name
+                    || ((canonical == "subagent_bg" || canonical == "collect_subagent")
+                        && (norm == "subagent" || norm == "subagent_bg"))
             })
         }
     }
@@ -1558,6 +1562,7 @@ pub fn default_global_tools() -> HashMap<String, bool> {
     map.insert("web_search".to_string(), true);
     map.insert("web_fetch".to_string(), true);
     map.insert("subagent".to_string(), true);
+    map.insert("subagent_bg".to_string(), true);
     map.insert("todo_write".to_string(), true);
     map.insert("advance_task".to_string(), true);
     map.insert("reject_task".to_string(), true);
@@ -1630,6 +1635,60 @@ pub fn is_tool_allowed(
     // str_replace -> edit_file) so the schema filter in run_agent_loop and
     // the zero-trust gate in execute_tool evaluate the same canonical name.
     let canonical = normalize_tool_name(tool_name);
+
+    // Hierarchical Subagent Policy:
+    // If checking 'subagent', 'subagent_bg', or 'collect_subagent':
+    // The master switch 'subagent' must be allowed first!
+    if canonical == "subagent" || canonical == "subagent_bg" || canonical == "collect_subagent" {
+        let master_global = policy_lookup(&policy.global_enabled, "subagent").unwrap_or(true);
+        if !master_global {
+            return false;
+        }
+        if let Some(stage) = stage_id {
+            if let Some(stage_map) = policy.stage_overrides.get(stage) {
+                if let Some(master_stage) = policy_lookup(stage_map, "subagent") {
+                    if !master_stage {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        if canonical == "subagent" {
+            let sync_global = policy_lookup(&policy.global_enabled, "subagent_sync").unwrap_or(true);
+            if !sync_global {
+                return false;
+            }
+            if let Some(stage) = stage_id {
+                if let Some(stage_map) = policy.stage_overrides.get(stage) {
+                    if let Some(sync_stage) = policy_lookup(stage_map, "subagent_sync") {
+                        if !sync_stage {
+                            return false;
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+
+        if canonical == "subagent_bg" || canonical == "collect_subagent" {
+            let bg_global = policy_lookup(&policy.global_enabled, "subagent_bg").unwrap_or(true);
+            if !bg_global {
+                return false;
+            }
+            if let Some(stage) = stage_id {
+                if let Some(stage_map) = policy.stage_overrides.get(stage) {
+                    if let Some(bg_stage) = policy_lookup(stage_map, "subagent_bg") {
+                        if !bg_stage {
+                            return false;
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+    }
+
     // AND-semantics: effective(tool, stage) = globalEnabled && stageOverride
     // (missing entries default to true). A stage override of `true` can no
     // longer re-enable a globally disabled tool; both layers must allow it.

@@ -329,21 +329,36 @@ export default function ToolPolicyModal() {
                         {toolsInCat.map((tool) => {
                           const isGloballyActive = globalEnabled[tool.id] ?? false;
                           const isExpanded = expandedToolId === tool.id;
+                          const isChild = Boolean(tool.parentTool);
 
                           return (
-                            <tr key={tool.id} className="hover:bg-[#fafafa] transition text-[#171717]">
-                              <td className="py-2.5 px-3">
+                            <tr
+                              key={tool.id}
+                              className={`hover:bg-[#fafafa] transition text-[#171717] ${
+                                isChild ? 'bg-[#fafafc]' : ''
+                              }`}
+                            >
+                              <td className={`py-2.5 px-3 ${isChild ? 'pl-7' : ''}`}>
                                 <button
                                   type="button"
                                   onClick={() => toggleExpanded(tool.id)}
                                   title={isExpanded ? 'Свернуть описание' : 'Показать описание'}
                                   className="flex items-center gap-1.5 text-left cursor-pointer group"
                                 >
+                                  {isChild && (
+                                    <span className="text-[#8f8f8f] font-mono text-xs select-none shrink-0 mr-1">
+                                      {tool.id === 'subagent_sync' ? '├──' : '└──'}
+                                    </span>
+                                  )}
                                   <ChevronDown
                                     className={`h-3.5 w-3.5 shrink-0 text-[#8f8f8f] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                                   />
                                   <span>
-                                    <span className="font-medium text-[#171717] group-hover:underline underline-offset-2">
+                                    <span
+                                      className={`font-medium text-[#171717] group-hover:underline underline-offset-2 ${
+                                        tool.isSubagentMaster ? 'font-semibold' : ''
+                                      }`}
+                                    >
                                       {tool.label}
                                     </span>
                                     <span className="text-[10px] text-[#8f8f8f] block">
@@ -363,13 +378,26 @@ export default function ToolPolicyModal() {
                               </td>
 
                               {agents.map((agent) => {
+                                const isMasterAllowed = isChild && tool.parentTool
+                                  ? isToolAllowed(tool.parentTool, agent.role)
+                                  : true;
                                 const isAllowed = isToolAllowed(tool.id, agent.role);
+                                const isDisabled = isChild && !isMasterAllowed;
 
                                 return (
                                   <td key={agent.role} className="py-2 px-2 text-center border-l border-[#ebebeb]">
                                     {!isGloballyActive ? (
                                       <span className="text-[10px] text-[#8f8f8f] select-none">
                                         Выкл
+                                      </span>
+                                    ) : isDisabled ? (
+                                      <span className="inline-flex justify-center opacity-40">
+                                        <Toggle
+                                          enabled={false}
+                                          disabled={true}
+                                          onToggle={() => {}}
+                                          title={`${tool.label} отключен: мастер-тул '${tool.parentTool}' выключен для ${agent.role}`}
+                                        />
                                       </span>
                                     ) : (
                                       <span className="inline-flex justify-center">
@@ -484,13 +512,19 @@ export default function ToolPolicyModal() {
                       {toolsInCat.map((tool) => {
                         const isEnabled = globalEnabled[tool.id] ?? false;
                         const isExpanded = expandedToolId === tool.id;
+                        const isChild = Boolean(tool.parentTool);
+                        const isMasterGloballyActive = tool.parentTool ? (globalEnabled[tool.parentTool] ?? true) : true;
+                        const isDisabled = isChild && !isMasterGloballyActive;
+
                         return (
                           <div
                             key={tool.id}
                             className={`p-3 rounded-md border transition select-none ${
-                              isEnabled
+                              isChild ? 'ml-4 bg-[#f9f9fb]' : ''
+                            } ${
+                              isEnabled && !isDisabled
                                 ? 'border-[#ebebeb] bg-white hover:border-[#d4d4d8] shadow-xs'
-                                : 'border-[#ebebeb] bg-[#fafafa] opacity-70'
+                                : 'border-[#ebebeb] bg-[#fafafa] opacity-60'
                             }`}
                           >
                             <div className="flex items-center justify-between gap-3">
@@ -500,10 +534,15 @@ export default function ToolPolicyModal() {
                                 title={isExpanded ? 'Свернуть описание' : 'Показать описание'}
                                 className="flex items-center gap-1.5 text-left cursor-pointer min-w-0"
                               >
+                                {isChild && (
+                                  <span className="text-[#8f8f8f] font-mono text-xs select-none shrink-0 mr-1">
+                                    {tool.id === 'subagent_sync' ? '├──' : '└──'}
+                                  </span>
+                                )}
                                 <ChevronDown
                                   className={`h-3.5 w-3.5 shrink-0 text-[#8f8f8f] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                                 />
-                                <span className="font-mono font-medium text-xs text-[#171717] truncate">
+                                <span className={`font-mono font-medium text-xs text-[#171717] truncate ${tool.isSubagentMaster ? 'font-semibold' : ''}`}>
                                   {tool.label}
                                 </span>
                                 <span className="text-[10px] text-[#8f8f8f] truncate">
@@ -512,9 +551,14 @@ export default function ToolPolicyModal() {
                               </button>
 
                               <Toggle
-                                enabled={isEnabled}
+                                enabled={isEnabled && !isDisabled}
+                                disabled={isDisabled}
                                 onToggle={() => toggleGlobalTool(tool.id)}
-                                title={`${tool.label}: ${isEnabled ? 'включено' : 'выключено'}`}
+                                title={
+                                  isDisabled
+                                    ? `${tool.label} отключен (мастер-тул '${tool.parentTool}' выключен глобально)`
+                                    : `${tool.label}: ${isEnabled ? 'включено' : 'выключено'}`
+                                }
                               />
                             </div>
                             {isExpanded && (

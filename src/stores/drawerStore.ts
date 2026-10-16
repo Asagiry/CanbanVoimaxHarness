@@ -39,6 +39,12 @@ interface DrawerState {
   finalTps: Record<string, number | null>;
   tokenOverrides: Record<string, number>;
 
+  // Nested Subagent View State
+  activeSubagentId: string | null;
+  activeSubagentTitle: string | null;
+  activeSubagentRole: string | null;
+  activeSubagentPrompt: string | null;
+
   // Actions
   openDrawer: (taskId: string, initialTab?: DrawerTab) => void;
   closeDrawer: () => void;
@@ -63,6 +69,9 @@ interface DrawerState {
   loadTaskDialog: (taskId: string) => Promise<void>;
   saveTaskDialog: (taskId: string) => Promise<void>;
   flushSaveDialog: (taskId: string) => Promise<void>;
+  openSubagent: (subagentId: string, title: string, role: string, prompt: string) => void;
+  closeSubagent: () => void;
+  loadSubagentDialog: (parentTaskId: string, subagentId: string) => Promise<void>;
 }
 
 export const useDrawerStore = create<DrawerState>((set, get) => ({
@@ -76,12 +85,20 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
   thinkingStartTime: {},
   finalTps: {},
   tokenOverrides: {},
+  activeSubagentId: null,
+  activeSubagentTitle: null,
+  activeSubagentRole: null,
+  activeSubagentPrompt: null,
 
   openDrawer: (taskId, initialTab = 'thoughts') => {
     set({
       isOpen: true,
       activeTaskId: taskId,
       activeTab: initialTab,
+      activeSubagentId: null,
+      activeSubagentTitle: null,
+      activeSubagentRole: null,
+      activeSubagentPrompt: null,
     });
     get().loadTaskDialog(taskId);
   },
@@ -90,6 +107,10 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
     set({
       isOpen: false,
       activeTaskId: null,
+      activeSubagentId: null,
+      activeSubagentTitle: null,
+      activeSubagentRole: null,
+      activeSubagentPrompt: null,
     });
   },
 
@@ -604,4 +625,135 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
   saveTaskDialog: async (taskId) => {
     await get().flushSaveDialog(taskId);
   },
+
+  openSubagent: (subagentId, title, role, prompt) => {
+    set({
+      activeSubagentId: subagentId,
+      activeSubagentTitle: title,
+      activeSubagentRole: role,
+      activeSubagentPrompt: prompt,
+    });
+    const parentTaskId = get().activeTaskId;
+    if (parentTaskId) {
+      void get().loadSubagentDialog(parentTaskId, subagentId);
+    }
+  },
+
+  closeSubagent: () => {
+    set({
+      activeSubagentId: null,
+      activeSubagentTitle: null,
+      activeSubagentRole: null,
+      activeSubagentPrompt: null,
+    });
+  },
+
+  loadSubagentDialog: async (parentTaskId, subagentId) => {
+    if (!parentTaskId || !subagentId) return;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const items = await invoke<DrawerActivityItem[]>('load_subagent_dialog', {
+        parentTaskId,
+        subagentId,
+      });
+      if (items && Array.isArray(items) && items.length > 0) {
+        set((state) => ({
+          activityFeed: {
+            ...state.activityFeed,
+            [subagentId]: items,
+          },
+        }));
+      }
+    } catch (err) {
+      console.info('load_subagent_dialog invoke error or web mode:', err);
+    }
+  },
 }));
+
+let subagentListenersInitialized = false;
+
+export async function initSubagentListeners() {
+  if (subagentListenersInitialized) return;
+  subagentListenersInitialized = true;
+  try {
+    const { listen } = await import('@tauri-apps/api/event');
+
+    await listen<{ parentTaskId?: string; subagentId?: string; title?: string; role?: string; prompt?: string; tools?: string[] }>(
+      'subagent:spawned',
+      (event) => {
+        const { subagentId, prompt } = event.payload || {};
+        if (!subagentId) return;
+        const state = useDrawerStore.getState();
+        const existingFeed = state.activityFeed[subagentId] || [];
+        if (prompt && !existingFeed.some((i) => i.type === 'prompt')) {
+          const promptItem: DrawerActivityItem = {
+            id: `prompt-${subagentId}`,
+            type: 'prompt',
+            timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+            content: prompt,
+          };
+          useDrawerStore.setState({
+            activityFeed: {
+              ...state.activityFeed,
+              [subagentId]: [promptItem, ...existingFeed],
+            },
+          });
+        }
+      }
+    );
+
+    await listen<{ parentTaskId?: string; subagentId?: string; activity?: DrawerActivityItem }>(
+      'subagent:activity',
+      (event) => {
+        const { subagentId, activity } = event.payload || {};
+        if (!subagentId || !activity) return;
+        const state = useDrawerStore.getState();
+        const existingFeed = state.activityFeed[subagentId] || [];
+        const existingIdx = existingFeed.findIndex((i) => i.id === activity.id);
+        let nextFeed: DrawerActivityItem[];
+        if (existingIdx >= 0) {
+          nextFeed = [...existingFeed];
+          nextFeed[existingIdx] = { ...nextFeed[existingIdx], ...activity };
+        } else {
+          nextFeed = [...existingFeed, activity];
+        }
+        useDrawerStore.setState({
+          activityFeed: {
+            ...state.activityFeed,
+            [subagentId]: nextFeed,
+          },
+        });
+      }
+    );
+
+    await listen<{ parentTaskId?: string; subagentId?: string; response?: string }>(
+      'subagent:finished',
+      (event) => {
+        const { subagentId, response } = event.payload || {};
+        if (!subagentId || !response) return;
+        const state = useDrawerStore.getState();
+        const existingFeed = state.activityFeed[subagentId] || [];
+        if (!existingFeed.some((i) => i.type === 'output' && i.content === response)) {
+          const outItem: DrawerActivityItem = {
+            id: `sub-out-${Date.now()}`,
+            type: 'output',
+            timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+            content: response,
+          };
+          useDrawerStore.setState({
+            activityFeed: {
+              ...state.activityFeed,
+              [subagentId]: [...existingFeed, outItem],
+            },
+          });
+        }
+      }
+    );
+  } catch (err) {
+    console.info('initSubagentListeners: web or test mode', err);
+  }
+}
+
+if (typeof window !== 'undefined') {
+  void initSubagentListeners();
+}
