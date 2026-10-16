@@ -6,6 +6,8 @@ import {
   Check,
   X,
   Wrench,
+  FileCode2,
+  FileText,
 } from 'lucide-react';
 
 interface ToolExecutionCardProps {
@@ -24,15 +26,91 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       ? ((tool as ToolExecution).params as Record<string, unknown>)
       : {};
 
-  const isDiffTool =
+  // Check if tool is a file modification/creation operation
+  const isFileOp =
+    toolName === 'write_file' ||
+    toolName === 'write' ||
+    toolName === 'edit_file' ||
+    toolName === 'edit' ||
+    toolName === 'str_replace';
+
+  const isEditTool =
     toolName === 'edit_file' ||
     toolName === 'str_replace' ||
     toolName === 'edit';
+  const isDiffTool = isEditTool;
 
-  const filePath =
-    (params?.file_path as string) || (params?.path as string);
-  const oldString = params?.old_string as string | undefined;
-  const newString = params?.new_string as string | undefined;
+  const rawFilePath =
+    (params?.file_path as string) ||
+    (params?.path as string) ||
+    (params?.filePath as string) ||
+    (params?.target_file as string) ||
+    '';
+
+  const normalizedPath = rawFilePath.replace(/\\/g, '/');
+  const fileName = normalizedPath.split('/').pop() || rawFilePath;
+  const dirPath = normalizedPath.substring(0, normalizedPath.length - fileName.length).replace(/\/$/, '');
+
+  const oldString =
+    (params?.old_string as string | undefined) ??
+    (params?.old_str as string | undefined) ??
+    (params?.before as string | undefined);
+
+  const newString =
+    (params?.new_string as string | undefined) ??
+    (params?.new_str as string | undefined) ??
+    (params?.content as string | undefined);
+
+  // Compute delta additions and deletions (+X -Y)
+  let additions = 0;
+  let deletions = 0;
+
+  if (oldString !== undefined && oldString !== '') {
+    deletions = oldString.split('\n').length;
+  }
+  if (newString !== undefined && newString !== '') {
+    additions = newString.split('\n').length;
+  }
+
+  // Fallback for line counts if not computed from strings
+  if (additions === 0 && deletions === 0) {
+    if (typeof params?.lines === 'number') {
+      additions = params.lines;
+    } else if (tool.stdout) {
+      const match = tool.stdout.match(/\+(\d+)\s*-(\d+)/);
+      if (match) {
+        additions = parseInt(match[1], 10);
+        deletions = parseInt(match[2], 10);
+      }
+    }
+  }
+
+  // Label: "Created" (if new file) or "Edited" (if edit/overwrite)
+  let opLabel: 'Created' | 'Edited' = 'Edited';
+  if (isEditTool) {
+    opLabel = 'Edited';
+  } else {
+    const op = (params?.operation as string)?.toLowerCase();
+    if (op === 'create' || params?.is_new === true) {
+      opLabel = 'Created';
+    } else if (op === 'update' || deletions > 0 || params?.before !== undefined) {
+      opLabel = 'Edited';
+    } else {
+      const stdoutLower = (tool.stdout ?? '').toLowerCase();
+      if (stdoutLower.includes('created') || stdoutLower.includes('new file')) {
+        opLabel = 'Created';
+      } else if (stdoutLower.includes('update') || stdoutLower.includes('overwrit') || stdoutLower.includes('replaced')) {
+        opLabel = 'Edited';
+      } else {
+        opLabel = deletions === 0 ? 'Created' : 'Edited';
+      }
+    }
+  }
+
+  // Select code icon vs generic text icon
+  const ext = fileName.includes('.') ? fileName.split('.').pop()?.toLowerCase() : '';
+  const isCode = ['ts', 'tsx', 'js', 'jsx', 'rs', 'py', 'json', 'toml', 'yaml', 'yml', 'xaml', 'xml', 'html', 'css', 'scss', 'sh', 'ps1', 'bat'].includes(ext || '');
+  const DocIcon = isCode ? FileCode2 : FileText;
 
   const getTarget = (): { target: string; fullTarget: string } => {
     const p = params ?? {};
@@ -90,40 +168,11 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   const getExtraInfo = (): string | null => {
     const p = tool.params ?? {};
     switch (tool.toolName) {
-      case 'write':
-      case 'write_file': {
-        if (typeof p.content === 'string') {
-          const lineCount = p.content.split('\n').length;
-          return `${lineCount} lines`;
-        }
-        if (typeof p.lines === 'number') {
-          return `${p.lines} lines`;
-        }
-        if (tool.stdout) {
-          const lines = tool.stdout.split('\n').length;
-          if (lines > 1) return `${lines} lines`;
-        }
-        return null;
-      }
-      case 'edit':
-      case 'edit_file':
-      case 'str_replace': {
-        const newStr = typeof p.new_string === 'string' ? p.new_string : '';
-        const oldStr = typeof p.old_string === 'string' ? p.old_string : '';
-        if (newStr || oldStr) {
-          const changedLines = Math.max(
-            newStr ? newStr.split('\n').length : 0,
-            oldStr ? oldStr.split('\n').length : 0
-          );
-          return `${changedLines} lines`;
-        }
-        return null;
-      }
       case 'read':
       case 'read_file': {
         if (tool.stdout) {
           const lines = tool.stdout.split('\n').length;
-          return `${lines} lines`;
+          if (lines > 1) return `${lines} lines`;
         }
         if (typeof p.limit === 'number') {
           return `${p.limit} lines`;
@@ -180,82 +229,6 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   const { target, fullTarget } = getTarget();
   const extraInfo = getExtraInfo();
   const durationText = formatDuration(tool.durationMs);
-
-  const renderToolParams = (paramsObj: Record<string, unknown>) => {
-    const entries = Object.entries(paramsObj);
-    if (entries.length === 0) return null;
-
-    return (
-      <div className="space-y-1.5">
-        <span className="text-[10px] text-[#666666] block font-mono">
-          Параметры вызова
-        </span>
-        <div className="space-y-2">
-          {entries.map(([key, value]) => {
-            // String values: preserve real newlines, format multiline strings cleanly
-            if (typeof value === 'string') {
-              const isMultiline = value.includes('\n');
-              const isCodeLike =
-                key === 'content' ||
-                key === 'code' ||
-                key === 'command' ||
-                key === 'cmd' ||
-                key === 'old_string' ||
-                key === 'new_string' ||
-                key === 'prompt' ||
-                key === 'script' ||
-                key === 'patch' ||
-                isMultiline;
-
-              if (isCodeLike || isMultiline) {
-                const lineCount = value.split('\n').length;
-                return (
-                  <div key={key} className="space-y-1">
-                    <div className="flex items-center justify-between text-[10px] text-[#666666]">
-                      <span className="font-semibold text-[#171717] font-mono">{key}:</span>
-                      <span className="text-[#8f8f8f] tabular-nums font-mono text-[10px]">
-                        {lineCount > 1 ? `${lineCount} строк` : `${value.length} симв.`}
-                      </span>
-                    </div>
-                    <pre className="p-2.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[11px] text-[#171717] overflow-x-auto leading-relaxed max-h-64 whitespace-pre select-text font-mono">
-                      {value}
-                    </pre>
-                  </div>
-                );
-              }
-
-              return (
-                <div key={key} className="flex items-baseline space-x-2 py-0.5 text-[11px] font-mono">
-                  <span className="text-[#666666] font-semibold shrink-0">{key}:</span>
-                  <span className="text-[#171717] select-text break-all">{value}</span>
-                </div>
-              );
-            }
-
-            // Object / array values
-            if (typeof value === 'object' && value !== null) {
-              return (
-                <div key={key} className="space-y-1">
-                  <span className="text-[10px] font-semibold text-[#171717] font-mono">{key}:</span>
-                  <pre className="p-2 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[11px] text-[#171717] overflow-x-auto leading-relaxed max-h-48 whitespace-pre-wrap select-text font-mono">
-                    {JSON.stringify(value, null, 2)}
-                  </pre>
-                </div>
-              );
-            }
-
-            // Primitives (number, boolean, null)
-            return (
-              <div key={key} className="flex items-baseline space-x-2 py-0.5 text-[11px] font-mono">
-                <span className="text-[#666666] font-semibold shrink-0">{key}:</span>
-                <span className="text-[#171717] select-text">{String(value)}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
 
   const handleCopyLogs = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -319,22 +292,30 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
       return (
         <div className="rounded-md border border-[#ebebeb] bg-[#fafafa] overflow-hidden font-mono text-[11px]">
-          {filePath && (
-            <div className="flex items-center justify-between px-2.5 py-1 bg-[#f4f4f5] border-b border-[#ebebeb] text-[#666666] text-[10px]">
-              <span className="truncate max-w-[340px] text-[#171717]">
-                {filePath}
+          {rawFilePath && (
+            <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#f4f4f5] border-b border-[#ebebeb] text-[#666666] text-[10px]">
+              <span className="truncate max-w-[340px] text-[#171717] font-semibold" title={rawFilePath}>
+                {rawFilePath}
               </span>
-              <span className="text-[#8f8f8f]">Различия</span>
+              <div className="flex items-center space-x-2 font-mono tabular-nums">
+                {oldLines.length > 0 && (
+                  <span className="text-[#dc2626]">-{oldLines.length}</span>
+                )}
+                {newLines.length > 0 && (
+                  <span className="text-[#16a34a]">+{newLines.length}</span>
+                )}
+                <span className="text-[#8f8f8f]">Различия</span>
+              </div>
             </div>
           )}
 
-          <div className="divide-y divide-[#ebebeb] select-text overflow-x-auto max-h-64 font-mono">
+          <div className="divide-y divide-[#ebebeb] select-text overflow-x-auto max-h-72 font-mono">
             {oldLines.map((line, idx) => (
               <div
                 key={`old-${idx}`}
-                className="flex items-start bg-[#fef2f2] text-[#991b1b] px-2 py-0.5 leading-relaxed"
+                className="flex items-start bg-[#fef2f2] text-[#991b1b] px-2 py-0.5 leading-relaxed font-mono"
               >
-                <span className="w-4 shrink-0 text-[#ef4444] select-none text-center">
+                <span className="w-4 shrink-0 text-[#ef4444] select-none text-center font-bold">
                   -
                 </span>
                 <span className="w-8 shrink-0 text-[#8f8f8f] select-none text-right pr-2 tabular-nums">
@@ -349,9 +330,9 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             {newLines.map((line, idx) => (
               <div
                 key={`new-${idx}`}
-                className="flex items-start bg-[#f0fdf4] text-[#166534] px-2 py-0.5 leading-relaxed"
+                className="flex items-start bg-[#f0fdf4] text-[#166534] px-2 py-0.5 leading-relaxed font-mono"
               >
-                <span className="w-4 shrink-0 text-[#22c55e] select-none text-center">
+                <span className="w-4 shrink-0 text-[#22c55e] select-none text-center font-bold">
                   +
                 </span>
                 <span className="w-8 shrink-0 text-[#8f8f8f] select-none text-right pr-2 tabular-nums">
@@ -370,68 +351,252 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
     return null;
   };
 
+  const renderFileContentPreview = () => {
+    if (!newString) return null;
+    const lines = newString.split('\n');
+
+    return (
+      <div className="rounded-md border border-[#ebebeb] bg-[#fafafa] overflow-hidden font-mono text-[11px]">
+        {rawFilePath && (
+          <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#f4f4f5] border-b border-[#ebebeb] text-[#666666] text-[10px]">
+            <span className="truncate max-w-[340px] text-[#171717] font-semibold" title={rawFilePath}>
+              {rawFilePath}
+            </span>
+            <span className="text-[#8f8f8f] tabular-nums font-mono">
+              {lines.length} {lines.length === 1 ? 'строка' : 'строк'}
+            </span>
+          </div>
+        )}
+        <div className="divide-y divide-[#f0f0f0] select-text overflow-x-auto max-h-72 font-mono bg-white">
+          {lines.map((line, idx) => (
+            <div
+              key={`line-${idx}`}
+              className="flex items-start px-2 py-0.5 leading-relaxed hover:bg-[#fafafa]"
+            >
+              <span className="w-8 shrink-0 text-[#a1a1aa] select-none text-right pr-2.5 tabular-nums text-[10px]">
+                {idx + 1}
+              </span>
+              <span className="whitespace-pre-wrap break-all text-[#171717]">
+                {line || ' '}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderToolParams = (paramsObj: Record<string, unknown>) => {
+    const entries = Object.entries(paramsObj);
+    if (entries.length === 0) return null;
+
+    return (
+      <div className="space-y-1.5">
+        <span className="text-[10px] text-[#666666] block font-mono">
+          Параметры вызова
+        </span>
+        <div className="space-y-2">
+          {entries.map(([key, value]) => {
+            if (typeof value === 'string') {
+              const isMultiline = value.includes('\n');
+              const isCodeLike =
+                key === 'content' ||
+                key === 'code' ||
+                key === 'command' ||
+                key === 'cmd' ||
+                key === 'old_string' ||
+                key === 'new_string' ||
+                key === 'prompt' ||
+                key === 'script' ||
+                key === 'patch' ||
+                isMultiline;
+
+              if (isCodeLike || isMultiline) {
+                const lineCount = value.split('\n').length;
+                return (
+                  <div key={key} className="space-y-1">
+                    <div className="flex items-center justify-between text-[10px] text-[#666666]">
+                      <span className="font-semibold text-[#171717] font-mono">{key}:</span>
+                      <span className="text-[#8f8f8f] tabular-nums font-mono text-[10px]">
+                        {lineCount > 1 ? `${lineCount} строк` : `${value.length} симв.`}
+                      </span>
+                    </div>
+                    <pre className="p-2.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[11px] text-[#171717] overflow-x-auto leading-relaxed max-h-64 whitespace-pre select-text font-mono">
+                      {value}
+                    </pre>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={key} className="flex items-baseline space-x-2 py-0.5 text-[11px] font-mono">
+                  <span className="text-[#666666] font-semibold shrink-0">{key}:</span>
+                  <span className="text-[#171717] select-text break-all">{value}</span>
+                </div>
+              );
+            }
+
+            if (typeof value === 'object' && value !== null) {
+              return (
+                <div key={key} className="space-y-1">
+                  <span className="text-[10px] font-semibold text-[#171717] font-mono">{key}:</span>
+                  <pre className="p-2 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[11px] text-[#171717] overflow-x-auto leading-relaxed max-h-48 whitespace-pre-wrap select-text font-mono">
+                    {JSON.stringify(value, null, 2)}
+                  </pre>
+                </div>
+              );
+            }
+
+            return (
+              <div key={key} className="flex items-baseline space-x-2 py-0.5 text-[11px] font-mono">
+                <span className="text-[#666666] font-semibold shrink-0">{key}:</span>
+                <span className="text-[#171717] select-text">{String(value)}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="group rounded-md border border-[#ebebeb] bg-[#fafafa] hover:border-[#d4d4d8] overflow-hidden text-xs shadow-2xs transition-colors my-1">
-      {/* Ultra-compact single-line strip */}
+      {/* Header Strip */}
       <div
         onClick={() => setIsExpanded(!isExpanded)}
         className="flex items-center justify-between px-2.5 py-1.5 hover:bg-[#f4f4f5] cursor-pointer transition select-none gap-2 text-xs min-h-[30px]"
       >
-        <div className="flex items-center space-x-1.5 min-w-0 flex-1 overflow-hidden">
-          <button
-            type="button"
-            className="p-0.5 text-[#8f8f8f] hover:text-[#171717] rounded shrink-0 transition cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsExpanded(!isExpanded);
-            }}
-            title={isExpanded ? 'Свернуть подробности' : 'Развернуть подробности'}
-          >
-            <ChevronRight
-              className={`h-3 w-3 transition-transform duration-150 ${
-                isExpanded ? 'rotate-90 text-[#171717]' : ''
-              }`}
-            />
-          </button>
-
-          <span
-            className="flex items-center shrink-0 select-none text-[#8f8f8f]"
-            title="Инструмент"
-          >
-            <Wrench className="h-3.5 w-3.5" />
-          </span>
-
-          <span className="font-mono font-medium text-[#171717] shrink-0">
-            {tool.toolName}{target ? ':' : ''}
-          </span>
-
-          {target && (
-            <span
-              title={fullTarget}
-              className="font-mono text-[#52525b] truncate max-w-[260px] sm:max-w-[360px] md:max-w-[460px]"
+        {isFileOp ? (
+          /* File operation card in screenshot style: [Edited 📄 MainWindow.xaml +4 -2] */
+          <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
+            <button
+              type="button"
+              className="p-0.5 text-[#8f8f8f] hover:text-[#171717] rounded shrink-0 transition cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsExpanded(!isExpanded);
+              }}
+              title={isExpanded ? 'Свернуть подробности' : 'Развернуть подробности'}
             >
-              {target}
+              <ChevronRight
+                className={`h-3 w-3 transition-transform duration-150 ${
+                  isExpanded ? 'rotate-90 text-[#171717]' : ''
+                }`}
+              />
+            </button>
+
+            {/* Label: Created or Edited */}
+            <span
+              className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold uppercase tracking-wider shrink-0 select-none ${
+                opLabel === 'Created'
+                  ? 'bg-[#ecfdf5] text-[#047857] border border-[#a7f3d0]'
+                  : 'bg-[#eff6ff] text-[#1d4ed8] border border-[#bfdbfe]'
+              }`}
+            >
+              {opLabel}
             </span>
-          )}
 
-          {extraInfo && (
-            <>
-              <span className="text-[#a1a1aa] select-none text-[10px]">•</span>
-              <span className="font-mono text-[#71717a] shrink-0 tabular-nums text-[11px]">
-                {extraInfo}
-              </span>
-            </>
-          )}
+            {/* Document icon */}
+            <DocIcon className="h-3.5 w-3.5 text-[#52525b] shrink-0" />
 
-          {durationText && (
-            <>
-              <span className="text-[#a1a1aa] select-none text-[10px]">•</span>
-              <span className="font-mono text-[#71717a] shrink-0 tabular-nums text-[11px]">
-                {durationText}
+            {/* Clean filename with muted path */}
+            <div
+              className="flex items-center min-w-0 font-mono text-xs overflow-hidden"
+              title={rawFilePath}
+            >
+              {dirPath && (
+                <span className="text-[#8f8f8f] truncate max-w-[120px] sm:max-w-[180px] shrink-0">
+                  {dirPath}/
+                </span>
+              )}
+              <span className="font-semibold text-[#171717] truncate">
+                {fileName || rawFilePath || 'file'}
               </span>
-            </>
-          )}
-        </div>
+            </div>
+
+            {/* Delta badge: +X -Y */}
+            {(additions > 0 || deletions > 0) && (
+              <div className="flex items-center space-x-1 font-mono text-[11px] tabular-nums font-semibold shrink-0 ml-1">
+                {additions > 0 && (
+                  <span className="text-[#16a34a] bg-[#f0fdf4] px-1 py-0.2 rounded border border-[#bbf7d0]">
+                    +{additions}
+                  </span>
+                )}
+                {deletions > 0 && (
+                  <span className="text-[#dc2626] bg-[#fef2f2] px-1 py-0.2 rounded border border-[#fecaca]">
+                    -{deletions}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {durationText && (
+              <>
+                <span className="text-[#a1a1aa] select-none text-[10px]">•</span>
+                <span className="font-mono text-[#71717a] shrink-0 tabular-nums text-[11px]">
+                  {durationText}
+                </span>
+              </>
+            )}
+          </div>
+        ) : (
+          /* Standard tool card */
+          <div className="flex items-center space-x-1.5 min-w-0 flex-1 overflow-hidden">
+            <button
+              type="button"
+              className="p-0.5 text-[#8f8f8f] hover:text-[#171717] rounded shrink-0 transition cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsExpanded(!isExpanded);
+              }}
+              title={isExpanded ? 'Свернуть подробности' : 'Развернуть подробности'}
+            >
+              <ChevronRight
+                className={`h-3 w-3 transition-transform duration-150 ${
+                  isExpanded ? 'rotate-90 text-[#171717]' : ''
+                }`}
+              />
+            </button>
+
+            <span
+              className="flex items-center shrink-0 select-none text-[#8f8f8f]"
+              title="Инструмент"
+            >
+              <Wrench className="h-3.5 w-3.5" />
+            </span>
+
+            <span className="font-mono font-medium text-[#171717] shrink-0">
+              {tool.toolName}{target ? ':' : ''}
+            </span>
+
+            {target && (
+              <span
+                title={fullTarget}
+                className="font-mono text-[#52525b] truncate max-w-[260px] sm:max-w-[360px] md:max-w-[460px]"
+              >
+                {target}
+              </span>
+            )}
+
+            {extraInfo && (
+              <>
+                <span className="text-[#a1a1aa] select-none text-[10px]">•</span>
+                <span className="font-mono text-[#71717a] shrink-0 tabular-nums text-[11px]">
+                  {extraInfo}
+                </span>
+              </>
+            )}
+
+            {durationText && (
+              <>
+                <span className="text-[#a1a1aa] select-none text-[10px]">•</span>
+                <span className="font-mono text-[#71717a] shrink-0 tabular-nums text-[11px]">
+                  {durationText}
+                </span>
+              </>
+            )}
+          </div>
+        )}
 
         <div className="flex items-center space-x-2 shrink-0">
           <button
@@ -456,12 +621,39 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       {/* Expanded Details */}
       {isExpanded && (
         <div className="p-3 border-t border-[#ebebeb] space-y-2.5 font-mono text-xs bg-white">
-          {isDiffTool && (oldString !== undefined || newString !== undefined) ? (
+          {isFileOp ? (
             <div className="space-y-2">
-              {filePath && (
+              {rawFilePath && (
                 <div className="flex items-baseline space-x-2 py-0.5 text-[11px] font-mono">
                   <span className="text-[#666666] font-semibold shrink-0">Файл:</span>
-                  <span className="text-[#171717] select-text break-all">{filePath}</span>
+                  <span className="text-[#171717] select-text break-all">{rawFilePath}</span>
+                </div>
+              )}
+              {oldString !== undefined && newString !== undefined ? (
+                <div>
+                  <span className="text-[10px] text-[#666666] block mb-1">
+                    Изменения файлов (Diff)
+                  </span>
+                  {renderUnifiedDiff()}
+                </div>
+              ) : newString ? (
+                <div>
+                  <span className="text-[10px] text-[#666666] block mb-1">
+                    Содержимое файла
+                  </span>
+                  {renderFileContentPreview()}
+                </div>
+              ) : (
+                tool.params &&
+                Object.keys(tool.params).length > 0 && renderToolParams(params)
+              )}
+            </div>
+          ) : isDiffTool && (oldString !== undefined || newString !== undefined) ? (
+            <div className="space-y-2">
+              {rawFilePath && (
+                <div className="flex items-baseline space-x-2 py-0.5 text-[11px] font-mono">
+                  <span className="text-[#666666] font-semibold shrink-0">Файл:</span>
+                  <span className="text-[#171717] select-text break-all">{rawFilePath}</span>
                 </div>
               )}
               <div>

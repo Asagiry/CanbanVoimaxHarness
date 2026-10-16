@@ -368,16 +368,20 @@ export default function AgentConsoleDrawer() {
   useEffect(() => {
     if (!task?.id) return;
     let unlistenStatus: (() => void) | undefined;
+    let unlistenFinished: (() => void) | undefined;
     let unlistenError: (() => void) | undefined;
 
     const setupErrorListeners = async () => {
       try {
         const { listen } = await import('@tauri-apps/api/event');
+
+        // Listen for agent:status terminal states
         unlistenStatus = await listen<{ taskId?: string; status?: string }>('agent:status', (event) => {
           if (event.payload?.taskId === task.id) {
             const st = event.payload.status;
-            // Заморозка TPS на терминальных статусах (бэкенд может не прислать agent:finished)
+            // Immediate reset of running status on terminal states
             if (st === 'finished' || st === 'aborted' || st === 'error') {
+              useBoardStore.getState().updateTaskStatus(task.id, 'idle');
               try {
                 const ds = useDrawerStore.getState();
                 if (ds.finalTps[task.id] == null) {
@@ -391,23 +395,43 @@ export default function AgentConsoleDrawer() {
                     }
                   }
                 }
+                ds.setThinkingStartTime(task.id, null);
               } catch {
                 // ignore
               }
             }
-            if (event.payload.status === 'error') {
+            if (st === 'error') {
               setRunError((prev) => prev || 'Агент сообщил об ошибке выполнения');
-              updateTask(task.id, { status: 'idle', isTimerRunning: false });
-            } else if (event.payload.status === 'running') {
+            } else if (st === 'running') {
               setRunError(null);
             }
           }
         });
 
+        // Listen for agent:finished
+        unlistenFinished = await listen<{ taskId?: string; response?: string }>('agent:finished', (event) => {
+          if (event.payload?.taskId === task.id) {
+            useBoardStore.getState().updateTaskStatus(task.id, 'idle');
+            try {
+              const ds = useDrawerStore.getState();
+              ds.setThinkingStartTime(task.id, null);
+            } catch {
+              // ignore
+            }
+          }
+        });
+
+        // Listen for agent:error
         unlistenError = await listen<{ taskId?: string; error?: string }>('agent:error', (event) => {
           if (event.payload && (!event.payload.taskId || event.payload.taskId === task.id)) {
             setRunError(event.payload.error || 'Произошла непредвиденная ошибка агента');
-            updateTask(task.id, { status: 'idle', isTimerRunning: false });
+            useBoardStore.getState().updateTaskStatus(task.id, 'idle');
+            try {
+              const ds = useDrawerStore.getState();
+              ds.setThinkingStartTime(task.id, null);
+            } catch {
+              // ignore
+            }
           }
         });
       } catch {
@@ -418,6 +442,7 @@ export default function AgentConsoleDrawer() {
     setupErrorListeners();
     return () => {
       if (unlistenStatus) unlistenStatus();
+      if (unlistenFinished) unlistenFinished();
       if (unlistenError) unlistenError();
     };
   }, [task?.id, updateTask]);
@@ -907,11 +932,13 @@ export default function AgentConsoleDrawer() {
             const key = activity?.id ?? `activity-${idx}`;
             // b) Live Streaming Thinking Block
             if (activity?.type === 'thought') {
+              const isLastActivity = idx === ((unifiedActivities?.length ?? 1) - 1);
               return (
                 <ThinkingCard
                   key={key}
                   thought={activity}
                   isTaskRunning={isRunning}
+                  isLive={isRunning && isLastActivity}
                   taskId={task.id}
                 />
               );

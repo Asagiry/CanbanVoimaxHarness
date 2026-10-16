@@ -262,6 +262,8 @@ export default function App() {
             }
             // Immediately flush task activity feed to disk upon turn finish
             useDrawerStore.getState().flushSaveDialog(taskId);
+            useBoardStore.getState().updateTaskStatus(taskId, 'idle');
+            useDrawerStore.getState().setThinkingStartTime(taskId, null);
           }
           loadTasks();
         });
@@ -272,6 +274,8 @@ export default function App() {
           if (taskId) {
             flushTask(taskId);
             useDrawerStore.getState().flushSaveDialog(taskId);
+            useBoardStore.getState().updateTaskStatus(taskId, 'idle');
+            useDrawerStore.getState().setThinkingStartTime(taskId, null);
           } else {
             flushAll();
           }
@@ -284,6 +288,8 @@ export default function App() {
           if (taskId && (status === 'finished' || status === 'aborted' || status === 'error')) {
             flushTask(taskId);
             useDrawerStore.getState().flushSaveDialog(taskId);
+            useBoardStore.getState().updateTaskStatus(taskId, 'idle');
+            useDrawerStore.getState().setThinkingStartTime(taskId, null);
           }
           loadTasks();
         });

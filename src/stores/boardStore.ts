@@ -85,6 +85,7 @@ interface BoardState {
   loadTasks: () => Promise<void>;
   moveTask: (taskId: string, targetColumnId: string) => Promise<void>;
   updateTask: (taskId: string, partial: Partial<KanbanTask>) => void;
+  updateTaskStatus: (taskId: string, status: TaskStatus) => void;
   addTask: (input: {
     title: string;
     description?: string;
@@ -759,6 +760,19 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   updateTask: (taskId, partial) => {
     set((state) => {
       const updatedTasks = state.tasks.map((t) => (t.id === taskId ? { ...t, ...partial } : t));
+      persistTasksToLocalStorage(updatedTasks);
+      syncTasksBackend(updatedTasks);
+      return { tasks: updatedTasks };
+    });
+  },
+
+  updateTaskStatus: (taskId, status) => {
+    set((state) => {
+      const updatedTasks = state.tasks.map((t) => {
+        if (t.id !== taskId) return t;
+        const isTimerRunning = status === 'running' ? t.isTimerRunning : false;
+        return { ...t, status, isTimerRunning };
+      });
       persistTasksToLocalStorage(updatedTasks);
       syncTasksBackend(updatedTasks);
       return { tasks: updatedTasks };
