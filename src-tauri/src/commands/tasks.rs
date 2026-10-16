@@ -14,7 +14,7 @@ use chrono::Utc;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 pub fn ensure_task_board_id(mut tasks: Vec<Task>) -> Vec<Task> {
@@ -1916,3 +1916,24 @@ pub async fn steer_agent(
 
     run_agent(task_id, Some(message), app_handle).await
 }
+
+#[tauri::command]
+pub async fn answer_agent_question(
+    task_id: String,
+    question_id: String,
+    answer: String,
+) -> Result<(), String> {
+    let mut reg = crate::agent::QUESTION_REGISTRY.lock().await;
+    if let Some(sender) = reg.remove(&question_id) {
+        sender
+            .send(answer)
+            .map_err(|_| "Failed to send answer: agent question channel was dropped".to_string())?;
+        Ok(())
+    } else {
+        Err(format!(
+            "Question {} for task {} not found in registry (already answered or expired)",
+            question_id, task_id
+        ))
+    }
+}
+
