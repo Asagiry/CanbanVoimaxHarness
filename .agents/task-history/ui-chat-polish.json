@@ -1,0 +1,20 @@
+{
+  "taskId": "CVH-UI-CHAT-POLISH",
+  "task": "ui-chat-polish",
+  "branch": "feat/ui-chat-polish",
+  "title": "Chat UI Polish: instant historical thoughts, file delta cards, immediate agent status reset",
+  "summary": "Fixed re-animation of historical thoughts by rendering full content immediately when finished/not running. Implemented screenshot-style file operation cards with Created/Edited badges, document icons, clean filenames, and delta (+X -Y) indicators. Ensured instant transition of task running state to idle upon agent completion or status termination.",
+  "verdict": "APPROVED",
+  "commitHash": "5a8c275ab30209977e4b006f1f6dede01f7dbfbd",
+  "sensors": {
+    "frontend_build_pnpm": "pass (tsc && vite build)"
+  },
+  "files": [
+    "src/components/drawer/ThinkingCard.tsx",
+    "src/components/drawer/ToolExecutionCard.tsx",
+    "src/components/drawer/AgentConsoleDrawer.tsx",
+    "src/stores/boardStore.ts",
+    "src/App.tsx"
+  ],
+  "notes": "Verified clean bundle build with 0 TypeScript errors and 0 Vite build errors. Merged to main and pushed to origin."
+}
