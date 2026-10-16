@@ -1,0 +1,19 @@
+{
+  "taskId": "CVH-TODO-FOOTER-CLEAN",
+  "task": "todo-footer-clean",
+  "title": "Remove read-only hint and Esc footer from TaskTodoWidget popover",
+  "branch": "feat/todo-footer-clean",
+  "commitHash": "51949c2",
+  "commitMessage": "feat(ui): remove read-only hint and Esc footer from TaskTodoWidget",
+  "author": "agent-developer (react-tailwind-artisan)",
+  "verdict": "APPROVED",
+  "sensors": {
+    "frontend_build": "pass (npx tsc --noEmit, 0 errors)"
+  },
+  "files": [
+    "src/components/drawer/TaskTodoWidget.tsx"
+  ],
+  "summary": "Removed bottom footer bar containing 'Только чтение · обновляется агентом' and 'Esc закрыть' from the To-Dos popover in TaskTodoWidget.tsx per user request. The popover is now more compact and clean, with outside-click and Escape listeners remaining fully active.",
+  "diff_summary": "src/components/drawer/TaskTodoWidget.tsx: removed 5 lines (lines 236-240) containing the popover footer bar. Total: 1 file, -5 lines.",
+  "timestamp": 1792176798352
+}

@@ -615,5 +615,24 @@
     "summary": "Implemented canonical AGENT_ICONS pack with 18 SVG icons, frontmatter icon metadata support on agent creation and deterministic assignment for missing icons, automatic column icon inheritance upon assigning/resetting agents, and full icon rendering in CortexExplorer agent list and KanbanColumn headers.",
     "diff_summary": "1. src-tauri/src/commands.rs: Added AGENT_ICONS canonical pack, default_column_icon, extract_persona_icon_from_text, insert_or_update_frontmatter_icon, read_persona_icon_from_dir, save_persona_icon, and deterministic_icon_for_role. Added icon: Option<String> to AgentPersonaInfo. Updated create_agent_persona_file to assign random unused icon and list_agent_personas_in to persist missing icons. Reset column icon to default on persona deletion. 2. src/components/common/AgentIcon.tsx: New reusable component rendering canonical Lucide icons. 3. src/lib/columnIcons.ts: Column default icon mapping. 4. src/stores/cortexStore.ts: Added icon to AgentPersonaInfo and RawAgentPersona, mapped to stage.icon. 5. src/components/board/ColumnContextMenu.tsx & KanbanBoard.tsx & CreateBoardModal.tsx: Column inherits persona.icon on agent assignment, resets to default on detachment. 6. src/components/board/KanbanColumn.tsx: Header renders assigned agent's icon. 7. src/components/cortex/CortexExplorer.tsx: Renders agent's SVG icon in Section 2 next to their name and column stage headers.",
     "timestamp": 1792161400000
+  },
+  "CVH-TODO-FOOTER-CLEAN": {
+    "taskId": "CVH-TODO-FOOTER-CLEAN",
+    "task": "todo-footer-clean",
+    "title": "Remove read-only hint and Esc footer from TaskTodoWidget popover",
+    "branch": "feat/todo-footer-clean",
+    "commitHash": "51949c2",
+    "commitMessage": "feat(ui): remove read-only hint and Esc footer from TaskTodoWidget",
+    "author": "agent-developer (react-tailwind-artisan)",
+    "verdict": "APPROVED",
+    "sensors": {
+      "frontend_build": "pass (npx tsc --noEmit, 0 errors)"
+    },
+    "files": [
+      "src/components/drawer/TaskTodoWidget.tsx"
+    ],
+    "summary": "Removed bottom footer bar containing 'Только чтение · обновляется агентом' and 'Esc закрыть' from the To-Dos popover in TaskTodoWidget.tsx per user request. The popover is now more compact and clean, with outside-click and Escape listeners remaining fully active.",
+    "diff_summary": "src/components/drawer/TaskTodoWidget.tsx: removed 5 lines (lines 236-240) containing the popover footer bar. Total: 1 file, -5 lines.",
+    "timestamp": 1792176798352
   }
 }
