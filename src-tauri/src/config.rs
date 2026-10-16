@@ -1524,6 +1524,21 @@ pub async fn register_or_update_project(
 // Tool Policy Matrix Configuration
 // ============================================================================
 
+pub const CANONICAL_TOOLS: &[&str] = &[
+    "execute_command",
+    "read_file",
+    "edit_file",
+    "write_file",
+    "glob",
+    "grep",
+    "web_search",
+    "web_fetch",
+    "subagent",
+    "todo_write",
+    "advance_task",
+    "reject_task",
+];
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolPolicyConfig {
     #[serde(default = "default_global_tools", rename = "globalEnabled")]
@@ -1544,6 +1559,8 @@ pub fn default_global_tools() -> HashMap<String, bool> {
     map.insert("web_fetch".to_string(), true);
     map.insert("subagent".to_string(), true);
     map.insert("todo_write".to_string(), true);
+    map.insert("advance_task".to_string(), true);
+    map.insert("reject_task".to_string(), true);
     map
 }
 
@@ -1563,6 +1580,8 @@ impl Default for ToolPolicyConfig {
         review_map.insert("web_fetch".to_string(), true);
         review_map.insert("subagent".to_string(), true);
         review_map.insert("todo_write".to_string(), true);
+        review_map.insert("advance_task".to_string(), true);
+        review_map.insert("reject_task".to_string(), true);
         stage_overrides.insert("review".to_string(), review_map);
 
         // Dev stage: write enabled, web_search disabled
@@ -1577,6 +1596,8 @@ impl Default for ToolPolicyConfig {
         dev_map.insert("web_fetch".to_string(), true);
         dev_map.insert("subagent".to_string(), true);
         dev_map.insert("todo_write".to_string(), true);
+        dev_map.insert("advance_task".to_string(), true);
+        dev_map.insert("reject_task".to_string(), true);
         stage_overrides.insert("dev".to_string(), dev_map);
 
         Self {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { useToolPolicyStore, AVAILABLE_TOOLS } from '../../stores/toolPolicyStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { X, ChevronDown, Trash2 } from 'lucide-react';
@@ -45,6 +45,22 @@ function Toggle({
 }
 
 const NAME_PATTERN = /^[a-z0-9_]+$/;
+
+const CATEGORY_ORDER: Array<'workflow' | 'system' | 'fs' | 'web' | 'agent'> = [
+  'workflow',
+  'system',
+  'fs',
+  'web',
+  'agent',
+];
+
+const CATEGORY_LABELS: Record<string, string> = {
+  workflow: 'Управление задачами (Workflow)',
+  system: 'Команды и терминал (System)',
+  fs: 'Файловая система (Filesystem)',
+  web: 'Сеть и документация (Web)',
+  agent: 'Подагенты и планирование (Agent)',
+};
 
 export default function ToolPolicyModal() {
   const {
@@ -230,64 +246,81 @@ export default function ToolPolicyModal() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#ebebeb]">
-                  {AVAILABLE_TOOLS.map((tool) => {
-                    const isGloballyActive = globalEnabled[tool.id] ?? false;
-                    const isExpanded = expandedToolId === tool.id;
+                  {CATEGORY_ORDER.map((catKey) => {
+                    const toolsInCat = AVAILABLE_TOOLS.filter((t) => t.category === catKey);
+                    if (toolsInCat.length === 0) return null;
 
                     return (
-                      <tr key={tool.id} className="hover:bg-[#fafafa] transition text-[#171717]">
-                        <td className="py-2.5 px-3">
-                          <button
-                            type="button"
-                            onClick={() => toggleExpanded(tool.id)}
-                            title={isExpanded ? 'Свернуть описание' : 'Показать описание'}
-                            className="flex items-center gap-1.5 text-left cursor-pointer group"
+                      <Fragment key={`cat-grp-${catKey}`}>
+                        <tr className="bg-[#f4f4f5]/90 border-y border-[#ebebeb]">
+                          <td
+                            colSpan={2 + agentColumns.length}
+                            className="py-1.5 px-3 text-[10px] font-semibold text-[#52525b] uppercase tracking-wider"
                           >
-                            <ChevronDown
-                              className={`h-3.5 w-3.5 shrink-0 text-[#8f8f8f] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                            />
-                            <span>
-                              <span className="font-medium text-[#171717] group-hover:underline underline-offset-2">
-                                {tool.label}
-                              </span>
-                              <span className="text-[10px] text-[#8f8f8f] block">
-                                {tool.name}
-                              </span>
-                            </span>
-                          </button>
-                          {isExpanded && (
-                            <p className="text-[11px] text-[#666666] mt-1.5 font-sans leading-snug">
-                              {tool.description}
-                            </p>
-                          )}
-                        </td>
-
-                        <td className="py-2.5 px-2 text-right text-[#666666] tabular-nums text-[11px]">
-                          {tool.tokenWeight}
-                        </td>
-
-                        {agentColumns.map((col) => {
-                          const isAllowed = isToolAllowed(tool.id, col.id);
+                            {CATEGORY_LABELS[catKey] || catKey}
+                          </td>
+                        </tr>
+                        {toolsInCat.map((tool) => {
+                          const isGloballyActive = globalEnabled[tool.id] ?? false;
+                          const isExpanded = expandedToolId === tool.id;
 
                           return (
-                            <td key={col.id} className="py-2 px-2 text-center border-l border-[#ebebeb]">
-                              {!isGloballyActive ? (
-                                <span className="text-[10px] text-[#8f8f8f] select-none">
-                                  Выкл
-                                </span>
-                              ) : (
-                                <span className="inline-flex justify-center">
-                                  <Toggle
-                                    enabled={isAllowed}
-                                    onToggle={() => setStageTool(col.id, tool.id, !isAllowed)}
-                                    title={`${tool.label} для ${col.title}: ${isAllowed ? 'включено' : 'выключено'}`}
+                            <tr key={tool.id} className="hover:bg-[#fafafa] transition text-[#171717]">
+                              <td className="py-2.5 px-3">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpanded(tool.id)}
+                                  title={isExpanded ? 'Свернуть описание' : 'Показать описание'}
+                                  className="flex items-center gap-1.5 text-left cursor-pointer group"
+                                >
+                                  <ChevronDown
+                                    className={`h-3.5 w-3.5 shrink-0 text-[#8f8f8f] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                                   />
-                                </span>
-                              )}
-                            </td>
+                                  <span>
+                                    <span className="font-medium text-[#171717] group-hover:underline underline-offset-2">
+                                      {tool.label}
+                                    </span>
+                                    <span className="text-[10px] text-[#8f8f8f] block">
+                                      {tool.name}
+                                    </span>
+                                  </span>
+                                </button>
+                                {isExpanded && (
+                                  <p className="text-[11px] text-[#666666] mt-1.5 font-sans leading-snug">
+                                    {tool.description}
+                                  </p>
+                                )}
+                              </td>
+
+                              <td className="py-2.5 px-2 text-right text-[#666666] tabular-nums text-[11px]">
+                                {tool.tokenWeight}
+                              </td>
+
+                              {agentColumns.map((col) => {
+                                const isAllowed = isToolAllowed(tool.id, col.id);
+
+                                return (
+                                  <td key={col.id} className="py-2 px-2 text-center border-l border-[#ebebeb]">
+                                    {!isGloballyActive ? (
+                                      <span className="text-[10px] text-[#8f8f8f] select-none">
+                                        Выкл
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex justify-center">
+                                        <Toggle
+                                          enabled={isAllowed}
+                                          onToggle={() => setStageTool(col.id, tool.id, !isAllowed)}
+                                          title={`${tool.label} для ${col.title}: ${isAllowed ? 'включено' : 'выключено'}`}
+                                        />
+                                      </span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
                           );
                         })}
-                      </tr>
+                      </Fragment>
                     );
                   })}
                   {customTools.map((customTool) => {
@@ -357,48 +390,62 @@ export default function ToolPolicyModal() {
           )}
 
           {activeTab === 'global' && (
-            <div className="space-y-2">
-              {AVAILABLE_TOOLS.map((tool) => {
-                const isEnabled = globalEnabled[tool.id] ?? false;
-                const isExpanded = expandedToolId === tool.id;
-                return (
-                  <div
-                    key={tool.id}
-                    className={`p-3 rounded-md border transition select-none ${
-                      isEnabled
-                        ? 'border-[#ebebeb] bg-white hover:border-[#d4d4d8] shadow-xs'
-                        : 'border-[#ebebeb] bg-[#fafafa] opacity-70'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <button
-                        type="button"
-                        onClick={() => toggleExpanded(tool.id)}
-                        title={isExpanded ? 'Свернуть описание' : 'Показать описание'}
-                        className="flex items-center gap-1.5 text-left cursor-pointer min-w-0"
-                      >
-                        <ChevronDown
-                          className={`h-3.5 w-3.5 shrink-0 text-[#8f8f8f] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                        />
-                        <span className="font-mono font-medium text-xs text-[#171717] truncate">
-                          {tool.label}
-                        </span>
-                        <span className="text-[10px] text-[#8f8f8f] truncate">
-                          ({tool.name})
-                        </span>
-                      </button>
+            <div className="space-y-4">
+              {CATEGORY_ORDER.map((catKey) => {
+                const toolsInCat = AVAILABLE_TOOLS.filter((t) => t.category === catKey);
+                if (toolsInCat.length === 0) return null;
 
-                      <Toggle
-                        enabled={isEnabled}
-                        onToggle={() => toggleGlobalTool(tool.id)}
-                        title={`${tool.label}: ${isEnabled ? 'включено' : 'выключено'}`}
-                      />
+                return (
+                  <div key={`global-cat-${catKey}`} className="space-y-2">
+                    <h3 className="text-[11px] font-semibold text-[#52525b] uppercase tracking-wider px-1">
+                      {CATEGORY_LABELS[catKey] || catKey}
+                    </h3>
+                    <div className="space-y-2">
+                      {toolsInCat.map((tool) => {
+                        const isEnabled = globalEnabled[tool.id] ?? false;
+                        const isExpanded = expandedToolId === tool.id;
+                        return (
+                          <div
+                            key={tool.id}
+                            className={`p-3 rounded-md border transition select-none ${
+                              isEnabled
+                                ? 'border-[#ebebeb] bg-white hover:border-[#d4d4d8] shadow-xs'
+                                : 'border-[#ebebeb] bg-[#fafafa] opacity-70'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <button
+                                type="button"
+                                onClick={() => toggleExpanded(tool.id)}
+                                title={isExpanded ? 'Свернуть описание' : 'Показать описание'}
+                                className="flex items-center gap-1.5 text-left cursor-pointer min-w-0"
+                              >
+                                <ChevronDown
+                                  className={`h-3.5 w-3.5 shrink-0 text-[#8f8f8f] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                />
+                                <span className="font-mono font-medium text-xs text-[#171717] truncate">
+                                  {tool.label}
+                                </span>
+                                <span className="text-[10px] text-[#8f8f8f] truncate">
+                                  ({tool.name})
+                                </span>
+                              </button>
+
+                              <Toggle
+                                enabled={isEnabled}
+                                onToggle={() => toggleGlobalTool(tool.id)}
+                                title={`${tool.label}: ${isEnabled ? 'включено' : 'выключено'}`}
+                              />
+                            </div>
+                            {isExpanded && (
+                              <p className="text-[11px] text-[#666666] mt-1.5 font-sans leading-snug">
+                                {tool.description}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                    {isExpanded && (
-                      <p className="text-[11px] text-[#666666] mt-1.5 font-sans leading-snug">
-                        {tool.description}
-                      </p>
-                    )}
                   </div>
                 );
               })}

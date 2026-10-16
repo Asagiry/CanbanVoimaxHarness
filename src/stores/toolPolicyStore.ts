@@ -5,11 +5,27 @@ export interface ToolMeta {
   name: string;
   label: string;
   description: string;
-  category: 'system' | 'fs' | 'web' | 'agent';
+  category: 'system' | 'fs' | 'web' | 'agent' | 'workflow';
   tokenWeight: number;
 }
 
 export const AVAILABLE_TOOLS: ToolMeta[] = [
+  {
+    id: 'advance_task',
+    name: 'advance_task',
+    label: 'Передать задачу (Advance)',
+    description: 'Передать задачу на следующий этап пайплайна (шаг вперед) с обязательным саммари проделанной работы.',
+    category: 'workflow',
+    tokenWeight: 220,
+  },
+  {
+    id: 'reject_task',
+    name: 'reject_task',
+    label: 'Вернуть задачу (Reject)',
+    description: 'Вернуть задачу на предыдущий этап пайплайна (шаг назад) с указанием причины отклонения и замечаний.',
+    category: 'workflow',
+    tokenWeight: 220,
+  },
   {
     id: 'execute_command',
     name: 'execute_command',
@@ -110,6 +126,8 @@ export interface ToolPolicyState {
 }
 
 const DEFAULT_GLOBAL: Record<string, boolean> = {
+  advance_task: true,
+  reject_task: true,
   execute_command: true,
   read_file: true,
   edit_file: true,
@@ -124,6 +142,8 @@ const DEFAULT_GLOBAL: Record<string, boolean> = {
 
 const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
   review: {
+    advance_task: true,
+    reject_task: true,
     execute_command: true,
     read_file: true,
     edit_file: false,
@@ -136,6 +156,8 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     todo_write: true,
   },
   dev: {
+    advance_task: true,
+    reject_task: true,
     execute_command: true,
     read_file: true,
     edit_file: true,
@@ -148,6 +170,8 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     todo_write: true,
   },
   retro: {
+    advance_task: true,
+    reject_task: true,
     execute_command: true,
     read_file: true,
     edit_file: false,

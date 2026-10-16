@@ -691,70 +691,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         return;
       }
       throw new Error('move_task_stage returned empty task');
-    } catch (err) {
-      console.info('Backend move_task_stage failed, falling back to local move:', err);
-    }
-
-    // Fallback path (web mode / IPC error): old local computation + save_tasks.
-    const fb = get();
-    const fbTask = fb.tasks.find((t) => t.id === taskId);
-    if (!fbTask || fbTask.columnId === targetColumnId) return;
-    const fbTargetColDef = fb.columns.find((c) => c.id === targetColumnId);
-
-    // Generic rework detection: board order only, no hardcoded stages
-    const sourceColIndex = fb.columns.findIndex((c) => c.id === fbTask.columnId);
-    const targetColIndex = fb.columns.findIndex((c) => c.id === targetColumnId);
-
-    // Check if task is being returned / reworked backwards
-    const isRework =
-      sourceColIndex >= 0 && targetColIndex >= 0 && targetColIndex < sourceColIndex;
-    const newReturnsCount = isRework ? fbTask.returnsCount + 1 : fbTask.returnsCount;
-
-    // Freeze current stage duration (legacy tasks may lack duration fields)
-    const currentStage = fbTask.columnId;
-    const currentDuration = typeof fbTask.activeStageDuration === 'number' && Number.isFinite(fbTask.activeStageDuration)
-      ? fbTask.activeStageDuration
-      : 0;
-    const prevStageDurations = fbTask.stageDurations && typeof fbTask.stageDurations === 'object'
-      ? fbTask.stageDurations
-      : {};
-    const updatedStageDurations = {
-      ...prevStageDurations,
-      [currentStage]: (prevStageDurations[currentStage] || 0) + currentDuration,
-    };
-
-    // NOTE: fastTrack (noReview/noRetro) is intentionally ignored —
-    // the task always lands in the requested target column.
-
-    // terminal → done, persona column → running, otherwise idle
-    const newStatus: TaskStatus = fbTargetColDef?.terminal
-      ? 'done'
-      : fbTargetColDef?.persona
-      ? 'running'
-      : 'idle';
-
-    const updatedTasks = fb.tasks.map((t) => {
-      if (t.id !== taskId) return t;
-      return {
-        ...t,
-        columnId: targetColumnId,
-        persona: fbTargetColDef?.persona || t.persona,
-        status: newStatus,
-        activeStageDuration: 0,
-        stageDurations: updatedStageDurations,
-        isTimerRunning: newStatus === 'running',
-        returnsCount: newReturnsCount,
-      };
-    });
-
-    set({ tasks: updatedTasks });
-    persistTasksToLocalStorage(updatedTasks);
-    await syncTasksBackend(updatedTasks);
-
-    // Column = agent: autoRun triggers run_agent on entry (default: !!persona)
-    if (fbTargetColDef?.autoRun ?? !!fbTargetColDef?.persona) {
-      const targetTask = updatedTasks.find((t) => t.id === taskId);
-      await triggerRunAgent(taskId, targetTask?.description);
+    } catch (err: unknown) {
+      console.error('Backend move_task_stage failed (gatekeeper sensor or hook rejected):', err);
+      const msg = typeof err === 'string' ? err : err instanceof Error ? err.message : JSON.stringify(err);
+      alert(`Перемещение задачи отклонено:\n${msg}`);
+      // Откатить состояние / синхронизировать карточки с бэкенда
+      const { loadTasks } = get();
+      await loadTasks();
+      return;
     }
   },
 

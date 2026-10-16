@@ -8,6 +8,7 @@ use crate::config::{
 use crate::hooks::kill_process_tree;
 use crate::llm::{ChatMessage, LlmClient, OpenAIChatRequest, StreamChunk, ToolCall, ToolDefinition};
 use anyhow::{bail, Context, Result};
+use tauri::{AppHandle, Emitter};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -400,6 +401,28 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
                 "required": ["todos"]
             }),
         ),
+        ToolDefinition::function(
+            "advance_task",
+            "Передать задачу на следующий этап пайплайна (шаг вперед). Обязательно передайте подробное саммари проделанной работы для следующего агента.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "summary": { "type": "string", "description": "Подробное саммари изменений, результатов и проверок" }
+                },
+                "required": ["summary"]
+            }),
+        ),
+        ToolDefinition::function(
+            "reject_task",
+            "Вернуть задачу на предыдущий этап пайплайна (шаг назад с замечаниями). Обязательно укажите причину отклонения и конкретные замечания.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "reason": { "type": "string", "description": "Причина отклонения: упавшие проверки, баги, необходимые исправления" }
+                },
+                "required": ["reason"]
+            }),
+        ),
     ]
 }
 
@@ -572,6 +595,7 @@ pub struct ToolContext<'a> {
     pub tool_policy: &'a ToolPolicyConfig,
     pub task_id: Option<&'a str>,
     pub agent_allowed_tools: Option<&'a [String]>,
+    pub app_handle: Option<AppHandle>,
 }
 
 /// Executes a tool within the safe boundary of `worktree_dir` with zero-trust policy checks
@@ -869,6 +893,198 @@ pub async fn execute_tool(
             format!(
                 "Updated todo list: {} completed, {} in progress, {} pending.",
                 completed_cnt, in_progress_cnt, pending_cnt
+            )
+        }
+
+        "advance_task" => {
+            let summary = args
+                .get("summary")
+                .and_then(|v| v.as_str())
+                .context("Missing required parameter 'summary'")?;
+
+            let task_id = task_id.context("No active task ID for advance_task")?;
+
+            // 1. Determine active board and find current column
+            let tasks = crate::commands::load_tasks_from_disk(repo_root).await;
+            let current_task = tasks
+                .iter()
+                .find(|t| t.id == task_id)
+                .ok_or_else(|| anyhow::anyhow!("Task {} not found", task_id))?;
+
+            let boards_cfg = crate::config::load_boards_config(repo_root).await.ok();
+            let columns = {
+                let from_board = boards_cfg.as_ref().and_then(|bc| {
+                    let b = if let Some(ref bid) = current_task.board_id {
+                        bc.boards.iter().find(|b| &b.id == bid)
+                    } else {
+                        bc.boards.iter().find(|b| b.id == bc.active_board_id)
+                    };
+                    b.map(|b| b.columns.clone())
+                });
+                match from_board {
+                    Some(cols) => cols,
+                    None => {
+                        let pipeline = crate::config::load_pipeline_config(repo_root).await
+                            .context("Failed to load pipeline configuration")?;
+                        pipeline.columns
+                    }
+                }
+            };
+
+            let curr_idx = columns
+                .iter()
+                .position(|c| c.id == current_task.stage_id)
+                .ok_or_else(|| anyhow::anyhow!("Current column '{}' not found in pipeline", current_task.stage_id))?;
+
+            if curr_idx + 1 >= columns.len() {
+                bail!("Задача {} уже находится на последнем этапе пайплайна ({})", task_id, columns[curr_idx].title);
+            }
+
+            let next_col = &columns[curr_idx + 1];
+            let is_terminal = next_col.terminal == Some(true) || next_col.id == "ready" || next_col.id == "done";
+            let status_override = if is_terminal {
+                Some("done".to_string())
+            } else {
+                None
+            };
+
+            // 2. Execute move_task_stage logic (gatekeeper sensor, hooks, updates tasks.json and emits task:moved)
+            let updated_task = crate::commands::internal_move_task_stage(
+                repo_root,
+                task_id,
+                &next_col.id,
+                Some("APPROVED".to_string()),
+                status_override,
+                ctx.app_handle.as_ref(),
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            // 3. Save summary to task dialog/history
+            let summary_content = format!("### Саммари этапа: {}\n\n{}", next_col.title, summary);
+            let _ = crate::commands::append_task_dialog_activity(
+                repo_root,
+                task_id,
+                "summary",
+                &summary_content,
+                ctx.app_handle.as_ref(),
+            )
+            .await;
+
+            format!(
+                "УСПЕШНО: Задача {} переведена на этап '{}' ({}), статус: {}",
+                task_id,
+                next_col.title,
+                next_col.id,
+                updated_task.status.unwrap_or_else(|| "idle".to_string())
+            )
+        }
+
+        "reject_task" => {
+            let reason = args
+                .get("reason")
+                .and_then(|v| v.as_str())
+                .context("Missing required parameter 'reason'")?;
+
+            let task_id = task_id.context("No active task ID for reject_task")?;
+
+            // 1. Determine active board and find current column
+            let tasks = crate::commands::load_tasks_from_disk(repo_root).await;
+            let current_task = tasks
+                .iter()
+                .find(|t| t.id == task_id)
+                .ok_or_else(|| anyhow::anyhow!("Task {} not found", task_id))?;
+
+            let boards_cfg = crate::config::load_boards_config(repo_root).await.ok();
+            let columns = {
+                let from_board = boards_cfg.as_ref().and_then(|bc| {
+                    let b = if let Some(ref bid) = current_task.board_id {
+                        bc.boards.iter().find(|b| &b.id == bid)
+                    } else {
+                        bc.boards.iter().find(|b| b.id == bc.active_board_id)
+                    };
+                    b.map(|b| b.columns.clone())
+                });
+                match from_board {
+                    Some(cols) => cols,
+                    None => {
+                        let pipeline = crate::config::load_pipeline_config(repo_root).await
+                            .context("Failed to load pipeline configuration")?;
+                        pipeline.columns
+                    }
+                }
+            };
+
+            let curr_idx = columns
+                .iter()
+                .position(|c| c.id == current_task.stage_id)
+                .ok_or_else(|| anyhow::anyhow!("Current column '{}' not found in pipeline", current_task.stage_id))?;
+
+            if curr_idx == 0 {
+                bail!("Задача {} уже находится в начальной колонке ({})", task_id, columns[curr_idx].title);
+            }
+
+            let prev_col = &columns[curr_idx - 1];
+
+            // ЖЕЛЕЗНЫЙ ИНВАРИАНТ: Если текущая колонка — первая рабочая колонка после backlog (колонка A),
+            // шаг назад в backlog СТРОГО ЗАПРЕЩЁН! Возвращай ошибку:
+            // "Запрещено возвращать задачу из первой рабочей стадии назад в бэклог. Задача должна быть доработана или закрыта."
+            let is_prev_backlog = prev_col.id == "backlog"
+                || prev_col.title.to_lowercase().contains("backlog")
+                || prev_col.title.to_lowercase().contains("бэклог")
+                || (curr_idx == 1 && columns[0].id == "backlog");
+
+            if is_prev_backlog {
+                bail!("Запрещено возвращать задачу из первой рабочей стадии назад в бэклог. Задача должна быть доработана или закрыта.");
+            }
+
+            // 2. Execute move_task_stage logic with status 'idle' and verdict 'CHANGES_REQUESTED'
+            let updated_task = crate::commands::internal_move_task_stage(
+                repo_root,
+                task_id,
+                &prev_col.id,
+                Some("CHANGES_REQUESTED".to_string()),
+                Some("idle".to_string()),
+                ctx.app_handle.as_ref(),
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            // 3. Save rejection reason to task dialog/history
+            let reject_content = format!(
+                "### Задача возвращена на этап: {}\n\n**Причина отклонения:**\n{}",
+                prev_col.title,
+                reason
+            );
+            let _ = crate::commands::append_task_dialog_activity(
+                repo_root,
+                task_id,
+                "reject",
+                &reject_content,
+                ctx.app_handle.as_ref(),
+            )
+            .await;
+
+            // Emit task:moved with reject marker and reason
+            if let Some(app) = ctx.app_handle.as_ref() {
+                let _ = app.emit("task:moved", serde_json::json!({
+                    "taskId": task_id,
+                    "toStage": prev_col.id,
+                    "stageId": prev_col.id,
+                    "status": "idle",
+                    "rejected": true,
+                    "reason": reason,
+                    "verdict": "CHANGES_REQUESTED",
+                    "task": &updated_task,
+                }));
+            }
+
+            format!(
+                "ОТКЛОНЕНО: Задача {} возвращена на этап '{}' ({}) по причине: {}",
+                task_id,
+                prev_col.title,
+                prev_col.id,
+                reason
             )
         }
 
@@ -1374,6 +1590,7 @@ pub struct AgentSessionConfig {
     pub temperature: Option<f32>,
     pub reasoning_effort: Option<String>,
     pub max_turns: usize,
+    pub app_handle: Option<AppHandle>,
 }
 
 #[derive(Debug, Default)]
@@ -1782,6 +1999,7 @@ where
             tool_policy: &tool_policy,
             task_id: Some(&config.task_id),
             agent_allowed_tools: agent_allowed.as_deref(),
+            app_handle: config.app_handle.clone(),
         };
 
         // Execute each tool call and record response
@@ -2115,6 +2333,7 @@ mod tests {
             tool_policy: &policy,
             task_id: None,
             agent_allowed_tools: agent_allowed.as_deref(),
+            app_handle: None,
         };
         let err = execute_tool(
             &tool_ctx,
