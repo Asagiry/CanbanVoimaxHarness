@@ -226,11 +226,6 @@ export default function App() {
         });
         unlisteners.push(uTurnStart);
 
-        const u4 = await listen<any>('task:moved', () => {
-          loadTasks();
-        });
-        unlisteners.push(u4);
-
         const u5 = await listen<any>('agent:finished', (event) => {
           const { taskId, response } = event.payload || {};
           if (taskId) {
