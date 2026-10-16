@@ -1,0 +1,23 @@
+{
+  "task": "tool-card-advance",
+  "taskId": "CVH-TOOL-CARD-ADVANCE",
+  "title": "Clean tool-driven pipeline task routing (advance_task / reject_task) and sensor enforcement",
+  "branch": "feat/tool-card-advance",
+  "merge_sha": "b97e4f4",
+  "changed_files": [
+    "src-tauri/src/agent.rs",
+    "src-tauri/src/commands.rs",
+    "src-tauri/src/config.rs",
+    "src/components/settings/ToolPolicyModal.tsx",
+    "src/stores/boardStore.ts",
+    "src/stores/toolPolicyStore.ts"
+  ],
+  "diff_summary": "1. src-tauri/src/agent.rs: Added advance_task and reject_task canonical tools with strict parameters. advance_task advances task to next pipeline column, sets terminal tasks to 'done', executes move_task_stage (sensors & hooks), writes summary to dialog history, and emits task:moved. reject_task moves card back with 'CHANGES_REQUESTED' and 'idle' status, emits reject reason, and enforces ironclad invariant forbidding return to backlog from stage 1. 2. src-tauri/src/commands.rs: Removed automatic post-loop stage advancement in run_agent — cards move ONLY upon explicit advance_task/reject_task calls, otherwise transitioning to 'idle' in current column. Factored internal_move_task_stage and append_task_dialog_activity with SQLite persistence. 3. src-tauri/src/config.rs: Added advance_task and reject_task to CANONICAL_TOOLS and DEFAULT_TOOL_POLICY (enabled by default). 4. src/stores/toolPolicyStore.ts & src/components/settings/ToolPolicyModal.tsx: Added advance_task and reject_task to Workflow category ('Управление задачами') with category grouping in matrix and global tabs. 5. src/stores/boardStore.ts: Removed unsafe local fallback that bypassed gatekeeper sensors, adding rollback via loadTasks() and sensor error alert on rejection.",
+  "sensors": {
+    "cargo_check": "green (exit code 0)",
+    "cargo_clippy_D_warnings": "green (0 warnings/errors, exit code 0)",
+    "pnpm_run_build": "green (tsc && vite build, exit code 0)"
+  },
+  "verdict": "APPROVED",
+  "notes": "Autonomous tool-driven pipeline task routing successfully implemented and verified. Gatekeeper sensors cannot be bypassed. Worktree cleaned up and changes merged to main."
+}
