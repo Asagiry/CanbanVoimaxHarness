@@ -30,6 +30,41 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(state)
         .setup(|_app| {
+            // Setup only runs in the verified single primary instance.
+            // Safely recover from unheld stale locks left behind by abrupt crashes
+            // without interfering with any active running instance.
+            #[cfg(target_os = "windows")]
+            {
+                if let Ok(localappdata) = std::env::var("LOCALAPPDATA") {
+                    let base = std::path::PathBuf::from(&localappdata).join("com.voimax.cvh");
+                    let _ = std::fs::create_dir_all(&base);
+                    let udf = base.join("webview_data");
+                    let _ = std::fs::create_dir_all(&udf);
+
+                    fn remove_stale_locks_recursive(dir: &std::path::Path) {
+                        if let Ok(entries) = std::fs::read_dir(dir) {
+                            for entry in entries.flatten() {
+                                let path = entry.path();
+                                if path.is_dir() {
+                                    remove_stale_locks_recursive(&path);
+                                } else if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                                    if name == "LOCK" || name.ends_with(".lock") {
+                                        let _ = std::fs::remove_file(&path);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    let eb_dir = base.join("EBWebView");
+                    if eb_dir.exists() {
+                        remove_stale_locks_recursive(&eb_dir);
+                    }
+                    if udf.exists() {
+                        remove_stale_locks_recursive(&udf);
+                    }
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

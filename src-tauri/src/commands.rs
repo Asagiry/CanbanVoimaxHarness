@@ -369,9 +369,15 @@ pub async fn create_agent_persona_file(root: &Path, role: &str) -> Result<String
     Ok(format!(".cvh/agents/{}/persona.md", role))
 }
 
+#[derive(Clone)]
+pub struct ActiveAgentHandle {
+    pub abort_flag: Arc<AtomicBool>,
+    pub join_handle: Arc<tokio::sync::Mutex<Option<tokio::task::JoinHandle<()>>>>,
+}
+
 pub struct AppState {
     pub repo_root: RwLock<PathBuf>,
-    pub active_agents: Mutex<HashMap<String, Arc<AtomicBool>>>,
+    pub active_agents: Mutex<HashMap<String, ActiveAgentHandle>>,
     pub agent_contexts: Mutex<HashMap<String, Arc<Mutex<crate::agent::compactor::AgentContextState>>>>,
     pub tasks: Arc<Mutex<Vec<Task>>>,
 }
@@ -1983,6 +1989,7 @@ pub async fn run_agent(
     };
 
     let abort_flag = Arc::new(AtomicBool::new(false));
+    let join_slot = Arc::new(tokio::sync::Mutex::new(None));
 
     // Store in active agents registry
     {
@@ -1991,7 +1998,13 @@ pub async fn run_agent(
             .active_agents
             .lock()
             .map_err(|_| "Failed to lock active agents".to_string())?;
-        map.insert(task_id.clone(), Arc::clone(&abort_flag));
+        map.insert(
+            task_id.clone(),
+            ActiveAgentHandle {
+                abort_flag: Arc::clone(&abort_flag),
+                join_handle: Arc::clone(&join_slot),
+            },
+        );
     }
 
     // Persist status "running" to tasks.json and update state.tasks
@@ -2048,8 +2061,9 @@ pub async fn run_agent(
     let tid = task.id.clone();
     let app = app_handle.clone();
     let root_task = root.clone();
+    let abort_flag_task = Arc::clone(&abort_flag);
 
-    tokio::spawn(async move {
+    let handle = tokio::spawn(async move {
         let app_inner = app.clone();
         let tid_inner = tid.clone();
 
@@ -2633,26 +2647,46 @@ pub async fn run_agent(
             }
         }
 
-        // Clean up from active_agents registry upon agent completion
+        // Clean up from active_agents registry upon agent completion only if this entry still belongs to this run
         if let Some(state_ref) = app.try_state::<AppState>() {
             if let Ok(mut map) = state_ref.active_agents.lock() {
-                map.remove(&tid);
+                if let Some(entry) = map.get(&tid) {
+                    if Arc::ptr_eq(&entry.abort_flag, &abort_flag_task) {
+                        map.remove(&tid);
+                    }
+                }
             }
         }
     });
+
+    // Populate the JoinHandle slot for cooperative cancellation and awaiting in steer_agent
+    {
+        let mut guard = join_slot.lock().await;
+        *guard = Some(handle);
+    }
 
     Ok(format!("Agent launched for task {}", task_id))
 }
 
 #[tauri::command]
 pub async fn abort_agent(task_id: String, state: State<'_, AppState>) -> Result<(), String> {
-    let mut map = state
-        .active_agents
-        .lock()
-        .map_err(|_| "Failed to lock active agents".to_string())?;
+    let entry = {
+        let mut map = state
+            .active_agents
+            .lock()
+            .map_err(|_| "Failed to lock active agents".to_string())?;
+        map.remove(&task_id)
+    };
 
-    if let Some(flag) = map.remove(&task_id) {
-        flag.store(true, Ordering::SeqCst);
+    if let Some(agent_entry) = entry {
+        agent_entry.abort_flag.store(true, Ordering::SeqCst);
+        let maybe_handle = {
+            let mut guard = agent_entry.join_handle.lock().await;
+            guard.take()
+        };
+        if let Some(handle) = maybe_handle {
+            let _ = tokio::time::timeout(tokio::time::Duration::from_millis(2000), handle).await;
+        }
         Ok(())
     } else {
         Err(format!("No running agent found for task {}", task_id))
@@ -3212,14 +3246,38 @@ pub async fn steer_agent(
     });
     let _ = app_handle.emit("agent:steer", steer_payload);
 
-    // If an agent is currently running for this task, signal abort before re-triggering
+    // If an agent is currently running for this task, signal abort and await its full termination
+    // before re-triggering. This eliminates concurrent runs in the same worktree and avoids
+    // the old agent deleting the new agent's abort flag upon exit.
     {
-        let mut map = state
-            .active_agents
-            .lock()
-            .map_err(|_| "Failed to lock active agents".to_string())?;
-        if let Some(flag) = map.remove(&task_id) {
-            flag.store(true, Ordering::SeqCst);
+        let prev_entry = {
+            let mut map = state
+                .active_agents
+                .lock()
+                .map_err(|_| "Failed to lock active agents".to_string())?;
+            map.remove(&task_id)
+        };
+
+        if let Some(agent_entry) = prev_entry {
+            // 1. Signal abort
+            agent_entry.abort_flag.store(true, Ordering::SeqCst);
+
+            // 2. Await previous coroutine termination (defensive 5s ceiling)
+            let maybe_handle = {
+                let mut guard = agent_entry.join_handle.lock().await;
+                guard.take()
+            };
+            if let Some(handle) = maybe_handle {
+                if tokio::time::timeout(tokio::time::Duration::from_millis(5000), handle)
+                    .await
+                    .is_err()
+                {
+                    eprintln!(
+                        "CVH [steer_agent]: Warning: previous agent task for {} did not finish within 5s timeout, proceeding with steer",
+                        task_id
+                    );
+                }
+            }
         }
     }
 

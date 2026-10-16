@@ -102,7 +102,7 @@ pub async fn create_worktree(
     // The fresh worktree carries the COMMITTED .cvh snapshot, which is stale by
     // definition. Overwrite it with the live runtime-state from <root>/.cvh
     // (best-effort: sync errors only warn, never fail creation).
-    sync_cvh_runtime_state(repo_path, &worktree_abs);
+    sync_cvh_runtime_state(repo_path, &worktree_abs).await;
 
     Ok(worktree_abs)
 }
@@ -118,9 +118,9 @@ fn is_secret_file_name(name: &str) -> bool {
 
 /// Best-effort overwrite-copy of a single file. Creates parent dirs as needed.
 /// Never fails the caller: errors become `eprintln!` warnings.
-fn copy_file_overwrite(src: &Path, dst: &Path) {
+async fn copy_file_overwrite(src: &Path, dst: &Path) {
     if let Some(parent) = dst.parent() {
-        if let Err(e) = std::fs::create_dir_all(parent) {
+        if let Err(e) = tokio::fs::create_dir_all(parent).await {
             eprintln!(
                 "CVH [sync_cvh_runtime_state]: warning: cannot create dir {:?}: {}",
                 parent, e
@@ -128,7 +128,7 @@ fn copy_file_overwrite(src: &Path, dst: &Path) {
             return;
         }
     }
-    if let Err(e) = std::fs::copy(src, dst) {
+    if let Err(e) = tokio::fs::copy(src, dst).await {
         eprintln!(
             "CVH [sync_cvh_runtime_state]: warning: cannot copy {:?} -> {:?}: {}",
             src, dst, e
@@ -138,18 +138,18 @@ fn copy_file_overwrite(src: &Path, dst: &Path) {
 
 /// Copies top-level files of `src_dir` into `dst_dir` when `keep` accepts the
 /// file name. Secret files are always skipped. Subdirectories are ignored.
-fn copy_top_level_filtered(src_dir: &Path, dst_dir: &Path, keep: impl Fn(&str) -> bool) {
-    if !src_dir.is_dir() {
+async fn copy_top_level_filtered(src_dir: &Path, dst_dir: &Path, keep: impl Fn(&str) -> bool) {
+    if !tokio::fs::try_exists(src_dir).await.unwrap_or(false) {
         return;
     }
-    if let Err(e) = std::fs::create_dir_all(dst_dir) {
+    if let Err(e) = tokio::fs::create_dir_all(dst_dir).await {
         eprintln!(
             "CVH [sync_cvh_runtime_state]: warning: cannot create dir {:?}: {}",
             dst_dir, e
         );
         return;
     }
-    let entries = match std::fs::read_dir(src_dir) {
+    let mut entries = match tokio::fs::read_dir(src_dir).await {
         Ok(e) => e,
         Err(e) => {
             eprintln!(
@@ -159,19 +159,13 @@ fn copy_top_level_filtered(src_dir: &Path, dst_dir: &Path, keep: impl Fn(&str) -
             return;
         }
     };
-    for entry in entries {
-        let entry = match entry {
-            Ok(e) => e,
-            Err(e) => {
-                eprintln!(
-                    "CVH [sync_cvh_runtime_state]: warning: bad dir entry in {:?}: {}",
-                    src_dir, e
-                );
-                continue;
-            }
-        };
+    while let Ok(Some(entry)) = entries.next_entry().await {
         let path = entry.path();
-        if !path.is_file() {
+        let file_type = match entry.file_type().await {
+            Ok(ft) => ft,
+            Err(_) => continue,
+        };
+        if !file_type.is_file() {
             continue;
         }
         let name = match path.file_name().and_then(|n| n.to_str()) {
@@ -181,56 +175,53 @@ fn copy_top_level_filtered(src_dir: &Path, dst_dir: &Path, keep: impl Fn(&str) -
         if is_secret_file_name(&name) || !keep(&name) {
             continue;
         }
-        copy_file_overwrite(&path, &dst_dir.join(&name));
+        copy_file_overwrite(&path, &dst_dir.join(&name)).await;
     }
 }
 
 /// Recursively copies `src_dir` into `dst_dir` (overwrite). Secret files are
 /// skipped at every level. Errors are warnings only.
-fn copy_dir_recursive_filtered(src_dir: &Path, dst_dir: &Path) {
-    if !src_dir.is_dir() {
+async fn copy_dir_recursive_filtered(src_dir: &Path, dst_dir: &Path) {
+    if !tokio::fs::try_exists(src_dir).await.unwrap_or(false) {
         return;
     }
-    if let Err(e) = std::fs::create_dir_all(dst_dir) {
-        eprintln!(
-            "CVH [sync_cvh_runtime_state]: warning: cannot create dir {:?}: {}",
-            dst_dir, e
-        );
-        return;
-    }
-    let entries = match std::fs::read_dir(src_dir) {
-        Ok(e) => e,
-        Err(e) => {
+    let mut stack = vec![(src_dir.to_path_buf(), dst_dir.to_path_buf())];
+    while let Some((current_src, current_dst)) = stack.pop() {
+        if let Err(e) = tokio::fs::create_dir_all(&current_dst).await {
             eprintln!(
-                "CVH [sync_cvh_runtime_state]: warning: cannot list {:?}: {}",
-                src_dir, e
+                "CVH [sync_cvh_runtime_state]: warning: cannot create dir {:?}: {}",
+                current_dst, e
             );
-            return;
+            continue;
         }
-    };
-    for entry in entries {
-        let entry = match entry {
+        let mut entries = match tokio::fs::read_dir(&current_src).await {
             Ok(e) => e,
             Err(e) => {
                 eprintln!(
-                    "CVH [sync_cvh_runtime_state]: warning: bad dir entry in {:?}: {}",
-                    src_dir, e
+                    "CVH [sync_cvh_runtime_state]: warning: cannot list {:?}: {}",
+                    current_src, e
                 );
                 continue;
             }
         };
-        let src_path = entry.path();
-        let name = match src_path.file_name().and_then(|n| n.to_str()) {
-            Some(n) => n.to_string(),
-            None => continue,
-        };
-        if src_path.is_dir() {
-            copy_dir_recursive_filtered(&src_path, &dst_dir.join(&name));
-        } else if src_path.is_file() {
-            if is_secret_file_name(&name) {
-                continue;
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let path = entry.path();
+            let file_type = match entry.file_type().await {
+                Ok(ft) => ft,
+                Err(_) => continue,
+            };
+            let name = match path.file_name().and_then(|n| n.to_str()) {
+                Some(n) => n.to_string(),
+                None => continue,
+            };
+            if file_type.is_dir() {
+                stack.push((path, current_dst.join(&name)));
+            } else if file_type.is_file() {
+                if is_secret_file_name(&name) {
+                    continue;
+                }
+                copy_file_overwrite(&path, &current_dst.join(&name)).await;
             }
-            copy_file_overwrite(&src_path, &dst_dir.join(&name));
         }
     }
 }
@@ -246,13 +237,13 @@ fn copy_dir_recursive_filtered(src_dir: &Path, dst_dir: &Path) {
 /// secrets (`llm.json`, `*.secret`, `*.key`, `.env*`).
 ///
 /// Best-effort: all errors are `eprintln!` warnings, never propagated.
-pub fn sync_cvh_runtime_state(repo_root: &Path, worktree_abs: &Path) {
+pub async fn sync_cvh_runtime_state(repo_root: &Path, worktree_abs: &Path) {
     let src_cvh = repo_root.join(".cvh");
-    if !src_cvh.is_dir() {
+    if !tokio::fs::try_exists(&src_cvh).await.unwrap_or(false) {
         return;
     }
     let dst_cvh = worktree_abs.join(".cvh");
-    if let Err(e) = std::fs::create_dir_all(&dst_cvh) {
+    if let Err(e) = tokio::fs::create_dir_all(&dst_cvh).await {
         eprintln!(
             "CVH [sync_cvh_runtime_state]: warning: cannot create {:?}: {}",
             dst_cvh, e
@@ -263,35 +254,38 @@ pub fn sync_cvh_runtime_state(repo_root: &Path, worktree_abs: &Path) {
     // Single files (overwrite stale snapshot when root has a live copy).
     for rel in ["pipeline.json", "boards.json", "tasks.json"] {
         let src = src_cvh.join(rel);
-        if src.is_file() {
+        if tokio::fs::try_exists(&src).await.unwrap_or(false) {
             if let Some(name) = src.file_name().and_then(|n| n.to_str()) {
                 if is_secret_file_name(name) {
                     continue;
                 }
             }
-            copy_file_overwrite(&src, &dst_cvh.join(rel));
+            copy_file_overwrite(&src, &dst_cvh.join(rel)).await;
         }
     }
     // Canonical Tool Policy Matrix only (not the whole settings/ dir).
     let src_policy = src_cvh.join("settings").join("tool-policy.json");
-    if src_policy.is_file() {
+    if tokio::fs::try_exists(&src_policy).await.unwrap_or(false) {
         copy_file_overwrite(
             &src_policy,
             &dst_cvh.join("settings").join("tool-policy.json"),
-        );
+        )
+        .await;
     }
 
     // Flat filtered copies.
     copy_top_level_filtered(&src_cvh.join("agents"), &dst_cvh.join("agents"), |n| {
         n.ends_with(".md")
-    });
+    })
+    .await;
     copy_top_level_filtered(&src_cvh.join("tools"), &dst_cvh.join("tools"), |n| {
         n.ends_with(".json")
-    });
+    })
+    .await;
 
     // Whole-directory copies (minus secrets).
-    copy_dir_recursive_filtered(&src_cvh.join("hooks"), &dst_cvh.join("hooks"));
-    copy_dir_recursive_filtered(&src_cvh.join("skills"), &dst_cvh.join("skills"));
+    copy_dir_recursive_filtered(&src_cvh.join("hooks"), &dst_cvh.join("hooks")).await;
+    copy_dir_recursive_filtered(&src_cvh.join("skills"), &dst_cvh.join("skills")).await;
     // Deliberately NOT synced: worktrees/, dialogs/, tasks/<id>/, spill/,
     // llm.json and other secrets.
 }
@@ -439,11 +433,15 @@ mod tests {
     /// Builds `<tmp>/{root,worktree}` with a live root `.cvh` and a stale
     /// worktree `.cvh` snapshot. Returns `(tmp, root, worktree_abs)`.
     fn setup_sync_fixture(tag: &str) -> (PathBuf, PathBuf, PathBuf) {
-        let tmp = std::env::temp_dir().join(format!(
-            "cvh_worktree_sync_{}_{}",
-            tag,
-            uuid::Uuid::new_v4()
-        ));
+        let tmp = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("tmp")
+            .join(format!(
+                "cvh_worktree_sync_{}_{}",
+                tag,
+                uuid::Uuid::new_v4()
+            ));
+        let _ = std::fs::create_dir_all(&tmp);
         let root = tmp.join("root");
         // Worktree abs mimics `<root>/.cvh/worktrees/<slug>` layout.
         let worktree_abs = root.join(".cvh").join("worktrees").join("task-a");
@@ -489,12 +487,12 @@ mod tests {
         (tmp, root, worktree_abs)
     }
 
-    #[test]
-    fn test_sync_copies_live_state_and_overwrites_stale_snapshot() {
+    #[tokio::test]
+    async fn test_sync_copies_live_state_and_overwrites_stale_snapshot() {
         let (tmp, root, worktree_abs) = setup_sync_fixture("copy");
         let dst_cvh = worktree_abs.join(".cvh");
 
-        sync_cvh_runtime_state(&root, &worktree_abs);
+        sync_cvh_runtime_state(&root, &worktree_abs).await;
 
         // Overwritten stale files carry the live content now.
         assert_eq!(read_str(&dst_cvh.join("pipeline.json")), r#"{"live":true}"#);
@@ -530,12 +528,12 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
-    #[test]
-    fn test_sync_excludes_worktrees_llm_dialogs_tasks_spill_secrets() {
+    #[tokio::test]
+    async fn test_sync_excludes_worktrees_llm_dialogs_tasks_spill_secrets() {
         let (tmp, root, worktree_abs) = setup_sync_fixture("exclude");
         let dst_cvh = worktree_abs.join(".cvh");
 
-        sync_cvh_runtime_state(&root, &worktree_abs);
+        sync_cvh_runtime_state(&root, &worktree_abs).await;
 
         assert!(
             !dst_cvh.join("worktrees").exists(),
@@ -556,15 +554,15 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
-    #[test]
-    fn test_sync_is_idempotent() {
+    #[tokio::test]
+    async fn test_sync_is_idempotent() {
         let (tmp, root, worktree_abs) = setup_sync_fixture("idem");
         let dst_cvh = worktree_abs.join(".cvh");
 
-        sync_cvh_runtime_state(&root, &worktree_abs);
+        sync_cvh_runtime_state(&root, &worktree_abs).await;
         let first = read_str(&dst_cvh.join("pipeline.json"));
         // Second run must not fail and must leave identical content.
-        sync_cvh_runtime_state(&root, &worktree_abs);
+        sync_cvh_runtime_state(&root, &worktree_abs).await;
         let second = read_str(&dst_cvh.join("pipeline.json"));
 
         assert_eq!(first, r#"{"live":true}"#);
@@ -578,7 +576,7 @@ mod tests {
         let empty_root = tmp.join("empty-root");
         let empty_wt = tmp.join("empty-wt");
         std::fs::create_dir_all(&empty_wt).expect("empty wt");
-        sync_cvh_runtime_state(&empty_root, &empty_wt);
+        sync_cvh_runtime_state(&empty_root, &empty_wt).await;
 
         let _ = std::fs::remove_dir_all(&tmp);
     }
