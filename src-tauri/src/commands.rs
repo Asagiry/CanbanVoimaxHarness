@@ -1232,6 +1232,7 @@ pub async fn create_task(
         parent_id: None,
         subtask_index: None,
         waiting_for_subtask_id: None,
+        handover_summary: None,
         cover_image: None,
         attachments: None,
         todos: None,
@@ -1460,6 +1461,7 @@ pub async fn create_subtask(
         parent_id: Some(parent_id.clone()),
         subtask_index: Some(next_subtask_idx),
         waiting_for_subtask_id: None,
+        handover_summary: None,
         cover_image: None,
         attachments: None,
         todos: None,
@@ -1594,6 +1596,7 @@ pub async fn internal_move_task_stage(
     target_stage_id: &str,
     verdict: Option<String>,
     status_override: Option<String>,
+    handover_summary: Option<String>,
     app_handle: Option<&AppHandle>,
 ) -> Result<Task, String> {
     let mut tasks = load_tasks_from_disk(root).await;
@@ -1773,6 +1776,9 @@ STDERR: {}",
     if verdict.is_some() {
         current_task.verdict = verdict;
     }
+    if let Some(summary) = handover_summary {
+        current_task.handover_summary = Some(summary);
+    }
     if let Some(st) = status_override {
         current_task.status = Some(st);
     } else if target_col.terminal == Some(true) || target_stage_id == "ready" || target_stage_id == "done" {
@@ -1821,11 +1827,12 @@ pub async fn move_task_stage(
     task_id: String,
     target_stage_id: String,
     verdict: Option<String>,
+    handover_summary: Option<String>,
     app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Task, String> {
     let root = state.get_root();
-    internal_move_task_stage(&root, &task_id, &target_stage_id, verdict, None, Some(&app_handle)).await
+    internal_move_task_stage(&root, &task_id, &target_stage_id, verdict, None, handover_summary, Some(&app_handle)).await
 }
 
 #[tauri::command]
@@ -2122,6 +2129,7 @@ pub async fn run_agent(
         task_id: task.id.clone(),
         task_title: task.title.clone(),
         task_description: initial_description,
+        handover_summary: task.handover_summary.clone(),
         steer_prompt,
         base_url,
         api_key,

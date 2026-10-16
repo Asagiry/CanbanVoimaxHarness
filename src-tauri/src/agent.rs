@@ -62,6 +62,8 @@ pub struct Task {
     pub subtask_index: Option<u32>,
     #[serde(rename = "waitingForSubtaskId", alias = "waiting_for_subtask_id", default)]
     pub waiting_for_subtask_id: Option<String>,
+    #[serde(rename = "handoverSummary", alias = "handover_summary", default)]
+    pub handover_summary: Option<String>,
     #[serde(rename = "coverImage", alias = "cover_image", default)]
     pub cover_image: Option<String>,
     #[serde(default)]
@@ -955,6 +957,7 @@ pub async fn execute_tool(
                 &next_col.id,
                 Some("APPROVED".to_string()),
                 status_override,
+                Some(summary.to_string()),
                 ctx.app_handle.as_ref(),
             )
             .await
@@ -1038,13 +1041,16 @@ pub async fn execute_tool(
                 bail!("Запрещено возвращать задачу из первой рабочей стадии назад в бэклог. Задача должна быть доработана или закрыта.");
             }
 
-            // 2. Execute move_task_stage logic with status 'idle' and verdict 'CHANGES_REQUESTED'
+            let rejection_summary = format!("ОТКЛОНЕНО РЕВЬЮ: {}", reason);
+
+            // 2. Execute move_task_stage logic with status 'idle', verdict 'CHANGES_REQUESTED', and handover_summary
             let updated_task = crate::commands::internal_move_task_stage(
                 repo_root,
                 task_id,
                 &prev_col.id,
                 Some("CHANGES_REQUESTED".to_string()),
                 Some("idle".to_string()),
+                Some(rejection_summary),
                 ctx.app_handle.as_ref(),
             )
             .await
@@ -1583,6 +1589,7 @@ pub struct AgentSessionConfig {
     pub task_id: String,
     pub task_title: String,
     pub task_description: String,
+    pub handover_summary: Option<String>,
     pub steer_prompt: Option<String>,
     pub base_url: String,
     pub api_key: Option<String>,
@@ -1743,11 +1750,23 @@ where
     // Deterministic static system prompt
     let system_prompt = compile_primed_system_prompt(&config.repo_root, &config.role).await?;
 
-    let initial_user_prompt = format!(
+    // Zero-Turn Memory Priming Relay Handoff (§ 2.9 AGENTS.md):
+    // If task has handover_summary, inject at the beginning of the prompt.
+    let mut initial_user_prompt = String::new();
+    if let Some(ref handover) = config.handover_summary {
+        let trimmed = handover.trim();
+        if !trimmed.is_empty() {
+            initial_user_prompt.push_str(&format!(
+                "### [ЭСТАФЕТА ПАЙПЛАЙНА / RELAY HANDOFF]\nПредыдущий этап пайплайна передал следующее саммари:\n{}\n\n",
+                trimmed
+            ));
+        }
+    }
+    initial_user_prompt.push_str(&format!(
         "# Objective: {}\n\n{}",
         config.task_title,
         config.task_description.trim()
-    );
+    ));
 
     let mut messages = vec![
         ChatMessage::system(system_prompt).with_cache_control(crate::llm::CacheControl::ephemeral()),

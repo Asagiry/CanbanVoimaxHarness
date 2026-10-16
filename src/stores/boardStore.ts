@@ -265,6 +265,9 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
           status: item?.status === 'completed' || item?.status === 'in_progress' ? item.status : 'pending',
         }))
       : undefined,
+    handoverSummary: typeof raw.handoverSummary === 'string'
+      ? raw.handoverSummary
+      : (typeof raw.handover_summary === 'string' ? raw.handover_summary : undefined),
   };
 }
 
@@ -382,6 +385,7 @@ function mapBackendTaskToKanban(t: any): KanbanTask {
     parentId: undefined,
     subtaskIndex: undefined,
     waitingForSubtaskId: undefined,
+    handoverSummary: undefined,
   };
 }
 
@@ -671,6 +675,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           priority: prev.priority,
           fastTrack: prev.fastTrack,
           attachments: mapped.attachments ?? prev.attachments,
+          handoverSummary: mapped.handoverSummary ?? prev.handoverSummary,
           activeStageDuration: 0,
           stageDurations: {
             ...prevStageDurations,
@@ -889,6 +894,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       model: targetCol.modelOverride || parent.model,
       parentId,
       subtaskIndex: nextIndex,
+      handoverSummary: undefined,
     };
 
     const updatedTasks = tasks.map((t) => {

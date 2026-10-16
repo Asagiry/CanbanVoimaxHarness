@@ -49,6 +49,7 @@ export interface KanbanTask {
   subtaskIndex?: number;
   waitingForSubtaskId?: string;
   todos?: TodoItem[];
+  handoverSummary?: string;
 }
 
 export interface PipelineColumn {

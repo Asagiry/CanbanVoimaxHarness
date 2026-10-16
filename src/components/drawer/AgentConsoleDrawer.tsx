@@ -31,6 +31,7 @@ import {
   GitCompare,
   Settings,
   Wrench,
+  Check,
 } from 'lucide-react';
 
 // Lightweight Markdown Renderer for streaming assistant output
@@ -294,7 +295,7 @@ export default function AgentConsoleDrawer() {
     appendOutput,
   } = useDrawerStore();
 
-  const { tasks, updateTask } = useBoardStore();
+  const { tasks, updateTask, columns, moveTask } = useBoardStore();
   const { settings, availableModels, openSettings } = useSettingsStore();
   const isToolAllowed = useToolPolicyStore((s) => s.isToolAllowed);
   const openToolPolicyModal = useToolPolicyStore((s) => s.openModal);
@@ -350,6 +351,7 @@ export default function AgentConsoleDrawer() {
   };
 
   const task = tasks.find((t) => t.id === activeTaskId);
+  const currentStageIdx = columns.findIndex((c) => c?.id === task?.columnId);
 
   // Reset error when switching tasks & load dialog history from disk
   useEffect(() => {
@@ -752,7 +754,7 @@ export default function AgentConsoleDrawer() {
             </button>
           </div>
 
-          {/* Center: Stage and Task badges, draggable empty area */}
+          {/* Center: Stage Stepper & Task badges, draggable empty area */}
           <div
             className="flex-1 flex items-center justify-center space-x-2 px-4 overflow-hidden select-none"
             data-tauri-drag-region
@@ -762,18 +764,68 @@ export default function AgentConsoleDrawer() {
                 {task.id}
               </span>
             )}
-            {task?.columnId && (
-              <span className="font-mono text-[11px] text-[#666666] px-2 py-0.5 rounded bg-[#fcfcfc] border border-[#ebebeb] shrink-0 select-none pointer-events-auto">
-                {task.columnId}
-              </span>
+
+            {/* Elegant Stage Stepper for Console Header */}
+            {task && columns.length > 0 && (
+              <div
+                data-no-drag
+                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg bg-[#f9fafb] border border-[#ebebeb] shrink-0 select-none pointer-events-auto shadow-2xs overflow-x-auto no-scrollbar max-w-[500px]"
+              >
+                {columns.map((col, idx) => {
+                  const isCurrent = col.id === task.columnId;
+                  const isPassed = currentStageIdx >= 0 && idx < currentStageIdx;
+                  const isRunningStage = isCurrent && isRunning;
+
+                  return (
+                    <div key={col.id} className="flex items-center shrink-0">
+                      {idx > 0 && (
+                        <ChevronRight className="h-3 w-3 text-[#d4d4d8] mx-0.5 shrink-0" />
+                      )}
+                      <button
+                        data-no-drag
+                        type="button"
+                        disabled={isCurrent}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!isCurrent) {
+                            moveTask(task.id, col.id);
+                          }
+                        }}
+                        title={
+                          isCurrent
+                            ? `Текущий этап: ${col.title}`
+                            : isPassed
+                            ? `Пройденный этап: ${col.title} (клик для перемещения)`
+                            : `Переместить на этап: ${col.title}`
+                        }
+                        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono transition-all duration-150 tabular-nums ${
+                          isCurrent
+                            ? 'bg-[#171717] text-white font-semibold shadow-xs ring-1 ring-[#171717]'
+                            : isPassed
+                            ? 'bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0] hover:bg-[#dcfce7] cursor-pointer active:scale-95'
+                            : 'bg-white text-[#71717a] border border-[#ebebeb] hover:bg-[#f4f4f5] hover:text-[#171717] hover:border-[#d4d4d8] cursor-pointer active:scale-95'
+                        }`}
+                      >
+                        {isPassed && <Check className="h-3 w-3 text-[#15803d] shrink-0" />}
+                        {isRunningStage && (
+                          <span className="h-2 w-2 rounded-full bg-[#22c55e] animate-pulse shrink-0" />
+                        )}
+                        <span className="truncate max-w-[85px]">{col.title}</span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             )}
+
             {effectiveModel && (
-              <span className="hidden sm:inline-block font-mono text-[10px] text-[#8f8f8f] px-1.5 py-0.5 rounded bg-[#fafafa] border border-[#ebebeb] shrink-0 select-none pointer-events-auto truncate max-w-[140px]">
+              <span className="hidden xl:inline-block font-mono text-[10px] text-[#8f8f8f] px-1.5 py-0.5 rounded bg-[#fafafa] border border-[#ebebeb] shrink-0 select-none pointer-events-auto truncate max-w-[130px]">
                 {effectiveModel}
               </span>
             )}
             {task?.title && (
-              <span className="text-xs text-[#666666] truncate max-w-[220px] select-none pointer-events-none">
+              <span className="hidden 2xl:inline-block text-xs text-[#666666] truncate max-w-[180px] select-none pointer-events-none">
                 {task.title}
               </span>
             )}
@@ -926,6 +978,26 @@ export default function AgentConsoleDrawer() {
               {getCleanPrompt(task.description, task.title)}
             </div>
           </div>
+
+          {/* a2) Relay Handoff / Zero-Turn Memory Priming Card */}
+          {task.handoverSummary && (
+            <div className="rounded-lg border border-[#c7d2fe] bg-[#f5f7ff] p-4 shadow-xs">
+              <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#e0e7ff]">
+                <div className="flex items-center space-x-2">
+                  <Sparkles className="h-4 w-4 text-[#6366f1]" />
+                  <span className="text-xs font-semibold text-[#4338ca] font-sans">
+                    Эстафета пайплайна / Relay Handoff (Zero-Turn Memory Priming)
+                  </span>
+                </div>
+                <span className="text-[10px] font-mono text-[#6366f1] bg-[#eef2ff] px-2 py-0.5 rounded border border-[#c7d2fe]">
+                  Передано предыдущим этапом
+                </span>
+              </div>
+              <div className="text-sm text-[#1e1b4b] leading-relaxed whitespace-pre-wrap select-text font-sans">
+                {task.handoverSummary}
+              </div>
+            </div>
+          )}
 
           {/* Unified Chronological Activity Stream */}
           {(unifiedActivities ?? []).map((activity, idx) => {
