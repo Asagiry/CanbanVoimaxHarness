@@ -1,0 +1,25 @@
+{
+  "task": "sqlite-dialogs",
+  "taskId": "CVH-SQLITE-DIALOGS",
+  "title": "Migrate task dialogs persistence to SQLite database (.cvh/harness.db)",
+  "branch": "feat/feat-sqlite-dialogs",
+  "merge_sha": "c195ba1",
+  "changed_files": [
+    "src-tauri/.cargo/config.toml",
+    "src-tauri/Cargo.toml",
+    "src-tauri/Cargo.lock",
+    "src-tauri/src/db.rs",
+    "src-tauri/src/lib.rs",
+    "src-tauri/src/commands.rs",
+    "src/stores/boardStore.ts",
+    "src/stores/drawerStore.ts"
+  ],
+  "diff_summary": "1. src-tauri/Cargo.toml: added rusqlite = { version = '0.32', features = ['bundled'] }. 2. src-tauri/src/db.rs: implemented SQLite database initialization at .cvh/harness.db (WAL mode, normal synchronous), dialog_items table with index idx_dialog_task, atomic batch insert/upsert (append_dialog_items), chronological loading (load_dialog_items), and task deletion (clear_dialog_items). 3. src-tauri/src/lib.rs: registered mod db. 4. src-tauri/src/commands.rs: switched save_task_dialog, load_task_dialog, clear_task_dialog to db module, removed dead JSON file helpers, added SQLite roundtrip unit test. 5. src/stores/drawerStore.ts: removed redundant heavy chat reading/writing to localStorage (cvh_dialog_<taskId>). 6. src-tauri/.cargo/config.toml: set CRATE_CC_NO_DEFAULTS = '1' to avoid Windows MSVC cc-rs error D8050.",
+  "sensors": {
+    "cargo_check": "green (exit code 0)",
+    "cargo_clippy_D_warnings": "green (0 warnings/errors, exit code 0)",
+    "pnpm_run_build": "green (tsc && vite build, exit code 0)"
+  },
+  "verdict": "APPROVED",
+  "notes": "Task chat and activity items now persist cleanly to .cvh/harness.db. Fast-forward merged into main, worktree cleaned up, branch deleted."
+}
