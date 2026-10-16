@@ -1,0 +1,27 @@
+{
+  "taskId": "CVH-INTERACTIVE-QUESTION-TOOL",
+  "task": "interactive-question-tool",
+  "title": "Interactive user interrogation system ('question' / 'ask_user' tool) with OpenCode-style prompt card and zero-polling Tokio pause",
+  "branch": "feat/interactive-question-tool",
+  "commitHash": "aa0d2b1",
+  "author": "agent-developer (tauri-rust-engineer & react-tailwind-artisan)",
+  "verdict": "APPROVED",
+  "sensors": {
+    "frontend_build": "pass (npx tsc --noEmit, 0 errors)",
+    "rust_compiler": "pass (cargo check --tests, 0 errors)"
+  },
+  "files": [
+    "src-tauri/src/agent.rs",
+    "src-tauri/src/commands.rs",
+    "src-tauri/src/config.rs",
+    "src-tauri/src/lib.rs",
+    "src/components/drawer/QuestionPromptCard.tsx",
+    "src/components/drawer/ToolExecutionCard.tsx",
+    "src/components/settings/ToolPolicyModal.tsx",
+    "src/stores/drawerStore.ts",
+    "src/stores/toolPolicyStore.ts",
+    "src/types/index.ts"
+  ],
+  "summary": "Implemented interactive user prompt tool ('question' / 'ask_user') allowing agents to ask clarifying questions with predefined options and custom user input. Backend pauses using tokio::sync::oneshot channel with 0% CPU and zero polling. Frontend renders tactile OpenCode-styled question cards in White Paper aesthetic.",
+  "timestamp": 1792184806027
+}
