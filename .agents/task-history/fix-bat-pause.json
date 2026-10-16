@@ -1,0 +1,23 @@
+{
+  "taskId": "CVH-BAT-PAUSE-FIX",
+  "task": "fix-bat-pause",
+  "title": "Prevent batch script from closing automatically on exit/error and verify installed rustup targets",
+  "branch": "feat/fix-bat-pause",
+  "commitHash": "c9d4ec4",
+  "mergeSha": "c9d4ec489db5c4ea5285e1db30318b7e840f6333",
+  "commitMessage": "fix(build): prevent auto-close on error/exit and check installed rustup target",
+  "author": "agent-developer (Level 1 Subagent)",
+  "verdict": "APPROVED",
+  "sensors": {
+    "cmd_help_exit_0": "pass (cmd.exe /c build-release.bat --help -> exit 0)",
+    "cmd_preflight_no_pause": "pass (cmd.exe /c build-release.bat --skip-install --skip-checks --no-pause -> exit 0)",
+    "cargo_check_src_tauri": "pass (cargo check exit 0 in src-tauri)",
+    "frontend_build_pnpm": "pass (pnpm run build exit 0 in root)",
+    "l2_reviewer": "APPROVED"
+  },
+  "files": [
+    "build-release.bat",
+    "build-release.ps1"
+  ],
+  "summary": "Fixed erroneous GNU target fallback when link.exe is not in PATH by strictly checking installed rustup targets (rustup target list --installed) in build-release.bat and build-release.ps1, preserving default host target (MSVC) when x86_64-pc-windows-gnu is not installed. Made pause enabled by default on completion and error exits so interactive console windows do not close immediately, added --no-pause flag for automated scripts and CI, added defensive pre-copy of WebView2Loader.dll into target release directory prior to tauri build."
+}
