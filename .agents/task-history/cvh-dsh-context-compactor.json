@@ -1,0 +1,29 @@
+{
+  "taskId": "CVH-DSH-CONTEXT-COMPACTOR",
+  "task": "dsh-context-compactor",
+  "title": "High-Density DSH-Style Context Compaction system with collapsible paper-styled accordion and model configuration",
+  "branch": "feat/dsh-context-compactor",
+  "commitHash": "616ca6b",
+  "author": "agent-developer (tauri-rust-engineer & react-tailwind-artisan)",
+  "verdict": "APPROVED",
+  "sensors": {
+    "frontend_build": "pass (npx tsc --noEmit, 0 errors)",
+    "rust_compiler": "pass (cargo check --tests, 0 errors)",
+    "rust_clippy": "pass (cargo clippy -- -D warnings, 0 warnings)"
+  },
+  "files": [
+    "src-tauri/src/agent/compactor.rs",
+    "src-tauri/src/commands.rs",
+    "src-tauri/src/config.rs",
+    "src-tauri/src/db.rs",
+    "src/components/drawer/CompactedContextCard.tsx",
+    "src/components/drawer/DrawerActivityStream.tsx",
+    "src/components/drawer/DrawerSteerBar.tsx",
+    "src/components/settings/SettingsModal.tsx",
+    "src/stores/drawerStore.ts",
+    "src/stores/settingsStore.ts",
+    "src/types/index.ts"
+  ],
+  "summary": "Implemented High-Density DSH-Style Context Compaction system. Rust backend condenses dialogue history prior to the last 2 active turns using an authoritative 7-section structured system prompt, with model inheritance ('inherit' default or custom override) and resilient HTTP client with deterministic fallback. Persists compacted markdown into SQLite table dialog_items with type = 'compacted' and archives older intermediate entries. React 19 frontend renders a tactile collapsible paper-styled accordion strip in White Paper / Vercel design, an on-demand 'Сжать контекст' button in DrawerSteerBar, and a Compactor Model selector in SettingsModal.",
+  "timestamp": 1792185353667
+}
