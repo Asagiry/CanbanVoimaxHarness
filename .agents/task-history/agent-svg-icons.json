@@ -1,0 +1,27 @@
+{
+  "taskId": "CVH-AGENT-SVG-ICONS",
+  "task": "agent-svg-icons",
+  "branch": "feat/agent-svg-icons",
+  "title": "SVG Icon Pack for Personas with Column Inheritance and Cortex Explorer Display",
+  "summary": "1) Added canonical AGENT_ICONS pack to commands.rs with 18 distinct icons ('Bot', 'Brain', 'Cpu', 'Code2', 'ShieldCheck', 'Sparkles', 'Terminal', 'Zap', 'Flame', 'Radar', 'Workflow', 'Boxes', 'Wrench', 'Rocket', 'Fingerprint', 'Compass', 'Crosshair', 'Layers'). 2) Supported reading and writing persona icons in YAML frontmatter and metadata, selecting a random unused icon on create_agent_persona and deterministically assigning and persisting missing icons in list_agent_personas. 3) Added icon?: string to AgentPersonaInfo and TypeScript definitions. 4) Columns automatically inherit assigned persona icon (col.icon = persona.icon || col.icon) in ColumnContextMenu, KanbanBoard, CreateBoardModal, and CortexExplorer, resetting to default_column_icon when detached. 5) Created reusable AgentIcon component rendering Lucide SVG icons. 6) CortexExplorer displays the agent's SVG icon next to their name in Section 2, and KanbanColumn displays the assigned agent's icon in the column header.",
+  "verdict": "APPROVED",
+  "commitHash": "e90a770",
+  "commitMessage": "feat(agents): SVG icon pack for personas with column inheritance and cortex explorer display",
+  "sensors": {
+    "cargo_check": "pass (0 warnings)",
+    "cargo_clippy": "pass (0 warnings, -D warnings)",
+    "pnpm_build": "pass (0 errors, 1645 modules transformed)"
+  },
+  "files": [
+    "src-tauri/src/commands.rs",
+    "src/components/common/AgentIcon.tsx",
+    "src/lib/columnIcons.ts",
+    "src/stores/cortexStore.ts",
+    "src/components/board/ColumnContextMenu.tsx",
+    "src/components/board/KanbanColumn.tsx",
+    "src/components/board/KanbanBoard.tsx",
+    "src/components/cortex/CortexExplorer.tsx",
+    "src/components/board/CreateBoardModal.tsx"
+  ],
+  "notes": "Verified with cargo check, cargo clippy -- -D warnings, and pnpm run build in isolated worktree. Merged to main and worktree cleaned up."
+}

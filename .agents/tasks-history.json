@@ -585,5 +585,35 @@
     "summary": "Removed invalid 'windows': {'staticVCRuntime': true} object from 'build' section in src-tauri/tauri.conf.json. In Tauri v2 schema, 'windows' is not a valid property of 'build' and caused 'tauri build' to fail schema validation with 'Additional properties are not allowed ('windows' was unexpected)'.",
     "diff_summary": "src-tauri/tauri.conf.json: removed invalid 'windows': {'staticVCRuntime': true} block from 'build' section. The 'build' section now strictly contains only valid Tauri v2 properties: beforeDevCommand, devUrl, beforeBuildCommand, frontendDist.",
     "timestamp": 1792159207581
+  },
+  "CVH-AGENT-SVG-ICONS": {
+    "taskId": "CVH-AGENT-SVG-ICONS",
+    "task": "agent-svg-icons",
+    "title": "SVG Icon Pack for Personas with Column Inheritance and Cortex Explorer Display",
+    "branch": "feat/agent-svg-icons",
+    "commitHash": "e90a770",
+    "merge_sha": "e90a770",
+    "commitMessage": "feat(agents): SVG icon pack for personas with column inheritance and cortex explorer display",
+    "author": "agent-developer (Level 1)",
+    "verdict": "APPROVED",
+    "sensors": {
+      "cargo_check": "pass (exit code 0)",
+      "cargo_clippy": "pass (exit code 0, 0 warnings)",
+      "frontend_build": "pass (tsc && vite build, exit code 0, 1645 modules transformed)"
+    },
+    "files": [
+      "src-tauri/src/commands.rs",
+      "src/components/common/AgentIcon.tsx",
+      "src/lib/columnIcons.ts",
+      "src/stores/cortexStore.ts",
+      "src/components/board/ColumnContextMenu.tsx",
+      "src/components/board/KanbanColumn.tsx",
+      "src/components/board/KanbanBoard.tsx",
+      "src/components/cortex/CortexExplorer.tsx",
+      "src/components/board/CreateBoardModal.tsx"
+    ],
+    "summary": "Implemented canonical AGENT_ICONS pack with 18 SVG icons, frontmatter icon metadata support on agent creation and deterministic assignment for missing icons, automatic column icon inheritance upon assigning/resetting agents, and full icon rendering in CortexExplorer agent list and KanbanColumn headers.",
+    "diff_summary": "1. src-tauri/src/commands.rs: Added AGENT_ICONS canonical pack, default_column_icon, extract_persona_icon_from_text, insert_or_update_frontmatter_icon, read_persona_icon_from_dir, save_persona_icon, and deterministic_icon_for_role. Added icon: Option<String> to AgentPersonaInfo. Updated create_agent_persona_file to assign random unused icon and list_agent_personas_in to persist missing icons. Reset column icon to default on persona deletion. 2. src/components/common/AgentIcon.tsx: New reusable component rendering canonical Lucide icons. 3. src/lib/columnIcons.ts: Column default icon mapping. 4. src/stores/cortexStore.ts: Added icon to AgentPersonaInfo and RawAgentPersona, mapped to stage.icon. 5. src/components/board/ColumnContextMenu.tsx & KanbanBoard.tsx & CreateBoardModal.tsx: Column inherits persona.icon on agent assignment, resets to default on detachment. 6. src/components/board/KanbanColumn.tsx: Header renders assigned agent's icon. 7. src/components/cortex/CortexExplorer.tsx: Renders agent's SVG icon in Section 2 next to their name and column stage headers.",
+    "timestamp": 1792161400000
   }
 }
