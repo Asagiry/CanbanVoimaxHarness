@@ -906,7 +906,7 @@ function HooksFolderBlock({
       {isOpen && files.length > 0 && (
         <div className="pl-4 space-y-0.5 border-l border-[#ebebeb] ml-2">
           {files.map((hookFile) => {
-            const isBuiltin = hookFile.path === 'builtin:create_worktree';
+            const isBuiltin = hookFile.path === 'builtin:create_worktree' || hookFile.path.startsWith('builtin:');
             return (
               <FileTreeItem
                 key={hookFile.id}
@@ -915,7 +915,7 @@ function HooksFolderBlock({
                 isActive={activeFileId === hookFile.id}
                 badge={isBuiltin ? 'встроенный' : hookMomentOf(hookFile.name)}
                 icon={<Zap className="h-3.5 w-3.5 text-[#666666] shrink-0" />}
-                onSelect={isBuiltin ? () => {} : () => onOpen(hookFile.id)}
+                onSelect={() => onOpen(hookFile.id)}
               />
             );
           })}

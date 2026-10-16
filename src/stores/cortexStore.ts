@@ -140,6 +140,167 @@ function buildSettingTemplate(role: string, stageTitle: string): string {
   );
 }
 
+// Токенизация shell-команд с учётом кавычек
+export function tokenizeCommand(cmd: string): string[] {
+  const tokens: string[] = [];
+  const regex = /[^\s"']+|"([^"]*)"|'([^']*)'/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(cmd)) !== null) {
+    if (match[1] !== undefined) tokens.push(match[1]);
+    else if (match[2] !== undefined) tokens.push(match[2]);
+    else tokens.push(match[0]);
+  }
+  return tokens;
+}
+
+const SCRIPT_EXTENSIONS = new Set(['bat', 'cmd', 'ps1', 'sh', 'bash', 'py', 'js', 'ts', 'mjs', 'cjs', 'rb', 'pl']);
+
+// Извлечение пути к файлу скрипта из команды хука (напр. "python .cvh/hooks/gatekeeper.py", ".bat", ".ps1")
+export function extractScriptPath(cmd: string): string | null {
+  if (!cmd || cmd.startsWith('builtin:')) return null;
+  const trimmed = cmd.trim();
+  const tokens = tokenizeCommand(trimmed);
+  if (tokens.length === 0) return null;
+
+  // 1. Проверяем токен с распознанным расширением скрипта
+  for (const token of tokens) {
+    const extMatch = token.match(/\.([a-zA-Z0-9_-]+)$/);
+    if (extMatch && SCRIPT_EXTENSIONS.has(extMatch[1].toLowerCase())) {
+      return token;
+    }
+  }
+
+  // 2. Проверяем токен с разделителями каталогов и расширением
+  for (const token of tokens) {
+    if (!token.startsWith('-') && (token.includes('/') || token.includes('\\'))) {
+      const extMatch = token.match(/\.([a-zA-Z0-9_-]+)$/);
+      if (extMatch && extMatch[1].length > 0) {
+        return token;
+      }
+    }
+  }
+
+  return null;
+}
+
+// Генерация подробного описания и псевдокода для встроенного хука
+export function buildBuiltinHookDescription(path: string, moment: string, stageTitle: string): string {
+  if (path === 'builtin:create_worktree' || path.startsWith('builtin:create_worktree')) {
+    return `# Встроенный хук: create_worktree (${moment})
+
+Выполняется автоматически при перемещении задачи в колонку ${stageTitle || 'Backlog'}.
+
+## Логика работы:
+1. Создает изолированный git worktree по пути worktrees/<task-id>.
+2. Создает и переключает ветку feat/<task-id> от main.
+3. Синхронизирует актуальное состояние проекта и .cvh/ в изолированный каталог.
+4. Изолирует правки агента от основной ветки.
+
+## Переменные окружения:
+- CVH_TASK_ID, CVH_TASK_TITLE, CVH_WORKTREE_PATH, CVH_BRANCH, CVH_STAGE_ID.
+
+## Псевдокод выполнения:
+\`\`\`bash
+# 1. Определение целевого пути и имени ветки
+WORKTREE_DIR="worktrees/\${CVH_TASK_ID}"
+BRANCH_NAME="feat/\${CVH_TASK_ID}"
+
+# 2. Создание изолированной ветки и worktree от main
+git branch "\${BRANCH_NAME}" main
+git worktree add "\${WORKTREE_DIR}" "\${BRANCH_NAME}"
+
+# 3. Синхронизация актуальной конфигурации harness
+cp -r .cvh/ "\${WORKTREE_DIR}/.cvh/"
+\`\`\``;
+  }
+
+  const hookName = path.replace(/^builtin:/, '');
+  return `# Встроенный хук: ${hookName} (${moment})
+
+Выполняется автоматически ядром CanbanVoimaxHarness.
+
+## Логика работы:
+1. Вызывается ядром Tauri v2 при наступлении события ${moment} стадии "${stageTitle}".
+2. Выполняет встроенные операции жизненного цикла задачи.
+
+## Переменные окружения:
+- CVH_TASK_ID, CVH_TASK_TITLE, CVH_WORKTREE_PATH, CVH_BRANCH, CVH_STAGE_ID.`;
+}
+
+// Генерация описания для прямой команды (напр. "cargo check")
+export function buildCommandHookDescription(command: string, moment: string, stageTitle: string): string {
+  const tokens = tokenizeCommand(command.trim());
+  const binary = tokens[0] || command;
+  const args = tokens.slice(1);
+
+  return `# Команда хука: ${moment}
+
+Выполняется как системная команда в рабочем окружении (worktree) задачи.
+
+## Команда:
+\`\`\`bash
+${command}
+\`\`\`
+
+## Детали запуска:
+- **Утилита / Бинарник**: \`${binary}\`
+- **Аргументы**: ${args.length > 0 ? `\`${args.join(' ')}\`` : '*(без аргументов)*'}
+- **Рабочий каталог**: \`CVH_WORKTREE_PATH\`
+
+## Логика работы:
+1. Запускается ядром CanbanVoimaxHarness при наступлении события **${moment}** колонки "${stageTitle}".
+2. Выполняет команду внутри изолированного каталога задачи.
+3. При ненулевом коде возврата (exit code != 0) переход стадии отклоняется.
+
+## Переменные окружения:
+- CVH_TASK_ID, CVH_TASK_TITLE, CVH_WORKTREE_PATH, CVH_BRANCH, CVH_STAGE_ID, CVH_VERDICT.`;
+}
+
+// Шаблон скрипта при отсутствии файла на диске
+export function buildScriptTemplate(scriptPath: string, moment: string, stageId: string): string {
+  const ext = scriptPath.split('.').pop()?.toLowerCase() ?? '';
+  if (ext === 'bat' || ext === 'cmd') {
+    return `@echo off
+rem Скрипт хука: ${moment} (${stageId})
+rem Файл: ${scriptPath}
+rem Рабочий каталог: %CVH_WORKTREE_PATH%
+
+echo [CVH Hook: %CVH_STAGE_ID%] Running ${moment} for %CVH_TASK_ID%...
+exit /b 0
+`;
+  }
+  if (ext === 'ps1') {
+    return `# Скрипт хука: ${moment} (${stageId})
+# Файл: ${scriptPath}
+# Рабочий каталог: $env:CVH_WORKTREE_PATH
+
+Write-Output "[CVH Hook: $env:CVH_STAGE_ID] Running ${moment} for $env:CVH_TASK_ID..."
+exit 0
+`;
+  }
+  if (ext === 'py') {
+    return `import os
+import sys
+
+# Скрипт хука: ${moment} (${stageId})
+# Файл: ${scriptPath}
+
+task_id = os.environ.get("CVH_TASK_ID", "")
+stage_id = os.environ.get("CVH_STAGE_ID", "")
+print(f"[CVH Hook: {stage_id}] Running ${moment} for {task_id}...")
+sys.exit(0)
+`;
+  }
+  return `#!/usr/bin/env bash
+# Скрипт хука: ${moment} (${stageId})
+# Файл: ${scriptPath}
+
+echo "[CVH Hook: \${CVH_STAGE_ID}] Running ${moment} for \${CVH_TASK_ID}..."
+exit 0
+`;
+}
+
+
 // Имя файла хука по моменту и расширению. Базу из ввода очищаем от
 // вручную вписанного расширения, чтобы не получить `setup.bat.bat`.
 export function buildHookFileName(
@@ -425,7 +586,7 @@ export const useCortexStore = create<CortexState>((set, get) => ({
     const nextMissing: Record<string, boolean> = {};
     for (const st of boardStages) {
       for (const f of st.files) {
-        if (f.path === 'builtin:create_worktree') continue;
+        if (f.path === 'builtin:create_worktree' || f.path.startsWith('builtin:')) continue;
         if (prevMissing[f.id]) nextMissing[f.id] = true;
       }
     }
@@ -559,9 +720,115 @@ export const useCortexStore = create<CortexState>((set, get) => ({
     for (const stage of allStages) {
       const file = stage.files.find((f) => f.id === fileId);
       if (!file) continue;
-      // Встроенный маркер — не файл на диске: открывать нечего.
-      if (file.path === 'builtin:create_worktree') return;
 
+      // 1. Встроенные хуки (builtin:create_worktree и др.)
+      if (file.path.startsWith('builtin:') || file.path === 'builtin:create_worktree') {
+        const content =
+          file.content && file.content.trim().length > 0
+            ? file.content
+            : buildBuiltinHookDescription(file.path, file.name, stage.stageTitle);
+        const loaded: CortexAgentFile = { ...file, content, isDirty: false };
+        set((state) => ({
+          stages: state.stages.map((st) =>
+            st.stageId === stage.stageId
+              ? { ...st, files: st.files.map((f) => (f.id === fileId ? loaded : f)) }
+              : st
+          ),
+          agentStages: state.agentStages.map((st) =>
+            st.stageId === stage.stageId
+              ? { ...st, files: st.files.map((f) => (f.id === fileId ? loaded : f)) }
+              : st
+          ),
+          activeFile: loaded,
+          isEditorOpen: true,
+          saveFeedback: null,
+        }));
+        return;
+      }
+
+      // 2. Хуки стадий: скрипты или системные команды
+      if (file.type === 'hook') {
+        const scriptPath = extractScriptPath(file.path);
+        if (scriptPath) {
+          // Хук является скриптом: пробуем прочитать его реальный исходный код с диска
+          try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            const content = await invoke<string>('read_cortex_file', { path: scriptPath });
+            const loaded: CortexAgentFile = { ...file, content, isDirty: false };
+            set((state) => ({
+              stages: state.stages.map((st) =>
+                st.stageId === stage.stageId
+                  ? { ...st, files: st.files.map((f) => (f.id === fileId ? loaded : f)) }
+                  : st
+              ),
+              agentStages: state.agentStages.map((st) =>
+                st.stageId === stage.stageId
+                  ? { ...st, files: st.files.map((f) => (f.id === fileId ? loaded : f)) }
+                  : st
+              ),
+              activeFile: loaded,
+              isEditorOpen: true,
+              saveFeedback: null,
+            }));
+            // Файл найден: снимаем пометку отсутствия
+            set((state) => {
+              if (!state.fileMissing[fileId]) return state;
+              const next = { ...state.fileMissing };
+              delete next[fileId];
+              return { fileMissing: next };
+            });
+            return;
+          } catch (err) {
+            console.info('read_cortex_file for hook script failed, using template/memory:', err);
+            const content =
+              file.content && file.content.trim().length > 0
+                ? file.content
+                : buildScriptTemplate(scriptPath, file.name, stage.stageId);
+            const loaded: CortexAgentFile = { ...file, content, isDirty: false };
+            set((state) => ({
+              stages: state.stages.map((st) =>
+                st.stageId === stage.stageId
+                  ? { ...st, files: st.files.map((f) => (f.id === fileId ? loaded : f)) }
+                  : st
+              ),
+              agentStages: state.agentStages.map((st) =>
+                st.stageId === stage.stageId
+                  ? { ...st, files: st.files.map((f) => (f.id === fileId ? loaded : f)) }
+                  : st
+              ),
+              activeFile: loaded,
+              isEditorOpen: true,
+              saveFeedback: null,
+            }));
+            return;
+          }
+        } else {
+          // Прямая команда (напр. "cargo check", "npm run build") — формируем структурированное описание
+          const content =
+            file.content && file.content.trim().length > 0
+              ? file.content
+              : buildCommandHookDescription(file.path, file.name, stage.stageTitle);
+          const loaded: CortexAgentFile = { ...file, content, isDirty: false };
+          set((state) => ({
+            stages: state.stages.map((st) =>
+              st.stageId === stage.stageId
+                ? { ...st, files: st.files.map((f) => (f.id === fileId ? loaded : f)) }
+                : st
+            ),
+            agentStages: state.agentStages.map((st) =>
+              st.stageId === stage.stageId
+                ? { ...st, files: st.files.map((f) => (f.id === fileId ? loaded : f)) }
+                : st
+            ),
+            activeFile: loaded,
+            isEditorOpen: true,
+            saveFeedback: null,
+          }));
+          return;
+        }
+      }
+
+      // 3. Обычные текстовые файлы (persona, rule, settings)
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         const content = await invoke<string>('read_cortex_file', { path: file.path });
@@ -830,11 +1097,18 @@ export const useCortexStore = create<CortexState>((set, get) => ({
 
     set({ isSaving: true });
 
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('save_cortex_file', { path: activeFile.path, content: activeFile.content });
-    } catch (err) {
-      console.info('save_cortex_file not available or in web mode:', err);
+    const isBuiltin = activeFile.path.startsWith('builtin:');
+    const scriptPath = extractScriptPath(activeFile.path);
+    const isDirectCommand = activeFile.type === 'hook' && !isBuiltin && !scriptPath;
+
+    if (!isBuiltin && !isDirectCommand) {
+      const targetPath = scriptPath ?? activeFile.path;
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('save_cortex_file', { path: targetPath, content: activeFile.content });
+      } catch (err) {
+        console.info('save_cortex_file not available or in web mode:', err);
+      }
     }
 
     // Update in memory stages (обе секции: файл мог быть открыт из любой)
@@ -861,12 +1135,18 @@ export const useCortexStore = create<CortexState>((set, get) => ({
       };
     });
 
+    const feedbackMsg = isBuiltin
+      ? `Встроенный хук ${activeFile.name} обновлен`
+      : isDirectCommand
+      ? `Команда ${activeFile.name} обновлена`
+      : `Файл ${activeFile.name} сохранен`;
+
     set({
       stages: updatedStages,
       agentStages: updatedAgentStages,
       activeFile: { ...activeFile, isDirty: false },
       isSaving: false,
-      saveFeedback: `Файл ${activeFile.name} сохранен`,
+      saveFeedback: feedbackMsg,
     });
 
     setTimeout(() => {
