@@ -2,8 +2,8 @@
 # CanbanVoimaxHarness - one-button local Release build (PowerShell 5.1+).
 # Single entry point for agents: run from the repository root, no questions.
 #
-#   ./build-release.ps1 [-SkipInstall] [-SkipChecks] [-Bundles nsis] [-Target x86_64-pc-windows-gnu] [-Pause] [-Help]
-#   Double-dash spellings (--skip-install, --bundles=nsis, --target=..., --help) work too.
+#   ./build-release.ps1 [-SkipInstall] [-SkipChecks] [-Bundles nsis] [-Target x86_64-pc-windows-gnu] [-NoPause] [-Pause] [-Help]
+#   Double-dash spellings (--skip-install, --bundles=nsis, --target=..., --no-pause, --pause, --help) work too.
 #
 # Pipeline: [1/5] preflight, [2/5] pnpm install, [3/5] frontend build,
 #             [4/5] cargo check + clippy, [5/5] tauri build + collect.
@@ -12,7 +12,7 @@
 # Layout (Linux):   Release/Linux/bin/           portable binary
 #                   Release/Linux/installer/     AppImage, deb
 # All errors are printed with an ERROR: prefix and exit with a nonzero code.
-# No blocking prompt at the end unless -Pause is given (agents must never block).
+# Window stays open on completion or error unless -NoPause / --no-pause is passed.
 # ============================================================================
 $ErrorActionPreference = "Stop"
 
@@ -32,7 +32,8 @@ Usage: build-release.ps1 [options]
     -SkipChecks  | --skip-checks     skip cargo check + cargo clippy
     -Bundles LIST | --bundles=LIST   forward to "tauri build --bundles LIST" (e.g. nsis)
     -Target TRIPLE | --target=TRIPLE target triple (e.g. x86_64-pc-windows-gnu)
-    -Pause       | --pause           wait for Enter at the end (interactive use only)
+    -NoPause     | --no-pause        do not pause before exit (agents and automated scripts)
+    -Pause       | --pause           wait for Enter at the end (default behavior)
     -Help        | --help, -h, /?    print this help and exit 0
 
   Examples:
@@ -44,8 +45,16 @@ Usage: build-release.ps1 [options]
 "@
 }
 
+$NoPause = $false
+
 function Fail([string]$Message, [int]$Code = 1) {
   [Console]::Error.WriteLine("ERROR: $Message")
+  if (-not $script:NoPause) {
+    Write-Host "Press Enter to exit..."
+    if (-not [Console]::IsInputRedirected) {
+      try { [void][Console]::ReadLine() } catch {}
+    }
+  }
   exit $Code
 }
 
@@ -53,14 +62,14 @@ $SkipInstall = $false
 $SkipChecks = $false
 $Bundles = ""
 $Target = ""
-$DoPause = $false
 $i = 0
 while ($i -lt $args.Count) {
   $a = [string]$args[$i]
   if ($a -eq "-h" -or $a -eq "-Help" -or $a -eq "--help" -or $a -eq "/?") { Show-Usage; exit 0 }
   elseif ($a -eq "--skip-install" -or $a -eq "-SkipInstall") { $SkipInstall = $true }
   elseif ($a -eq "--skip-checks" -or $a -eq "-SkipChecks") { $SkipChecks = $true }
-  elseif ($a -eq "--pause" -or $a -eq "-Pause") { $DoPause = $true }
+  elseif ($a -eq "--no-pause" -or $a -eq "-NoPause") { $NoPause = $true }
+  elseif ($a -eq "--pause" -or $a -eq "-Pause") { $NoPause = $false }
   elseif ($a -like "--bundles=*") {
     $Bundles = $a.Substring(11)
     if ([string]::IsNullOrWhiteSpace($Bundles)) { Fail "--bundles requires a non-empty value." 2 }
@@ -203,9 +212,10 @@ if ($OnWindows) {
   if ([string]::IsNullOrEmpty($Target)) {
     $hasMsvc = $null -ne (Get-Command link.exe -ErrorAction SilentlyContinue)
     $hasGnuGcc = $null -ne (Get-Command gcc.exe -ErrorAction SilentlyContinue)
-    if (-not $hasMsvc -and $hasGnuGcc) {
+    $hasGnuTarget = @(rustup target list --installed 2>$null) -contains "x86_64-pc-windows-gnu"
+    if (-not $hasMsvc -and $hasGnuGcc -and $hasGnuTarget) {
       $Target = "x86_64-pc-windows-gnu"
-      Write-Host "  notice: MSVC link.exe not found; defaulting target to $Target"
+      Write-Host "  notice: MSVC link.exe not found and GNU target installed; defaulting target to $Target"
     }
   }
   if ([string]::IsNullOrEmpty($Bundles)) {
@@ -258,6 +268,19 @@ if ($SkipChecks) {
 Write-Host ""
 
 Write-Host "[5/5] Building Tauri release bundles..."
+# Ensure WebView2Loader.dll is present in target release directory for NSIS bundling on Windows
+if ($OnWindows) {
+  $targetReleaseDir = if (-not [string]::IsNullOrEmpty($Target)) { "src-tauri/target/$Target/release" } else { "src-tauri/target/release" }
+  $targetDll = Join-Path $targetReleaseDir "WebView2Loader.dll"
+  if (-not (Test-Path -LiteralPath $targetDll -PathType Leaf)) {
+    $foundBuildDll = Get-ChildItem "$targetReleaseDir/build" -Recurse -Filter "WebView2Loader.dll" -ErrorAction SilentlyContinue |
+      Where-Object { $_.FullName -like "*x64*" } | Select-Object -First 1
+    if ($foundBuildDll) {
+      Copy-Item -Force -LiteralPath $foundBuildDll.FullName -Destination $targetReleaseDir
+      Write-Host "  notice: pre-copied WebView2Loader.dll to $targetReleaseDir"
+    }
+  }
+}
 $tauriArgs = @("tauri", "build")
 if (-not [string]::IsNullOrEmpty($Target)) {
   $tauriArgs += @("--target", $Target)
@@ -381,8 +404,10 @@ foreach ($f in (Get-ChildItem -LiteralPath $InstDir -File)) {
 }
 Write-Host ""
 Write-Host "DONE: local Release build complete."
-if ($DoPause) {
+if (-not $NoPause) {
   Write-Host "Press Enter to continue..."
-  [void][Console]::ReadLine()
+  if (-not [Console]::IsInputRedirected) {
+    try { [void][Console]::ReadLine() } catch {}
+  }
 }
 exit 0

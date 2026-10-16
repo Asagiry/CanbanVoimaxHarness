@@ -3,7 +3,7 @@ rem ==========================================================================
 rem CanbanVoimaxHarness - one-button local Release build (Windows, cmd.exe).
 rem Single entry point for agents: run from the repository root, no questions.
 rem
-rem   build-release.bat [--skip-install] [--skip-checks] [--bundles=LIST] [--target=TRIPLE] [--pause] [--help]
+rem   build-release.bat [--skip-install] [--skip-checks] [--bundles=LIST] [--target=TRIPLE] [--no-pause] [--pause] [--help]
 rem
 rem Pipeline: [1/5] preflight, [2/5] pnpm install, [3/5] frontend build,
 rem             [4/5] cargo check + clippy, [5/5] tauri build + collect.
@@ -13,20 +13,42 @@ rem Flags:    --skip-install    reuse existing node_modules
 rem           --skip-checks     skip cargo check + clippy
 rem           --bundles=LIST    forward to "tauri build --bundles LIST" (e.g. nsis)
 rem           --target=TRIPLE   target triple (e.g. x86_64-pc-windows-gnu)
-rem           --pause           keep the window open at the end (interactive use only)
+rem           --no-pause        do not pause before exit (agents and automated scripts)
+rem           --pause           pause before exit (default behavior)
 rem           --help, -h, /?    print this help and exit 0
 rem All errors are printed with an ERROR: prefix and exit with a nonzero code.
-rem No pause at the end unless --pause is given (agents must never block).
+rem Window stays open on completion or error unless --no-pause is passed.
 rem ==========================================================================
 setlocal EnableExtensions
 set "SKIP_INSTALL=0"
 set "SKIP_CHECKS=0"
 set "BUNDLES="
 set "TARGET="
-set "DO_PAUSE=0"
+set "NO_PAUSE=0"
+set "EXIT_CODE=0"
 
 :parse_args
 if "%~1"=="" goto args_done
+if "%~1"=="--no-pause" (
+  set "NO_PAUSE=1"
+  shift
+  goto parse_args
+)
+if "%~1"=="-no-pause" (
+  set "NO_PAUSE=1"
+  shift
+  goto parse_args
+)
+if "%~1"=="--pause" (
+  set "NO_PAUSE=0"
+  shift
+  goto parse_args
+)
+if "%~1"=="-pause" (
+  set "NO_PAUSE=0"
+  shift
+  goto parse_args
+)
 if "%~1"=="--skip-install" (
   set "SKIP_INSTALL=1"
   shift
@@ -34,11 +56,6 @@ if "%~1"=="--skip-install" (
 )
 if "%~1"=="--skip-checks" (
   set "SKIP_CHECKS=1"
-  shift
-  goto parse_args
-)
-if "%~1"=="--pause" (
-  set "DO_PAUSE=1"
   shift
   goto parse_args
 )
@@ -50,7 +67,7 @@ if "%ARG:~0,10%"=="--bundles=" (
   set "BUNDLES=%ARG:~10%"
   if "%BUNDLES%"=="" (
     echo ERROR: --bundles requires a non-empty value. 1>&2
-    exit /b 2
+    goto error_exit_2
   )
   shift
   goto parse_args
@@ -58,7 +75,7 @@ if "%ARG:~0,10%"=="--bundles=" (
 if "%~1"=="--bundles" (
   if "%~2"=="" (
     echo ERROR: --bundles requires a value. 1>&2
-    exit /b 2
+    goto error_exit_2
   )
   set "BUNDLES=%~2"
   shift
@@ -69,7 +86,7 @@ if "%ARG:~0,9%"=="--target=" (
   set "TARGET=%ARG:~9%"
   if "%TARGET%"=="" (
     echo ERROR: --target requires a non-empty value. 1>&2
-    exit /b 2
+    goto error_exit_2
   )
   shift
   goto parse_args
@@ -77,7 +94,7 @@ if "%ARG:~0,9%"=="--target=" (
 if "%~1"=="--target" (
   if "%~2"=="" (
     echo ERROR: --target requires a value. 1>&2
-    exit /b 2
+    goto error_exit_2
   )
   set "TARGET=%~2"
   shift
@@ -86,12 +103,12 @@ if "%~1"=="--target" (
 )
 echo ERROR: unknown flag: %~1 1>&2
 echo Run "build-release.bat --help" for usage. 1>&2
-exit /b 2
+goto error_exit_2
 
 :args_done
 if /I not "%OS%"=="Windows_NT" (
   echo ERROR: build-release.bat requires Windows cmd.exe. On Linux run ./build-release.sh --help 1>&2
-  exit /b 1
+  goto error_exit
 )
 
 set "BIN_DIR=Release\Windows\bin"
@@ -176,17 +193,17 @@ rem Validate required tools
 where cargo >nul 2>nul
 if errorlevel 1 (
   echo ERROR: cargo not found in PATH or in .cargo\bin. Install the Rust toolchain. 1>&2
-  exit /b 1
+  goto error_exit
 )
 where node >nul 2>nul
 if errorlevel 1 (
   echo ERROR: node not found in PATH. Install Node.js 20. 1>&2
-  exit /b 1
+  goto error_exit
 )
 where pnpm >nul 2>nul
 if errorlevel 1 (
   echo ERROR: pnpm not found in PATH. Install pnpm. 1>&2
-  exit /b 1
+  goto error_exit
 )
 echo   ok: cargo, node, pnpm found.
 
@@ -196,8 +213,11 @@ if "%TARGET%"=="" (
   if errorlevel 1 (
     where gcc.exe >nul 2>nul
     if not errorlevel 1 (
-      set "TARGET=x86_64-pc-windows-gnu"
-      echo   notice: MSVC link.exe not found; defaulting target to x86_64-pc-windows-gnu
+      rustup target list --installed 2>nul | findstr /i "x86_64-pc-windows-gnu" >nul
+      if not errorlevel 1 (
+        set "TARGET=x86_64-pc-windows-gnu"
+        echo   notice: MSVC link.exe not found and GNU target installed; defaulting target to x86_64-pc-windows-gnu
+      )
     )
   )
 )
@@ -228,7 +248,7 @@ goto install_done
 call pnpm install --frozen-lockfile
 if errorlevel 1 (
   echo ERROR: pnpm install --frozen-lockfile failed. 1>&2
-  exit /b 1
+  goto error_exit
 )
 
 :install_done
@@ -238,7 +258,7 @@ echo [3/5] Building frontend (pnpm run build)...
 call pnpm run build
 if errorlevel 1 (
   echo ERROR: pnpm run build failed ^(tsc ^& vite build^). 1>&2
-  exit /b 1
+  goto error_exit
 )
 echo.
 
@@ -246,7 +266,7 @@ echo [4/5] Rust sensors (cargo check + clippy)...
 if "%SKIP_CHECKS%"=="1" goto skip_checks
 if not exist "src-tauri" (
   echo ERROR: src-tauri directory not found. Run from the repository root. 1>&2
-  exit /b 1
+  goto error_exit
 )
 pushd "src-tauri"
 if not "%TARGET%"=="" (
@@ -254,26 +274,26 @@ if not "%TARGET%"=="" (
   if errorlevel 1 (
     echo ERROR: cargo check --target %TARGET% failed. 1>&2
     popd
-    exit /b 1
+    goto error_exit
   )
   cargo clippy --target %TARGET% -- -D warnings
   if errorlevel 1 (
     echo ERROR: cargo clippy --target %TARGET% -- -D warnings failed. 1>&2
     popd
-    exit /b 1
+    goto error_exit
   )
 ) else (
   cargo check
   if errorlevel 1 (
     echo ERROR: cargo check failed. 1>&2
     popd
-    exit /b 1
+    goto error_exit
   )
   cargo clippy -- -D warnings
   if errorlevel 1 (
     echo ERROR: cargo clippy -- -D warnings failed. 1>&2
     popd
-    exit /b 1
+    goto error_exit
   )
 )
 popd
@@ -286,6 +306,19 @@ echo   skipped ^(--skip-checks^).
 echo.
 
 echo [5/5] Building Tauri release bundles...
+rem Ensure WebView2Loader.dll is present in target release directory for NSIS bundling
+if not exist "src-tauri\target\release\WebView2Loader.dll" (
+  for /r "src-tauri\target\release\build" %%D in (WebView2Loader.dll) do (
+    if exist "%%D" copy /Y "%%D" "src-tauri\target\release\" >nul 2>nul
+  )
+)
+if not "%TARGET%"=="" (
+  if not exist "src-tauri\target\%TARGET%\release\WebView2Loader.dll" (
+    for /r "src-tauri\target\%TARGET%\release\build" %%D in (WebView2Loader.dll) do (
+      if exist "%%D" copy /Y "%%D" "src-tauri\target\%TARGET%\release\" >nul 2>nul
+    )
+  )
+)
 set "BUILD_CMD=pnpm tauri build"
 if not "%TARGET%"=="" set "BUILD_CMD=%BUILD_CMD% --target %TARGET%"
 if not "%BUNDLES%"=="" set "BUILD_CMD=%BUILD_CMD% --bundles %BUNDLES%"
@@ -293,7 +326,7 @@ if not "%BUNDLES%"=="" set "BUILD_CMD=%BUILD_CMD% --bundles %BUNDLES%"
 call %BUILD_CMD%
 if errorlevel 1 (
   echo ERROR: tauri build failed. 1>&2
-  exit /b 1
+  goto error_exit
 )
 echo.
 
@@ -329,13 +362,13 @@ if "%APP_EXE%"=="" (
 
 if "%APP_EXE%"=="" (
   echo ERROR: portable exe not found. 1>&2
-  exit /b 1
+  goto error_exit
 )
 
 copy /Y "%APP_EXE%" "%BIN_DIR%\" >nul
 if errorlevel 1 (
   echo ERROR: failed to copy %APP_EXE% to %BIN_DIR% 1>&2
-  exit /b 1
+  goto error_exit
 )
 set "COPIED_BIN=%BIN_DIR%\canban-voimax-harness.exe"
 
@@ -446,8 +479,22 @@ for %%F in ("%INST_DIR%\*") do (
 )
 echo.
 echo DONE: local Release build complete.
-if "%DO_PAUSE%"=="1" pause
+if not "%NO_PAUSE%"=="1" pause
 exit /b 0
+
+:error_exit_2
+set "EXIT_CODE=2"
+goto error_exit
+
+:error_exit
+if "%EXIT_CODE%"=="" set "EXIT_CODE=1"
+if "%EXIT_CODE%"=="0" set "EXIT_CODE=1"
+echo.
+echo ==============================================================================
+echo [ERROR] Build script failed with exit code %EXIT_CODE%.
+echo ==============================================================================
+if not "%NO_PAUSE%"=="1" pause
+exit /b %EXIT_CODE%
 
 :usage
 echo Usage: build-release.bat [options]
@@ -462,7 +509,8 @@ echo     --skip-install    reuse existing node_modules (default: skip if present
 echo     --skip-checks     skip cargo check + cargo clippy
 echo     --bundles=LIST    forward to "tauri build --bundles LIST" (e.g. nsis)
 echo     --target=TRIPLE   target triple (e.g. x86_64-pc-windows-gnu)
-echo     --pause           keep the window open at the end (interactive use only)
+echo     --no-pause        do not pause before exit (agents and automated scripts)
+echo     --pause           pause before exit (default behavior)
 echo     --help, -h, /?    print this help and exit 0
 echo.
 echo   Examples:
