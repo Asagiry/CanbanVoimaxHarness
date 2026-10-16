@@ -1,880 +1,875 @@
-﻿{
-    "CVH-INIT":  {
-                     "taskId":  "CVH-INIT",
-                     "title":  "Initialize CanbanVoimaxHarness architecture, AGENTS.md, .cvh/ pipeline, and skills",
-                     "author":  "Root Orchestrator",
-                     "verdict":  "APPROVED",
-                     "commitHash":  "INIT",
-                     "commitMessage":  "chore(init): initialize CanbanVoimaxHarness repository, architecture, and core skills",
-                     "summary":  "Scaffolded initial repository structure, AGENTS.md governance, .cvh/ configuration, dogfooding pipeline, transition hooks, and 7 core development skills.",
-                     "files":  [
-                                   ".gitignore",
-                                   "README.md",
-                                   "AGENTS.md",
-                                   ".cvh/config.json",
-                                   ".cvh/pipeline.json",
-                                   ".cvh/agents/developer.md",
-                                   ".cvh/agents/reviewer.md",
-                                   ".cvh/agents/retro.md",
-                                   ".cvh/hooks/on_enter_dev.bat",
-                                   ".cvh/hooks/on_finish_done.bat",
-                                   ".agents/skills/development/SKILL.md",
-                                   ".agents/skills/agent-developer/SKILL.md",
-                                   ".agents/skills/agent-developer-reviewer/SKILL.md",
-                                   ".agents/skills/agent-retro-verifier/SKILL.md",
-                                   ".agents/skills/tauri-rust-engineer/SKILL.md",
-                                   ".agents/skills/react-tailwind-artisan/SKILL.md",
-                                   ".agents/skills/llm-streaming-expert/SKILL.md",
-                                   ".agents/tasks-history.json",
-                                   ".agents/knowledge-graph.json"
-                               ],
-                     "timestamp":  1740000000000
-                 },
-    "CVH-001-FRONTEND":  {
-                             "taskId":  "CVH-001-FRONTEND",
-                             "title":  "React 19 + TypeScript + Tailwind CSS v4 Frontend Control Plane with Cortex Explorer \u0026 Kanban Board",
-                             "author":  "agent-developer (react-tailwind-artisan)",
-                             "verdict":  "APPROVED",
-                             "commitHash":  "e4215a4",
-                             "commitMessage":  "feat(frontend): CVH-001 React 19 control plane with Cortex Explorer and Kanban board",
-                             "summary":  "Implemented React 19 + TypeScript + Tailwind CSS v4 desktop control plane. Built Cortex Explorer for agent mind navigation (zero-turn memory inspection and rule editing), interactive Kanban board with fast-track routing and live stage duration timers, slide-out Agent Console Drawer with real-time thoughts and tool execution logs, and full Zustand state management.",
-                             "files":  [
-                                           "package.json",
-                                           "package-lock.json",
-                                           "vite.config.ts",
-                                           "tsconfig.json",
-                                           "tsconfig.node.json",
-                                           "index.html",
-                                           "src/main.tsx",
-                                           "src/App.tsx",
-                                           "src/index.css",
-                                           "src/lib/utils.ts",
-                                           "src/types/index.ts",
-                                           "src/stores/boardStore.ts",
-                                           "src/stores/cortexStore.ts",
-                                           "src/stores/drawerStore.ts",
-                                           "src/stores/projectStore.ts",
-                                           "src/stores/mockData.ts",
-                                           "src/components/layout/Topbar.tsx",
-                                           "src/components/board/KanbanBoard.tsx",
-                                           "src/components/board/KanbanColumn.tsx",
-                                           "src/components/card/KanbanCard.tsx",
-                                           "src/components/cortex/CortexExplorer.tsx",
-                                           "src/components/cortex/RuleEditorModal.tsx",
-                                           "src/components/drawer/AgentConsoleDrawer.tsx",
-                                           "src/components/drawer/ToolExecutionCard.tsx"
-                                       ],
-                             "timestamp":  1740003600000
-                         },
-    "CVH-002-BACKEND":  {
-                            "taskId":  "CVH-002-BACKEND",
-                            "title":  "Implement the full Tauri v2 + Tokio Rust desktop core engine",
-                            "author":  "tauri-rust-engineer",
-                            "verdict":  "APPROVED_WITH_CAVEATS",
-                            "commitHash":  "69ccb0d",
-                            "commitMessage":  "feat(backend): complete Tauri v2 + Tokio core engine with icon assets and header fixes",
-                            "summary":  "Implemented complete Tauri v2 + Tokio desktop core engine including config \u0026 pipeline parsers with atomic disk writes, Git worktree \u0026 branch manager, transition hooks with Windows process tree kill and async stdio drain, universal SSE streaming client for OpenAI and Anthropic native APIs with prompt caching, Zero-Turn Memory Priming and ReAct agent loop with worktree-scoped tools, and 13 Tauri IPC commands. Resolved Level 2 review caveats: scaffolded Tauri icon assets (32x32, 128x128, icon.ico) and fixed reqwest HeaderName type bound in stream_anthropic.",
-                            "files":  [
-                                          "src-tauri/Cargo.toml",
-                                          "src-tauri/build.rs",
-                                          "src-tauri/tauri.conf.json",
-                                          "src-tauri/capabilities/default.json",
-                                          "src-tauri/src/config.rs",
-                                          "src-tauri/src/git.rs",
-                                          "src-tauri/src/hooks.rs",
-                                          "src-tauri/src/llm/mod.rs",
-                                          "src-tauri/src/llm/models.rs",
-                                          "src-tauri/src/llm/client.rs",
-                                          "src-tauri/src/agent.rs",
-                                          "src-tauri/src/commands.rs",
-                                          "src-tauri/src/lib.rs",
-                                          "src-tauri/src/main.rs",
-                                          "src-tauri/icons/icon.ico",
-                                          "src-tauri/icons/32x32.png",
-                                          "src-tauri/icons/128x128.png",
-                                          "src-tauri/icons/icon.png"
-                                      ],
-                            "timestamp":  1740007200000
-                        },
-    "CVH-003":  {
-                    "taskId":  "CVH-003",
-                    "title":  "State-Preserving Context Compactor \u0026 UI Token Gauge",
-                    "author":  "agent-developer (tauri-rust-engineer \u0026 react-tailwind-artisan)",
-                    "verdict":  "APPROVED_WITH_CAVEATS",
-                    "commitHash":  "af2e1ca",
-                    "commitMessage":  "refactor(drawer): unify IPC callpath to compact_context in drawerStore",
-                    "summary":  "Implemented State-Preserving Context Compactor and UI Token Gauge for CanbanVoimaxHarness. Rust backend features 4 Immutable Anchors (System prompt, Task prompt, Execution state Markdown snapshot, and last 2 working turns), Zero-Cost Log Evaporation (replacing tool logs \u003e500 chars older than 3 turns with deterministic metadata placeholders without LLM calls), and Structured State Snapshots. Added `compact_context` IPC command returning CompactionReport and emitting `agent:compacted` event. Frontend features tactile ContextGauge with Emerald/Amber/Crimson thresholds, Web Audio API mechanical click synthesis, flame toast notification, ripple animation, and client/backend compaction trigger. Level 2 review caveat regarding IPC callpath desynchronization in drawerStore was fully resolved in af2e1ca with unified primary call to compact_context and backward-compatible fallback. Verified with 0 errors via cargo check and npm run build.",
-                    "files":  [
-                                  ".gitignore",
-                                  "src-tauri/src/agent.rs",
-                                  "src-tauri/src/agent/compactor.rs",
-                                  "src-tauri/src/commands.rs",
-                                  "src-tauri/src/compactor.rs",
-                                  "src-tauri/src/lib.rs",
-                                  "src-tauri/src/llm/client.rs",
-                                  "src/components/drawer/ContextGauge.tsx",
-                                  "src/stores/drawerStore.ts",
-                                  "src/types/index.ts"
-                              ],
-                    "timestamp":  1740009000000
-                },
-    "CVH-004":  {
-                    "taskId":  "CVH-004",
-                    "title":  "Remove CI push trigger, configure static vc runtime, and restrict bundle to nsis",
-                    "author":  "agent-developer",
-                    "verdict":  "APPROVED",
-                    "commitHash":  "34ee7ec",
-                    "mergeCommitHash":  "66cea7d",
-                    "commitMessage":  "fix(ci): remove push trigger, configure static vc runtime, and restrict bundle to nsis (CVH-004-CI-BUNDLE-FIX)",
-                    "summary":  "Removed push triggers from .github/workflows/ci.yml to avoid costly automatic runs on every push (only workflow_dispatch and pull_request remain). Configured tauri_build::WindowsAttributes::new().static_vc_runtime(true) in src-tauri/build.rs to eliminate STATIC_VCRUNTIME deprecation warning. Changed bundle.targets to [\u0027nsis\u0027] in src-tauri/tauri.conf.json to completely eliminate WiX 3 downloads and light.exe MSI packaging hangs. Achieved 100% first-pass FTR score.",
-                    "files":  [
-                                  ".github/workflows/ci.yml",
-                                  "src-tauri/build.rs",
-                                  "src-tauri/tauri.conf.json"
-                              ],
-                    "ftrScore":  "100%",
-                    "timestamp":  1791824555382
-                },
-    "CVH-012":  {
-                    "taskId":  "CVH-012",
-                    "title":  "Backend Runtime: Model Discovery IPC, Custom Flow Agent Execution \u0026 Windows Cleanup",
-                    "author":  "tauri-rust-engineer",
-                    "verdict":  "APPROVED",
-                    "commitHash":  "f1bdd1e",
-                    "mergeCommitHash":  "abd1c81",
-                    "commitMessage":  "feat(backend): add fetch_available_models, agent execution along custom flow, and eliminate GPU/ACL hacks",
-                    "summary":  "Implemented fetch_available_models IPC command with candidate endpoint probing (/models, /v1/models, /api/tags), Bearer auth, OpenAI/Ollama payload normalization, and deduplicated sorting. Added real ReAct agent execution with absolute precedence of llm_settings, live streaming events (agent:thought via ThinkingStreamParser for \u003cthinking\u003e tags, agent:output, agent:status running/finished), and autonomous task promotion along custom_flow and pipeline fallback with stage on_enter hook execution and review routing. Cleaned up Windows/WebView2 workarounds by removing --disable-gpu, icacls process spawn, and hardcoded second monitor window positioning.",
-                    "files":  [
-                                  "src-tauri/src/agent.rs",
-                                  "src-tauri/src/commands.rs",
-                                  "src-tauri/src/lib.rs",
-                                  "src-tauri/src/main.rs"
-                              ],
-                    "ftrScore":  "100%",
-                    "timestamp":  1791830400000
-                },
-    "CVH-014":  {
-                    "taskId":  "CVH-014",
-                    "title":  "Real AI Proxy 8045, reasoning_content SSE Streaming, and customFlow Promotion",
-                    "author":  "agent-developer (tauri-rust-engineer \u0026 react-tailwind-artisan)",
-                    "verdict":  "APPROVED",
-                    "commitHash":  "3146e73",
-                    "mergeCommitHash":  "40232db",
-                    "commitMessage":  "feat(runtime): wire real AI proxy 8045, reasoning_content SSE parsing, and remove stub fallbacks",
-                    "summary":  "Implemented dynamic multi-provider resolution pointing to local AI proxy (http://127.0.0.1:8045/v1) with gitignored credentials. Extended Rust backend SSE streaming client to parse both delta-level and choice-level reasoning_content and thought payloads into StreamChunk::Thought. Wired Tauri desktop events (agent:thought, agent:output, agent:tool_call, task:moved, agent:finished, agent:status) into React frontend App with 3000ms sliding-window thought and token stream coalescing in drawerStore. Implemented custom_flow boundary fallbacks for stage promotion and removed synthetic fallback model stubs in settingsStore to ensure real network errors bubble directly to UI. Achieved 100% First-Time-Right score with zero regressions and zero compiler warnings.",
-                    "files":  [
-                                  ".cvh/config.json",
-                                  "src/stores/settingsStore.ts",
-                                  "src/stores/drawerStore.ts",
-                                  "src/components/settings/SettingsModal.tsx",
-                                  "src/App.tsx",
-                                  "src-tauri/src/commands.rs",
-                                  "src-tauri/src/config.rs",
-                                  "src-tauri/src/llm/client.rs",
-                                  "src-tauri/src/llm/models.rs"
-                              ],
-                    "ftrScore":  "100%",
-                    "timestamp":  1791836000000
-                },
-    "CVH-015":  {
-                    "taskId":  "CVH-015",
-                    "title":  "Task-Level Model Selection, Persistence \u0026 Unified DSH Activity Feed",
-                    "author":  "agent-developer (react-tailwind-artisan \u0026 tauri-rust-engineer)",
-                    "verdict":  "APPROVED",
-                    "commitHash":  "d9cf958",
-                    "commitMessage":  "feat(feed): task model selection, backend persistence, and unified DSH activity feed",
-                    "summary":  "Resolved silent dev stage execution and fragmented UI: implemented task-level model selection in NewTaskModal and model badges on cards/drawer, auto-run agent invocation on dev stage entry, save_tasks IPC persistence to .cvh/tasks.json, and a unified DSH \u0026 Claude Code chronological activity feed with collapsible live thinking blocks, markdown response rendering, inline tool execution cards, agent status controls (abort/run), and interactive steering via steer_agent.",
-                    "files":  [
-                                  "src/types/index.ts",
-                                  "src/stores/boardStore.ts",
-                                  "src/stores/drawerStore.ts",
-                                  "src/components/board/KanbanBoard.tsx",
-                                  "src/components/card/KanbanCard.tsx",
-                                  "src/components/drawer/AgentConsoleDrawer.tsx",
-                                  "src-tauri/src/commands.rs"
-                              ],
-                    "ftrScore":  "100%",
-                    "timestamp":  1791885299000
-                },
-    "CVH-016":  {
-                    "taskId":  "CVH-016",
-                    "title":  "Backend Agent Runner, Task Model Selection, save_tasks IPC, and Robust Execution",
-                    "author":  "tauri-rust-engineer",
-                    "verdict":  "APPROVED_WITH_CAVEATS",
-                    "commitHash":  "a1e15a2",
-                    "mergeCommitHash":  "9a1e452",
-                    "resolutionCommitHash":  "24949cc",
-                    "commitMessage":  "feat(agent): implement task model selection, save_tasks IPC, and robust agent runner execution",
-                    "summary":  "Implemented backend agent runner execution in run_agent with 4-level model selection precedence (task.model -\u003e llm_settings.model -\u003e col.model_override -\u003e proj_cfg.default_model), robust worktree scaffolding via create_worktree(\u0026root, \u0026task.id.to_lowercase(), \u0027main\u0027), full event emitting parity (agent:thought, agent:token, agent:output, agent:tool_call, agent:tool_result, agent:turn_start, agent:finished, agent:status, and task:moved), save_tasks IPC command for atomic task state persistence to .cvh/tasks.json, and interactive steer_agent execution. Resolved Level 2 review caveats in commit 24949cc on main: eliminated duplicate save_tasks registration in src-tauri/src/lib.rs tauri::generate_handler! and refactored guarded worktree_path unwrap to safe idiomatic pattern matching.",
-                    "files":  [
-                                  "src-tauri/src/agent.rs",
-                                  "src-tauri/src/commands.rs",
-                                  "src-tauri/src/lib.rs"
-                              ],
-                    "ftrScore":  "85%",
-                    "caveatsResolved":  [
-                                            "Removed duplicate save_tasks registration in src-tauri/src/lib.rs tauri::generate_handler! macro.",
-                                            "Eliminated guarded .unwrap() on task.worktree_path in src-tauri/src/commands.rs run_agent in favor of idiomatic pattern matching per AGENTS.md Р’В§ 2.2 Ponytail Minimalism."
-                                        ],
-                    "timestamp":  1791889400000
-                },
-    "CVH-018":  {
-                    "taskId":  "CVH-018",
-                    "title":  "Clean Activity Feed, Circular Context Gauge with Hover Card, LocalStorage Task Persistence, and Run Error Surface",
-                    "author":  "Lead Frontend Artisan (react-tailwind-artisan)",
-                    "verdict":  "APPROVED",
-                    "commitHash":  "905f7d6",
-                    "commitMessage":  "feat(ui): clean activity feed, circular context gauge with hover card, localStorage task persistence, and run error surface",
-                    "summary":  "Eliminated redundant filter tab bar to deliver a clean, uninterrupted chronological activity stream. Replaced the bulky horizontal context bar with an elegant 28px circular SVG progress ring and hover breakdown card (System prompt, Tool definitions, Messages) with compact context action. Fortified task persistence with dual-layer synchronization (Tauri backend save_tasks IPC + automatic localStorage backup cvh_tasks_backup) ensuring zero task loss on app cold start, window reloads, or web preview. Added immediate error transparency by surfacing run/status errors directly in the drawer with one-click retry execution.",
-                    "files":  [
-                                  "src/components/drawer/AgentConsoleDrawer.tsx",
-                                  "src/components/drawer/ContextGauge.tsx",
-                                  "src/stores/boardStore.ts"
-                              ],
-                    "ftrScore":  "100%",
-                    "timestamp":  1791898170000
-                },
-    "CVH-017":  {
-                    "taskId":  "CVH-017",
-                    "title":  "Smart Workspace Root Discovery, Fallback Pipeline, Dual Task Persistence, and LLM Runner Error Dispatching",
-                    "author":  "tauri-rust-engineer",
-                    "verdict":  "APPROVED_WITH_CAVEATS",
-                    "commitHash":  "f98dac0",
-                    "resolutionCommitHash":  "a4d225f",
-                    "commitMessage":  "feat(backend): smart root discovery, fallback pipeline, and proxy connection fix",
-                    "summary":  "Resolved executable double-click root resolution failures and silent LLM runner stalls: implemented multi-tier discover_project_root (current_dir check, current_dir.ancestors() traversal, persistent %LOCALAPPDATA% active_project.txt lookup, and deterministic default fallback), 5-stage default_pipeline_config fail-safe fallback, dual-layer task persistence writing atomically to both .cvh/tasks.json and global app data with empty list preservation, and fortified async LLM runner error dispatching in Tokio background tasks with StreamChunk::Error propagation, zero-chunk channel closure detection, and multi-channel UI error surfacing (agent:error, agent:status, and formatted agent:output).",
-                    "files":  [
-                                  "src-tauri/src/agent.rs",
-                                  "src-tauri/src/commands.rs",
-                                  "src-tauri/src/config.rs",
-                                  "src-tauri/src/lib.rs",
-                                  "src-tauri/src/llm/client.rs"
-                              ],
-                    "ftrScore":  "88%",
-                    "caveatsResolved":  [
-                                            "Ensured empty task array in local .cvh/tasks.json is honored without falling back to global backup, preventing resurrection of deleted tasks.",
-                                            "Verified default_pipeline_config schema matches canonical 5-stage pipeline specification."
-                                        ],
-                    "timestamp":  1791898200000
-                },
-    "CVH-021":  {
-                    "taskId":  "CVH-021",
-                    "title":  "Restore SplashScreen bootloader and fix drawer white-screen flex layout",
-                    "author":  "react-tailwind-artisan",
-                    "verdict":  "APPROVED_WITH_CAVEATS",
-                    "commitHash":  "4e97cc6",
-                    "resolutionCommitHash":  "0732d49",
-                    "commitMessage":  "fix(ui): restore SplashScreen bootloader and fix drawer white-screen flex layout",
-                    "summary":  "Restored terminal CLI bootloader SplashScreen.tsx with kernel boot sequence, TTY_VOIMAX header, hairline progress bar, and isDataReady hydration guard. Fixed critical drawer white-screen layout failure by hoisting AgentConsoleDrawer and SplashScreen outside the CSS transformed/zoomed container to the root fragment level, establishing h-screen max-h-screen overflow-hidden bounds, and enforcing min-h-0/min-w-0 on all flex children. Resolved Level 2 review caveat in commit 0732d49 by hoisting and cleaning up finishTimer on unmount.",
-                    "files":  [
-                                  "src/App.tsx",
-                                  "src/components/drawer/AgentConsoleDrawer.tsx",
-                                  "src/components/splash/SplashScreen.tsx"
-                              ],
-                    "ftrScore":  "85%",
-                    "caveatsResolved":  [
-                                            "Hoisted finishTimer into effect scope and cleaned it up on unmount to prevent state updates on unmounted SplashScreen component."
-                                        ],
-                    "timestamp":  1791966200000
-                },
-    "CVH-022":  {
-                    "taskId":  "CVH-022",
-                    "title":  "Generate desktop icon.ico and PNG assets from new SVG logo",
-                    "author":  "tauri-rust-engineer / agent-developer",
-                    "verdict":  "APPROVED",
-                    "commitHash":  "9800657",
-                    "mergeCommitHash":  "89e7d2c",
-                    "commitMessage":  "feat(assets): generate desktop icon.ico and PNG assets from new SVG logo",
-                    "summary":  "Generated desktop icon assets from public/favicon.svg (obsidian badge, white delta triangle, and 3-column kanban motif) to resolve Windows taskbar, window header, and Explorer displaying the default Tauri icon. Produced 32x32.png, 128x128.png, icon.png (512x512), and multi-resolution icon.ico containing 16x16, 24x24, 32x32, 48x48, 64x64, 128x128, and 256x256 mipmaps with high-fidelity Lanczos resampling. Verified index.html favicon link, Topbar Logo rendering, and verified zero compiler/bundler errors via cargo check and npm run build.",
-                    "files":  [
-                                  "src-tauri/icons/128x128.png",
-                                  "src-tauri/icons/128x128@2x.png",
-                                  "src-tauri/icons/32x32.png",
-                                  "src-tauri/icons/Square107x107Logo.png",
-                                  "src-tauri/icons/Square142x142Logo.png",
-                                  "src-tauri/icons/Square150x150Logo.png",
-                                  "src-tauri/icons/Square284x284Logo.png",
-                                  "src-tauri/icons/Square30x30Logo.png",
-                                  "src-tauri/icons/Square310x310Logo.png",
-                                  "src-tauri/icons/Square44x44Logo.png",
-                                  "src-tauri/icons/Square71x71Logo.png",
-                                  "src-tauri/icons/Square89x89Logo.png",
-                                  "src-tauri/icons/StoreLogo.png",
-                                  "src-tauri/icons/icon.icns",
-                                  "src-tauri/icons/icon.ico",
-                                  "src-tauri/icons/icon.png"
-                              ],
-                    "ftrScore":  "100%",
-                    "timestamp":  1792000000000
-                },
-    "CVH-023":  {
-                    "taskId":  "CVH-023",
-                    "title":  "Eliminate React Rules of Hooks violation in AgentConsoleDrawer and wrap in root ErrorBoundary",
-                    "author":  "react-tailwind-artisan",
-                    "verdict":  "APPROVED",
-                    "commitHash":  "74ea7a5",
-                    "mergeCommitHash":  "96347cb",
-                    "commitMessage":  "fix(drawer): eliminate React rules of hooks violation and wrap drawer in root ErrorBoundary",
-                    "summary":  "Resolved fatal React White Screen of Death on Kanban card click caused by conditional execution of useSettingsStore, useMemo(selectableModels), and useMemo(turns) below `if (!isOpen || !task) return null;` in AgentConsoleDrawer.tsx. Hoisted all hooks unconditionally to the top of the component with safe null-coalescing fallbacks. Wrapped \u003cAgentConsoleDrawer /\u003e in a root \u003cErrorBoundary scopeLabel=\"Р С™Р С•Р Р…РЎРѓР С•Р В»РЎРЉ Р В·Р В°Р Т‘Р В°РЎвЂЎР С‘\" onClose={() =\u003e useDrawerStore.getState().closeDrawer()}\u003e in src/App.tsx to defensively isolate child render errors.",
-                    "files":  [
-                                  "src/App.tsx",
-                                  "src/components/drawer/AgentConsoleDrawer.tsx"
-                              ],
-                    "ftrScore":  "100%",
-                    "timestamp":  1792050000000
-                },
-    "CVH-024":  {
-                    "taskId":  "CVH-024",
-                    "title":  "Configure instant HMR dev workflow with IPv4 127.0.0.1 binding for Vite and Tauri devUrl",
-                    "author":  "agent-developer",
-                    "verdict":  "APPROVED",
-                    "commitHash":  "9698ee6",
-                    "mergeCommitHash":  "5f4b34a",
-                    "commitMessage":  "feat(dev): bind Vite and Tauri devUrl to IPv4 127.0.0.1 for instant HMR dev mode",
-                    "summary":  "Eliminated Windows dual-stack IPv6/IPv4 dev server hang where Vite defaulted to IPv6 ::1 while Tauri CLI checked IPv4 127.0.0.1:5173. Explicitly bound Vite server.host to \u0027127.0.0.1\u0027 in vite.config.ts and synchronized build.devUrl to \u0027http://127.0.0.1:5173\u0027 in src-tauri/tauri.conf.json. Verified clean production bundle via npm run build and verified Level 2 review APPROVED.",
-                    "files":  [
-                                  "vite.config.ts",
-                                  "src-tauri/tauri.conf.json"
-                              ],
-                    "ftrScore":  "100%",
-                    "timestamp":  1792100000000
-                },
-    "CVH-025":  {
-                    "taskId":  "CVH-025",
-                    "title":  "Non-admin WebView2 user-data permission inheritance and stale lock recovery",
-                    "author":  "tauri-rust-engineer",
-                    "verdict":  "APPROVED",
-                    "commitHash":  "d35a418",
-                    "mergeCommitHash":  "0a15c39",
-                    "commitMessage":  "fix(windows): non-admin WebView2 permission inheritance and stale lock recovery",
-                    "summary":  "Resolved WebView2 initialization failures (0x80070005 Access Denied and 0x800700AA ERROR_BUSY) on non-admin Windows accounts by recursively granting Full Control to current user and AppContainer via icacls, and purging stale lockfiles from previous ungraceful exits.",
-                    "files":  [
-                                  "src-tauri/src/main.rs"
-                              ],
-                    "ftrScore":  "100%",
-                    "timestamp":  1792150000000
-                },
-    "CVH-026":  {
-                    "taskId":  "CVH-026",
-                    "title":  "Eliminate msedgewebview2 STATUS_BREAKPOINT (0x80000003) crash in msedge_elf.dll via --no-sandbox and --disable-gpu",
-                    "author":  "tauri-rust-engineer",
-                    "verdict":  "APPROVED",
-                    "commitHash":  "710ff49",
-                    "commitMessage":  "fix(windows): eliminate msedgewebview2 STATUS_BREAKPOINT crash in msedge_elf.dll via --no-sandbox and --disable-gpu",
-                    "summary":  "Resolved fatal desktop crash on launch where msedgewebview2.exe tripped STATUS_BREAKPOINT (0x80000003) in msedge_elf.dll during Chromium early loader process-integrity and sandbox checks on non-admin accounts or with local proxies present. Injected --disable-features=RendererCodeIntegrity --no-sandbox --disable-gpu into WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS at the entry point of main.rs.",
-                    "files":  [
-                                  "src-tauri/src/main.rs"
-                              ],
-                    "ftrScore":  "100%",
-                    "timestamp":  1792200000000
-                },
-    "CVH-028":  {
-                    "taskId":  "CVH-028",
-                    "title":  "Interactive To-Dos Execution Plan Widget (DSH-Style) and todo_write protocol",
-                    "author":  "agent-developer",
-                    "verdict":  "APPROVED",
-                    "commitHash":  "5749089",
-                    "mergeCommitHash":  "c48fe04",
-                    "commitMessage":  "feat(agent): implement DSH-style interactive To-Dos plan widget and todo_write protocol",
-                    "summary":  "Implemented authentic, interactive To-Dos plan widget and protocol directly inspired by DeepSeek Harness (DSH) and Harness Engineering Р’В§ 17. Added TodoItem and KanbanTask.todos in TypeScript and Rust, created DSH-authentic TaskTodoWidget with obsidian styling and interactive status cycling, anchored it above the feed obeying Р’В§ 2.13 Viewport Overlay \u0026 Flex Boundary Invariants, and added todo_write agent tool in Rust with atomic persistence and task:updated event emission.",
-                    "files":  [
-                                  "src/types/kanban.ts",
-                                  "src/types/index.ts",
-                                  "src/stores/kanbanStore.ts",
-                                  "src/stores/boardStore.ts",
-                                  "src/components/drawer/TaskTodoWidget.tsx",
-                                  "src/components/drawer/AgentConsoleDrawer.tsx",
-                                  "src/App.tsx",
-                                  "src-tauri/src/agent.rs",
-                                  "src-tauri/src/commands.rs",
-                                  ".cvh/settings/tool-policy.json"
-                              ],
-                    "ftrScore":  "100%",
-                    "timestamp":  1792300000000
-                },
-    "CVH-006":  {
-                    "taskId":  "CVH-006",
-                    "title":  "Implement builtin cvh-dev agent, prune hooks from Cortex Explorer agents section, and fix reactive updates",
-                    "author":  "agent-developer",
-                    "verdict":  "APPROVED",
-                    "commitHash":  "8fae343419d9069ace4556f465c9408097f192e0",
-                    "commitMessage":  "feat(agent): builtin cvh-dev agent, cortex explorer hooks pruning, and reactive updates",
-                    "summary":  "Implemented builtin immutable cvh-dev agent with virtual fallback prompt (BUILTIN_CVH_DEV_PROMPT) and deletion protection in Rust backend and React UI; pruned hooks/ from Agents section in Cortex Explorer so agents strictly represent minds while hooks belong to stages; added reactive updates via Tauri event agent:personas_updated and reactive store listeners.",
-                    "files":  [
-                                  "src-tauri/src/agent.rs",
-                                  "src-tauri/src/commands.rs",
-                                  "src-tauri/src/lib.rs",
-                                  "src/App.tsx",
-                                  "src/components/board/ColumnContextMenu.tsx",
-                                  "src/components/board/CreateBoardModal.tsx",
-                                  "src/components/board/KanbanBoard.tsx",
-                                  "src/components/cortex/CortexExplorer.tsx",
-                                  "src/stores/cortexStore.ts",
-                                  "src/types/index.ts"
-                              ],
-                    "ftrScore":  "100%",
-                    "timestamp":  1792350000000
-                },
-    "CVH-007":  {
-                    "taskId":  "CVH-007",
-                    "title":  "Lean cvh-dev router prompt (progressive disclosure, 48 lines) + marker test",
-                    "author":  "agent-developer",
-                    "verdict":  "APPROVED",
-                    "commitHash":  "847cc9e653c8da6535217ff7132f1c51c338799b",
-                    "commitMessage":  "feat(agent): lean cvh-dev router prompt (48 lines, progressive disclosure) + marker test",
-                    "summary":  "Rewrote BUILTIN_CVH_DEV_PROMPT as lean harness router (48/150 lines): identity/triggers/paths/frontmatter/boards+pipeline+tool-policy skeletons/guards; full detail lazy via .cvh/agents/\u003crole\u003e/rules/*.md. Added ground-truth test asserting line cap + 24 markers. Recovered hung worktree feat/cvh-dev-router-prompt: reverted auto-generated gen/schemas LF/CRLF noise. Sensors: cargo check green, target test green; clippy baseline shows 5 pre-existing errors outside diff hunks (commands.rs x3 + agent.rs:536 too-many-args), zero new from this diff РІР‚вЂќ left untouched per single-task ceiling.",
-                    "files":  [
-                                  "src-tauri/src/agent.rs"
-                              ],
-                    "ftrScore":  "100%",
-                    "timestamp":  1792400000000
-                },
-    "CVH-RELEASE-BUILD-FIX":  {
-                                  "taskId":  "CVH-RELEASE-BUILD-FIX",
-                                  "title":  "Fix Windows GNU release bundling and bundle WebView2Loader.dll in portable and NSIS artifacts",
-                                  "author":  "tauri-rust-engineer (Level 1)",
-                                  "verdict":  "APPROVED",
-                                  "commitHash":  "8e2efe2",
-                                  "commitMessage":  "feat(build): fix Windows GNU release bundling and include WebView2Loader.dll in portable and NSIS artifacts",
-                                  "summary":  "Diagnosed and resolved release build and bundling failure on Windows under x86_64-pc-windows-gnu toolchain (llvm-mingw). Fixed runtime \u0027WebView2Loader.dll not found\u0027 error by copying the target WebView2Loader.dll into Release/Windows/bin/ alongside canban-voimax-harness.exe, and created src-tauri/nsis-hooks.nsh to embed WebView2Loader.dll into the NSIS installer. Pruned bundle targets in tauri.conf.json to [\u0027nsis\u0027] to eliminate WiX v3 stalls, and hardened build-release.ps1 and build-release.bat with automatic toolchain discovery, short temp directory redirect, and multi-candidate artifact collection.",
-                                  "files":  [
-                                                "build-release.bat",
-                                                "build-release.ps1",
-                                                "src-tauri/nsis-hooks.nsh",
-                                                "src-tauri/tauri.conf.json"
-                                            ],
-                                  "timestamp":  1792091130907
-                              },
-    "CVH-TODO-OVERLAY-FIX":  {
-                                 "taskId":  "CVH-TODO-OVERLAY-FIX",
-                                 "title":  "Redesign TaskTodoWidget as non-displacing overlay popover pill to eliminate chat displacement and divider stripes",
-                                 "author":  "agent-developer (react-tailwind-artisan)",
-                                 "verdict":  "APPROVED",
-                                 "commitHash":  "f249cd1",
-                                 "commitMessage":  "feat(ui): redesign TaskTodoWidget as non-displacing overlay popover pill",
-                                 "summary":  "Redesigned TaskTodoWidget so the plan list floats as an overlay popover (z-30 shadow-xl rounded-xl border border-[#ebebeb] bg-white) with outside-click and Escape listeners, completely preventing chat feed displacement. Removed the full-width divider stripe (\u0027border-t border-[#ebebeb] bg-[#fafafa]\u0027) above the input area, anchoring a compact pill trigger (\u0027To-dos X/Y\u0027) in the steer bar toolbar adjacent to the input controls.",
-                                 "files":  [
-                                               "src/components/drawer/AgentConsoleDrawer.tsx",
-                                               "src/components/drawer/TaskTodoWidget.tsx"
-                                           ],
-                                 "timestamp":  1792091253086
-                             },
-    "CVH-UI-DIFF-THINKING-POLISH":  {
-                                        "taskId":  "CVH-UI-DIFF-THINKING-POLISH",
-                                        "title":  "Diff accordion with noise stripping, real newlines in tool params, window dragging by chat header, and typewriter thinking",
-                                        "author":  "agent-developer (react-tailwind-artisan)",
-                                        "verdict":  "APPROVED",
-                                        "commitHash":  "20aeb04",
-                                        "mergeCommitHash":  "b5f8ebd",
-                                        "commitMessage":  "feat(ui): diff accordion, noise stripping, real newlines in tool params, and typewriter thinking",
-                                        "summary":  "Refactored GitDiffSidebar into a clean per-file accordion with additions/deletions badges and stripped git noise headers (diff --git, index, --- /dev/null, +++ b/..., new file mode). Refactored ToolExecutionCard to render multiline string parameters (content, command, old_string, new_string, patch) with real newlines in dedicated scrollable pre blocks instead of escaped \\n in raw JSON.stringify. Extracted ThinkingCard and implemented smooth streaming typewriter effect via requestAnimationFrame with adaptive cadence, live timer, and blinking cursor. Added data-tauri-drag-region to AgentConsoleDrawer header with selective pointer-event isolation for buttons and badges.",
-                                        "files":  [
-                                                      "src/components/drawer/AgentConsoleDrawer.tsx",
-                                                      "src/components/drawer/GitDiffSidebar.tsx",
-                                                      "src/components/drawer/ThinkingCard.tsx",
-                                                      "src/components/drawer/ToolExecutionCard.tsx"
-                                                  ],
-                                        "timestamp":  1792092193529
-                                    },
-    "CVH-DEV-RULES-UTF8":  {
-                               "taskId":  "CVH-DEV-RULES-UTF8",
-                               "task":  "cvh-dev-rules-utf8",
-                               "title":  "Windows cmd.exe UTF-8 fix, modular cvh-dev rules (progressive disclosure), rich developer fallback persona, and Backlog-to-Ready Invariant enforcement",
-                               "branch":  "feat/cvh-dev-rules-utf8",
-                               "commitHash":  "99053fd",
-                               "mergeCommitHash":  "1dba66b",
-                               "commitMessage":  "feat(agent): fix Windows cmd UTF-8, modular cvh-dev rules, developer fallback, and enforce backlog-to-ready invariant",
-                               "author":  "tauri-rust-engineer / agent-developer",
-                               "verdict":  "APPROVED",
-                               "sensors":  {
-                                               "cargo_check":  "pass (0 errors, target x86_64-pc-windows-gnu)",
-                                               "cargo_clippy":  "pass (0 warnings, -D warnings, target x86_64-pc-windows-gnu)",
-                                               "frontend_build":  "pass (tsc \u0026\u0026 vite build, 0 errors)"
-                                           },
-                               "files":  [
-                                             "src-tauri/src/agent.rs",
-                                             "src-tauri/src/config.rs",
-                                             "src-tauri/src/commands.rs",
-                                             "src-tauri/src/lib.rs",
-                                             "src/stores/cortexStore.ts",
-                                             "src/components/cortex/CortexExplorer.tsx",
-                                             ".gitignore",
-                                             ".cvh/agents/cvh-dev/persona.md",
-                                             ".cvh/agents/cvh-dev/setting",
-                                             ".cvh/agents/cvh-dev/rules/boards.md",
-                                             ".cvh/agents/cvh-dev/rules/agents.md",
-                                             ".cvh/agents/cvh-dev/rules/hooks.md"
-                                         ],
-                               "summary":  "Eliminated Windows cmd.exe CP866 black diamonds by prepending \u0027chcp 65001 \u003enul \u0026\u0026 \u0027 in run_scoped_command. Implemented modular progressive-disclosure rules for cvh-dev (.cvh/agents/cvh-dev/rules/boards.md, agents.md, hooks.md) and seeded them in project scaffolding. Added rich BUILTIN_DEVELOPER_PROMPT fallback for the developer role. Enforced strict directory-only agent persona architecture (.cvh/agents/\u003crole\u003e/persona.md) with real disk listing via new list_cortex_agent_files IPC command. Enforced Backlog-to-Ready Invariant across all boards and pipeline configurations (backlog at index 0, ready with terminal:true at final index, auto-re-injecting and forbidding deletion).",
-                               "timestamp":  1792094128123
-                           },
-    "CVH-CLEAN-DEAD-CODE-LEGACY":  {
-                                       "task":  "clean-dead-code-legacy",
-                                       "taskId":  "CVH-CLEAN-DEAD-CODE-LEGACY",
-                                       "title":  "Clean codebase of dead code, legacy prototypes, and duplicates",
-                                       "branch":  "feat/clean-dead-code-legacy",
-                                       "base":  "18dc350f55cf55d045d625d9b626490659da0ca2",
-                                       "merge_sha":  "410b0488ae5746b19a0a192bb3c800fb86498369",
-                                       "changed_files":  [
-                                                             "src-tauri/src/llm/client.rs",
-                                                             "src/App.tsx",
-                                                             "src/components/drawer/MarkdownViewer.tsx",
-                                                             "src/lib/audio.ts",
-                                                             "src/lib/utils.ts",
-                                                             "src/stores/kanbanStore.ts",
-                                                             "src/stores/mockData.ts",
-                                                             "src/types/kanban.ts"
-                                                         ],
-                                       "diff_summary":  "1. Deleted dead files: MarkdownViewer.tsx (194 lines), audio.ts (166 lines), utils.ts (42 lines), kanbanStore.ts (2 lines), kanban.ts (16 lines). 2. src-tauri/src/llm/client.rs: deleted unused stream_anthropic method (245 lines) and unused HeaderName import. 3. src/stores/mockData.ts: pruned dead mocks INITIAL_TASKS, INITIAL_TOOL_EXECUTIONS, INITIAL_STREAM_ENTRIES and unused imports. 4. src/App.tsx: removed duplicate \u0027task:moved\u0027 listener (u4). Total: 8 files, +2 / -995 lines.",
-                                       "sensors":  {
-                                                       "cargo_check":  "green (Finished dev profile, exit code 0)",
-                                                       "cargo_clippy_D_warnings":  "green (Finished dev profile, 0 warnings/errors, exit code 0)",
-                                                       "pnpm_run_build":  "green (tsc \u0026\u0026 vite build, exit code 0)"
-                                                   },
-                                       "verdict":  "APPROVED",
-                                       "notes":  "995 lines of dead legacy code completely eliminated. Fast-forward merged into main (410b048), pushed to origin/main. Worktree removed, branch deleted.",
-                                       "author":  "agent-developer (Level 1)",
-                                       "timestamp":  1792150641409
-                                   },
-    "CVH-STAGE-STEPPER-RELAY":  {
-                                    "taskId":  "CVH-STAGE-STEPPER-RELAY",
-                                    "task":  "stage-stepper-relay",
-                                    "title":  "Stage Stepper UX on Cards/Drawer \u0026 Relay Handoff Memory Priming",
-                                    "branch":  "feat/stage-stepper-relay",
-                                    "commitHash":  "7b1734c",
-                                    "merge_sha":  "7b1734c",
-                                    "commitMessage":  "feat(ux): stage stepper on cards and drawer header with relay handoff memory priming",
-                                    "author":  "agent-developer (Level 1)",
-                                    "verdict":  "APPROVED",
-                                    "sensors":  {
-                                                    "cargo_check":  "pass (exit code 0)",
-                                                    "cargo_clippy":  "pass (exit code 0, 0 warnings)",
-                                                    "frontend_build":  "pass (tsc \u0026\u0026 vite build, exit code 0, 1643 modules transformed)"
-                                                },
-                                    "files":  [
-                                                  "src-tauri/src/agent.rs",
-                                                  "src-tauri/src/commands.rs",
-                                                  "src/components/card/KanbanCard.tsx",
-                                                  "src/components/drawer/AgentConsoleDrawer.tsx",
-                                                  "src/stores/boardStore.ts",
-                                                  "src/types/index.ts"
-                                              ],
-                                    "summary":  "Implemented tactile pipeline stage stepper/tabs directly on KanbanCard and AgentConsoleDrawer header with 1-click stage switching. Added handover_summary to KanbanTask and wired Zero-Turn Memory Priming in agent.rs so subsequent agents start Turn 1 with full context of previous stage\u0027s accomplishments.",
-                                    "diff_summary":  "1. src/components/card/KanbanCard.tsx: Added tactical pipeline stage stepper/tabs directly on cards with active stage indicator (pulsing green dot for running), passed stage checkmarks, and 1-click stage transition with stopPropagation and tooltip preview. Added relay handoff summary preview badge with purple sparkles. 2. src/components/drawer/AgentConsoleDrawer.tsx: Added tactile stage stepper in console drawer header and persistent \u0027Р В­РЎРѓРЎвЂљР В°РЎвЂћР ВµРЎвЂљР В° Р С—Р В°Р в„–Р С—Р В»Р В°Р в„–Р Р…Р В° / Relay Handoff\u0027 banner (indigo/violet) with zero-turn memory priming preview. 3. src-tauri/src/agent.rs: Added handover_summary to Task and AgentSessionConfig; updated advance_task and reject_task to propagate summary into internal_move_task_stage and dialog feed; wired Zero-Turn Memory Priming to prepend \u0027### [Р В­Р РЋР СћР С’Р В¤Р вЂўР СћР С’ Р СџР С’Р в„ўР СџР вЂєР С’Р в„ўР СњР С’ / RELAY HANDOFF]\u0027 banner to initial_user_prompt. 4. src-tauri/src/commands.rs: Added handover_summary handling to internal_move_task_stage and move_task_stage IPC command; injected handover_summary when launching run_agent. 5. src/stores/boardStore.ts \u0026 src/types/index.ts: Added handoverSummary to KanbanTask frontend interface and boardStore updateTask payload.",
-                                    "timestamp":  1792151286000
-                                },
-    "CVH-FIX-TAURI-CONF-SCHEMA":  {
-                                      "taskId":  "CVH-FIX-TAURI-CONF-SCHEMA",
-                                      "task":  "fix-tauri-conf-schema",
-                                      "title":  "Fix tauri.conf.json schema error by removing unexpected windows block from build section",
-                                      "branch":  "feat/fix-tauri-conf-schema",
-                                      "commitHash":  "e2b86bb",
-                                      "merge_sha":  "e2b86bb",
-                                      "commitMessage":  "fix(tauri): remove invalid windows property from build section in tauri.conf.json",
-                                      "author":  "agent-developer (Level 1)",
-                                      "verdict":  "APPROVED",
-                                      "sensors":  {
-                                                      "tauri_schema_validation":  "pass (pnpm tauri build --help exit code 0, 0 errors)",
-                                                      "cargo_check":  "pass (exit code 0)",
-                                                      "cargo_clippy":  "pass (exit code 0, 0 warnings)",
-                                                      "frontend_build":  "pass (tsc \u0026\u0026 vite build, exit code 0, 1643 modules transformed)"
-                                                  },
-                                      "files":  [
-                                                    "src-tauri/tauri.conf.json"
-                                                ],
-                                      "summary":  "Removed invalid \u0027windows\u0027: {\u0027staticVCRuntime\u0027: true} object from \u0027build\u0027 section in src-tauri/tauri.conf.json. In Tauri v2 schema, \u0027windows\u0027 is not a valid property of \u0027build\u0027 and caused \u0027tauri build\u0027 to fail schema validation with \u0027Additional properties are not allowed (\u0027windows\u0027 was unexpected)\u0027.",
-                                      "diff_summary":  "src-tauri/tauri.conf.json: removed invalid \u0027windows\u0027: {\u0027staticVCRuntime\u0027: true} block from \u0027build\u0027 section. The \u0027build\u0027 section now strictly contains only valid Tauri v2 properties: beforeDevCommand, devUrl, beforeBuildCommand, frontendDist.",
-                                      "timestamp":  1792159207581
-                                  },
-    "CVH-AGENT-SVG-ICONS":  {
-                                "taskId":  "CVH-AGENT-SVG-ICONS",
-                                "task":  "agent-svg-icons",
-                                "title":  "SVG Icon Pack for Personas with Column Inheritance and Cortex Explorer Display",
-                                "branch":  "feat/agent-svg-icons",
-                                "commitHash":  "e90a770",
-                                "merge_sha":  "e90a770",
-                                "commitMessage":  "feat(agents): SVG icon pack for personas with column inheritance and cortex explorer display",
-                                "author":  "agent-developer (Level 1)",
-                                "verdict":  "APPROVED",
-                                "sensors":  {
-                                                "cargo_check":  "pass (exit code 0)",
-                                                "cargo_clippy":  "pass (exit code 0, 0 warnings)",
-                                                "frontend_build":  "pass (tsc \u0026\u0026 vite build, exit code 0, 1645 modules transformed)"
-                                            },
-                                "files":  [
-                                              "src-tauri/src/commands.rs",
-                                              "src/components/common/AgentIcon.tsx",
-                                              "src/lib/columnIcons.ts",
-                                              "src/stores/cortexStore.ts",
-                                              "src/components/board/ColumnContextMenu.tsx",
-                                              "src/components/board/KanbanColumn.tsx",
-                                              "src/components/board/KanbanBoard.tsx",
-                                              "src/components/cortex/CortexExplorer.tsx",
-                                              "src/components/board/CreateBoardModal.tsx"
-                                          ],
-                                "summary":  "Implemented canonical AGENT_ICONS pack with 18 SVG icons, frontmatter icon metadata support on agent creation and deterministic assignment for missing icons, automatic column icon inheritance upon assigning/resetting agents, and full icon rendering in CortexExplorer agent list and KanbanColumn headers.",
-                                "diff_summary":  "1. src-tauri/src/commands.rs: Added AGENT_ICONS canonical pack, default_column_icon, extract_persona_icon_from_text, insert_or_update_frontmatter_icon, read_persona_icon_from_dir, save_persona_icon, and deterministic_icon_for_role. Added icon: Option\u003cString\u003e to AgentPersonaInfo. Updated create_agent_persona_file to assign random unused icon and list_agent_personas_in to persist missing icons. Reset column icon to default on persona deletion. 2. src/components/common/AgentIcon.tsx: New reusable component rendering canonical Lucide icons. 3. src/lib/columnIcons.ts: Column default icon mapping. 4. src/stores/cortexStore.ts: Added icon to AgentPersonaInfo and RawAgentPersona, mapped to stage.icon. 5. src/components/board/ColumnContextMenu.tsx \u0026 KanbanBoard.tsx \u0026 CreateBoardModal.tsx: Column inherits persona.icon on agent assignment, resets to default on detachment. 6. src/components/board/KanbanColumn.tsx: Header renders assigned agent\u0027s icon. 7. src/components/cortex/CortexExplorer.tsx: Renders agent\u0027s SVG icon in Section 2 next to their name and column stage headers.",
-                                "timestamp":  1792161400000
-                            },
-    "CVH-TODO-FOOTER-CLEAN":  {
-                                  "taskId":  "CVH-TODO-FOOTER-CLEAN",
-                                  "task":  "todo-footer-clean",
-                                  "title":  "Remove read-only hint and Esc footer from TaskTodoWidget popover",
-                                  "branch":  "feat/todo-footer-clean",
-                                  "commitHash":  "51949c2",
-                                  "commitMessage":  "feat(ui): remove read-only hint and Esc footer from TaskTodoWidget",
-                                  "author":  "agent-developer (react-tailwind-artisan)",
-                                  "verdict":  "APPROVED",
-                                  "sensors":  {
-                                                  "frontend_build":  "pass (npx tsc --noEmit, 0 errors)"
-                                              },
-                                  "files":  [
-                                                "src/components/drawer/TaskTodoWidget.tsx"
-                                            ],
-                                  "summary":  "Removed bottom footer bar containing \u0027Р СћР С•Р В»РЎРЉР С”Р С• РЎвЂЎРЎвЂљР ВµР Р…Р С‘Р Вµ Р’В· Р С•Р В±Р Р…Р С•Р Р†Р В»РЎРЏР ВµРЎвЂљРЎРѓРЎРЏ Р В°Р С–Р ВµР Р…РЎвЂљР С•Р С\u0027 and \u0027Esc Р В·Р В°Р С”РЎР‚РЎвЂ№РЎвЂљРЎРЉ\u0027 from the To-Dos popover in TaskTodoWidget.tsx per user request. The popover is now more compact and clean, with outside-click and Escape listeners remaining fully active.",
-                                  "diff_summary":  "src/components/drawer/TaskTodoWidget.tsx: removed 5 lines (lines 236-240) containing the popover footer bar. Total: 1 file, -5 lines.",
-                                  "timestamp":  1792176798352
-                              },
-    "CVH-CORTEX-COLORS-MATRIX-POLISH":  {
-                                            "taskId":  "CVH-CORTEX-COLORS-MATRIX-POLISH",
-                                            "task":  "cortex-colors-matrix-polish",
-                                            "title":  "Agent color palette without gray/green, column color inheritance, reactive icons, and agent tool matrix",
-                                            "branch":  "feat/cortex-colors-matrix-polish",
-                                            "commitHash":  "5754c86",
-                                            "author":  "agent-developer (react-tailwind-artisan)",
-                                            "verdict":  "APPROVED",
-                                            "sensors":  {
-                                                            "frontend_build":  "pass (npx tsc --noEmit, 0 errors)"
-                                                        },
-                                            "files":  [
-                                                          "src/lib/agentPalette.ts",
-                                                          "src/components/board/ColumnContextMenu.tsx",
-                                                          "src/components/board/KanbanBoard.tsx",
-                                                          "src/components/cortex/CortexExplorer.tsx",
-                                                          "src/components/settings/ToolPolicyModal.tsx",
-                                                          "src/stores/cortexStore.ts",
-                                                          "src/stores/toolPolicyStore.ts",
-                                                          "src-tauri/src/commands.rs"
-                                                      ],
-                                            "summary":  "Implemented agent color palette strictly excluding gray (#64748b) and green (#10b981) reserved for backlog and ready. Implemented automatic column color inheritance from assigned agent persona. Enforced reactive SVG agent icon display in Cortex Explorer. Added gray/green styling for backlog/ready columns in Cortex Explorer. Restructured ToolPolicyModal to display agent personas instead of columns.",
-                                            "timestamp":  1792180867156
-                                        },
-    "CVH-DOCTOR-AUDIT-CLEANUP":  {
-                                     "taskId":  "CVH-DOCTOR-AUDIT-CLEANUP",
-                                     "task":  "doctor-audit-cleanup",
-                                     "title":  "Codebase health audit, dead code cleanup, and documentation synchronization",
-                                     "branch":  "feat/doctor-audit-cleanup",
-                                     "commitHash":  "73970c9",
-                                     "author":  "agent-developer (doctor)",
-                                     "verdict":  "APPROVED",
-                                     "sensors":  {
-                                                     "frontend_build":  "pass (npx tsc --noEmit, 0 errors)"
-                                                 },
-                                     "files":  [
-                                                   "AGENTS.md",
-                                                   "HANDOFF.md",
-                                                   "README.md",
-                                                   "docs/GUIDE.md",
-                                                   "docs/agents.md",
-                                                   "docs/board.md",
-                                                   "src/App.tsx"
-                                               ],
-                                     "summary":  "Synchronized documentation across README, HANDOFF, GUIDE, board.md, and agents.md to reflect SQLite (.cvh/harness.db) persistence, SVG persona icons, Relay Handoff memory priming, and Backlog-to-Ready Invariant. Cleaned up App.tsx duplicate imports.",
-                                     "timestamp":  1792180912955
-                                 },
-    "CVH-REACTIVE-BOARDS-PROMPT-HARDEN":  {
-                                              "taskId":  "CVH-REACTIVE-BOARDS-PROMPT-HARDEN",
-                                              "task":  "reactive-boards-prompt-harden",
-                                              "title":  "Reactive board \u0026 agent updates, cross-board task completion, and prompt hardening",
-                                              "branch":  "feat/reactive-boards-prompt-harden",
-                                              "commitHash":  "34b7b6b",
-                                              "commitMessage":  "feat(backend/ui): reactive board updates, cross-board task completion, and strict invariants prompt hardening",
-                                              "author":  "Level 1 Systems Engineer (tauri-rust-engineer / agent-developer)",
-                                              "verdict":  "APPROVED",
-                                              "sensors":  {
-                                                              "frontend_sensor":  "pass (npx tsc --noEmit, 0 errors)",
-                                                              "backend_sensor":  "pass (cargo check --tests, 0 errors)",
-                                                              "prompt_sensor":  "pass (BUILTIN_CVH_DEV_PROMPT 54 lines \u003c= 150 lines, all 23 markers intact)"
-                                                          },
-                                              "files":  [
-                                                            "src-tauri/src/commands.rs",
-                                                            "src-tauri/src/agent.rs",
-                                                            "src-tauri/src/lib.rs",
-                                                            "src/App.tsx",
-                                                            "src/stores/boardStore.ts",
-                                                            "src/stores/cortexStore.ts",
-                                                            ".cvh/agents/cvh-dev/rules/agents.md",
-                                                            ".cvh/agents/cvh-dev/rules/boards.md"
-                                                        ],
-                                              "summary":  "Implemented reactive board \u0026 persona updates (boards:updated, pipeline:updated, agent:personas_updated) across backend IPC commands and agent tools with frontend subscriptions in App.tsx, boardStore.ts, and cortexStore.ts. Implemented task finalization and clean transition to \u0027done\u0027 in the terminal column (\u0027ready\u0027) upon active board change in advance_task, internal_move_task_stage, and run_agent. Hardened BUILTIN_CVH_DEV_PROMPT and modular rules (.cvh/agents/cvh-dev/rules/agents.md \u0026 boards.md) with strict 1:1 invariants for column.persona matching .cvh/agents/\u003crole\u003e/ directory \u0026 frontmatter name, and stageOverrides matching column.id.",
-                                              "diff_summary":  "src-tauri/src/commands.rs (added advance_task command \u0026 internal_advance_task, event emits for save_pipeline, create_board, save_board, delete_board, set_active_board, delete_agent_persona, rename_agent_persona, save_cortex_file, board switch finalization in internal_move_task_stage and run_agent, unit test); src-tauri/src/agent.rs (advance_task delegation, emit_file_change_events for tool writes, 1:1 prompt invariants); src-tauri/src/lib.rs (registered advance_task); src/App.tsx \u0026 stores (reactive listeners); rules (agents.md \u0026 boards.md updated).",
-                                              "timestamp":  1792181246553
-                                          },
-    "CVH-REFACTOR-DRAWER-MODULAR":  {
-                                        "taskId":  "CVH-REFACTOR-DRAWER-MODULAR",
-                                        "task":  "refactor-drawer-modular",
-                                        "title":  "Decompose monolithic AgentConsoleDrawer into DrawerHeader, DrawerActivityStream, and DrawerSteerBar",
-                                        "branch":  "feat/refactor-drawer-modular",
-                                        "commitHash":  "64d9552",
-                                        "author":  "agent-developer (react-tailwind-artisan)",
-                                        "verdict":  "APPROVED",
-                                        "sensors":  {
-                                                        "frontend_build":  "pass (npx tsc --noEmit, 0 errors)"
-                                                    },
-                                        "files":  [
-                                                      "src/components/drawer/AgentConsoleDrawer.tsx",
-                                                      "src/components/drawer/DrawerHeader.tsx",
-                                                      "src/components/drawer/DrawerActivityStream.tsx",
-                                                      "src/components/drawer/DrawerSteerBar.tsx"
-                                                  ],
-                                        "summary":  "Decomposed the giant AgentConsoleDrawer component (\u003e900 lines) into clean, decoupled React 19 subcomponents: DrawerHeader (window dragging, breadcrumbs, stage stepper), DrawerActivityStream (chronological stream, thinking cards, tool cards), and DrawerSteerBar (steer bar, todo popover, context gauge). Preserved strict adherence to В§ 2.13 Viewport Overlay \u0026 Flex Boundary Invariants.",
-                                        "timestamp":  1792182033280
-                                    },
-    "CVH-WINDOWS-CMD-HARDENING":  {
-                                      "taskId":  "CVH-WINDOWS-CMD-HARDENING",
-                                      "task":  "windows-cmd-hardening",
-                                      "title":  "Robust Windows command quoting, path safety, and UTF-8 isolation",
-                                      "branch":  "feat/windows-cmd-hardening",
-                                      "commitHash":  "4f9e395",
-                                      "author":  "agent-developer (tauri-rust-engineer)",
-                                      "verdict":  "APPROVED",
-                                      "sensors":  {
-                                                      "rust_compiler":  "pass (cargo check --tests, 0 errors)"
-                                                  },
-                                      "files":  [
-                                                    "src-tauri/src/hooks.rs",
-                                                    "src-tauri/src/agent.rs",
-                                                    "src-tauri/src/commands.rs"
-                                                ],
-                                      "summary":  "Implemented robust Windows argument and path quotation (quote_windows_arg, quote_windows_path, format_windows_cd_command, build_windows_cmd_args) handling paths with spaces, non-ASCII characters, and parentheses. Guaranteed UTF-8 code page 65001 across all child cmd.exe and sensor executions.",
-                                      "timestamp":  1792183099232
-                                  },
-    "CVH-KANBAN-COLUMN-PAGINATION":  {
-                                         "taskId":  "CVH-KANBAN-COLUMN-PAGINATION",
-                                         "task":  "kanban-column-pagination",
-                                         "title":  "Progressive card pagination (10 cards + Load More) with dnd-kit persistence",
-                                         "branch":  "feat/kanban-column-pagination",
-                                         "commitHash":  "6839dda",
-                                         "author":  "agent-developer (react-tailwind-artisan)",
-                                         "verdict":  "APPROVED",
-                                         "sensors":  {
-                                                         "frontend_build":  "pass (npx tsc --noEmit, 0 errors)"
-                                                     },
-                                         "files":  [
-                                                       "src/components/board/KanbanColumn.tsx",
-                                                       "src/components/board/KanbanBoard.tsx"
-                                                   ],
-                                         "summary":  "Implemented progressive card pagination for Kanban board columns defaulting to PAGE_SIZE = 10 cards. When a column contains more than 10 cards, renders a tactile hairline \u0027Р—Р°РіСЂСѓР·РёС‚СЊ РµС‰Рµ\u0027 button with remaining card count. Preserved full dnd-kit drag-and-drop mechanics across paginated items.",
-                                         "timestamp":  1792183995198
-                                     },
-    "CVH-SUBAGENT-OPENCODE-NESTED-CHAT":  {
-                                              "taskId":  "CVH-SUBAGENT-OPENCODE-NESTED-CHAT",
-                                              "task":  "subagent-opencode-nested-chat",
-                                              "title":  "In-process subagent execution, OpenCode-style nested chat, delegation tools, and reactive tool matrix",
-                                              "branch":  "feat/subagent-opencode-nested-chat",
-                                              "commitHash":  "67a45c1",
-                                              "author":  "agent-developer (tauri-rust-engineer \u0026 react-tailwind-artisan)",
-                                              "verdict":  "APPROVED",
-                                              "sensors":  {
-                                                              "frontend_build":  "pass (npx tsc --noEmit, 0 errors)",
-                                                              "rust_compiler":  "pass (cargo check --tests, 0 errors)"
-                                                          },
-                                              "files":  [
-                                                            "src-tauri/src/agent.rs",
-                                                            "src-tauri/src/commands.rs",
-                                                            "src-tauri/src/lib.rs",
-                                                            "src-tauri/src/config.rs",
-                                                            "src/stores/drawerStore.ts",
-                                                            "src/stores/toolPolicyStore.ts",
-                                                            "src/components/drawer/ToolExecutionCard.tsx",
-                                                            "src/components/drawer/AgentConsoleDrawer.tsx",
-                                                            "src/components/settings/ToolPolicyModal.tsx",
-                                                            "src/types/index.ts"
-                                                        ],
-                                              "summary":  "Implemented OpenCode-style subagent execution: runs in-process inside parent active worktree with zero separate worktrees and zero card movement. Added collect_subagent with batch array support and zero-context-pollution on subagent failure. Added subagent cards, nested chat view with breadcrumbs, and hierarchical subagent master/slave toggles in Tool Policy Matrix.",
-                                              "timestamp":  1792184540134
-                                          },
-    "CVH-INTERACTIVE-QUESTION-TOOL":  {
-                                          "taskId":  "CVH-INTERACTIVE-QUESTION-TOOL",
-                                          "task":  "interactive-question-tool",
-                                          "title":  "Interactive user interrogation system (\u0027question\u0027 / \u0027ask_user\u0027 tool) with OpenCode-style prompt card and zero-polling Tokio pause",
-                                          "branch":  "feat/interactive-question-tool",
-                                          "commitHash":  "aa0d2b1",
-                                          "author":  "agent-developer (tauri-rust-engineer \u0026 react-tailwind-artisan)",
-                                          "verdict":  "APPROVED",
-                                          "sensors":  {
-                                                          "frontend_build":  "pass (npx tsc --noEmit, 0 errors)",
-                                                          "rust_compiler":  "pass (cargo check --tests, 0 errors)"
-                                                      },
-                                          "files":  [
-                                                        "src-tauri/src/agent.rs",
-                                                        "src-tauri/src/commands.rs",
-                                                        "src-tauri/src/config.rs",
-                                                        "src-tauri/src/lib.rs",
-                                                        "src/components/drawer/QuestionPromptCard.tsx",
-                                                        "src/components/drawer/ToolExecutionCard.tsx",
-                                                        "src/components/settings/ToolPolicyModal.tsx",
-                                                        "src/stores/drawerStore.ts",
-                                                        "src/stores/toolPolicyStore.ts",
-                                                        "src/types/index.ts"
-                                                    ],
-                                          "summary":  "Implemented interactive user prompt tool (\u0027question\u0027 / \u0027ask_user\u0027) allowing agents to ask clarifying questions with predefined options and custom user input. Backend pauses using tokio::sync::oneshot channel with 0% CPU and zero polling. Frontend renders tactile OpenCode-styled question cards in White Paper aesthetic.",
-                                          "timestamp":  1792184806027
-                                      },
-    "CVH-DSH-CONTEXT-COMPACTOR":  {
-                                      "taskId":  "CVH-DSH-CONTEXT-COMPACTOR",
-                                      "task":  "dsh-context-compactor",
-                                      "title":  "High-Density DSH-Style Context Compactor with LLM condensation, model inheritance, and paper accordion UI",
-                                      "branch":  "feat/dsh-context-compactor",
-                                      "commitHash":  "616ca6b",
-                                      "author":  "agent-developer (tauri-rust-engineer \u0026 react-tailwind-artisan)",
-                                      "verdict":  "APPROVED",
-                                      "sensors":  {
-                                                      "frontend_build":  "pass (npx tsc --noEmit, 0 errors)",
-                                                      "rust_compiler":  "pass (cargo check --tests, 0 errors)"
-                                                  },
-                                      "files":  [
-                                                    "src-tauri/src/agent/compactor.rs",
-                                                    "src-tauri/src/commands/tasks.rs",
-                                                    "src-tauri/src/config.rs",
-                                                    "src-tauri/src/db.rs",
-                                                    "src/components/drawer/CompactedContextCard.tsx",
-                                                    "src/components/drawer/DrawerActivityStream.tsx",
-                                                    "src/components/drawer/DrawerSteerBar.tsx",
-                                                    "src/components/settings/SettingsModal.tsx",
-                                                    "src/stores/drawerStore.ts",
-                                                    "src/stores/settingsStore.ts",
-                                                    "src/types/index.ts"
-                                                ],
-                                      "summary":  "Implemented lossless semantic context condensation into 7 structured Markdown sections (Primary Request, Key Concepts, Files \u0026 Code, Errors \u0026 Fixes, Pending Jobs, Current Work, Critical Invariants). Added compactor model selector in Settings with \u0027inherit\u0027 default. Rendered tactile white paper accordion card for compacted history in Drawer stream.",
-                                      "timestamp":  1792185021739
-                                  },
-    "CVH-REFACTOR-COMMANDS-MODULAR":  {
-                                          "taskId":  "CVH-REFACTOR-COMMANDS-MODULAR",
-                                          "task":  "refactor-commands-modular",
-                                          "title":  "Decompose monolithic commands.rs into modular submodules under src-tauri/src/commands/",
-                                          "branch":  "feat/refactor-commands-modular",
-                                          "commitHash":  "8698a07",
-                                          "author":  "tauri-rust-engineer",
-                                          "verdict":  "APPROVED",
-                                          "sensors":  {
-                                                          "cargo_check":  "pass (cargo check --tests, 0 errors)",
-                                                          "cargo_clippy":  "pass (cargo clippy --tests -- -D warnings, 0 warnings)"
-                                                      },
-                                          "files":  [
-                                                        "src-tauri/src/commands/mod.rs",
-                                                        "src-tauri/src/commands/state.rs",
-                                                        "src-tauri/src/commands/boards.rs",
-                                                        "src-tauri/src/commands/tasks.rs",
-                                                        "src-tauri/src/commands/dialogs.rs",
-                                                        "src-tauri/src/commands/git.rs",
-                                                        "src-tauri/src/commands/cortex.rs",
-                                                        "src-tauri/src/commands/tools.rs",
-                                                        "src-tauri/src/commands/llm.rs",
-                                                        "src-tauri/src/commands/projects.rs",
-                                                        "src-tauri/src/commands/tests.rs"
-                                                    ],
-                                          "summary":  "Decomposed monolithic commands.rs (5209 lines) into 10 decoupled domain submodules under src-tauri/src/commands/. Re-exported all symbols in commands/mod.rs ensuring 100% backward compatibility for lib.rs generate_handler! and agent.rs. Replaced hardcoded stage names for git worktree creation with configurable hook engine (builtin:create_worktree). All Ground Truth Sensors (cargo check --tests, cargo clippy -- -D warnings) passed with zero warnings/errors.",
-                                          "timestamp":  1792185313298
-                                      }
+{
+  "CVH-INIT": {
+    "taskId": "CVH-INIT",
+    "title": "Initialize CanbanVoimaxHarness architecture, AGENTS.md, .cvh/ pipeline, and skills",
+    "author": "Root Orchestrator",
+    "verdict": "APPROVED",
+    "commitHash": "INIT",
+    "commitMessage": "chore(init): initialize CanbanVoimaxHarness repository, architecture, and core skills",
+    "summary": "Scaffolded initial repository structure, AGENTS.md governance, .cvh/ configuration, dogfooding pipeline, transition hooks, and 7 core development skills.",
+    "files": [
+      ".gitignore",
+      "README.md",
+      "AGENTS.md",
+      ".cvh/config.json",
+      ".cvh/pipeline.json",
+      ".cvh/agents/developer.md",
+      ".cvh/agents/reviewer.md",
+      ".cvh/agents/retro.md",
+      ".cvh/hooks/on_enter_dev.bat",
+      ".cvh/hooks/on_finish_done.bat",
+      ".agents/skills/development/SKILL.md",
+      ".agents/skills/agent-developer/SKILL.md",
+      ".agents/skills/agent-developer-reviewer/SKILL.md",
+      ".agents/skills/agent-retro-verifier/SKILL.md",
+      ".agents/skills/tauri-rust-engineer/SKILL.md",
+      ".agents/skills/react-tailwind-artisan/SKILL.md",
+      ".agents/skills/llm-streaming-expert/SKILL.md",
+      ".agents/tasks-history.json",
+      ".agents/knowledge-graph.json"
+    ],
+    "timestamp": 1740000000000
+  },
+  "CVH-001-FRONTEND": {
+    "taskId": "CVH-001-FRONTEND",
+    "title": "React 19 + TypeScript + Tailwind CSS v4 Frontend Control Plane with Cortex Explorer & Kanban Board",
+    "author": "agent-developer (react-tailwind-artisan)",
+    "verdict": "APPROVED",
+    "commitHash": "e4215a4",
+    "commitMessage": "feat(frontend): CVH-001 React 19 control plane with Cortex Explorer and Kanban board",
+    "summary": "Implemented React 19 + TypeScript + Tailwind CSS v4 desktop control plane. Built Cortex Explorer for agent mind navigation (zero-turn memory inspection and rule editing), interactive Kanban board with fast-track routing and live stage duration timers, slide-out Agent Console Drawer with real-time thoughts and tool execution logs, and full Zustand state management.",
+    "files": [
+      "package.json",
+      "package-lock.json",
+      "vite.config.ts",
+      "tsconfig.json",
+      "tsconfig.node.json",
+      "index.html",
+      "src/main.tsx",
+      "src/App.tsx",
+      "src/index.css",
+      "src/lib/utils.ts",
+      "src/types/index.ts",
+      "src/stores/boardStore.ts",
+      "src/stores/cortexStore.ts",
+      "src/stores/drawerStore.ts",
+      "src/stores/projectStore.ts",
+      "src/stores/mockData.ts",
+      "src/components/layout/Topbar.tsx",
+      "src/components/board/KanbanBoard.tsx",
+      "src/components/board/KanbanColumn.tsx",
+      "src/components/card/KanbanCard.tsx",
+      "src/components/cortex/CortexExplorer.tsx",
+      "src/components/cortex/RuleEditorModal.tsx",
+      "src/components/drawer/AgentConsoleDrawer.tsx",
+      "src/components/drawer/ToolExecutionCard.tsx"
+    ],
+    "timestamp": 1740003600000
+  },
+  "CVH-002-BACKEND": {
+    "taskId": "CVH-002-BACKEND",
+    "title": "Implement the full Tauri v2 + Tokio Rust desktop core engine",
+    "author": "tauri-rust-engineer",
+    "verdict": "APPROVED_WITH_CAVEATS",
+    "commitHash": "69ccb0d",
+    "commitMessage": "feat(backend): complete Tauri v2 + Tokio core engine with icon assets and header fixes",
+    "summary": "Implemented complete Tauri v2 + Tokio desktop core engine including config & pipeline parsers with atomic disk writes, Git worktree & branch manager, transition hooks with Windows process tree kill and async stdio drain, universal SSE streaming client for OpenAI and Anthropic native APIs with prompt caching, Zero-Turn Memory Priming and ReAct agent loop with worktree-scoped tools, and 13 Tauri IPC commands. Resolved Level 2 review caveats: scaffolded Tauri icon assets (32x32, 128x128, icon.ico) and fixed reqwest HeaderName type bound in stream_anthropic.",
+    "files": [
+      "src-tauri/Cargo.toml",
+      "src-tauri/build.rs",
+      "src-tauri/tauri.conf.json",
+      "src-tauri/capabilities/default.json",
+      "src-tauri/src/config.rs",
+      "src-tauri/src/git.rs",
+      "src-tauri/src/hooks.rs",
+      "src-tauri/src/llm/mod.rs",
+      "src-tauri/src/llm/models.rs",
+      "src-tauri/src/llm/client.rs",
+      "src-tauri/src/agent.rs",
+      "src-tauri/src/commands.rs",
+      "src-tauri/src/lib.rs",
+      "src-tauri/src/main.rs",
+      "src-tauri/icons/icon.ico",
+      "src-tauri/icons/32x32.png",
+      "src-tauri/icons/128x128.png",
+      "src-tauri/icons/icon.png"
+    ],
+    "timestamp": 1740007200000
+  },
+  "CVH-003": {
+    "taskId": "CVH-003",
+    "title": "State-Preserving Context Compactor & UI Token Gauge",
+    "author": "agent-developer (tauri-rust-engineer & react-tailwind-artisan)",
+    "verdict": "APPROVED_WITH_CAVEATS",
+    "commitHash": "af2e1ca",
+    "commitMessage": "refactor(drawer): unify IPC callpath to compact_context in drawerStore",
+    "summary": "Implemented State-Preserving Context Compactor and UI Token Gauge for CanbanVoimaxHarness. Rust backend features 4 Immutable Anchors (System prompt, Task prompt, Execution state Markdown snapshot, and last 2 working turns), Zero-Cost Log Evaporation (replacing tool logs >500 chars older than 3 turns with deterministic metadata placeholders without LLM calls), and Structured State Snapshots. Added `compact_context` IPC command returning CompactionReport and emitting `agent:compacted` event. Frontend features tactile ContextGauge with Emerald/Amber/Crimson thresholds, Web Audio API mechanical click synthesis, flame toast notification, ripple animation, and client/backend compaction trigger. Level 2 review caveat regarding IPC callpath desynchronization in drawerStore was fully resolved in af2e1ca with unified primary call to compact_context and backward-compatible fallback. Verified with 0 errors via cargo check and npm run build.",
+    "files": [
+      ".gitignore",
+      "src-tauri/src/agent.rs",
+      "src-tauri/src/agent/compactor.rs",
+      "src-tauri/src/commands.rs",
+      "src-tauri/src/compactor.rs",
+      "src-tauri/src/lib.rs",
+      "src-tauri/src/llm/client.rs",
+      "src/components/drawer/ContextGauge.tsx",
+      "src/stores/drawerStore.ts",
+      "src/types/index.ts"
+    ],
+    "timestamp": 1740009000000
+  },
+  "CVH-004": {
+    "taskId": "CVH-004",
+    "title": "Remove CI push trigger, configure static vc runtime, and restrict bundle to nsis",
+    "author": "agent-developer",
+    "verdict": "APPROVED",
+    "commitHash": "34ee7ec",
+    "mergeCommitHash": "66cea7d",
+    "commitMessage": "fix(ci): remove push trigger, configure static vc runtime, and restrict bundle to nsis (CVH-004-CI-BUNDLE-FIX)",
+    "summary": "Removed push triggers from .github/workflows/ci.yml to avoid costly automatic runs on every push (only workflow_dispatch and pull_request remain). Configured tauri_build::WindowsAttributes::new().static_vc_runtime(true) in src-tauri/build.rs to eliminate STATIC_VCRUNTIME deprecation warning. Changed bundle.targets to ['nsis'] in src-tauri/tauri.conf.json to completely eliminate WiX 3 downloads and light.exe MSI packaging hangs. Achieved 100% first-pass FTR score.",
+    "files": [
+      ".github/workflows/ci.yml",
+      "src-tauri/build.rs",
+      "src-tauri/tauri.conf.json"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1791824555382
+  },
+  "CVH-012": {
+    "taskId": "CVH-012",
+    "title": "Backend Runtime: Model Discovery IPC, Custom Flow Agent Execution & Windows Cleanup",
+    "author": "tauri-rust-engineer",
+    "verdict": "APPROVED",
+    "commitHash": "f1bdd1e",
+    "mergeCommitHash": "abd1c81",
+    "commitMessage": "feat(backend): add fetch_available_models, agent execution along custom flow, and eliminate GPU/ACL hacks",
+    "summary": "Implemented fetch_available_models IPC command with candidate endpoint probing (/models, /v1/models, /api/tags), Bearer auth, OpenAI/Ollama payload normalization, and deduplicated sorting. Added real ReAct agent execution with absolute precedence of llm_settings, live streaming events (agent:thought via ThinkingStreamParser for <thinking> tags, agent:output, agent:status running/finished), and autonomous task promotion along custom_flow and pipeline fallback with stage on_enter hook execution and review routing. Cleaned up Windows/WebView2 workarounds by removing --disable-gpu, icacls process spawn, and hardcoded second monitor window positioning.",
+    "files": [
+      "src-tauri/src/agent.rs",
+      "src-tauri/src/commands.rs",
+      "src-tauri/src/lib.rs",
+      "src-tauri/src/main.rs"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1791830400000
+  },
+  "CVH-014": {
+    "taskId": "CVH-014",
+    "title": "Real AI Proxy 8045, reasoning_content SSE Streaming, and customFlow Promotion",
+    "author": "agent-developer (tauri-rust-engineer & react-tailwind-artisan)",
+    "verdict": "APPROVED",
+    "commitHash": "3146e73",
+    "mergeCommitHash": "40232db",
+    "commitMessage": "feat(runtime): wire real AI proxy 8045, reasoning_content SSE parsing, and remove stub fallbacks",
+    "summary": "Implemented dynamic multi-provider resolution pointing to local AI proxy (http://127.0.0.1:8045/v1) with gitignored credentials. Extended Rust backend SSE streaming client to parse both delta-level and choice-level reasoning_content and thought payloads into StreamChunk::Thought. Wired Tauri desktop events (agent:thought, agent:output, agent:tool_call, task:moved, agent:finished, agent:status) into React frontend App with 3000ms sliding-window thought and token stream coalescing in drawerStore. Implemented custom_flow boundary fallbacks for stage promotion and removed synthetic fallback model stubs in settingsStore to ensure real network errors bubble directly to UI. Achieved 100% First-Time-Right score with zero regressions and zero compiler warnings.",
+    "files": [
+      ".cvh/config.json",
+      "src/stores/settingsStore.ts",
+      "src/stores/drawerStore.ts",
+      "src/components/settings/SettingsModal.tsx",
+      "src/App.tsx",
+      "src-tauri/src/commands.rs",
+      "src-tauri/src/config.rs",
+      "src-tauri/src/llm/client.rs",
+      "src-tauri/src/llm/models.rs"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1791836000000
+  },
+  "CVH-015": {
+    "taskId": "CVH-015",
+    "title": "Task-Level Model Selection, Persistence & Unified DSH Activity Feed",
+    "author": "agent-developer (react-tailwind-artisan & tauri-rust-engineer)",
+    "verdict": "APPROVED",
+    "commitHash": "d9cf958",
+    "commitMessage": "feat(feed): task model selection, backend persistence, and unified DSH activity feed",
+    "summary": "Resolved silent dev stage execution and fragmented UI: implemented task-level model selection in NewTaskModal and model badges on cards/drawer, auto-run agent invocation on dev stage entry, save_tasks IPC persistence to .cvh/tasks.json, and a unified DSH & Claude Code chronological activity feed with collapsible live thinking blocks, markdown response rendering, inline tool execution cards, agent status controls (abort/run), and interactive steering via steer_agent.",
+    "files": [
+      "src/types/index.ts",
+      "src/stores/boardStore.ts",
+      "src/stores/drawerStore.ts",
+      "src/components/board/KanbanBoard.tsx",
+      "src/components/card/KanbanCard.tsx",
+      "src/components/drawer/AgentConsoleDrawer.tsx",
+      "src-tauri/src/commands.rs"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1791885299000
+  },
+  "CVH-016": {
+    "taskId": "CVH-016",
+    "title": "Backend Agent Runner, Task Model Selection, save_tasks IPC, and Robust Execution",
+    "author": "tauri-rust-engineer",
+    "verdict": "APPROVED_WITH_CAVEATS",
+    "commitHash": "a1e15a2",
+    "mergeCommitHash": "9a1e452",
+    "resolutionCommitHash": "24949cc",
+    "commitMessage": "feat(agent): implement task model selection, save_tasks IPC, and robust agent runner execution",
+    "summary": "Implemented backend agent runner execution in run_agent with 4-level model selection precedence (task.model -> llm_settings.model -> col.model_override -> proj_cfg.default_model), robust worktree scaffolding via create_worktree(&root, &task.id.to_lowercase(), 'main'), full event emitting parity (agent:thought, agent:token, agent:output, agent:tool_call, agent:tool_result, agent:turn_start, agent:finished, agent:status, and task:moved), save_tasks IPC command for atomic task state persistence to .cvh/tasks.json, and interactive steer_agent execution. Resolved Level 2 review caveats in commit 24949cc on main: eliminated duplicate save_tasks registration in src-tauri/src/lib.rs tauri::generate_handler! and refactored guarded worktree_path unwrap to safe idiomatic pattern matching.",
+    "files": [
+      "src-tauri/src/agent.rs",
+      "src-tauri/src/commands.rs",
+      "src-tauri/src/lib.rs"
+    ],
+    "ftrScore": "85%",
+    "caveatsResolved": [
+      "Removed duplicate save_tasks registration in src-tauri/src/lib.rs tauri::generate_handler! macro.",
+      "Eliminated guarded .unwrap() on task.worktree_path in src-tauri/src/commands.rs run_agent in favor of idiomatic pattern matching per AGENTS.md Р’В§ 2.2 Ponytail Minimalism."
+    ],
+    "timestamp": 1791889400000
+  },
+  "CVH-018": {
+    "taskId": "CVH-018",
+    "title": "Clean Activity Feed, Circular Context Gauge with Hover Card, LocalStorage Task Persistence, and Run Error Surface",
+    "author": "Lead Frontend Artisan (react-tailwind-artisan)",
+    "verdict": "APPROVED",
+    "commitHash": "905f7d6",
+    "commitMessage": "feat(ui): clean activity feed, circular context gauge with hover card, localStorage task persistence, and run error surface",
+    "summary": "Eliminated redundant filter tab bar to deliver a clean, uninterrupted chronological activity stream. Replaced the bulky horizontal context bar with an elegant 28px circular SVG progress ring and hover breakdown card (System prompt, Tool definitions, Messages) with compact context action. Fortified task persistence with dual-layer synchronization (Tauri backend save_tasks IPC + automatic localStorage backup cvh_tasks_backup) ensuring zero task loss on app cold start, window reloads, or web preview. Added immediate error transparency by surfacing run/status errors directly in the drawer with one-click retry execution.",
+    "files": [
+      "src/components/drawer/AgentConsoleDrawer.tsx",
+      "src/components/drawer/ContextGauge.tsx",
+      "src/stores/boardStore.ts"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1791898170000
+  },
+  "CVH-017": {
+    "taskId": "CVH-017",
+    "title": "Smart Workspace Root Discovery, Fallback Pipeline, Dual Task Persistence, and LLM Runner Error Dispatching",
+    "author": "tauri-rust-engineer",
+    "verdict": "APPROVED_WITH_CAVEATS",
+    "commitHash": "f98dac0",
+    "resolutionCommitHash": "a4d225f",
+    "commitMessage": "feat(backend): smart root discovery, fallback pipeline, and proxy connection fix",
+    "summary": "Resolved executable double-click root resolution failures and silent LLM runner stalls: implemented multi-tier discover_project_root (current_dir check, current_dir.ancestors() traversal, persistent %LOCALAPPDATA% active_project.txt lookup, and deterministic default fallback), 5-stage default_pipeline_config fail-safe fallback, dual-layer task persistence writing atomically to both .cvh/tasks.json and global app data with empty list preservation, and fortified async LLM runner error dispatching in Tokio background tasks with StreamChunk::Error propagation, zero-chunk channel closure detection, and multi-channel UI error surfacing (agent:error, agent:status, and formatted agent:output).",
+    "files": [
+      "src-tauri/src/agent.rs",
+      "src-tauri/src/commands.rs",
+      "src-tauri/src/config.rs",
+      "src-tauri/src/lib.rs",
+      "src-tauri/src/llm/client.rs"
+    ],
+    "ftrScore": "88%",
+    "caveatsResolved": [
+      "Ensured empty task array in local .cvh/tasks.json is honored without falling back to global backup, preventing resurrection of deleted tasks.",
+      "Verified default_pipeline_config schema matches canonical 5-stage pipeline specification."
+    ],
+    "timestamp": 1791898200000
+  },
+  "CVH-021": {
+    "taskId": "CVH-021",
+    "title": "Restore SplashScreen bootloader and fix drawer white-screen flex layout",
+    "author": "react-tailwind-artisan",
+    "verdict": "APPROVED_WITH_CAVEATS",
+    "commitHash": "4e97cc6",
+    "resolutionCommitHash": "0732d49",
+    "commitMessage": "fix(ui): restore SplashScreen bootloader and fix drawer white-screen flex layout",
+    "summary": "Restored terminal CLI bootloader SplashScreen.tsx with kernel boot sequence, TTY_VOIMAX header, hairline progress bar, and isDataReady hydration guard. Fixed critical drawer white-screen layout failure by hoisting AgentConsoleDrawer and SplashScreen outside the CSS transformed/zoomed container to the root fragment level, establishing h-screen max-h-screen overflow-hidden bounds, and enforcing min-h-0/min-w-0 on all flex children. Resolved Level 2 review caveat in commit 0732d49 by hoisting and cleaning up finishTimer on unmount.",
+    "files": [
+      "src/App.tsx",
+      "src/components/drawer/AgentConsoleDrawer.tsx",
+      "src/components/splash/SplashScreen.tsx"
+    ],
+    "ftrScore": "85%",
+    "caveatsResolved": [
+      "Hoisted finishTimer into effect scope and cleaned it up on unmount to prevent state updates on unmounted SplashScreen component."
+    ],
+    "timestamp": 1791966200000
+  },
+  "CVH-022": {
+    "taskId": "CVH-022",
+    "title": "Generate desktop icon.ico and PNG assets from new SVG logo",
+    "author": "tauri-rust-engineer / agent-developer",
+    "verdict": "APPROVED",
+    "commitHash": "9800657",
+    "mergeCommitHash": "89e7d2c",
+    "commitMessage": "feat(assets): generate desktop icon.ico and PNG assets from new SVG logo",
+    "summary": "Generated desktop icon assets from public/favicon.svg (obsidian badge, white delta triangle, and 3-column kanban motif) to resolve Windows taskbar, window header, and Explorer displaying the default Tauri icon. Produced 32x32.png, 128x128.png, icon.png (512x512), and multi-resolution icon.ico containing 16x16, 24x24, 32x32, 48x48, 64x64, 128x128, and 256x256 mipmaps with high-fidelity Lanczos resampling. Verified index.html favicon link, Topbar Logo rendering, and verified zero compiler/bundler errors via cargo check and npm run build.",
+    "files": [
+      "src-tauri/icons/128x128.png",
+      "src-tauri/icons/128x128@2x.png",
+      "src-tauri/icons/32x32.png",
+      "src-tauri/icons/Square107x107Logo.png",
+      "src-tauri/icons/Square142x142Logo.png",
+      "src-tauri/icons/Square150x150Logo.png",
+      "src-tauri/icons/Square284x284Logo.png",
+      "src-tauri/icons/Square30x30Logo.png",
+      "src-tauri/icons/Square310x310Logo.png",
+      "src-tauri/icons/Square44x44Logo.png",
+      "src-tauri/icons/Square71x71Logo.png",
+      "src-tauri/icons/Square89x89Logo.png",
+      "src-tauri/icons/StoreLogo.png",
+      "src-tauri/icons/icon.icns",
+      "src-tauri/icons/icon.ico",
+      "src-tauri/icons/icon.png"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1792000000000
+  },
+  "CVH-023": {
+    "taskId": "CVH-023",
+    "title": "Eliminate React Rules of Hooks violation in AgentConsoleDrawer and wrap in root ErrorBoundary",
+    "author": "react-tailwind-artisan",
+    "verdict": "APPROVED",
+    "commitHash": "74ea7a5",
+    "mergeCommitHash": "96347cb",
+    "commitMessage": "fix(drawer): eliminate React rules of hooks violation and wrap drawer in root ErrorBoundary",
+    "summary": "Resolved fatal React White Screen of Death on Kanban card click caused by conditional execution of useSettingsStore, useMemo(selectableModels), and useMemo(turns) below `if (!isOpen || !task) return null;` in AgentConsoleDrawer.tsx. Hoisted all hooks unconditionally to the top of the component with safe null-coalescing fallbacks. Wrapped <AgentConsoleDrawer /> in a root <ErrorBoundary scopeLabel=\"Р С™Р С•Р Р…РЎРѓР С•Р В»РЎРЉ Р В·Р В°Р Т‘Р В°РЎвЂЎР С‘\" onClose={() => useDrawerStore.getState().closeDrawer()}> in src/App.tsx to defensively isolate child render errors.",
+    "files": [
+      "src/App.tsx",
+      "src/components/drawer/AgentConsoleDrawer.tsx"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1792050000000
+  },
+  "CVH-024": {
+    "taskId": "CVH-024",
+    "title": "Configure instant HMR dev workflow with IPv4 127.0.0.1 binding for Vite and Tauri devUrl",
+    "author": "agent-developer",
+    "verdict": "APPROVED",
+    "commitHash": "9698ee6",
+    "mergeCommitHash": "5f4b34a",
+    "commitMessage": "feat(dev): bind Vite and Tauri devUrl to IPv4 127.0.0.1 for instant HMR dev mode",
+    "summary": "Eliminated Windows dual-stack IPv6/IPv4 dev server hang where Vite defaulted to IPv6 ::1 while Tauri CLI checked IPv4 127.0.0.1:5173. Explicitly bound Vite server.host to '127.0.0.1' in vite.config.ts and synchronized build.devUrl to 'http://127.0.0.1:5173' in src-tauri/tauri.conf.json. Verified clean production bundle via npm run build and verified Level 2 review APPROVED.",
+    "files": [
+      "vite.config.ts",
+      "src-tauri/tauri.conf.json"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1792100000000
+  },
+  "CVH-025": {
+    "taskId": "CVH-025",
+    "title": "Non-admin WebView2 user-data permission inheritance and stale lock recovery",
+    "author": "tauri-rust-engineer",
+    "verdict": "APPROVED",
+    "commitHash": "d35a418",
+    "mergeCommitHash": "0a15c39",
+    "commitMessage": "fix(windows): non-admin WebView2 permission inheritance and stale lock recovery",
+    "summary": "Resolved WebView2 initialization failures (0x80070005 Access Denied and 0x800700AA ERROR_BUSY) on non-admin Windows accounts by recursively granting Full Control to current user and AppContainer via icacls, and purging stale lockfiles from previous ungraceful exits.",
+    "files": [
+      "src-tauri/src/main.rs"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1792150000000
+  },
+  "CVH-026": {
+    "taskId": "CVH-026",
+    "title": "Eliminate msedgewebview2 STATUS_BREAKPOINT (0x80000003) crash in msedge_elf.dll via --no-sandbox and --disable-gpu",
+    "author": "tauri-rust-engineer",
+    "verdict": "APPROVED",
+    "commitHash": "710ff49",
+    "commitMessage": "fix(windows): eliminate msedgewebview2 STATUS_BREAKPOINT crash in msedge_elf.dll via --no-sandbox and --disable-gpu",
+    "summary": "Resolved fatal desktop crash on launch where msedgewebview2.exe tripped STATUS_BREAKPOINT (0x80000003) in msedge_elf.dll during Chromium early loader process-integrity and sandbox checks on non-admin accounts or with local proxies present. Injected --disable-features=RendererCodeIntegrity --no-sandbox --disable-gpu into WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS at the entry point of main.rs.",
+    "files": [
+      "src-tauri/src/main.rs"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1792200000000
+  },
+  "CVH-028": {
+    "taskId": "CVH-028",
+    "title": "Interactive To-Dos Execution Plan Widget (DSH-Style) and todo_write protocol",
+    "author": "agent-developer",
+    "verdict": "APPROVED",
+    "commitHash": "5749089",
+    "mergeCommitHash": "c48fe04",
+    "commitMessage": "feat(agent): implement DSH-style interactive To-Dos plan widget and todo_write protocol",
+    "summary": "Implemented authentic, interactive To-Dos plan widget and protocol directly inspired by DeepSeek Harness (DSH) and Harness Engineering Р’В§ 17. Added TodoItem and KanbanTask.todos in TypeScript and Rust, created DSH-authentic TaskTodoWidget with obsidian styling and interactive status cycling, anchored it above the feed obeying Р’В§ 2.13 Viewport Overlay & Flex Boundary Invariants, and added todo_write agent tool in Rust with atomic persistence and task:updated event emission.",
+    "files": [
+      "src/types/kanban.ts",
+      "src/types/index.ts",
+      "src/stores/kanbanStore.ts",
+      "src/stores/boardStore.ts",
+      "src/components/drawer/TaskTodoWidget.tsx",
+      "src/components/drawer/AgentConsoleDrawer.tsx",
+      "src/App.tsx",
+      "src-tauri/src/agent.rs",
+      "src-tauri/src/commands.rs",
+      ".cvh/settings/tool-policy.json"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1792300000000
+  },
+  "CVH-006": {
+    "taskId": "CVH-006",
+    "title": "Implement builtin cvh-dev agent, prune hooks from Cortex Explorer agents section, and fix reactive updates",
+    "author": "agent-developer",
+    "verdict": "APPROVED",
+    "commitHash": "8fae343419d9069ace4556f465c9408097f192e0",
+    "commitMessage": "feat(agent): builtin cvh-dev agent, cortex explorer hooks pruning, and reactive updates",
+    "summary": "Implemented builtin immutable cvh-dev agent with virtual fallback prompt (BUILTIN_CVH_DEV_PROMPT) and deletion protection in Rust backend and React UI; pruned hooks/ from Agents section in Cortex Explorer so agents strictly represent minds while hooks belong to stages; added reactive updates via Tauri event agent:personas_updated and reactive store listeners.",
+    "files": [
+      "src-tauri/src/agent.rs",
+      "src-tauri/src/commands.rs",
+      "src-tauri/src/lib.rs",
+      "src/App.tsx",
+      "src/components/board/ColumnContextMenu.tsx",
+      "src/components/board/CreateBoardModal.tsx",
+      "src/components/board/KanbanBoard.tsx",
+      "src/components/cortex/CortexExplorer.tsx",
+      "src/stores/cortexStore.ts",
+      "src/types/index.ts"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1792350000000
+  },
+  "CVH-007": {
+    "taskId": "CVH-007",
+    "title": "Lean cvh-dev router prompt (progressive disclosure, 48 lines) + marker test",
+    "author": "agent-developer",
+    "verdict": "APPROVED",
+    "commitHash": "847cc9e653c8da6535217ff7132f1c51c338799b",
+    "commitMessage": "feat(agent): lean cvh-dev router prompt (48 lines, progressive disclosure) + marker test",
+    "summary": "Rewrote BUILTIN_CVH_DEV_PROMPT as lean harness router (48/150 lines): identity/triggers/paths/frontmatter/boards+pipeline+tool-policy skeletons/guards; full detail lazy via .cvh/agents/<role>/rules/*.md. Added ground-truth test asserting line cap + 24 markers. Recovered hung worktree feat/cvh-dev-router-prompt: reverted auto-generated gen/schemas LF/CRLF noise. Sensors: cargo check green, target test green; clippy baseline shows 5 pre-existing errors outside diff hunks (commands.rs x3 + agent.rs:536 too-many-args), zero new from this diff РІР‚вЂќ left untouched per single-task ceiling.",
+    "files": [
+      "src-tauri/src/agent.rs"
+    ],
+    "ftrScore": "100%",
+    "timestamp": 1792400000000
+  },
+  "CVH-RELEASE-BUILD-FIX": {
+    "taskId": "CVH-RELEASE-BUILD-FIX",
+    "title": "Fix Windows GNU release bundling and bundle WebView2Loader.dll in portable and NSIS artifacts",
+    "author": "tauri-rust-engineer (Level 1)",
+    "verdict": "APPROVED",
+    "commitHash": "8e2efe2",
+    "commitMessage": "feat(build): fix Windows GNU release bundling and include WebView2Loader.dll in portable and NSIS artifacts",
+    "summary": "Diagnosed and resolved release build and bundling failure on Windows under x86_64-pc-windows-gnu toolchain (llvm-mingw). Fixed runtime 'WebView2Loader.dll not found' error by copying the target WebView2Loader.dll into Release/Windows/bin/ alongside canban-voimax-harness.exe, and created src-tauri/nsis-hooks.nsh to embed WebView2Loader.dll into the NSIS installer. Pruned bundle targets in tauri.conf.json to ['nsis'] to eliminate WiX v3 stalls, and hardened build-release.ps1 and build-release.bat with automatic toolchain discovery, short temp directory redirect, and multi-candidate artifact collection.",
+    "files": [
+      "build-release.bat",
+      "build-release.ps1",
+      "src-tauri/nsis-hooks.nsh",
+      "src-tauri/tauri.conf.json"
+    ],
+    "timestamp": 1792091130907
+  },
+  "CVH-TODO-OVERLAY-FIX": {
+    "taskId": "CVH-TODO-OVERLAY-FIX",
+    "title": "Redesign TaskTodoWidget as non-displacing overlay popover pill to eliminate chat displacement and divider stripes",
+    "author": "agent-developer (react-tailwind-artisan)",
+    "verdict": "APPROVED",
+    "commitHash": "f249cd1",
+    "commitMessage": "feat(ui): redesign TaskTodoWidget as non-displacing overlay popover pill",
+    "summary": "Redesigned TaskTodoWidget so the plan list floats as an overlay popover (z-30 shadow-xl rounded-xl border border-[#ebebeb] bg-white) with outside-click and Escape listeners, completely preventing chat feed displacement. Removed the full-width divider stripe ('border-t border-[#ebebeb] bg-[#fafafa]') above the input area, anchoring a compact pill trigger ('To-dos X/Y') in the steer bar toolbar adjacent to the input controls.",
+    "files": [
+      "src/components/drawer/AgentConsoleDrawer.tsx",
+      "src/components/drawer/TaskTodoWidget.tsx"
+    ],
+    "timestamp": 1792091253086
+  },
+  "CVH-UI-DIFF-THINKING-POLISH": {
+    "taskId": "CVH-UI-DIFF-THINKING-POLISH",
+    "title": "Diff accordion with noise stripping, real newlines in tool params, window dragging by chat header, and typewriter thinking",
+    "author": "agent-developer (react-tailwind-artisan)",
+    "verdict": "APPROVED",
+    "commitHash": "20aeb04",
+    "mergeCommitHash": "b5f8ebd",
+    "commitMessage": "feat(ui): diff accordion, noise stripping, real newlines in tool params, and typewriter thinking",
+    "summary": "Refactored GitDiffSidebar into a clean per-file accordion with additions/deletions badges and stripped git noise headers (diff --git, index, --- /dev/null, +++ b/..., new file mode). Refactored ToolExecutionCard to render multiline string parameters (content, command, old_string, new_string, patch) with real newlines in dedicated scrollable pre blocks instead of escaped \\n in raw JSON.stringify. Extracted ThinkingCard and implemented smooth streaming typewriter effect via requestAnimationFrame with adaptive cadence, live timer, and blinking cursor. Added data-tauri-drag-region to AgentConsoleDrawer header with selective pointer-event isolation for buttons and badges.",
+    "files": [
+      "src/components/drawer/AgentConsoleDrawer.tsx",
+      "src/components/drawer/GitDiffSidebar.tsx",
+      "src/components/drawer/ThinkingCard.tsx",
+      "src/components/drawer/ToolExecutionCard.tsx"
+    ],
+    "timestamp": 1792092193529
+  },
+  "CVH-DEV-RULES-UTF8": {
+    "taskId": "CVH-DEV-RULES-UTF8",
+    "task": "cvh-dev-rules-utf8",
+    "title": "Windows cmd.exe UTF-8 fix, modular cvh-dev rules (progressive disclosure), rich developer fallback persona, and Backlog-to-Ready Invariant enforcement",
+    "branch": "feat/cvh-dev-rules-utf8",
+    "commitHash": "99053fd",
+    "mergeCommitHash": "1dba66b",
+    "commitMessage": "feat(agent): fix Windows cmd UTF-8, modular cvh-dev rules, developer fallback, and enforce backlog-to-ready invariant",
+    "author": "tauri-rust-engineer / agent-developer",
+    "verdict": "APPROVED",
+    "sensors": {
+      "cargo_check": "pass (0 errors, target x86_64-pc-windows-gnu)",
+      "cargo_clippy": "pass (0 warnings, -D warnings, target x86_64-pc-windows-gnu)",
+      "frontend_build": "pass (tsc && vite build, 0 errors)"
+    },
+    "files": [
+      "src-tauri/src/agent.rs",
+      "src-tauri/src/config.rs",
+      "src-tauri/src/commands.rs",
+      "src-tauri/src/lib.rs",
+      "src/stores/cortexStore.ts",
+      "src/components/cortex/CortexExplorer.tsx",
+      ".gitignore",
+      ".cvh/agents/cvh-dev/persona.md",
+      ".cvh/agents/cvh-dev/setting",
+      ".cvh/agents/cvh-dev/rules/boards.md",
+      ".cvh/agents/cvh-dev/rules/agents.md",
+      ".cvh/agents/cvh-dev/rules/hooks.md"
+    ],
+    "summary": "Eliminated Windows cmd.exe CP866 black diamonds by prepending 'chcp 65001 >nul && ' in run_scoped_command. Implemented modular progressive-disclosure rules for cvh-dev (.cvh/agents/cvh-dev/rules/boards.md, agents.md, hooks.md) and seeded them in project scaffolding. Added rich BUILTIN_DEVELOPER_PROMPT fallback for the developer role. Enforced strict directory-only agent persona architecture (.cvh/agents/<role>/persona.md) with real disk listing via new list_cortex_agent_files IPC command. Enforced Backlog-to-Ready Invariant across all boards and pipeline configurations (backlog at index 0, ready with terminal:true at final index, auto-re-injecting and forbidding deletion).",
+    "timestamp": 1792094128123
+  },
+  "CVH-CLEAN-DEAD-CODE-LEGACY": {
+    "task": "clean-dead-code-legacy",
+    "taskId": "CVH-CLEAN-DEAD-CODE-LEGACY",
+    "title": "Clean codebase of dead code, legacy prototypes, and duplicates",
+    "branch": "feat/clean-dead-code-legacy",
+    "base": "18dc350f55cf55d045d625d9b626490659da0ca2",
+    "merge_sha": "410b0488ae5746b19a0a192bb3c800fb86498369",
+    "changed_files": [
+      "src-tauri/src/llm/client.rs",
+      "src/App.tsx",
+      "src/components/drawer/MarkdownViewer.tsx",
+      "src/lib/audio.ts",
+      "src/lib/utils.ts",
+      "src/stores/kanbanStore.ts",
+      "src/stores/mockData.ts",
+      "src/types/kanban.ts"
+    ],
+    "diff_summary": "1. Deleted dead files: MarkdownViewer.tsx (194 lines), audio.ts (166 lines), utils.ts (42 lines), kanbanStore.ts (2 lines), kanban.ts (16 lines). 2. src-tauri/src/llm/client.rs: deleted unused stream_anthropic method (245 lines) and unused HeaderName import. 3. src/stores/mockData.ts: pruned dead mocks INITIAL_TASKS, INITIAL_TOOL_EXECUTIONS, INITIAL_STREAM_ENTRIES and unused imports. 4. src/App.tsx: removed duplicate 'task:moved' listener (u4). Total: 8 files, +2 / -995 lines.",
+    "sensors": {
+      "cargo_check": "green (Finished dev profile, exit code 0)",
+      "cargo_clippy_D_warnings": "green (Finished dev profile, 0 warnings/errors, exit code 0)",
+      "pnpm_run_build": "green (tsc && vite build, exit code 0)"
+    },
+    "verdict": "APPROVED",
+    "notes": "995 lines of dead legacy code completely eliminated. Fast-forward merged into main (410b048), pushed to origin/main. Worktree removed, branch deleted.",
+    "author": "agent-developer (Level 1)",
+    "timestamp": 1792150641409
+  },
+  "CVH-STAGE-STEPPER-RELAY": {
+    "taskId": "CVH-STAGE-STEPPER-RELAY",
+    "task": "stage-stepper-relay",
+    "title": "Stage Stepper UX on Cards/Drawer & Relay Handoff Memory Priming",
+    "branch": "feat/stage-stepper-relay",
+    "commitHash": "7b1734c",
+    "merge_sha": "7b1734c",
+    "commitMessage": "feat(ux): stage stepper on cards and drawer header with relay handoff memory priming",
+    "author": "agent-developer (Level 1)",
+    "verdict": "APPROVED",
+    "sensors": {
+      "cargo_check": "pass (exit code 0)",
+      "cargo_clippy": "pass (exit code 0, 0 warnings)",
+      "frontend_build": "pass (tsc && vite build, exit code 0, 1643 modules transformed)"
+    },
+    "files": [
+      "src-tauri/src/agent.rs",
+      "src-tauri/src/commands.rs",
+      "src/components/card/KanbanCard.tsx",
+      "src/components/drawer/AgentConsoleDrawer.tsx",
+      "src/stores/boardStore.ts",
+      "src/types/index.ts"
+    ],
+    "summary": "Implemented tactile pipeline stage stepper/tabs directly on KanbanCard and AgentConsoleDrawer header with 1-click stage switching. Added handover_summary to KanbanTask and wired Zero-Turn Memory Priming in agent.rs so subsequent agents start Turn 1 with full context of previous stage's accomplishments.",
+    "diff_summary": "1. src/components/card/KanbanCard.tsx: Added tactical pipeline stage stepper/tabs directly on cards with active stage indicator (pulsing green dot for running), passed stage checkmarks, and 1-click stage transition with stopPropagation and tooltip preview. Added relay handoff summary preview badge with purple sparkles. 2. src/components/drawer/AgentConsoleDrawer.tsx: Added tactile stage stepper in console drawer header and persistent 'Р В­РЎРѓРЎвЂљР В°РЎвЂћР ВµРЎвЂљР В° Р С—Р В°Р в„–Р С—Р В»Р В°Р в„–Р Р…Р В° / Relay Handoff' banner (indigo/violet) with zero-turn memory priming preview. 3. src-tauri/src/agent.rs: Added handover_summary to Task and AgentSessionConfig; updated advance_task and reject_task to propagate summary into internal_move_task_stage and dialog feed; wired Zero-Turn Memory Priming to prepend '### [Р В­Р РЋР СћР С’Р В¤Р вЂўР СћР С’ Р СџР С’Р в„ўР СџР вЂєР С’Р в„ўР СњР С’ / RELAY HANDOFF]' banner to initial_user_prompt. 4. src-tauri/src/commands.rs: Added handover_summary handling to internal_move_task_stage and move_task_stage IPC command; injected handover_summary when launching run_agent. 5. src/stores/boardStore.ts & src/types/index.ts: Added handoverSummary to KanbanTask frontend interface and boardStore updateTask payload.",
+    "timestamp": 1792151286000
+  },
+  "CVH-FIX-TAURI-CONF-SCHEMA": {
+    "taskId": "CVH-FIX-TAURI-CONF-SCHEMA",
+    "task": "fix-tauri-conf-schema",
+    "title": "Fix tauri.conf.json schema error by removing unexpected windows block from build section",
+    "branch": "feat/fix-tauri-conf-schema",
+    "commitHash": "e2b86bb",
+    "merge_sha": "e2b86bb",
+    "commitMessage": "fix(tauri): remove invalid windows property from build section in tauri.conf.json",
+    "author": "agent-developer (Level 1)",
+    "verdict": "APPROVED",
+    "sensors": {
+      "tauri_schema_validation": "pass (pnpm tauri build --help exit code 0, 0 errors)",
+      "cargo_check": "pass (exit code 0)",
+      "cargo_clippy": "pass (exit code 0, 0 warnings)",
+      "frontend_build": "pass (tsc && vite build, exit code 0, 1643 modules transformed)"
+    },
+    "files": [
+      "src-tauri/tauri.conf.json"
+    ],
+    "summary": "Removed invalid 'windows': {'staticVCRuntime': true} object from 'build' section in src-tauri/tauri.conf.json. In Tauri v2 schema, 'windows' is not a valid property of 'build' and caused 'tauri build' to fail schema validation with 'Additional properties are not allowed ('windows' was unexpected)'.",
+    "diff_summary": "src-tauri/tauri.conf.json: removed invalid 'windows': {'staticVCRuntime': true} block from 'build' section. The 'build' section now strictly contains only valid Tauri v2 properties: beforeDevCommand, devUrl, beforeBuildCommand, frontendDist.",
+    "timestamp": 1792159207581
+  },
+  "CVH-AGENT-SVG-ICONS": {
+    "taskId": "CVH-AGENT-SVG-ICONS",
+    "task": "agent-svg-icons",
+    "title": "SVG Icon Pack for Personas with Column Inheritance and Cortex Explorer Display",
+    "branch": "feat/agent-svg-icons",
+    "commitHash": "e90a770",
+    "merge_sha": "e90a770",
+    "commitMessage": "feat(agents): SVG icon pack for personas with column inheritance and cortex explorer display",
+    "author": "agent-developer (Level 1)",
+    "verdict": "APPROVED",
+    "sensors": {
+      "cargo_check": "pass (exit code 0)",
+      "cargo_clippy": "pass (exit code 0, 0 warnings)",
+      "frontend_build": "pass (tsc && vite build, exit code 0, 1645 modules transformed)"
+    },
+    "files": [
+      "src-tauri/src/commands.rs",
+      "src/components/common/AgentIcon.tsx",
+      "src/lib/columnIcons.ts",
+      "src/stores/cortexStore.ts",
+      "src/components/board/ColumnContextMenu.tsx",
+      "src/components/board/KanbanColumn.tsx",
+      "src/components/board/KanbanBoard.tsx",
+      "src/components/cortex/CortexExplorer.tsx",
+      "src/components/board/CreateBoardModal.tsx"
+    ],
+    "summary": "Implemented canonical AGENT_ICONS pack with 18 SVG icons, frontmatter icon metadata support on agent creation and deterministic assignment for missing icons, automatic column icon inheritance upon assigning/resetting agents, and full icon rendering in CortexExplorer agent list and KanbanColumn headers.",
+    "diff_summary": "1. src-tauri/src/commands.rs: Added AGENT_ICONS canonical pack, default_column_icon, extract_persona_icon_from_text, insert_or_update_frontmatter_icon, read_persona_icon_from_dir, save_persona_icon, and deterministic_icon_for_role. Added icon: Option<String> to AgentPersonaInfo. Updated create_agent_persona_file to assign random unused icon and list_agent_personas_in to persist missing icons. Reset column icon to default on persona deletion. 2. src/components/common/AgentIcon.tsx: New reusable component rendering canonical Lucide icons. 3. src/lib/columnIcons.ts: Column default icon mapping. 4. src/stores/cortexStore.ts: Added icon to AgentPersonaInfo and RawAgentPersona, mapped to stage.icon. 5. src/components/board/ColumnContextMenu.tsx & KanbanBoard.tsx & CreateBoardModal.tsx: Column inherits persona.icon on agent assignment, resets to default on detachment. 6. src/components/board/KanbanColumn.tsx: Header renders assigned agent's icon. 7. src/components/cortex/CortexExplorer.tsx: Renders agent's SVG icon in Section 2 next to their name and column stage headers.",
+    "timestamp": 1792161400000
+  },
+  "CVH-TODO-FOOTER-CLEAN": {
+    "taskId": "CVH-TODO-FOOTER-CLEAN",
+    "task": "todo-footer-clean",
+    "title": "Remove read-only hint and Esc footer from TaskTodoWidget popover",
+    "branch": "feat/todo-footer-clean",
+    "commitHash": "51949c2",
+    "commitMessage": "feat(ui): remove read-only hint and Esc footer from TaskTodoWidget",
+    "author": "agent-developer (react-tailwind-artisan)",
+    "verdict": "APPROVED",
+    "sensors": {
+      "frontend_build": "pass (npx tsc --noEmit, 0 errors)"
+    },
+    "files": [
+      "src/components/drawer/TaskTodoWidget.tsx"
+    ],
+    "summary": "Removed bottom footer bar containing 'Р СћР С•Р В»РЎРЉР С”Р С• РЎвЂЎРЎвЂљР ВµР Р…Р С‘Р Вµ Р’В· Р С•Р В±Р Р…Р С•Р Р†Р В»РЎРЏР ВµРЎвЂљРЎРѓРЎРЏ Р В°Р С–Р ВµР Р…РЎвЂљР С•Р С' and 'Esc Р В·Р В°Р С”РЎР‚РЎвЂ№РЎвЂљРЎРЉ' from the To-Dos popover in TaskTodoWidget.tsx per user request. The popover is now more compact and clean, with outside-click and Escape listeners remaining fully active.",
+    "diff_summary": "src/components/drawer/TaskTodoWidget.tsx: removed 5 lines (lines 236-240) containing the popover footer bar. Total: 1 file, -5 lines.",
+    "timestamp": 1792176798352
+  },
+  "CVH-CORTEX-COLORS-MATRIX-POLISH": {
+    "taskId": "CVH-CORTEX-COLORS-MATRIX-POLISH",
+    "task": "cortex-colors-matrix-polish",
+    "title": "Agent color palette without gray/green, column color inheritance, reactive icons, and agent tool matrix",
+    "branch": "feat/cortex-colors-matrix-polish",
+    "commitHash": "5754c86",
+    "author": "agent-developer (react-tailwind-artisan)",
+    "verdict": "APPROVED",
+    "sensors": {
+      "frontend_build": "pass (npx tsc --noEmit, 0 errors)"
+    },
+    "files": [
+      "src/lib/agentPalette.ts",
+      "src/components/board/ColumnContextMenu.tsx",
+      "src/components/board/KanbanBoard.tsx",
+      "src/components/cortex/CortexExplorer.tsx",
+      "src/components/settings/ToolPolicyModal.tsx",
+      "src/stores/cortexStore.ts",
+      "src/stores/toolPolicyStore.ts",
+      "src-tauri/src/commands.rs"
+    ],
+    "summary": "Implemented agent color palette strictly excluding gray (#64748b) and green (#10b981) reserved for backlog and ready. Implemented automatic column color inheritance from assigned agent persona. Enforced reactive SVG agent icon display in Cortex Explorer. Added gray/green styling for backlog/ready columns in Cortex Explorer. Restructured ToolPolicyModal to display agent personas instead of columns.",
+    "timestamp": 1792180867156
+  },
+  "CVH-DOCTOR-AUDIT-CLEANUP": {
+    "taskId": "CVH-DOCTOR-AUDIT-CLEANUP",
+    "task": "doctor-audit-cleanup",
+    "title": "Codebase health audit, dead code cleanup, and documentation synchronization",
+    "branch": "feat/doctor-audit-cleanup",
+    "commitHash": "73970c9",
+    "author": "agent-developer (doctor)",
+    "verdict": "APPROVED",
+    "sensors": {
+      "frontend_build": "pass (npx tsc --noEmit, 0 errors)"
+    },
+    "files": [
+      "AGENTS.md",
+      "HANDOFF.md",
+      "README.md",
+      "docs/GUIDE.md",
+      "docs/agents.md",
+      "docs/board.md",
+      "src/App.tsx"
+    ],
+    "summary": "Synchronized documentation across README, HANDOFF, GUIDE, board.md, and agents.md to reflect SQLite (.cvh/harness.db) persistence, SVG persona icons, Relay Handoff memory priming, and Backlog-to-Ready Invariant. Cleaned up App.tsx duplicate imports.",
+    "timestamp": 1792180912955
+  },
+  "CVH-REACTIVE-BOARDS-PROMPT-HARDEN": {
+    "taskId": "CVH-REACTIVE-BOARDS-PROMPT-HARDEN",
+    "task": "reactive-boards-prompt-harden",
+    "title": "Reactive board & agent updates, cross-board task completion, and prompt hardening",
+    "branch": "feat/reactive-boards-prompt-harden",
+    "commitHash": "34b7b6b",
+    "commitMessage": "feat(backend/ui): reactive board updates, cross-board task completion, and strict invariants prompt hardening",
+    "author": "Level 1 Systems Engineer (tauri-rust-engineer / agent-developer)",
+    "verdict": "APPROVED",
+    "sensors": {
+      "frontend_sensor": "pass (npx tsc --noEmit, 0 errors)",
+      "backend_sensor": "pass (cargo check --tests, 0 errors)",
+      "prompt_sensor": "pass (BUILTIN_CVH_DEV_PROMPT 54 lines <= 150 lines, all 23 markers intact)"
+    },
+    "files": [
+      "src-tauri/src/commands.rs",
+      "src-tauri/src/agent.rs",
+      "src-tauri/src/lib.rs",
+      "src/App.tsx",
+      "src/stores/boardStore.ts",
+      "src/stores/cortexStore.ts",
+      ".cvh/agents/cvh-dev/rules/agents.md",
+      ".cvh/agents/cvh-dev/rules/boards.md"
+    ],
+    "summary": "Implemented reactive board & persona updates (boards:updated, pipeline:updated, agent:personas_updated) across backend IPC commands and agent tools with frontend subscriptions in App.tsx, boardStore.ts, and cortexStore.ts. Implemented task finalization and clean transition to 'done' in the terminal column ('ready') upon active board change in advance_task, internal_move_task_stage, and run_agent. Hardened BUILTIN_CVH_DEV_PROMPT and modular rules (.cvh/agents/cvh-dev/rules/agents.md & boards.md) with strict 1:1 invariants for column.persona matching .cvh/agents/<role>/ directory & frontmatter name, and stageOverrides matching column.id.",
+    "diff_summary": "src-tauri/src/commands.rs (added advance_task command & internal_advance_task, event emits for save_pipeline, create_board, save_board, delete_board, set_active_board, delete_agent_persona, rename_agent_persona, save_cortex_file, board switch finalization in internal_move_task_stage and run_agent, unit test); src-tauri/src/agent.rs (advance_task delegation, emit_file_change_events for tool writes, 1:1 prompt invariants); src-tauri/src/lib.rs (registered advance_task); src/App.tsx & stores (reactive listeners); rules (agents.md & boards.md updated).",
+    "timestamp": 1792181246553
+  },
+  "CVH-REFACTOR-DRAWER-MODULAR": {
+    "taskId": "CVH-REFACTOR-DRAWER-MODULAR",
+    "task": "refactor-drawer-modular",
+    "title": "Decompose monolithic AgentConsoleDrawer into DrawerHeader, DrawerActivityStream, and DrawerSteerBar",
+    "branch": "feat/refactor-drawer-modular",
+    "commitHash": "64d9552",
+    "author": "agent-developer (react-tailwind-artisan)",
+    "verdict": "APPROVED",
+    "sensors": {
+      "frontend_build": "pass (npx tsc --noEmit, 0 errors)"
+    },
+    "files": [
+      "src/components/drawer/AgentConsoleDrawer.tsx",
+      "src/components/drawer/DrawerHeader.tsx",
+      "src/components/drawer/DrawerActivityStream.tsx",
+      "src/components/drawer/DrawerSteerBar.tsx"
+    ],
+    "summary": "Decomposed the giant AgentConsoleDrawer component (>900 lines) into clean, decoupled React 19 subcomponents: DrawerHeader (window dragging, breadcrumbs, stage stepper), DrawerActivityStream (chronological stream, thinking cards, tool cards), and DrawerSteerBar (steer bar, todo popover, context gauge). Preserved strict adherence to В§ 2.13 Viewport Overlay & Flex Boundary Invariants.",
+    "timestamp": 1792182033280
+  },
+  "CVH-WINDOWS-CMD-HARDENING": {
+    "taskId": "CVH-WINDOWS-CMD-HARDENING",
+    "task": "windows-cmd-hardening",
+    "title": "Robust Windows command quoting, path safety, and UTF-8 isolation",
+    "branch": "feat/windows-cmd-hardening",
+    "commitHash": "4f9e395",
+    "author": "agent-developer (tauri-rust-engineer)",
+    "verdict": "APPROVED",
+    "sensors": {
+      "rust_compiler": "pass (cargo check --tests, 0 errors)"
+    },
+    "files": [
+      "src-tauri/src/hooks.rs",
+      "src-tauri/src/agent.rs",
+      "src-tauri/src/commands.rs"
+    ],
+    "summary": "Implemented robust Windows argument and path quotation (quote_windows_arg, quote_windows_path, format_windows_cd_command, build_windows_cmd_args) handling paths with spaces, non-ASCII characters, and parentheses. Guaranteed UTF-8 code page 65001 across all child cmd.exe and sensor executions.",
+    "timestamp": 1792183099232
+  },
+  "CVH-KANBAN-COLUMN-PAGINATION": {
+    "taskId": "CVH-KANBAN-COLUMN-PAGINATION",
+    "task": "kanban-column-pagination",
+    "title": "Progressive card pagination (10 cards + Load More) with dnd-kit persistence",
+    "branch": "feat/kanban-column-pagination",
+    "commitHash": "6839dda",
+    "author": "agent-developer (react-tailwind-artisan)",
+    "verdict": "APPROVED",
+    "sensors": {
+      "frontend_build": "pass (npx tsc --noEmit, 0 errors)"
+    },
+    "files": [
+      "src/components/board/KanbanColumn.tsx",
+      "src/components/board/KanbanBoard.tsx"
+    ],
+    "summary": "Implemented progressive card pagination for Kanban board columns defaulting to PAGE_SIZE = 10 cards. When a column contains more than 10 cards, renders a tactile hairline 'Р—Р°РіСЂСѓР·РёС‚СЊ РµС‰Рµ' button with remaining card count. Preserved full dnd-kit drag-and-drop mechanics across paginated items.",
+    "timestamp": 1792183995198
+  },
+  "CVH-SUBAGENT-OPENCODE-NESTED-CHAT": {
+    "taskId": "CVH-SUBAGENT-OPENCODE-NESTED-CHAT",
+    "task": "subagent-opencode-nested-chat",
+    "title": "In-process subagent execution, OpenCode-style nested chat, delegation tools, and reactive tool matrix",
+    "branch": "feat/subagent-opencode-nested-chat",
+    "commitHash": "67a45c1",
+    "author": "agent-developer (tauri-rust-engineer & react-tailwind-artisan)",
+    "verdict": "APPROVED",
+    "sensors": {
+      "frontend_build": "pass (npx tsc --noEmit, 0 errors)",
+      "rust_compiler": "pass (cargo check --tests, 0 errors)"
+    },
+    "files": [
+      "src-tauri/src/agent.rs",
+      "src-tauri/src/commands.rs",
+      "src-tauri/src/lib.rs",
+      "src-tauri/src/config.rs",
+      "src/stores/drawerStore.ts",
+      "src/stores/toolPolicyStore.ts",
+      "src/components/drawer/ToolExecutionCard.tsx",
+      "src/components/drawer/AgentConsoleDrawer.tsx",
+      "src/components/settings/ToolPolicyModal.tsx",
+      "src/types/index.ts"
+    ],
+    "summary": "Implemented OpenCode-style subagent execution: runs in-process inside parent active worktree with zero separate worktrees and zero card movement. Added collect_subagent with batch array support and zero-context-pollution on subagent failure. Added subagent cards, nested chat view with breadcrumbs, and hierarchical subagent master/slave toggles in Tool Policy Matrix.",
+    "timestamp": 1792184540134
+  },
+  "CVH-INTERACTIVE-QUESTION-TOOL": {
+    "taskId": "CVH-INTERACTIVE-QUESTION-TOOL",
+    "task": "interactive-question-tool",
+    "title": "Interactive user interrogation system ('question' / 'ask_user' tool) with OpenCode-style prompt card and zero-polling Tokio pause",
+    "branch": "feat/interactive-question-tool",
+    "commitHash": "aa0d2b1",
+    "author": "agent-developer (tauri-rust-engineer & react-tailwind-artisan)",
+    "verdict": "APPROVED",
+    "sensors": {
+      "frontend_build": "pass (npx tsc --noEmit, 0 errors)",
+      "rust_compiler": "pass (cargo check --tests, 0 errors)"
+    },
+    "files": [
+      "src-tauri/src/agent.rs",
+      "src-tauri/src/commands.rs",
+      "src-tauri/src/config.rs",
+      "src-tauri/src/lib.rs",
+      "src/components/drawer/QuestionPromptCard.tsx",
+      "src/components/drawer/ToolExecutionCard.tsx",
+      "src/components/settings/ToolPolicyModal.tsx",
+      "src/stores/drawerStore.ts",
+      "src/stores/toolPolicyStore.ts",
+      "src/types/index.ts"
+    ],
+    "summary": "Implemented interactive user prompt tool ('question' / 'ask_user') allowing agents to ask clarifying questions with predefined options and custom user input. Backend pauses using tokio::sync::oneshot channel with 0% CPU and zero polling. Frontend renders tactile OpenCode-styled question cards in White Paper aesthetic.",
+    "timestamp": 1792184806027
+  },
+  "CVH-DSH-CONTEXT-COMPACTOR": {
+    "taskId": "CVH-DSH-CONTEXT-COMPACTOR",
+    "title": "High-Density DSH-Style Context Compaction system with collapsible paper-styled accordion and model configuration",
+    "author": "agent-developer (tauri-rust-engineer & react-tailwind-artisan)",
+    "verdict": "APPROVED",
+    "commitHash": "616ca6b",
+    "commitMessage": "feat(compactor): implement High-Density DSH-Style Context Compaction system",
+    "summary": "Implemented High-Density DSH-Style Context Compaction system. Rust backend condenses dialogue history prior to the last 2 active turns using an authoritative 7-section structured system prompt, with model inheritance ('inherit' default or custom override) and resilient HTTP client with deterministic fallback. Persists compacted markdown into SQLite table dialog_items with type = 'compacted' and archives older intermediate entries. React 19 frontend renders a tactile collapsible paper-styled accordion strip in White Paper / Vercel design, an on-demand 'Сжать контекст' button in DrawerSteerBar, and a Compactor Model selector in SettingsModal.",
+    "files": [
+      "src-tauri/src/agent/compactor.rs",
+      "src-tauri/src/commands.rs",
+      "src-tauri/src/config.rs",
+      "src-tauri/src/db.rs",
+      "src/components/drawer/CompactedContextCard.tsx",
+      "src/components/drawer/DrawerActivityStream.tsx",
+      "src/components/drawer/DrawerSteerBar.tsx",
+      "src/components/settings/SettingsModal.tsx",
+      "src/stores/drawerStore.ts",
+      "src/stores/settingsStore.ts",
+      "src/types/index.ts"
+    ],
+    "timestamp": 1792185383261
+  },
+  "CVH-REFACTOR-COMMANDS-MODULAR": {
+    "taskId": "CVH-REFACTOR-COMMANDS-MODULAR",
+    "task": "refactor-commands-modular",
+    "title": "Decompose monolithic commands.rs into modular submodules under src-tauri/src/commands/",
+    "branch": "feat/refactor-commands-modular",
+    "commitHash": "8698a07",
+    "author": "tauri-rust-engineer",
+    "verdict": "APPROVED",
+    "sensors": {
+      "cargo_check": "pass (cargo check --tests, 0 errors)",
+      "cargo_clippy": "pass (cargo clippy --tests -- -D warnings, 0 warnings)"
+    },
+    "files": [
+      "src-tauri/src/commands/mod.rs",
+      "src-tauri/src/commands/state.rs",
+      "src-tauri/src/commands/boards.rs",
+      "src-tauri/src/commands/tasks.rs",
+      "src-tauri/src/commands/dialogs.rs",
+      "src-tauri/src/commands/git.rs",
+      "src-tauri/src/commands/cortex.rs",
+      "src-tauri/src/commands/tools.rs",
+      "src-tauri/src/commands/llm.rs",
+      "src-tauri/src/commands/projects.rs",
+      "src-tauri/src/commands/tests.rs"
+    ],
+    "summary": "Decomposed monolithic commands.rs (5209 lines) into 10 decoupled domain submodules under src-tauri/src/commands/. Re-exported all symbols in commands/mod.rs ensuring 100% backward compatibility for lib.rs generate_handler! and agent.rs. Replaced hardcoded stage names for git worktree creation with configurable hook engine (builtin:create_worktree). All Ground Truth Sensors (cargo check --tests, cargo clippy -- -D warnings) passed with zero warnings/errors.",
+    "timestamp": 1792185313298
+  }
 }
