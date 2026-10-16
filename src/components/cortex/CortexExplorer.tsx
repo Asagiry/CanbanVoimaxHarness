@@ -287,6 +287,14 @@ export default function CortexExplorer() {
         <span className="text-xs font-semibold text-[#171717]">
           Проводник разума агента
         </span>
+        <button
+          type="button"
+          onClick={handleRefreshPersonas}
+          title="Обновить агентов"
+          className="p-1 rounded hover:bg-[#e4e4e7] text-[#71717a] hover:text-[#171717] transition cursor-pointer"
+        >
+          <RotateCw className={`h-3.5 w-3.5 ${isRefreshingPersonas ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
       {/* Filter Search Input */}
@@ -379,16 +387,6 @@ export default function CortexExplorer() {
             count={agentStages.length}
             open={openSections.agents}
             onToggle={() => toggleSection('agents')}
-            action={
-              <button
-                type="button"
-                onClick={handleRefreshPersonas}
-                title="Обновить агентов"
-                className="p-1 rounded hover:bg-[#e4e4e7] text-[#71717a] hover:text-[#171717] transition cursor-pointer"
-              >
-                <RotateCw className={`h-3 w-3 ${isRefreshingPersonas ? 'animate-spin' : ''}`} />
-              </button>
-            }
           />
           {openSections.agents && (
             <div className="space-y-1">
@@ -590,7 +588,7 @@ function StageHeaderButton({
           </span>
 
           {isBuiltin && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-sans font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0">
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-sans font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0 self-center translate-y-[0.5px] leading-tight">
               Встроенный
             </span>
           )}

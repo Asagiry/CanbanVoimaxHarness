@@ -292,10 +292,11 @@ export default function AgentConsoleDrawer() {
     streamEntries,
     toolExecutions,
     closeDrawer,
+    openDrawer,
     appendOutput,
   } = useDrawerStore();
 
-  const { tasks, updateTask, columns, moveTask } = useBoardStore();
+  const { tasks, updateTask, columns } = useBoardStore();
   const { settings, availableModels, openSettings } = useSettingsStore();
   const isToolAllowed = useToolPolicyStore((s) => s.isToolAllowed);
   const openToolPolicyModal = useToolPolicyStore((s) => s.openModal);
@@ -352,6 +353,17 @@ export default function AgentConsoleDrawer() {
 
   const task = tasks.find((t) => t.id === activeTaskId);
   const currentStageIdx = columns.findIndex((c) => c?.id === task?.columnId);
+
+  const workingColumns = columns.filter(
+    (c) => c.id !== 'backlog' && c.id !== 'ready' && !c.terminal
+  );
+
+  const rootTask = task
+    ? task.parentId
+      ? tasks.find((t) => t.id === task.parentId) || task
+      : task
+    : null;
+  const subtasks = rootTask ? tasks.filter((t) => t.parentId === rootTask.id) : [];
 
   // Reset error when switching tasks & load dialog history from disk
   useEffect(() => {
@@ -766,15 +778,31 @@ export default function AgentConsoleDrawer() {
             )}
 
             {/* Elegant Stage Stepper for Console Header */}
-            {task && columns.length > 0 && (
+            {task && workingColumns.length > 0 && (
               <div
                 data-no-drag
                 className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg bg-[#f9fafb] border border-[#ebebeb] shrink-0 select-none pointer-events-auto shadow-2xs overflow-x-auto no-scrollbar max-w-[500px]"
               >
-                {columns.map((col, idx) => {
-                  const isCurrent = col.id === task.columnId;
-                  const isPassed = currentStageIdx >= 0 && idx < currentStageIdx;
+                {workingColumns.map((col, idx) => {
+                  const matchingSubtask = subtasks.find(
+                    (s) => s.columnId === col.id || (s as any).stageId === col.id
+                  );
+                  const isRootStage = rootTask ? rootTask.columnId === col.id : false;
+                  const targetTaskId = matchingSubtask
+                    ? matchingSubtask.id
+                    : isRootStage && rootTask
+                    ? rootTask.id
+                    : null;
+
+                  const isCurrent =
+                    col.id === task.columnId ||
+                    (targetTaskId != null && targetTaskId === activeTaskId);
                   const isRunningStage = isCurrent && isRunning;
+                  const isPassed =
+                    Boolean(targetTaskId) &&
+                    (matchingSubtask?.status === 'done' ||
+                      (currentStageIdx >= 0 &&
+                        columns.findIndex((c) => c.id === col.id) < currentStageIdx));
 
                   return (
                     <div key={col.id} className="flex items-center shrink-0">
@@ -784,27 +812,29 @@ export default function AgentConsoleDrawer() {
                       <button
                         data-no-drag
                         type="button"
-                        disabled={isCurrent}
+                        disabled={isCurrent || !targetTaskId}
                         onMouseDown={(e) => e.stopPropagation()}
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (!isCurrent) {
-                            moveTask(task.id, col.id);
+                          if (targetTaskId && targetTaskId !== activeTaskId) {
+                            openDrawer(targetTaskId);
                           }
                         }}
                         title={
                           isCurrent
                             ? `Текущий этап: ${col.title}`
-                            : isPassed
-                            ? `Пройденный этап: ${col.title} (клик для перемещения)`
-                            : `Переместить на этап: ${col.title}`
+                            : targetTaskId
+                            ? `Перейти к этапу: ${col.title}`
+                            : 'Этап еще не начат'
                         }
                         className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono transition-all duration-150 tabular-nums ${
                           isCurrent
-                            ? 'bg-[#171717] text-white font-semibold shadow-xs ring-1 ring-[#171717]'
-                            : isPassed
-                            ? 'bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0] hover:bg-[#dcfce7] cursor-pointer active:scale-95'
-                            : 'bg-white text-[#71717a] border border-[#ebebeb] hover:bg-[#f4f4f5] hover:text-[#171717] hover:border-[#d4d4d8] cursor-pointer active:scale-95'
+                            ? 'bg-[#171717] text-white font-semibold shadow-xs ring-1 ring-[#171717] cursor-default'
+                            : targetTaskId
+                            ? isPassed
+                              ? 'bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0] hover:bg-[#dcfce7] cursor-pointer active:scale-95'
+                              : 'bg-white text-[#71717a] border border-[#ebebeb] hover:bg-[#f4f4f5] hover:text-[#171717] hover:border-[#d4d4d8] cursor-pointer active:scale-95'
+                            : 'bg-[#fafafa] text-[#a1a1aa] border border-[#ebebeb]/60 cursor-default select-none opacity-60'
                         }`}
                       >
                         {isPassed && <Check className="h-3 w-3 text-[#15803d] shrink-0" />}
@@ -817,17 +847,6 @@ export default function AgentConsoleDrawer() {
                   );
                 })}
               </div>
-            )}
-
-            {effectiveModel && (
-              <span className="hidden xl:inline-block font-mono text-[10px] text-[#8f8f8f] px-1.5 py-0.5 rounded bg-[#fafafa] border border-[#ebebeb] shrink-0 select-none pointer-events-auto truncate max-w-[130px]">
-                {effectiveModel}
-              </span>
-            )}
-            {task?.title && (
-              <span className="hidden 2xl:inline-block text-xs text-[#666666] truncate max-w-[180px] select-none pointer-events-none">
-                {task.title}
-              </span>
             )}
           </div>
 
