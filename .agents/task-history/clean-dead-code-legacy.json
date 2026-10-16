@@ -1,0 +1,26 @@
+{
+  "task": "clean-dead-code-legacy",
+  "taskId": "CVH-CLEAN-DEAD-CODE-LEGACY",
+  "title": "Clean codebase of dead code, legacy prototypes, and duplicates",
+  "branch": "feat/clean-dead-code-legacy",
+  "base": "18dc350f55cf55d045d625d9b626490659da0ca2",
+  "merge_sha": "410b0488ae5746b19a0a192bb3c800fb86498369",
+  "changed_files": [
+    "src-tauri/src/llm/client.rs",
+    "src/App.tsx",
+    "src/components/drawer/MarkdownViewer.tsx",
+    "src/lib/audio.ts",
+    "src/lib/utils.ts",
+    "src/stores/kanbanStore.ts",
+    "src/stores/mockData.ts",
+    "src/types/kanban.ts"
+  ],
+  "diff_summary": "1. Deleted dead files: MarkdownViewer.tsx (194 lines), audio.ts (166 lines), utils.ts (42 lines), kanbanStore.ts (2 lines), kanban.ts (16 lines). 2. src-tauri/src/llm/client.rs: deleted unused stream_anthropic method (245 lines) and unused HeaderName import. 3. src/stores/mockData.ts: pruned dead mocks INITIAL_TASKS, INITIAL_TOOL_EXECUTIONS, INITIAL_STREAM_ENTRIES and unused imports. 4. src/App.tsx: removed duplicate 'task:moved' listener (u4). Total: 8 files, +2 / -995 lines.",
+  "sensors": {
+    "cargo_check": "green (Finished dev profile, exit code 0)",
+    "cargo_clippy_D_warnings": "green (Finished dev profile, 0 warnings/errors, exit code 0)",
+    "pnpm_run_build": "green (tsc && vite build, exit code 0)"
+  },
+  "verdict": "APPROVED",
+  "notes": "995 lines of dead legacy code completely eliminated. Fast-forward merged into main (410b048), pushed to origin/main. Worktree removed, branch deleted."
+}
