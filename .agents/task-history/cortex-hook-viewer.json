@@ -1,0 +1,22 @@
+{
+  "taskId": "CVH-CORTEX-HOOK-VIEWER",
+  "task": "cortex-hook-viewer",
+  "title": "Enable viewing and editing hook code, builtin worktree pseudocode, and command details in Cortex",
+  "branch": "feat/cortex-hook-viewer",
+  "commitHash": "8ff576d",
+  "mergeSha": "abb6f2a",
+  "commitMessage": "feat(cortex): enable viewing and editing hooks and builtin worktree pseudocode",
+  "author": "agent-developer (react-tailwind-artisan)",
+  "verdict": "APPROVED",
+  "sensors": {
+    "frontend_build_npm": "pass (tsc && vite build 0 errors)",
+    "cargo_check": "pass (cargo check 0 errors)",
+    "l2_reviewer": "APPROVED"
+  },
+  "files": [
+    "src/components/cortex/CortexExplorer.tsx",
+    "src/components/cortex/RuleEditorModal.tsx",
+    "src/stores/cortexStore.ts"
+  ],
+  "summary": "Enabled opening and viewing hooks in Cortex explorer. Builtin hooks (like builtin:create_worktree) display comprehensive markdown descriptions and pseudocode in RuleEditorModal. Script hooks extract the script path from commands and read real script files from disk via read_cortex_file (saving back to the script file upon edit). Direct commands (like cargo check) display detailed command utility and argument breakdowns. Added Markdown code fence and list rendering in RuleEditorModal preview mode."
+}
