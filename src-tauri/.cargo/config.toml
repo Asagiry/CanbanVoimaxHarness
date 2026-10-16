@@ -1,0 +1,2 @@
+[env]
+CRATE_CC_NO_DEFAULTS = "1"

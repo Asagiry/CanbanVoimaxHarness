@@ -1,0 +1,253 @@
+use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
+use std::path::Path;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityItem {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub item_type: String,
+    pub timestamp: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub images: Option<Vec<String>>,
+}
+
+
+
+/// Initializes SQLite database at <root>/.cvh/harness.db and creates tables and indexes.
+pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
+    let db_dir = root.join(".cvh");
+    if !db_dir.exists() {
+        let _ = std::fs::create_dir_all(&db_dir);
+    }
+    let db_path = db_dir.join("harness.db");
+    let conn = Connection::open(db_path)?;
+
+    conn.execute_batch(
+        "PRAGMA journal_mode = WAL;
+         PRAGMA synchronous = NORMAL;
+         PRAGMA foreign_keys = ON;
+         CREATE TABLE IF NOT EXISTS dialog_items (
+             id TEXT PRIMARY KEY,
+             task_id TEXT NOT NULL,
+             type TEXT NOT NULL,
+             content TEXT,
+             images_json TEXT,
+             timestamp TEXT,
+             created_at INTEGER NOT NULL,
+             tool_json TEXT,
+             duration_ms REAL
+         );
+         CREATE INDEX IF NOT EXISTS idx_dialog_task ON dialog_items(task_id, created_at);",
+    )?;
+
+    // Ensure optional columns exist if table was initialized by an earlier schema
+    let _ = conn.execute("ALTER TABLE dialog_items ADD COLUMN tool_json TEXT", []);
+    let _ = conn.execute("ALTER TABLE dialog_items ADD COLUMN duration_ms REAL", []);
+
+    Ok(conn)
+}
+
+/// Persists/appends dialog items for a task into SQLite atomically.
+pub fn append_dialog_items(root: &Path, task_id: &str, items: &[ActivityItem]) -> Result<(), String> {
+    if items.is_empty() {
+        return Ok(());
+    }
+
+    let mut conn = init_db(root).map_err(|e| format!("Failed to open database: {}", e))?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| format!("Failed to start transaction: {}", e))?;
+
+    let now_base = chrono::Utc::now().timestamp_millis();
+
+    {
+        let mut stmt = tx
+            .prepare_cached(
+                "INSERT INTO dialog_items (
+                    id, task_id, type, content, images_json, timestamp, created_at, tool_json, duration_ms
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                ON CONFLICT(id) DO UPDATE SET
+                    content = excluded.content,
+                    images_json = excluded.images_json,
+                    timestamp = excluded.timestamp,
+                    tool_json = excluded.tool_json,
+                    duration_ms = excluded.duration_ms",
+            )
+            .map_err(|e| format!("Failed to prepare insert statement: {}", e))?;
+
+        for (idx, item) in items.iter().enumerate() {
+            let images_json = match &item.images {
+                Some(imgs) if !imgs.is_empty() => {
+                    Some(serde_json::to_string(imgs).map_err(|e| e.to_string())?)
+                }
+                _ => None,
+            };
+
+            let tool_json = match &item.tool {
+                Some(val) => Some(serde_json::to_string(val).map_err(|e| e.to_string())?),
+                None => None,
+            };
+
+            let created_at = now_base + (idx as i64);
+
+            stmt.execute(params![
+                item.id,
+                task_id,
+                item.item_type,
+                item.content,
+                images_json,
+                item.timestamp,
+                created_at,
+                tool_json,
+                item.duration_ms,
+            ])
+            .map_err(|e| format!("Failed to insert dialog item {}: {}", item.id, e))?;
+        }
+    }
+
+    tx.commit()
+        .map_err(|e| format!("Failed to commit transaction: {}", e))?;
+
+    Ok(())
+}
+
+/// Loads all dialog items for a task ordered chronologically by created_at.
+pub fn load_dialog_items(root: &Path, task_id: &str) -> Result<Vec<ActivityItem>, String> {
+    let conn = init_db(root).map_err(|e| format!("Failed to open database: {}", e))?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, type, content, images_json, timestamp, tool_json, duration_ms
+             FROM dialog_items
+             WHERE task_id = ?1
+             ORDER BY created_at ASC",
+        )
+        .map_err(|e| format!("Failed to prepare select statement: {}", e))?;
+
+    let rows = stmt
+        .query_map(params![task_id], |row| {
+            let id: String = row.get(0)?;
+            let item_type: String = row.get(1)?;
+            let content: Option<String> = row.get(2)?;
+            let images_json: Option<String> = row.get(3)?;
+            let timestamp: String = row.get(4)?;
+            let tool_json: Option<String> = row.get(5)?;
+            let duration_ms: Option<f64> = row.get(6)?;
+
+            Ok((id, item_type, content, images_json, timestamp, tool_json, duration_ms))
+        })
+        .map_err(|e| format!("Query failed: {}", e))?;
+
+    let mut items = Vec::new();
+    for row_res in rows {
+        let (id, item_type, content, images_json, timestamp, tool_json, duration_ms) =
+            row_res.map_err(|e| format!("Row extraction failed: {}", e))?;
+
+        let images = images_json.and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok());
+        let tool = tool_json.and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
+
+        items.push(ActivityItem {
+            id,
+            item_type,
+            timestamp,
+            content,
+            tool,
+            duration_ms,
+            images,
+        });
+    }
+
+    Ok(items)
+}
+
+/// Deletes all dialog items for a specific task.
+pub fn clear_dialog_items(root: &Path, task_id: &str) -> Result<(), String> {
+    let conn = init_db(root).map_err(|e| format!("Failed to open database: {}", e))?;
+    conn.execute(
+        "DELETE FROM dialog_items WHERE task_id = ?1",
+        params![task_id],
+    )
+    .map_err(|e| format!("Failed to delete dialog items: {}", e))?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_sqlite_dialog_roundtrip() {
+        let root = PathBuf::from("target").join(format!("cvh_db_test_{}", uuid::Uuid::new_v4()));
+        let _ = std::fs::create_dir_all(&root);
+        let root = root.as_path();
+
+        let items = vec![
+            ActivityItem {
+                id: "user-100".to_string(),
+                item_type: "user".to_string(),
+                timestamp: "10:00:00".to_string(),
+                content: Some("User prompt".to_string()),
+                tool: None,
+                duration_ms: None,
+                images: Some(vec!["img1.png".to_string()]),
+            },
+            ActivityItem {
+                id: "th-1710000000000-abcd".to_string(),
+                item_type: "thought".to_string(),
+                timestamp: "10:00:01".to_string(),
+                content: Some("Thinking...".to_string()),
+                tool: None,
+                duration_ms: Some(500.0),
+                images: None,
+            },
+            ActivityItem {
+                id: "call-1".to_string(),
+                item_type: "tool".to_string(),
+                timestamp: "10:00:02".to_string(),
+                content: None,
+                tool: Some(serde_json::json!({
+                    "id": "call-1",
+                    "toolName": "read",
+                    "status": "success"
+                })),
+                duration_ms: Some(42.0),
+                images: None,
+            },
+        ];
+
+        append_dialog_items(root, "CVH-TEST-1", &items).expect("append");
+
+        let loaded = load_dialog_items(root, "CVH-TEST-1").expect("load");
+        assert_eq!(loaded.len(), 3);
+        assert_eq!(loaded[0].id, "user-100");
+        assert_eq!(loaded[0].images, Some(vec!["img1.png".to_string()]));
+        assert_eq!(loaded[1].duration_ms, Some(500.0));
+        assert_eq!(loaded[2].item_type, "tool");
+        assert!(loaded[2].tool.is_some());
+
+        // Update streaming content
+        let mut updated = items.clone();
+        updated[1].content = Some("Thinking deeper...".to_string());
+        append_dialog_items(root, "CVH-TEST-1", &updated).expect("update");
+
+        let loaded_updated = load_dialog_items(root, "CVH-TEST-1").expect("load updated");
+        assert_eq!(loaded_updated.len(), 3);
+        assert_eq!(loaded_updated[1].content.as_deref(), Some("Thinking deeper..."));
+
+        // Clear
+        clear_dialog_items(root, "CVH-TEST-1").expect("clear");
+        let empty = load_dialog_items(root, "CVH-TEST-1").expect("load after clear");
+        assert!(empty.is_empty());
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+}

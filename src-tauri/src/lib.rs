@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod commands;
+pub mod db;
 pub mod config;
 pub mod error;
 pub mod git;

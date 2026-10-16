@@ -457,11 +457,6 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       },
     }));
     try {
-      localStorage.removeItem(`cvh_dialog_${taskId}`);
-    } catch {
-      // ignore
-    }
-    try {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('clear_task_dialog', { taskId });
     } catch (e) {
@@ -588,27 +583,6 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
     } catch (e) {
       console.info('load_task_dialog invoke error or web mode:', e);
     }
-
-    // LocalStorage fallback for web mode or cold recovery
-    try {
-      const backup = localStorage.getItem(`cvh_dialog_${taskId}`);
-      if (backup) {
-        const items = JSON.parse(backup) as DrawerActivityItem[];
-        if (Array.isArray(items) && items.length > 0) {
-          set((state) => {
-            const currentFeed = state.activityFeed[taskId] || [];
-            if (currentFeed.length === 0) {
-              return {
-                activityFeed: { ...state.activityFeed, [taskId]: items },
-              };
-            }
-            return state;
-          });
-        }
-      }
-    } catch {
-      // ignore
-    }
   },
 
   flushSaveDialog: async (taskId) => {
@@ -624,12 +598,6 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       await invoke('save_task_dialog', { taskId, items: feed });
     } catch (err) {
       console.info('save_task_dialog invoke error or web mode:', err);
-    }
-
-    try {
-      localStorage.setItem(`cvh_dialog_${taskId}`, JSON.stringify(feed));
-    } catch {
-      // ignore
     }
   },
 

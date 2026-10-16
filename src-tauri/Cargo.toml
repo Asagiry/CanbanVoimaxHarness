@@ -25,6 +25,7 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-single-instance = "2"
+rusqlite = { version = "0.32", features = ["bundled"] }
 
 [features]
 default = ["custom-protocol"]

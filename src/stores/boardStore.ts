@@ -1004,8 +1004,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     }
 
     // (б) Dialog history cleanup via the drawer store action:
-    // localStorage `cvh_dialog_<id>` + invoke clear_task_dialog (.cvh/dialogs/,
-    // .cvh/tasks/<id>/, global fallback).
+    // invoke clear_task_dialog (.cvh/harness.db SQLite table dialog_items).
     for (const id of ids) {
       try {
         await useDrawerStore.getState().clearTaskLogs(id);
