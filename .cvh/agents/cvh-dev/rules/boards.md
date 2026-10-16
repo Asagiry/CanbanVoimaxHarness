@@ -29,3 +29,8 @@ Columns represent autonomous stages. Moving a card triggers stage automations an
 - `.cvh/pipeline.json`:
   Mirrors the active board's columns and lifecycle settings.
   Stage properties: `id`, `title`, `persona`, `contextWindow`, `gatekeeperSensor`, `allowedTools`, `terminal`, `hooks`, `routes`.
+
+## 4. Persona Mapping Invariant: 1 Persona = Exactly 1 Directory
+- **Single Source of Truth**: Exactly 1 persona corresponds to 1 directory under `.cvh/agents/<persona>/`.
+- **Decoupled Column IDs and Personas**: Columns define stages (`id`), while `persona` defines the autonomous agent role executing in that stage.
+- **No Duplication by Column ID**: Never create duplicate persona directories based on column IDs. For example, if a column has `id: "review"` and `persona: "reviewer"`, create strictly `.cvh/agents/reviewer/`, never `.cvh/agents/review/`. Multiple columns can reference the same persona without duplicating directories.
