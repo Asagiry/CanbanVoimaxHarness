@@ -28,6 +28,7 @@ pub fn normalize_tool_name(name: &str) -> &str {
     match name {
         "bash" => "execute_command",
         "str_replace" => "edit_file",
+        "ask_user" => "question",
         other => other,
     }
 }
@@ -1566,6 +1567,7 @@ pub fn default_global_tools() -> HashMap<String, bool> {
     map.insert("todo_write".to_string(), true);
     map.insert("advance_task".to_string(), true);
     map.insert("reject_task".to_string(), true);
+    map.insert("question".to_string(), true);
     map
 }
 
@@ -1587,6 +1589,7 @@ impl Default for ToolPolicyConfig {
         review_map.insert("todo_write".to_string(), true);
         review_map.insert("advance_task".to_string(), true);
         review_map.insert("reject_task".to_string(), true);
+        review_map.insert("question".to_string(), true);
         stage_overrides.insert("review".to_string(), review_map);
 
         // Dev stage: write enabled, web_search disabled
@@ -1603,6 +1606,7 @@ impl Default for ToolPolicyConfig {
         dev_map.insert("todo_write".to_string(), true);
         dev_map.insert("advance_task".to_string(), true);
         dev_map.insert("reject_task".to_string(), true);
+        dev_map.insert("question".to_string(), true);
         stage_overrides.insert("dev".to_string(), dev_map);
 
         Self {
@@ -1951,6 +1955,9 @@ mod tests {
         assert!(is_tool_allowed(&policy, Some("review"), "execute_command"));
         // str_replace alias normalizes to edit_file (disabled in review).
         assert!(!is_tool_allowed(&policy, Some("review"), "str_replace"));
+        // ask_user alias normalizes to question (enabled in dev and review by default).
+        assert!(is_tool_allowed(&policy, Some("dev"), "question"));
+        assert!(is_tool_allowed(&policy, Some("dev"), "ask_user"));
     }
 
     #[test]

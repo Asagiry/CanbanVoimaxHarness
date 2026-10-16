@@ -196,6 +196,20 @@ export default function App() {
         });
         unlisteners.push(uToolResult);
 
+        const uQuestion = await listen<any>('agent:question', (event) => {
+          const { taskId, questionId, text, options, multiple } = event.payload || {};
+          if (taskId) flushTask(taskId);
+          if (taskId && questionId) {
+            useDrawerStore.getState().addQuestion(taskId, {
+              questionId,
+              text: text || '',
+              options: options || [],
+              multiple: Boolean(multiple),
+            });
+          }
+        });
+        unlisteners.push(uQuestion);
+
         const uTelemetry = await listen<any>('agent:telemetry', (event) => {
           const { taskId, inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens, cacheHitRate } = event.payload || {};
           if (!taskId) return;

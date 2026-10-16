@@ -112,6 +112,7 @@ pub fn run() {
             compact_task_context,
             compact_context,
             steer_agent,
+            answer_agent_question,
             get_llm_settings,
             save_llm_settings,
             fetch_available_models,

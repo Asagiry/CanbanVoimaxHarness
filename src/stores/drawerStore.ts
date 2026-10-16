@@ -72,6 +72,16 @@ interface DrawerState {
   openSubagent: (subagentId: string, title: string, role: string, prompt: string) => void;
   closeSubagent: () => void;
   loadSubagentDialog: (parentTaskId: string, subagentId: string) => Promise<void>;
+  addQuestion: (
+    taskId: string,
+    question: {
+      questionId: string;
+      text: string;
+      options?: Array<{ label: string; description?: string }>;
+      multiple?: boolean;
+    }
+  ) => void;
+  recordQuestionAnswer: (taskId: string, questionId: string, answer: string) => Promise<void>;
 }
 
 export const useDrawerStore = create<DrawerState>((set, get) => ({
@@ -667,6 +677,90 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
     } catch (err) {
       console.info('load_subagent_dialog invoke error or web mode:', err);
     }
+  },
+
+  addQuestion: (taskId, question) => {
+    const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false });
+    const questionId = question.questionId;
+    const itemId = `q-${questionId}`;
+
+    set((state) => {
+      const existingFeed = state.activityFeed[taskId] || [];
+      if (existingFeed.some((f) => f.id === itemId || f.tool?.id === questionId)) {
+        return state;
+      }
+
+      const item: DrawerActivityItem = {
+        id: itemId,
+        type: 'question',
+        timestamp: timeStr,
+        content: question.text,
+        tool: {
+          id: questionId,
+          toolName: 'question',
+          timestamp: timeStr,
+          durationMs: 0,
+          status: 'running',
+          params: {
+            taskId,
+            questionId,
+            text: question.text,
+            options: question.options,
+            multiple: question.multiple,
+          },
+        },
+      };
+
+      return {
+        activityFeed: {
+          ...state.activityFeed,
+          [taskId]: [...existingFeed, item],
+        },
+      };
+    });
+  },
+
+  recordQuestionAnswer: async (taskId, questionId, answer) => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('answer_agent_question', { taskId, questionId, answer });
+    } catch (err) {
+      console.error('Failed to invoke answer_agent_question:', err);
+    }
+
+    set((state) => {
+      const existingFeed = state.activityFeed[taskId] || [];
+      const updatedFeed = existingFeed.map((item) => {
+        if (
+          item.id === `q-${questionId}` ||
+          (item.tool && (item.tool.id === questionId || item.tool.params?.questionId === questionId))
+        ) {
+          const prevParams = (item.tool?.params as Record<string, unknown>) || {};
+          return {
+            ...item,
+            tool: item.tool
+              ? {
+                  ...item.tool,
+                  status: 'success' as const,
+                  params: {
+                    ...prevParams,
+                    selectedAnswer: answer,
+                  },
+                }
+              : undefined,
+          };
+        }
+        return item;
+      });
+
+      return {
+        activityFeed: {
+          ...state.activityFeed,
+          [taskId]: updatedFeed,
+        },
+      };
+    });
+    scheduleDialogSave(taskId);
   },
 }));
 
