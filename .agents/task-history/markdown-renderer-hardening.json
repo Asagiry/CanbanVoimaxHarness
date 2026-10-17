@@ -1,0 +1,19 @@
+{
+  "taskId": "CVH-MARKDOWN-RENDERER-HARDENING",
+  "task": "markdown-renderer-hardening",
+  "title": "Harden MarkdownContent streaming renderer and update RuleEditorModal preview ergonomics",
+  "branch": "feat/markdown-renderer-hardening",
+  "commitHash": "b1f2152",
+  "commitMessage": "feat(ui): harden MarkdownContent renderer and update RuleEditorModal preview",
+  "author": "agent-developer (react-tailwind-artisan)",
+  "verdict": "APPROVED",
+  "sensors": {
+    "tsc": "pass (npx tsc --noEmit: 0 errors)",
+    "l2_reviewer": "APPROVED (agent-developer-reviewer)"
+  },
+  "files": [
+    "src/components/drawer/DrawerActivityStream.tsx",
+    "src/components/cortex/RuleEditorModal.tsx"
+  ],
+  "summary": "Hardened MarkdownContent in DrawerActivityStream.tsx: normalized CRLF to prevent Windows line-break desync; supported indented code fences with trimmedLine.startsWith('```'); added EOF flush for unclosed streaming code blocks with language banner; implemented safe linear non-greedy inline code parsing with 120-character ceiling, sentence boundary rejection (/[.!?]\\s+/), and conversational Cyrillic prose filtering so stray backticks fallback to literal text without swallowing valid subsequent code badges; protected intra-word underscores in bold and italic formatting (!/\\w/.test(prevChar)); and supported bullet lists (-, *, +, •) and numbered lists with indented bold monospace prefixes. Updated RuleEditorModal.tsx: defaults to preview mode on file load and mount; toggles between [Правка] (Edit3) and [Просмотр] (Eye); increased typography to text-sm body, H1 text-base font-bold, H2 text-sm font-semibold, H3 text-sm font-medium, and list/code text-xs; and expanded modal container from max-w-2xl mx-auto to w-full max-w-4xl px-5 py-4."
+}
