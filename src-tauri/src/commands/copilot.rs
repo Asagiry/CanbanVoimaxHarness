@@ -9,13 +9,10 @@ use tauri::{AppHandle, Emitter, State};
 
 pub const COPILOT_DIALOG_TASK_ID: &str = "copilot:meta-chat";
 
-/// Returns the 10 standard architectural tools permitted for CVH Copilot,
+/// Returns the 7 standard architectural tools permitted for CVH Copilot (Project Configuration Specialist),
 /// sorted alphabetically for deterministic prefix caching.
 pub fn get_copilot_tool_suite() -> Vec<ToolDefinition> {
     const COPILOT_TOOLS: &[&str] = &[
-        "create_task",
-        "create_tasks",
-        "complete_task",
         "read_file",
         "write_file",
         "edit_file",
@@ -143,10 +140,7 @@ pub async fn compile_copilot_system_prompt(repo_root: &Path) -> String {
 
     let mut system_prompt = format!(
         "{}\n\n## Project Workspace Context\n{}\n\n{}\n\n{}\n\n## Tool Suite\n\
-        You have direct access to 10 architectural and system tools:\n\
-        - `create_task`: Create a new task card on the Kanban board (title, description, column_id, board_id, tags, priority).\n\
-        - `create_tasks`: Batch create multiple task cards at once.\n\
-        - `complete_task`: Mark a task as completed and move it to the terminal ready/done column (task_id, summary).\n\
+        You have direct access to 7 project configuration and system tools:\n\
         - `read_file`: Inspect file contents with line numbers.\n\
         - `write_file`: Write full content to a file.\n\
         - `edit_file`: Surgically replace text in a file.\n\
@@ -155,7 +149,7 @@ pub async fn compile_copilot_system_prompt(repo_root: &Path) -> String {
         - `execute_command`: Run terminal commands with output capture.\n\
         - `web_search`: Query external technical documentation and web resources.\n\
         \n\
-        Act as the Meta-Architect and Technical Counselor for this project. Guide architecture, inspect the codebase, manage kanban tasks, and provide authoritative system-level guidance.",
+        Act as the Project Configuration & Environment Specialist for this project. Guide architecture, configure boards, pipelines, agent personas, rules, and tool policies. You do NOT create task cards or manage workflow tickets.",
         base_persona.trim(),
         boards_summary,
         pipeline_summary,
@@ -695,16 +689,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_copilot_tool_suite_has_ten_tools() {
+    fn test_copilot_tool_suite_has_seven_tools() {
         let tools = get_copilot_tool_suite();
-        assert_eq!(tools.len(), 10);
+        assert_eq!(tools.len(), 7);
         let names: Vec<String> = tools.into_iter().map(|t| t.function.name).collect();
         assert_eq!(
             names,
             vec![
-                "complete_task",
-                "create_task",
-                "create_tasks",
                 "edit_file",
                 "execute_command",
                 "glob",
@@ -730,9 +721,10 @@ mod tests {
         assert!(prompt.contains("Custom Architect"));
         assert!(prompt.contains("## Project Workspace Context"));
         assert!(prompt.contains("## Tool Suite"));
-        assert!(prompt.contains("`create_task`"));
-        assert!(prompt.contains("`complete_task`"));
+        assert!(!prompt.contains("`create_task`"));
+        assert!(!prompt.contains("`complete_task`"));
         assert!(prompt.contains("`read_file`"));
+        assert!(prompt.contains("`write_file`"));
 
         let _ = tokio::fs::remove_dir_all(&temp_dir).await;
     }
