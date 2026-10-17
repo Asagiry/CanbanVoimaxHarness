@@ -1,0 +1,19 @@
+{
+  "taskId": "CVH-FIX-GIT-DIFF-SIDEBAR",
+  "task": "fix-git-diff-sidebar",
+  "branch": "feat/fix-git-diff-sidebar",
+  "title": "Resolve cramping and auto-reopening bugs in GitDiffSidebar",
+  "verdict": "APPROVED_WITH_CAVEATS",
+  "summary": "Expanded GitDiffSidebar default width to 480px, added an interactive left-edge drag resize handle (360px-840px, persisted to localStorage), and restructured the header with flex-wrap, compact badges (text-[10px], px-1.5 py-0.5), and cleanly truncated branch badge with tooltip. Fixed the auto-reopening bug by tracking initial load state (hasInitialLoadedRef) and explicit user-collapsed files (userCollapsedFilesRef) so background syncs triggered by live agent tool events never forcibly reopen files the user collapsed. Added anti-race disposal pattern for async Tauri event listeners.",
+  "files": [
+    "src/components/drawer/GitDiffSidebar.tsx"
+  ],
+  "sensors": {
+    "npx_tsc": "pass (0 errors)"
+  },
+  "invariants": {
+    "viewport_flex_boundary_2_13": "intact (min-h-0, min-w-0, overflow-hidden)",
+    "ponytail_minimalism_2_11": "intact (zero dead code, clean styling)",
+    "anti_race_disposal": "verified"
+  }
+}
