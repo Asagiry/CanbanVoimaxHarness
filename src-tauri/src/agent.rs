@@ -3257,6 +3257,7 @@ pub struct AgentSessionConfig {
     pub reasoning_effort: Option<String>,
     pub max_turns: usize,
     pub app_handle: Option<AppHandle>,
+    pub context_window: Option<u64>,
 }
 
 #[derive(Debug, Default)]
@@ -3439,6 +3440,20 @@ where
         }
     }
 
+    if let Some(ref app) = config.app_handle {
+        if let Some(state) = app.try_state::<crate::commands::AppState>() {
+            if let Ok(mut map) = state.agent_contexts.lock() {
+                map.insert(
+                    config.task_id.clone(),
+                    std::sync::Arc::new(std::sync::Mutex::new(compactor::AgentContextState {
+                        current_turn: 0,
+                        messages: messages.clone(),
+                    })),
+                );
+            }
+        }
+    }
+
     // Tool Policy Matrix + per-agent intersection: filter out disabled tools
     // when building schema array (saving tokens!). Effective set =
     // policy lookup ∩ agent setting.allowed_tools (absent → unrestricted).
@@ -3478,13 +3493,65 @@ where
 
         event_sink(AgentEvent::TurnStart { turn });
 
-        // State-Preserving Context Compactor: evaporate bloated tool outputs >3 turns old.
-        // Prefix-cache guard: mutating old tool outputs rewrites the prompt prefix and
-        // invalidates Gemini implicit caching from that byte onward. Fire only on real
-        // need (large estimated context), not on message count, to keep prefix stable.
-        if turn > 3 && compactor::estimate_tokens(&messages) > 40_000 {
+        // Synchronize in-memory agent context state with AppState
+        if let Some(ref app) = config.app_handle {
+            if let Some(state) = app.try_state::<crate::commands::AppState>() {
+                if let Ok(map) = state.agent_contexts.lock() {
+                    if let Some(cs) = map.get(&config.task_id) {
+                        if let Ok(guard) = cs.lock() {
+                            // If external manual compaction condensed messages, adopt them
+                            if guard.messages.len() < messages.len() && !guard.messages.is_empty() {
+                                eprintln!(
+                                    "CVH [compactor]: Adopting externally compacted messages (from {} to {}) for task {}",
+                                    messages.len(), guard.messages.len(), config.task_id
+                                );
+                                messages = guard.messages.clone();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // State-Preserving Dynamic Context Compactor:
+        // Reads active column's context_window (default 128,000, or 64,000, etc.).
+        // Triggers compaction whenever estimated tokens exceed 70% of context_window,
+        // or > 20,000 tokens for long turns (turn > 3).
+        let context_window = config.context_window.unwrap_or(128_000) as usize;
+        let compaction_threshold = ((context_window as f64) * 0.70) as usize;
+        let current_tokens = compactor::estimate_tokens(&messages);
+
+        let should_compact = current_tokens > compaction_threshold || (turn > 3 && current_tokens > 20_000);
+        if should_compact {
             let compaction_res = compactor::compact_conversation(&mut messages, None);
             if compaction_res.saved_chars > 0 {
+                // If app_handle is present, persist to SQLite dialog_items
+                if let Some(ref app) = config.app_handle {
+                    let summary_text = if !compaction_res.preserved_state_summary.is_empty() {
+                        compaction_res.preserved_state_summary.clone()
+                    } else {
+                        "Dynamic context compaction: older turns condensed to preserve context window.".to_string()
+                    };
+                    let compacted_item = crate::db::ActivityItem {
+                        id: format!("compacted-{}-{}", config.task_id, chrono::Utc::now().timestamp_millis()),
+                        item_type: "compacted".to_string(),
+                        timestamp: chrono::Local::now().format("%H:%M:%S").to_string(),
+                        content: Some(summary_text),
+                        tool: Some(serde_json::json!({
+                            "compactedCount": compaction_res.evaporated_tools_count,
+                            "savedTokens": compaction_res.estimated_saved_tokens,
+                            "tokensBefore": current_tokens,
+                            "tokensAfter": compactor::estimate_tokens(&messages),
+                            "autoCompacted": true,
+                            "contextWindow": context_window,
+                        })),
+                        duration_ms: None,
+                        images: None,
+                    };
+                    let _ = crate::db::persist_compacted_dialog(&config.repo_root, &config.task_id, &compacted_item, &[]);
+                    let _ = app.emit("dialog:updated", serde_json::json!({ "taskId": config.task_id }));
+                }
+
                 event_sink(AgentEvent::Compacted {
                     saved_chars: compaction_res.saved_chars,
                     estimated_saved_tokens: compaction_res.estimated_saved_tokens,
@@ -3765,6 +3832,20 @@ where
             });
 
             messages.push(ChatMessage::tool_response(tc.id, result_str));
+        }
+
+        // Sync messages to in-memory context state
+        if let Some(ref app) = config.app_handle {
+            if let Some(state) = app.try_state::<crate::commands::AppState>() {
+                if let Ok(map) = state.agent_contexts.lock() {
+                    if let Some(cs) = map.get(&config.task_id) {
+                        if let Ok(mut guard) = cs.lock() {
+                            guard.current_turn = turn;
+                            guard.messages = messages.clone();
+                        }
+                    }
+                }
+            }
         }
     }
 

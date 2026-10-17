@@ -1512,6 +1512,12 @@ pub async fn run_agent(
                 join_handle: Arc::clone(&join_slot),
             },
         );
+        if let Ok(mut ctx_map) = state.agent_contexts.lock() {
+            ctx_map.insert(
+                task_id.clone(),
+                std::sync::Arc::new(std::sync::Mutex::new(crate::agent::compactor::AgentContextState::default())),
+            );
+        };
     }
 
     // Persist status "running" to tasks.json and update state.tasks
@@ -1563,6 +1569,7 @@ pub async fn run_agent(
         reasoning_effort: col.reasoning_effort.clone(),
         max_turns: 25,
         app_handle: Some(app_handle.clone()),
+        context_window: col.context_window.or(agent_setting.context_window),
     };
 
     let tid = task.id.clone();
@@ -1978,10 +1985,12 @@ pub async fn compact_context(
                     ));
                 }
                 "thought" => {
-                    messages_to_condense.push(crate::llm::ChatMessage::assistant(
+                    let mut msg = crate::llm::ChatMessage::assistant(
                         it.content.clone(),
                         None,
-                    ));
+                    );
+                    msg.name = Some("thought".to_string());
+                    messages_to_condense.push(msg);
                 }
                 "tool" => {
                     if let Some(ref t) = it.tool {
@@ -2004,21 +2013,38 @@ pub async fn compact_context(
             }
         }
     } else {
-        // Fallback to task description prompt
-        if let Some(ref t) = task {
-            messages_to_condense.push(crate::llm::ChatMessage::user(format!(
-                "Task {}: {}\n{}",
-                t.id, t.title, t.description
-            )));
-        } else {
-            messages_to_condense.push(crate::llm::ChatMessage::user(format!(
-                "Task {}",
-                task_id
-            )));
+        // Fallback to in-memory active agent context if available, or task description
+        let mem_msgs = {
+            if let Ok(map) = state.agent_contexts.lock() {
+                map.get(&task_id).and_then(|cs| cs.lock().ok().map(|g| g.messages.clone()))
+            } else {
+                None
+            }
+        };
+
+        if let Some(msgs) = mem_msgs {
+            if msgs.len() > 2 {
+                let split_idx = msgs.len().saturating_sub(2);
+                messages_to_condense.extend(msgs[..split_idx].iter().cloned());
+            }
+        }
+
+        if messages_to_condense.is_empty() {
+            if let Some(ref t) = task {
+                messages_to_condense.push(crate::llm::ChatMessage::user(format!(
+                    "Task {}: {}\n{}",
+                    t.id, t.title, t.description
+                )));
+            } else {
+                messages_to_condense.push(crate::llm::ChatMessage::user(format!(
+                    "Task {}",
+                    task_id
+                )));
+            }
         }
     }
 
-    let tokens_before = crate::agent::compactor::estimate_tokens(&messages_to_condense).max(1800);
+    let tokens_before = crate::agent::compactor::estimate_tokens(&messages_to_condense);
 
     // 5. Run LLM condensation with the 7-section structured prompt
     let compacted_markdown = crate::agent::compactor::condense_context_with_llm(
@@ -2030,7 +2056,7 @@ pub async fn compact_context(
     )
     .await;
 
-    let tokens_after = crate::agent::compactor::estimate_text_tokens(&compacted_markdown).max(350);
+    let tokens_after = crate::agent::compactor::estimate_text_tokens(&compacted_markdown);
     let saved_tokens = tokens_before.saturating_sub(tokens_after);
     let compacted_count = if !ids_to_archive.is_empty() {
         ids_to_archive.len()
@@ -2055,7 +2081,8 @@ pub async fn compact_context(
         images: None,
     };
 
-    let _ = crate::db::persist_compacted_dialog(&root, &task_id, &compacted_item, &ids_to_archive);
+    crate::db::persist_compacted_dialog(&root, &task_id, &compacted_item, &ids_to_archive)
+        .map_err(|e| format!("Failed to persist compacted dialog: {}", e))?;
 
     // 7. Update in-memory active agent context if present
     let context_state_opt = {
