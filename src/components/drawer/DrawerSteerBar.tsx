@@ -3,7 +3,9 @@ import type { KanbanTask } from '../../types';
 import ContextGauge from './ContextGauge';
 import TaskTodoWidget from './TaskTodoWidget';
 import { useDrawerStore } from '../../stores/drawerStore';
+import { getRoleBadgeClass } from './ToolExecutionCard';
 import {
+  ArrowLeft,
   ArrowUp,
   Plus,
   ChevronDown,
@@ -42,7 +44,12 @@ export default function DrawerSteerBar({
   const chatFileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const compactTaskContext = useDrawerStore((s) => s.compactTaskContext);
+  const {
+    compactTaskContext,
+    activeSubagentId,
+    activeSubagentRole,
+    closeSubagent,
+  } = useDrawerStore();
 
   const handleCompact = async () => {
     if (isCompacting || !task?.id) return;
@@ -186,6 +193,29 @@ export default function DrawerSteerBar({
             isDragOverChat ? 'ring-2 ring-blue-500/30 bg-blue-50/40' : ''
           }`}
         >
+          {/* Subagent Steer Guidance Banner */}
+          {activeSubagentId && (
+            <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#ebebeb] select-none">
+              <div className="flex items-center space-x-2 min-w-0">
+                <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider border uppercase shrink-0 ${getRoleBadgeClass(activeSubagentRole)}`}>
+                  СУБАГЕНТ: {(activeSubagentRole || 'general').toUpperCase()}
+                </span>
+                <span className="text-xs font-sans text-[#71717a] truncate">
+                  Уточнение задачи субагента
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={closeSubagent}
+                className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-sans font-medium text-[#71717a] hover:text-[#171717] hover:bg-[#f4f4f5] border border-transparent hover:border-[#ebebeb] transition cursor-pointer shrink-0"
+                title="Вернуться к родительской задаче"
+              >
+                <ArrowLeft className="h-3.5 w-3.5 text-[#171717]" />
+                <span>← Вернуться к задаче</span>
+              </button>
+            </div>
+          )}
+
           {/* Attached Images Thumbnail Preview Bar */}
           {attachedImages.length > 0 && (
             <div className="flex items-center gap-2 mb-2.5 pb-1 overflow-x-auto select-none">
@@ -223,7 +253,11 @@ export default function DrawerSteerBar({
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             onPaste={handleChatPaste}
-            placeholder="Напишите сообщение, задачу или прикрепите изображение..."
+            placeholder={
+              activeSubagentId
+                ? 'Уточнить задачу для субагента...'
+                : 'Напишите сообщение, задачу или прикрепите изображение...'
+            }
             className="w-full bg-transparent text-sm text-[#171717] placeholder:text-[#8f8f8f] focus:outline-none resize-none leading-relaxed min-h-[44px] max-h-44 overflow-y-auto font-sans"
           />
 

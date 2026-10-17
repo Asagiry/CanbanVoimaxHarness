@@ -145,7 +145,21 @@ export default function AgentConsoleDrawer() {
   // Unified Chronological Activity List (Parent stream or Nested Subagent stream)
   const unifiedActivities = useMemo(() => {
     if (activeSubagentId) {
-      const subFeed = activityFeed[activeSubagentId] || [];
+      let subFeed = activityFeed[activeSubagentId] || [];
+      if (subFeed.length === 0) {
+        const state = useDrawerStore.getState();
+        const mappedId = state.toolIdToSubagentId[activeSubagentId];
+        if (mappedId && activityFeed[mappedId]?.length) {
+          subFeed = activityFeed[mappedId];
+        } else {
+          for (const [toolId, subId] of Object.entries(state.toolIdToSubagentId)) {
+            if (subId === activeSubagentId && activityFeed[toolId]?.length) {
+              subFeed = activityFeed[toolId];
+              break;
+            }
+          }
+        }
+      }
       return subFeed.filter((item) => item.type !== 'prompt');
     }
 
@@ -250,15 +264,35 @@ export default function AgentConsoleDrawer() {
     setRunError(null);
 
     const mainText = trimmed || (images.length > 0 ? 'Изображение прикреплено' : '');
-
-    // Append user steer message into feed immediately with attached images
-    appendOutput(task.id, mainText, 'user', imageUrls.length > 0 ? imageUrls : undefined);
-    useDrawerStore.getState().flushSaveDialog(task.id);
-
     const imageNotice = images.length > 0
       ? `\n[Прикреплено ${images.length} изображений: ${images.map((i) => i.name).join(', ')}]`
       : '';
     const fullMessage = `${mainText}${imageNotice}`;
+
+    if (activeSubagentId) {
+      // Append user steer message into subagent feed
+      appendOutput(activeSubagentId, mainText, 'user', imageUrls.length > 0 ? imageUrls : undefined);
+      useDrawerStore.getState().flushSaveDialog(activeSubagentId);
+
+      const resolvedSubagentId =
+        useDrawerStore.getState().toolIdToSubagentId[activeSubagentId] || activeSubagentId;
+
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('retry_subagent', {
+          parentTaskId: task.id,
+          subagentId: resolvedSubagentId,
+          message: fullMessage,
+        });
+      } catch (err) {
+        console.info('retry_subagent invoke error or web mode:', err);
+      }
+      return;
+    }
+
+    // Append user steer message into feed immediately with attached images
+    appendOutput(task.id, mainText, 'user', imageUrls.length > 0 ? imageUrls : undefined);
+    useDrawerStore.getState().flushSaveDialog(task.id);
 
     // Do NOT pollute task description with user steer messages.
     // If task has no description yet, set initial prompt. Otherwise, keep original description untouched.

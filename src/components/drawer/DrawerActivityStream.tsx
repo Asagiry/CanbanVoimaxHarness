@@ -1,12 +1,14 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { KanbanTask } from '../../types';
 import type { DrawerActivityItem } from '../../stores/drawerStore';
-import ToolExecutionCard from './ToolExecutionCard';
+import ToolExecutionCard, { getRoleBadgeClass } from './ToolExecutionCard';
 import ThinkingCard from './ThinkingCard';
 import QuestionPromptCard from './QuestionPromptCard';
 import CompactedContextCard from './CompactedContextCard';
+import { useDrawerStore } from '../../stores/drawerStore';
 import {
   ArrowDown,
+  ArrowLeft,
   ChevronDown,
   ChevronRight,
   Sparkles,
@@ -288,6 +290,14 @@ export default function DrawerActivityStream({
   subtasks,
   onOpenDrawer,
 }: DrawerActivityStreamProps) {
+  const {
+    activeSubagentId,
+    activeSubagentTitle,
+    activeSubagentRole,
+    activeSubagentPrompt,
+    closeSubagent,
+  } = useDrawerStore();
+
   const [expandedOutputs, setExpandedOutputs] = useState<Set<string>>(() => new Set());
   const [showNewButton, setShowNewButton] = useState(false);
   const isFirstBatchRef = useRef(true);
@@ -387,23 +397,54 @@ export default function DrawerActivityStream({
       {/* Main Unified Activity Feed Scrollable Area */}
       <div ref={scrollRef} onScroll={handleFeedScroll} className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6">
         <div className="max-w-4xl mx-auto space-y-3.5">
-          {/* a) Task Goal / User Objective Card */}
-          <div className="rounded-lg border border-[#ebebeb] bg-white p-4 shadow-xs">
-            <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#ebebeb]">
-              <div className="flex items-center space-x-2">
-                <Target className="h-4 w-4 text-[#171717]" />
-                <span className="text-xs font-semibold text-[#171717] font-sans">
-                  Цель задачи / Prompt
-                </span>
+          {activeSubagentId ? (
+            /* Subagent Atomic Objective Card */
+            <div className="rounded-lg border border-[#ebebeb] bg-white p-4 shadow-xs">
+              <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#ebebeb]">
+                <div className="flex items-center space-x-2 min-w-0">
+                  <span className="text-[#171717] text-xs font-mono shrink-0">■</span>
+                  <span className="text-xs font-semibold text-[#171717] font-sans truncate">
+                    Атомарная задача субагента: {activeSubagentTitle || 'Субагент'}
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2 shrink-0">
+                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border ${getRoleBadgeClass(activeSubagentRole)}`}>
+                    {(activeSubagentRole || 'general').toUpperCase()}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={closeSubagent}
+                    className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-sans font-medium text-[#71717a] hover:text-[#171717] hover:bg-[#f4f4f5] border border-transparent hover:border-[#ebebeb] transition cursor-pointer"
+                    title="Вернуться к родительской задаче"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                    <span>← К родительской задаче</span>
+                  </button>
+                </div>
               </div>
-              <span className="text-[10px] font-mono text-[#8f8f8f]">
-                Постановка задачи
-              </span>
+              <div className="text-sm text-[#171717] leading-relaxed whitespace-pre-wrap select-text font-sans bg-[#fafafa] p-3 rounded-md border border-[#ebebeb]">
+                {activeSubagentPrompt || 'Инструкция для субагента'}
+              </div>
             </div>
-            <div className="text-sm text-[#171717] leading-relaxed whitespace-pre-wrap select-text font-sans">
-              {getCleanPrompt(task.description, task.title)}
-            </div>
-          </div>
+          ) : (
+            <>
+              {/* a) Task Goal / User Objective Card */}
+              <div className="rounded-lg border border-[#ebebeb] bg-white p-4 shadow-xs">
+                <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#ebebeb]">
+                  <div className="flex items-center space-x-2">
+                    <Target className="h-4 w-4 text-[#171717]" />
+                    <span className="text-xs font-semibold text-[#171717] font-sans">
+                      Цель задачи / Prompt
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-[#8f8f8f]">
+                    Постановка задачи
+                  </span>
+                </div>
+                <div className="text-sm text-[#171717] leading-relaxed whitespace-pre-wrap select-text font-sans">
+                  {getCleanPrompt(task.description, task.title)}
+                </div>
+              </div>
 
           {/* a2) Relay Handoff / Zero-Turn Memory Priming Card */}
           {task.handoverSummary && (
@@ -458,6 +499,8 @@ export default function DrawerActivityStream({
               </div>
             </div>
           )}
+          </>
+        )}
 
           {/* Unified Chronological Activity Stream */}
           {(unifiedActivities ?? []).map((activity, idx) => {

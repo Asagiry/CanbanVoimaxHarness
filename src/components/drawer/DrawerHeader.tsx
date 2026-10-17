@@ -1,6 +1,8 @@
 import React from 'react';
 import type { KanbanTask, PipelineColumn } from '../../types';
 import Logo from '../common/Logo';
+import { useDrawerStore } from '../../stores/drawerStore';
+import { getRoleBadgeClass } from './ToolExecutionCard';
 import WindowControls, { toggleMaximizeWindow } from '../layout/WindowControls';
 import {
   ArrowLeft,
@@ -53,6 +55,13 @@ export default function DrawerHeader({
     void toggleMaximizeWindow();
   };
 
+  const {
+    activeSubagentId,
+    activeSubagentTitle,
+    activeSubagentRole,
+    closeSubagent,
+  } = useDrawerStore();
+
   const workingColumns = columns.filter(
     (c) => c.id !== 'backlog' && c.id !== 'ready' && !c.terminal
   );
@@ -74,12 +83,12 @@ export default function DrawerHeader({
               data-no-drag
               type="button"
               onMouseDown={(e) => e.stopPropagation()}
-              onClick={onClose}
+              onClick={activeSubagentId ? closeSubagent : onClose}
               className="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-white hover:bg-[#f9f9f9] text-[#171717] border border-[#ebebeb] transition font-sans text-xs font-medium cursor-pointer shadow-xs active:scale-[0.98] select-none pointer-events-auto"
-              title="Назад к доске (Esc)"
+              title={activeSubagentId ? "Назад к родительской задаче" : "Назад к доске (Esc)"}
             >
               <ArrowLeft className="h-4 w-4 text-[#171717]" />
-              <span>Назад</span>
+              <span>{activeSubagentId ? "К задаче" : "Назад"}</span>
             </button>
           </div>
 
@@ -88,36 +97,62 @@ export default function DrawerHeader({
             className="flex-1 flex items-center justify-center space-x-2 px-4 overflow-hidden select-none"
             data-tauri-drag-region
           >
-            {/* Task badge / Subagent breadcrumb */}
-            {task?.id && (
-              rootTask && rootTask.id !== task.id ? (
-                <div className="flex items-center space-x-1 shrink-0 select-none pointer-events-auto" data-no-drag>
-                  <button
-                    type="button"
-                    onClick={() => onOpenDrawer(rootTask.id)}
-                    className="font-mono text-xs text-[#71717a] hover:text-[#171717] px-1.5 py-0.5 rounded hover:bg-[#f4f4f5] transition cursor-pointer"
-                    title={`К родительской задаче ${rootTask.id}`}
-                  >
-                    {rootTask.id}
-                  </button>
-                  <ChevronRight className="h-3 w-3 text-[#a1a1aa] shrink-0" />
-                  <span className="font-mono text-xs font-semibold text-[#171717] px-2 py-0.5 rounded bg-[#f4f4f5] border border-[#ebebeb] shrink-0">
-                    {task.id}
-                  </span>
-                </div>
-              ) : (
-                <span className="font-mono text-xs font-semibold text-[#171717] px-2 py-0.5 rounded bg-[#f4f4f5] border border-[#ebebeb] shrink-0 select-none pointer-events-auto">
-                  {task.id}
-                </span>
-              )
-            )}
-
-            {/* Stage Stepper for Console Header */}
-            {task && workingColumns.length > 0 && (
+            {activeSubagentId ? (
+              /* Subagent Breadcrumb: <Parent Task Title> / <Subagent Task Title> */
               <div
                 data-no-drag
-                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg bg-[#f9fafb] border border-[#ebebeb] shrink-0 select-none pointer-events-auto shadow-2xs overflow-x-auto no-scrollbar max-w-[500px]"
+                className="flex items-center space-x-2 px-3 py-1 rounded-md bg-[#f4f4f5] border border-[#ebebeb] text-xs font-mono min-w-0 max-w-[650px] overflow-hidden select-none pointer-events-auto shadow-2xs"
               >
+                <button
+                  type="button"
+                  onClick={closeSubagent}
+                  className="flex items-center space-x-1.5 text-[#52525b] hover:text-[#171717] hover:underline cursor-pointer truncate max-w-[240px] font-medium transition"
+                  title={`Вернуться к задаче: ${task?.title || task?.id || 'Родительская задача'}`}
+                >
+                  <ArrowLeft className="h-3.5 w-3.5 shrink-0 text-[#171717]" />
+                  <span className="truncate">{task?.title || task?.id || 'Задача'}</span>
+                </button>
+                <span className="text-[#a1a1aa] shrink-0 font-sans">/</span>
+                <span className="flex items-center space-x-1.5 font-semibold text-[#171717] truncate max-w-[320px]">
+                  <span className="text-[#171717] shrink-0 text-xs">■</span>
+                  <span className="truncate">{activeSubagentTitle || 'Субагент'}</span>
+                </span>
+                <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border shrink-0 ${getRoleBadgeClass(activeSubagentRole)}`}>
+                  {(activeSubagentRole || 'general').toUpperCase()}
+                </span>
+              </div>
+            ) : (
+              <>
+                {/* Task badge */}
+                {task?.id && (
+                  rootTask && rootTask.id !== task.id ? (
+                    <div className="flex items-center space-x-1 shrink-0 select-none pointer-events-auto" data-no-drag>
+                      <button
+                        type="button"
+                        onClick={() => onOpenDrawer(rootTask.id)}
+                        className="font-mono text-xs text-[#71717a] hover:text-[#171717] px-1.5 py-0.5 rounded hover:bg-[#f4f4f5] transition cursor-pointer"
+                        title={`К родительской задаче ${rootTask.id}`}
+                      >
+                        {rootTask.id}
+                      </button>
+                      <ChevronRight className="h-3 w-3 text-[#a1a1aa] shrink-0" />
+                      <span className="font-mono text-xs font-semibold text-[#171717] px-2 py-0.5 rounded bg-[#f4f4f5] border border-[#ebebeb] shrink-0">
+                        {task.id}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="font-mono text-xs font-semibold text-[#171717] px-2 py-0.5 rounded bg-[#f4f4f5] border border-[#ebebeb] shrink-0 select-none pointer-events-auto">
+                      {task.id}
+                    </span>
+                  )
+                )}
+
+                {/* Stage Stepper for Console Header */}
+                {task && workingColumns.length > 0 && (
+                  <div
+                    data-no-drag
+                    className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg bg-[#f9fafb] border border-[#ebebeb] shrink-0 select-none pointer-events-auto shadow-2xs overflow-x-auto no-scrollbar max-w-[500px]"
+                  >
                 {workingColumns.map((col, idx) => {
                   const matchingSubtask = subtasks.find(
                     (s) => s.columnId === col.id || (s as any).stageId === col.id
@@ -183,6 +218,8 @@ export default function DrawerHeader({
                 })}
               </div>
             )}
+            </>
+          )}
           </div>
 
           {/* Right: triggers + window controls */}
