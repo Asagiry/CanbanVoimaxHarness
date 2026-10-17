@@ -463,13 +463,24 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "advance_task",
-            "Передать задачу на следующий этап пайплайна (шаг вперед). Обязательно передайте подробное саммари проделанной работы для следующего агента.",
+            "Передать задачу на следующий этап пайплайна (шаг вперед) или переместить на конкретный этап (target_stage / stage_id). Обязательно передайте саммари проделанной работы для следующего агента. Алиасы: 'move_task', 'move_task_stage', 'advance_stage', 'next_stage'.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "summary": { "type": "string", "description": "Подробное саммари изменений, результатов и проверок" }
-                },
-                "required": ["summary"]
+                    "summary": { "type": "string", "description": "Подробное саммари изменений, результатов и проверок (опционально, есть дефолт)" },
+                    "stage_id": { "type": "string", "description": "Целевой этап пайплайна (например, 'review', 'retro', 'ready'). Алиасы: 'target_stage', 'column_id'. Если не указан — переход на следующий по порядку этап." }
+                }
+            }),
+        ),
+        ToolDefinition::function(
+            "move_task",
+            "Переместить задачу на указанный этап пайплайна (например, 'review', 'retro', 'ready') или на следующий этап. Алиас для advance_task.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "stage_id": { "type": "string", "description": "Целевой этап пайплайна (например, 'review', 'ready'). Алиасы: 'target_stage', 'column_id'." },
+                    "summary": { "type": "string", "description": "Саммари проделанной работы для следующего агента (опционально)" }
+                }
             }),
         ),
         ToolDefinition::function(
@@ -907,6 +918,18 @@ pub fn remove_subagent_receiver(
     None
 }
 
+/// Canonical tool name normalization for aliases and SWE-bench compatibility.
+pub fn canonical_tool_name(tool_name: &str) -> &str {
+    match tool_name {
+        "bash" => "execute_command",
+        "str_replace" => "edit_file",
+        "ask_user" => "question",
+        "create_tasks" => "create_task",
+        "move_task" | "move_task_stage" | "advance_stage" | "next_stage" => "advance_task",
+        other => other,
+    }
+}
+
 /// Executes a tool within the safe boundary of `worktree_dir` with zero-trust policy checks
 /// (global/stage matrix AND optional per-agent `allowed_tools` intersection).
 pub async fn execute_tool(
@@ -927,13 +950,7 @@ pub async fn execute_tool(
     }
 
     // SWE-bench signatures & aliasing
-    let normalized_tool_name = match tool_name {
-        "bash" => "execute_command",
-        "str_replace" => "edit_file",
-        "ask_user" => "question",
-        "create_tasks" => "create_task",
-        other => other,
-    };
+    let normalized_tool_name = canonical_tool_name(tool_name);
 
     // Zero-Trust Iron Barrier: verify tool permission for current stage & role
     if !is_tool_allowed(tool_policy, stage_id, normalized_tool_name) {
@@ -1429,22 +1446,76 @@ Channel closed before completion", id)),
             )
         }
 
-        "advance_task" => {
+        "advance_task" | "move_task" => {
             let summary = args
                 .get("summary")
+                .or_else(|| args.get("handover_summary"))
+                .or_else(|| args.get("description"))
+                .or_else(|| args.get("comment"))
+                .or_else(|| args.get("message"))
                 .and_then(|v| v.as_str())
-                .context("Missing required parameter 'summary'")?;
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or("Задача выполнена и передана на следующий этап");
 
-            let task_id = task_id.context("No active task ID for advance_task")?;
+            let target_stage = args
+                .get("stage_id")
+                .or_else(|| args.get("target_stage"))
+                .or_else(|| args.get("column_id"))
+                .or_else(|| args.get("target_stage_id"))
+                .or_else(|| args.get("to_stage"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty());
 
-            crate::commands::internal_advance_task(
-                repo_root,
-                task_id,
-                summary,
-                ctx.app_handle.as_ref(),
-            )
-            .await
-            .map_err(|e| anyhow::anyhow!("{}", e))?
+            let task_id = args
+                .get("task_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .or(task_id)
+                .context("No active task ID for advance_task / move_task")?;
+
+            if let Some(target_stage_id) = target_stage {
+                let updated_task = crate::commands::internal_move_task_stage(
+                    repo_root,
+                    task_id,
+                    target_stage_id,
+                    Some("APPROVED".to_string()),
+                    None,
+                    Some(summary.to_string()),
+                    ctx.app_handle.as_ref(),
+                )
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+                let summary_content = format!("### Саммари этапа: {}
+
+{}", updated_task.stage_id, summary);
+                let _ = crate::commands::dialogs::append_task_dialog_activity(
+                    repo_root,
+                    task_id,
+                    "summary",
+                    &summary_content,
+                    ctx.app_handle.as_ref(),
+                )
+                .await;
+
+                format!(
+                    "УСПЕШНО: Задача {} перемещена на этап '{}', статус: {}",
+                    task_id,
+                    updated_task.stage_id,
+                    updated_task.status.as_deref().unwrap_or("idle")
+                )
+            } else {
+                crate::commands::internal_advance_task(
+                    repo_root,
+                    task_id,
+                    summary,
+                    ctx.app_handle.as_ref(),
+                )
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?
+            }
         }
 
         "reject_task" => {
@@ -2162,6 +2233,10 @@ pub fn run_inprocess_subagent(
                 && t != "subagent_bg"
                 && t != "collect_subagent"
                 && t != "advance_task"
+                && t != "move_task"
+                && t != "move_task_stage"
+                && t != "advance_stage"
+                && t != "next_stage"
                 && t != "reject_task"
                 && t != "create_task"
                 && t != "create_tasks"
@@ -4278,4 +4353,183 @@ mod tests {
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
 
+    #[test]
+    fn test_canonical_tool_name_aliasing() {
+        assert_eq!(canonical_tool_name("move_task"), "advance_task");
+        assert_eq!(canonical_tool_name("move_task_stage"), "advance_task");
+        assert_eq!(canonical_tool_name("advance_stage"), "advance_task");
+        assert_eq!(canonical_tool_name("next_stage"), "advance_task");
+        assert_eq!(canonical_tool_name("advance_task"), "advance_task");
+        assert_eq!(canonical_tool_name("bash"), "execute_command");
+        assert_eq!(canonical_tool_name("str_replace"), "edit_file");
+        assert_eq!(canonical_tool_name("ask_user"), "question");
+        assert_eq!(canonical_tool_name("create_tasks"), "create_task");
+        assert_eq!(canonical_tool_name("read_file"), "read_file");
+    }
+
+    #[tokio::test]
+    async fn test_advance_and_move_task_tool_dispatch() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_adv_tool_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+
+        let b_cols = vec![
+            crate::config::PipelineColumn {
+                id: "backlog".to_string(),
+                title: "Backlog".to_string(),
+                color: None,
+                icon: None,
+                persona: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            crate::config::PipelineColumn {
+                id: "dev".to_string(),
+                title: "Dev".to_string(),
+                color: None,
+                icon: None,
+                persona: Some("developer".to_string()),
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            crate::config::PipelineColumn {
+                id: "review".to_string(),
+                title: "Review".to_string(),
+                color: None,
+                icon: None,
+                persona: Some("reviewer".to_string()),
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            crate::config::PipelineColumn {
+                id: "ready".to_string(),
+                title: "Ready".to_string(),
+                color: None,
+                icon: None,
+                persona: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: Some(true),
+            },
+        ];
+
+        let boards_cfg = crate::config::BoardsConfig {
+            active_board_id: "dev-board".to_string(),
+            boards: vec![
+                crate::config::BoardDef {
+                    id: "dev-board".to_string(),
+                    name: "Development".to_string(),
+                    columns: b_cols,
+                },
+            ],
+        };
+        crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
+
+        let task = Task {
+            id: "CVH-050".to_string(),
+            title: "Move Task Test".to_string(),
+            description: "Testing move task aliasing and target_stage".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("dev-board".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("running".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            created_at: 0,
+            updated_at: 0,
+            handover_summary: None,
+            attachments: None,
+            cover_image: None,
+        };
+        crate::commands::tasks::save_tasks_to_disk(&base, &[task]).await.expect("save task");
+
+        let flag = Arc::new(AtomicBool::new(false));
+        let policy = ToolPolicyConfig::default();
+        let tool_ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("dev"),
+            role: Some("developer"),
+            abort_handle: flag,
+            tool_policy: &policy,
+            task_id: Some("CVH-050"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        // 1. advance_task without summary -> uses default summary and advances to next column (review)
+        let adv_res = execute_tool(&tool_ctx, "advance_task", &serde_json::json!({}))
+            .await
+            .expect("advance_task with default summary");
+        assert!(adv_res.contains("УСПЕШНО"));
+
+        let tasks_after_adv = crate::commands::tasks::load_tasks_from_disk(&base).await;
+        let t = tasks_after_adv.iter().find(|t| t.id == "CVH-050").unwrap();
+        assert_eq!(t.stage_id, "review");
+
+        // 2. move_task with target_stage: "ready" and explicit summary
+        let move_res = execute_tool(&tool_ctx, "move_task", &serde_json::json!({
+            "target_stage": "ready",
+            "summary": "Completed code review, verified clean build."
+        }))
+        .await
+        .expect("move_task to ready");
+        assert!(move_res.contains("УСПЕШНО"));
+
+        let tasks_after_move = crate::commands::tasks::load_tasks_from_disk(&base).await;
+        let t_ready = tasks_after_move.iter().find(|t| t.id == "CVH-050").unwrap();
+        assert_eq!(t_ready.stage_id, "ready");
+        assert_eq!(t_ready.status.as_deref(), Some("done"));
+        assert_eq!(t_ready.handover_summary.as_deref(), Some("Completed code review, verified clean build."));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
 }

@@ -29,6 +29,8 @@ pub fn normalize_tool_name(name: &str) -> &str {
         "bash" => "execute_command",
         "str_replace" => "edit_file",
         "ask_user" => "question",
+        "create_tasks" => "create_task",
+        "move_task" | "move_task_stage" | "advance_stage" | "next_stage" => "advance_task",
         other => other,
     }
 }
@@ -1553,6 +1555,7 @@ pub const CANONICAL_TOOLS: &[&str] = &[
     "subagent",
     "todo_write",
     "advance_task",
+    "move_task",
     "reject_task",
     "create_task",
     "complete_task",

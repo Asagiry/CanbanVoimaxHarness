@@ -630,15 +630,24 @@ pub async fn internal_move_task_stage(
 
     if let Some(ref bc) = boards_cfg {
         let active_board = bc.boards.iter().find(|b| b.id == bc.active_board_id).cloned();
-        let board_switched = current_task.board_id.as_deref().is_some_and(|bid| bid != bc.active_board_id);
-
         let current_board = current_task.board_id.as_deref().and_then(|bid| {
             bc.boards.iter().find(|b| b.id == bid).cloned()
         });
 
-        if board_switched {
-            // Active board changed during task execution: target board is the active board!
-            effective_board = active_board.or_else(|| bc.boards.first().cloned());
+        let current_has_exact = current_board
+            .as_ref()
+            .map(|b| b.columns.iter().any(|c| c.id == target_stage_id))
+            .unwrap_or(false);
+
+        let active_has_exact = active_board
+            .as_ref()
+            .map(|b| b.columns.iter().any(|c| c.id == target_stage_id))
+            .unwrap_or(false);
+
+        if current_has_exact {
+            effective_board = current_board;
+        } else if active_has_exact {
+            effective_board = active_board;
             if let Some(ref b) = effective_board {
                 current_task.board_id = Some(b.id.clone());
             }
@@ -839,9 +848,21 @@ pub async fn internal_move_task_stage(
                 .map_err(|e| format!("Sensor execution failed: {}", e))?;
 
             if !sensor_res.success {
+                let stdout_trim = sensor_res.stdout.trim();
+                let stderr_trim = sensor_res.stderr.trim();
+                let mut details = String::new();
+                if !stdout_trim.is_empty() {
+                    details.push_str(&format!("\n--- STDOUT ---\n{}", stdout_trim));
+                }
+                if !stderr_trim.is_empty() {
+                    details.push_str(&format!("\n--- STDERR ---\n{}", stderr_trim));
+                }
+                if details.is_empty() {
+                    details = "\n(No stdout/stderr produced by sensor command)".to_string();
+                }
                 return Err(format!(
-                    "Gatekeeper Sensor '{}' rejected transition (Exit code: {:?}):\nSTDOUT: {}\nSTDERR: {}",
-                    sensor_cmd, sensor_res.exit_code, sensor_res.stdout, sensor_res.stderr
+                    "Gatekeeper Sensor '{}' rejected transition (Exit code: {:?}):{}",
+                    sensor_cmd, sensor_res.exit_code, details
                 ));
             }
         }
@@ -1053,18 +1074,47 @@ pub async fn internal_advance_task(
         ));
     }
 
-    // Normal progression within same board
+    // Normal progression within same board or fallback boards
     let columns = {
         let from_board = boards_cfg.as_ref().and_then(|bc| {
-            let b = if let Some(ref bid) = current_task.board_id {
-                bc.boards.iter().find(|b| &b.id == bid)
-            } else {
-                bc.boards.iter().find(|b| b.id == bc.active_board_id)
-            };
-            b.map(|b| b.columns.clone())
+            // 1. Try board referenced by current_task.board_id if it contains current stage
+            if let Some(ref bid) = current_task.board_id {
+                if let Some(b) = bc.boards.iter().find(|b| &b.id == bid) {
+                    if b.columns.iter().any(|c| stage_id_matches(&c.id, &current_task.stage_id)) {
+                        return Some(b.columns.clone());
+                    }
+                }
+            }
+            // 2. Try active board if it contains current stage
+            if let Some(b) = bc.boards.iter().find(|b| b.id == bc.active_board_id) {
+                if b.columns.iter().any(|c| stage_id_matches(&c.id, &current_task.stage_id)) {
+                    return Some(b.columns.clone());
+                }
+            }
+            // 3. Search any board in boards.json that contains current stage
+            if let Some(b) = bc.boards.iter().find(|b| {
+                b.columns.iter().any(|c| stage_id_matches(&c.id, &current_task.stage_id))
+            }) {
+                return Some(b.columns.clone());
+            }
+            // 4. Fallback to active board columns or first board
+            bc.boards
+                .iter()
+                .find(|b| b.id == bc.active_board_id)
+                .or_else(|| bc.boards.first())
+                .map(|b| b.columns.clone())
         });
         match from_board {
-            Some(cols) => cols,
+            Some(cols) => {
+                if cols.iter().any(|c| stage_id_matches(&c.id, &current_task.stage_id)) {
+                    cols
+                } else {
+                    let pipeline = load_pipeline_config(root)
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    pipeline.columns
+                }
+            }
             None => {
                 let pipeline = load_pipeline_config(root)
                     .await
