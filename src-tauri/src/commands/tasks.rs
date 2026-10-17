@@ -23,6 +23,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 ///    or fallback to "development".
 /// 2. Column / Stage ID: If task.stage_id does not exist in the target board's columns (checked via stage_id_matches),
 ///    dynamically heal it to the target board's first column (typically "backlog").
+///
 /// Returns true if any modification was made to the task.
 pub fn heal_task_board_and_column(task: &mut Task, config: &crate::config::BoardsConfig) -> bool {
     let mut modified = false;
