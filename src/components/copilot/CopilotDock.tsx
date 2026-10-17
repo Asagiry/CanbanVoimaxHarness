@@ -210,12 +210,17 @@ export default function CopilotDock() {
             <Bot className="w-3.5 h-3.5" />
           </div>
 
-          <div className="flex items-center space-x-1.5 min-w-0">
-            <span className="font-semibold text-xs text-[#171717] tracking-tight truncate">
-              CVH Copilot
-            </span>
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-[#f5f3ff] text-[#7c3aed] border border-[#ddd6fe] shrink-0">
-              АРХИТЕКТОР
+          <div className="flex flex-col min-w-0 justify-center">
+            <div className="flex items-center space-x-1.5 min-w-0">
+              <span className="font-semibold text-xs text-[#171717] tracking-tight truncate">
+                CVH Copilot
+              </span>
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-[#f5f3ff] text-[#7c3aed] border border-[#ddd6fe] shrink-0">
+                НАСТРОЙКА ПРОЕКТА
+              </span>
+            </div>
+            <span className="text-[10px] text-[#71717a] truncate max-w-[190px]" title="Спросить о настройке досок, пайплайнов, правил или персон проекта...">
+              Спросить о настройке досок, пайплайнов, правил или персон проекта...
             </span>
           </div>
 
@@ -311,10 +316,10 @@ export default function CopilotDock() {
               <Sparkles className="w-5 h-5" />
             </div>
             <h4 className="text-xs font-semibold text-[#18181b] mb-1">
-              Архитектор готов к работе
+              Настройка проекта и окружения (.cvh)
             </h4>
             <p className="text-[11px] text-[#71717a] max-w-[260px] leading-relaxed">
-              Задайте вопрос по структуре проекта, попросите декомпозировать фичу или спланировать шаги для карточек доски.
+              Спросить о настройке досок, пайплайнов, правил или персон проекта...
             </p>
           </div>
         ) : (
@@ -361,7 +366,7 @@ export default function CopilotDock() {
               value={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder="Попросить Архитектора спланировать фичу, настроить доски или создать задачи..."
+              placeholder="Спросить о настройке досок, пайплайнов, правил или персон проекта..."
               className="w-full bg-transparent border-0 resize-none text-xs text-[#171717] placeholder-[#a1a1aa] px-2 py-1 focus:outline-none max-h-40 leading-relaxed font-sans"
             />
 

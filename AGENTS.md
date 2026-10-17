@@ -218,18 +218,34 @@
 - **Transient UI Confirmation State Lifecycle**: Any transient user confirmation timer (e.g. `setConfirm(true) -> setTimeout(false, 3000)`) MUST store its handle in a `useRef` and enforce defensive double-cleanup: explicitly cancel any pending timer before arming a new one, and cancel during component unmount in `useEffect` cleanup to prevent unmounted state updates.
 - **Model Display Name Regex Hygiene**: Model name stripping regexes (such as 8-digit date suffixes like `-20250219`) must strictly use escaped digit classes `-\d{8}$` rather than literal `-d{8}$`.
 
-### 2.15 Sidecar Copilot Dock Architecture
+### 2.15 Cross-Toolchain Windows Linker Flag Invariant (`build.rs`)
+- **Target Environment Discrimination**: In `build.rs`, platform-specific linker arguments (such as `/MANIFESTDEPENDENCY`, `/ENTRY`, `/SUBSYSTEM`) MUST inspect `CARGO_CFG_TARGET_ENV == "msvc"`, not merely `cfg(windows)`. The GNU toolchain (`windows-gnu` / MinGW GCC `ld`) treats MSVC flags as unrecognized options, causing immediate build failures. Always use:
+  ```rust
+  let target_env = std::env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+  let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+  if target_os == "windows" && target_env == "msvc" {
+      println!("cargo:rustc-link-arg=/MANIFESTDEPENDENCY:...");
+  }
+  ```
+
+### 2.16 CVH-DEV & Copilot Scope Invariant: Zero-Card-Management & 3-Tier Tool Gating
+- **Zero-Card-Management Invariant**: The `cvh-dev` persona and CVH Copilot Sidecar Dock are strictly Project Configuration & Environment Specialists (`.cvh/` infrastructure, boards, pipelines, agent personas, rules, and hooks). They are strictly forbidden from creating, completing, moving, or managing task cards. Card lifecycle is strictly reserved for the human user and the pipeline orchestrator.
+- **Symmetric 3-Tier Tool Gating**: The allowed configuration tools (`CVH_DEV_TOOLS`: `read_file`, `write_file`, `edit_file`, `glob`, `grep`, `execute_command`, `web_search`) MUST be enforced at all three layers of the architecture:
+  1. *Prompt Schema Definition*: Only the 7 configuration tools are compiled into the system prompt and tool definitions sent to the LLM.
+  2. *Candidate Tool Filtering*: `active_tools.retain(|t| CVH_DEV_TOOLS.contains(&t.function.name.as_str()))` before submission to LLM.
+  3. *Runtime Defense-in-Depth Execution Gate*: `execute_tool` in `agent.rs` MUST strictly check `(role == "cvh-dev" || role == "copilot") && !CVH_DEV_TOOLS.contains(&tool)` and reject unauthorized tool calls with `PermissionDenied`.
+- **UI Labeling Consistency**: UI surfaces for Copilot (`CopilotDock.tsx`, topbar badge, placeholders, empty states) MUST reflect "НАСТРОЙКА ПРОЕКТА" / "Project Configuration", never mislabeling configuration sidecars as general task creators.
+
+### 2.17 Sidecar Copilot Dock Architecture
 - **Persistent Companion Control Plane**: The Sidecar Copilot Dock (`CopilotDock.tsx`, `copilotStore.ts`) resides as a collapsible, resizable panel docked to the right edge of the screen, providing real-time architectural peer consultation, codebase exploration, and multi-board supervision alongside the Kanban board.
 - **White Paper / Vercel Tactical Aesthetic**: Features a high-contrast White Paper design system (`bg-white`, left border 1px `#ebebeb`, graphite ink typography `#171717`, zero dark slop) intentionally differentiating the meta-architectural companion from the obsidian dark Kanban console.
 - **SQLite Dialogue Persistence Invariant**: All Copilot messages, user prompts, thinking blocks, and tool executions persist in SQLite at `<repo_root>/.cvh/harness.db` under dedicated ID `task_id = "copilot:meta-chat"` using WAL mode, loaded with `load_copilot_history` and cleared with `clear_copilot_history`.
 - **Independent ReAct Loop & Event Streaming**: Operates its own autonomous ReAct loop (`src-tauri/src/commands/copilot.rs`) emitting `copilot:stream` events with token streaming, multi-block thinking cards, tool call visualization, and abort capability (`abort_copilot`).
-- **Dedicated Permitted Tool Suite**: Pre-compiled with `get_copilot_tool_suite()` containing 10 permitted tools:
-  - Task management: `create_task`, `create_tasks`, `complete_task`.
-  - Inspection & modification: `read_file`, `write_file`, `edit_file`, `glob`, `grep`, `execute_command`, `web_search`.
+- **Dedicated Permitted Tool Suite**: Pre-compiled with `get_copilot_tool_suite()` containing permitted configuration tools:
+  - Configuration & inspection tools: `read_file`, `write_file`, `edit_file`, `glob`, `grep`, `execute_command`, `web_search`.
 
-### 2.16 Board Self-Healing Runtime Subsystem
+### 2.18 Board Self-Healing Runtime Subsystem
 - **Autonomous Task Healing Invariant**: The Rust desktop backend automatically heals tasks against board configurations (`heal_task_board_and_column` and `heal_tasks` in `src-tauri/src/commands/tasks.rs`).
 - **Orphaned Board Resolution**: If a task's `board_id` is missing, empty, or references a deleted board, the harness dynamically assigns it to `active_board_id` (or the first existing board, or `"development"`).
 - **Orphaned Column Resolution**: If a task's `stage_id` does not exist in the target board's columns, it is dynamically reassigned to that board's first column (typically `"backlog"`).
 - **Healing Lifecycle Execution**: Self-healing runs autonomously during task loading (`load_tasks`), board deletion, board switching, and task imports, preventing broken references, orphan cards, or frontend crashes.
-

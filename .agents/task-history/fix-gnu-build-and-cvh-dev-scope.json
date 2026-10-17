@@ -1,0 +1,40 @@
+{
+  "taskId": "CVH-FIX-GNU-BUILD-AND-CVH-DEV-SCOPE",
+  "task": "fix-gnu-build-and-cvh-dev-scope",
+  "title": "Guard MSVC MANIFESTDEPENDENCY flag to msvc target and re-align cvh-dev/copilot scope strictly to project config specialist",
+  "branch": "feat/fix-gnu-build-and-cvh-dev-scope",
+  "commitHash": "22fa9f4",
+  "initialCommitHash": "5bafb5dccb7acb88f86b2258f65b8c0c68079c15",
+  "resolutionCommitHash": "22fa9f4de685a1e8a16db1296575d3d026fbc1a6",
+  "commitMessage": "fix(agent): enforce CVH_DEV_TOOLS on copilot role as defense-in-depth",
+  "author": "Lead Systems Engineer (tauri-rust-engineer) & Lead UI Artisan (react-tailwind-artisan)",
+  "verdict": "APPROVED_WITH_CAVEATS",
+  "ftrScore": "85%",
+  "date": "2026-10-17T15:02:00.000Z",
+  "summary": "Resolved MinGW (GNU) linker compilation failures and rectified scope drift across CVH-DEV and Copilot agents. 1. Guarded the MSVC-specific /MANIFESTDEPENDENCY flag in src-tauri/build.rs behind (target_os == \"windows\" && target_env == \"msvc\"), eliminating unrecognized linker flag errors on x86_64-pc-windows-gnu toolchains. 2. Re-aligned CVH-DEV and Copilot strictly to Project Configuration Specialists (.cvh/ environment, boards, pipelines, agent personas, rules, and hooks): stripped create_task, create_tasks, and complete_task from their allowed tool suites, enforced the 7-tool whitelist CVH_DEV_TOOLS ([\"read_file\", \"write_file\", \"edit_file\", \"glob\", \"grep\", \"execute_command\", \"web_search\"]) across prompt compilation, candidate tool filtering (active_tools.retain), and runtime tool execution gatekeeping (execute_tool) for both cvh-dev and copilot roles. 3. Re-aligned CopilotDock.tsx UI from 'АРХИТЕКТОР' (feature planning/task creation) to 'НАСТРОЙКА ПРОЕКТА' with updated placeholders and empty state text ('Спросить о настройке досок, пайплайнов, правил или персон проекта...'). 4. Added Rust unit tests test_cvh_dev_cannot_create_or_complete_tasks and test_copilot_tool_suite_has_seven_tools.",
+  "files": [
+    "src-tauri/build.rs",
+    "src-tauri/src/agent.rs",
+    "src-tauri/src/commands/copilot.rs",
+    "src-tauri/src/config.rs",
+    ".cvh/agents/cvh-dev/persona.md",
+    "src/components/copilot/CopilotDock.tsx"
+  ],
+  "affectedModules": [
+    "BuildSystem",
+    "AgentEngine",
+    "CopilotBackend",
+    "Config",
+    "CopilotDockUI"
+  ],
+  "verification": {
+    "cargoCheck": "PASSED (0 errors)",
+    "cargoClippy": "PASSED (cargo clippy --tests -- -D warnings: 0 warnings)",
+    "cargoTest": "PASSED (81 passed, 0 failed)",
+    "typescript": "PASSED (npx tsc --noEmit: 0 errors)",
+    "l2Review": "APPROVED_WITH_CAVEATS by agent-developer-reviewer (caveat: defense-in-depth copilot role execution check resolved in 22fa9f4)"
+  },
+  "caveatsResolved": [
+    "Defense-in-depth: extended runtime execute_tool whitelist check from role == 'cvh-dev' to (role == 'cvh-dev' || role == 'copilot') to guarantee copilot cannot invoke unlisted tools if called directly."
+  ]
+}
