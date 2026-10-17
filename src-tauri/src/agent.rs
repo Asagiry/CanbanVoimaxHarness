@@ -984,9 +984,10 @@ pub async fn execute_tool(
                 role
             );
         }
-        if role == "cvh-dev" && !CVH_DEV_TOOLS.contains(&normalized_tool_name) {
+        if (role == "cvh-dev" || role == "copilot") && !CVH_DEV_TOOLS.contains(&normalized_tool_name) {
             bail!(
-                "PermissionDenied: Агент 'cvh-dev' ограничен только инструментами настройки проекта: {:?}. Попытка вызова '{}'",
+                "PermissionDenied: Агент '{}' ограничен только инструментами настройки проекта: {:?}. Попытка вызова '{}'",
+                role,
                 CVH_DEV_TOOLS,
                 normalized_tool_name
             );
