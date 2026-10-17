@@ -151,21 +151,35 @@
   - When `APPROVED` is emitted: the task advances according to `routes.on_approved` or moves to the next sequential column in the pipeline.
   - Upon reaching a column with `terminal: true` (or the final `ready` stage), the task is marked as `done`.
 
-### 2.8 Dynamic Custom Tools (`.cvh/tools/`)
-- **Extensible Schema Engine**: Adding a JSON descriptor in `.cvh/tools/<tool_name>.json` automatically exposes a custom tool to all agents:
-  ```json
-  {
-    "name": "run_linter",
-    "description": "Run project linter inside worktree",
-    "parameters": {
-      "type": "object",
-      "properties": { "fix": { "type": "boolean" } }
-    },
-    "command": "npm run lint -- {{args}}"
-  }
-  ```
-- **Automatic Argument Injection**: `{{args}}` is dynamically substituted with the tool call arguments and executed within the active worktree.
-- **Tool Output Spilling Invariant**: Outputs exceeding 100 lines or 8 KB are automatically written to `.cvh/spill/<timestamp>-<tool>.log`, returning only the head (20 lines) and tail (20 lines) to protect model context.
+### 2.8 Authoritative Standard Tools Catalog & Dynamic Custom Tools
+- **Complete Standard Tools Catalog**: Defined in Rust engine (`src-tauri/src/agent.rs`) and governed by the two-level tool policy matrix:
+  - **Pipeline Navigation**:
+    - `advance_task` / `move_task`: Transitions task to next sequential stage or specific `stage_id` / `target_stage`. Accepts `summary` parameter injected via Relay Handoff. Emits `agent:autorun` on stage entry.
+    - `reject_task`: Rejects task with `reason` parameter, returning card to prior pipeline stage and unlocking it.
+  - **Subagent Delegation Hierarchy**:
+    - `subagent` (Sync Oneshot): Executes focused child task synchronously in-process without moving cards or creating worktrees; blocks until completion and returns report.
+    - `subagent_bg` (Async Background): Spawns asynchronous child task returning immediately with `subagent_id`.
+    - `collect_subagent`: Awaits completion of one or more background subagents without busy-polling.
+  - **Human-in-the-Loop & Planning**:
+    - `question` / `ask_user`: Prompts user with interactive query (`text`, `options`, `multiple`), suspending execution until answered.
+    - `todo_write`: Records and updates tactical execution checklist (`todos: [{content, status}]`).
+  - **Worktree File & Shell Operations**:
+    - `read_file`: Reads UTF-8 text file with line numbers (`file_path`, `offset`, `limit`).
+    - `write_file`: Writes complete UTF-8 file content (`file_path`, `content`).
+    - `edit_file` (alias: `str_replace`): Precise text replacement (`file_path`, `old_string`, `new_string`, `replace_all`).
+    - `glob`: Finds files by pattern within active worktree (`pattern`, `path`).
+    - `grep`: Searches file contents by regex within active worktree (`pattern`, `path`).
+    - `execute_command` (alias: `bash`): Runs shell command with piped stdio (`command`, `timeout_seconds`).
+  - **External Research**:
+    - `web_search`: DuckDuckGo web search for APIs, documentation, and error solutions (`query`, `limit`).
+    - `web_fetch`: Fetches URL content converted to clean Markdown (`url`).
+- **Strict Role Boundary on Task Card Operations**:
+  - `create_task`, `create_tasks`, and `complete_task` are **strictly reserved for Root Orchestrators (Level 0), human users via UI, and Sidecar Copilot**.
+  - **Development Subagents and cvh-dev are STRICTLY FORBIDDEN from calling `create_task`, `create_tasks`, or `complete_task`**. Subagents work inside assigned tasks and advance stages via `advance_task` / `move_task`.
+- **Dynamic Custom Tools (`.cvh/tools/`)**:
+  - Extensible JSON descriptors in `.cvh/tools/<tool_name>.json` automatically expose custom CLI tools with argument interpolation (`{{args}}`).
+- **Tool Output Spilling Invariant**:
+  - Outputs exceeding 100 lines or 8 KB are automatically written to `.cvh/spill/<timestamp>-<tool>.log`, returning only head (20 lines) and tail (20 lines) to preserve model context.
 
 ### 2.9 Zero-Turn Memory Priming & Relay Handoff Invariant
 - Personas are defined in `.cvh/agents/<role>.md` (or `.cvh/agents/<role>/persona.md`).
@@ -184,8 +198,9 @@
 - **Rust HTTP Header Typing**: Header keys in `HeaderMap` MUST implement `IntoHeaderName`. Use `HeaderName::from_static(...)` or `&'static str`; never pass `HeaderValue` as a key.
 - **Anti-Slop UI Standard**: Tactile obsidian dark theme (`#07090e`, `#0d1117`, `#161b22`), monospace numerals (`tabular-nums`) for timers/metrics, and zero pastel gradients or generic illustrations.
 
-### 2.12 Zero-Credential Leak & Local Environment Invariant
+### 2.12 Zero-Credential Leak, Auto-Gitignore & Local Environment Invariant
 - **Zero Secrets in Git**: Secrets and local endpoints reside strictly in gitignored files (`.cvh/llm.json`, `.env*`, `*.secret`, `*.key`) or runtime UI settings. Default API keys evaluate to empty strings (`String::new()`, `""`).
+- **Auto-Gitignore Runtime Policy**: Implemented in Rust backend (`ensure_cvh_scaffold` in `src-tauri/src/config.rs`). On startup and workspace initialization, the backend checks root `.gitignore` and automatically appends `.cvh/llm.json`, `llm.json`, and `.cvh/worktrees/` if missing, preventing accidental credential commits or tracking of transient task worktrees.
 - **Multi-Tier Workspace Root Discovery**: GUI launches locate the project root via:
   1. Current directory inspection for `.cvh` or `.git`.
   2. Ancestor directory traversal.
@@ -202,3 +217,19 @@
 - **Multi-Block Reasoning Tag Parsing**: When parsing reasoning tags (`<thinking>`, `<reasoning>`) from LLM streaming outputs, parsers MUST use global iterative extraction (`/<thinking>([\s\S]*?)<\/thinking>/gi` with `while (exec)`) rather than single-match (`.match()`). Advanced reasoning models frequently generate multiple fragmented or alternating thought blocks.
 - **Transient UI Confirmation State Lifecycle**: Any transient user confirmation timer (e.g. `setConfirm(true) -> setTimeout(false, 3000)`) MUST store its handle in a `useRef` and enforce defensive double-cleanup: explicitly cancel any pending timer before arming a new one, and cancel during component unmount in `useEffect` cleanup to prevent unmounted state updates.
 - **Model Display Name Regex Hygiene**: Model name stripping regexes (such as 8-digit date suffixes like `-20250219`) must strictly use escaped digit classes `-\d{8}$` rather than literal `-d{8}$`.
+
+### 2.15 Sidecar Copilot Dock Architecture
+- **Persistent Companion Control Plane**: The Sidecar Copilot Dock (`CopilotDock.tsx`, `copilotStore.ts`) resides as a collapsible, resizable panel docked to the right edge of the screen, providing real-time architectural peer consultation, codebase exploration, and multi-board supervision alongside the Kanban board.
+- **White Paper / Vercel Tactical Aesthetic**: Features a high-contrast White Paper design system (`bg-white`, left border 1px `#ebebeb`, graphite ink typography `#171717`, zero dark slop) intentionally differentiating the meta-architectural companion from the obsidian dark Kanban console.
+- **SQLite Dialogue Persistence Invariant**: All Copilot messages, user prompts, thinking blocks, and tool executions persist in SQLite at `<repo_root>/.cvh/harness.db` under dedicated ID `task_id = "copilot:meta-chat"` using WAL mode, loaded with `load_copilot_history` and cleared with `clear_copilot_history`.
+- **Independent ReAct Loop & Event Streaming**: Operates its own autonomous ReAct loop (`src-tauri/src/commands/copilot.rs`) emitting `copilot:stream` events with token streaming, multi-block thinking cards, tool call visualization, and abort capability (`abort_copilot`).
+- **Dedicated Permitted Tool Suite**: Pre-compiled with `get_copilot_tool_suite()` containing 10 permitted tools:
+  - Task management: `create_task`, `create_tasks`, `complete_task`.
+  - Inspection & modification: `read_file`, `write_file`, `edit_file`, `glob`, `grep`, `execute_command`, `web_search`.
+
+### 2.16 Board Self-Healing Runtime Subsystem
+- **Autonomous Task Healing Invariant**: The Rust desktop backend automatically heals tasks against board configurations (`heal_task_board_and_column` and `heal_tasks` in `src-tauri/src/commands/tasks.rs`).
+- **Orphaned Board Resolution**: If a task's `board_id` is missing, empty, or references a deleted board, the harness dynamically assigns it to `active_board_id` (or the first existing board, or `"development"`).
+- **Orphaned Column Resolution**: If a task's `stage_id` does not exist in the target board's columns, it is dynamically reassigned to that board's first column (typically `"backlog"`).
+- **Healing Lifecycle Execution**: Self-healing runs autonomously during task loading (`load_tasks`), board deletion, board switching, and task imports, preventing broken references, orphan cards, or frontend crashes.
+
