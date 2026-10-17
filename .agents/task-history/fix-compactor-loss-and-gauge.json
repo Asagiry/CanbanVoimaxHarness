@@ -1,0 +1,28 @@
+{
+  "taskId": "CVH-FIX-COMPACTOR-LOSS-AND-GAUGE",
+  "task": "fix-compactor-loss-and-gauge",
+  "title": "Fix context compactor memory loss, in-chat card display, and 100% full gauge bug",
+  "branch": "feat/fix-compactor-loss-and-gauge",
+  "mergeSha": "026ccf889cd7a2732608691b9abccf27e8193340",
+  "commitHash": "e42b251",
+  "verdict": "APPROVED",
+  "sensors": {
+    "cargo_check": "pass (0 errors)",
+    "cargo_test": "pass (88 passed, 0 failed)",
+    "tsc": "pass (npx tsc --noEmit 0 errors)",
+    "l2_reviewer": "APPROVED"
+  },
+  "files": [
+    "src-tauri/src/agent.rs",
+    "src-tauri/src/agent/compactor.rs",
+    "src-tauri/src/commands/tasks.rs",
+    "src-tauri/src/commands/tests.rs",
+    "src-tauri/src/db.rs",
+    "src/components/drawer/ContextGauge.tsx",
+    "src/components/drawer/ToolExecutionCard.tsx",
+    "src/stores/boardStore.ts",
+    "src/stores/drawerStore.ts",
+    "src/types/index.ts"
+  ],
+  "summary": "Fixed context compactor amnesia by enhancing LLM prompts and eliminating generic placeholder stubs in fallback compaction report to extract actual tool calls, commands, tests, and active todos. Preserved the last 4 messages (2 full recent turns) during compaction. Emitted and persisted first-class visible in-chat compact_context tool cards with localized metrics into SQLite dialog_items. Resolved the 100% full gauge overflow bug upon drawer re-entry by persisting task.current_tokens on disk/memory, fixing drawerStore dialogue reload dropping compacted items, and preventing uncompressed character sum recalculation in ContextGauge."
+}
