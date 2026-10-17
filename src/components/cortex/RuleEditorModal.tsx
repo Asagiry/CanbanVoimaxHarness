@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCortexStore } from '../../stores/cortexStore';
 import {
   X,
@@ -10,41 +10,94 @@ import {
   Zap,
 } from 'lucide-react';
 
-function renderInlineMarkdown(text: string) {
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
-  return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return (
-        <strong key={i} className="font-semibold text-[#171717]">
-          {part.slice(2, -2)}
-        </strong>
-      );
+function isValidInlineCode(code: string): boolean {
+  if (!code || code.length > 120) return false;
+  if (/[\r\n]/.test(code)) return false;
+  if (/[.!?]\s+/.test(code)) return false;
+  if (code.includes('`')) return false;
+  if (/[а-яА-ЯёЁ]{2,}\s+[а-яА-ЯёЁ]{2,}/.test(code) && !/^["'].*["']$/.test(code.trim())) {
+    return false;
+  }
+  return true;
+}
+
+function renderInlineMarkdown(text: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  let i = 0;
+  let textBuf = '';
+
+  const flushText = () => {
+    if (textBuf) {
+      nodes.push(textBuf);
+      textBuf = '';
     }
-    if (part.startsWith('`') && part.endsWith('`')) {
-      return (
-        <code
-          key={i}
-          className="px-1.5 py-0.5 bg-[#f4f4f5] border border-[#ebebeb] rounded text-[11px] font-mono text-[#09090b]"
-        >
-          {part.slice(1, -1)}
-        </code>
-      );
+  };
+
+  while (i < text.length) {
+    if (text[i] === '`') {
+      const closeIdx = text.indexOf('`', i + 1);
+      if (closeIdx !== -1) {
+        const candidate = text.slice(i + 1, closeIdx);
+        if (isValidInlineCode(candidate)) {
+          flushText();
+          nodes.push(
+            <code
+              key={`code-${i}`}
+              className="px-1.5 py-0.5 bg-[#f4f4f5] border border-[#ebebeb] rounded text-xs font-mono text-[#09090b]"
+            >
+              {candidate}
+            </code>
+          );
+          i = closeIdx + 1;
+          continue;
+        }
+      }
+      textBuf += text[i];
+      i++;
+      continue;
     }
-    return part;
-  });
+
+    if (text.startsWith('**', i)) {
+      const closeIdx = text.indexOf('**', i + 2);
+      if (closeIdx !== -1) {
+        const candidate = text.slice(i + 2, closeIdx);
+        if (candidate.length > 0 && candidate.length <= 300) {
+          flushText();
+          nodes.push(
+            <strong key={`bold-${i}`} className="font-semibold text-[#171717]">
+              {candidate}
+            </strong>
+          );
+          i = closeIdx + 2;
+          continue;
+        }
+      }
+    }
+
+    textBuf += text[i];
+    i++;
+  }
+
+  flushText();
+  return nodes;
 }
 
 function renderMarkdownBlocks(content: string) {
-  const lines = content.split('\n');
+  const cleanContent = (content ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const lines = cleanContent.split('\n');
   const elements: React.ReactNode[] = [];
   let inCodeBlock = false;
   let codeBuffer: string[] = [];
   let codeLang = '';
 
+  const bulletRegex = /^(\s*)([-*+•]|\u2022)\s+(.*)$/;
+  const numberedRegex = /^(\s*)(\d+(\.\d+)*[\.\)])\s+(.*)$/;
+
   for (let idx = 0; idx < lines.length; idx++) {
     const line = lines[idx];
+    const trimmedLine = line.trim();
 
-    if (line.trim().startsWith('```')) {
+    if (trimmedLine.startsWith('```')) {
       if (inCodeBlock) {
         const codeText = codeBuffer.join('\n');
         elements.push(
@@ -53,11 +106,11 @@ function renderMarkdownBlocks(content: string) {
             className="my-2 rounded-md border border-[#e4e4e7] bg-[#f8fafc] overflow-hidden"
           >
             {codeLang && (
-              <div className="px-3 py-1 bg-[#f1f5f9] border-b border-[#e4e4e7] text-[10px] font-mono text-[#64748b]">
+              <div className="px-3 py-1 bg-[#f1f5f9] border-b border-[#e4e4e7] text-xs font-mono text-[#64748b]">
                 {codeLang}
               </div>
             )}
-            <pre className="p-3 font-mono text-[11px] text-[#0f172a] overflow-x-auto leading-relaxed">
+            <pre className="p-3 font-mono text-xs text-[#0f172a] overflow-x-auto leading-relaxed">
               <code>{codeText}</code>
             </pre>
           </div>
@@ -67,7 +120,7 @@ function renderMarkdownBlocks(content: string) {
         codeLang = '';
       } else {
         inCodeBlock = true;
-        codeLang = line.trim().slice(3).trim();
+        codeLang = trimmedLine.slice(3).trim();
       }
       continue;
     }
@@ -77,50 +130,55 @@ function renderMarkdownBlocks(content: string) {
       continue;
     }
 
-    if (line.startsWith('# ')) {
+    if (trimmedLine.startsWith('# ')) {
       elements.push(
-        <h1 key={idx} className="text-sm font-bold text-[#171717] mt-3 mb-1.5">
-          {line.replace('# ', '')}
+        <h1 key={idx} className="text-base font-bold text-[#171717] mt-3.5 mb-1.5">
+          {renderInlineMarkdown(trimmedLine.slice(2))}
         </h1>
       );
       continue;
     }
-    if (line.startsWith('## ')) {
+    if (trimmedLine.startsWith('## ')) {
       elements.push(
         <h2
           key={idx}
-          className="text-xs font-semibold text-[#171717] mt-2.5 mb-1 pb-1 border-b border-[#f4f4f5]"
+          className="text-sm font-semibold text-[#171717] mt-2.5 mb-1 pb-1 border-b border-[#f4f4f5]"
         >
-          {line.replace('## ', '')}
+          {renderInlineMarkdown(trimmedLine.slice(3))}
         </h2>
       );
       continue;
     }
-    if (line.startsWith('### ')) {
+    if (trimmedLine.startsWith('### ')) {
       elements.push(
-        <h3 key={idx} className="text-xs font-medium text-[#4d4d4d] mt-2 mb-0.5">
-          {line.replace('### ', '')}
+        <h3 key={idx} className="text-sm font-medium text-[#4d4d4d] mt-2 mb-0.5">
+          {renderInlineMarkdown(trimmedLine.slice(4))}
         </h3>
       );
       continue;
     }
-    if (line.startsWith('- ')) {
+    if (numberedRegex.test(line)) {
+      const numMatch = line.match(numberedRegex)!;
+      const indent = numMatch[1].length;
+      const mlClass = indent >= 4 ? 'ml-6' : indent >= 2 ? 'ml-4' : 'ml-2';
       elements.push(
-        <div key={idx} className="flex items-start space-x-1.5 py-0.5 text-[#171717]">
-          <span className="text-[#8f8f8f] shrink-0 mt-0.5">•</span>
-          <span>{renderInlineMarkdown(line.replace('- ', ''))}</span>
+        <div key={idx} className={`flex items-start space-x-2 py-0.5 text-xs text-[#171717] ${mlClass}`}>
+          <span className="text-[#8f8f8f] font-mono text-xs shrink-0 font-medium">
+            {numMatch[2]}
+          </span>
+          <span className="flex-1 min-w-0">{renderInlineMarkdown(numMatch[4])}</span>
         </div>
       );
       continue;
     }
-    const numMatch = line.match(/^(\d+)\.\s+(.*)/);
-    if (numMatch) {
+    if (bulletRegex.test(line)) {
+      const bulletMatch = line.match(bulletRegex)!;
+      const indent = bulletMatch[1].length;
+      const mlClass = indent >= 4 ? 'ml-6' : indent >= 2 ? 'ml-4' : 'ml-2';
       elements.push(
-        <div key={idx} className="flex items-start space-x-2 py-0.5 text-[#171717]">
-          <span className="text-[#8f8f8f] font-mono text-[11px] shrink-0 font-medium mt-0.5">
-            {numMatch[1]}.
-          </span>
-          <span>{renderInlineMarkdown(numMatch[2])}</span>
+        <div key={idx} className={`flex items-start space-x-1.5 py-0.5 text-xs text-[#171717] ${mlClass}`}>
+          <span className="text-[#8f8f8f] shrink-0 leading-relaxed">•</span>
+          <span className="flex-1 min-w-0">{renderInlineMarkdown(bulletMatch[3])}</span>
         </div>
       );
       continue;
@@ -130,20 +188,27 @@ function renderMarkdownBlocks(content: string) {
       continue;
     }
     elements.push(
-      <p key={idx} className="text-xs text-[#171717] py-0.5 leading-relaxed">
+      <p key={idx} className="text-sm text-[#171717] py-0.5 leading-relaxed">
         {renderInlineMarkdown(line)}
       </p>
     );
   }
 
-  if (inCodeBlock && codeBuffer.length > 0) {
+  if (inCodeBlock) {
     elements.push(
-      <pre
+      <div
         key="code-tail"
-        className="p-3 bg-[#f8fafc] border border-[#e4e4e7] rounded-md font-mono text-[11px] overflow-x-auto text-[#0f172a] my-2"
+        className="my-2 rounded-md border border-[#e4e4e7] bg-[#f8fafc] overflow-hidden"
       >
-        <code>{codeBuffer.join('\n')}</code>
-      </pre>
+        {codeLang && (
+          <div className="px-3 py-1 bg-[#f1f5f9] border-b border-[#e4e4e7] text-xs font-mono text-[#64748b]">
+            {codeLang}
+          </div>
+        )}
+        <pre className="p-3 font-mono text-xs text-[#0f172a] overflow-x-auto leading-relaxed">
+          <code>{codeBuffer.join('\n')}</code>
+        </pre>
+      </div>
     );
   }
 
@@ -154,15 +219,12 @@ export default function RuleEditorModal() {
   const { activeFile, isEditorOpen, isSaving, saveFeedback, updateActiveFileContent, saveRules, closeEditor } =
     useCortexStore();
 
-  const [previewMode, setPreviewMode] = useState(false);
+  const [previewMode, setPreviewMode] = useState(true);
 
-  // Автопереключение в режим предпросмотра для markdown-описаний встроенных хуков и команд
+  // По умолчанию открываем файл в режиме предпросмотра
   useEffect(() => {
     if (activeFile) {
-      const isDoc =
-        activeFile.content.startsWith('# Встроенный хук:') ||
-        activeFile.content.startsWith('# Команда хука:');
-      setPreviewMode(isDoc);
+      setPreviewMode(true);
     }
   }, [activeFile?.id]);
 
@@ -275,8 +337,8 @@ export default function RuleEditorModal() {
               />
             </div>
           ) : (
-            <div className="w-full h-full p-4 overflow-y-auto bg-white text-[#171717] font-sans leading-relaxed">
-              <div className="max-w-2xl mx-auto space-y-2 text-xs">
+            <div className="w-full h-full overflow-y-auto bg-white text-[#171717] font-sans leading-relaxed">
+              <div className="w-full max-w-4xl px-5 py-4 space-y-2 text-sm">
                 {renderMarkdownBlocks(activeFile.content)}
               </div>
             </div>

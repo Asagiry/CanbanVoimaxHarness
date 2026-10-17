@@ -21,39 +21,191 @@ import {
   Bot,
 } from 'lucide-react';
 
+// Inline Markdown Parser Types & Helpers
+interface InlineTextNode {
+  type: 'text';
+  text: string;
+}
+interface InlineCodeNode {
+  type: 'code';
+  text: string;
+}
+interface InlineBoldNode {
+  type: 'bold';
+  children: InlineNode[];
+}
+interface InlineItalicNode {
+  type: 'italic';
+  children: InlineNode[];
+}
+type InlineNode = InlineTextNode | InlineCodeNode | InlineBoldNode | InlineItalicNode;
+
+function isValidInlineCode(code: string): boolean {
+  if (!code || code.length > 120) return false;
+  if (/[\r\n]/.test(code)) return false;
+  // Suspicious if it spans sentence boundaries:
+  if (/[.!?]\s+/.test(code)) return false;
+  // Disallow inner backticks:
+  if (code.includes('`')) return false;
+  // Conversational Cyrillic prose (multiple Cyrillic words without quotes):
+  if (/[а-яА-ЯёЁ]{2,}\s+[а-яА-ЯёЁ]{2,}/.test(code) && !/^["'].*["']$/.test(code.trim())) {
+    return false;
+  }
+  return true;
+}
+
+function parseInlineTokens(text: string, depth = 0): InlineNode[] {
+  const nodes: InlineNode[] = [];
+  let i = 0;
+  let textBuf = '';
+
+  const flushText = () => {
+    if (textBuf) {
+      nodes.push({ type: 'text', text: textBuf });
+      textBuf = '';
+    }
+  };
+
+  while (i < text.length) {
+    // 1. Inline code `code`
+    if (text[i] === '`') {
+      const closeIdx = text.indexOf('`', i + 1);
+      if (closeIdx !== -1) {
+        const candidate = text.slice(i + 1, closeIdx);
+        if (isValidInlineCode(candidate)) {
+          flushText();
+          nodes.push({ type: 'code', text: candidate });
+          i = closeIdx + 1;
+          continue;
+        }
+      }
+      // Stray or invalid backtick: treat as plain text
+      textBuf += text[i];
+      i++;
+      continue;
+    }
+
+    // 2. Bold: **text** or __text__
+    if (depth < 2 && text.startsWith('**', i)) {
+      const closeIdx = text.indexOf('**', i + 2);
+      if (closeIdx !== -1) {
+        const candidate = text.slice(i + 2, closeIdx);
+        if (candidate.length > 0 && candidate.length <= 300 && !candidate.startsWith(' ') && !candidate.endsWith(' ')) {
+          flushText();
+          nodes.push({ type: 'bold', children: parseInlineTokens(candidate, depth + 1) });
+          i = closeIdx + 2;
+          continue;
+        }
+      }
+    }
+
+    if (depth < 2 && text.startsWith('__', i)) {
+      const prevChar = i > 0 ? text[i - 1] : ' ';
+      if (!/\w/.test(prevChar)) {
+        const closeIdx = text.indexOf('__', i + 2);
+        if (closeIdx !== -1) {
+          const nextChar = closeIdx + 2 < text.length ? text[closeIdx + 2] : ' ';
+          if (!/\w/.test(nextChar)) {
+            const candidate = text.slice(i + 2, closeIdx);
+            if (candidate.length > 0 && candidate.length <= 300 && !candidate.startsWith(' ') && !candidate.endsWith(' ')) {
+              flushText();
+              nodes.push({ type: 'bold', children: parseInlineTokens(candidate, depth + 1) });
+              i = closeIdx + 2;
+              continue;
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Italic: *text* or _text_
+    if (depth < 2 && text[i] === '*' && !text.startsWith('**', i)) {
+      const closeIdx = text.indexOf('*', i + 1);
+      if (closeIdx !== -1 && !text.startsWith('**', closeIdx)) {
+        const candidate = text.slice(i + 1, closeIdx);
+        if (candidate.length > 0 && candidate.length <= 200 && !candidate.startsWith(' ') && !candidate.endsWith(' ')) {
+          flushText();
+          nodes.push({ type: 'italic', children: parseInlineTokens(candidate, depth + 1) });
+          i = closeIdx + 1;
+          continue;
+        }
+      }
+    }
+
+    if (depth < 2 && text[i] === '_' && !text.startsWith('__', i)) {
+      const prevChar = i > 0 ? text[i - 1] : ' ';
+      if (!/\w/.test(prevChar)) {
+        const closeIdx = text.indexOf('_', i + 1);
+        if (closeIdx !== -1 && !text.startsWith('__', closeIdx)) {
+          const nextChar = closeIdx + 1 < text.length ? text[closeIdx + 1] : ' ';
+          if (!/\w/.test(nextChar)) {
+            const candidate = text.slice(i + 1, closeIdx);
+            if (candidate.length > 0 && candidate.length <= 200 && !candidate.startsWith(' ') && !candidate.endsWith(' ')) {
+              flushText();
+              nodes.push({ type: 'italic', children: parseInlineTokens(candidate, depth + 1) });
+              i = closeIdx + 1;
+              continue;
+            }
+          }
+        }
+      }
+    }
+
+    textBuf += text[i];
+    i++;
+  }
+
+  flushText();
+  return nodes;
+}
+
+function renderInlineNodes(nodes: InlineNode[], prefix: string): React.ReactNode[] {
+  return nodes.map((node, i) => {
+    const key = `${prefix}-${i}`;
+    switch (node.type) {
+      case 'code':
+        return (
+          <code
+            key={key}
+            className="px-1.5 py-0.5 rounded bg-[#f4f4f5] border border-[#ebebeb] text-[#171717] font-mono text-[13px]"
+          >
+            {node.text}
+          </code>
+        );
+      case 'bold':
+        return (
+          <strong key={key} className="font-semibold text-[#171717]">
+            {renderInlineNodes(node.children, `${key}-b`)}
+          </strong>
+        );
+      case 'italic':
+        return (
+          <em key={key} className="italic text-[#171717]">
+            {renderInlineNodes(node.children, `${key}-i`)}
+          </em>
+        );
+      case 'text':
+      default:
+        return node.text;
+    }
+  });
+}
+
+function formatInline(text: string, prefix = 'inl'): React.ReactNode[] {
+  if (!text) return [];
+  const nodes = parseInlineTokens(text);
+  return renderInlineNodes(nodes, prefix);
+}
+
 // Lightweight Markdown Renderer for streaming assistant output
 export function MarkdownContent({ content }: { content?: string }) {
   const elements = useMemo(() => {
-    const lines = (content ?? '').split('\n');
+    const cleanContent = (content ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const lines = cleanContent.split('\n');
     const result: React.ReactNode[] = [];
     let inCodeBlock = false;
     let codeLanguage = '';
     let codeBuffer: string[] = [];
-
-    const formatInline = (text: string): React.ReactNode[] => {
-      // Inline code `code`
-      const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
-      return parts.map((part, i) => {
-        if (part.startsWith('`') && part.endsWith('`') && part.length >= 2) {
-          return (
-            <code
-              key={i}
-              className="px-1.5 py-0.5 rounded bg-[#f4f4f5] border border-[#ebebeb] text-[#171717] font-mono text-[13px]"
-            >
-              {part.slice(1, -1)}
-            </code>
-          );
-        }
-        if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
-          return (
-            <strong key={i} className="font-semibold text-[#171717]">
-              {part.slice(2, -2)}
-            </strong>
-          );
-        }
-        return part;
-      });
-    };
 
     const splitTableRow = (row: string): string[] => {
       let t = row.trim();
@@ -80,12 +232,18 @@ export function MarkdownContent({ content }: { content?: string }) {
       return /^(-{3,}|\*{3,}|_{3,})$/.test(nospace);
     };
 
+    const bulletRegex = /^(\s*)([-*+•]|\u2022)\s+(.*)$/;
+    const numberedRegex = /^(\s*)(\d+(\.\d+)*[\.\)])\s+(.*)$/;
+
     for (let index = 0; index < lines.length; index++) {
       const line = lines[index];
-      if (line.startsWith('```')) {
+      const trimmedLine = line.trim();
+
+      // Code block start / end (supports indented fences)
+      if (trimmedLine.startsWith('```')) {
         if (!inCodeBlock) {
           inCodeBlock = true;
-          codeLanguage = line.slice(3).trim();
+          codeLanguage = trimmedLine.slice(3).trim();
           codeBuffer = [];
         } else {
           inCodeBlock = false;
@@ -95,7 +253,7 @@ export function MarkdownContent({ content }: { content?: string }) {
               className="my-2.5 rounded-md border border-[#ebebeb] bg-[#fafafa] overflow-hidden font-mono text-[13px]"
             >
               {codeLanguage && (
-                <div className="px-3 py-1 bg-[#f4f4f5] border-b border-[#ebebeb] text-xs text-[#666666] font-medium flex justify-between">
+                <div className="px-3 py-1 bg-[#f4f4f5] border-b border-[#ebebeb] text-xs text-[#666666] font-medium flex justify-between items-center">
                   <span>{codeLanguage}</span>
                 </div>
               )}
@@ -129,7 +287,7 @@ export function MarkdownContent({ content }: { content?: string }) {
           );
           const bodyRows: string[][] = [];
           let j = index + 2;
-          while (j < lines.length && lines[j].includes('|') && lines[j].trim() !== '' && !lines[j].startsWith('```')) {
+          while (j < lines.length && lines[j].includes('|') && lines[j].trim() !== '' && !lines[j].trim().startsWith('```')) {
             const cells = splitTableRow(lines[j]);
             bodyRows.push(Array.from({ length: colCount }, (_, k) => cells[k] ?? ''));
             j++;
@@ -148,7 +306,7 @@ export function MarkdownContent({ content }: { content?: string }) {
                         style={{ textAlign: normAligns[k] }}
                         className="border border-[#ebebeb] bg-[#f9f9f9] px-2 py-1.5 font-semibold text-[#171717]"
                       >
-                        {formatInline(cell)}
+                        {formatInline(cell, `th-${index}-${k}`)}
                       </th>
                     ))}
                   </tr>
@@ -162,7 +320,7 @@ export function MarkdownContent({ content }: { content?: string }) {
                           style={{ textAlign: normAligns[k] }}
                           className="border border-[#ebebeb] px-2 py-1.5 text-[#171717]"
                         >
-                          {formatInline(cell)}
+                          {formatInline(cell, `td-${index}-${r}-${k}`)}
                         </td>
                       ))}
                     </tr>
@@ -199,53 +357,75 @@ export function MarkdownContent({ content }: { content?: string }) {
       }
 
       // Headings
-      if (line.startsWith('#### ')) {
+      if (trimmedLine.startsWith('#### ')) {
         result.push(
           <h5 key={index} className="text-[13px] md:text-sm font-semibold text-[#171717] mt-2 mb-1">
-            {formatInline(line.slice(5))}
+            {formatInline(trimmedLine.slice(5), `h5-${index}`)}
           </h5>
         );
-      } else if (line.startsWith('### ')) {
+      } else if (trimmedLine.startsWith('### ')) {
         result.push(
           <h4 key={index} className="text-sm font-semibold text-[#171717] mt-2.5 mb-1">
-            {formatInline(line.slice(4))}
+            {formatInline(trimmedLine.slice(4), `h4-${index}`)}
           </h4>
         );
-      } else if (line.startsWith('## ')) {
+      } else if (trimmedLine.startsWith('## ')) {
         result.push(
           <h3 key={index} className="text-sm md:text-base font-semibold text-[#171717] mt-3 mb-1">
-            {formatInline(line.slice(3))}
+            {formatInline(trimmedLine.slice(3), `h3-${index}`)}
           </h3>
         );
-      } else if (line.startsWith('# ')) {
+      } else if (trimmedLine.startsWith('# ')) {
         result.push(
           <h2 key={index} className="text-base md:text-lg font-bold text-[#171717] mt-3.5 mb-1.5">
-            {formatInline(line.slice(2))}
+            {formatInline(trimmedLine.slice(2), `h2-${index}`)}
           </h2>
         );
-      } else if (line.startsWith('- ') || line.startsWith('* ')) {
+      } else if (numberedRegex.test(line)) {
+        const numMatch = line.match(numberedRegex)!;
+        const indent = numMatch[1].length;
+        const mlClass = indent >= 4 ? 'ml-8' : indent >= 2 ? 'ml-6' : 'ml-4';
         result.push(
-          <li key={index} className="ml-4 list-disc text-sm leading-relaxed text-[#171717]">
-            {formatInline(line.slice(2))}
-          </li>
+          <div key={`num-${index}`} className={`${mlClass} text-sm leading-relaxed text-[#171717] flex items-start gap-1.5`}>
+            <span className="font-semibold text-[#171717] select-none shrink-0 font-mono text-[13px]">
+              {numMatch[2]}
+            </span>
+            <span className="flex-1 min-w-0">{formatInline(numMatch[4], `num-${index}`)}</span>
+          </div>
+        );
+      } else if (bulletRegex.test(line)) {
+        const bulletMatch = line.match(bulletRegex)!;
+        const indent = bulletMatch[1].length;
+        const mlClass = indent >= 4 ? 'ml-8' : indent >= 2 ? 'ml-6' : 'ml-4';
+        result.push(
+          <div key={`bullet-${index}`} className={`${mlClass} text-sm leading-relaxed text-[#171717] flex items-start gap-2`}>
+            <span className="text-[#666666] select-none shrink-0 leading-relaxed">•</span>
+            <span className="flex-1 min-w-0">{formatInline(bulletMatch[3], `bullet-${index}`)}</span>
+          </div>
         );
       } else if (line.trim() === '') {
         result.push(<div key={index} className="h-1.5" />);
       } else {
         result.push(
           <p key={index} className="text-sm leading-relaxed text-[#171717]">
-            {formatInline(line)}
+            {formatInline(line, `p-${index}`)}
           </p>
         );
       }
     }
 
-    if (inCodeBlock && codeBuffer.length > 0) {
+    // Flush unfinished streaming code block at EOF
+    if (inCodeBlock) {
       result.push(
         <div
           key="code-unfinished"
           className="my-2.5 rounded-md border border-[#ebebeb] bg-[#fafafa] overflow-hidden font-mono text-[13px]"
         >
+          {codeLanguage && (
+            <div className="px-3 py-1 bg-[#f4f4f5] border-b border-[#ebebeb] text-xs text-[#666666] font-medium flex justify-between items-center">
+              <span>{codeLanguage}</span>
+            </div>
+          )}
           <pre className="p-3 text-[#171717] overflow-x-auto leading-relaxed select-text font-mono text-[13px]">
             {codeBuffer.join('\n')}
           </pre>
