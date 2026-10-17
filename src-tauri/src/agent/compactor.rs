@@ -163,8 +163,8 @@ pub fn generate_fallback_compaction_report(
 - Intermediate context turns condensed. Continuing active development in current stage.
 
 ## Critical Invariants
-- Ground Truth Sensor verification (cargo check, tsc).
-- Pure White / Paper design aesthetics per docs/StyleReference/README.md.
+- Ground Truth Sensor verification (cargo check, pnpm run build).
+- Tactile obsidian dark theme aesthetics per AGENTS.md.
 - Strict AND-semantics tool policy matrix.",
         task_id, primary_intent, files_md, errors_md
     )
@@ -395,9 +395,14 @@ fn extract_exit_code(content: &str) -> i32 {
 }
 
 /// Zero-Cost Log Evaporation:
-/// Iterates through messages and replaces bulky tool execution outputs (> 500 characters)
-/// where `current_turn - turn_index > 3` with a lightweight, deterministic placeholder:
-/// `[Output evaporated: {len} chars truncated. Exit code: {code}. Tool: {name}]`
+/// Iterates through messages and:
+/// - Replaces bulky tool execution outputs (> 500 characters) or spilled tool logs
+///   (`[Output spilled to...`) older than 2 turns (`current_turn - turn_index > 2`)
+///   with a lightweight deterministic placeholder.
+/// - Evaporates large assistant thought messages older than 2 turns (> 500 characters
+///   or embedded `<think>...</think>` / `<thinking>...</thinking>` tags).
+///
+/// Preserves Immutable Anchors (Turn 0) and the 2 most recent turns.
 /// Reclaims up to 80% of token space instantly WITHOUT ANY LLM CALL.
 #[allow(clippy::ptr_arg)]
 pub fn evaporate_tool_logs(messages: &mut Vec<ChatMessage>, current_turn: usize) -> usize {
@@ -413,37 +418,110 @@ pub fn evaporate_tool_logs(messages: &mut Vec<ChatMessage>, current_turn: usize)
             continue;
         }
 
-        // Only evaporate older turns where current_turn - turn_index > 3
-        if current_turn.saturating_sub(turn_index) <= 3 {
+        // Only evaporate older turns where current_turn - turn_index > 2
+        if current_turn.saturating_sub(turn_index) <= 2 {
             continue;
         }
 
         let msg = &mut messages[i];
-        if msg.role != Role::Tool {
-            continue;
-        }
 
-        if let Some(ref content) = msg.content {
-            let char_len = content.chars().count();
-            if char_len > 500 {
-                let code = extract_exit_code(content);
-                let tool_name = msg
-                    .name
-                    .clone()
-                    .or_else(|| {
-                        msg.tool_call_id
-                            .as_ref()
-                            .and_then(|id| tool_names.get(id).cloned())
-                    })
-                    .unwrap_or_else(|| "tool".to_string());
+        // 1. Evaporate Tool Results
+        if msg.role == Role::Tool {
+            if let Some(ref content) = msg.content {
+                if content.starts_with("[Output evaporated:") {
+                    continue;
+                }
 
-                let replacement = format!(
-                    "[Output evaporated: {} chars truncated. Exit code: {}. Tool: {}]",
-                    char_len, code, tool_name
-                );
+                let char_len = content.chars().count();
+                let is_spilled = content.starts_with("[Output spilled to")
+                    || (content.starts_with("[Output truncated:") && content.contains("spilled to"))
+                    || content.contains(".cvh/spill/");
+                let is_bulky = char_len > 500;
 
-                msg.content = Some(replacement);
-                evaporated_count += 1;
+                if is_spilled || is_bulky {
+                    let code = extract_exit_code(content);
+                    let tool_name = msg
+                        .name
+                        .clone()
+                        .or_else(|| {
+                            msg.tool_call_id
+                                .as_ref()
+                                .and_then(|id| tool_names.get(id).cloned())
+                        })
+                        .unwrap_or_else(|| "tool".to_string());
+
+                    let replacement = format!(
+                        "[Output evaporated: {} chars truncated. Exit code: {}. Tool: {}]",
+                        char_len, code, tool_name
+                    );
+
+                    msg.content = Some(replacement);
+                    evaporated_count += 1;
+                }
+            }
+        } else if msg.role == Role::Assistant {
+            // 2. Evaporate Large Assistant Thought Messages
+            if let Some(ref content) = msg.content {
+                if content.starts_with("[Thought evaporated:") {
+                    continue;
+                }
+
+                let is_explicit_thought = msg.name.as_deref() == Some("thought")
+                    || msg.name.as_deref() == Some("thinking")
+                    || content.starts_with("[Thought")
+                    || content.starts_with("<think>")
+                    || content.starts_with("<thinking>");
+
+                let has_embedded_think = (content.contains("<think>") && content.contains("</think>"))
+                    || (content.contains("<thinking>") && content.contains("</thinking>"));
+
+                let char_len = content.chars().count();
+
+                if has_embedded_think {
+                    let mut new_content = content.clone();
+                    let mut modified = false;
+
+                    while let Some(start_idx) = new_content.find("<think>") {
+                        if let Some(end_offset) = new_content[start_idx..].find("</think>") {
+                            let end_idx = start_idx + end_offset + "</think>".len();
+                            let inner_len = end_idx - start_idx;
+                            if inner_len > 300 {
+                                let placeholder = format!("[Thought evaporated: {} chars truncated]", inner_len);
+                                new_content.replace_range(start_idx..end_idx, &placeholder);
+                                modified = true;
+                            } else {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+
+                    while let Some(start_idx) = new_content.find("<thinking>") {
+                        if let Some(end_offset) = new_content[start_idx..].find("</thinking>") {
+                            let end_idx = start_idx + end_offset + "</thinking>".len();
+                            let inner_len = end_idx - start_idx;
+                            if inner_len > 300 {
+                                let placeholder = format!("[Thought evaporated: {} chars truncated]", inner_len);
+                                new_content.replace_range(start_idx..end_idx, &placeholder);
+                                modified = true;
+                            } else {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+
+                    if modified {
+                        msg.content = Some(new_content);
+                        evaporated_count += 1;
+                    }
+                } else if is_explicit_thought && char_len > 500 {
+                    let replacement = format!("[Thought evaporated: {} chars truncated]", char_len);
+                    msg.content = Some(replacement);
+                    evaporated_count += 1;
+                }
             }
         }
     }
@@ -451,31 +529,100 @@ pub fn evaporate_tool_logs(messages: &mut Vec<ChatMessage>, current_turn: usize)
     evaporated_count
 }
 
-/// Compresses intermediate turns without injecting synthetic state clutter into messages.
+/// Condenses intermediate messages older than 2 turns into a crisp summary block.
+/// Turn 0 Immutable Anchors and the 2 most recent turns are strictly preserved.
+/// Returns the number of condensed messages and the summary markdown.
+pub fn condense_older_messages(
+    messages: &mut Vec<ChatMessage>,
+    current_turn: usize,
+) -> (usize, Option<String>) {
+    let turns = compute_message_turns(messages);
+    let max_turn = turns.iter().copied().max().unwrap_or(current_turn);
+
+    if max_turn <= 2 {
+        return (0, None);
+    }
+
+    let mut anchor_messages = Vec::new();
+    let mut existing_summary: Option<String> = None;
+    let mut older_messages = Vec::new();
+    let mut recent_messages = Vec::new();
+
+    for (i, msg) in messages.iter().enumerate() {
+        let turn = turns[i];
+
+        // Check if this is an existing compacted summary block from an earlier compaction
+        if msg.role == Role::System && i > 0 {
+            if let Some(ref c) = msg.content {
+                if c.starts_with("# Compacted Context Summary") {
+                    existing_summary = Some(c.clone());
+                    continue;
+                }
+            }
+        }
+
+        if turn == 0 {
+            anchor_messages.push(msg.clone());
+        } else if max_turn.saturating_sub(turn) > 2 {
+            older_messages.push(msg.clone());
+        } else {
+            recent_messages.push(msg.clone());
+        }
+    }
+
+    if older_messages.is_empty() {
+        return (0, None);
+    }
+
+    let compacted_count = older_messages.len();
+
+    // Include previous summary text in older messages scan to retain historical context
+    let mut older_for_summary = older_messages.clone();
+    if let Some(prev) = existing_summary {
+        older_for_summary.push(ChatMessage::system(prev));
+    }
+    let summary_md = generate_fallback_compaction_report("active_task", &older_for_summary);
+
+    let summary_msg = ChatMessage::system(format!(
+        "# Compacted Context Summary\n\n{}",
+        summary_md
+    ));
+
+    let mut new_messages = Vec::with_capacity(anchor_messages.len() + 1 + recent_messages.len());
+    new_messages.extend(anchor_messages);
+    new_messages.push(summary_msg);
+    new_messages.extend(recent_messages);
+
+    *messages = new_messages;
+    (compacted_count, Some(summary_md))
+}
+
+/// Compresses intermediate turns by condensing older turns into a crisp summary block.
 #[allow(clippy::ptr_arg)]
 pub fn compress_intermediate_turns(
-    _messages: &mut Vec<ChatMessage>,
-    _current_turn: usize,
+    messages: &mut Vec<ChatMessage>,
+    current_turn: usize,
 ) -> usize {
-    // Clutter removal: do not inject synthetic 'Preserved Execution State' into chat messages array
-    0
+    let (count, _) = condense_older_messages(messages, current_turn);
+    count
 }
 
 /// Full State-Preserving Context Compactor:
 /// 1. Enforces Immutable Anchors (Turn 0: System + User spec, and 2 most recent turns).
-/// 2. Executes Zero-Cost Log Evaporation on tool results older than 3 turns (> 500 chars).
-/// 3. Generates and returns a comprehensive `CompactionReport`.
+/// 2. Executes Zero-Cost Log Evaporation on tool results & thoughts older than 2 turns.
+/// 3. Condenses older intermediate messages into a crisp structured summary block.
+/// 4. Generates and returns a comprehensive `CompactionReport` with accurate saved tokens.
 pub fn compact_context_messages(
     messages: &mut Vec<ChatMessage>,
     current_turn: usize,
 ) -> CompactionReport {
     let tokens_before = estimate_tokens(messages);
 
-    // 1. Evaporate bulky tool logs (> 500 chars, older than 3 turns)
+    // 1. Evaporate bulky tool logs & large thoughts older than 2 turns
     let evaporated_count = evaporate_tool_logs(messages, current_turn);
 
-    // 2. Do not inject clutter into messages
-    let _ = compress_intermediate_turns(messages, current_turn);
+    // 2. Condense older intermediate messages into a crisp summary block
+    let (compacted_messages_count, summary) = condense_older_messages(messages, current_turn);
 
     let tokens_after = estimate_tokens(messages);
     let saved_tokens = tokens_before.saturating_sub(tokens_after);
@@ -485,8 +632,8 @@ pub fn compact_context_messages(
         tokens_after,
         evaporated_count,
         saved_tokens,
-        compacted_messages_count: 0,
-        summary: None,
+        compacted_messages_count,
+        summary,
     }
 }
 
@@ -507,6 +654,8 @@ pub fn compact_conversation(
 
     let snapshot_summary = if let Some(s) = current_snapshot {
         s.to_markdown()
+    } else if let Some(ref s) = report.summary {
+        s.clone()
     } else {
         String::new()
     };
@@ -532,7 +681,7 @@ mod tests {
     use crate::llm::{FunctionCall, ToolCall};
 
     #[test]
-    fn test_immutable_anchors_and_log_evaporation() {
+    fn test_immutable_anchors_and_condensation() {
         let system_prompt = "# System: Persona + Rules + Skills".to_string();
         let initial_user_spec = "Implement Feature X. Specification details...".to_string();
 
@@ -542,7 +691,7 @@ mod tests {
         ];
 
         // Turn 1: Bulky tool log (> 500 chars)
-        let large_output = "x".repeat(1200);
+        let large_output = "x".repeat(2400);
         messages.push(ChatMessage::assistant(
             Some("Executing check".to_string()),
             Some(vec![ToolCall {
@@ -578,7 +727,7 @@ mod tests {
         ));
 
         // Turn 5: Current turn is 5.
-        // Turn 1 is 4 turns ago (5 - 1 = 4 > 3). It should be evaporated!
+        // Turn 1 is 4 turns ago (5 - 1 = 4 > 2), Turn 2 is 3 turns ago (5 - 2 = 3 > 2).
         let current_turn = 5;
         let report = compact_context_messages(&mut messages, current_turn);
 
@@ -586,14 +735,55 @@ mod tests {
         assert_eq!(messages[0].content.as_ref().unwrap(), &system_prompt);
         assert_eq!(messages[1].content.as_ref().unwrap(), &initial_user_spec);
 
-        // Tool output at Turn 1 should be evaporated
+        // Turn 1 & 2 condensed into crisp summary
         assert_eq!(report.evaporated_count, 1);
-        let tool_content = messages[3].content.as_ref().unwrap();
-        assert!(tool_content.contains("[Output evaporated:"));
-        assert!(tool_content.contains("Exit code: 0"));
-        assert!(tool_content.contains("Tool: execute_command"));
+        assert!(report.compacted_messages_count > 0);
         assert!(report.saved_tokens > 200);
         assert!(report.tokens_after < report.tokens_before);
+
+        // Message at index 2 should be the Compacted Context Summary
+        let summary_msg = &messages[2];
+        assert_eq!(summary_msg.role, Role::System);
+        assert!(summary_msg.content.as_ref().unwrap().starts_with("# Compacted Context Summary"));
+
+        // Recent turns (Turns 3 and 4) are preserved
+        let recent_content = messages.last().unwrap().content.as_ref().unwrap();
+        assert_eq!(recent_content, "Turn 4 assistant");
+    }
+
+    #[test]
+    fn test_evaporate_spilled_logs_and_large_thoughts() {
+        let mut messages = vec![
+            ChatMessage::system("system"),
+            ChatMessage::user("spec"),
+            // Turn 1: Spilled tool output (< 500 chars, but spilled format)
+            ChatMessage::assistant(Some("action".to_string()), None),
+            ChatMessage::tool_response(
+                "call_spill",
+                "[Output spilled to .cvh/spill/2026-03-30-build.log]\n--- HEAD ---\nline1\n--- TAIL ---\nline2",
+            ),
+            // Turn 2: Large assistant thought (> 500 chars)
+            ChatMessage::assistant(
+                Some(format!("<think>{}</think>\nResulting plan", "t".repeat(600))),
+                None,
+            ),
+            // Turn 3 & 4 (recent turns)
+            ChatMessage::assistant(Some("recent action 3".to_string()), None),
+            ChatMessage::assistant(Some("recent action 4".to_string()), None),
+        ];
+
+        let current_turn = 5;
+        let count = evaporate_tool_logs(&mut messages, current_turn);
+        assert_eq!(count, 2);
+
+        // Check spilled tool log evaporated
+        let tool_content = messages[3].content.as_ref().unwrap();
+        assert!(tool_content.starts_with("[Output evaporated:"));
+
+        // Check thought evaporated
+        let thought_content = messages[4].content.as_ref().unwrap();
+        assert!(thought_content.contains("[Thought evaporated:"));
+        assert!(thought_content.contains("Resulting plan"));
     }
 
     #[test]
@@ -623,5 +813,56 @@ mod tests {
         assert_eq!(resolve_compactor_model("   ", "gemini-3.8-flash-high"), "gemini-3.8-flash-high");
         // Specific model override takes precedence
         assert_eq!(resolve_compactor_model("gemini-1.5-flash", "claude-3-5-sonnet"), "gemini-1.5-flash");
+    }
+
+    #[test]
+    fn test_multiple_compaction_rounds_no_duplicate_summary() {
+        let mut messages = vec![
+            ChatMessage::system("system"),
+            ChatMessage::user("spec"),
+            ChatMessage::assistant(Some("action 1".to_string()), None),
+            ChatMessage::tool_response("call_1", "output 1"),
+            ChatMessage::assistant(Some("action 2".to_string()), None),
+            ChatMessage::assistant(Some("action 3".to_string()), None),
+            ChatMessage::assistant(Some("action 4".to_string()), None),
+        ];
+
+        // Round 1 compaction at turn 5
+        let report1 = compact_context_messages(&mut messages, 5);
+        assert!(report1.compacted_messages_count > 0);
+
+        // Count how many system summary messages exist
+        let summaries_count_1 = messages
+            .iter()
+            .filter(|m| {
+                m.role == Role::System
+                    && m.content
+                        .as_ref()
+                        .map(|c| c.starts_with("# Compacted Context Summary"))
+                        .unwrap_or(false)
+            })
+            .count();
+        assert_eq!(summaries_count_1, 1);
+
+        // Add more turns
+        messages.push(ChatMessage::assistant(Some("action 5".to_string()), None));
+        messages.push(ChatMessage::assistant(Some("action 6".to_string()), None));
+        messages.push(ChatMessage::assistant(Some("action 7".to_string()), None));
+
+        // Round 2 compaction at turn 8
+        let report2 = compact_context_messages(&mut messages, 8);
+        assert!(report2.compacted_messages_count > 0);
+
+        let summaries_count_2 = messages
+            .iter()
+            .filter(|m| {
+                m.role == Role::System
+                    && m.content
+                        .as_ref()
+                        .map(|c| c.starts_with("# Compacted Context Summary"))
+                        .unwrap_or(false)
+            })
+            .count();
+        assert_eq!(summaries_count_2, 1, "Should never duplicate summary blocks!");
     }
 }
