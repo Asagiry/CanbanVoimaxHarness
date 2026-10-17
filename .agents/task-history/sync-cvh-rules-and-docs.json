@@ -1,0 +1,22 @@
+{
+  "taskId": "CVH-SYNC-RULES-AND-DOCS",
+  "title": "Synchronize rules, personas, and tools documentation across project",
+  "summary": "Synchronized authoritative agent rules, tool catalogs, and architectural invariants across .cvh/agents/cvh-dev/rules/ (tools.md, agents.md, boards.md), .cvh/agents/cvh-dev/persona.md, and AGENTS.md. Documented full authoritative standard tools catalog (advance_task/move_task with target_stage and summary, reject_task, subagent sync/async/collect, question/ask_user, todo_write, execute_command, read_file, write_file, edit_file, glob, grep, web_search, web_fetch). Formulated strict role boundaries prohibiting cvh-dev and development agents from calling create_task, create_tasks, or complete_task (reserved strictly for Root Orchestrator, users, and Sidecar Copilot). Documented Sidecar Copilot Dock architecture (CopilotDock.tsx, White Paper aesthetic, SQLite persistence under copilot:meta-chat, independent ReAct loop emitting copilot:stream), board self-healing subsystem (heal_task_board_and_column and heal_tasks), and the auto-gitignore runtime policy (ensure_cvh_scaffold appending .cvh/llm.json, llm.json, .cvh/worktrees/ to .gitignore).",
+  "commitHash": "308c166",
+  "commitMessage": "docs(rules): synchronize tools catalog, copilot dock architecture, and self-healing rules",
+  "author": "Lead Systems & Persona Architect (agent-developer)",
+  "verdict": "APPROVED",
+  "date": "2026-10-17T15:04:05.627Z",
+  "affectedModules": [
+    ".cvh/agents/cvh-dev/persona.md",
+    ".cvh/agents/cvh-dev/rules/agents.md",
+    ".cvh/agents/cvh-dev/rules/boards.md",
+    ".cvh/agents/cvh-dev/rules/tools.md",
+    "AGENTS.md"
+  ],
+  "verification": {
+    "cargoCheck": "PASSED (cargo check --tests: 0 errors)",
+    "typescript": "PASSED (npx tsc --noEmit: 0 errors)",
+    "l2Review": "APPROVED by agent-developer-reviewer (Verdict 🟢 APPROVED)"
+  }
+}
