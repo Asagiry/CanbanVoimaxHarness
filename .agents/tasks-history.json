@@ -914,5 +914,32 @@
                                                 ],
                                       "summary":  "Synchronized LLM tool call ID (tc.id) directly with in-process subagent IDs. Added toolCallId to subagent:spawned Tauri event. Hardened load_subagent_dialog and db::load_dialog_items to query by both subagent_id, tool_call_id, and prefix/suffix patterns. Enforced the parent agent wait barrier: synchronous oneshot \u0027subagent\u0027 tool blocks cleanly until completion, and compile_primed_system_prompt explicitly mandates awaiting subagent results.",
                                       "timestamp":  1792228508452
-                                  }
+                                  },
+    "CVH-SELF-HEALING-BOARDS":  {
+                                    "taskId":  "CVH-SELF-HEALING-BOARDS",
+                                    "task":  "self-healing-boards",
+                                    "title":  "Self-Healing Orphan Tasks \u0026 Board Reconfiguration Safety Engine",
+                                    "branch":  "feat/self-healing-boards",
+                                    "commitHash":  "7cd2ae9",
+                                    "author":  "agent-developer",
+                                    "verdict":  "APPROVED",
+                                    "sensors":  {
+                                                    "cargo_check":  "pass (cargo check --tests, 0 errors)",
+                                                    "typescript":  "pass (npx tsc --noEmit, 0 errors)"
+                                                },
+                                    "files":  [
+                                                  ".cvh/agents/cvh-dev/persona.md",
+                                                  ".cvh/agents/cvh-dev/rules/boards.md",
+                                                  "src-tauri/src/agent.rs",
+                                                  "src-tauri/src/commands/boards.rs",
+                                                  "src-tauri/src/commands/tasks.rs",
+                                                  "src-tauri/src/commands/tests.rs",
+                                                  "src/components/board/KanbanBoard.tsx",
+                                                  "src/components/drawer/AgentConsoleDrawer.tsx",
+                                                  "src/components/drawer/DrawerHeader.tsx",
+                                                  "src/stores/boardStore.ts"
+                                              ],
+                                    "summary":  "Implemented Self-Healing Orphan Tasks \u0026 Board Reconfiguration Safety Engine. Dynamic fallback in ensure_task_board_id maps missing/deleted board IDs to active_board_id, and missing column IDs to the board\u0027s first column (backlog). Zero invisible tasks guarantee in KanbanBoard. Drawer never crashes or silently unmounts on board updates. Added Board Reconfiguration Safety Invariant to cvh-dev system prompt.",
+                                    "timestamp":  1792228556222
+                                }
 }
