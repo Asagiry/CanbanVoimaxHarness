@@ -1564,6 +1564,8 @@ pub const CANONICAL_TOOLS: &[&str] = &[
     "todo_write",
     "advance_task",
     "reject_task",
+    "create_task",
+    "complete_task",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1590,6 +1592,8 @@ pub fn default_global_tools() -> HashMap<String, bool> {
     map.insert("advance_task".to_string(), true);
     map.insert("reject_task".to_string(), true);
     map.insert("question".to_string(), true);
+    map.insert("create_task".to_string(), true);
+    map.insert("complete_task".to_string(), true);
     map
 }
 
@@ -1597,7 +1601,7 @@ impl Default for ToolPolicyConfig {
     fn default() -> Self {
         let mut stage_overrides = HashMap::new();
 
-        // Review stage: read_file, grep, glob, bash read-only enabled; edit_file, write_file disabled
+        // Review stage: read_file, grep, glob, bash read-only enabled; edit_file, write_file disabled; orchestrator tools disabled
         let mut review_map = HashMap::new();
         review_map.insert("read_file".to_string(), true);
         review_map.insert("grep".to_string(), true);
@@ -1612,6 +1616,8 @@ impl Default for ToolPolicyConfig {
         review_map.insert("advance_task".to_string(), true);
         review_map.insert("reject_task".to_string(), true);
         review_map.insert("question".to_string(), true);
+        review_map.insert("create_task".to_string(), false);
+        review_map.insert("complete_task".to_string(), false);
         stage_overrides.insert("review".to_string(), review_map);
 
         // Dev stage: write enabled, web_search disabled
@@ -1629,7 +1635,21 @@ impl Default for ToolPolicyConfig {
         dev_map.insert("advance_task".to_string(), true);
         dev_map.insert("reject_task".to_string(), true);
         dev_map.insert("question".to_string(), true);
+        dev_map.insert("create_task".to_string(), true);
+        dev_map.insert("complete_task".to_string(), true);
         stage_overrides.insert("dev".to_string(), dev_map);
+
+        // Backlog stage: orchestration enabled
+        let mut backlog_map = HashMap::new();
+        backlog_map.insert("create_task".to_string(), true);
+        backlog_map.insert("complete_task".to_string(), true);
+        stage_overrides.insert("backlog".to_string(), backlog_map);
+
+        // Orchestrator stage: orchestration enabled
+        let mut orch_map = HashMap::new();
+        orch_map.insert("create_task".to_string(), true);
+        orch_map.insert("complete_task".to_string(), true);
+        stage_overrides.insert("orchestrator".to_string(), orch_map);
 
         Self {
             global_enabled: default_global_tools(),
@@ -2113,7 +2133,7 @@ mod tests {
         let cols = get_board_template_columns("canonical");
         assert_eq!(cols.len(), 3);
         assert_eq!(cols[0].id, "backlog");
-        assert_eq!(cols[0].title, "Ожидание");
+        assert_eq!(cols[0].title, "Бэклог");
         assert_eq!(cols[0].persona, None);
         assert_eq!(cols[1].id, "dev");
         assert_eq!(cols[1].title, "В разработке");
@@ -2142,10 +2162,10 @@ mod tests {
 
         // Verify boards.json exists
         assert!(base_dir.join(".cvh").join("boards.json").exists());
-        // Verify pipeline.json synchronized with active board
+        // Verify pipeline.json synchronized with active board (normalized with mandatory backlog and ready)
         let pipe = load_pipeline_config(&base_dir).await.expect("load pipeline");
         assert_eq!(pipe.title, "3D Моделирование");
-        assert_eq!(pipe.columns.len(), 4);
+        assert_eq!(pipe.columns.len(), 5);
 
         // Load boards config back
         let reloaded = load_boards_config(&base_dir).await.expect("load boards");

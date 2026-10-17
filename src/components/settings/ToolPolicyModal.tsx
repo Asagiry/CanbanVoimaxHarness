@@ -48,7 +48,8 @@ function Toggle({
 
 const NAME_PATTERN = /^[a-z0-9_]+$/;
 
-const CATEGORY_ORDER: Array<'interactive' | 'workflow' | 'system' | 'fs' | 'web' | 'agent'> = [
+const CATEGORY_ORDER: Array<'orchestration' | 'interactive' | 'workflow' | 'system' | 'fs' | 'web' | 'agent'> = [
+  'orchestration',
   'interactive',
   'workflow',
   'system',
@@ -58,6 +59,7 @@ const CATEGORY_ORDER: Array<'interactive' | 'workflow' | 'system' | 'fs' | 'web'
 ];
 
 const CATEGORY_LABELS: Record<string, string> = {
+  orchestration: 'Оркестрация и управление задачами',
   interactive: 'Интерактивность (Human-in-the-Loop)',
   workflow: 'Управление задачами (Workflow)',
   system: 'Команды и терминал (System)',

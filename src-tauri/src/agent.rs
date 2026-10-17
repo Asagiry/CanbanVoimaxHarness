@@ -9,7 +9,7 @@ use crate::db::ActivityItem;
 use crate::hooks::{build_windows_cmd_args, kill_process_tree};
 use crate::llm::{ChatMessage, LlmClient, OpenAIChatRequest, StreamChunk, ToolCall, ToolDefinition};
 use anyhow::{bail, Context, Result};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -77,6 +77,10 @@ pub struct Task {
     pub attachments: Option<Vec<String>>,
     #[serde(default)]
     pub todos: Option<Vec<TodoItem>>,
+    #[serde(default)]
+    pub priority: Option<String>,
+    #[serde(default)]
+    pub tags: Option<Vec<String>>,
     #[serde(rename = "createdAt", alias = "created_at", default)]
     pub created_at: i64,
     #[serde(rename = "updatedAt", alias = "updated_at", default)]
@@ -503,6 +507,75 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
                 "required": ["text"]
             }),
         ),
+        ToolDefinition::function(
+            "create_task",
+            "Декомпозировать требования и создать новую карточку задачи на Канбан-доске. Привязывает созданную задачу к текущей родительской карточке оркестратора (parent_id = current_task_id).",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "title": { "type": "string", "description": "Краткое и емкое название задачи" },
+                    "description": { "type": "string", "description": "Полные технические требования, критерии приёмки и файлы" },
+                    "column_id": { "type": "string", "description": "Целевая колонка (по умолчанию 'dev' или первая рабочая колонка)" },
+                    "board_id": { "type": "string", "description": "Целевая доска (по умолчанию доска текущей задачи)" },
+                    "tags": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Теги задачи"
+                    },
+                    "priority": {
+                        "type": "string",
+                        "enum": ["low", "medium", "high"],
+                        "description": "Приоритет задачи: low, medium, high"
+                    }
+                },
+                "required": ["title", "description"]
+            }),
+        ),
+        ToolDefinition::function(
+            "create_tasks",
+            "Пакетно декомпозировать требования и создать несколько карточек задач на Канбан-доске для оркестратора.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "tasks": {
+                        "type": "array",
+                        "description": "Список задач для создания",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "title": { "type": "string", "description": "Краткое и емкое название задачи" },
+                                "description": { "type": "string", "description": "Полные технические требования, критерии приёмки и файлы" },
+                                "column_id": { "type": "string", "description": "Целевая колонка (по умолчанию 'dev' или первая рабочая колонка)" },
+                                "board_id": { "type": "string", "description": "Целевая доска (по умолчанию доска текущей задачи)" },
+                                "tags": {
+                                    "type": "array",
+                                    "items": { "type": "string" },
+                                    "description": "Теги задачи"
+                                },
+                                "priority": {
+                                    "type": "string",
+                                    "enum": ["low", "medium", "high"],
+                                    "description": "Приоритет задачи: low, medium, high"
+                                }
+                            },
+                            "required": ["title", "description"]
+                        }
+                    }
+                },
+                "required": ["tasks"]
+            }),
+        ),
+        ToolDefinition::function(
+            "complete_task",
+            "Завершить текущую задачу оркестратора и перевести её в финальную колонку Готово (ready/done). Доступно только оркестратору, создавшему подзадачи.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "summary": { "type": "string", "description": "Исчерпывающее саммари плана декомпозиции и созданных подзадач" }
+                },
+                "required": ["summary"]
+            }),
+        ),
     ]
 }
 
@@ -858,6 +931,7 @@ pub async fn execute_tool(
         "bash" => "execute_command",
         "str_replace" => "edit_file",
         "ask_user" => "question",
+        "create_tasks" => "create_task",
         other => other,
     };
 
@@ -1592,6 +1666,407 @@ Channel closed before completion", id)),
             answer
         }
 
+        "create_task" => {
+            // Check if batch call (via create_tasks alias or tasks array in arguments)
+            let is_batch = tool_name == "create_tasks" || args.get("tasks").and_then(|v| v.as_array()).is_some();
+
+            struct TaskInput {
+                title: String,
+                description: String,
+                column_id: Option<String>,
+                board_id: Option<String>,
+                tags: Option<Vec<String>>,
+                priority: Option<String>,
+            }
+
+            let mut inputs = Vec::new();
+
+            if let Some(tasks_arr) = args.get("tasks").and_then(|v| v.as_array()) {
+                if tasks_arr.is_empty() {
+                    bail!("'tasks' array must not be empty");
+                }
+                for (idx, item) in tasks_arr.iter().enumerate() {
+                    let title = item
+                        .get("title")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| anyhow::anyhow!("Missing 'title' in tasks[{}]", idx))?
+                        .trim()
+                        .to_string();
+                    if title.is_empty() {
+                        bail!("'title' in tasks[{}] cannot be empty", idx);
+                    }
+                    let description = item
+                        .get("description")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    let column_id = item
+                        .get("column_id")
+                        .or_else(|| item.get("columnId"))
+                        .and_then(|v| v.as_str())
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .map(str::to_string);
+                    let board_id = item
+                        .get("board_id")
+                        .or_else(|| item.get("boardId"))
+                        .and_then(|v| v.as_str())
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .map(str::to_string);
+                    let tags = item.get("tags").and_then(|v| v.as_array()).map(|arr| {
+                        arr.iter().filter_map(|t| t.as_str().map(str::to_string)).collect::<Vec<_>>()
+                    });
+                    let priority = item
+                        .get("priority")
+                        .and_then(|v| v.as_str())
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .map(str::to_string);
+
+                    inputs.push(TaskInput {
+                        title,
+                        description,
+                        column_id,
+                        board_id,
+                        tags,
+                        priority,
+                    });
+                }
+            } else {
+                let title = args
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .context("Missing required parameter 'title'")?
+                    .trim()
+                    .to_string();
+                if title.is_empty() {
+                    bail!("Parameter 'title' cannot be empty");
+                }
+                let description = args
+                    .get("description")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                let column_id = args
+                    .get("column_id")
+                    .or_else(|| args.get("columnId"))
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string);
+                let board_id = args
+                    .get("board_id")
+                    .or_else(|| args.get("boardId"))
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string);
+                let tags = args.get("tags").and_then(|v| v.as_array()).map(|arr| {
+                    arr.iter().filter_map(|t| t.as_str().map(str::to_string)).collect::<Vec<_>>()
+                });
+                let priority = args
+                    .get("priority")
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string);
+
+                inputs.push(TaskInput {
+                    title,
+                    description,
+                    column_id,
+                    board_id,
+                    tags,
+                    priority,
+                });
+            }
+
+            let mut tasks = crate::commands::load_tasks_from_disk(repo_root).await;
+            let current_task_opt = task_id.and_then(|tid| tasks.iter().find(|t| t.id == tid).cloned());
+            let boards_cfg = crate::config::load_boards_config(repo_root).await.ok();
+
+            let mut created_results = Vec::new();
+            let now = chrono::Utc::now().timestamp_millis();
+            let mut next_num = crate::commands::tasks::next_task_num(&tasks);
+
+            for input in inputs {
+                while tasks.iter().any(|t| t.id == format!("CVH-{:03}", next_num)) {
+                    next_num = next_num.saturating_add(1);
+                }
+                let new_id = format!("CVH-{:03}", next_num);
+                next_num = next_num.saturating_add(1);
+
+                // Resolve target board (defaults to current task's board)
+                let effective_board_id = if let Some(ref bid) = input.board_id {
+                    bid.clone()
+                } else if let Some(ref ct) = current_task_opt {
+                    ct.board_id.clone().unwrap_or_else(|| {
+                        boards_cfg.as_ref().map(|b| b.active_board_id.clone()).unwrap_or_else(|| "development".to_string())
+                    })
+                } else {
+                    boards_cfg.as_ref().map(|b| b.active_board_id.clone()).unwrap_or_else(|| "development".to_string())
+                };
+
+                let target_board_cols = boards_cfg.as_ref().and_then(|bc| {
+                    bc.boards.iter().find(|b| b.id == effective_board_id).map(|b| b.columns.clone())
+                });
+
+                // Resolve column (defaults to "dev" or active board's first actionable column)
+                let effective_column_id = if let Some(ref cid) = input.column_id {
+                    cid.clone()
+                } else if let Some(ref cols) = target_board_cols {
+                    if let Some(dev_col) = cols.iter().find(|c| crate::commands::tasks::stage_id_matches(&c.id, "dev")) {
+                        dev_col.id.clone()
+                    } else if let Some(first_act) = cols.iter().find(|c| {
+                        !crate::commands::tasks::stage_id_matches(&c.id, "backlog")
+                            && c.terminal != Some(true)
+                            && !crate::commands::tasks::stage_id_matches(&c.id, "ready")
+                            && !crate::commands::tasks::stage_id_matches(&c.id, "done")
+                    }) {
+                        first_act.id.clone()
+                    } else if cols.len() > 1 {
+                        cols[1].id.clone()
+                    } else if let Some(first) = cols.first() {
+                        first.id.clone()
+                    } else {
+                        "dev".to_string()
+                    }
+                } else {
+                    "dev".to_string()
+                };
+
+                let new_task = Task {
+                    id: new_id.clone(),
+                    title: input.title.clone(),
+                    description: input.description.clone(),
+                    stage_id: effective_column_id.clone(),
+                    board_id: Some(effective_board_id.clone()),
+                    worktree_path: None,
+                    branch: None,
+                    verdict: None,
+                    custom_flow: None,
+                    status: Some("idle".to_string()),
+                    model: None,
+                    parent_id: task_id.map(|s| s.to_string()),
+                    subtask_index: None,
+                    waiting_for_subtask_id: None,
+                    handover_summary: None,
+                    cover_image: None,
+                    attachments: None,
+                    todos: None,
+                    priority: input.priority,
+                    tags: input.tags,
+                    created_at: now,
+                    updated_at: now,
+                };
+
+                tasks.push(new_task);
+
+                created_results.push(serde_json::json!({
+                    "task_id": new_id,
+                    "title": input.title,
+                    "column_id": effective_column_id,
+                    "board_id": effective_board_id,
+                    "status": "created"
+                }));
+            }
+
+            // Sync in-memory AppState
+            if let Some(app) = ctx.app_handle.as_ref() {
+                if let Some(state_ref) = app.try_state::<crate::commands::state::AppState>() {
+                    if let Ok(mut guard) = state_ref.tasks.lock() {
+                        *guard = tasks.clone();
+                    }
+                }
+            }
+
+            // Persist to disk
+            crate::commands::tasks::save_tasks_to_disk(repo_root, &tasks)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            // Emit tasks:updated via Tauri AppHandle
+            if let Some(app) = ctx.app_handle.as_ref() {
+                let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+            }
+
+            // Record dialog activity in SQLite
+            if let Some(parent_tid) = task_id {
+                let act_content = if created_results.len() == 1 {
+                    format!(
+                        "### Оркестратор создал задачу\n- **ID**: {}\n- **Название**: {}\n- **Колонка**: {}\n- **Доска**: {}",
+                        created_results[0]["task_id"].as_str().unwrap_or_default(),
+                        created_results[0]["title"].as_str().unwrap_or_default(),
+                        created_results[0]["column_id"].as_str().unwrap_or_default(),
+                        created_results[0]["board_id"].as_str().unwrap_or_default()
+                    )
+                } else {
+                    let mut msg = format!("### Оркестратор пакетно создал {} задач:\n", created_results.len());
+                    for item in &created_results {
+                        msg.push_str(&format!(
+                            "- **{}**: {} ({})\n",
+                            item["task_id"].as_str().unwrap_or_default(),
+                            item["title"].as_str().unwrap_or_default(),
+                            item["column_id"].as_str().unwrap_or_default()
+                        ));
+                    }
+                    msg
+                };
+                let _ = crate::commands::dialogs::append_task_dialog_activity(
+                    repo_root,
+                    parent_tid,
+                    "orchestration_create",
+                    &act_content,
+                    ctx.app_handle.as_ref(),
+                ).await;
+            }
+
+            if !is_batch && created_results.len() == 1 {
+                serde_json::to_string_pretty(&created_results[0])?
+            } else {
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "status": "created",
+                    "count": created_results.len(),
+                    "tasks": created_results
+                }))?
+            }
+        }
+
+        "complete_task" => {
+            let summary = args
+                .get("summary")
+                .and_then(|v| v.as_str())
+                .context("Missing required parameter 'summary'")?;
+
+            let current_task_id = task_id.context("No active task ID for complete_task")?;
+
+            let mut tasks = crate::commands::load_tasks_from_disk(repo_root).await;
+            let current_task_idx = tasks
+                .iter()
+                .position(|t| t.id == current_task_id)
+                .ok_or_else(|| anyhow::anyhow!("Task {} not found", current_task_id))?;
+
+            // Anti-Bypass Security Check:
+            // Check if current task has spawned child tasks (parent_id linkage or created_subtasks), OR if the column is an orchestrator column.
+            let has_child_tasks = tasks
+                .iter()
+                .any(|t| t.parent_id.as_deref() == Some(current_task_id));
+
+            let current_task = &tasks[current_task_idx];
+            let stage_name = ctx.stage_id.unwrap_or(&current_task.stage_id).to_lowercase();
+            let role_name = ctx.role.unwrap_or_default().to_lowercase();
+
+            let boards_cfg = crate::config::load_boards_config(repo_root).await.ok();
+            let board_cols = boards_cfg.as_ref().and_then(|bc| {
+                let b = if let Some(ref bid) = current_task.board_id {
+                    bc.boards.iter().find(|b| &b.id == bid)
+                } else {
+                    bc.boards.iter().find(|b| b.id == bc.active_board_id)
+                };
+                b.map(|b| b.columns.clone())
+            });
+
+            let is_col_orchestrator = if let Some(ref cols) = board_cols {
+                cols.iter().any(|c| {
+                    c.id == current_task.stage_id
+                        && (c.id.to_lowercase().contains("orchestrat")
+                            || c.title.to_lowercase().contains("orchestrat")
+                            || c.title.to_lowercase().contains("оркестрат")
+                            || c.persona.as_deref().map(|p| p.to_lowercase().contains("orchestrat") || p.to_lowercase().contains("оркестрат")).unwrap_or(false))
+                })
+            } else {
+                false
+            };
+
+            let is_orchestrator = is_col_orchestrator
+                || stage_name.contains("orchestrat")
+                || stage_name.contains("оркестрат")
+                || role_name.contains("orchestrat")
+                || role_name.contains("оркестрат");
+
+            if !has_child_tasks && !is_orchestrator {
+                bail!("complete_task is restricted to orchestrator tasks that created subtasks.");
+            }
+
+            // Find terminal column (ready / done)
+            let columns = match board_cols {
+                Some(cols) => cols,
+                None => {
+                    let pipeline = crate::config::load_pipeline_config(repo_root).await
+                        .context("Failed to load pipeline configuration")?;
+                    pipeline.columns
+                }
+            };
+
+            let terminal_col = columns
+                .iter()
+                .find(|c| {
+                    c.terminal == Some(true)
+                        || crate::commands::tasks::stage_id_matches(&c.id, "ready")
+                        || crate::commands::tasks::stage_id_matches(&c.id, "done")
+                })
+                .or_else(|| columns.last())
+                .ok_or_else(|| anyhow::anyhow!("No terminal column found in board/pipeline"))?;
+            let terminal_col_id = terminal_col.id.clone();
+            let old_stage = tasks[current_task_idx].stage_id.clone();
+
+            tasks[current_task_idx].stage_id = terminal_col_id.clone();
+            tasks[current_task_idx].status = Some("done".to_string());
+            tasks[current_task_idx].verdict = Some("APPROVED".to_string());
+            tasks[current_task_idx].handover_summary = Some(summary.to_string());
+            tasks[current_task_idx].updated_at = chrono::Utc::now().timestamp_millis();
+            let updated_task = tasks[current_task_idx].clone();
+
+            // In-memory state sync
+            if let Some(app) = ctx.app_handle.as_ref() {
+                if let Some(state_ref) = app.try_state::<crate::commands::state::AppState>() {
+                    if let Ok(mut guard) = state_ref.tasks.lock() {
+                        *guard = tasks.clone();
+                    }
+                }
+            }
+
+            // Persist to disk
+            crate::commands::tasks::save_tasks_to_disk(repo_root, &tasks)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            // Emit events
+            if let Some(app) = ctx.app_handle.as_ref() {
+                let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+                let _ = app.emit(
+                    "task:moved",
+                    serde_json::json!({
+                        "taskId": current_task_id,
+                        "fromStage": old_stage,
+                        "toStage": &terminal_col_id,
+                        "stageId": &terminal_col_id,
+                        "status": "done",
+                        "verdict": "APPROVED",
+                        "task": &updated_task
+                    }),
+                );
+            }
+
+            // Append dialog activity in SQLite
+            let _ = crate::commands::dialogs::append_task_dialog_activity(
+                repo_root,
+                current_task_id,
+                "orchestration_complete",
+                &format!("### Оркестратор завершил задачу\n\n**Итоговое саммари декомпозиции:**\n{}", summary),
+                ctx.app_handle.as_ref(),
+            ).await;
+
+            serde_json::to_string_pretty(&serde_json::json!({
+                "task_id": current_task_id,
+                "title": updated_task.title,
+                "column_id": terminal_col_id,
+                "status": "done",
+                "handover_summary": summary
+            }))?
+        }
+
         custom_tool => {
             let custom_tools = load_custom_tools(repo_root).await;
             if let Some(ct) = custom_tools.into_iter().find(|t| t.name == custom_tool) {
@@ -1688,6 +2163,9 @@ pub fn run_inprocess_subagent(
                 && t != "collect_subagent"
                 && t != "advance_task"
                 && t != "reject_task"
+                && t != "create_task"
+                && t != "create_tasks"
+                && t != "complete_task"
                 && is_tool_allowed(&ctx.tool_policy, ctx.stage_id.as_deref(), t)
                 && agent_allows_tool(ctx.agent_allowed_tools.as_deref(), t)
         })
@@ -3178,11 +3656,11 @@ mod tests {
         // present on disk (user mandate: send the model ONLY .cvh + persona).
         let base =
             std::path::PathBuf::from("target").join(format!("cvh_prompt_{}", uuid::Uuid::new_v4()));
-        tokio::fs::create_dir_all(base.join(".cvh").join("agents"))
+        tokio::fs::create_dir_all(base.join(".cvh").join("agents").join("developer"))
             .await
             .expect("test dirs");
         tokio::fs::write(
-            base.join(".cvh").join("agents").join("developer.md"),
+            base.join(".cvh").join("agents").join("developer").join("persona.md"),
             "PERSONA_MARKER_ALPHA",
         )
         .await
@@ -3237,7 +3715,7 @@ mod tests {
         tokio::fs::create_dir_all(role_dir.join("rules"))
             .await
             .expect("test dirs");
-        tokio::fs::write(agents.join("dev.md"), "FLAT_PERSONA_MARKER")
+        tokio::fs::write(role_dir.join("persona.md"), "FLAT_PERSONA_MARKER")
             .await
             .expect("persona seed");
         // Seed out of order: b before a — prompt must order a, b.
@@ -3548,4 +4026,237 @@ mod tests {
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
+    #[tokio::test]
+    async fn test_orchestrator_create_task_and_create_tasks() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_orch_test_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+
+        // Seed parent orchestrator task CVH-001
+        let parent_task = Task {
+            id: "CVH-001".to_string(),
+            title: "Parent Orchestrator Task".to_string(),
+            description: "Decomposing feature".to_string(),
+            stage_id: "backlog".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("running".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            handover_summary: None,
+            cover_image: None,
+            attachments: None,
+            todos: None,
+            priority: Some("high".to_string()),
+            tags: Some(vec!["orchestrator".to_string()]),
+            created_at: 0,
+            updated_at: 0,
+        };
+        crate::commands::tasks::save_tasks_to_disk(&base, &[parent_task]).await.expect("save parent");
+
+        let flag = Arc::new(AtomicBool::new(false));
+        let policy = ToolPolicyConfig::default();
+        let tool_ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("backlog"),
+            role: Some("orchestrator"),
+            abort_handle: Arc::clone(&flag),
+            tool_policy: &policy,
+            task_id: Some("CVH-001"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        // 1. Single create_task call
+        let single_args = serde_json::json!({
+            "title": "Backend Rust Implementation",
+            "description": "Implement create_task and complete_task tools",
+            "column_id": "dev",
+            "priority": "high",
+            "tags": ["rust", "tauri"]
+        });
+        let single_res = execute_tool(&tool_ctx, "create_task", &single_args)
+            .await
+            .expect("create_task execution");
+
+        let parsed_single: serde_json::Value = serde_json::from_str(&single_res).expect("parse single json");
+        assert_eq!(parsed_single["status"], "created");
+        assert_eq!(parsed_single["task_id"], "CVH-002");
+        assert_eq!(parsed_single["title"], "Backend Rust Implementation");
+        assert_eq!(parsed_single["column_id"], "dev");
+
+        // Verify on disk that CVH-002 has parent_id = "CVH-001"
+        let tasks_on_disk = crate::commands::tasks::load_tasks_from_disk(&base).await;
+        let created_child = tasks_on_disk.iter().find(|t| t.id == "CVH-002").expect("CVH-002 on disk");
+        assert_eq!(created_child.parent_id.as_deref(), Some("CVH-001"));
+        assert_eq!(created_child.priority.as_deref(), Some("high"));
+        assert_eq!(created_child.tags.as_ref().unwrap(), &vec!["rust".to_string(), "tauri".to_string()]);
+
+        // 2. Batch create_tasks call
+        let batch_args = serde_json::json!({
+            "tasks": [
+                {
+                    "title": "Frontend UI Matrix",
+                    "description": "Integrate into toolPolicyStore.ts",
+                    "column_id": "dev",
+                    "priority": "medium"
+                },
+                {
+                    "title": "End-to-End Test Suite",
+                    "description": "Run cargo check and vitest",
+                    "column_id": "dev",
+                    "priority": "high"
+                }
+            ]
+        });
+        let batch_res = execute_tool(&tool_ctx, "create_tasks", &batch_args)
+            .await
+            .expect("create_tasks execution");
+
+        let parsed_batch: serde_json::Value = serde_json::from_str(&batch_res).expect("parse batch json");
+        assert_eq!(parsed_batch["status"], "created");
+        assert_eq!(parsed_batch["count"], 2);
+
+        let tasks_after_batch = crate::commands::tasks::load_tasks_from_disk(&base).await;
+        assert_eq!(tasks_after_batch.len(), 4); // CVH-001, CVH-002, CVH-003, CVH-004
+
+        let t3 = tasks_after_batch.iter().find(|t| t.id == "CVH-003").expect("CVH-003");
+        let t4 = tasks_after_batch.iter().find(|t| t.id == "CVH-004").expect("CVH-004");
+        assert_eq!(t3.parent_id.as_deref(), Some("CVH-001"));
+        assert_eq!(t4.parent_id.as_deref(), Some("CVH-001"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_complete_task_anti_bypass_invariant() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_antibypass_test_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+
+        // Seed a regular developer task CVH-010 that has NO child tasks
+        let regular_task = Task {
+            id: "CVH-010".to_string(),
+            title: "Regular Developer Task".to_string(),
+            description: "Working on code".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("running".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            handover_summary: None,
+            cover_image: None,
+            attachments: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            created_at: 0,
+            updated_at: 0,
+        };
+        crate::commands::tasks::save_tasks_to_disk(&base, &[regular_task]).await.expect("save regular task");
+
+        let flag = Arc::new(AtomicBool::new(false));
+        let policy = ToolPolicyConfig::default();
+        let dev_ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("dev"),
+            role: Some("developer"),
+            abort_handle: Arc::clone(&flag),
+            tool_policy: &policy,
+            task_id: Some("CVH-010"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        // 1. Regular dev agent attempting to bypass pipeline with complete_task MUST BE REJECTED
+        let bypass_err = execute_tool(&dev_ctx, "complete_task", &serde_json::json!({
+            "summary": "Trying to skip review and retro"
+        }))
+        .await
+        .expect_err("Regular dev agent must be rejected from complete_task");
+
+        assert!(
+            bypass_err.to_string().contains("complete_task is restricted to orchestrator tasks that created subtasks."),
+            "Error must match Anti-Bypass Invariant string, got: {}",
+            bypass_err
+        );
+
+        // Verify task is still in 'dev' with status 'running'
+        let tasks_check1 = crate::commands::tasks::load_tasks_from_disk(&base).await;
+        let t10 = tasks_check1.iter().find(|t| t.id == "CVH-010").unwrap();
+        assert_eq!(t10.stage_id, "dev");
+        assert_eq!(t10.status.as_deref(), Some("running"));
+
+        // 2. Now let's spawn a child task linked to CVH-010
+        let child_task = Task {
+            id: "CVH-011".to_string(),
+            title: "Child Subtask".to_string(),
+            description: "Subtask 1".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("idle".to_string()),
+            model: None,
+            parent_id: Some("CVH-010".to_string()),
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            handover_summary: None,
+            cover_image: None,
+            attachments: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            created_at: 0,
+            updated_at: 0,
+        };
+        crate::commands::tasks::save_tasks_to_disk(&base, &[t10.clone(), child_task]).await.expect("save with child");
+
+        // Now CVH-010 has spawned child tasks -> complete_task MUST SUCCEED
+        let complete_res = execute_tool(&dev_ctx, "complete_task", &serde_json::json!({
+            "summary": "Decomposition finished and subtasks spawned"
+        }))
+        .await
+        .expect("complete_task must succeed for task with child subtasks");
+
+        let parsed_res: serde_json::Value = serde_json::from_str(&complete_res).expect("parse complete json");
+        assert_eq!(parsed_res["task_id"], "CVH-010");
+        assert_eq!(parsed_res["status"], "done");
+        assert_eq!(parsed_res["column_id"], "ready");
+
+        // Verify on disk that CVH-010 moved to 'ready', status is 'done', and handover_summary is recorded
+        let tasks_final = crate::commands::tasks::load_tasks_from_disk(&base).await;
+        let t10_done = tasks_final.iter().find(|t| t.id == "CVH-010").unwrap();
+        assert_eq!(t10_done.stage_id, "ready");
+        assert_eq!(t10_done.status.as_deref(), Some("done"));
+        assert_eq!(t10_done.handover_summary.as_deref(), Some("Decomposition finished and subtasks spawned"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
 }

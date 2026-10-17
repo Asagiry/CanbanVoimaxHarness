@@ -1,4 +1,4 @@
-﻿{
+{
   "globalEnabled": {
     "execute_command": true,
     "read_file": true,
@@ -12,9 +12,19 @@
     "todo_write": true,
     "advance_task": true,
     "reject_task": true,
-    "question": true
+    "question": true,
+    "create_task": true,
+    "complete_task": true
   },
   "stageOverrides": {
+    "backlog": {
+      "create_task": true,
+      "complete_task": true
+    },
+    "orchestrator": {
+      "create_task": true,
+      "complete_task": true
+    },
     "dev": {
       "execute_command": true,
       "read_file": true,
@@ -28,7 +38,9 @@
       "todo_write": true,
       "advance_task": true,
       "reject_task": true,
-      "question": true
+      "question": true,
+      "create_task": true,
+      "complete_task": true
     },
     "review": {
       "read_file": true,
@@ -43,7 +55,9 @@
       "todo_write": true,
       "advance_task": true,
       "reject_task": true,
-      "question": true
+      "question": true,
+      "create_task": false,
+      "complete_task": false
     },
     "retro": {
       "read_file": true,
@@ -57,7 +71,9 @@
       "todo_write": true,
       "advance_task": true,
       "reject_task": true,
-      "question": true
+      "question": true,
+      "create_task": false,
+      "complete_task": false
     }
   }
 }

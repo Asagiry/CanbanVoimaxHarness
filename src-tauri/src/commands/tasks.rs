@@ -306,6 +306,8 @@ pub async fn create_task(
         cover_image: None,
         attachments: None,
         todos: None,
+        priority: None,
+        tags: None,
         created_at: now,
         updated_at: now,
     };
@@ -480,6 +482,8 @@ pub async fn create_subtask(
         cover_image: None,
         attachments: None,
         todos: None,
+        priority: tasks[parent_idx].priority.clone(),
+        tags: None,
         created_at: now,
         updated_at: now,
     };
