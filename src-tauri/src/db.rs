@@ -238,6 +238,68 @@ pub fn clear_dialog_items(root: &Path, task_id: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Searches SQLite for a subagent dialog key matching the given parent_task_id and/or subagent/tool_call_id.
+/// Checks for keys ending with `.sub-{tool_call_id}` or containing `:sub:`.
+pub fn find_subagent_dialog_key(
+    root: &Path,
+    parent_task_id: Option<&str>,
+    tool_call_id: &str,
+) -> Result<Option<String>, String> {
+    let conn = init_db(root).map_err(|e| format!("Failed to open database: {}", e))?;
+    let tc_clean = tool_call_id.trim();
+    if tc_clean.is_empty() {
+        return Ok(None);
+    }
+
+    // 1. Try parent-scoped suffix match: "{parent}:sub:%.sub-{tool_call_id}"
+    if let Some(p) = parent_task_id {
+        let p_clean = p.trim();
+        if !p_clean.is_empty() {
+            let pattern = format!("{}:sub:%.sub-{}", p_clean, tc_clean);
+            let mut stmt = conn
+                .prepare("SELECT task_id FROM dialog_items WHERE task_id LIKE ?1 ORDER BY created_at DESC LIMIT 1")
+                .map_err(|e| format!("Prepare failed: {}", e))?;
+            let mut rows = stmt
+                .query(params![pattern])
+                .map_err(|e| format!("Query failed: {}", e))?;
+            if let Some(row) = rows.next().map_err(|e| format!("Next row failed: {}", e))? {
+                let matched: String = row.get(0).map_err(|e| format!("Get col failed: {}", e))?;
+                return Ok(Some(matched));
+            }
+        }
+    }
+
+    // 2. Try general suffix match: "%.sub-{tool_call_id}"
+    let pattern_suffix = format!("%.sub-{}", tc_clean);
+    let mut stmt = conn
+        .prepare("SELECT task_id FROM dialog_items WHERE task_id LIKE ?1 ORDER BY created_at DESC LIMIT 1")
+        .map_err(|e| format!("Prepare failed: {}", e))?;
+    let mut rows = stmt
+        .query(params![pattern_suffix])
+        .map_err(|e| format!("Query failed: {}", e))?;
+    if let Some(row) = rows.next().map_err(|e| format!("Next row failed: {}", e))? {
+        let matched: String = row.get(0).map_err(|e| format!("Get col failed: {}", e))?;
+        return Ok(Some(matched));
+    }
+
+    // 3. Try exact suffix match if tool_call_id is already prefixed with .sub-
+    if tc_clean.contains(".sub-") {
+        let pattern_any = format!("%{}", tc_clean);
+        let mut stmt = conn
+            .prepare("SELECT task_id FROM dialog_items WHERE task_id LIKE ?1 ORDER BY created_at DESC LIMIT 1")
+            .map_err(|e| format!("Prepare failed: {}", e))?;
+        let mut rows = stmt
+            .query(params![pattern_any])
+            .map_err(|e| format!("Query failed: {}", e))?;
+        if let Some(row) = rows.next().map_err(|e| format!("Next row failed: {}", e))? {
+            let matched: String = row.get(0).map_err(|e| format!("Get col failed: {}", e))?;
+            return Ok(Some(matched));
+        }
+    }
+
+    Ok(None)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -306,6 +368,43 @@ mod tests {
         clear_dialog_items(root, "CVH-TEST-1").expect("clear");
         let empty = load_dialog_items(root, "CVH-TEST-1").expect("load after clear");
         assert!(empty.is_empty());
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn test_find_subagent_dialog_key() {
+        let root = PathBuf::from("target").join(format!("cvh_db_test_find_{}", uuid::Uuid::new_v4()));
+        let _ = std::fs::create_dir_all(&root);
+        let root = root.as_path();
+
+        let sub_key = "CVH-42:sub:CVH-42.sub-call_xyz987";
+        let item = ActivityItem {
+            id: "sub-p-1".to_string(),
+            item_type: "prompt".to_string(),
+            timestamp: "10:00:00".to_string(),
+            content: Some("Subagent prompt".to_string()),
+            tool: None,
+            duration_ms: None,
+            images: None,
+        };
+        append_dialog_items(root, sub_key, &[item]).expect("append subagent item");
+
+        // 1. Find by exact tool_call_id with parent_task_id
+        let found1 = find_subagent_dialog_key(root, Some("CVH-42"), "call_xyz987").expect("find1");
+        assert_eq!(found1.as_deref(), Some(sub_key));
+
+        // 2. Find by tool_call_id without parent_task_id
+        let found2 = find_subagent_dialog_key(root, None, "call_xyz987").expect("find2");
+        assert_eq!(found2.as_deref(), Some(sub_key));
+
+        // 3. Find when input has .sub- prefix
+        let found3 = find_subagent_dialog_key(root, None, ".sub-call_xyz987").expect("find3");
+        assert_eq!(found3.as_deref(), Some(sub_key));
+
+        // 4. Non-existent returns None
+        let not_found = find_subagent_dialog_key(root, Some("CVH-42"), "call_nonexistent").expect("find non");
+        assert_eq!(not_found, None);
 
         let _ = std::fs::remove_dir_all(root);
     }

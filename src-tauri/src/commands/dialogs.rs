@@ -78,9 +78,66 @@ pub async fn load_subagent_dialog(
     subagent_id: String,
     state: State<'_, AppState>,
 ) -> Result<Vec<ActivityItem>, String> {
-    let sub_key = format!("{}:sub:{}", parent_task_id.trim(), subagent_id.trim());
-    let safe_id = sanitize_task_id(&sub_key)?;
     let root = state.get_root();
+    let p_trim = parent_task_id.trim();
+    let s_trim = subagent_id.trim();
+
+    // 1. If subagent_id already contains ":sub:", use it directly.
+    if s_trim.contains(":sub:") {
+        if let Ok(safe_id) = sanitize_task_id(s_trim) {
+            let items = crate::db::load_dialog_items(&root, &safe_id)?;
+            if !items.is_empty() {
+                return Ok(items);
+            }
+        }
+    }
+
+    // 2. Direct format: "{}:sub:{}"
+    let direct_key = format!("{}:sub:{}", p_trim, s_trim);
+    if let Ok(safe_id) = sanitize_task_id(&direct_key) {
+        let items = crate::db::load_dialog_items(&root, &safe_id)?;
+        if !items.is_empty() {
+            return Ok(items);
+        }
+    }
+
+    // 3. Hierarchical format: "{}:sub:{}.sub-{}" if s_trim does not already contain ".sub-"
+    if !s_trim.contains(".sub-") && !p_trim.is_empty() {
+        let nested_key = format!("{}:sub:{}.sub-{}", p_trim, p_trim, s_trim);
+        if let Ok(safe_id) = sanitize_task_id(&nested_key) {
+            let items = crate::db::load_dialog_items(&root, &safe_id)?;
+            if !items.is_empty() {
+                return Ok(items);
+            }
+        }
+    }
+
+    // 4. Check if subagent_id is a tool call ID (e.g. "call_...") or ends with tool call ID,
+    // and search SQLite for keys ending with ".sub-{tool_call_id}".
+    let tool_call_id = if let Some(pos) = s_trim.rfind(".sub-") {
+        &s_trim[(pos + 5)..]
+    } else {
+        s_trim
+    };
+
+    if !tool_call_id.is_empty() {
+        if let Ok(Some(matched_key)) = crate::db::find_subagent_dialog_key(&root, Some(p_trim), tool_call_id) {
+            if let Ok(safe_id) = sanitize_task_id(&matched_key) {
+                let items = crate::db::load_dialog_items(&root, &safe_id)?;
+                if !items.is_empty() {
+                    return Ok(items);
+                }
+            }
+        }
+    }
+
+    // 5. Fallback: return result of direct key
+    let fallback_key = if s_trim.contains(":sub:") {
+        s_trim.to_string()
+    } else {
+        format!("{}:sub:{}", p_trim, s_trim)
+    };
+    let safe_id = sanitize_task_id(&fallback_key)?;
     crate::db::load_dialog_items(&root, &safe_id)
 }
 
@@ -90,8 +147,7 @@ pub async fn retry_subagent(
     subagent_id: String,
     message: Option<String>,
 ) -> Result<(), String> {
-    let _ = parent_task_id;
-    crate::agent::retry_subagent_execution(&subagent_id, message)
+    crate::agent::retry_subagent_execution(Some(&parent_task_id), &subagent_id, message)
         .await
         .map_err(|e| e.to_string())
 }
