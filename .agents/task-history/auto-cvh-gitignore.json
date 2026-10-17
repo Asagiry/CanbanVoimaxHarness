@@ -1,0 +1,22 @@
+{
+  "taskId": "CVH-AUTO-GITIGNORE",
+  "title": "Automatic project .gitignore injection for .cvh local runtime",
+  "summary": "Implemented automatic .gitignore synchronization for CanbanVoimaxHarness local runtime in Rust desktop backend. Added ensure_project_gitignore(repo_root: &Path) in src-tauri/src/config.rs which verifies <repo_root>/.gitignore exists (creates if missing), verifies required CVH runtime entries (.cvh/harness.db*, .cvh/spill/, .cvh/worktrees/, .cvh/llm.json, .cvh/tasks.json), verifies directory wildcard coverage (.cvh/, .cvh, **/.cvh/, etc.), and cleanly appends missing lines under '# CanbanVoimaxHarness Local Runtime' without duplicating lines or headers. Hooked ensure_project_gitignore into project initialization (init_project_harness, scaffold_cvh_project), project opening (open_project, set_active_project, select_project_folder), and startup (discover_project_root). Added .cvh/harness.db* to root .gitignore. Added 6 comprehensive unit tests covering creation, append, idempotency, wildcard protection, partial preservation, and harness initialization.",
+  "commitHash": "c782b94459b35bf35a338f438f735d6e973374c1",
+  "commitMessage": "feat(config): automatic project .gitignore injection for .cvh local runtime",
+  "author": "Lead Systems Engineer (tauri-rust-engineer)",
+  "verdict": "APPROVED",
+  "date": "2026-10-17T15:09:38.946Z",
+  "affectedModules": [
+    ".gitignore",
+    "src-tauri/src/config.rs",
+    "src-tauri/src/commands/projects.rs",
+    "src-tauri/src/lib.rs"
+  ],
+  "verification": {
+    "cargoCheck": "PASSED (cargo check --tests: 0 errors)",
+    "cargoClippy": "PASSED (cargo clippy --tests -- -D warnings: 0 warnings)",
+    "cargoTest": "PASSED (86 passed, 0 failed; 5 gitignore tests + 1 integration test)",
+    "l2Review": "APPROVED by Level 2 Reviewer (agent-developer-reviewer)"
+  }
+}
