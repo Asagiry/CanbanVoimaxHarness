@@ -307,17 +307,7 @@ pub fn discover_project_root() -> PathBuf {
         }
     }
 
-    // d) If still not found, check if C:\Users\Voimax\Projects\CanbanVoimaxHarness exists; if so, return it.
-    let hardcoded_default = PathBuf::from(r"C:\Users\Voimax\Projects\CanbanVoimaxHarness");
-    if hardcoded_default.exists() && hardcoded_default.is_dir() {
-        eprintln!(
-            "CVH [discover_project_root]: Using default path: {:?}",
-            hardcoded_default
-        );
-        return hardcoded_default;
-    }
-
-    // e) Otherwise fallback to std::env::current_dir().
+    // d) Otherwise fallback to std::env::current_dir().
     eprintln!(
         "CVH [discover_project_root]: Fallback to current_dir: {:?}",
         current

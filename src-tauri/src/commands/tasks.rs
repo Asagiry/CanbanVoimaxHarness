@@ -779,12 +779,36 @@ pub async fn internal_move_task_stage(
         ensure_builtin_worktree(root, current_task).await;
     }
 
-    // Gatekeeper Sensor Verification: do not block initial move from backlog to dev or new/empty worktree
+    // Gatekeeper Sensor Verification: do not block initial move from backlog to first actionable stage or new/empty worktree
     if let Some(sensor_cmd) = &target_col.gatekeeper_sensor {
         let is_from_backlog = source_stage_id.is_empty()
             || stage_id_matches(&source_stage_id, "backlog");
-        let is_to_dev = stage_id_matches(&canonical_target_stage_id, "dev");
-        let is_initial_move_to_dev = is_from_backlog && is_to_dev;
+        let is_first_actionable_stage = {
+            let active_board = effective_board
+                .as_ref()
+                .or_else(|| {
+                    boards_cfg
+                        .as_ref()
+                        .and_then(|bc| bc.boards.iter().find(|b| b.id == bc.active_board_id))
+                });
+
+            if let Some(b) = active_board {
+                b.columns
+                    .iter()
+                    .find(|c| !stage_id_matches(&c.id, "backlog"))
+                    .map(|c| stage_id_matches(&canonical_target_stage_id, &c.id))
+                    .unwrap_or(false)
+            } else if let Ok(pipe) = load_pipeline_config(root).await {
+                pipe.columns
+                    .iter()
+                    .find(|c| !stage_id_matches(&c.id, "backlog"))
+                    .map(|c| stage_id_matches(&canonical_target_stage_id, &c.id))
+                    .unwrap_or(false)
+            } else {
+                stage_id_matches(&canonical_target_stage_id, "dev")
+            }
+        };
+        let is_initial_move = is_from_backlog && is_first_actionable_stage;
 
         let wt_empty_or_new = match &current_task.worktree_path {
             None => true,
@@ -794,7 +818,7 @@ pub async fn internal_move_task_stage(
             }
         };
 
-        if is_initial_move_to_dev || wt_empty_or_new {
+        if is_initial_move || wt_empty_or_new {
             println!(
                 "CVH [gatekeeper]: skipping gatekeeper sensor '{}' for initial transition of task {} from '{}' to '{}' (initial move / empty worktree)",
                 sensor_cmd, current_task.id, source_stage_id, canonical_target_stage_id
