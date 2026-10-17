@@ -1,0 +1,22 @@
+{
+  "taskId": "CVH-COMPACTOR-DYNAMIC",
+  "title": "Dynamic Context Compactor & Robust Tool Log Evaporation",
+  "summary": "Implemented dynamic compaction trigger in run_agent_loop based on active column context_window (>70% or >20,000 tokens for turns > 3). Enhanced compactor with spilled tool log evaporation (.cvh/spill/), large assistant thought evaporation (embedded <think> blocks and explicit thought messages older than 2 turns), immutable anchor preservation, and intermediate message condensation into a single crisp structured summary block. Fixed compact_context command to use true estimated tokens and persist to SQLite dialog_items.",
+  "commitHash": "ab71bdc",
+  "commitMessage": "feat(compactor): dynamic context compaction trigger and robust log evaporation",
+  "author": "Lead Systems Engineer (agent-developer & tauri-rust-engineer)",
+  "verdict": "APPROVED",
+  "date": "2026-10-17T13:42:58.467Z",
+  "affectedModules": [
+    "src-tauri/src/agent.rs",
+    "src-tauri/src/agent/compactor.rs",
+    "src-tauri/src/commands/tasks.rs"
+  ],
+  "verification": {
+    "cargoCheck": "PASSED (0 errors)",
+    "cargoClippy": "PASSED (0 warnings)",
+    "cargoTests": "PASSED (73 passed, 0 failed, 5 compactor unit tests)",
+    "typescript": "PASSED (tsc --noEmit: 0 errors)",
+    "l2Review": "APPROVED by agent-developer-reviewer"
+  }
+}
