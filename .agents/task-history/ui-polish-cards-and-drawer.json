@@ -1,0 +1,25 @@
+{
+  "taskId": "CVH-UI-POLISH-CARDS-AND-DRAWER",
+  "task": "ui-polish-cards-and-drawer",
+  "title": "UI polish for Drawer header stepper button, Kanban card footer, ThinkingCard whitespace, ToolExecutionCard failed edit badge, and live stage timers",
+  "branch": "feat/ui-polish-cards-and-drawer",
+  "commitHash": "d6935ec",
+  "mergeSha": "c757364441e0ff30d7a57665836d33065ad7244c",
+  "commitMessage": "feat(ui): polish cards and drawer components",
+  "author": "agent-developer (react-tailwind-artisan)",
+  "verdict": "APPROVED",
+  "sensors": {
+    "frontend_tsc": "pass (npx tsc --noEmit 0 errors)",
+    "cargo_check": "pass (cargo check exit 0)",
+    "l2_reviewer": "APPROVED"
+  },
+  "files": [
+    "src/components/card/KanbanCard.tsx",
+    "src/components/drawer/DrawerHeader.tsx",
+    "src/components/drawer/ThinkingCard.tsx",
+    "src/components/drawer/ToolExecutionCard.tsx",
+    "src/stores/boardStore.ts",
+    "src/types/index.ts"
+  ],
+  "summary": "Resolved 5 high-visibility UI issues across Drawer and Kanban cards: 1) Replaced obsidian black button in DrawerHeader stage stepper with White Paper / Vercel style (bg-[#f4f4f5] border border-[#ebebeb] text-[#171717] font-semibold shadow-2xs); 2) Removed literal 'модель не задана' in KanbanCard footer and conditionally rendered model only when non-empty; 3) Stripped trailing newlines with visibleText.trimEnd() and reduced bottom padding in ThinkingCard; 4) Added subtle red FAILED EDIT badge and contextualized diff label as 'Запланированные изменения (не применены)' for failed tool executions in ToolExecutionCard; 5) Dynamically calculated live stage duration and total elapsed timers in KanbanCard and boardStore from stageEnteredAt || updatedAt || createdAt with state preservation on disk resync, and implemented seamless s/m/h/d formatStageDuration formatting."
+}
