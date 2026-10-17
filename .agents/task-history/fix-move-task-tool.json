@@ -1,0 +1,21 @@
+{
+  "taskId": "CVH-FIX-MOVE-TASK-TOOL",
+  "title": "Robust move_task / advance_task Tool Aliasing, Target Stage Dispatch, and Gatekeeper Error Details",
+  "summary": "Normalized move_task, move_task_stage, advance_stage, and next_stage to advance_task in tool normalization and policy config. In execute_tool, made summary optional with sensible default fallback, enabled target_stage/stage_id/column_id direct stage movement via internal_move_task_stage, and retained sequential pipeline advancement via internal_advance_task. Propagated gatekeeper sensor stdout/stderr clearly formatted. Fixed multi-board column and exact-match resolution.",
+  "commitHash": "22be54e",
+  "commitMessage": "feat(agent): robust move_task and advance_task aliasing, target_stage dispatch, and sensor error details",
+  "author": "Lead Systems Engineer (tauri-rust-engineer)",
+  "verdict": "APPROVED",
+  "date": "2026-10-17T13:41:09.354Z",
+  "affectedModules": [
+    "src-tauri/src/agent.rs",
+    "src-tauri/src/commands/tasks.rs",
+    "src-tauri/src/config.rs"
+  ],
+  "verification": {
+    "cargoCheck": "PASSED (0 errors)",
+    "cargoClippy": "PASSED (0 warnings)",
+    "cargoTests": "PASSED (73 passed, 0 failed)",
+    "level2Reviewer": "APPROVED by agent-developer-reviewer"
+  }
+}
