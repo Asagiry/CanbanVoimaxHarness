@@ -121,6 +121,10 @@ pub fn run() {
             set_active_project,
             set_project_root,
             list_projects,
+            send_copilot_message,
+            abort_copilot,
+            load_copilot_history,
+            clear_copilot_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running CanbanVoimaxHarness desktop application");

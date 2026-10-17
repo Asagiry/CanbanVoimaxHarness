@@ -578,11 +578,12 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "complete_task",
-            "Завершить текущую задачу оркестратора и перевести её в финальную колонку Готово (ready/done). Доступно только оркестратору, создавшему подзадачи.",
+            "Завершить задачу и перевести её в финальную колонку Готово (ready/done). Доступно оркестратору и Copilot.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "summary": { "type": "string", "description": "Исчерпывающее саммари плана декомпозиции и созданных подзадач" }
+                    "task_id": { "type": "string", "description": "ID завершаемой задачи (например, 'CVH-001'). Если не указан, завершается текущая задача." },
+                    "summary": { "type": "string", "description": "Исчерпывающее саммари плана декомпозиции и выполненной работы" }
                 },
                 "required": ["summary"]
             }),
@@ -2023,7 +2024,12 @@ Channel closed before completion", id)),
                 .and_then(|v| v.as_str())
                 .context("Missing required parameter 'summary'")?;
 
-            let current_task_id = task_id.context("No active task ID for complete_task")?;
+            let current_task_id = args
+                .get("task_id")
+                .or_else(|| args.get("taskId"))
+                .and_then(|v| v.as_str())
+                .or(task_id)
+                .context("No active task ID for complete_task")?;
 
             let mut tasks = crate::commands::load_tasks_from_disk(repo_root).await;
             let current_task_idx = tasks
@@ -2067,7 +2073,9 @@ Channel closed before completion", id)),
                 || stage_name.contains("orchestrat")
                 || stage_name.contains("оркестрат")
                 || role_name.contains("orchestrat")
-                || role_name.contains("оркестрат");
+                || role_name.contains("оркестрат")
+                || role_name == "copilot"
+                || role_name == "cvh-dev";
 
             if !has_child_tasks && !is_orchestrator {
                 bail!("complete_task is restricted to orchestrator tasks that created subtasks.");
