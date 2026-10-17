@@ -50,10 +50,16 @@ export default function CopilotDock() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
+  const clearConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load history on mount
+  // Load history on mount and clean up timers on unmount
   useEffect(() => {
     void loadHistory();
+    return () => {
+      if (clearConfirmTimerRef.current) {
+        clearTimeout(clearConfirmTimerRef.current);
+      }
+    };
   }, [loadHistory]);
 
   // Close model dropdown on click outside
@@ -159,12 +165,20 @@ export default function CopilotDock() {
     window.addEventListener('mouseup', handleMouseUp);
   };
 
-  // Clear confirmation timer
+  // Clear confirmation timer with defensive timer handle cleanup
   const handleClearClick = () => {
     if (!confirmClear) {
       setConfirmClear(true);
-      setTimeout(() => setConfirmClear(false), 3000);
+      if (clearConfirmTimerRef.current) clearTimeout(clearConfirmTimerRef.current);
+      clearConfirmTimerRef.current = setTimeout(() => {
+        setConfirmClear(false);
+        clearConfirmTimerRef.current = null;
+      }, 3000);
     } else {
+      if (clearConfirmTimerRef.current) {
+        clearTimeout(clearConfirmTimerRef.current);
+        clearConfirmTimerRef.current = null;
+      }
       void clearHistory();
       setConfirmClear(false);
     }
@@ -225,7 +239,7 @@ export default function CopilotDock() {
             >
               <Cpu className="w-3 h-3 text-[#71717a]" />
               <span className="truncate max-w-[110px]">
-                {selectedModel.replace(/-d{8}$/, '')}
+                {selectedModel.replace(/-\d{8}$/, '')}
               </span>
               <ChevronDown className="w-2.5 h-2.5 opacity-60" />
             </button>
@@ -478,12 +492,13 @@ function extractThinkingBlocks(rawContent: string): {
   let thinking = '';
   let markdown = rawContent;
 
-  // Closed <thinking>...</thinking>
-  const closedMatch = markdown.match(/<thinking>([\s\S]*?)<\/thinking>/i);
-  if (closedMatch) {
-    thinking += closedMatch[1] + '\n';
-    markdown = markdown.replace(/<thinking>[\s\S]*?<\/thinking>/i, '').trim();
+  // Closed <thinking>...</thinking> (handle multiple closed tags)
+  const closedRegex = /<thinking>([\s\S]*?)<\/thinking>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = closedRegex.exec(rawContent)) !== null) {
+    thinking += match[1] + '\n';
   }
+  markdown = markdown.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
 
   // Unclosed <thinking>... during streaming
   const openMatch = markdown.match(/<thinking>([\s\S]*)$/i);
