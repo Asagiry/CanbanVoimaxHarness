@@ -3,7 +3,7 @@ use crate::config::{
     normalize_pipeline_columns, save_boards_config, save_pipeline_config, BoardDef, PipelineConfig,
 };
 use crate::commands::state::AppState;
-use crate::commands::tasks::{load_tasks_from_disk, save_tasks_to_disk};
+use crate::commands::tasks::{heal_tasks, load_tasks_from_disk, save_tasks_to_disk};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::Path;
@@ -793,6 +793,15 @@ pub async fn save_pipeline(
             "boards:updated",
             serde_json::json!({ "boards": &boards_cfg.boards, "activeBoardId": &boards_cfg.active_board_id }),
         );
+        let mut tasks = load_tasks_from_disk(&root).await;
+        let modified = heal_tasks(&mut tasks, &boards_cfg);
+        if modified {
+            if let Ok(mut guard) = state.tasks.lock() {
+                *guard = tasks.clone();
+            }
+            let _ = save_tasks_to_disk(&root, &tasks).await;
+        }
+        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
     }
     Ok(())
 }
@@ -864,6 +873,16 @@ pub async fn create_board(
         let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipe }));
     }
 
+    let mut tasks = load_tasks_from_disk(&root).await;
+    let modified = heal_tasks(&mut tasks, &config);
+    if modified {
+        if let Ok(mut guard) = state.tasks.lock() {
+            *guard = tasks.clone();
+        }
+        let _ = save_tasks_to_disk(&root, &tasks).await;
+    }
+    let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+
     Ok(new_board)
 }
 
@@ -902,6 +921,20 @@ pub async fn save_board(
     if let Ok(pipe) = load_pipeline_config(&root).await {
         let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipe }));
     }
+
+    // Verify and heal all tasks:
+    // Any task on a deleted/renamed board must be mapped to config.active_board_id,
+    // and any task in a removed column mapped to the board's first column (backlog).
+    let mut tasks = load_tasks_from_disk(&root).await;
+    let modified = heal_tasks(&mut tasks, &config);
+    if modified {
+        if let Ok(mut guard) = state.tasks.lock() {
+            *guard = tasks.clone();
+        }
+        let _ = save_tasks_to_disk(&root, &tasks).await;
+    }
+    // Emit both boards:updated and tasks:updated so the UI immediately updates!
+    let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
 
     Ok(())
 }
@@ -945,20 +978,16 @@ pub async fn delete_board(
         let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipe }));
     }
 
+    // Verify and heal all tasks:
+    // Any task on the deleted board must be mapped to config.active_board_id,
+    // and any task in a removed column mapped to the target board's first column (backlog).
     let mut tasks = load_tasks_from_disk(&root).await;
-    let mut tasks_modified = false;
-    for t in &mut tasks {
-        if t.board_id.as_deref() == Some(&board_id) {
-            t.board_id = Some(config.active_board_id.clone());
-            tasks_modified = true;
-        }
+    let _modified = heal_tasks(&mut tasks, &config);
+    if let Ok(mut guard) = state.tasks.lock() {
+        *guard = tasks.clone();
     }
-    if tasks_modified {
-        if let Ok(mut guard) = state.tasks.lock() {
-            *guard = tasks.clone();
-        }
-        let _ = save_tasks_to_disk(&root, &tasks).await;
-    }
+    let _ = save_tasks_to_disk(&root, &tasks).await;
+    let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
 
     Ok(())
 }
