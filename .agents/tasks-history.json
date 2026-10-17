@@ -871,5 +871,28 @@
     ],
     "summary": "Decomposed monolithic commands.rs (5209 lines) into 10 decoupled domain submodules under src-tauri/src/commands/. Re-exported all symbols in commands/mod.rs ensuring 100% backward compatibility for lib.rs generate_handler! and agent.rs. Replaced hardcoded stage names for git worktree creation with configurable hook engine (builtin:create_worktree). All Ground Truth Sensors (cargo check --tests, cargo clippy -- -D warnings) passed with zero warnings/errors.",
     "timestamp": 1792185313298
+  },
+  "CVH-SUBAGENT-UI-NAVIGATION": {
+    "taskId": "CVH-SUBAGENT-UI-NAVIGATION",
+    "task": "subagent-ui-navigation",
+    "title": "Subagent drawer navigation, 100% White Paper compliance, and CortexExplorer polish",
+    "branch": "feat/subagent-ui-navigation",
+    "commitHash": "51e482c",
+    "author": "agent-developer (react-tailwind-artisan)",
+    "verdict": "APPROVED",
+    "sensors": {
+      "frontend_typecheck": "pass (npx tsc --noEmit, 0 errors)"
+    },
+    "files": [
+      "src/components/cortex/CortexExplorer.tsx",
+      "src/components/drawer/AgentConsoleDrawer.tsx",
+      "src/components/drawer/DrawerActivityStream.tsx",
+      "src/components/drawer/DrawerHeader.tsx",
+      "src/components/drawer/DrawerSteerBar.tsx",
+      "src/components/drawer/ToolExecutionCard.tsx",
+      "src/stores/drawerStore.ts"
+    ],
+    "summary": "Fixed subagent drawer view navigation and White Paper compliance. Replaced all dark obsidian styles on subagent cards with pure White Paper styling and subtle role badges. Added prominent breadcrumbs <Parent Task Title> / <Subagent Task Title> with role badge and 'К задаче' back button in DrawerHeader. Updated DrawerActivityStream to display atomic subagent prompt and [← К родительской задаче] return button. Updated DrawerSteerBar with [СУБАГЕНТ: <ROLE>] badge, subagent steer placeholder, and return button. Removed backlog/ready chips in CortexExplorer StageHeaderButton and hid agent dropdown on ready/terminal columns in ColumnStageCard. Added bidirectional toolIdToSubagentId mapping and auto-resolution in drawerStore.ts and AgentConsoleDrawer.",
+    "timestamp": 1792227995001
   }
 }
