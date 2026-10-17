@@ -1104,7 +1104,7 @@ pub async fn execute_tool(
                 .context("Missing required parameter 'command'")?;
             let timeout_secs = args.get("timeout_seconds").and_then(|v| v.as_u64()).unwrap_or(60);
 
-            let res = run_scoped_command(worktree_dir, command_str, Duration::from_secs(timeout_secs), abort_handle).await?;
+            let res = run_scoped_command(worktree_dir, command_str, Duration::from_secs(timeout_secs), Arc::clone(&abort_handle)).await?;
             format!(
                 "[Exit Code: {}]\n--- STDOUT ---\n{}\n--- STDERR ---\n{}",
                 res.exit_code.unwrap_or(-1),
@@ -1201,10 +1201,23 @@ pub async fn execute_tool(
             });
 
             // Parent agent blocks synchronously awaiting clean report from channel (Zero-Pollution Invariant!)
-            match rx.await {
-                Ok(clean_report) => clean_report,
-                Err(_) => bail!("Subagent channel closed before completion"),
-            }
+            let mut rx = rx;
+            let clean_report = loop {
+                tokio::select! {
+                    res = &mut rx => {
+                        match res {
+                            Ok(report) => break report,
+                            Err(_) => bail!("Subagent channel closed before completion"),
+                        }
+                    }
+                    _ = tokio::time::sleep(Duration::from_millis(200)) => {
+                        if abort_handle.load(Ordering::SeqCst) {
+                            bail!("Agent execution aborted while waiting for subagent");
+                        }
+                    }
+                }
+            };
+            clean_report
         }
 
         "subagent_bg" => {
@@ -2071,7 +2084,7 @@ Channel closed before completion", id)),
             let custom_tools = load_custom_tools(repo_root).await;
             if let Some(ct) = custom_tools.into_iter().find(|t| t.name == custom_tool) {
                 let cmd_str = ct.command.replace("{{args}}", &args.to_string());
-                let res = run_scoped_command(worktree_dir, &cmd_str, Duration::from_secs(60), abort_handle).await?;
+                let res = run_scoped_command(worktree_dir, &cmd_str, Duration::from_secs(60), Arc::clone(&abort_handle)).await?;
                 format!(
                     "[Custom Tool: {} Exit: {}]\nSTDOUT: {}\nSTDERR: {}",
                     custom_tool,
@@ -2084,6 +2097,10 @@ Channel closed before completion", id)),
             }
         }
     };
+
+    if abort_handle.load(Ordering::SeqCst) {
+        bail!("Operation aborted");
+    }
 
     maybe_spill_output(repo_root, normalized_tool_name, raw_result).await
 }
@@ -2454,6 +2471,9 @@ pub fn run_inprocess_subagent(
 
         // Execute subagent tool calls
         for tc in turn_tool_calls {
+            if ctx.abort_handle.load(Ordering::SeqCst) {
+                break;
+            }
             let parsed_args: serde_json::Value =
                 serde_json::from_str(&tc.function.arguments).unwrap_or_else(|_| serde_json::json!({}));
 
@@ -2504,6 +2524,9 @@ pub fn run_inprocess_subagent(
             };
 
             let exec_res = execute_tool(&sub_tool_ctx, &tc.function.name, &parsed_args).await;
+            if ctx.abort_handle.load(Ordering::SeqCst) {
+                break;
+            }
             let duration_ms = (chrono::Utc::now().timestamp_millis() - start_time) as f64;
 
             let (res_str, is_success) = match exec_res {
@@ -3592,6 +3615,11 @@ where
 
         // Execute each tool call and record response
         for tc in turn_tool_calls {
+            if abort_flag.load(Ordering::SeqCst) {
+                event_sink(AgentEvent::Aborted);
+                bail!("Agent execution aborted by user");
+            }
+
             let parsed_args: serde_json::Value =
                 serde_json::from_str(&tc.function.arguments).unwrap_or_else(|_| serde_json::json!({}));
 
@@ -3604,6 +3632,11 @@ where
                 &parsed_args,
             )
             .await;
+
+            if abort_flag.load(Ordering::SeqCst) {
+                event_sink(AgentEvent::Aborted);
+                bail!("Agent execution aborted by user");
+            }
 
             if tc.function.name == "todo_write" && exec_result.is_ok() {
                 if let Some(raw_todos) = parsed_args.get("todos").and_then(|v| v.as_array()) {
