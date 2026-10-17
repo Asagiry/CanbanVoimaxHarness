@@ -197,9 +197,7 @@ pub fn prepare_anthropic_system(system_prompt: &str, enable_cache: bool) -> serd
 impl LlmClient {
     pub fn new() -> Self {
         Self {
-            client: reqwest::Client::builder()
-                .build()
-                .expect("Failed to build reqwest Client"),
+            client: reqwest::Client::new(),
         }
     }
 

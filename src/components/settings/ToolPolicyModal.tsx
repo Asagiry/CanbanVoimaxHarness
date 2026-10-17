@@ -285,7 +285,7 @@ export default function ToolPolicyModal() {
         </div>
 
         {/* Body Content */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 font-mono text-xs">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 font-mono text-xs">
           {activeTab === 'matrix' && (
             <div className="overflow-x-auto rounded-md border border-[#ebebeb] bg-white">
               <table className="w-full text-left border-collapse text-xs">

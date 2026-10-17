@@ -1,4 +1,4 @@
-import { useState, useId, useMemo } from 'react';
+import { useState, useId, useMemo, useRef, useEffect } from 'react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import {
   X,
@@ -36,6 +36,15 @@ export default function SettingsModal() {
   const [selectedCandidateModels, setSelectedCandidateModels] = useState<Set<string>>(new Set());
   const [searchFilter, setSearchFilter] = useState('');
   const [isCustomModelInput, setIsCustomModelInput] = useState(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+      }
+    };
+  }, []);
 
   const providerId = useId();
   const gatewayId = useId();
@@ -55,8 +64,12 @@ export default function SettingsModal() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     await saveSettings();
-    setTimeout(() => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+    }
+    closeTimerRef.current = setTimeout(() => {
       closeSettings();
+      closeTimerRef.current = null;
     }, 400);
   };
 

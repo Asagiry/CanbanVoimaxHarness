@@ -37,6 +37,7 @@ export default function ContextGauge({
 
   const [isCompacting, setIsCompacting] = useState(false);
   const [savingsBadge, setSavingsBadge] = useState<string | null>(null);
+  const savingsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Инкрементальный кэш суммы длин thought/output: горячий путь стрима —
   // та же длина ленты + вырос только последний элемент — досчитываем дельту
@@ -223,8 +224,12 @@ export default function ContextGauge({
 
   const triggerSavingsNotice = useCallback((savedCount: number) => {
     setSavingsBadge(`Оптимизировано: ~${savedCount.toLocaleString('ru-RU')} токенов`);
-    setTimeout(() => {
+    if (savingsTimerRef.current) {
+      clearTimeout(savingsTimerRef.current);
+    }
+    savingsTimerRef.current = setTimeout(() => {
       setSavingsBadge(null);
+      savingsTimerRef.current = null;
     }, 3000);
   }, []);
 
@@ -250,6 +255,9 @@ export default function ContextGauge({
 
     return () => {
       if (unlisten) unlisten();
+      if (savingsTimerRef.current) {
+        clearTimeout(savingsTimerRef.current);
+      }
     };
   }, [taskId, setTaskTokens, triggerSavingsNotice]);
 

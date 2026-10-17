@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Brain, ChevronDown, ChevronRight, Copy, Check, Sparkles } from 'lucide-react';
 
 interface ThinkingCardProps {
@@ -9,6 +9,15 @@ interface ThinkingCardProps {
 export function ThinkingCard({ thought, isLive }: ThinkingCardProps) {
   const [isExpanded, setIsExpanded] = useState(isLive ?? false);
   const [copied, setCopied] = useState(false);
+  const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimeoutRef.current) {
+        clearTimeout(copiedTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const cleanThought = thought.trim();
   if (!cleanThought) return null;
@@ -17,7 +26,13 @@ export function ThinkingCard({ thought, isLive }: ThinkingCardProps) {
     e.stopPropagation();
     navigator.clipboard.writeText(cleanThought);
     setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    if (copiedTimeoutRef.current) {
+      clearTimeout(copiedTimeoutRef.current);
+    }
+    copiedTimeoutRef.current = setTimeout(() => {
+      setCopied(false);
+      copiedTimeoutRef.current = null;
+    }, 1500);
   };
 
   return (

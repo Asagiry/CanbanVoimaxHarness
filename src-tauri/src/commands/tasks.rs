@@ -29,24 +29,22 @@ pub fn heal_task_board_and_column(task: &mut Task, config: &crate::config::Board
     let mut modified = false;
 
     // 1. Resolve board_id
-    let has_valid_board = match task.board_id.as_deref().map(str::trim) {
-        Some(b_id) if !b_id.is_empty() => config.boards.iter().any(|b| b.id == b_id),
-        _ => false,
-    };
-
-    let target_board_id = if has_valid_board {
-        task.board_id.as_deref().unwrap().trim().to_string()
-    } else {
-        let fallback_id = if config.boards.iter().any(|b| b.id == config.active_board_id) {
-            config.active_board_id.clone()
-        } else if let Some(first_board) = config.boards.first() {
-            first_board.id.clone()
-        } else {
-            "development".to_string()
-        };
-        task.board_id = Some(fallback_id.clone());
-        modified = true;
-        fallback_id
+    let target_board_id = match task.board_id.as_deref().map(str::trim) {
+        Some(b_id) if !b_id.is_empty() && config.boards.iter().any(|b| b.id == b_id) => {
+            b_id.to_string()
+        }
+        _ => {
+            let fallback_id = if config.boards.iter().any(|b| b.id == config.active_board_id) {
+                config.active_board_id.clone()
+            } else if let Some(first_board) = config.boards.first() {
+                first_board.id.clone()
+            } else {
+                "development".to_string()
+            };
+            task.board_id = Some(fallback_id.clone());
+            modified = true;
+            fallback_id
+        }
     };
 
     // 2. Resolve column / stage_id within target board
@@ -1736,8 +1734,7 @@ pub async fn run_agent(
                         end_active_board_id.as_deref() != tasks[task_idx].board_id.as_deref()
                     );
 
-                    if board_changed {
-                        let active_id = end_active_board_id.unwrap();
+                    if let (true, Some(active_id)) = (board_changed, end_active_board_id) {
                         let target_board = end_boards_cfg.as_ref().and_then(|bc| {
                             bc.boards.iter().find(|b| b.id == active_id).cloned()
                         });
