@@ -405,6 +405,7 @@ use super::*;
             todos: None,
             priority: Some("high".to_string()),
             tags: Some(vec!["orchestrator".to_string()]),
+            current_tokens: None,
             created_at: 0,
             updated_at: 0,
         };
@@ -518,6 +519,7 @@ use super::*;
             todos: None,
             priority: None,
             tags: None,
+            current_tokens: None,
             created_at: 0,
             updated_at: 0,
         };
@@ -584,6 +586,7 @@ use super::*;
             todos: None,
             priority: None,
             tags: None,
+            current_tokens: None,
             created_at: 0,
             updated_at: 0,
         };
@@ -779,6 +782,7 @@ use super::*;
             todos: None,
             priority: None,
             tags: None,
+            current_tokens: None,
             created_at: 0,
             updated_at: 0,
             handover_summary: None,
@@ -948,6 +952,7 @@ use super::*;
             todos: None,
             priority: None,
             tags: None,
+            current_tokens: None,
             created_at: 0,
             updated_at: 0,
             handover_summary: None,
