@@ -1,8 +1,10 @@
 use crate::commands::state::AppState;
 use crate::commands::tasks::load_tasks_from_disk;
+pub use crate::config::ensure_project_gitignore;
 use crate::config::{
-    load_project_config, load_project_registry, persist_active_project,
-    register_or_update_project, scaffold_cvh_project, ProjectConfig, ProjectEntry, ProjectRegistry,
+    init_project_harness as cfg_init_project_harness, load_project_config, load_project_registry,
+    persist_active_project, register_or_update_project, scaffold_cvh_project, ProjectConfig,
+    ProjectEntry, ProjectRegistry,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -35,6 +37,7 @@ pub async fn select_project_folder(
         if !p.trim().is_empty() {
             let path_buf = PathBuf::from(p.trim());
             if path_buf.exists() && path_buf.is_dir() {
+                let _ = ensure_project_gitignore(&path_buf);
                 let _ = scaffold_cvh_project(&path_buf).await;
                 persist_active_project(&path_buf).await;
                 let _ = state.set_root(path_buf.clone());
@@ -62,6 +65,7 @@ pub async fn select_project_folder(
     .and_then(|folder| folder.simplified().into_path().ok());
 
     if let Some(ref folder) = selected {
+        let _ = ensure_project_gitignore(folder);
         let _ = scaffold_cvh_project(folder).await;
         persist_active_project(folder).await;
         let _ = state.set_root(folder.clone());
@@ -90,6 +94,9 @@ pub async fn set_active_project(
 
     // Persist to %LOCALAPPDATA%\com.voimax.cvh\active_project.txt
     persist_active_project(&new_path).await;
+
+    // Ensure .gitignore excludes local CVH runtime entries
+    let _ = ensure_project_gitignore(&new_path);
 
     // Scaffold empty .cvh structure (agents/, worktrees/, skills/, settings/) if missing
     scaffold_cvh_project(&new_path)
@@ -181,4 +188,25 @@ pub async fn set_project_root(
     persist_active_project(&PathBuf::from(path.trim())).await;
     let _cfg = set_active_project(path.clone(), state, app_handle).await?;
     Ok(path)
+}
+
+/// Project opening command (ensures .gitignore synchronization and switches active project)
+#[tauri::command]
+pub async fn open_project(
+    path: String,
+    state: State<'_, AppState>,
+    app_handle: AppHandle,
+) -> Result<ProjectConfig, String> {
+    let new_path = PathBuf::from(path.trim());
+    let _ = ensure_project_gitignore(&new_path);
+    set_active_project(path, state, app_handle).await
+}
+
+/// Project initialization command (ensures .gitignore synchronization and scaffolds CVH structure)
+#[tauri::command]
+pub async fn init_project_harness(path: String) -> Result<(), String> {
+    let p = PathBuf::from(path.trim());
+    cfg_init_project_harness(&p)
+        .await
+        .map_err(|e| format!("Failed to initialize project harness: {}", e))
 }

@@ -266,6 +266,12 @@ pub fn get_app_config_dir() -> PathBuf {
 }
 
 pub fn discover_project_root() -> PathBuf {
+    let root = discover_project_root_raw();
+    let _ = ensure_project_gitignore(&root);
+    root
+}
+
+fn discover_project_root_raw() -> PathBuf {
     // a) FIRST: Check %LOCALAPPDATA%\com.voimax.cvh\active_project.txt.
     // If this file exists, is not empty, and points to an existing directory,
     // return that path as the active project!
@@ -1318,26 +1324,153 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
         atomic_write_file(&tool_policy_path, &serde_json::to_string_pretty(&default_tp)?).await?;
     }
 
-    // 6. Ensure .gitignore excludes .cvh/llm.json, llm.json, and .cvh/worktrees/
+    // 6. Ensure .gitignore has all local CVH runtime entries
+    let _ = ensure_project_gitignore(repo_root);
+
+    Ok(())
+}
+
+// ============================================================================
+// Automatic .gitignore Synchronization for .cvh Local Runtime
+// ============================================================================
+
+pub const CVH_GITIGNORE_HEADER: &str = "# CanbanVoimaxHarness Local Runtime";
+pub const CVH_RUNTIME_GITIGNORE_ENTRIES: &[&str] = &[
+    ".cvh/harness.db*",
+    ".cvh/spill/",
+    ".cvh/worktrees/",
+    ".cvh/llm.json",
+    ".cvh/tasks.json",
+];
+
+/// Ensures that `<repo_root>/.gitignore` exists and contains all required
+/// local CVH runtime entries:
+/// - `.cvh/harness.db*`
+/// - `.cvh/spill/`
+/// - `.cvh/worktrees/`
+/// - `.cvh/llm.json`
+/// - `.cvh/tasks.json`
+///
+/// If any of these entries are missing (and no wildcard `.cvh/` or `.cvh` covers them),
+/// appends the missing lines with the clean section header `# CanbanVoimaxHarness Local Runtime`.
+/// Never duplicates existing lines or existing section headers.
+pub fn ensure_project_gitignore(repo_root: &Path) -> std::io::Result<()> {
     let gitignore_path = repo_root.join(".gitignore");
-    if gitignore_path.exists() {
-        if let Ok(mut gi_content) = tokio::fs::read_to_string(&gitignore_path).await {
-            let mut modified = false;
-            if !gi_content.contains(".cvh/llm.json") {
-                gi_content.push_str("\n.cvh/llm.json\nllm.json\n");
-                modified = true;
+    if !gitignore_path.exists() {
+        if !repo_root.exists() {
+            let _ = std::fs::create_dir_all(repo_root);
+        }
+        let mut content = String::new();
+        content.push_str(CVH_GITIGNORE_HEADER);
+        content.push('\n');
+        for entry in CVH_RUNTIME_GITIGNORE_ENTRIES {
+            content.push_str(entry);
+            content.push('\n');
+        }
+        return std::fs::write(&gitignore_path, content);
+    }
+
+    let existing_content = std::fs::read_to_string(&gitignore_path)?;
+
+    let lines: Vec<&str> = existing_content.lines().collect();
+
+    // 1. Check if any wildcard `.cvh` or `.cvh/` covers the entire directory
+    let is_wildcard_covered = lines.iter().any(|line| {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with('!') {
+            return false;
+        }
+        let norm = trimmed.trim_start_matches('/');
+        norm == ".cvh"
+            || norm == ".cvh/"
+            || norm == ".cvh/*"
+            || norm == "**/.cvh"
+            || norm == "**/.cvh/"
+            || norm == "**/.cvh/*"
+    });
+
+    if is_wildcard_covered {
+        return Ok(());
+    }
+
+    // 2. Determine which runtime entries are missing
+    let mut missing_entries = Vec::new();
+    for &entry in CVH_RUNTIME_GITIGNORE_ENTRIES {
+        let clean_entry = entry.trim_start_matches('/');
+        let clean_entry_no_slash = clean_entry.trim_end_matches('/');
+
+        let present = lines.iter().any(|line| {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with('!') {
+                return false;
             }
-            if !gi_content.contains(".cvh/worktrees") {
-                gi_content.push_str(".cvh/worktrees/\n");
-                modified = true;
+            let norm = trimmed.trim_start_matches('/');
+            let norm_no_slash = norm.trim_end_matches('/');
+
+            if norm == clean_entry || norm_no_slash == clean_entry_no_slash {
+                return true;
             }
-            if modified {
-                let _ = tokio::fs::write(&gitignore_path, gi_content).await;
+
+            if let Some(stripped) = norm.strip_prefix("**/") {
+                let stripped_no_slash = stripped.trim_end_matches('/');
+                if stripped == clean_entry || stripped_no_slash == clean_entry_no_slash {
+                    return true;
+                }
             }
+
+            if entry.ends_with('/') {
+                let dir_wildcard = format!("{}/*", clean_entry_no_slash);
+                if norm == dir_wildcard || norm == format!("**/{}", dir_wildcard) {
+                    return true;
+                }
+            }
+
+            if entry == ".cvh/harness.db*" && (norm == ".cvh/harness*" || norm == "**/.cvh/harness*") {
+                return true;
+            }
+
+            false
+        });
+
+        if !present {
+            missing_entries.push(entry);
         }
     }
 
-    Ok(())
+    if missing_entries.is_empty() {
+        return Ok(());
+    }
+
+    // 3. Append missing lines with clean section header without duplicating
+    let has_header = lines.iter().any(|l| l.trim() == CVH_GITIGNORE_HEADER);
+
+    let mut output = existing_content;
+    if !has_header {
+        if !output.is_empty() && !output.ends_with("\n\n") {
+            if output.ends_with('\n') {
+                output.push('\n');
+            } else {
+                output.push_str("\n\n");
+            }
+        }
+        output.push_str(CVH_GITIGNORE_HEADER);
+        output.push('\n');
+    } else if !output.is_empty() && !output.ends_with('\n') {
+        output.push('\n');
+    }
+
+    for entry in missing_entries {
+        output.push_str(entry);
+        output.push('\n');
+    }
+
+    std::fs::write(&gitignore_path, output)
+}
+
+/// Project initialization helper (ensures .gitignore entries and scaffolds CVH structure)
+pub async fn init_project_harness(repo_root: &Path) -> Result<()> {
+    let _ = ensure_project_gitignore(repo_root);
+    scaffold_cvh_project(repo_root).await
 }
 
 // ============================================================================
@@ -2213,6 +2346,136 @@ mod tests {
         assert_eq!(boards_cfg.boards[0].columns.len(), 1);
 
         let _ = tokio::fs::remove_dir_all(&base_dir).await;
+    }
+
+    #[test]
+    fn test_ensure_project_gitignore_creates_missing_file() {
+        let base_dir = std::env::temp_dir().join(format!("cvh_gi_create_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&base_dir).expect("create test dir");
+
+        ensure_project_gitignore(&base_dir).expect("ensure gitignore failed");
+
+        let gi_path = base_dir.join(".gitignore");
+        assert!(gi_path.is_file(), ".gitignore must be created if missing");
+
+        let content = std::fs::read_to_string(&gi_path).expect("read gitignore");
+        assert!(content.contains(CVH_GITIGNORE_HEADER));
+        for entry in CVH_RUNTIME_GITIGNORE_ENTRIES {
+            assert!(content.contains(entry), "Missing entry in created gitignore: {}", entry);
+        }
+
+        let _ = std::fs::remove_dir_all(&base_dir);
+    }
+
+    #[test]
+    fn test_ensure_project_gitignore_appends_to_existing_file() {
+        let base_dir = std::env::temp_dir().join(format!("cvh_gi_append_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&base_dir).expect("create test dir");
+
+        let gi_path = base_dir.join(".gitignore");
+        std::fs::write(&gi_path, "/target/\nnode_modules/\n").expect("seed existing");
+
+        ensure_project_gitignore(&base_dir).expect("ensure gitignore failed");
+
+        let content = std::fs::read_to_string(&gi_path).expect("read gitignore");
+        assert!(content.starts_with("/target/\nnode_modules/\n"));
+        assert!(content.contains(CVH_GITIGNORE_HEADER));
+        for entry in CVH_RUNTIME_GITIGNORE_ENTRIES {
+            assert!(content.contains(entry), "Missing runtime entry: {}", entry);
+        }
+
+        let _ = std::fs::remove_dir_all(&base_dir);
+    }
+
+    #[test]
+    fn test_ensure_project_gitignore_idempotent_no_duplicates() {
+        let base_dir = std::env::temp_dir().join(format!("cvh_gi_idempotent_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&base_dir).expect("create test dir");
+
+        ensure_project_gitignore(&base_dir).expect("first run");
+        let content_first = std::fs::read_to_string(base_dir.join(".gitignore")).expect("read first");
+
+        ensure_project_gitignore(&base_dir).expect("second run");
+        let content_second = std::fs::read_to_string(base_dir.join(".gitignore")).expect("read second");
+
+        assert_eq!(content_first, content_second, "Second run must not modify gitignore");
+
+        let header_count = content_second.matches(CVH_GITIGNORE_HEADER).count();
+        assert_eq!(header_count, 1, "Header must appear exactly once");
+
+        for entry in CVH_RUNTIME_GITIGNORE_ENTRIES {
+            let entry_count = content_second.matches(entry).count();
+            assert_eq!(entry_count, 1, "Entry {} must appear exactly once", entry);
+        }
+
+        let _ = std::fs::remove_dir_all(&base_dir);
+    }
+
+    #[test]
+    fn test_ensure_project_gitignore_wildcard_covered() {
+        let base_dir = std::env::temp_dir().join(format!("cvh_gi_wildcard_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&base_dir).expect("create test dir");
+
+        let gi_path = base_dir.join(".gitignore");
+        let initial_content = "target/\n.cvh/\nnode_modules/\n";
+        std::fs::write(&gi_path, initial_content).expect("seed wildcard");
+
+        ensure_project_gitignore(&base_dir).expect("run on wildcard");
+
+        let content = std::fs::read_to_string(&gi_path).expect("read gitignore");
+        assert_eq!(content, initial_content, "Wildcard .cvh/ must prevent modifying gitignore");
+
+        let _ = std::fs::remove_dir_all(&base_dir);
+    }
+
+    #[test]
+    fn test_ensure_project_gitignore_partial_preserves_header_and_entries() {
+        let base_dir = std::env::temp_dir().join(format!("cvh_gi_partial_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&base_dir).expect("create test dir");
+
+        let gi_path = base_dir.join(".gitignore");
+        let initial = format!(
+            "{}\n.cvh/worktrees/\n.cvh/llm.json\n",
+            CVH_GITIGNORE_HEADER
+        );
+        std::fs::write(&gi_path, &initial).expect("seed partial");
+
+        ensure_project_gitignore(&base_dir).expect("run on partial");
+
+        let content = std::fs::read_to_string(&gi_path).expect("read gitignore");
+        let header_count = content.matches(CVH_GITIGNORE_HEADER).count();
+        assert_eq!(header_count, 1, "Existing header must not be duplicated");
+
+        for entry in CVH_RUNTIME_GITIGNORE_ENTRIES {
+            assert!(content.contains(entry), "Entry {} must be present", entry);
+        }
+
+        let _ = std::fs::remove_dir_all(&base_dir);
+    }
+
+    #[tokio::test]
+    async fn test_init_project_harness_integration() {
+        let base_dir = std::env::temp_dir().join(format!("cvh_init_test_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&base_dir).expect("create test dir");
+
+        init_project_harness(&base_dir).await.expect("init project harness failed");
+
+        let gi_path = base_dir.join(".gitignore");
+        assert!(gi_path.is_file(), ".gitignore must exist");
+        let content = std::fs::read_to_string(&gi_path).expect("read gitignore");
+        assert!(content.contains(".cvh/harness.db*"));
+        assert!(content.contains(".cvh/spill/"));
+        assert!(content.contains(".cvh/worktrees/"));
+        assert!(content.contains(".cvh/llm.json"));
+        assert!(content.contains(".cvh/tasks.json"));
+
+        let cvh = base_dir.join(".cvh");
+        assert!(cvh.is_dir());
+        assert!(cvh.join("agents").is_dir());
+        assert!(cvh.join("config.json").is_file());
+        assert!(cvh.join("pipeline.json").is_file());
+
+        let _ = std::fs::remove_dir_all(&base_dir);
     }
 }
 

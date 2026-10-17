@@ -121,6 +121,8 @@ pub fn run() {
             set_active_project,
             set_project_root,
             list_projects,
+            open_project,
+            init_project_harness,
             send_copilot_message,
             abort_copilot,
             load_copilot_history,
