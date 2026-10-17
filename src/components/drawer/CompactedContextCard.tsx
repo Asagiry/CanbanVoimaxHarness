@@ -38,29 +38,29 @@ export default function CompactedContextCard({ activity }: CompactedContextCardP
   };
 
   return (
-    <div className="my-2 rounded-md border border-[#ebebeb] bg-white overflow-hidden shadow-xs transition-all">
+    <div className="my-2 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] overflow-hidden shadow-xs transition-all">
       {/* Collapsed State: Clean hairline paper strip */}
       <div
         onClick={() => setIsExpanded(!isExpanded)}
         className={`flex items-center justify-between px-3.5 py-2.5 cursor-pointer select-none transition-colors ${
-          isExpanded ? 'bg-[#fafafa] border-b border-[#ebebeb]' : 'hover:bg-[#f4f4f5]'
+          isExpanded ? 'bg-[#fafafa] dark:bg-[#161b22] border-b border-[#ebebeb] dark:border-[#21262d]' : 'hover:bg-[#f4f4f5] dark:hover:bg-[#161b22]'
         }`}
       >
-        <div className="flex items-center space-x-2 text-[#0d0d0d] min-w-0">
+        <div className="flex items-center space-x-2 text-[#0d0d0d] dark:text-[#f0f6fc] min-w-0">
           {isExpanded ? (
-            <ChevronDown className="h-3.5 w-3.5 text-[#4d4d4d] shrink-0 transition-transform duration-150" />
+            <ChevronDown className="h-3.5 w-3.5 text-[#4d4d4d] dark:text-[#8b949e] shrink-0 transition-transform duration-150" />
           ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-[#4d4d4d] shrink-0 transition-transform duration-150" />
+            <ChevronRight className="h-3.5 w-3.5 text-[#4d4d4d] dark:text-[#8b949e] shrink-0 transition-transform duration-150" />
           )}
 
           <div className="flex items-center space-x-2 text-xs font-medium font-sans truncate">
-            <span className="text-[#0d0d0d] font-semibold">Контекст сжат</span>
-            <span className="text-[#8f8f8f]">·</span>
-            <span className="text-[#4d4d4d]">
-              Сжато <span className="font-mono tabular-nums text-[#0d0d0d]">{count}</span> {pluralMsg}
+            <span className="text-[#0d0d0d] dark:text-[#f0f6fc] font-semibold">Контекст сжат</span>
+            <span className="text-[#8f8f8f] dark:text-[#6e7681]">·</span>
+            <span className="text-[#4d4d4d] dark:text-[#8b949e]">
+              Сжато <span className="font-mono tabular-nums text-[#0d0d0d] dark:text-[#f0f6fc]">{count}</span> {pluralMsg}
             </span>
-            <span className="text-[#8f8f8f]">·</span>
-            <span className="font-mono tabular-nums text-[#4d4d4d] text-[11px] bg-[#f4f4f5] px-1.5 py-0.5 rounded border border-[#ebebeb]">
+            <span className="text-[#8f8f8f] dark:text-[#6e7681]">·</span>
+            <span className="font-mono tabular-nums text-[#4d4d4d] dark:text-[#8b949e] text-[11px] bg-[#f4f4f5] dark:bg-[#161b22] px-1.5 py-0.5 rounded border border-[#ebebeb] dark:border-[#30363d]">
               ~{formattedTokens} токенов
             </span>
           </div>
@@ -96,14 +96,14 @@ export default function CompactedContextCard({ activity }: CompactedContextCardP
 
       {/* Expanded State: Smooth slide-down showing structured Markdown report */}
       {isExpanded && (
-        <div className="p-4 bg-white text-[#0d0d0d] font-sans text-xs leading-relaxed animate-in fade-in slide-in-from-top-1 duration-150">
-          <div className="mb-3 pb-2 border-b border-[#ebebeb] flex items-center justify-between">
-            <div className="flex items-center space-x-1.5 text-[11px] font-mono text-[#666666]">
-              <Minimize2 className="h-3.5 w-3.5 text-[#0d0d0d]" />
-              <span className="font-semibold text-[#0d0d0d]">DSH Context Compactor Report</span>
+        <div className="p-4 bg-white dark:bg-[#0d1117] text-[#0d0d0d] dark:text-[#f0f6fc] font-sans text-xs leading-relaxed animate-in fade-in slide-in-from-top-1 duration-150">
+          <div className="mb-3 pb-2 border-b border-[#ebebeb] dark:border-[#21262d] flex items-center justify-between">
+            <div className="flex items-center space-x-1.5 text-[11px] font-mono text-[#666666] dark:text-[#8b949e]">
+              <Minimize2 className="h-3.5 w-3.5 text-[#0d0d0d] dark:text-[#f0f6fc]" />
+              <span className="font-semibold text-[#0d0d0d] dark:text-[#f0f6fc]">DSH Context Compactor Report</span>
             </div>
             {toolData?.compactorModel && (
-              <span className="text-[10px] font-mono text-[#8f8f8f] bg-[#f4f4f5] px-1.5 py-0.5 rounded border border-[#ebebeb]">
+              <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] bg-[#f4f4f5] dark:bg-[#161b22] px-1.5 py-0.5 rounded border border-[#ebebeb] dark:border-[#30363d]">
                 model: {toolData.compactorModel}
               </span>
             )}

@@ -14,7 +14,10 @@ import {
   GitBranch,
   Square,
   GitCompare,
+  Sun,
+  Moon,
 } from 'lucide-react';
+import { useThemeStore } from '../../stores/themeStore';
 
 export interface DrawerHeaderProps {
   task: KanbanTask;
@@ -61,6 +64,7 @@ export default function DrawerHeader({
     activeSubagentRole,
     closeSubagent,
   } = useDrawerStore();
+  const { theme, toggleThemeWithAnimation } = useThemeStore();
 
   const workingColumns = columns.filter(
     (c) => c.id !== 'backlog' && c.id !== 'ready' && !c.terminal
@@ -73,7 +77,7 @@ export default function DrawerHeader({
       <header
         data-tauri-drag-region
         onDoubleClick={handleHeaderDoubleClick}
-        className="h-10 border-b border-[#ebebeb] bg-white pl-4 pr-0 shrink-0 z-10 shadow-xs flex items-center select-none"
+        className="h-10 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] pl-4 pr-0 shrink-0 z-10 shadow-xs flex items-center select-none transition-colors"
       >
         <div className="flex items-center justify-between w-full h-full" data-tauri-drag-region>
           {/* Left: Logo + Back */}
@@ -84,10 +88,10 @@ export default function DrawerHeader({
               type="button"
               onMouseDown={(e) => e.stopPropagation()}
               onClick={activeSubagentId ? closeSubagent : onClose}
-              className="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-white hover:bg-[#f9f9f9] text-[#171717] border border-[#ebebeb] transition font-sans text-xs font-medium cursor-pointer shadow-xs active:scale-[0.98] select-none pointer-events-auto"
+              className="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] border border-[#ebebeb] dark:border-[#30363d] transition font-sans text-xs font-medium cursor-pointer shadow-xs active:scale-[0.98] select-none pointer-events-auto"
               title={activeSubagentId ? "Назад к родительской задаче" : "Назад к доске (Esc)"}
             >
-              <ArrowLeft className="h-4 w-4 text-[#171717]" />
+              <ArrowLeft className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
               <span>{activeSubagentId ? "К задаче" : "Назад"}</span>
             </button>
           </div>
@@ -101,20 +105,20 @@ export default function DrawerHeader({
               /* Subagent Breadcrumb: <Parent Task Title> / <Subagent Task Title> */
               <div
                 data-no-drag
-                className="flex items-center space-x-2 px-3 py-1 rounded-md bg-[#f4f4f5] border border-[#ebebeb] text-xs font-mono min-w-0 max-w-[650px] overflow-hidden select-none pointer-events-auto shadow-2xs"
+                className="flex items-center space-x-2 px-3 py-1 rounded-md bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-xs font-mono min-w-0 max-w-[650px] overflow-hidden select-none pointer-events-auto shadow-2xs"
               >
                 <button
                   type="button"
                   onClick={closeSubagent}
-                  className="flex items-center space-x-1.5 text-[#52525b] hover:text-[#171717] hover:underline cursor-pointer truncate max-w-[240px] font-medium transition"
+                  className="flex items-center space-x-1.5 text-[#52525b] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:underline cursor-pointer truncate max-w-[240px] font-medium transition"
                   title={`Вернуться к задаче: ${task?.title || task?.id || 'Родительская задача'}`}
                 >
-                  <ArrowLeft className="h-3.5 w-3.5 shrink-0 text-[#171717]" />
+                  <ArrowLeft className="h-3.5 w-3.5 shrink-0 text-[#171717] dark:text-[#f0f6fc]" />
                   <span className="truncate">{task?.title || task?.id || 'Задача'}</span>
                 </button>
-                <span className="text-[#a1a1aa] shrink-0 font-sans">/</span>
-                <span className="flex items-center space-x-1.5 font-semibold text-[#171717] truncate max-w-[320px]">
-                  <span className="text-[#171717] shrink-0 text-xs">■</span>
+                <span className="text-[#a1a1aa] dark:text-[#6e7681] shrink-0 font-sans">/</span>
+                <span className="flex items-center space-x-1.5 font-semibold text-[#171717] dark:text-[#f0f6fc] truncate max-w-[320px]">
+                  <span className="text-[#171717] dark:text-[#f0f6fc] shrink-0 text-xs">■</span>
                   <span className="truncate">{activeSubagentTitle || 'Субагент'}</span>
                 </span>
                 <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border shrink-0 ${getRoleBadgeClass(activeSubagentRole)}`}>
@@ -151,7 +155,7 @@ export default function DrawerHeader({
                 {task && workingColumns.length > 0 && (
                   <div
                     data-no-drag
-                    className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg bg-[#f9fafb] border border-[#ebebeb] shrink-0 select-none pointer-events-auto shadow-2xs overflow-x-auto no-scrollbar max-w-[500px]"
+                    className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg bg-[#f9fafb] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] shrink-0 select-none pointer-events-auto shadow-2xs overflow-x-auto no-scrollbar max-w-[500px]"
                   >
                 {workingColumns.map((col, idx) => {
                   const matchingSubtask = subtasks.find(
@@ -199,12 +203,12 @@ export default function DrawerHeader({
                         }
                         className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono transition-all duration-150 tabular-nums ${
                           isCurrent
-                            ? 'bg-[#f4f4f5] border border-[#ebebeb] text-[#171717] font-semibold shadow-2xs cursor-default'
+                            ? 'bg-[#f4f4f5] dark:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] font-semibold shadow-2xs cursor-default'
                             : targetTaskId
                             ? isPassed
-                              ? 'bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0] hover:bg-[#dcfce7] cursor-pointer active:scale-95'
-                              : 'bg-white text-[#71717a] border border-[#ebebeb] hover:bg-[#f4f4f5] hover:text-[#171717] hover:border-[#d4d4d8] cursor-pointer active:scale-95'
-                            : 'bg-[#fafafa] text-[#a1a1aa] border border-[#ebebeb]/60 cursor-default select-none opacity-60'
+                              ? 'bg-[#f0fdf4] dark:bg-[#052e16]/50 text-[#15803d] dark:text-[#4ade80] border border-[#bbf7d0] dark:border-[#166534] hover:bg-[#dcfce7] dark:hover:bg-[#052e16]/80 cursor-pointer active:scale-95'
+                              : 'bg-white dark:bg-[#0d1117] text-[#71717a] dark:text-[#8b949e] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:border-[#d4d4d8] dark:hover:border-[#484f58] cursor-pointer active:scale-95'
+                            : 'bg-[#fafafa] dark:bg-[#0d1117] text-[#a1a1aa] dark:text-[#6e7681] border border-[#ebebeb]/60 dark:border-[#30363d]/60 cursor-default select-none opacity-60'
                         }`}
                       >
                         {isPassed && <Check className="h-3 w-3 text-[#15803d] shrink-0" />}
@@ -230,7 +234,7 @@ export default function DrawerHeader({
                 type="button"
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={onOpenToolPolicy}
-                className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] border border-[#ebebeb] text-[#666666] hover:text-[#171717] transition cursor-pointer select-none pointer-events-auto"
+                className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#666666] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer select-none pointer-events-auto"
                 title="Матрица инструментов — доступ тулов по агентам"
               >
                 <Wrench className="h-3.5 w-3.5" />
@@ -240,13 +244,41 @@ export default function DrawerHeader({
                 type="button"
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={onOpenSettings}
-                className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] border border-[#ebebeb] text-[#666666] hover:text-[#171717] transition cursor-pointer select-none pointer-events-auto"
+                className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#666666] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer select-none pointer-events-auto"
                 title="Настройки LLM"
               >
                 <Settings className="h-3.5 w-3.5" />
               </button>
+
+              {/* Theme Toggle Button with Circular Wave Animation */}
+              <button
+                data-no-drag
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => toggleThemeWithAnimation(e)}
+                className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#666666] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer relative overflow-hidden group select-none pointer-events-auto"
+                title={theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'}
+                aria-label="Сменить тему оформления"
+              >
+                <div className="relative h-3.5 w-3.5 flex items-center justify-center">
+                  <Sun
+                    className={`h-3.5 w-3.5 transition-all duration-300 transform absolute inset-0 ${
+                      theme === 'dark'
+                        ? 'rotate-90 scale-0 opacity-0'
+                        : 'rotate-0 scale-100 opacity-100 text-amber-500'
+                    }`}
+                  />
+                  <Moon
+                    className={`h-3.5 w-3.5 transition-all duration-300 transform absolute inset-0 ${
+                      theme === 'dark'
+                        ? 'rotate-0 scale-100 opacity-100 text-indigo-400'
+                        : '-rotate-90 scale-0 opacity-0'
+                    }`}
+                  />
+                </div>
+              </button>
             </div>
-            <div className="h-4 w-px bg-[#ebebeb] mx-1" />
+            <div className="h-4 w-px bg-[#ebebeb] dark:bg-[#21262d] mx-1" />
             <div className="select-none pointer-events-auto" data-no-drag>
               <WindowControls />
             </div>
@@ -255,18 +287,18 @@ export default function DrawerHeader({
       </header>
 
       {/* Worktree strip below the header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-[#ebebeb] bg-white text-xs font-mono text-[#666666] shrink-0">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] text-xs font-mono text-[#666666] dark:text-[#8b949e] shrink-0 transition-colors">
         <div className="flex items-center space-x-2.5">
           {task?.worktreePath && (
-            <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-[#f9f9f9] border border-[#ebebeb]">
-              <FolderGit2 className="h-3.5 w-3.5 text-[#8f8f8f]" />
-              <span className="text-[#4d4d4d]">{task.worktreePath}</span>
+            <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-[#f9f9f9] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d]">
+              <FolderGit2 className="h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e]" />
+              <span className="text-[#4d4d4d] dark:text-[#c9d1d9]">{task.worktreePath}</span>
             </div>
           )}
           {task?.branch && (
-            <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-[#f9f9f9] border border-[#ebebeb]">
-              <GitBranch className="h-3.5 w-3.5 text-[#8f8f8f]" />
-              <span className="text-[#4d4d4d]">{task.branch}</span>
+            <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-[#f9f9f9] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d]">
+              <GitBranch className="h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e]" />
+              <span className="text-[#4d4d4d] dark:text-[#c9d1d9]">{task.branch}</span>
             </div>
           )}
         </div>
@@ -303,8 +335,8 @@ export default function DrawerHeader({
             onClick={onToggleDiff}
             className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-mono border transition cursor-pointer ${
               !isDiffCollapsed
-                ? 'bg-[#171717] text-white border-[#171717] shadow-xs'
-                : 'bg-[#f4f4f5] text-[#171717] border-[#ebebeb] hover:bg-[#e4e4e7]'
+                ? 'bg-[#171717] dark:bg-[#21262d] text-white border-[#171717] dark:border-[#30363d] shadow-xs'
+                : 'bg-[#f4f4f5] dark:bg-[#161b22] text-[#171717] dark:text-[#f0f6fc] border-[#ebebeb] dark:border-[#30363d] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d]'
             }`}
             title={isDiffCollapsed ? 'Развернуть Git Diff панель' : 'Скрыть Git Diff панель'}
           >

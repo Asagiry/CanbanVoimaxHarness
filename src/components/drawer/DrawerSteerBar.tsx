@@ -182,20 +182,20 @@ export default function DrawerSteerBar({
   };
 
   return (
-    <footer className="border-t border-[#ebebeb] bg-[#fafafa]/80 backdrop-blur-xs px-3 pb-3 pt-1 shrink-0 shadow-xs z-10">
+    <footer className="border-t border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa]/80 dark:bg-[#090a0f]/80 backdrop-blur-xs px-3 pb-3 pt-1 shrink-0 shadow-xs z-10 transition-colors">
       <div className="max-w-4xl mx-auto">
         {/* Floating Modern Light Card */}
         <div
           onDragOver={handleChatDragOver}
           onDragLeave={handleChatDragLeave}
           onDrop={handleChatDrop}
-          className={`rounded-2xl bg-white border border-[#ebebeb] transition-all shadow-xs p-3 ${
-            isDragOverChat ? 'ring-2 ring-blue-500/30 bg-blue-50/40' : ''
+          className={`rounded-2xl bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] transition-all shadow-xs p-3 ${
+            isDragOverChat ? 'ring-2 ring-blue-500/30 bg-blue-50/40 dark:bg-blue-950/40' : ''
           }`}
         >
           {/* Subagent Steer Guidance Banner */}
           {activeSubagentId && (
-            <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#ebebeb] select-none">
+            <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#ebebeb] dark:border-[#21262d] select-none">
               <div className="flex items-center space-x-2 min-w-0">
                 <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider border uppercase shrink-0 ${getRoleBadgeClass(activeSubagentRole)}`}>
                   СУБАГЕНТ: {(activeSubagentRole || 'general').toUpperCase()}
@@ -258,18 +258,18 @@ export default function DrawerSteerBar({
                 ? 'Уточнить задачу для субагента...'
                 : 'Напишите сообщение, задачу или прикрепите изображение...'
             }
-            className="w-full bg-transparent text-sm text-[#171717] placeholder:text-[#8f8f8f] focus:outline-none resize-none leading-relaxed min-h-[44px] max-h-44 overflow-y-auto font-sans"
+            className="w-full bg-transparent text-sm text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-none resize-none leading-relaxed min-h-[44px] max-h-44 overflow-y-auto font-sans"
           />
 
           {/* Bottom toolbar inside card */}
-          <div className="flex items-center justify-between pt-2 mt-1 border-t border-[#ebebeb] select-none">
+          <div className="flex items-center justify-between pt-2 mt-1 border-t border-[#ebebeb] dark:border-[#21262d] select-none">
             {/* Left Toolbar Items */}
             <div className="flex items-center space-x-2">
               {/* Round "+" Button */}
               <button
                 type="button"
                 onClick={() => chatFileInputRef.current?.click()}
-                className="w-7 h-7 rounded-full bg-[#f4f4f5] hover:bg-[#171717] text-[#171717] hover:text-white flex items-center justify-center transition cursor-pointer"
+                className="w-7 h-7 rounded-full bg-[#f4f4f5] dark:bg-[#161b22] hover:bg-[#171717] dark:hover:bg-[#f0f6fc] text-[#171717] dark:text-[#f0f6fc] hover:text-white dark:hover:text-[#090a0f] flex items-center justify-center transition cursor-pointer"
                 title="Прикрепить изображение (PNG, JPG, WebP) или файл"
               >
                 <Plus className="h-4 w-4" />
@@ -298,15 +298,15 @@ export default function DrawerSteerBar({
                 <button
                   type="button"
                   onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
-                  className="px-2.5 py-1 rounded-full bg-[#f4f4f5] hover:bg-[#e4e4e7] text-[#171717] font-mono text-xs border border-[#ebebeb] transition cursor-pointer flex items-center gap-1.5 max-w-[200px]"
+                  className="px-2.5 py-1 rounded-full bg-[#f4f4f5] dark:bg-[#161b22] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] font-mono text-xs border border-[#ebebeb] dark:border-[#30363d] transition cursor-pointer flex items-center gap-1.5 max-w-[200px]"
                   title={`Модель задачи: ${effectiveModel}`}
                 >
                   <span className="truncate">{effectiveModel}</span>
-                  <ChevronDown className="h-3 w-3 text-[#8f8f8f] shrink-0" />
+                  <ChevronDown className="h-3 w-3 text-[#8f8f8f] dark:text-[#8b949e] shrink-0" />
                 </button>
                 {isModelMenuOpen && (
-                  <div className="absolute bottom-full right-0 mb-2 w-56 rounded-lg bg-white border border-[#ebebeb] shadow-md p-1 z-30 font-mono text-xs max-h-60 overflow-y-auto">
-                    <div className="px-2 py-1 text-[#8f8f8f] text-[10px] uppercase">Выбор модели</div>
+                  <div className="absolute bottom-full right-0 mb-2 w-56 rounded-lg bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] shadow-md p-1 z-30 font-mono text-xs max-h-60 overflow-y-auto">
+                    <div className="px-2 py-1 text-[#8f8f8f] dark:text-[#8b949e] text-[10px] uppercase">Выбор модели</div>
                     {selectableModels.map((m) => (
                       <button
                         key={m}
@@ -316,11 +316,11 @@ export default function DrawerSteerBar({
                           setIsModelMenuOpen(false);
                         }}
                         className={`w-full text-left px-2 py-1.5 rounded flex items-center justify-between cursor-pointer ${
-                          effectiveModel === m ? 'bg-[#f4f4f5] text-[#171717]' : 'text-[#4d4d4d] hover:bg-[#f9f9f9]'
+                          effectiveModel === m ? 'bg-[#f4f4f5] dark:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc]' : 'text-[#4d4d4d] dark:text-[#8b949e] hover:bg-[#f9f9f9] dark:hover:bg-[#21262d]'
                         }`}
                       >
                         <span className="truncate">{m}</span>
-                        {effectiveModel === m && <span className="text-emerald-600 shrink-0 ml-1">✓</span>}
+                        {effectiveModel === m && <span className="text-emerald-600 dark:text-emerald-400 shrink-0 ml-1">✓</span>}
                       </button>
                     ))}
                   </div>
@@ -342,7 +342,7 @@ export default function DrawerSteerBar({
                   type="button"
                   onClick={() => handleSubmit()}
                   disabled={!interactiveInput.trim() && attachedImages.length === 0}
-                  className="w-8 h-8 rounded-full bg-[#171717] hover:bg-black disabled:opacity-40 disabled:hover:bg-[#171717] disabled:cursor-not-allowed text-white flex items-center justify-center shadow-xs transition cursor-pointer active:scale-95"
+                  className="w-8 h-8 rounded-full bg-[#171717] dark:bg-[#f0f6fc] hover:bg-black dark:hover:bg-white disabled:opacity-40 disabled:hover:bg-[#171717] dark:disabled:hover:bg-[#f0f6fc] disabled:cursor-not-allowed text-white dark:text-[#090a0f] flex items-center justify-center shadow-xs transition cursor-pointer active:scale-95"
                   title="Отправить сообщение агенту (Enter)"
                 >
                   <ArrowUp className="h-4 w-4 stroke-[2.5]" />
@@ -355,15 +355,15 @@ export default function DrawerSteerBar({
         {/* Elegant Telemetry Status Line (Кэш, TPS, Контекст) & Compactor Trigger */}
         <div className="flex items-center justify-center gap-3">
           <ContextGauge taskId={task.id} turns={turns} />
-          <div className="h-3 w-px bg-[#ebebeb]" />
+          <div className="h-3 w-px bg-[#ebebeb] dark:bg-[#21262d]" />
           <button
             type="button"
             onClick={handleCompact}
             disabled={isCompacting}
-            className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-white border border-[#ebebeb] hover:bg-[#f4f4f5] hover:border-[#d4d4d8] text-[#0d0d0d] hover:text-[#000000] text-[11px] font-sans font-medium transition cursor-pointer shadow-2xs disabled:opacity-50 active:scale-[0.98]"
+            className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] hover:border-[#d4d4d8] dark:hover:border-[#484f58] text-[#0d0d0d] dark:text-[#f0f6fc] hover:text-[#000000] dark:hover:text-[#ffffff] text-[11px] font-sans font-medium transition cursor-pointer shadow-2xs disabled:opacity-50 active:scale-[0.98]"
             title="Сжать контекст (DSH-Style State-Preserving Compaction)"
           >
-            <Minimize2 className={`h-3 w-3 text-[#4d4d4d] ${isCompacting ? 'animate-spin' : ''}`} />
+            <Minimize2 className={`h-3 w-3 text-[#4d4d4d] dark:text-[#8b949e] ${isCompacting ? 'animate-spin' : ''}`} />
             <span>{isCompacting ? 'Сжатие...' : 'Сжать контекст'}</span>
           </button>
         </div>

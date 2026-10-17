@@ -102,24 +102,24 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/70 backdrop-blur-xs p-4 animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md bg-white rounded-xl shadow-2xl border border-[#ebebeb] overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col"
+        className="w-full max-w-md bg-white dark:bg-[#0d1117] rounded-xl shadow-2xl border border-[#ebebeb] dark:border-[#21262d] overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col transition-colors"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#ebebeb] bg-[#fafafa]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#161b22]">
           <div className="flex items-center space-x-2.5">
-            <div className="p-1.5 rounded-lg bg-white border border-[#ebebeb] shadow-xs text-[#171717]">
-              <Layers className="h-4 w-4 text-[#171717]" />
+            <div className="p-1.5 rounded-lg bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] shadow-xs text-[#171717] dark:text-[#f0f6fc]">
+              <Layers className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-[#171717] font-sans">
+              <h2 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">
                 Новая доска
               </h2>
-              <p className="text-[11px] text-[#71717a] font-sans">
+              <p className="text-[11px] text-[#71717a] dark:text-[#8b949e] font-sans">
                 Канонический цикл: Ожидание → В разработке → Готово
               </p>
             </div>
@@ -127,7 +127,7 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-md text-[#71717a] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
+            className="p-1 rounded-md text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer"
             aria-label="Закрыть"
           >
             <X className="h-4 w-4" />
@@ -144,7 +144,7 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
 
           {/* Board Name Input */}
           <div>
-            <label className="block text-xs font-medium text-[#171717] mb-1.5">
+            <label className="block text-xs font-medium text-[#171717] dark:text-[#f0f6fc] mb-1.5">
               Название доски <span className="text-red-500">*</span>
             </label>
             <input
@@ -154,7 +154,7 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
               value={boardName}
               onChange={(e) => setBoardName(e.target.value)}
               placeholder="Например: 3D Моделирование, Рефакторинг"
-              className="w-full px-3 py-2 rounded-lg bg-[#fafafa] border border-[#ebebeb] text-[#171717] placeholder:text-[#a1a1aa] focus:outline-hidden focus:border-[#171717] focus:bg-white text-xs transition"
+              className="w-full px-3 py-2 rounded-lg bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#a1a1aa] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] text-xs transition"
             />
           </div>
 
@@ -181,55 +181,55 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
           </div>
 
           {/* Invariant Visual Preview */}
-          <div className="p-3 rounded-lg bg-[#fafafa] border border-[#ebebeb] space-y-2">
-            <span className="block text-[11px] font-medium text-[#71717a]">
+          <div className="p-3 rounded-lg bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] space-y-2">
+            <span className="block text-[11px] font-medium text-[#71717a] dark:text-[#8b949e]">
               Инвариант стадий (3 колонки):
             </span>
             <div className="flex items-center justify-between gap-1 text-[11px]">
               {/* Backlog */}
-              <div className="flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-md bg-white border border-[#64748b]/30 shadow-2xs text-center">
+              <div className="flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-md bg-white dark:bg-[#0d1117] border border-[#64748b]/30 shadow-2xs text-center">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#64748b] mb-1" />
-                <span className="font-medium text-[#171717] text-[11px]">Ожидание</span>
-                <span className="text-[9px] text-[#71717a]">Вход</span>
+                <span className="font-medium text-[#171717] dark:text-[#f0f6fc] text-[11px]">Ожидание</span>
+                <span className="text-[9px] text-[#71717a] dark:text-[#8b949e]">Вход</span>
               </div>
 
-              <ArrowRight className="h-3 w-3 text-[#a1a1aa] shrink-0" />
+              <ArrowRight className="h-3 w-3 text-[#a1a1aa] dark:text-[#6e7681] shrink-0" />
 
               {/* Dev */}
-              <div className="flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-md bg-white border border-[#f59e0b]/30 shadow-2xs text-center">
+              <div className="flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-md bg-white dark:bg-[#0d1117] border border-[#f59e0b]/30 shadow-2xs text-center">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#f59e0b] mb-1" />
-                <span className="font-medium text-[#171717] text-[11px]">В разработке</span>
+                <span className="font-medium text-[#171717] dark:text-[#f0f6fc] text-[11px]">В разработке</span>
                 <span className="text-[9px] text-[#f59e0b] font-mono">@{selectedPersona}</span>
               </div>
 
-              <ArrowRight className="h-3 w-3 text-[#a1a1aa] shrink-0" />
+              <ArrowRight className="h-3 w-3 text-[#a1a1aa] dark:text-[#6e7681] shrink-0" />
 
               {/* Ready */}
-              <div className="flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-md bg-white border border-[#10b981]/30 shadow-2xs text-center">
+              <div className="flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-md bg-white dark:bg-[#0d1117] border border-[#10b981]/30 shadow-2xs text-center">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#10b981] mb-1" />
-                <span className="font-medium text-[#171717] text-[11px]">Готово</span>
+                <span className="font-medium text-[#171717] dark:text-[#f0f6fc] text-[11px]">Готово</span>
                 <span className="text-[9px] text-[#10b981] font-semibold">Терминал</span>
               </div>
             </div>
-            <p className="text-[10px] text-[#71717a] text-center pt-0.5">
+            <p className="text-[10px] text-[#71717a] dark:text-[#8b949e] text-center pt-0.5">
               Задачи всегда идут из Ожидания в Готово!
             </p>
           </div>
 
           {/* Footer Actions */}
-          <div className="flex items-center justify-end space-x-2 pt-2 border-t border-[#ebebeb]">
+          <div className="flex items-center justify-end space-x-2 pt-2 border-t border-[#ebebeb] dark:border-[#21262d]">
             <button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-3.5 py-1.5 rounded-md border border-[#ebebeb] hover:bg-[#f4f4f5] text-[#71717a] hover:text-[#171717] font-medium transition cursor-pointer text-xs"
+              className="px-3.5 py-1.5 rounded-md border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] font-medium transition cursor-pointer text-xs"
             >
               Отмена
             </button>
             <button
               type="submit"
               disabled={isSubmitting || !boardName.trim()}
-              className="flex items-center space-x-1.5 px-4 py-1.5 rounded-md bg-[#171717] hover:bg-[#262626] text-white font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs text-xs"
+              className="flex items-center space-x-1.5 px-4 py-1.5 rounded-md bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs text-xs border border-transparent dark:border-[#30363d]"
             >
               <span>{isSubmitting ? 'Создание...' : 'Создать'}</span>
             </button>

@@ -330,7 +330,7 @@ export default function ContextGauge({
 
   // Elegant bottom status bar under chat input card
   return (
-    <div className="font-mono text-xs text-[#8f8f8f] flex items-center justify-center gap-6 py-1.5 select-none">
+    <div className="font-mono text-xs text-[#8f8f8f] dark:text-[#8b949e] flex items-center justify-center gap-6 py-1.5 select-none">
       {/* ⏱️ {turns} шагов · {tps} tok/s */}
       <span className="flex items-center gap-1.5" title={tpsTitle}>
         <span className="tabular-nums">{effectiveTurns} шагов · {tpsText} tok/s</span>
@@ -370,14 +370,14 @@ export default function ContextGauge({
           {/* Invisible hit bridge to prevent losing hover on cursor transition */}
           <div className="absolute -bottom-3 left-0 right-0 h-3" />
 
-          <div className="w-72 rounded-lg border border-[#ebebeb] bg-white p-3.5 shadow-xl text-[#171717] select-none font-sans">
+          <div className="w-72 rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-3.5 shadow-xl text-[#171717] dark:text-[#f0f6fc] select-none font-sans">
             {/* Top Line */}
             <div className="flex items-center justify-between mb-2">
               <div>
-                <span className="font-semibold text-xs text-[#171717]">{percent}%</span>{' '}
-                <span className="text-xs text-[#666666]">of context used</span>
+                <span className="font-semibold text-xs text-[#171717] dark:text-[#f0f6fc]">{percent}%</span>{' '}
+                <span className="text-xs text-[#666666] dark:text-[#8b949e]">of context used</span>
               </div>
-              <span className="font-mono text-xs text-[#666666] tabular-nums">
+              <span className="font-mono text-xs text-[#666666] dark:text-[#8b949e] tabular-nums">
                 ~{usedTokensK}K / {maxTokensK}K
               </span>
             </div>
@@ -441,12 +441,12 @@ export default function ContextGauge({
             </div>
 
             {/* Action Row */}
-            <div className="mt-3 pt-2.5 border-t border-[#ebebeb] flex items-center justify-between">
+            <div className="mt-3 pt-2.5 border-t border-[#ebebeb] dark:border-[#21262d] flex items-center justify-between">
               <button
                 type="button"
                 onClick={handleCompactClick}
                 disabled={isCompacting}
-                className="px-2.5 py-1 rounded-md bg-[#fafafa] hover:bg-[#f4f4f5] border border-[#ebebeb] text-[#171717] text-[11px] font-mono transition cursor-pointer disabled:opacity-50 active:scale-[0.98]"
+                className="px-2.5 py-1 rounded-md bg-[#fafafa] dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] text-[11px] font-mono transition cursor-pointer disabled:opacity-50 active:scale-[0.98]"
                 title="Компактировать контекст (compact_context)"
               >
                 {isCompacting ? 'Сжатие...' : 'Компактировать'}

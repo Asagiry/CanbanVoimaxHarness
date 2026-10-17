@@ -113,16 +113,16 @@ export default function SettingsModal() {
 
   return (
     <>
-      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-100">
-        <div className="relative flex flex-col w-[500px] max-w-full rounded-lg border border-[#ebebeb] bg-white shadow-2xl p-5 text-[#171717]">
+      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 dark:bg-black/70 backdrop-blur-xs p-4 animate-in fade-in duration-100">
+        <div className="relative flex flex-col w-[500px] max-w-full rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-2xl p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors">
           {/* Header */}
-          <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb]">
+          <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#21262d]">
             <div className="flex items-center space-x-2">
-              <h2 className="text-sm font-semibold text-[#171717] tracking-tight">Настройки LLM</h2>
+              <h2 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] tracking-tight">Настройки LLM</h2>
             </div>
             <button
               onClick={closeSettings}
-              className="p-1 rounded-md text-[#666666] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
+              className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
               title="Закрыть"
             >
               <X className="h-4 w-4" />
@@ -329,10 +329,10 @@ export default function SettingsModal() {
 
       {/* Modal Dialog: "Choose models to add" */}
       {isChooseModelsModalOpen && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-100">
-          <div className="relative flex flex-col w-[520px] max-w-full rounded-lg border border-[#ebebeb] bg-white shadow-2xl p-5 text-[#171717]">
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 dark:bg-black/80 backdrop-blur-xs p-4 animate-in fade-in duration-100">
+          <div className="relative flex flex-col w-[520px] max-w-full rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-2xl p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors">
             {/* Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb]">
+            <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#21262d]">
               <div className="flex items-center space-x-2">
                 <Sparkles className="h-4 w-4 text-[#171717]" />
                 <h3 className="text-sm font-semibold text-[#171717] tracking-tight">Выбор моделей</h3>

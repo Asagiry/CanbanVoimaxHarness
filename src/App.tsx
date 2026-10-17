@@ -457,7 +457,7 @@ export default function App() {
     <>
       <div
         style={rootStyle}
-        className="flex flex-col h-screen w-screen overflow-hidden bg-[#fafafa] text-[#171717] select-none relative"
+        className="flex flex-col h-screen w-screen overflow-hidden bg-[#fafafa] dark:bg-[#090a0f] text-[#171717] dark:text-[#f0f6fc] select-none relative transition-colors"
       >
         {/* Top Navigation Bar */}
         <Topbar />

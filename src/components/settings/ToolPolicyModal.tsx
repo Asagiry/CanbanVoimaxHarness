@@ -239,21 +239,21 @@ export default function ToolPolicyModal() {
   if (!isModalOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 backdrop-blur-xs p-3">
-      <div className="w-full max-w-4xl rounded-lg border border-[#ebebeb] bg-white shadow-xl overflow-hidden flex flex-col max-h-[85vh]">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 dark:bg-black/70 backdrop-blur-xs p-3">
+      <div className="w-full max-w-4xl rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] shadow-xl overflow-hidden flex flex-col max-h-[85vh] transition-colors">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#ebebeb] px-4 py-3 bg-white">
+        <div className="flex items-center justify-between border-b border-[#ebebeb] dark:border-[#21262d] px-4 py-3 bg-white dark:bg-[#0d1117]">
           <div>
-            <h2 className="text-sm font-semibold text-[#171717]">
+            <h2 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc]">
               Настройки матрицы инструментов
             </h2>
-            <p className="text-[11px] text-[#666666] font-mono mt-0.5">
+            <p className="text-[11px] text-[#666666] dark:text-[#8b949e] font-mono mt-0.5">
               Разграничение прав доступа инструментов по агентам
             </p>
           </div>
           <button
             onClick={closeModal}
-            className="p-1 rounded-md text-[#666666] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
+            className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
             title="Закрыть"
           >
             <X className="h-4 w-4" />
@@ -261,13 +261,13 @@ export default function ToolPolicyModal() {
         </div>
 
         {/* Tabs Bar */}
-        <div className="flex border-b border-[#ebebeb] bg-white px-4 font-mono text-xs">
+        <div className="flex border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] px-4 font-mono text-xs">
           <button
             onClick={() => setActiveTab('matrix')}
             className={`px-3.5 py-2.5 border-b-2 transition cursor-pointer ${
               activeTab === 'matrix'
-                ? 'border-[#171717] text-[#171717] font-semibold'
-                : 'border-transparent text-[#666666] hover:text-[#171717]'
+                ? 'border-[#171717] dark:border-[#f0f6fc] text-[#171717] dark:text-[#f0f6fc] font-semibold'
+                : 'border-transparent text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
             }`}
           >
             Матрица агентов
@@ -276,8 +276,8 @@ export default function ToolPolicyModal() {
             onClick={() => setActiveTab('global')}
             className={`px-3.5 py-2.5 border-b-2 transition cursor-pointer ${
               activeTab === 'global'
-                ? 'border-[#171717] text-[#171717] font-semibold'
-                : 'border-transparent text-[#666666] hover:text-[#171717]'
+                ? 'border-[#171717] dark:border-[#f0f6fc] text-[#171717] dark:text-[#f0f6fc] font-semibold'
+                : 'border-transparent text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
             }`}
           >
             Глобальный реестр

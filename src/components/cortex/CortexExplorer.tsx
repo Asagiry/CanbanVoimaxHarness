@@ -580,19 +580,19 @@ function SectionHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="w-full flex items-center justify-between px-1.5 py-1 rounded-md text-[#171717] hover:bg-[#f4f4f5] transition group">
+    <div className="w-full flex items-center justify-between px-1.5 py-1 rounded-md text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition group">
       <button
         onClick={onToggle}
         aria-expanded={open}
         className="flex-1 flex items-center gap-1.5 py-1 text-left cursor-pointer"
       >
         {open ? (
-          <ChevronDown className="h-3.5 w-3.5 text-[#666666] shrink-0" />
+          <ChevronDown className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
         ) : (
-          <ChevronRight className="h-3.5 w-3.5 text-[#666666] shrink-0" />
+          <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
         )}
         <span className="font-sans text-xs font-semibold">{title}</span>
-        <span className="text-[10px] font-mono text-[#8f8f8f] tabular-nums">({count})</span>
+        <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] tabular-nums">({count})</span>
       </button>
       {action && (
         <div className="shrink-0 flex items-center" onClick={(e) => e.stopPropagation()}>
@@ -663,19 +663,19 @@ function StageHeaderButton({
             />
           )}
 
-          <span className="font-sans text-xs font-semibold text-[#171717] truncate">
+          <span className="font-sans text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] truncate">
             {stage.stageTitle}
           </span>
 
           {isBuiltin && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-sans font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0 self-center translate-y-[0.5px] leading-tight">
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-sans font-medium bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 shrink-0 self-center translate-y-[0.5px] leading-tight">
               Встроенный
             </span>
           )}
         </div>
 
         {hint !== '' && !isBuiltin && (
-          <span className="text-[10px] font-mono text-[#666666] truncate ml-1">
+          <span className="text-[10px] font-mono text-[#666666] dark:text-[#8b949e] truncate ml-1">
             {hint}
           </span>
         )}
@@ -689,7 +689,7 @@ function StageHeaderButton({
           }}
           title="Новое правило"
           aria-label="Новое правило"
-          className="p-1 rounded-md text-[#8f8f8f] hover:text-[#171717] hover:bg-[#ebebeb]/60 transition cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shrink-0"
+          className="p-1 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d] transition cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shrink-0"
         >
           <Plus className="h-3.5 w-3.5" />
         </button>
@@ -766,8 +766,8 @@ function ColumnStageCard({
       id={`cortex-stage-${stage.stageId}`}
       className={`rounded-md transition-colors ${
         isFocused
-          ? 'bg-white border border-[#ebebeb] shadow-xs'
-          : 'hover:bg-[#f4f4f5]'
+          ? 'bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] shadow-xs'
+          : 'hover:bg-[#f4f4f5] dark:hover:bg-[#161b22]'
       }`}
     >
       <StageHeaderButton
@@ -790,7 +790,7 @@ function ColumnStageCard({
 
       {/* Children */}
       {stage.isExpanded && (
-        <div className="pl-4 pr-1 py-0.5 space-y-0.5 border-l border-[#ebebeb] ml-3 my-0.5">
+        <div className="pl-4 pr-1 py-0.5 space-y-0.5 border-l border-[#ebebeb] dark:border-[#21262d] ml-3 my-0.5">
           {!isBacklogSystem && !isReady && !column?.terminal && column && (
             <AgentField
               columnId={column.id}
@@ -878,8 +878,8 @@ function AgentStageCard({
       onContextMenu={onContextMenu}
       className={`rounded-md transition-colors ${
         isFocused
-          ? 'bg-white border border-[#ebebeb] shadow-xs'
-          : 'hover:bg-[#f4f4f5]'
+          ? 'bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] shadow-xs'
+          : 'hover:bg-[#f4f4f5] dark:hover:bg-[#161b22]'
       }`}
     >
       <StageHeaderButton
@@ -903,7 +903,7 @@ function AgentStageCard({
 
       {/* Children */}
       {stage.isExpanded && (
-        <div className="pl-4 pr-1 py-0.5 space-y-0.5 border-l border-[#ebebeb] ml-3 my-0.5">
+        <div className="pl-4 pr-1 py-0.5 space-y-0.5 border-l border-[#ebebeb] dark:border-[#21262d] ml-3 my-0.5">
           {/* 1. Персона: .cvh/agents/<role>/persona.md */}
           {personaFile && !personaIsMissing && (
             <FileTreeItem
@@ -1007,7 +1007,7 @@ function AgentField({
             disabled={saving}
             onChange={(e) => onChange(columnId, e.target.value)}
             title="Агент колонки"
-            className="flex-1 min-w-0 px-1.5 py-0.5 rounded-md bg-white border border-[#ebebeb] text-[#171717] font-mono text-[11px] focus:outline-hidden focus:border-[#171717] cursor-pointer disabled:opacity-50 transition truncate"
+            className="flex-1 min-w-0 px-1.5 py-0.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] font-mono text-[11px] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] cursor-pointer disabled:opacity-50 transition truncate"
           >
             <option value="">без агента</option>
             {currentValue && !known && (
@@ -1041,7 +1041,7 @@ function AgentField({
             }}
             placeholder="developer"
             title="Агент колонки"
-            className="flex-1 min-w-0 px-1.5 py-0.5 rounded-md bg-white border border-[#ebebeb] text-[#171717] font-mono text-[11px] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] transition disabled:opacity-50"
+            className="flex-1 min-w-0 px-1.5 py-0.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] font-mono text-[11px] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] transition disabled:opacity-50"
           />
         )}
         {saving && (
@@ -1078,12 +1078,12 @@ function RulesFolderBlock({
       <div className="group/folder flex items-center gap-0.5">
         <button
           onClick={onToggle}
-          className="flex-1 min-w-0 flex items-center space-x-1.5 px-2 py-1 rounded-md text-left text-[#666666] hover:text-[#171717] hover:bg-[#ebebeb]/60 transition cursor-pointer"
+          className="flex-1 min-w-0 flex items-center space-x-1.5 px-2 py-1 rounded-md text-left text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d] transition cursor-pointer"
         >
           {isOpen ? (
-            <FolderOpen className="h-3.5 w-3.5 text-[#666666] shrink-0" />
+            <FolderOpen className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
           ) : (
-            <Folder className="h-3.5 w-3.5 text-[#666666] shrink-0" />
+            <Folder className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
           )}
           <span className="text-xs font-mono">Правила</span>
           <span className="text-[10px] font-mono text-[#8f8f8f]">rules/</span>
@@ -1144,12 +1144,12 @@ function HooksFolderBlock({
       <div className="group/folder flex items-center gap-0.5">
         <button
           onClick={onToggle}
-          className="flex-1 min-w-0 flex items-center space-x-1.5 px-2 py-1 rounded-md text-left text-[#666666] hover:text-[#171717] hover:bg-[#ebebeb]/60 transition cursor-pointer"
+          className="flex-1 min-w-0 flex items-center space-x-1.5 px-2 py-1 rounded-md text-left text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d] transition cursor-pointer"
         >
           {isOpen ? (
-            <FolderOpen className="h-3.5 w-3.5 text-[#666666] shrink-0" />
+            <FolderOpen className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
           ) : (
-            <Folder className="h-3.5 w-3.5 text-[#666666] shrink-0" />
+            <Folder className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
           )}
           <span className="text-xs font-mono">Хуки</span>
           <span className="text-[10px] font-mono text-[#8f8f8f]">hooks/</span>
@@ -1435,8 +1435,8 @@ function FileTreeItem({
       onClick={onSelect}
       className={`w-full flex items-center justify-between px-2 py-1 rounded-md text-left transition cursor-pointer ${
         isActive
-          ? 'bg-white border border-[#ebebeb] text-[#171717] font-semibold shadow-xs'
-          : 'text-[#4d4d4d] hover:text-[#171717] hover:bg-[#ebebeb]/60'
+          ? 'bg-white dark:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] font-semibold shadow-xs'
+          : 'text-[#4d4d4d] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d]'
       }`}
       title={file.path}
     >
@@ -1444,7 +1444,7 @@ function FileTreeItem({
         {icon}
         <span className="text-xs font-mono truncate">{displayName}</span>
         {badge && (
-          <span className="px-1 py-px rounded border border-[#ebebeb] bg-[#f4f4f5] text-[10px] font-mono text-[#666666] shrink-0">
+          <span className="px-1 py-px rounded border border-[#ebebeb] dark:border-[#30363d] bg-[#f4f4f5] dark:bg-[#161b22] text-[10px] font-mono text-[#666666] dark:text-[#8b949e] shrink-0">
             {badge}
           </span>
         )}
@@ -1546,21 +1546,21 @@ function EditAgentPersonaModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/75 backdrop-blur-xs p-4 animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-xl border border-[#e4e4e7] bg-white p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
+        className="w-full max-w-md rounded-xl border border-[#e4e4e7] dark:border-[#21262d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-[#f4f4f5] pb-3">
+        <div className="flex items-center justify-between border-b border-[#f4f4f5] dark:border-[#21262d] pb-3">
           <div className="flex items-center space-x-2">
-            <Palette className="h-4 w-4 text-[#171717]" />
-            <h3 className="font-semibold text-sm text-[#171717]">Настройка агента: {role}</h3>
+            <Palette className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
+            <h3 className="font-semibold text-sm text-[#171717] dark:text-[#f0f6fc]">Настройка агента: {role}</h3>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-md text-[#71717a] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
+            className="p-1 rounded-md text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
           >
             <X className="h-4 w-4" />
           </button>

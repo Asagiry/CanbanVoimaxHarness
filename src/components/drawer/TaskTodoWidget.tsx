@@ -67,10 +67,10 @@ export const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
         aria-label="План выполнения задач агента"
         className={`group px-2.5 py-1 rounded-full text-xs font-sans transition-all cursor-pointer flex items-center gap-1.5 select-none border ${
           isOpen
-            ? 'bg-[#e4e4e7] border-[#d4d4d8] text-[#171717] shadow-xs'
+            ? 'bg-[#e4e4e7] dark:bg-[#21262d] border-[#d4d4d8] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] shadow-xs'
             : hasTodos
-            ? 'bg-[#f4f4f5] hover:bg-[#ececee] border-[#ebebeb] text-[#171717]'
-            : 'bg-[#f4f4f5]/60 hover:bg-[#f4f4f5] border-[#ebebeb] text-[#737373]'
+            ? 'bg-[#f4f4f5] dark:bg-[#161b22] hover:bg-[#ececee] dark:hover:bg-[#21262d] border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc]'
+            : 'bg-[#f4f4f5]/60 dark:bg-[#161b22]/60 hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] border-[#ebebeb] dark:border-[#30363d] text-[#737373] dark:text-[#8b949e]'
         }`}
         title={
           hasTodos
@@ -121,20 +121,20 @@ export const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
           aria-label="Список задач агента"
           className={`absolute bottom-full mb-2 ${
             align === 'right' ? 'right-0' : 'left-0'
-          } w-[340px] sm:w-[420px] max-w-[calc(100vw-2rem)] z-30 bg-white rounded-xl border border-[#ebebeb] overflow-hidden select-text font-sans`}
+          } w-[340px] sm:w-[420px] max-w-[calc(100vw-2rem)] z-30 bg-white dark:bg-[#0d1117] rounded-xl border border-[#ebebeb] dark:border-[#21262d] overflow-hidden select-text font-sans text-[#171717] dark:text-[#f0f6fc]`}
           style={{
             boxShadow: '0 12px 32px -4px rgba(0, 0, 0, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.08)',
           }}
         >
           {/* Popover Header */}
-          <div className="px-3.5 py-2.5 bg-[#fafafa] border-b border-[#ebebeb] flex items-center justify-between gap-2 select-none">
+          <div className="px-3.5 py-2.5 bg-[#fafafa] dark:bg-[#161b22] border-b border-[#ebebeb] dark:border-[#21262d] flex items-center justify-between gap-2 select-none">
             <div className="flex items-center space-x-2 min-w-0">
-              <ListTodo className="h-4 w-4 text-[#171717] shrink-0" />
-              <span className="text-xs font-semibold text-[#171717] tracking-tight shrink-0">
+              <ListTodo className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
+              <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] tracking-tight shrink-0">
                 План выполнения (To-dos)
               </span>
               {hasTodos && (
-                <span className="font-mono tabular-nums text-[11px] text-[#15803d] bg-[#f0fdf4] border border-[#dcfce7] px-1.5 py-0.5 rounded-full font-medium shrink-0">
+                <span className="font-mono tabular-nums text-[11px] text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#052e16]/40 border border-[#dcfce7] dark:border-[#166534] px-1.5 py-0.5 rounded-full font-medium shrink-0">
                   {completedCount}/{todos.length}
                 </span>
               )}
@@ -152,7 +152,7 @@ export const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
 
           {/* Subheader summary strip */}
           {hasTodos && (
-            <div className="px-3.5 py-1.5 bg-white border-b border-[#f4f4f5] flex items-center space-x-3 text-[11px] text-[#737373] select-none">
+            <div className="px-3.5 py-1.5 bg-white dark:bg-[#0d1117] border-b border-[#f4f4f5] dark:border-[#21262d] flex items-center space-x-3 text-[11px] text-[#737373] dark:text-[#8b949e] select-none">
               <div className="flex items-center space-x-1">
                 <span className="font-mono tabular-nums text-[#15803d] font-semibold">
                   {completedCount}
@@ -181,7 +181,7 @@ export const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
             {!hasTodos ? (
               <div className="p-4 text-center text-xs text-[#8f8f8f] font-sans leading-relaxed">
                 План пока пуст. Шаги появятся здесь, когда агент вызовет инструмент{' '}
-                <code className="px-1.5 py-0.5 bg-[#f4f4f5] rounded border border-[#ebebeb] text-[11px] font-mono text-[#171717]">
+                <code className="px-1.5 py-0.5 bg-[#f4f4f5] dark:bg-[#161b22] rounded border border-[#ebebeb] dark:border-[#30363d] text-[11px] font-mono text-[#171717] dark:text-[#f0f6fc]">
                   todo_write
                 </code>
                 .
