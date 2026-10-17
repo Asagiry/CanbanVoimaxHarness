@@ -135,14 +135,29 @@ pub enum AgentEvent {
 /// Lean router System Persona for `cvh-dev` (≤150 lines, ≤8KB).
 /// Progressive disclosure: identity + triggers + paths + skeletons here;
 /// full detail lives lazy in `.cvh/agents/<role>/rules/*.md` by slug.
-pub const BUILTIN_CVH_DEV_PROMPT: &str = r#"# Role Persona: cvh-dev (Harness Router)
-Use PROACTIVELY when: empty/new repo, missing .cvh/, broken boards/pipeline/personas/hooks, or new stack to onboard. Goal: one runnable vertical slice.
+pub const CVH_DEV_TOOLS: &[&str] = &[
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "execute_command",
+    "web_search",
+];
+
+pub const BUILTIN_CVH_DEV_PROMPT: &str = r#"# Role: CVH-DEV (Project Configuration & Environment Specialist)
+Вы отвечаете ИСКЛЮЧИТЕЛЬНО за настройку проекта, правил и архитектуры CanbanVoimaxHarness (.cvh/):
+- Настройка досок (.cvh/boards.json) и пайплайнов (.cvh/pipeline.json).
+- Создание и редактирование персон, ролей и правил агентов (.cvh/agents/<role>/persona.md, rules/*.md).
+- Настройка политик инструментов (.cvh/settings/tool-policy.json) и скриптов перехода (hooks).
+Вы НЕ создаёте карточки задач и НЕ управляете рабочими тасками (этим занимается пользователь и пайплайн). Ваша цель — подготовить идеальное окружение для команды разработчиков.
+
 Identity:
 - Columns = Agents: board IS the control plane; column `persona: <role>` on-enter runs `run_agent(taskId)`; flow `backlog` -> ... -> `ready`.
-- Router-only: you may only search/inspect/load/delegate via glob/read_file/grep/execute_command/subagent; full text loads lazy by slug from rules/.
+- Configuration-only: you may inspect and configure .cvh/ via read_file/write_file/edit_file/glob/grep/execute_command/web_search. You do NOT create or complete task cards.
 - 1 ticket = 1 vertical slice = 1 commit; tiers T0-spec / T1-scaffold / T2-verify / T3-commit; redact secrets at ingest, never log keys.
 Overview: bootstrap or repair CVH harness (boards, pipeline, personas, policy, hooks) then stop. No monolith prompt, no docs dump.
-When NOT: not a coder for feature logic; not a reviewer (separate clean context); not a docs writer; if task needs code, delegate to `developer`, if audit to `reviewer`.
+When NOT: not a coder for feature logic; not a reviewer (separate clean context); not a docs writer; not a task creator or task manager. If task needs code, delegate to `developer`, if audit to `reviewer`.
 Paths (repo-root relative, single source of truth):
 - `.cvh/boards.json {activeBoardId, boards[{id,name,columns}]}` defines `development` + `kanban` boards; `activeBoardId` selects one.
 - `.cvh/pipeline.json {id,title,columns[{id,title,persona,contextWindow,gatekeeperSensor,allowedTools,terminal}]}` mirrors active board columns.
@@ -967,6 +982,13 @@ pub async fn execute_tool(
                 "PermissionDenied: Инструмент '{}' отключен политикой безопасности для агента '{}'",
                 normalized_tool_name,
                 role
+            );
+        }
+        if role == "cvh-dev" && !CVH_DEV_TOOLS.contains(&normalized_tool_name) {
+            bail!(
+                "PermissionDenied: Агент 'cvh-dev' ограничен только инструментами настройки проекта: {:?}. Попытка вызова '{}'",
+                CVH_DEV_TOOLS,
+                normalized_tool_name
             );
         }
     }
@@ -2073,9 +2095,7 @@ Channel closed before completion", id)),
                 || stage_name.contains("orchestrat")
                 || stage_name.contains("оркестрат")
                 || role_name.contains("orchestrat")
-                || role_name.contains("оркестрат")
-                || role_name == "copilot"
-                || role_name == "cvh-dev";
+                || role_name.contains("оркестрат");
 
             if !has_child_tasks && !is_orchestrator {
                 bail!("complete_task is restricted to orchestrator tasks that created subtasks.");
@@ -3483,6 +3503,11 @@ where
         })
         .collect();
 
+    // If running as cvh-dev, restrict candidate tools strictly to project configuration tools
+    if config.role == "cvh-dev" {
+        active_tools.retain(|t| CVH_DEV_TOOLS.contains(&t.function.name.as_str()));
+    }
+
     // Deterministic sorting of tool definitions for prefix caching
     active_tools.sort_by(|a, b| a.function.name.cmp(&b.function.name));
 
@@ -4471,6 +4496,50 @@ mod tests {
         assert_eq!(t10_done.stage_id, "ready");
         assert_eq!(t10_done.status.as_deref(), Some("done"));
         assert_eq!(t10_done.handover_summary.as_deref(), Some("Decomposition finished and subtasks spawned"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_cvh_dev_cannot_create_or_complete_tasks() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_dev_scope_test_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+
+        let flag = Arc::new(AtomicBool::new(false));
+        let policy = ToolPolicyConfig::default();
+        let cvh_dev_ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("dev"),
+            role: Some("cvh-dev"),
+            abort_handle: Arc::clone(&flag),
+            tool_policy: &policy,
+            task_id: Some("CVH-999"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        // 1. Calling create_task as cvh-dev must fail
+        let create_err = execute_tool(&cvh_dev_ctx, "create_task", &serde_json::json!({
+            "title": "Forbidden task"
+        }))
+        .await
+        .expect_err("cvh-dev must NOT be allowed to call create_task");
+        assert!(create_err.to_string().contains("cvh-dev"));
+
+        // 2. Calling complete_task as cvh-dev must fail
+        let complete_err = execute_tool(&cvh_dev_ctx, "complete_task", &serde_json::json!({
+            "summary": "Trying to complete task"
+        }))
+        .await
+        .expect_err("cvh-dev must NOT be allowed to call complete_task");
+        assert!(complete_err.to_string().contains("cvh-dev"));
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
