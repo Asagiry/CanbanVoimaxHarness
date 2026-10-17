@@ -1,0 +1,24 @@
+{
+  "taskId": "CVH-COPILOT-BACKEND",
+  "title": "CVH Copilot (Sidecar Architect Dock) Rust/Tauri v2 Backend",
+  "summary": "Implemented the Rust/Tauri v2 backend for CVH Copilot (Sidecar Architect Dock). Created src-tauri/src/commands/copilot.rs with 4 IPC commands: send_copilot_message, abort_copilot, load_copilot_history, clear_copilot_history. Pre-compiles the Meta-Architect persona from .cvh/agents/cvh-dev/persona.md (or BUILTIN_CVH_DEV_PROMPT) with complete project context (boards.json, pipeline.json, tasks.json, and rules). Exposes the 10 standard architectural tools (create_task, create_tasks, complete_task, read_file, write_file, edit_file, glob, grep, execute_command, web_search) sorted alphabetically for deterministic prefix caching. Runs the ReAct loop with real-time SSE streaming emitted via Tauri event copilot:stream (with taskId: 'copilot' and types token, thought, tool_call, tool_result, finished, error). Persists conversation and tool activity items into SQLite dialog_items under task_id = 'copilot:meta-chat'. Added active_copilot to AppState in src-tauri/src/commands/state.rs and registered commands in tauri::generate_handler! in lib.rs. Enhanced complete_task to accept optional task_id and allow copilot roles. Updated sanitize_task_id to allow the copilot: namespace. Addressed all 4 Level 2 reviewer caveats: prompt-level tool stripping, turn limit guard (MAX_COPILOT_TURNS: 30), parent_id pollution prevention on created tasks, and pointer-checked Arc::ptr_eq active_copilot cleanup.",
+  "commitHash": "67b0373",
+  "commitMessage": "feat: implement CVH Copilot Rust/Tauri v2 backend",
+  "author": "Lead Systems Engineer (tauri-rust-engineer)",
+  "verdict": "APPROVED",
+  "date": "2026-10-17T14:21:35.239Z",
+  "affectedModules": [
+    "src-tauri/src/commands/copilot.rs",
+    "src-tauri/src/commands/state.rs",
+    "src-tauri/src/commands/mod.rs",
+    "src-tauri/src/lib.rs",
+    "src-tauri/src/agent.rs",
+    "src-tauri/src/commands/dialogs.rs"
+  ],
+  "verification": {
+    "cargoCheck": "PASSED (0 errors)",
+    "cargoClippy": "PASSED (0 warnings with -D warnings)",
+    "cargoTest": "PASSED (80 passed, 0 failed)",
+    "l2Review": "APPROVED_WITH_CAVEATS by agent-developer-reviewer (all 4 caveats resolved)"
+  }
+}
