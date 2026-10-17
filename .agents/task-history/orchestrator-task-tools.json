@@ -1,0 +1,29 @@
+{
+  "taskId": "CVH-ORCH-TOOLS",
+  "title": "Orchestrator Task Tools with Anti-Bypass Invariant",
+  "summary": "Implemented create_task and complete_task tools in Rust agent runtime for the Orchestrator pattern. Implemented strict Anti-Bypass security invariant preventing non-orchestrator agents from skipping the pipeline to Готово. Registered under orchestration category in tool-policy matrix and UI.",
+  "commitHash": "5ca45ad",
+  "commitMessage": "feat(orchestrator): merge create_task and complete_task tools with anti-bypass invariant",
+  "author": "Lead Systems Engineer (agent-developer & tauri-rust-engineer)",
+  "verdict": "APPROVED",
+  "date": "2026-10-17T10:21:01.926Z",
+  "affectedModules": [
+    "src-tauri/src/agent.rs",
+    "src-tauri/src/commands/tasks.rs",
+    "src-tauri/src/commands/tests.rs",
+    "src-tauri/src/config.rs",
+    "src-tauri/build.rs",
+    ".cvh/settings/tool-policy.json",
+    "src/stores/toolPolicyStore.ts",
+    "src/components/settings/ToolPolicyModal.tsx",
+    "src/types/index.ts"
+  ],
+  "verification": {
+    "cargoCheck": "PASSED (0 errors)",
+    "cargoClippy": "PASSED (0 warnings)",
+    "cargoTests": "PASSED (69 passed, 0 failed)",
+    "typescript": "PASSED (tsc --noEmit: 0 errors)",
+    "antiBypassInvariant": "VERIFIED (unit test test_complete_task_anti_bypass_invariant verified rejection message 'complete_task is restricted to orchestrator tasks that created subtasks.')",
+    "subagentToolIsolation": "VERIFIED (create_task, create_tasks, and complete_task excluded from run_inprocess_subagent)"
+  }
+}
