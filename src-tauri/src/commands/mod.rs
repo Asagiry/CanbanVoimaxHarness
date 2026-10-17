@@ -7,6 +7,7 @@ pub mod tools;
 pub mod llm;
 pub mod projects;
 pub mod tasks;
+pub mod copilot;
 
 #[cfg(test)]
 mod tests;
@@ -20,3 +21,4 @@ pub use tools::*;
 pub use llm::*;
 pub use projects::*;
 pub use tasks::*;
+pub use copilot::*;
