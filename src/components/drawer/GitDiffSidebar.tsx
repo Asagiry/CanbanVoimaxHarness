@@ -397,9 +397,10 @@ export default function GitDiffSidebar({
     fetchDiff();
   }, [fetchDiff]);
 
-  // Listen to live agent tool execution & finish events
+  // Listen to live agent tool execution & finish events with anti-race disposal
   useEffect(() => {
     if (!taskId) return;
+    let isDisposed = false;
     let unlistenToolCall: (() => void) | undefined;
     let unlistenToolResult: (() => void) | undefined;
     let unlistenFinish: (() => void) | undefined;
@@ -407,23 +408,40 @@ export default function GitDiffSidebar({
     const setupListeners = async () => {
       try {
         const { listen } = await import('@tauri-apps/api/event');
-        unlistenToolCall = await listen<{ taskId?: string }>('agent:tool_call', (event) => {
-          if (event.payload?.taskId === taskId) {
-            scheduleFetch();
-          }
-        });
+        if (isDisposed) return;
 
-        unlistenToolResult = await listen<{ taskId?: string }>('agent:tool_result', (event) => {
+        const uCall = await listen<{ taskId?: string }>('agent:tool_call', (event) => {
           if (event.payload?.taskId === taskId) {
             scheduleFetch();
           }
         });
+        if (isDisposed) {
+          uCall();
+        } else {
+          unlistenToolCall = uCall;
+        }
 
-        unlistenFinish = await listen<{ taskId?: string }>('agent:finished', (event) => {
+        const uResult = await listen<{ taskId?: string }>('agent:tool_result', (event) => {
           if (event.payload?.taskId === taskId) {
             scheduleFetch();
           }
         });
+        if (isDisposed) {
+          uResult();
+        } else {
+          unlistenToolResult = uResult;
+        }
+
+        const uFinish = await listen<{ taskId?: string }>('agent:finished', (event) => {
+          if (event.payload?.taskId === taskId) {
+            scheduleFetch();
+          }
+        });
+        if (isDisposed) {
+          uFinish();
+        } else {
+          unlistenFinish = uFinish;
+        }
       } catch {
         // web fallback
       }
@@ -432,6 +450,7 @@ export default function GitDiffSidebar({
     setupListeners();
 
     return () => {
+      isDisposed = true;
       if (unlistenToolCall) unlistenToolCall();
       if (unlistenToolResult) unlistenToolResult();
       if (unlistenFinish) unlistenFinish();
