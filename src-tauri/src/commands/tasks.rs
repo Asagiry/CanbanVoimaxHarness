@@ -17,49 +17,124 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
 
-pub fn ensure_task_board_id(mut tasks: Vec<Task>) -> Vec<Task> {
-    for t in &mut tasks {
-        if t.board_id.as_deref().unwrap_or("").trim().is_empty() {
-            t.board_id = Some("development".to_string());
+/// Dynamically heals a single task against the given BoardsConfig:
+/// 1. Board ID: If task.board_id is None, empty, or does not match any existing board in config.boards:
+///    reassign it to config.active_board_id (if that board exists), otherwise to config.boards[0].id (if available),
+///    or fallback to "development".
+/// 2. Column / Stage ID: If task.stage_id does not exist in the target board's columns (checked via stage_id_matches),
+///    dynamically heal it to the target board's first column (typically "backlog").
+/// Returns true if any modification was made to the task.
+pub fn heal_task_board_and_column(task: &mut Task, config: &crate::config::BoardsConfig) -> bool {
+    let mut modified = false;
+
+    // 1. Resolve board_id
+    let has_valid_board = match task.board_id.as_deref().map(str::trim) {
+        Some(b_id) if !b_id.is_empty() => config.boards.iter().any(|b| b.id == b_id),
+        _ => false,
+    };
+
+    let target_board_id = if has_valid_board {
+        task.board_id.as_deref().unwrap().trim().to_string()
+    } else {
+        let fallback_id = if config.boards.iter().any(|b| b.id == config.active_board_id) {
+            config.active_board_id.clone()
+        } else if let Some(first_board) = config.boards.first() {
+            first_board.id.clone()
+        } else {
+            "development".to_string()
+        };
+        task.board_id = Some(fallback_id.clone());
+        modified = true;
+        fallback_id
+    };
+
+    // 2. Resolve column / stage_id within target board
+    if let Some(target_board) = config.boards.iter().find(|b| b.id == target_board_id) {
+        let col_exists = target_board
+            .columns
+            .iter()
+            .any(|c| stage_id_matches(&c.id, &task.stage_id));
+        if !col_exists {
+            let fallback_col = target_board
+                .columns
+                .first()
+                .map(|c| c.id.as_str())
+                .unwrap_or("backlog");
+            task.stage_id = fallback_col.to_string();
+            modified = true;
         }
     }
+
+    modified
+}
+
+/// Heals all tasks against the given BoardsConfig.
+/// Returns true if any task was modified.
+pub fn heal_tasks(tasks: &mut [Task], config: &crate::config::BoardsConfig) -> bool {
+    let mut any_modified = false;
+    for t in tasks.iter_mut() {
+        if heal_task_board_and_column(t, config) {
+            any_modified = true;
+        }
+    }
+    any_modified
+}
+
+/// Ensures all tasks have a valid board_id and column_id dynamically according to BoardsConfig.
+pub fn ensure_task_board_id(mut tasks: Vec<Task>, config: &crate::config::BoardsConfig) -> Vec<Task> {
+    heal_tasks(&mut tasks, config);
     tasks
 }
 
 pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
+    let boards_cfg = load_boards_config(repo_root)
+        .await
+        .unwrap_or_else(|_| crate::config::default_boards_config());
+
+    let mut tasks = Vec::new();
+    let mut loaded = false;
+
     let local_tasks_file = repo_root.join(".cvh").join("tasks.json");
     if local_tasks_file.exists() {
         if let Ok(content) = tokio::fs::read_to_string(&local_tasks_file).await {
             let trimmed = content.trim();
             if !trimmed.is_empty() {
-                if let Ok(tasks) = serde_json::from_str::<Vec<Task>>(trimmed) {
-                    return ensure_task_board_id(tasks);
+                if let Ok(parsed) = serde_json::from_str::<Vec<Task>>(trimmed) {
+                    tasks = parsed;
+                    loaded = true;
                 }
             }
         }
     }
 
-    // Try global fallback: %LOCALAPPDATA%\com.voimax.cvh\tasks.json
-    let global_tasks_file = get_app_config_dir().join("tasks.json");
-    if global_tasks_file.exists() {
-        if let Ok(content) = tokio::fs::read_to_string(&global_tasks_file).await {
-            let trimmed = content.trim();
-            if !trimmed.is_empty() {
-                if let Ok(tasks) = serde_json::from_str::<Vec<Task>>(trimmed) {
-                    if !tasks.is_empty() {
-                        eprintln!(
-                            "CVH [load_tasks_from_disk]: Restored {} tasks from global fallback {:?}",
-                            tasks.len(),
-                            global_tasks_file
-                        );
-                        return ensure_task_board_id(tasks);
+    if !loaded {
+        // Try global fallback: %LOCALAPPDATA%\com.voimax.cvh\tasks.json
+        let global_tasks_file = get_app_config_dir().join("tasks.json");
+        if global_tasks_file.exists() {
+            if let Ok(content) = tokio::fs::read_to_string(&global_tasks_file).await {
+                let trimmed = content.trim();
+                if !trimmed.is_empty() {
+                    if let Ok(parsed) = serde_json::from_str::<Vec<Task>>(trimmed) {
+                        if !parsed.is_empty() {
+                            eprintln!(
+                                "CVH [load_tasks_from_disk]: Restored {} tasks from global fallback {:?}",
+                                parsed.len(),
+                                global_tasks_file
+                            );
+                            tasks = parsed;
+                        }
                     }
                 }
             }
         }
     }
 
-    Vec::new()
+    let modified = heal_tasks(&mut tasks, &boards_cfg);
+    if modified {
+        let _ = save_tasks_to_disk(repo_root, &tasks).await;
+    }
+
+    tasks
 }
 
 pub async fn save_tasks_to_disk(repo_root: &Path, tasks: &[Task]) -> Result<(), String> {

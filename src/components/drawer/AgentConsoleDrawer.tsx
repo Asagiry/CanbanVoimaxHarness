@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import type { KanbanTask } from '../../types';
 import { useDrawerStore, DrawerActivityItem } from '../../stores/drawerStore';
 import { useBoardStore, syncTasksBackend } from '../../stores/boardStore';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -30,14 +31,34 @@ export default function AgentConsoleDrawer() {
   const [runError, setRunError] = useState<string | null>(null);
   const [isDiffCollapsed, setIsDiffCollapsed] = useState(false);
 
-  const task = tasks.find((t) => t.id === activeTaskId);
+  const rawTask = tasks.find((t) => t.id === activeTaskId);
+  const fallbackBoardId = useBoardStore.getState().activeBoardId || 'development';
+  const fallbackColId = columns[0]?.id ?? 'backlog';
+  // Resilient fallback: ensure task is never undefined if drawer is active
+  const task: KanbanTask = rawTask ?? {
+    id: activeTaskId || 'task',
+    title: activeTaskId || 'Task',
+    columnId: fallbackColId,
+    boardId: fallbackBoardId,
+    persona: 'developer',
+    status: 'idle',
+    priority: 'high',
+    branch: `feat/${(activeTaskId || 'task').toLowerCase()}`,
+    worktreePath: `worktrees/${(activeTaskId || 'task').toLowerCase()}`,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    activeStageDuration: 0,
+    stageDurations: {},
+    totalElapsed: 0,
+    isTimerRunning: false,
+    returnsCount: 0,
+    verdict: 'NONE',
+  };
 
-  const rootTask = task
-    ? task.parentId
-      ? tasks.find((t) => t.id === task.parentId) || task
-      : task
-    : null;
-  const subtasks = rootTask ? tasks.filter((t) => t.parentId === rootTask.id) : [];
+  const rootTask = task.parentId
+    ? tasks.find((t) => t.id === task.parentId) || task
+    : task;
+  const subtasks = tasks.filter((t) => t.parentId === rootTask.id);
 
   // Reset error when switching tasks & load dialog history from disk
   useEffect(() => {

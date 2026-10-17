@@ -164,6 +164,7 @@ Pipeline skeleton (ids/order must match board; backlog first, ready last):
 Tool-policy skeleton (AND-semantics: effective = globalEnabled && stageOverrides; global false cannot be re-enabled):
 {"globalEnabled":{"read_file":true,"glob":true,"grep":true,"execute_command":true,"edit_file":true,"write_file":true,"web_search":true,"web_fetch":true,"subagent":true},"stageOverrides":{"dev":{"web_search":false},"review":{"edit_file":false,"write_file":false}}}
 Rules (apply to every step):
+- Board Reconfiguration Invariant: When creating, renaming, or modifying boards in .cvh/boards.json or .cvh/pipeline.json, NEVER delete the board or column where your current task is running. If you create new boards, ensure all existing tasks in .cvh/tasks.json have their boardId cleanly preserved or mapped to the intended boards.
 - Hooks/policy live outside prompt: read them from disk, never inline full dumps; tiers: files-only (glob/read), read-only (+grep/fetch), gated-writes (+edit/write/execute inside worktree after sensor).
 - Normalize (commands.rs:47): backlog always first if present, ready always last, middle keeps order; duplicate column id returns Err and blocks move.
 - Sync boards<->pipeline: same column ids/order; boards.json is index, pipeline.json is active execution copy.
@@ -1515,25 +1516,21 @@ Channel closed before completion", id)),
 async fn emit_file_change_events(ctx: &ToolContext<'_>, rel_path: &str) {
     if let Some(app) = &ctx.app_handle {
         let norm = rel_path.replace('\\', "/");
-        if norm.ends_with("boards.json") {
+        if norm.ends_with("boards.json") || norm.ends_with("pipeline.json") {
             if let Ok(bc) = crate::config::load_boards_config(ctx.repo_root).await {
                 let _ = app.emit(
                     "boards:updated",
                     serde_json::json!({ "boards": &bc.boards, "activeBoardId": &bc.active_board_id }),
                 );
+                let mut tasks = crate::commands::tasks::load_tasks_from_disk(ctx.repo_root).await;
+                let modified = crate::commands::tasks::heal_tasks(&mut tasks, &bc);
+                if modified {
+                    let _ = crate::commands::tasks::save_tasks_to_disk(ctx.repo_root, &tasks).await;
+                }
+                let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
             }
             if let Ok(pipe) = crate::config::load_pipeline_config(ctx.repo_root).await {
                 let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipe }));
-            }
-        } else if norm.ends_with("pipeline.json") {
-            if let Ok(pipe) = crate::config::load_pipeline_config(ctx.repo_root).await {
-                let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipe }));
-            }
-            if let Ok(bc) = crate::config::load_boards_config(ctx.repo_root).await {
-                let _ = app.emit(
-                    "boards:updated",
-                    serde_json::json!({ "boards": &bc.boards, "activeBoardId": &bc.active_board_id }),
-                );
             }
         } else if norm.contains(".cvh/agents") || norm.contains("/agents/") {
             let list = crate::commands::list_agent_personas_in(ctx.repo_root).await;

@@ -203,11 +203,27 @@ function persistTasksToLocalStorage(tasks: KanbanTask[]): void {
 
 function normalizeKanbanTask(raw: any): KanbanTask | null {
   if (!raw || typeof raw.id !== 'string' || raw.id.trim() === '') return null;
-  const columns = useBoardStore.getState().columns;
+  const { boards, activeBoardId, columns: currentColumns } = useBoardStore.getState();
+
+  // Dynamic board resolution:
+  // If a task's boardId is missing or doesn't match any board, fallback to activeBoardId (or first board).
+  const rawBoardId = typeof raw.boardId === 'string' ? raw.boardId.trim() : (typeof raw.board_id === 'string' ? raw.board_id.trim() : '');
+  const hasMatchingBoard = rawBoardId !== '' && boards.some((b) => b.id === rawBoardId);
+  const boardId = hasMatchingBoard
+    ? rawBoardId
+    : (activeBoardId || boards[0]?.id || 'development');
+
+  // Determine target board's columns to validate columnId
+  const targetBoard = boards.find((b) => b.id === boardId);
+  const targetColumns = targetBoard?.columns && targetBoard.columns.length > 0
+    ? targetBoard.columns
+    : (currentColumns && currentColumns.length > 0 ? currentColumns : INITIAL_COLUMNS);
+
   const rawId: string | undefined = raw.stageId || raw.stage_id || raw.columnId;
-  const knownCol = columns.find((c) => c.id === rawId);
-  const columnId = knownCol?.id ?? columns[0]?.id ?? rawId ?? 'backlog';
-  const col = columns.find((c) => c.id === columnId);
+  const knownCol = targetColumns.find((c) => c.id === rawId);
+  // If columnId doesn't match any column in the target board, fallback to the first column (backlog)
+  const columnId = knownCol?.id ?? targetColumns[0]?.id ?? 'backlog';
+  const col = targetColumns.find((c) => c.id === columnId);
   const rawStatus = (raw.status as TaskStatus) || undefined;
   const status: TaskStatus = rawStatus ?? (col?.terminal
     ? 'done'
@@ -240,7 +256,7 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
       : (typeof raw.updated_at === 'number' && Number.isFinite(raw.updated_at) ? raw.updated_at : Date.now()),
     priority: (raw.priority as TaskPriority) || 'high',
     columnId,
-    boardId: raw.boardId || raw.board_id || 'development',
+    boardId,
     persona: col?.persona ?? (typeof raw.persona === 'string' ? raw.persona : 'developer'),
     branch: raw.branch || `feat/${raw.id.toLowerCase()}`,
     worktreePath: raw.worktreePath || raw.worktree_path || `worktrees/${raw.id.toLowerCase()}`,
@@ -300,37 +316,42 @@ function loadTasksFromLocalStorage(): KanbanTask[] {
 export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
   try {
     const { invoke } = await import('@tauri-apps/api/core');
-    const activeBoardId = useBoardStore.getState().activeBoardId || 'development';
+    const { activeBoardId, boards } = useBoardStore.getState();
+    const fallbackBoardId = activeBoardId || boards[0]?.id || 'development';
     // NOTE: send ONLY canonical camelCase keys. Sending both stageId+columnId
     // makes Rust serde fail with "duplicate field `stageId`" and save_tasks
     // silently never persists (this broke run_agent with "Task not found").
-    const backendPayload = tasks.map((t) => ({
-      id: t.id,
-      title: t.title,
-      description: t.description || '',
-      stageId: t.columnId,
-      boardId: t.boardId || activeBoardId,
-      worktreePath: t.worktreePath,
-      branch: t.branch,
-      verdict: t.verdict === 'NONE' ? null : t.verdict,
-      customFlow: t.customFlow,
-      status: t.status,
-      model: t.model,
-      parentId: t.parentId ?? null,
-      subtaskIndex: t.subtaskIndex ?? null,
-      waitingForSubtaskId: t.waitingForSubtaskId ?? null,
-      // NOTE: todos MUST be included — otherwise every sync wipes the plan
-      // the agent saved via todo_write (backend save_tasks replaces the file).
-      todos: Array.isArray(t.todos)
-        ? t.todos.map((td: any) => ({
-            id: String(td?.id ?? ''),
-            content: String(td?.content ?? ''),
-            status: td?.status === 'completed' || td?.status === 'in_progress' ? td.status : 'pending',
-          }))
-        : null,
-      createdAt: t.createdAt || Date.now(),
-      updatedAt: Date.now(),
-    }));
+    const backendPayload = tasks.map((t) => {
+      const hasBoard = boards.some((b) => b.id === t.boardId);
+      const effectiveBoardId = hasBoard ? t.boardId : fallbackBoardId;
+      return {
+        id: t.id,
+        title: t.title,
+        description: t.description || '',
+        stageId: t.columnId,
+        boardId: effectiveBoardId,
+        worktreePath: t.worktreePath,
+        branch: t.branch,
+        verdict: t.verdict === 'NONE' ? null : t.verdict,
+        customFlow: t.customFlow,
+        status: t.status,
+        model: t.model,
+        parentId: t.parentId ?? null,
+        subtaskIndex: t.subtaskIndex ?? null,
+        waitingForSubtaskId: t.waitingForSubtaskId ?? null,
+        // NOTE: todos MUST be included — otherwise every sync wipes the plan
+        // the agent saved via todo_write (backend save_tasks replaces the file).
+        todos: Array.isArray(t.todos)
+          ? t.todos.map((td: any) => ({
+              id: String(td?.id ?? ''),
+              content: String(td?.content ?? ''),
+              status: td?.status === 'completed' || td?.status === 'in_progress' ? td.status : 'pending',
+            }))
+          : null,
+        createdAt: t.createdAt || Date.now(),
+        updatedAt: Date.now(),
+      };
+    });
     await invoke('save_tasks', { tasks: backendPayload });
   } catch (err) {
     console.info('Backend save_tasks not available or in web mode:', err);
@@ -355,9 +376,10 @@ function mapBackendTaskToKanban(t: any): KanbanTask {
   if (normalized) return normalized;
   // Крайний фолбэк: запись без id — собрать безопасную задачу-заглушку,
   // чтобы рендер никогда не падал с TypeError.
-  const columns = useBoardStore.getState().columns;
+  const { columns, boards, activeBoardId } = useBoardStore.getState();
   const fallbackId = `unknown-${Date.now().toString(36)}`;
   const fallbackCol = columns[0]?.id ?? 'backlog';
+  const fallbackBoardId = activeBoardId || boards[0]?.id || 'development';
   return {
     id: fallbackId,
     title: fallbackId,
@@ -367,7 +389,7 @@ function mapBackendTaskToKanban(t: any): KanbanTask {
     updatedAt: Date.now(),
     priority: 'high' as TaskPriority,
     columnId: fallbackCol,
-    boardId: 'development',
+    boardId: fallbackBoardId,
     persona: columns.find((c) => c.id === fallbackCol)?.persona ?? 'developer',
     branch: `feat/${fallbackId.toLowerCase()}`,
     worktreePath: `worktrees/${fallbackId.toLowerCase()}`,
@@ -445,12 +467,29 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           ? rawActiveId
           : rawBoards[0].id;
         const currentBoard = rawBoards.find((b) => b.id === activeId) ?? rawBoards[0];
+
+        // Dynamic Self-Healing: Verify all tasks in store against the loaded boards
+        const currentTasks = get().tasks;
+        const healedTasks = currentTasks.map((t) => {
+          const hasBoard = rawBoards.some((b) => b.id === t.boardId);
+          const effectiveBoardId = hasBoard ? t.boardId : activeId;
+          const targetBoard = rawBoards.find((b) => b.id === effectiveBoardId) ?? currentBoard;
+          const colExists = targetBoard.columns.some((c) => c.id === t.columnId);
+          const effectiveColId = colExists ? t.columnId : (targetBoard.columns[0]?.id ?? 'backlog');
+          if (effectiveBoardId !== t.boardId || effectiveColId !== t.columnId) {
+            return { ...t, boardId: effectiveBoardId, columnId: effectiveColId };
+          }
+          return t;
+        });
+
         set({
           boards: rawBoards,
           activeBoardId: activeId,
           columns: currentBoard.columns,
+          tasks: healedTasks,
           isLoadingBoards: false,
         });
+        persistTasksToLocalStorage(healedTasks);
         return;
       }
     } catch (err) {
@@ -511,9 +550,20 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     set((state) => {
       const nextBoards = state.boards.map((b) => (b.id === board.id ? board : b));
       const isCurrent = state.activeBoardId === board.id;
+      // Heal tasks on this board whose columns may have been removed
+      const nextTasks = state.tasks.map((t) => {
+        if (t.boardId === board.id) {
+          const colExists = board.columns.some((c) => c.id === t.columnId);
+          if (!colExists) {
+            return { ...t, columnId: board.columns[0]?.id ?? 'backlog' };
+          }
+        }
+        return t;
+      });
       return {
         boards: nextBoards,
         columns: isCurrent ? board.columns : state.columns,
+        tasks: nextTasks,
       };
     });
     try {
@@ -533,9 +583,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const nextActiveId = activeBoardId === boardId ? filtered[0].id : activeBoardId;
     const nextBoard = filtered.find((b) => b.id === nextActiveId) ?? filtered[0];
 
-    const updatedTasks = tasks.map((t) =>
-      (t.boardId || 'development') === boardId ? { ...t, boardId: nextActiveId } : t
-    );
+    const updatedTasks = tasks.map((t) => {
+      const isTarget = (t.boardId || 'development') === boardId;
+      if (!isTarget) return t;
+      const targetCols = nextBoard.columns;
+      const colExists = targetCols.some((c) => c.id === t.columnId);
+      const healedCol = colExists ? t.columnId : (targetCols[0]?.id ?? 'backlog');
+      return { ...t, boardId: nextActiveId, columnId: healedCol };
+    });
 
     set({
       boards: filtered,

@@ -555,8 +555,147 @@ use std::path::PathBuf;
         let task_without_board: Task = serde_json::from_str(json_without_board).expect("deserialize task without board");
         assert!(task_without_board.board_id.is_none());
 
-        let fixed = ensure_task_board_id(vec![task_without_board]);
+        let default_cfg = crate::config::default_boards_config();
+        let fixed = ensure_task_board_id(vec![task_without_board], &default_cfg);
         assert_eq!(fixed[0].board_id.as_deref(), Some("development"));
+    }
+
+    #[test]
+    fn test_self_healing_orphaned_board_and_column() {
+        use crate::commands::tasks::{heal_task_board_and_column, heal_tasks};
+        use crate::config::{BoardDef, BoardsConfig, PipelineColumn};
+
+        let custom_cfg = BoardsConfig {
+            active_board_id: "feature-board".to_string(),
+            boards: vec![
+                BoardDef {
+                    id: "feature-board".to_string(),
+                    name: "Feature Board".to_string(),
+                    columns: vec![
+                        PipelineColumn {
+                            id: "backlog".to_string(),
+                            title: "Backlog".to_string(),
+                            color: None,
+                            icon: None,
+                            persona: None,
+                            on_enter_script: None,
+                            context_window: None,
+                            model_override: None,
+                            reasoning_effort: None,
+                            temperature: None,
+                            gatekeeper_sensor: None,
+                            allowed_tools: None,
+                            hooks: std::collections::HashMap::new(),
+                            routes: None,
+                            auto_run: None,
+                            terminal: None,
+                        },
+                        PipelineColumn {
+                            id: "in_progress".to_string(),
+                            title: "In Progress".to_string(),
+                            color: None,
+                            icon: None,
+                            persona: None,
+                            on_enter_script: None,
+                            context_window: None,
+                            model_override: None,
+                            reasoning_effort: None,
+                            temperature: None,
+                            gatekeeper_sensor: None,
+                            allowed_tools: None,
+                            hooks: std::collections::HashMap::new(),
+                            routes: None,
+                            auto_run: None,
+                            terminal: None,
+                        },
+                        PipelineColumn {
+                            id: "ready".to_string(),
+                            title: "Ready".to_string(),
+                            color: None,
+                            icon: None,
+                            persona: None,
+                            on_enter_script: None,
+                            context_window: None,
+                            model_override: None,
+                            reasoning_effort: None,
+                            temperature: None,
+                            gatekeeper_sensor: None,
+                            allowed_tools: None,
+                            hooks: std::collections::HashMap::new(),
+                            routes: None,
+                            auto_run: None,
+                            terminal: Some(true),
+                        },
+                    ],
+                },
+            ],
+        };
+
+        // 1. Orphaned board_id should be remapped to active_board_id ("feature-board")
+        // and non-existent column "old_unknown_stage" should be healed to "backlog"
+        let mut orphaned_task = Task {
+            id: "CVH-200".to_string(),
+            title: "Orphaned Task".to_string(),
+            description: String::new(),
+            stage_id: "old_unknown_stage".to_string(),
+            board_id: Some("deleted_board".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: None,
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            handover_summary: None,
+            cover_image: None,
+            attachments: None,
+            todos: None,
+            created_at: 0,
+            updated_at: 0,
+        };
+
+        let modified = heal_task_board_and_column(&mut orphaned_task, &custom_cfg);
+        assert!(modified);
+        assert_eq!(orphaned_task.board_id.as_deref(), Some("feature-board"));
+        assert_eq!(orphaned_task.stage_id, "backlog");
+
+        // 2. Valid task should remain unchanged
+        let mut valid_task = Task {
+            id: "CVH-201".to_string(),
+            title: "Valid Task".to_string(),
+            description: String::new(),
+            stage_id: "in_progress".to_string(),
+            board_id: Some("feature-board".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: None,
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            handover_summary: None,
+            cover_image: None,
+            attachments: None,
+            todos: None,
+            created_at: 0,
+            updated_at: 0,
+        };
+
+        let modified_valid = heal_task_board_and_column(&mut valid_task, &custom_cfg);
+        assert!(!modified_valid);
+        assert_eq!(valid_task.board_id.as_deref(), Some("feature-board"));
+        assert_eq!(valid_task.stage_id, "in_progress");
+
+        // 3. heal_tasks on vector
+        let mut tasks = vec![orphaned_task.clone(), valid_task.clone()];
+        tasks[0].board_id = None;
+        let any_mod = heal_tasks(&mut tasks, &custom_cfg);
+        assert!(any_mod);
+        assert_eq!(tasks[0].board_id.as_deref(), Some("feature-board"));
     }
 
     #[tokio::test]

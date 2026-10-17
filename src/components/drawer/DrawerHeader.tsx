@@ -220,13 +220,13 @@ export default function DrawerHeader({
       {/* Worktree strip below the header */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-[#ebebeb] bg-white text-xs font-mono text-[#666666] shrink-0">
         <div className="flex items-center space-x-2.5">
-          {task.worktreePath && (
+          {task?.worktreePath && (
             <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-[#f9f9f9] border border-[#ebebeb]">
               <FolderGit2 className="h-3.5 w-3.5 text-[#8f8f8f]" />
               <span className="text-[#4d4d4d]">{task.worktreePath}</span>
             </div>
           )}
-          {task.branch && (
+          {task?.branch && (
             <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-[#f9f9f9] border border-[#ebebeb]">
               <GitBranch className="h-3.5 w-3.5 text-[#8f8f8f]" />
               <span className="text-[#4d4d4d]">{task.branch}</span>

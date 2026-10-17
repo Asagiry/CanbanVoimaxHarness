@@ -40,3 +40,6 @@ Columns represent autonomous stages. Moving a card triggers stage automations an
   `column.persona` in `boards.json` and `pipeline.json` MUST STRICTLY MATCH the directory name `.cvh/agents/<role>/` and frontmatter `name: <role>`.
 - **stageOverrides.<stage_id> strictly matches column.id**:
   `stageOverrides.<stage_id>` in `.cvh/settings/tool-policy.json` MUST STRICTLY MATCH `column.id` in `boards.json` and `pipeline.json`.
+
+## 6. Board Reconfiguration Invariant
+When creating, renaming, or modifying boards in .cvh/boards.json or .cvh/pipeline.json, NEVER delete the board or column where your current task is running. If you create new boards, ensure all existing tasks in .cvh/tasks.json have their boardId cleanly preserved or mapped to the intended boards.

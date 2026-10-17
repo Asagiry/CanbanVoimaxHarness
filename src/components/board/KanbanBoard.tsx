@@ -329,10 +329,19 @@ export default function KanbanBoard() {
       );
     };
 
-    const getColumnDisplayTasks = (colId: string) => {
-      const isDone = isDoneCol(colId);
+    const firstColId = columns[0]?.id ?? 'backlog';
+    const getColumnDisplayTasks = (targetColId: string) => {
+      const isDone = isDoneCol(targetColId);
+      const isFirst = targetColId === firstColId;
       const baseTasks = searchQuery ? filteredTasks : currentBoardTasks;
-      const colTasks = baseTasks.filter((t) => t.columnId === colId);
+      const colTasks = baseTasks.filter((t) => {
+        if (t.columnId === targetColId) return true;
+        if (isFirst) {
+          const colExists = columns.some((c) => c.id === t.columnId);
+          return !colExists;
+        }
+        return false;
+      });
       return isDone ? colTasks.filter((t) => !t.parentId) : colTasks;
     };
 
@@ -627,10 +636,14 @@ export default function KanbanBoard() {
     }
   };
 
-  // Filter tasks based on activeBoardId and searchQuery
-  const currentBoardTasks = tasks.filter(
-    (task) => (task.boardId || 'development') === activeBoardId
-  );
+  // Filter tasks based on activeBoardId and searchQuery:
+  // If a task's boardId is missing or doesn't match any board, fallback to activeBoardId.
+  // ZERO INVISIBLE TASKS: Every task must be visible on the board it belongs to, or on the active board if orphaned.
+  const currentBoardTasks = tasks.filter((task) => {
+    const hasMatchingBoard = boards.some((b) => b.id === task.boardId);
+    const effectiveBoardId = hasMatchingBoard ? task.boardId : activeBoardId;
+    return effectiveBoardId === activeBoardId;
+  });
 
   const filteredTasks = currentBoardTasks.filter((task) => {
     if (!searchQuery) return true;
@@ -664,7 +677,11 @@ export default function KanbanBoard() {
           {boards.map((b) => {
             const isActive = b.id === activeBoardId;
             const isRenaming = renamingBoardId === b.id;
-            const boardTasksCount = tasks.filter((t) => (t.boardId || 'development') === b.id).length;
+            const boardTasksCount = tasks.filter((t) => {
+              const hasMatchingBoard = boards.some((board) => board.id === t.boardId);
+              const effectiveBoardId = hasMatchingBoard ? t.boardId : activeBoardId;
+              return effectiveBoardId === b.id;
+            }).length;
             return (
               <div
                 key={b.id}
@@ -1049,7 +1066,17 @@ export default function KanbanBoard() {
 
           <div className="flex items-start space-x-3.5 h-full min-w-max pb-1">
             {columns.map((column, index) => {
-              const columnTasks = filteredTasks.filter((t) => t.columnId === column.id);
+              const firstColId = columns[0]?.id ?? 'backlog';
+              const isFirstColumn = column.id === firstColId;
+              const columnTasks = filteredTasks.filter((t) => {
+                if (t.columnId === column.id) return true;
+                if (isFirstColumn) {
+                  // If a task's columnId doesn't match any column in the active board, fallback to the first column (backlog)
+                  const colExists = columns.some((c) => c.id === t.columnId);
+                  return !colExists;
+                }
+                return false;
+              });
               // Закреплены только backlog/ready/terminal по id/флагу.
               // index===0 — лишь fallback, когда id бэклога неизвестен (нет колонки backlog).
               const pinnedById =
