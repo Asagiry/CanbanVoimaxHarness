@@ -199,7 +199,7 @@ export default function DrawerHeader({
                         }
                         className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono transition-all duration-150 tabular-nums ${
                           isCurrent
-                            ? 'bg-[#171717] text-white font-semibold shadow-xs ring-1 ring-[#171717] cursor-default'
+                            ? 'bg-[#f4f4f5] border border-[#ebebeb] text-[#171717] font-semibold shadow-2xs cursor-default'
                             : targetTaskId
                             ? isPassed
                               ? 'bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0] hover:bg-[#dcfce7] cursor-pointer active:scale-95'

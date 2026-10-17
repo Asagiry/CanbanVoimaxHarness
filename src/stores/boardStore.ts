@@ -234,12 +234,36 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
     raw.stageDurations && typeof raw.stageDurations === 'object' && !Array.isArray(raw.stageDurations)
       ? raw.stageDurations
       : {};
-  const activeStageDuration = typeof raw.activeStageDuration === 'number' && Number.isFinite(raw.activeStageDuration)
+  const createdAt = typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt)
+    ? raw.createdAt
+    : (typeof raw.created_at === 'number' && Number.isFinite(raw.created_at) ? raw.created_at : Date.now());
+  const updatedAt = typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt)
+    ? raw.updatedAt
+    : (typeof raw.updated_at === 'number' && Number.isFinite(raw.updated_at) ? raw.updated_at : Date.now());
+  const stageEnteredAt = typeof raw.stageEnteredAt === 'number' && Number.isFinite(raw.stageEnteredAt)
+    ? raw.stageEnteredAt
+    : (typeof raw.stage_entered_at === 'number' && Number.isFinite(raw.stage_entered_at)
+      ? raw.stage_entered_at
+      : undefined);
+
+  const stageStart = stageEnteredAt || updatedAt || createdAt;
+  const isDoneTask = status === 'done';
+  const computedStageDuration = isDoneTask
+    ? (typeof raw.activeStageDuration === 'number' && Number.isFinite(raw.activeStageDuration) ? raw.activeStageDuration : 0)
+    : (stageStart ? Math.max(0, Math.floor((Date.now() - stageStart) / 1000)) : 0);
+
+  const activeStageDuration = typeof raw.activeStageDuration === 'number' && Number.isFinite(raw.activeStageDuration) && raw.activeStageDuration > 0
     ? raw.activeStageDuration
-    : 0;
-  const totalElapsed = typeof raw.totalElapsed === 'number' && Number.isFinite(raw.totalElapsed)
+    : computedStageDuration;
+
+  const computedTotalElapsed = isDoneTask
+    ? (typeof raw.totalElapsed === 'number' && Number.isFinite(raw.totalElapsed) ? raw.totalElapsed : 0)
+    : (createdAt ? Math.max(0, Math.floor((Date.now() - createdAt) / 1000)) : 0);
+
+  const totalElapsed = typeof raw.totalElapsed === 'number' && Number.isFinite(raw.totalElapsed) && raw.totalElapsed > 0
     ? raw.totalElapsed
-    : 0;
+    : computedTotalElapsed;
+
   const returnsCount = typeof raw.returnsCount === 'number' && Number.isFinite(raw.returnsCount)
     ? raw.returnsCount
     : 0;
@@ -248,12 +272,9 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
     title: typeof raw.title === 'string' && raw.title.trim() !== '' ? raw.title : raw.id,
     description: typeof raw.description === 'string' && raw.description !== '' ? raw.description : undefined,
     attachments: Array.isArray(raw.attachments) ? raw.attachments.filter((a: unknown) => typeof a === 'string') : undefined,
-    createdAt: typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt)
-      ? raw.createdAt
-      : (typeof raw.created_at === 'number' && Number.isFinite(raw.created_at) ? raw.created_at : Date.now()),
-    updatedAt: typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt)
-      ? raw.updatedAt
-      : (typeof raw.updated_at === 'number' && Number.isFinite(raw.updated_at) ? raw.updated_at : Date.now()),
+    createdAt,
+    updatedAt,
+    stageEnteredAt,
     priority: (raw.priority as TaskPriority) || 'high',
     columnId,
     boardId,
@@ -655,7 +676,20 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       const rawTasks = await invoke<any[]>('list_tasks');
       if (Array.isArray(rawTasks)) {
         if (rawTasks.length > 0) {
-          const mapped = rawTasks.map(mapBackendTaskToKanban);
+          const prevTasks = get().tasks;
+          const mapped = rawTasks.map((raw) => {
+            const prev = prevTasks.find((p) => p.id === raw.id);
+            const rawCol = raw.stageId || raw.stage_id || raw.columnId;
+            if (prev && (!rawCol || prev.columnId === rawCol)) {
+              if (prev.stageEnteredAt && !raw.stageEnteredAt && !raw.stage_entered_at) {
+                raw.stageEnteredAt = prev.stageEnteredAt;
+              }
+              if (prev.stageDurations && !raw.stageDurations) {
+                raw.stageDurations = prev.stageDurations;
+              }
+            }
+            return mapBackendTaskToKanban(raw);
+          });
           set({ tasks: mapped, isTauriConnected: true, isLoadingTasks: false });
           persistTasksToLocalStorage(mapped);
           syncTaskSeqWithTasks(mapped);
@@ -741,6 +775,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           fastTrack: prev.fastTrack,
           attachments: mapped.attachments ?? prev.attachments,
           handoverSummary: mapped.handoverSummary ?? prev.handoverSummary,
+          stageEnteredAt: Date.now(),
+          updatedAt: Date.now(),
           activeStageDuration: 0,
           stageDurations: {
             ...prevStageDurations,
@@ -859,6 +895,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       branch: `feat/${paddedId.toLowerCase()}`,
       worktreePath: `.cvh/worktrees/${paddedId.toLowerCase()}`,
       status,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      stageEnteredAt: Date.now(),
       activeStageDuration: 0,
       stageDurations: {},
       totalElapsed: 0,
@@ -950,6 +989,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       branch: parent.branch,
       worktreePath: parent.worktreePath,
       status: subtaskStatus,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      stageEnteredAt: Date.now(),
       activeStageDuration: 0,
       stageDurations: {},
       totalElapsed: 0,
@@ -1078,15 +1120,25 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   },
 
   tickTimers: () => {
+    const now = Date.now();
     set((state) => ({
       tasks: state.tasks.map((task) => {
-        if (!task.isTimerRunning || task.status === 'done' || task.status === 'paused') {
+        if (task.status === 'done' || task.status === 'paused') {
           return task;
         }
+        const stageStart = task.stageEnteredAt || task.updatedAt || task.createdAt;
+        const activeStageDuration = stageStart
+          ? Math.max(0, Math.floor((now - stageStart) / 1000))
+          : (typeof task.activeStageDuration === 'number' && Number.isFinite(task.activeStageDuration) ? task.activeStageDuration + 1 : 1);
+
+        const totalElapsed = task.createdAt
+          ? Math.max(0, Math.floor((now - task.createdAt) / 1000))
+          : (typeof task.totalElapsed === 'number' && Number.isFinite(task.totalElapsed) ? task.totalElapsed + 1 : 1);
+
         return {
           ...task,
-          activeStageDuration: (typeof task.activeStageDuration === 'number' && Number.isFinite(task.activeStageDuration) ? task.activeStageDuration : 0) + 1,
-          totalElapsed: (typeof task.totalElapsed === 'number' && Number.isFinite(task.totalElapsed) ? task.totalElapsed : 0) + 1,
+          activeStageDuration,
+          totalElapsed,
         };
       }),
     }));

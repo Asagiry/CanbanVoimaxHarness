@@ -120,7 +120,7 @@ export default function ThinkingCard({
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const visibleText = isFinished ? fullText : fullText.slice(0, displayedLength);
+  const visibleText = (isFinished ? fullText : fullText.slice(0, displayedLength)).trimEnd();
   const isTyping = !isFinished && displayedLength < fullText.length;
 
   return (
@@ -177,7 +177,7 @@ export default function ThinkingCard({
 
       {/* Expanded body */}
       {isExpanded && (
-        <div className="p-3 border-t border-[#ebebeb] bg-[#ffffff] font-mono text-[13px] leading-relaxed text-[#333333] whitespace-pre-wrap select-text max-h-96 overflow-y-auto">
+        <div className="px-3 pt-2.5 pb-2 border-t border-[#ebebeb] bg-[#ffffff] font-mono text-[13px] leading-relaxed text-[#333333] whitespace-pre-wrap select-text max-h-96 overflow-y-auto">
           {visibleText}
           {isTyping && (
             <span
