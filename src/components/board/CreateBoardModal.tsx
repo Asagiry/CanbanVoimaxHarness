@@ -160,13 +160,13 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
 
           {/* Persona selector for development column */}
           <div>
-            <label className="block text-xs font-medium text-[#171717] mb-1.5">
+            <label className="block text-xs font-medium text-[#171717] dark:text-[#f0f6fc] mb-1.5">
               Агент разработки
             </label>
             <select
               value={selectedPersona}
               onChange={(e) => setSelectedPersona(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-[#fafafa] border border-[#ebebeb] text-[#171717] text-xs font-mono focus:outline-hidden focus:border-[#171717] focus:bg-white transition cursor-pointer"
+              className="w-full px-3 py-2 rounded-lg bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] text-xs font-mono focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] transition cursor-pointer"
             >
               {personas.map((p) => {
                 const isBuiltin = p.role === 'cvh-dev' || Boolean(p.isBuiltin);

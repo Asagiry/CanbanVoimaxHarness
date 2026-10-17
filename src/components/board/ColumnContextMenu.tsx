@@ -397,8 +397,8 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
 
       {mode === 'persona' && (
         <div className="px-3 py-2">
-          <div className="text-[#4d4d4d] font-medium mb-1">Агент колонки</div>
-          <div className="mb-1.5 text-[#8f8f8f]">Текущий: {column.persona ?? 'не назначен'}</div>
+          <div className="text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">Агент колонки</div>
+          <div className="mb-1.5 text-[#8f8f8f] dark:text-[#8b949e]">Текущий: {column.persona ?? 'не назначен'}</div>
           {usePersonaSelect ? (
             <select
               value={isNewAgentSelected ? NEW_AGENT_OPTION : selectedPersona}
@@ -411,7 +411,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
                 }
               }}
               disabled={personasLoading || personaSaving}
-              className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[#171717] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono transition cursor-pointer"
+              className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#161b22] font-mono transition cursor-pointer"
             >
               {selectedPersona && !selectedKnown && (
                 <option value={selectedPersona}>{selectedPersona}</option>
@@ -434,7 +434,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
               value={selectedPersona}
               onChange={(e) => setSelectedPersona(e.target.value)}
               placeholder={personasLoading ? 'Загрузка агентов...' : 'developer'}
-              className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono transition"
+              className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#6e7681] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#161b22] font-mono transition"
             />
           )}
           {usePersonaSelect && isNewAgentSelected && (
@@ -445,7 +445,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
                 value={newAgentName}
                 onChange={(e) => setNewAgentName(e.target.value)}
                 placeholder="Имя нового агента"
-                className="mt-1.5 w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono transition"
+                className="mt-1.5 w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#6e7681] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#161b22] font-mono transition"
               />
               {newAgentName.trim() !== '' ? (
                 <div className="mt-1 text-[10px] font-mono text-[#8f8f8f]">
@@ -470,7 +470,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
             <button
               type="button"
               onClick={() => setMode('main')}
-              className="px-2.5 py-1.5 rounded-md bg-white border border-[#ebebeb] hover:bg-[#f4f4f5] transition cursor-pointer"
+              className="px-2.5 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] transition cursor-pointer"
             >
               Назад
             </button>
@@ -478,7 +478,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
               type="button"
               disabled={personaSaving || personasLoading}
               onClick={() => void handleSavePersona()}
-              className="px-3 py-1.5 rounded-md bg-[#171717] hover:bg-[#262626] text-white font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-default"
+              className="px-3 py-1.5 rounded-md bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-default border border-transparent dark:border-[#30363d]"
             >
               Сохранить
             </button>
@@ -488,9 +488,9 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
 
       {mode === 'script' && (
         <div className="px-3 py-2">
-          <div className="text-[#4d4d4d] font-medium mb-1">Скрипт перехода</div>
+          <div className="text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">Скрипт перехода</div>
           <div
-            className="mb-1.5 text-[#8f8f8f] truncate font-mono text-[10px]"
+            className="mb-1.5 text-[#8f8f8f] dark:text-[#8b949e] truncate font-mono text-[10px]"
             title={column.onEnterScript ?? 'не задан'}
           >
             Текущий: {column.onEnterScript ?? 'не задан'}
@@ -507,9 +507,9 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
               }
             }}
             placeholder="scripts/setup.bat, .py, .ps1, .sh"
-            className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono text-xs transition"
+            className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#6e7681] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#161b22] font-mono text-xs transition"
           />
-          <div className="mt-1 text-[10px] text-[#8f8f8f]">
+          <div className="mt-1 text-[10px] text-[#8f8f8f] dark:text-[#8b949e]">
             Запускается при входе задачи (.bat, .ps1, .py, .sh)
           </div>
           {scriptError && (
@@ -521,7 +521,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
             <button
               type="button"
               onClick={() => setMode('main')}
-              className="px-2.5 py-1.5 rounded-md bg-white border border-[#ebebeb] hover:bg-[#f4f4f5] transition cursor-pointer"
+              className="px-2.5 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] transition cursor-pointer"
             >
               Назад
             </button>
@@ -529,7 +529,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
               type="button"
               disabled={scriptSaving}
               onClick={() => void handleSaveScript()}
-              className="px-3 py-1.5 rounded-md bg-[#171717] hover:bg-[#262626] text-white font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-default"
+              className="px-3 py-1.5 rounded-md bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-default border border-transparent dark:border-[#30363d]"
             >
               Сохранить
             </button>
