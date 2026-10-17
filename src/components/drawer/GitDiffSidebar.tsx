@@ -279,6 +279,10 @@ function AccordionFileItem({ file, isExpanded, onToggle }: AccordionFileItemProp
   );
 }
 
+const DEFAULT_SIDEBAR_WIDTH = 480;
+const MIN_SIDEBAR_WIDTH = 360;
+const MAX_SIDEBAR_WIDTH = 840;
+
 export default function GitDiffSidebar({
   taskId,
   isCollapsed,
@@ -290,7 +294,37 @@ export default function GitDiffSidebar({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Width & Resizability (default 480px, stored in localStorage)
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('cvh_git_diff_width');
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && parsed >= MIN_SIDEBAR_WIDTH && parsed <= MAX_SIDEBAR_WIDTH) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return DEFAULT_SIDEBAR_WIDTH;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  const isDraggingRef = useRef(false);
+  const startXRef = useRef(0);
+  const startWidthRef = useRef(sidebarWidth);
+
+  // Bug Fix: Track initial load and explicit user-collapsed state
+  // Background syncs on tool events MUST NOT re-open files intentionally collapsed by user!
+  const hasInitialLoadedRef = useRef(false);
+  const userCollapsedFilesRef = useRef<Set<string>>(new Set());
+
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Reset initial tracking on task switch
+  useEffect(() => {
+    hasInitialLoadedRef.current = false;
+    userCollapsedFilesRef.current.clear();
+    setExpandedFiles(new Set());
+  }, [taskId]);
 
   const fetchDiff = useCallback(async () => {
     if (!taskId) return;
@@ -300,19 +334,44 @@ export default function GitDiffSidebar({
       const { invoke } = await import('@tauri-apps/api/core');
       const data = await invoke<TaskGitDiff | null>('get_task_git_diff', { taskId });
       setDiff(data ?? null);
-      // Auto-expand first file on initial load if none expanded
+
       if (data?.files && data.files.length > 0) {
-        setExpandedFiles((prev) => {
-          if (prev.size > 0) return prev;
-          const next = new Set<string>();
-          // If 1 or 2 files, expand both; otherwise expand first
-          if (data.files.length <= 2) {
-            data.files.forEach((f) => next.add(f.path));
-          } else if (data.files[0]?.path) {
-            next.add(data.files[0].path);
-          }
-          return next;
-        });
+        if (!hasInitialLoadedRef.current) {
+          // Initial load for this task: auto-expand the first file (or 2 if total <= 2)
+          hasInitialLoadedRef.current = true;
+          setExpandedFiles(() => {
+            const next = new Set<string>();
+            if (data.files.length <= 2) {
+              data.files.forEach((f) => {
+                if (!userCollapsedFilesRef.current.has(f.path)) {
+                  next.add(f.path);
+                }
+              });
+            } else if (data.files[0]?.path && !userCollapsedFilesRef.current.has(data.files[0].path)) {
+              next.add(data.files[0].path);
+            }
+            return next;
+          });
+        } else {
+          // Background sync (subsequent fetch on live tool events, etc.):
+          // NEVER forcibly re-expand files that the user intentionally collapsed!
+          // Maintain currently expanded files, purging any paths no longer in diff
+          setExpandedFiles((prev) => {
+            const currentValidPaths = new Set(data.files.map((f) => f.path));
+            const next = new Set<string>();
+            let changed = false;
+            for (const path of prev) {
+              if (currentValidPaths.has(path) && !userCollapsedFilesRef.current.has(path)) {
+                next.add(path);
+              } else {
+                changed = true;
+              }
+            }
+            return changed ? next : prev;
+          });
+        }
+      } else {
+        setExpandedFiles(new Set());
       }
     } catch (err: any) {
       console.info('get_task_git_diff invoke failed or web mode:', err);
@@ -341,13 +400,20 @@ export default function GitDiffSidebar({
   // Listen to live agent tool execution & finish events
   useEffect(() => {
     if (!taskId) return;
-    let unlistenTool: (() => void) | undefined;
+    let unlistenToolCall: (() => void) | undefined;
+    let unlistenToolResult: (() => void) | undefined;
     let unlistenFinish: (() => void) | undefined;
 
     const setupListeners = async () => {
       try {
         const { listen } = await import('@tauri-apps/api/event');
-        unlistenTool = await listen<{ taskId?: string }>('agent:tool_result', (event) => {
+        unlistenToolCall = await listen<{ taskId?: string }>('agent:tool_call', (event) => {
+          if (event.payload?.taskId === taskId) {
+            scheduleFetch();
+          }
+        });
+
+        unlistenToolResult = await listen<{ taskId?: string }>('agent:tool_result', (event) => {
           if (event.payload?.taskId === taskId) {
             scheduleFetch();
           }
@@ -366,7 +432,8 @@ export default function GitDiffSidebar({
     setupListeners();
 
     return () => {
-      if (unlistenTool) unlistenTool();
+      if (unlistenToolCall) unlistenToolCall();
+      if (unlistenToolResult) unlistenToolResult();
       if (unlistenFinish) unlistenFinish();
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
@@ -374,13 +441,63 @@ export default function GitDiffSidebar({
     };
   }, [taskId, scheduleFetch]);
 
+  // Drag handle resize logic
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDraggingRef.current = true;
+    startXRef.current = e.clientX;
+    startWidthRef.current = sidebarWidth;
+    setIsResizing(true);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      const delta = startXRef.current - moveEvent.clientX;
+      const maxAllowed = Math.min(MAX_SIDEBAR_WIDTH, window.innerWidth * 0.7);
+      const newWidth = Math.min(Math.max(MIN_SIDEBAR_WIDTH, startWidthRef.current + delta), maxAllowed);
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        setIsResizing(false);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        setSidebarWidth((finalWidth) => {
+          try {
+            localStorage.setItem('cvh_git_diff_width', String(Math.round(finalWidth)));
+          } catch {}
+          return finalWidth;
+        });
+      }
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    return () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, []);
+
   const toggleFile = (path: string) => {
     setExpandedFiles((prev) => {
       const next = new Set(prev);
       if (next.has(path)) {
+        // User intentionally collapses this file
         next.delete(path);
+        userCollapsedFilesRef.current.add(path);
       } else {
+        // User intentionally expands this file
         next.add(path);
+        userCollapsedFilesRef.current.delete(path);
       }
       return next;
     });
@@ -388,10 +505,13 @@ export default function GitDiffSidebar({
 
   const handleExpandAll = () => {
     if (!diff?.files) return;
+    userCollapsedFilesRef.current.clear();
     setExpandedFiles(new Set(diff.files.map((f) => f.path)));
   };
 
   const handleCollapseAll = () => {
+    if (!diff?.files) return;
+    diff.files.forEach((f) => userCollapsedFilesRef.current.add(f.path));
     setExpandedFiles(new Set());
   };
 
@@ -447,42 +567,67 @@ export default function GitDiffSidebar({
     );
   }
 
-  // Expanded Sidebar View (440px wide) with File Accordion List
+  // Expanded Sidebar View (Default 480px, Resizable) with File Accordion List
   return (
     <aside
-      className={`w-[440px] shrink-0 border-l border-[#ebebeb] bg-[#fafafa] flex flex-col h-full text-[#171717] overflow-hidden select-none ${className}`}
+      style={{ width: `${sidebarWidth}px` }}
+      className={`relative shrink-0 border-l border-[#ebebeb] bg-[#fafafa] flex flex-col h-full text-[#171717] overflow-hidden select-none ${isResizing ? 'select-none' : ''} ${className}`}
     >
+      {/* Left Resize Drag Handle */}
+      <div
+        onMouseDown={handleMouseDown}
+        className="group/handle absolute top-0 bottom-0 left-0 w-2 -ml-1 cursor-col-resize z-30 flex items-center justify-center select-none"
+        title="Потяните для изменения ширины панели Git Diff"
+      >
+        <div
+          className={`w-0.5 h-8 rounded-full transition-colors ${
+            isResizing ? 'bg-emerald-500' : 'bg-transparent group-hover/handle:bg-[#00000025]'
+          }`}
+        />
+      </div>
+
       {/* 1. Header: Title, Badges, Expand/Collapse All, Refresh, Panel Collapse */}
-      <header className="px-3.5 py-2.5 border-b border-[#ebebeb] bg-white flex items-center justify-between shrink-0 shadow-xs">
-        <div className="flex items-center space-x-2 min-w-0">
-          <GitCompare className="h-4 w-4 text-[#8f8f8f] shrink-0" />
-          <span className="font-semibold text-xs text-[#171717] tracking-wide font-sans">
-            Git Diff
-          </span>
+      <header className="px-3 py-2 border-b border-[#ebebeb] bg-white flex flex-wrap items-center justify-between gap-1.5 shrink-0 shadow-xs min-w-0">
+        {/* Left Section: Title, File count, Diff stats */}
+        <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <GitCompare className="h-3.5 w-3.5 text-[#8f8f8f] shrink-0" />
+            <span className="font-semibold text-xs text-[#171717] tracking-tight font-sans">
+              Git Diff
+            </span>
+          </div>
 
           {/* Changed files count badge */}
-          <span className="px-2 py-0.5 rounded-md text-[11px] font-mono bg-[#f4f4f5] text-[#666666] border border-[#ebebeb] whitespace-nowrap">
+          <span
+            className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-[#f4f4f5] text-[#666666] border border-[#ebebeb] shrink-0 whitespace-nowrap"
+            title={`${filesCount} измененных файлов`}
+          >
             {formatFilesCount(filesCount)}
           </span>
 
           {/* Additions / deletions badges */}
           {(totalAdditions > 0 || totalDeletions > 0) && (
-            <div className="flex items-center space-x-1.5 text-[11px] font-mono tabular-nums">
+            <div className="flex items-center gap-1 text-[10px] font-mono tabular-nums font-semibold shrink-0">
               {totalAdditions > 0 && (
-                <span className="text-[#15803d] font-medium">+{totalAdditions}</span>
+                <span className="text-[#15803d]" title={`+${totalAdditions} добавленных строк`}>
+                  +{totalAdditions}
+                </span>
               )}
               {totalDeletions > 0 && (
-                <span className="text-[#b91c1c] font-medium">-{totalDeletions}</span>
+                <span className="text-[#b91c1c]" title={`-${totalDeletions} удаленных строк`}>
+                  -{totalDeletions}
+                </span>
               )}
             </div>
           )}
         </div>
 
-        <div className="flex items-center space-x-1 shrink-0">
-          {/* Branch badge */}
+        {/* Right Section: Branch badge & Action buttons */}
+        <div className="flex items-center gap-1 shrink-0 ml-auto">
+          {/* Branch badge with clean truncation and tooltip */}
           {diff?.branch && (
             <div
-              className="flex items-center space-x-1 px-2 py-0.5 rounded-md bg-[#f9f9f9] border border-[#ebebeb] text-[10px] font-mono text-[#666666] max-w-[110px] truncate"
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#f4f4f5] border border-[#ebebeb] text-[10px] font-mono text-[#666666] max-w-[130px] min-w-0 cursor-default"
               title={`Текущая ветка: ${diff.branch}`}
             >
               <GitBranch className="h-3 w-3 text-[#8f8f8f] shrink-0" />
@@ -492,23 +637,23 @@ export default function GitDiffSidebar({
 
           {/* Expand / Collapse All Quick Actions */}
           {filesCount > 1 && (
-            <div className="flex items-center border border-[#ebebeb] rounded-md overflow-hidden bg-white">
+            <div className="flex items-center border border-[#ebebeb] rounded bg-white">
               <button
                 type="button"
                 onClick={handleExpandAll}
                 className="p-1 text-[#8f8f8f] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
                 title="Развернуть все файлы"
               >
-                <ChevronsUpDown className="h-3.5 w-3.5" />
+                <ChevronsUpDown className="h-3 w-3" />
               </button>
-              <div className="w-px h-3.5 bg-[#ebebeb]" />
+              <div className="w-px h-3 bg-[#ebebeb]" />
               <button
                 type="button"
                 onClick={handleCollapseAll}
                 className="p-1 text-[#8f8f8f] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
                 title="Свернуть все файлы"
               >
-                <ChevronsDownUp className="h-3.5 w-3.5" />
+                <ChevronsDownUp className="h-3 w-3" />
               </button>
             </div>
           )}
@@ -518,7 +663,7 @@ export default function GitDiffSidebar({
             type="button"
             onClick={fetchDiff}
             disabled={isLoading}
-            className="p-1.5 rounded-md text-[#8f8f8f] hover:text-[#171717] hover:bg-[#f4f4f5] disabled:opacity-50 transition cursor-pointer"
+            className="p-1 rounded text-[#8f8f8f] hover:text-[#171717] hover:bg-[#f4f4f5] disabled:opacity-50 transition cursor-pointer"
             title="Обновить дифф"
           >
             <RefreshCw
@@ -530,10 +675,10 @@ export default function GitDiffSidebar({
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="p-1.5 rounded-md text-[#8f8f8f] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
+            className="p-1 rounded text-[#8f8f8f] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
             title="Свернуть панель (Git Diff)"
           >
-            <PanelRightClose className="h-4 w-4" />
+            <PanelRightClose className="h-3.5 w-3.5" />
           </button>
         </div>
       </header>
