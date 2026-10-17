@@ -1,0 +1,21 @@
+{
+  "taskId": "CVH-FIX-AGENT-STOP-AND-BACKLOG-ABORT",
+  "title": "Immediate Agent Cancellation on User Stop and Drag to Backlog",
+  "summary": "Enforced immediate agent cancellation and responsive abort handling: 1) In internal_move_task_stage, if moved to backlog, a non-autorun stage, or if moving a running task, any active agent handle in state.active_agents is flagged for abort and its JoinHandle is explicitly aborted with handle.abort(); task status is set to idle when moved to backlog, and backlog never emits agent:autorun. 2) In abort_agent, injected app_handle, aborted the join handle, updated tasks.json to idle, and emitted tasks:updated and agent:status idle to immediately update UI. 3) In run_agent, abort exits cleanly reset task status to idle without triggering error banners. 4) In agent.rs, ReAct loop, execute_tool, and subagents check abort_flag before and after every tool call.",
+  "commitHash": "1c4edbb",
+  "commitMessage": "feat(agent): immediate cancellation on stop and backlog move (#fix-agent-stop-and-backlog-abort)",
+  "author": "Lead Systems Engineer (tauri-rust-engineer)",
+  "verdict": "APPROVED",
+  "date": "2026-10-17T13:42:01.474Z",
+  "affectedModules": [
+    "src-tauri/src/agent.rs",
+    "src-tauri/src/commands/tasks.rs",
+    "src-tauri/src/commands/tests.rs"
+  ],
+  "verification": {
+    "cargoCheck": "PASSED (0 errors)",
+    "cargoClippy": "PASSED (0 warnings)",
+    "cargoTests": "PASSED (72 passed, 0 failed)",
+    "level2Reviewer": "APPROVED by agent-developer-reviewer"
+  }
+}
