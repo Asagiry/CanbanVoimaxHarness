@@ -26,6 +26,33 @@ interface TextBuffer {
   outputTimer?: ReturnType<typeof setTimeout>;
 }
 
+/** Check if element is an editable text field or inside one (input, textarea, contenteditable) */
+function isEditableElement(el: HTMLElement | null): boolean {
+  if (!el) return false;
+  if (el.isContentEditable || el.closest?.('[contenteditable="true"], [contenteditable=""]')) {
+    return true;
+  }
+  const input = el.closest?.('input, textarea');
+  if (!input) return false;
+  if (input instanceof HTMLTextAreaElement) return true;
+  if (input instanceof HTMLInputElement) {
+    const nonTextTypes = new Set([
+      'button',
+      'checkbox',
+      'color',
+      'file',
+      'hidden',
+      'image',
+      'radio',
+      'range',
+      'reset',
+      'submit',
+    ]);
+    return !nonTextTypes.has(input.type.toLowerCase());
+  }
+  return false;
+}
+
 export default function App() {
   const { rootStyle, zoomPercent, showIndicator, resetZoom } = useUiZoom();
   const loadTasks = useBoardStore((s) => s.loadTasks);
@@ -50,6 +77,21 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Global context menu suppression: eliminate default browser/WebView2 context menu across
+  // canvas, headers, cards, and background while preserving custom app context menus and native text editing
+  useEffect(() => {
+    const handleContextMenu = (e: MouseEvent) => {
+      const target = e.target instanceof HTMLElement ? e.target : (e.target as Node | null)?.parentElement;
+      if (isEditableElement(target ?? null)) {
+        return;
+      }
+      e.preventDefault();
+    };
+
+    window.addEventListener('contextmenu', handleContextMenu);
+    return () => window.removeEventListener('contextmenu', handleContextMenu);
   }, []);
 
   useEffect(() => {
