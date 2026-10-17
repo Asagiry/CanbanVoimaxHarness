@@ -202,3 +202,21 @@
 - **Multi-Block Reasoning Tag Parsing**: When parsing reasoning tags (`<thinking>`, `<reasoning>`) from LLM streaming outputs, parsers MUST use global iterative extraction (`/<thinking>([\s\S]*?)<\/thinking>/gi` with `while (exec)`) rather than single-match (`.match()`). Advanced reasoning models frequently generate multiple fragmented or alternating thought blocks.
 - **Transient UI Confirmation State Lifecycle**: Any transient user confirmation timer (e.g. `setConfirm(true) -> setTimeout(false, 3000)`) MUST store its handle in a `useRef` and enforce defensive double-cleanup: explicitly cancel any pending timer before arming a new one, and cancel during component unmount in `useEffect` cleanup to prevent unmounted state updates.
 - **Model Display Name Regex Hygiene**: Model name stripping regexes (such as 8-digit date suffixes like `-20250219`) must strictly use escaped digit classes `-\d{8}$` rather than literal `-d{8}$`.
+
+### 2.15 Cross-Toolchain Windows Linker Flag Invariant (`build.rs`)
+- **Target Environment Discrimination**: In `build.rs`, platform-specific linker arguments (such as `/MANIFESTDEPENDENCY`, `/ENTRY`, `/SUBSYSTEM`) MUST inspect `CARGO_CFG_TARGET_ENV == "msvc"`, not merely `cfg(windows)`. The GNU toolchain (`windows-gnu` / MinGW GCC `ld`) treats MSVC flags as unrecognized options, causing immediate build failures. Always use:
+  ```rust
+  let target_env = std::env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+  let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+  if target_os == "windows" && target_env == "msvc" {
+      println!("cargo:rustc-link-arg=/MANIFESTDEPENDENCY:...");
+  }
+  ```
+
+### 2.16 CVH-DEV & Copilot Scope Invariant: Zero-Card-Management & 3-Tier Tool Gating
+- **Zero-Card-Management Invariant**: The `cvh-dev` persona and CVH Copilot Sidecar Dock are strictly Project Configuration & Environment Specialists (`.cvh/` infrastructure, boards, pipelines, agent personas, rules, and hooks). They are strictly forbidden from creating, completing, moving, or managing task cards. Card lifecycle is strictly reserved for the human user and the pipeline orchestrator.
+- **Symmetric 3-Tier Tool Gating**: The allowed configuration tools (`CVH_DEV_TOOLS`: `read_file`, `write_file`, `edit_file`, `glob`, `grep`, `execute_command`, `web_search`) MUST be enforced at all three layers of the architecture:
+  1. *Prompt Schema Definition*: Only the 7 configuration tools are compiled into the system prompt and tool definitions sent to the LLM.
+  2. *Candidate Tool Filtering*: `active_tools.retain(|t| CVH_DEV_TOOLS.contains(&t.function.name.as_str()))` before submission to LLM.
+  3. *Runtime Defense-in-Depth Execution Gate*: `execute_tool` in `agent.rs` MUST strictly check `(role == "cvh-dev" || role == "copilot") && !CVH_DEV_TOOLS.contains(&tool)` and reject unauthorized tool calls with `PermissionDenied`.
+- **UI Labeling Consistency**: UI surfaces for Copilot (`CopilotDock.tsx`, topbar badge, placeholders, empty states) MUST reflect "НАСТРОЙКА ПРОЕКТА" / "Project Configuration", never mislabeling configuration sidecars as general task creators.
