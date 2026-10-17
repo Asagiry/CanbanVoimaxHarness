@@ -81,6 +81,8 @@ pub struct Task {
     pub priority: Option<String>,
     #[serde(default)]
     pub tags: Option<Vec<String>>,
+    #[serde(rename = "currentTokens", alias = "current_tokens", default)]
+    pub current_tokens: Option<usize>,
     #[serde(rename = "createdAt", alias = "created_at", default)]
     pub created_at: i64,
     #[serde(rename = "updatedAt", alias = "updated_at", default)]
@@ -1561,14 +1563,7 @@ Channel closed before completion", id)),
                 .and_then(|v| v.as_str())
                 .context("Missing required parameter 'reason'")?;
 
-            let task_id = args
-                .get("task_id")
-                .or_else(|| args.get("taskId"))
-                .and_then(|v| v.as_str())
-                .map(|s| s.trim())
-                .filter(|s| !s.is_empty())
-                .or(task_id)
-                .context("No active task ID for reject_task")?;
+            let task_id = task_id.context("No active task ID for reject_task")?;
 
             // 1. Determine active board and find current column
             let tasks = crate::commands::load_tasks_from_disk(repo_root).await;
@@ -1682,15 +1677,7 @@ Channel closed before completion", id)),
             let multiple = args.get("multiple").and_then(|v| v.as_bool()).unwrap_or(false);
 
             let question_id = uuid::Uuid::new_v4().to_string();
-            let task_id_str = args
-                .get("task_id")
-                .or_else(|| args.get("taskId"))
-                .and_then(|v| v.as_str())
-                .map(|s| s.trim())
-                .filter(|s| !s.is_empty())
-                .or(task_id)
-                .unwrap_or("unknown")
-                .to_string();
+            let task_id_str = task_id.unwrap_or("unknown").to_string();
 
             // 1. Thread-safe oneshot channel registration (zero-polling)
             let (tx, mut rx) = tokio::sync::oneshot::channel::<String>();
@@ -1980,6 +1967,7 @@ Channel closed before completion", id)),
                     todos: None,
                     priority: input.priority,
                     tags: input.tags,
+                    current_tokens: None,
                     created_at: now,
                     updated_at: now,
                 };
@@ -2987,46 +2975,13 @@ async fn collect_matching_files(
 }
 
 fn glob_match(pattern: &str, candidate: &str) -> bool {
-    let p = pattern.replace('\\', "/");
-    let c = candidate.replace('\\', "/");
-    glob_match_slices(p.as_bytes(), c.as_bytes())
-}
-
-fn glob_match_slices(pattern: &[u8], candidate: &[u8]) -> bool {
-    if pattern.is_empty() {
-        return candidate.is_empty();
+    if pattern == "*" || pattern == "**/*" {
+        return true;
     }
-    if pattern.starts_with(b"**") {
-        let rest_pat = if pattern.starts_with(b"**/*") {
-            &pattern[4..]
-        } else if pattern.starts_with(b"**/") {
-            &pattern[3..]
-        } else {
-            &pattern[2..]
-        };
-        for i in 0..=candidate.len() {
-            if glob_match_slices(rest_pat, &candidate[i..]) {
-                return true;
-            }
-        }
-        return false;
+    if let Some(suffix) = pattern.strip_prefix('*') {
+        return candidate.ends_with(suffix);
     }
-    if pattern[0] == b'*' {
-        let rest_pat = &pattern[1..];
-        for i in 0..=candidate.len() {
-            if i > 0 && candidate[i - 1] == b'/' {
-                break;
-            }
-            if glob_match_slices(rest_pat, &candidate[i..]) {
-                return true;
-            }
-        }
-        return false;
-    }
-    if !candidate.is_empty() && (pattern[0] == b'?' || pattern[0] == candidate[0]) {
-        return glob_match_slices(&pattern[1..], &candidate[1..]);
-    }
-    false
+    candidate.contains(pattern)
 }
 
 async fn grep_walk(
@@ -3607,7 +3562,32 @@ where
         if should_compact {
             let compaction_res = compactor::compact_conversation(&mut messages, None);
             if compaction_res.saved_chars > 0 {
-                // If app_handle is present, persist to SQLite dialog_items
+                let tokens_after = compactor::estimate_tokens(&messages);
+                let saved_tokens = compaction_res.estimated_saved_tokens;
+                let stdout_msg = format!(
+                    "Контекст успешно сжат. Сохранено {} токенов. Контекст сокращен с {} до {} токенов.",
+                    saved_tokens, current_tokens, tokens_after
+                );
+                let tool_item_id = format!("compact_context-{}-{}", config.task_id, chrono::Utc::now().timestamp_millis());
+                let tool_act_item = crate::db::ActivityItem {
+                    id: tool_item_id.clone(),
+                    item_type: "tool".to_string(),
+                    timestamp: chrono::Local::now().format("%H:%M:%S").to_string(),
+                    content: None,
+                    tool: Some(serde_json::json!({
+                        "id": &tool_item_id,
+                        "toolName": "compact_context",
+                        "timestamp": chrono::Local::now().format("%H:%M:%S").to_string(),
+                        "durationMs": 0,
+                        "status": "success",
+                        "params": { "taskId": &config.task_id },
+                        "stdout": &stdout_msg,
+                    })),
+                    duration_ms: Some(0.0),
+                    images: None,
+                };
+
+                // If app_handle is present, persist to SQLite dialog_items and emit tool events
                 if let Some(ref app) = config.app_handle {
                     let summary_text = if !compaction_res.preserved_state_summary.is_empty() {
                         compaction_res.preserved_state_summary.clone()
@@ -3621,16 +3601,35 @@ where
                         content: Some(summary_text),
                         tool: Some(serde_json::json!({
                             "compactedCount": compaction_res.evaporated_tools_count,
-                            "savedTokens": compaction_res.estimated_saved_tokens,
+                            "savedTokens": saved_tokens,
                             "tokensBefore": current_tokens,
-                            "tokensAfter": compactor::estimate_tokens(&messages),
+                            "tokensAfter": tokens_after,
                             "autoCompacted": true,
                             "contextWindow": context_window,
                         })),
                         duration_ms: None,
                         images: None,
                     };
-                    let _ = crate::db::persist_compacted_dialog(&config.repo_root, &config.task_id, &compacted_item, &[]);
+                    let _ = crate::db::persist_compacted_dialog(&config.repo_root, &config.task_id, &compacted_item, Some(&tool_act_item), &[]);
+                    let _ = app.emit(
+                        "agent:tool_call",
+                        serde_json::json!({
+                            "taskId": &config.task_id,
+                            "id": &tool_item_id,
+                            "name": "compact_context",
+                            "arguments": serde_json::json!({ "taskId": &config.task_id }).to_string(),
+                        }),
+                    );
+                    let _ = app.emit(
+                        "agent:tool_result",
+                        serde_json::json!({
+                            "taskId": &config.task_id,
+                            "id": &tool_item_id,
+                            "name": "compact_context",
+                            "result": &stdout_msg,
+                            "success": true,
+                        }),
+                    );
                     let _ = app.emit("dialog:updated", serde_json::json!({ "taskId": config.task_id }));
                 }
 
@@ -3936,4 +3935,844 @@ where
 }
 
 #[cfg(test)]
-mod tests;
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_system_prompt_is_lean_cvh_only() {
+        // Regression: only `.cvh` persona + tool instructions reach the model.
+        // Root `AGENTS.md` and `.agents/skills` must NOT be injected even when
+        // present on disk (user mandate: send the model ONLY .cvh + persona).
+        let base =
+            std::path::PathBuf::from("target").join(format!("cvh_prompt_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh").join("agents").join("developer"))
+            .await
+            .expect("test dirs");
+        tokio::fs::write(
+            base.join(".cvh").join("agents").join("developer").join("persona.md"),
+            "PERSONA_MARKER_ALPHA",
+        )
+        .await
+        .expect("persona seed");
+        tokio::fs::write(base.join("AGENTS.md"), "AGENTS_MARKER_BETA")
+            .await
+            .expect("agents seed");
+        let skill_dir = base.join(".agents").join("skills").join("demo");
+        tokio::fs::create_dir_all(&skill_dir)
+            .await
+            .expect("skill dirs");
+        tokio::fs::write(skill_dir.join("SKILL.md"), "SKILL_MARKER_GAMMA")
+            .await
+            .expect("skill seed");
+
+        let prompt = compile_primed_system_prompt(&base, "developer")
+            .await
+            .expect("prompt failed");
+
+        assert!(
+            prompt.contains("PERSONA_MARKER_ALPHA"),
+            "persona from .cvh/agents must be present"
+        );
+        assert!(
+            !prompt.contains("AGENTS_MARKER_BETA"),
+            "root AGENTS.md must NOT leak into the system prompt"
+        );
+        assert!(
+            !prompt.contains("SKILL_MARKER_GAMMA"),
+            ".agents/skills must NOT leak into the system prompt"
+        );
+        assert!(
+            !prompt.contains("Active Agent Skills"),
+            "skills section must be gone"
+        );
+        assert!(
+            prompt.contains("Scoped Tool Execution Mandate"),
+            "tool instructions must be kept"
+        );
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_system_prompt_flat_persona_rules_alphabetical() {
+        // Single flat persona `.cvh/agents/<role>.md` + rules/*.md (alphabetical)
+        // + tool instructions.
+        let base =
+            std::path::PathBuf::from("target").join(format!("cvh_rules_{}", uuid::Uuid::new_v4()));
+        let agents = base.join(".cvh").join("agents");
+        let role_dir = agents.join("dev");
+        tokio::fs::create_dir_all(role_dir.join("rules"))
+            .await
+            .expect("test dirs");
+        tokio::fs::write(role_dir.join("persona.md"), "FLAT_PERSONA_MARKER")
+            .await
+            .expect("persona seed");
+        // Seed out of order: b before a — prompt must order a, b.
+        tokio::fs::write(role_dir.join("rules").join("b_second.md"), "RULE_B_MARKER")
+            .await
+            .expect("rule b");
+        tokio::fs::write(role_dir.join("rules").join("a_first.md"), "RULE_A_MARKER")
+            .await
+            .expect("rule a");
+        tokio::fs::write(role_dir.join("rules").join("notes.txt"), "IGNORED")
+            .await
+            .expect("non-md seed");
+
+        let prompt = compile_primed_system_prompt(&base, "dev")
+            .await
+            .expect("prompt failed");
+
+        assert!(prompt.contains("FLAT_PERSONA_MARKER"));
+        assert!(prompt.contains("RULE_A_MARKER"));
+        assert!(prompt.contains("RULE_B_MARKER"));
+        assert!(!prompt.contains("IGNORED"), "non-md rules must be skipped");
+        let pos_a = prompt.find("RULE_A_MARKER").expect("rule a pos");
+        let pos_b = prompt.find("RULE_B_MARKER").expect("rule b pos");
+        assert!(pos_a < pos_b, "rules must be alphabetical: a_first before b_second");
+        assert!(prompt.contains("Scoped Tool Execution Mandate"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_system_prompt_flat_persona_and_builtin_fallback() {
+        // Directory-only persona path: <role>/persona.md or <role>/agent.md.
+        // Flat .md files are strictly ignored.
+        let base =
+            std::path::PathBuf::from("target").join(format!("cvh_fb_{}", uuid::Uuid::new_v4()));
+        let agents = base.join(".cvh").join("agents");
+        tokio::fs::create_dir_all(&agents)
+            .await
+            .expect("test dirs");
+
+        // 1. persona.md in role directory
+        let custom_dir = agents.join("custom");
+        tokio::fs::create_dir_all(&custom_dir).await.expect("custom dir");
+        tokio::fs::write(custom_dir.join("persona.md"), "PERSONAMARKER")
+            .await
+            .expect("persona seed");
+        let with_persona = compile_primed_system_prompt(&base, "custom")
+            .await
+            .expect("prompt failed");
+        assert!(with_persona.contains("PERSONAMARKER"), "custom persona.md must be used");
+
+        // 2. agent.md in role directory
+        let alt_dir = agents.join("alt");
+        tokio::fs::create_dir_all(&alt_dir).await.expect("alt dir");
+        tokio::fs::write(alt_dir.join("agent.md"), "AGENTMARKER")
+            .await
+            .expect("agent seed");
+        let with_agent = compile_primed_system_prompt(&base, "alt")
+            .await
+            .expect("prompt failed");
+        assert!(with_agent.contains("AGENTMARKER"), "alt agent.md must be used");
+
+        // 3. Flat dev.md must NOT be picked up (directory-only structure)
+        tokio::fs::write(agents.join("dev.md"), "FLATMARKER")
+            .await
+            .expect("flat seed");
+        let fallback_dev = compile_primed_system_prompt(&base, "dev")
+            .await
+            .expect("prompt failed");
+        assert!(!fallback_dev.contains("FLATMARKER"), "flat dev.md must be ignored");
+
+        // 4. developer role without persona on disk → rich built-in developer fallback
+        let dev_builtin = compile_primed_system_prompt(&base, "developer")
+            .await
+            .expect("prompt failed");
+        assert!(
+            dev_builtin.contains("developer (Software Engineer)") && dev_builtin.contains("Ground Truth Sensors"),
+            "rich developer fallback must fire, got: {}",
+            &dev_builtin[..dev_builtin.len().min(200)]
+        );
+
+        // 5. ghost role without persona on disk → generic expert AI agent
+        let builtin = compile_primed_system_prompt(&base, "ghost")
+            .await
+            .expect("prompt failed");
+        assert!(
+            builtin.contains("You are an expert AI agent in ghost."),
+            "built-in fallback must fire, got: {}",
+            &builtin[..builtin.len().min(200)]
+        );
+
+        // cvh-dev without file on disk → rich builtin prompt
+        let cvh_dev = compile_primed_system_prompt(&base, "cvh-dev")
+            .await
+            .expect("prompt failed");
+        assert!(cvh_dev.contains("cvh-dev"));
+        assert!(cvh_dev.contains("Columns = Agents"));
+        assert!(cvh_dev.contains("boards.json"));
+        assert!(cvh_dev.contains("pipeline.json"));
+        assert!(cvh_dev.contains("APPROVED_WITH_CAVEATS"));
+        assert!(cvh_dev.contains("Instructions for Empty & New Projects"));
+        // Lean-router invariants (≤150 lines, frontmatter, paths, skeletons, guards).
+        assert!(
+            BUILTIN_CVH_DEV_PROMPT.lines().count() <= 150,
+            "router must stay ≤150 lines, got {}",
+            BUILTIN_CVH_DEV_PROMPT.lines().count()
+        );
+        for marker in [
+            "name: <role>",
+            "description: Use PROACTIVELY when",
+            "model: inherit",
+            "tools:",
+            "scope:",
+            "activation:",
+            ".cvh/boards.json {activeBoardId",
+            ".cvh/pipeline.json {id,title,columns[",
+            ".cvh/settings/tool-policy.json {globalEnabled, stageOverrides}",
+            ".cvh/agents/<role>.md",
+            ".cvh/tools/<tool>.json",
+            ".cvh/hooks/",
+            "worktrees/<slug>",
+            "activeBoardId",
+            "contextWindow",
+            "gatekeeperSensor",
+            "terminal",
+            "globalEnabled && stageOverrides",
+            "commands.rs:47",
+            "resolve_safe_path",
+            "Verification[evidence]",
+            "Red Flags",
+            "30 lines",
+        ] {
+            assert!(
+                cvh_dev.contains(marker),
+                "router prompt must contain marker: {}",
+                marker
+            );
+        }
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_agent_tool_intersection_with_policy() {
+        // Effective tool set = policy lookup ∩ agent allowed_tools.
+        use crate::config::{is_tool_allowed, ToolPolicyConfig};
+        let policy = ToolPolicyConfig::default();
+
+        // Agent restricts to read-only: schema filter must drop the rest
+        // even though the matrix allows them.
+        let agent_allowed = Some(vec!["read_file".to_string(), "glob".to_string()]);
+        let all = get_all_tools(&std::path::PathBuf::from("target")).await;
+        assert!(!all.is_empty());
+        let active: Vec<String> = all
+            .iter()
+            .filter(|t| {
+                is_tool_allowed(&policy, Some("dev"), &t.function.name)
+                    && agent_allows_tool(agent_allowed.as_deref(), &t.function.name)
+            })
+            .map(|t| t.function.name.clone())
+            .collect();
+        assert!(active.contains(&"read_file".to_string()));
+        assert!(active.contains(&"glob".to_string()));
+        assert!(!active.contains(&"execute_command".to_string()));
+        assert!(!active.contains(&"write_file".to_string()));
+
+        // No agent restriction → matrix alone decides.
+        let open: Vec<String> = all
+            .iter()
+            .filter(|t| {
+                is_tool_allowed(&policy, Some("dev"), &t.function.name)
+                    && agent_allows_tool(None, &t.function.name)
+            })
+            .map(|t| t.function.name.clone())
+            .collect();
+        assert!(open.len() > active.len());
+
+        // Zero-trust gate: agent-denied tool errors even when policy allows.
+        let flag = Arc::new(AtomicBool::new(false));
+        let workdir = std::env::temp_dir();
+        let target_root = std::path::PathBuf::from("target");
+        let tool_ctx = ToolContext {
+            repo_root: &target_root,
+            worktree_dir: &workdir,
+            stage_id: Some("dev"),
+            role: Some("developer"),
+            abort_handle: flag,
+            tool_policy: &policy,
+            task_id: None,
+            agent_allowed_tools: agent_allowed.as_deref(),
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+        let err = execute_tool(
+            &tool_ctx,
+            "write_file",
+            &serde_json::json!({"file_path": "x.txt", "content": "y"}),
+        )
+        .await
+        .expect_err("agent-denied tool must be rejected");
+        assert!(err.to_string().contains("PermissionDenied"), "unexpected: {}", err);
+    }
+    #[tokio::test]
+    async fn test_subagent_session_and_receiver_lookup() {
+        let (tx1, rx1) = oneshot::channel::<String>();
+        let flag = Arc::new(AtomicBool::new(false));
+        let workdir = std::env::temp_dir();
+        let target_root = std::path::PathBuf::from("target");
+        let policy = ToolPolicyConfig::default();
+
+        let ctx = OwnedToolContext {
+            repo_root: target_root,
+            worktree_dir: workdir,
+            stage_id: Some("dev".to_string()),
+            role: Some("developer".to_string()),
+            abort_handle: flag,
+            tool_policy: policy,
+            task_id: Some("CVH-100".to_string()),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: Some("call_sub_123".to_string()),
+        };
+
+        let sub_id = "CVH-100.sub-call_sub_123".to_string();
+        let retry_info = SubagentRetryInfo {
+            parent_task_id: "CVH-100".to_string(),
+            subagent_id: sub_id.clone(),
+            tool_call_id: Some("call_sub_123".to_string()),
+            title: "Test subagent".to_string(),
+            role: "developer".to_string(),
+            prompt: "Test prompt".to_string(),
+            requested_tools: None,
+            ctx,
+            status: "running".to_string(),
+            last_error: None,
+        };
+
+        let session = SubagentSession {
+            sender: Arc::new(tokio::sync::Mutex::new(Some(tx1))),
+            retry_info: Arc::new(tokio::sync::Mutex::new(retry_info)),
+        };
+
+        {
+            let mut sessions = SUBAGENT_SESSIONS.lock().await;
+            sessions.insert(sub_id.clone(), session);
+        }
+
+        // Test 1: find by exact subagent_id
+        let res1 = find_subagent_session(Some("CVH-100"), "CVH-100.sub-call_sub_123").await;
+        assert!(res1.is_some());
+        assert_eq!(res1.as_ref().map(|s| s.0.as_str()), Some(sub_id.as_str()));
+
+        // Test 2: find by stripped :sub: dialog ID
+        let res2 = find_subagent_session(Some("CVH-100"), "CVH-100:sub:CVH-100.sub-call_sub_123").await;
+        assert!(res2.is_some());
+        assert_eq!(res2.as_ref().map(|s| s.0.as_str()), Some(sub_id.as_str()));
+
+        // Test 3: find by tool_call_id alone
+        let res3 = find_subagent_session(Some("CVH-100"), "call_sub_123").await;
+        assert!(res3.is_some());
+        assert_eq!(res3.as_ref().map(|s| s.0.as_str()), Some(sub_id.as_str()));
+
+        // Test 4: find by .sub-call_sub_123
+        let res4 = find_subagent_session(None, ".sub-call_sub_123").await;
+        assert!(res4.is_some());
+        assert_eq!(res4.as_ref().map(|s| s.0.as_str()), Some(sub_id.as_str()));
+
+        // Test remove_subagent_receiver
+        let mut rec_map = HashMap::new();
+        rec_map.insert(sub_id.clone(), rx1);
+
+        let retrieved = remove_subagent_receiver(&mut rec_map, "call_sub_123");
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.as_ref().map(|s| s.0.as_str()), Some(sub_id.as_str()));
+        assert!(rec_map.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_system_prompt_subagent_delegation_mandate() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_sub_mandate_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh").join("agents"))
+            .await
+            .expect("test dirs");
+        tokio::fs::write(
+            base.join(".cvh").join("agents").join("developer.md"),
+            "PERSONA_SUB_TEST",
+        )
+        .await
+        .expect("persona seed");
+
+        let prompt = compile_primed_system_prompt(&base, "developer")
+            .await
+            .expect("prompt failed");
+
+        assert!(prompt.contains("## Subagent Delegation Mandate"));
+        assert!(prompt.contains("prefer `subagent` (oneshot sync)"));
+        assert!(prompt.contains("MUST call `collect_subagent`"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+    #[tokio::test]
+    async fn test_orchestrator_create_task_and_create_tasks() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_orch_test_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+
+        // Seed parent orchestrator task CVH-001
+        let parent_task = Task {
+            id: "CVH-001".to_string(),
+            title: "Parent Orchestrator Task".to_string(),
+            description: "Decomposing feature".to_string(),
+            stage_id: "backlog".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("running".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            handover_summary: None,
+            cover_image: None,
+            attachments: None,
+            todos: None,
+            priority: Some("high".to_string()),
+            tags: Some(vec!["orchestrator".to_string()]),
+            current_tokens: None,
+            created_at: 0,
+            updated_at: 0,
+        };
+        crate::commands::tasks::save_tasks_to_disk(&base, &[parent_task]).await.expect("save parent");
+
+        let flag = Arc::new(AtomicBool::new(false));
+        let policy = ToolPolicyConfig::default();
+        let tool_ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("backlog"),
+            role: Some("orchestrator"),
+            abort_handle: Arc::clone(&flag),
+            tool_policy: &policy,
+            task_id: Some("CVH-001"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        // 1. Single create_task call
+        let single_args = serde_json::json!({
+            "title": "Backend Rust Implementation",
+            "description": "Implement create_task and complete_task tools",
+            "column_id": "dev",
+            "priority": "high",
+            "tags": ["rust", "tauri"]
+        });
+        let single_res = execute_tool(&tool_ctx, "create_task", &single_args)
+            .await
+            .expect("create_task execution");
+
+        let parsed_single: serde_json::Value = serde_json::from_str(&single_res).expect("parse single json");
+        assert_eq!(parsed_single["status"], "created");
+        assert_eq!(parsed_single["task_id"], "CVH-002");
+        assert_eq!(parsed_single["title"], "Backend Rust Implementation");
+        assert_eq!(parsed_single["column_id"], "dev");
+
+        // Verify on disk that CVH-002 has parent_id = "CVH-001"
+        let tasks_on_disk = crate::commands::tasks::load_tasks_from_disk(&base).await;
+        let created_child = tasks_on_disk.iter().find(|t| t.id == "CVH-002").expect("CVH-002 on disk");
+        assert_eq!(created_child.parent_id.as_deref(), Some("CVH-001"));
+        assert_eq!(created_child.priority.as_deref(), Some("high"));
+        assert_eq!(created_child.tags.as_ref().unwrap(), &vec!["rust".to_string(), "tauri".to_string()]);
+
+        // 2. Batch create_tasks call
+        let batch_args = serde_json::json!({
+            "tasks": [
+                {
+                    "title": "Frontend UI Matrix",
+                    "description": "Integrate into toolPolicyStore.ts",
+                    "column_id": "dev",
+                    "priority": "medium"
+                },
+                {
+                    "title": "End-to-End Test Suite",
+                    "description": "Run cargo check and vitest",
+                    "column_id": "dev",
+                    "priority": "high"
+                }
+            ]
+        });
+        let batch_res = execute_tool(&tool_ctx, "create_tasks", &batch_args)
+            .await
+            .expect("create_tasks execution");
+
+        let parsed_batch: serde_json::Value = serde_json::from_str(&batch_res).expect("parse batch json");
+        assert_eq!(parsed_batch["status"], "created");
+        assert_eq!(parsed_batch["count"], 2);
+
+        let tasks_after_batch = crate::commands::tasks::load_tasks_from_disk(&base).await;
+        assert_eq!(tasks_after_batch.len(), 4); // CVH-001, CVH-002, CVH-003, CVH-004
+
+        let t3 = tasks_after_batch.iter().find(|t| t.id == "CVH-003").expect("CVH-003");
+        let t4 = tasks_after_batch.iter().find(|t| t.id == "CVH-004").expect("CVH-004");
+        assert_eq!(t3.parent_id.as_deref(), Some("CVH-001"));
+        assert_eq!(t4.parent_id.as_deref(), Some("CVH-001"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_complete_task_anti_bypass_invariant() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_antibypass_test_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+
+        // Seed a regular developer task CVH-010 that has NO child tasks
+        let regular_task = Task {
+            id: "CVH-010".to_string(),
+            title: "Regular Developer Task".to_string(),
+            description: "Working on code".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("running".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            handover_summary: None,
+            cover_image: None,
+            attachments: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            created_at: 0,
+            updated_at: 0,
+        };
+        crate::commands::tasks::save_tasks_to_disk(&base, &[regular_task]).await.expect("save regular task");
+
+        let flag = Arc::new(AtomicBool::new(false));
+        let policy = ToolPolicyConfig::default();
+        let dev_ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("dev"),
+            role: Some("developer"),
+            abort_handle: Arc::clone(&flag),
+            tool_policy: &policy,
+            task_id: Some("CVH-010"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        // 1. Regular dev agent attempting to bypass pipeline with complete_task MUST BE REJECTED
+        let bypass_err = execute_tool(&dev_ctx, "complete_task", &serde_json::json!({
+            "summary": "Trying to skip review and retro"
+        }))
+        .await
+        .expect_err("Regular dev agent must be rejected from complete_task");
+
+        assert!(
+            bypass_err.to_string().contains("complete_task is restricted to orchestrator tasks that created subtasks."),
+            "Error must match Anti-Bypass Invariant string, got: {}",
+            bypass_err
+        );
+
+        // Verify task is still in 'dev' with status 'running'
+        let tasks_check1 = crate::commands::tasks::load_tasks_from_disk(&base).await;
+        let t10 = tasks_check1.iter().find(|t| t.id == "CVH-010").unwrap();
+        assert_eq!(t10.stage_id, "dev");
+        assert_eq!(t10.status.as_deref(), Some("running"));
+
+        // 2. Now let's spawn a child task linked to CVH-010
+        let child_task = Task {
+            id: "CVH-011".to_string(),
+            title: "Child Subtask".to_string(),
+            description: "Subtask 1".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("idle".to_string()),
+            model: None,
+            parent_id: Some("CVH-010".to_string()),
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            handover_summary: None,
+            cover_image: None,
+            attachments: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            created_at: 0,
+            updated_at: 0,
+        };
+        crate::commands::tasks::save_tasks_to_disk(&base, &[t10.clone(), child_task]).await.expect("save with child");
+
+        // Now CVH-010 has spawned child tasks -> complete_task MUST SUCCEED
+        let complete_res = execute_tool(&dev_ctx, "complete_task", &serde_json::json!({
+            "summary": "Decomposition finished and subtasks spawned"
+        }))
+        .await
+        .expect("complete_task must succeed for task with child subtasks");
+
+        let parsed_res: serde_json::Value = serde_json::from_str(&complete_res).expect("parse complete json");
+        assert_eq!(parsed_res["task_id"], "CVH-010");
+        assert_eq!(parsed_res["status"], "done");
+        assert_eq!(parsed_res["column_id"], "ready");
+
+        // Verify on disk that CVH-010 moved to 'ready', status is 'done', and handover_summary is recorded
+        let tasks_final = crate::commands::tasks::load_tasks_from_disk(&base).await;
+        let t10_done = tasks_final.iter().find(|t| t.id == "CVH-010").unwrap();
+        assert_eq!(t10_done.stage_id, "ready");
+        assert_eq!(t10_done.status.as_deref(), Some("done"));
+        assert_eq!(t10_done.handover_summary.as_deref(), Some("Decomposition finished and subtasks spawned"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_cvh_dev_cannot_create_or_complete_tasks() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_dev_scope_test_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+
+        let flag = Arc::new(AtomicBool::new(false));
+        let policy = ToolPolicyConfig::default();
+        let cvh_dev_ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("dev"),
+            role: Some("cvh-dev"),
+            abort_handle: Arc::clone(&flag),
+            tool_policy: &policy,
+            task_id: Some("CVH-999"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        // 1. Calling create_task as cvh-dev must fail
+        let create_err = execute_tool(&cvh_dev_ctx, "create_task", &serde_json::json!({
+            "title": "Forbidden task"
+        }))
+        .await
+        .expect_err("cvh-dev must NOT be allowed to call create_task");
+        assert!(create_err.to_string().contains("cvh-dev"));
+
+        // 2. Calling complete_task as cvh-dev must fail
+        let complete_err = execute_tool(&cvh_dev_ctx, "complete_task", &serde_json::json!({
+            "summary": "Trying to complete task"
+        }))
+        .await
+        .expect_err("cvh-dev must NOT be allowed to call complete_task");
+        assert!(complete_err.to_string().contains("cvh-dev"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[test]
+    fn test_canonical_tool_name_aliasing() {
+        assert_eq!(canonical_tool_name("move_task"), "advance_task");
+        assert_eq!(canonical_tool_name("move_task_stage"), "advance_task");
+        assert_eq!(canonical_tool_name("advance_stage"), "advance_task");
+        assert_eq!(canonical_tool_name("next_stage"), "advance_task");
+        assert_eq!(canonical_tool_name("advance_task"), "advance_task");
+        assert_eq!(canonical_tool_name("bash"), "execute_command");
+        assert_eq!(canonical_tool_name("str_replace"), "edit_file");
+        assert_eq!(canonical_tool_name("ask_user"), "question");
+        assert_eq!(canonical_tool_name("create_tasks"), "create_task");
+        assert_eq!(canonical_tool_name("read_file"), "read_file");
+    }
+
+    #[tokio::test]
+    async fn test_advance_and_move_task_tool_dispatch() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_adv_tool_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+
+        let b_cols = vec![
+            crate::config::PipelineColumn {
+                id: "backlog".to_string(),
+                title: "Backlog".to_string(),
+                color: None,
+                icon: None,
+                persona: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            crate::config::PipelineColumn {
+                id: "dev".to_string(),
+                title: "Dev".to_string(),
+                color: None,
+                icon: None,
+                persona: Some("developer".to_string()),
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            crate::config::PipelineColumn {
+                id: "review".to_string(),
+                title: "Review".to_string(),
+                color: None,
+                icon: None,
+                persona: Some("reviewer".to_string()),
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            crate::config::PipelineColumn {
+                id: "ready".to_string(),
+                title: "Ready".to_string(),
+                color: None,
+                icon: None,
+                persona: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: Some(true),
+            },
+        ];
+
+        let boards_cfg = crate::config::BoardsConfig {
+            active_board_id: "dev-board".to_string(),
+            boards: vec![
+                crate::config::BoardDef {
+                    id: "dev-board".to_string(),
+                    name: "Development".to_string(),
+                    columns: b_cols,
+                },
+            ],
+        };
+        crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
+
+        let task = Task {
+            id: "CVH-050".to_string(),
+            title: "Move Task Test".to_string(),
+            description: "Testing move task aliasing and target_stage".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("dev-board".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("running".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            created_at: 0,
+            updated_at: 0,
+            handover_summary: None,
+            attachments: None,
+            cover_image: None,
+        };
+        crate::commands::tasks::save_tasks_to_disk(&base, &[task]).await.expect("save task");
+
+        let flag = Arc::new(AtomicBool::new(false));
+        let policy = ToolPolicyConfig::default();
+        let tool_ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("dev"),
+            role: Some("developer"),
+            abort_handle: flag,
+            tool_policy: &policy,
+            task_id: Some("CVH-050"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        // 1. advance_task without summary -> uses default summary and advances to next column (review)
+        let adv_res = execute_tool(&tool_ctx, "advance_task", &serde_json::json!({}))
+            .await
+            .expect("advance_task with default summary");
+        assert!(adv_res.contains("УСПЕШНО"));
+
+        let tasks_after_adv = crate::commands::tasks::load_tasks_from_disk(&base).await;
+        let t = tasks_after_adv.iter().find(|t| t.id == "CVH-050").unwrap();
+        assert_eq!(t.stage_id, "review");
+
+        // 2. move_task with target_stage: "ready" and explicit summary
+        let move_res = execute_tool(&tool_ctx, "move_task", &serde_json::json!({
+            "target_stage": "ready",
+            "summary": "Completed code review, verified clean build."
+        }))
+        .await
+        .expect("move_task to ready");
+        assert!(move_res.contains("УСПЕШНО"));
+
+        let tasks_after_move = crate::commands::tasks::load_tasks_from_disk(&base).await;
+        let t_ready = tasks_after_move.iter().find(|t| t.id == "CVH-050").unwrap();
+        assert_eq!(t_ready.stage_id, "ready");
+        assert_eq!(t_ready.status.as_deref(), Some("done"));
+        assert_eq!(t_ready.handover_summary.as_deref(), Some("Completed code review, verified clean build."));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+}
