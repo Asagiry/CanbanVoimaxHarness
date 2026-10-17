@@ -1,0 +1,23 @@
+{
+  "taskId": "CVH-MODEL-INHERITANCE-AND-TEMPLATES",
+  "task": "model-inheritance-and-templates",
+  "title": "Eliminate Hardcoded Model Overrides from Default Column Templates and Ensure Subagent & Compactor Model Inheritance",
+  "branch": "feat/model-inheritance-and-templates",
+  "commitHash": "dbb5a9a",
+  "mergeCommitHash": "e082d02",
+  "commitMessage": "feat(llm): strip column model overrides and enforce subagent & compactor model inheritance",
+  "author": "agent-developer",
+  "verdict": "APPROVED",
+  "sensors": {
+    "cargo_check": "pass (cargo check --tests, 0 errors)",
+    "cargo_clippy": "pass (cargo clippy --tests -- -D warnings, 0 warnings)"
+  },
+  "files": [
+    "src-tauri/src/agent.rs",
+    "src-tauri/src/agent/compactor.rs",
+    "src-tauri/src/commands/tasks.rs",
+    "src-tauri/src/config.rs"
+  ],
+  "summary": "Eliminated hardcoded model overrides (model_override: None) across all default pipeline and board templates (canonical, development, 3D modeler) in config.rs to prevent unintentional shadowing of user global LLM settings. Ensured in-process subagents strictly inherit the calling parent task's active model from ctx.model (falling back to global settings model if unset) and pass the resolved model to child tool contexts. Extracted canonical resolve_task_active_agent_model helper in tasks.rs and unified model resolution across run_agent and compact_context, guaranteeing the compactor strictly respects active_agent_model when compactor_model is 'inherit'. Added unit tests in config.rs and agent/compactor.rs.",
+  "timestamp": 1792232077601
+}
