@@ -1,0 +1,19 @@
+{
+  "taskId": "CVH-DISABLE-DEFAULT-CONTEXT-MENU",
+  "title": "Eliminate default browser context menu on right-click across application",
+  "summary": "Suppressed the default native browser/WebView2 context menu on right-click across the entire application canvas, headers, cards, and background while strictly preserving native text editing (Cut, Copy, Paste, Select All) inside text inputs, textareas, and contenteditable elements. Maintained 100% functionality and isolation for all custom app context menus including KanbanBoard tab menu (setBoardContextMenu), KanbanCard task menu (setContextMenu), KanbanColumn header menu, and CortexExplorer agent menu. Optimized with zero-allocation module-scoped non-text input type filtering.",
+  "commitHash": "b557df0",
+  "commitMessage": "feat(ui): eliminate default browser context menu while preserving custom menus and text editing",
+  "author": "Lead UI Artisan (react-tailwind-artisan)",
+  "verdict": "APPROVED",
+  "date": "2026-10-17T14:50:48.074Z",
+  "affectedModules": [
+    "src/App.tsx"
+  ],
+  "verification": {
+    "typescript": "PASSED (npx tsc --noEmit: 0 errors)",
+    "l2Review": "APPROVED by agent-developer-reviewer (micro-optimization hoisted in b557df0)",
+    "contextMenuInvariants": "PASSED (KanbanBoard, KanbanCard, KanbanColumn, CortexExplorer menus verified intact)",
+    "textEditingPreservation": "PASSED (Native cut/copy/paste preserved for input, textarea, contenteditable)"
+  }
+}
