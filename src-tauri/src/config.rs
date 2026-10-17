@@ -380,7 +380,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 persona: Some("developer".to_string()),
                 on_enter_script: None,
                 context_window: Some(400000),
-                model_override: Some("gemini-3.8-flash-high".to_string()),
+                model_override: None,
                 reasoning_effort: None,
                 temperature: Some(0.2),
                 gatekeeper_sensor: None,
@@ -406,7 +406,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 persona: Some("reviewer".to_string()),
                 on_enter_script: None,
                 context_window: Some(200000),
-                model_override: Some("gemini-3.8-flash-high".to_string()),
+                model_override: None,
                 reasoning_effort: None,
                 temperature: Some(0.1),
                 gatekeeper_sensor: None,
@@ -430,7 +430,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 persona: Some("retro".to_string()),
                 on_enter_script: None,
                 context_window: Some(128000),
-                model_override: Some("gemini-3.8-flash-high".to_string()),
+                model_override: None,
                 reasoning_effort: None,
                 temperature: Some(0.2),
                 gatekeeper_sensor: None,
@@ -523,7 +523,7 @@ pub fn get_canonical_board_columns() -> Vec<PipelineColumn> {
             persona: Some("developer".to_string()),
             on_enter_script: None,
             context_window: Some(400000),
-            model_override: Some("gemini-3.8-flash-high".to_string()),
+            model_override: None,
             reasoning_effort: None,
             temperature: Some(0.2),
             gatekeeper_sensor: None,
@@ -577,7 +577,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 persona: Some("concept-artist".to_string()),
                 on_enter_script: None,
                 context_window: Some(200000),
-                model_override: Some("gemini-3.8-flash-high".to_string()),
+                model_override: None,
                 reasoning_effort: None,
                 temperature: Some(0.4),
                 gatekeeper_sensor: None,
@@ -599,7 +599,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 persona: Some("modeler".to_string()),
                 on_enter_script: None,
                 context_window: Some(300000),
-                model_override: Some("gemini-3.8-flash-high".to_string()),
+                model_override: None,
                 reasoning_effort: None,
                 temperature: Some(0.2),
                 gatekeeper_sensor: None,
@@ -624,7 +624,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 persona: Some("texture-artist".to_string()),
                 on_enter_script: None,
                 context_window: Some(200000),
-                model_override: Some("gemini-3.8-flash-high".to_string()),
+                model_override: None,
                 reasoning_effort: None,
                 temperature: Some(0.2),
                 gatekeeper_sensor: None,
@@ -2098,6 +2098,7 @@ mod tests {
     fn test_get_board_template_columns_modeler() {
         let cols = get_board_template_columns("modeler");
         assert_eq!(cols.len(), 4);
+        assert!(cols.iter().all(|c| c.model_override.is_none()));
         assert_eq!(cols[0].id, "concept");
         assert_eq!(cols[0].persona.as_deref(), Some("concept-artist"));
         assert_eq!(cols[1].id, "modeling");
@@ -2112,6 +2113,7 @@ mod tests {
     fn test_get_board_template_columns_canonical_default() {
         let cols = get_board_template_columns("canonical");
         assert_eq!(cols.len(), 3);
+        assert!(cols.iter().all(|c| c.model_override.is_none()));
         assert_eq!(cols[0].id, "backlog");
         assert_eq!(cols[0].title, "Ожидание");
         assert_eq!(cols[0].persona, None);

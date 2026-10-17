@@ -1116,6 +1116,73 @@ pub async fn advance_task(
     internal_advance_task(&root, &task_id, &summary, Some(&app)).await
 }
 
+/// Resolves the effective active agent model for a task, following the canonical priority hierarchy:
+/// 1. Task-level model override (`task.model`)
+/// 2. Global LLM settings model (`llm_settings.model`)
+/// 3. Stage persona agent settings (`agent_setting.model`)
+/// 4. Column model override (`col.model_override`)
+/// 5. Project default model (`proj_cfg.default_model`)
+/// 6. Hardcoded fallback ("gemini-3.8-flash-high")
+pub async fn resolve_task_active_agent_model(
+    root: &Path,
+    task: Option<&Task>,
+    llm_settings: &crate::config::LlmSettings,
+) -> String {
+    fn non_empty_opt(v: &Option<String>) -> Option<String> {
+        v.as_ref()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+    }
+
+    if let Some(m) = task.and_then(|t| non_empty_opt(&t.model)) {
+        return m;
+    }
+
+    let llm_model = {
+        let m = llm_settings.model.trim();
+        if m.is_empty() {
+            None
+        } else {
+            Some(m.to_string())
+        }
+    };
+
+    let (col_override, agent_model) = if let Some(t) = task {
+        let pipeline = load_pipeline_config(root)
+            .await
+            .unwrap_or_else(|_| crate::config::default_pipeline_config());
+        let boards_cfg = load_boards_config(root).await.ok();
+        let col_from_board = boards_cfg.as_ref().and_then(|bc| {
+            let b = if let Some(ref bid) = t.board_id {
+                bc.boards.iter().find(|b| &b.id == bid)
+            } else {
+                bc.boards.iter().find(|b| b.id == bc.active_board_id)
+            };
+            b.and_then(|b| b.columns.iter().find(|c| c.id == t.stage_id).cloned())
+        });
+        let col = col_from_board
+            .or_else(|| pipeline.columns.iter().find(|c| c.id == t.stage_id).cloned());
+        let col_override = col.as_ref().and_then(|c| non_empty_opt(&c.model_override));
+        let persona_role = col
+            .as_ref()
+            .and_then(|c| c.persona.clone())
+            .unwrap_or_else(|| "developer".to_string());
+        let agent_setting = crate::config::load_agent_setting(root, &persona_role).await;
+        (col_override, non_empty_opt(&agent_setting.model))
+    } else {
+        (None, None)
+    };
+
+    let proj_cfg = load_project_config(root).await.ok();
+    let proj_default = proj_cfg.and_then(|p| non_empty_opt(&p.default_model));
+
+    llm_model
+        .or(agent_model)
+        .or(col_override)
+        .or(proj_default)
+        .unwrap_or_else(|| "gemini-3.8-flash-high".to_string())
+}
+
 #[tauri::command]
 pub async fn run_agent(
     task_id: String,
@@ -1257,22 +1324,7 @@ pub async fn run_agent(
         );
     }
 
-    fn non_empty_opt(v: &Option<String>) -> Option<String> {
-        v.as_ref()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-    }
-
-    let llm_model = {
-        let m = llm_settings.model.trim();
-        if m.is_empty() { None } else { Some(m.to_string()) }
-    };
-    let model = non_empty_opt(&task.model)
-        .or(llm_model)
-        .or_else(|| non_empty_opt(&agent_setting.model))
-        .or_else(|| non_empty_opt(&col.model_override))
-        .or_else(|| non_empty_opt(&proj_cfg.default_model))
-        .unwrap_or_else(|| "gemini-3.8-flash-high".to_string());
+    let model = resolve_task_active_agent_model(&root, Some(&task), &llm_settings).await;
 
     let mut base_url = if !llm_settings.base_url.trim().is_empty() {
         llm_settings.base_url.trim().to_string()
@@ -1718,19 +1770,14 @@ pub async fn compact_context(
 ) -> Result<crate::agent::compactor::CompactionReport, String> {
     let root = state.get_root();
 
-    // 1. Resolve task and active agent model
+    // 1. Load LLM configuration and resolve active agent model
+    let llm_settings = crate::config::load_llm_settings(&root).await.unwrap_or_default();
     let tasks = load_tasks_from_disk(&root).await;
     let task = tasks.iter().find(|t| t.id == task_id).cloned();
 
-    let active_agent_model = task
-        .as_ref()
-        .and_then(|t| t.model.as_deref())
-        .filter(|m| !m.trim().is_empty())
-        .map(|m| m.to_string())
-        .unwrap_or_else(|| "gemini-3.8-flash-high".to_string());
+    let active_agent_model = resolve_task_active_agent_model(&root, task.as_ref(), &llm_settings).await;
 
-    // 2. Load LLM configuration and resolve compactor model (inheritance support)
-    let llm_settings = crate::config::load_llm_settings(&root).await.unwrap_or_default();
+    // 2. Resolve compactor model (inheritance support)
     let compactor_model = crate::agent::compactor::resolve_compactor_model(
         &llm_settings.compactor_model,
         &active_agent_model,

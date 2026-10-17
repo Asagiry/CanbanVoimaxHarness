@@ -1770,7 +1770,26 @@ pub fn run_inprocess_subagent(
     ];
 
     let base_url = ctx.base_url.as_deref().unwrap_or("http://127.0.0.1:8045/v1");
-    let model = ctx.model.as_deref().unwrap_or("gemini-3.8-flash-high");
+    let resolved_model = match ctx
+        .model
+        .as_deref()
+        .map(str::trim)
+        .filter(|m| !m.is_empty())
+    {
+        Some(m) => m.to_string(),
+        None => {
+            let global_settings = crate::config::load_llm_settings(&ctx.repo_root)
+                .await
+                .unwrap_or_default();
+            let m = global_settings.model.trim();
+            if !m.is_empty() {
+                m.to_string()
+            } else {
+                "gemini-3.8-flash-high".to_string()
+            }
+        }
+    };
+    let model = resolved_model.as_str();
     let api_key = ctx.api_key.as_deref();
     let temperature = ctx.temperature.or(Some(0.2));
     let reasoning_effort = ctx.reasoning_effort.clone();
@@ -2000,7 +2019,7 @@ pub fn run_inprocess_subagent(
                 app_handle: ctx.app_handle.clone(),
                 base_url: ctx.base_url.as_deref(),
                 api_key: ctx.api_key.as_deref(),
-                model: ctx.model.as_deref(),
+                model: Some(model),
                 temperature: ctx.temperature,
                 reasoning_effort: ctx.reasoning_effort.as_deref(),
                 call_id: Some(&tc.id),
