@@ -1,0 +1,24 @@
+{
+  "taskId": "CVH-REMOVE-COPILOT-DOCK",
+  "task": "remove-copilot-dock",
+  "branch": "feat/remove-copilot-dock",
+  "title": "Unmount CopilotDock from main layout and restore full-width Kanban board",
+  "verdict": "APPROVED",
+  "summary": "Unmounted persistent CopilotDock from main App flex layout and removed [Архитектор] button from Topbar header per user clarification ('Имею ввиду тока справа вот эту колонку а так его оставить да'). Restored clean full-width Kanban board while preserving all backend copilot IPC commands, state, SQLite dialogue storage, and cvh-dev personas intact.",
+  "files": [
+    "src/App.tsx",
+    "src/components/layout/Topbar.tsx"
+  ],
+  "sensors": {
+    "cargo_check": "pass (0 errors)",
+    "cargo_clippy": "pass (0 warnings)",
+    "cargo_test": "pass (87 passed, 0 failed)",
+    "npx_tsc": "pass (0 errors)"
+  },
+  "invariants": {
+    "gnu_linker_build_rs": "intact",
+    "auto_gitignore_config_rs": "intact",
+    "context_menu_suppression_app_tsx": "intact",
+    "backend_copilot_ipc_and_state": "intact"
+  }
+}
