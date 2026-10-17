@@ -238,9 +238,30 @@ async fn run_copilot_react_loop(
     let tool_policy = crate::config::load_tool_policies(&repo_root)
         .await
         .unwrap_or_default();
+    let active_tools: Vec<ToolDefinition> = tools
+        .into_iter()
+        .filter(|t| crate::config::is_tool_allowed(&tool_policy, None, &t.function.name))
+        .collect();
     let llm_client = LlmClient::new();
 
+    const MAX_COPILOT_TURNS: usize = 30;
+    let mut turn: usize = 0;
+
     loop {
+        turn += 1;
+        if turn > MAX_COPILOT_TURNS {
+            let msg = format!("Reached maximum turns limit ({}) for copilot session", MAX_COPILOT_TURNS);
+            let _ = app_handle.emit(
+                "copilot:stream",
+                serde_json::json!({
+                    "taskId": "copilot",
+                    "chunk": &msg,
+                    "type": "error"
+                }),
+            );
+            return Err(msg);
+        }
+
         if abort_flag.load(Ordering::SeqCst) {
             let _ = app_handle.emit(
                 "copilot:stream",
@@ -258,10 +279,10 @@ async fn run_copilot_react_loop(
             messages: messages.clone(),
             temperature: Some(temperature),
             stream: true,
-            tools: if tools.is_empty() {
+            tools: if active_tools.is_empty() {
                 None
             } else {
-                Some(tools.clone())
+                Some(active_tools.clone())
             },
             reasoning_effort: None,
         };
@@ -473,7 +494,7 @@ async fn run_copilot_react_loop(
             role: Some("copilot"),
             abort_handle: Arc::clone(&abort_flag),
             tool_policy: &tool_policy,
-            task_id: Some("copilot"),
+            task_id: None,
             agent_allowed_tools: None,
             app_handle: Some(app_handle.clone()),
             base_url: Some(&base_url),
@@ -622,9 +643,13 @@ pub async fn send_copilot_message(
         Err(_) => Err("Copilot execution aborted".to_string()),
     };
 
-    // Clean up active_copilot entry once task finishes
+    // Clean up active_copilot entry once task finishes (pointer check)
     if let Ok(mut guard) = active_copilot_slot.lock() {
-        *guard = None;
+        if let Some(ref entry) = *guard {
+            if Arc::ptr_eq(&entry.abort_flag, &abort_flag) {
+                *guard = None;
+            }
+        }
     }
 
     result
