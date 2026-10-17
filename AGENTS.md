@@ -249,3 +249,8 @@
 - **Orphaned Board Resolution**: If a task's `board_id` is missing, empty, or references a deleted board, the harness dynamically assigns it to `active_board_id` (or the first existing board, or `"development"`).
 - **Orphaned Column Resolution**: If a task's `stage_id` does not exist in the target board's columns, it is dynamically reassigned to that board's first column (typically `"backlog"`).
 - **Healing Lifecycle Execution**: Self-healing runs autonomously during task loading (`load_tasks`), board deletion, board switching, and task imports, preventing broken references, orphan cards, or frontend crashes.
+
+### 2.19 Dark Theme & Deep Token Propagation Invariant
+- **Deep Control Styling Invariant**: Any UI component supporting dark theme MUST NOT stop at top-level container backgrounds. All nested form controls (`<input>`, `<select>`, `<textarea>`, `<option>`), context submenus, and dialog panels MUST declare paired dark tokens (`dark:bg-[#0d1117]`, `dark:bg-[#161b22]`, `dark:border-[#30363d]`, `dark:text-[#f0f6fc]`). Hardcoded light tokens (`#ffffff`, `#fafafa`, `#ebebeb`) without dark overrides are strictly forbidden.
+- **Defensive View Transitions API Fallback**: Signature animations utilizing the CSS View Transitions API (`document.startViewTransition`) MUST include graceful fallbacks that immediately toggle state when the API is unsupported (e.g. non-Chromium or older webviews) or when the user prefers reduced motion (`prefers-reduced-motion: reduce`).
+- **Pre-Review TypeScript Sensor Gate**: Before requesting Level 2 Review on multi-file UI refactors, the lead developer MUST execute `tsc --noEmit` inside the isolated worktree to catch unbalanced JSX tags or missing props early, preserving high First-Time-Right (FTR) execution.

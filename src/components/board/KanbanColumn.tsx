@@ -86,12 +86,12 @@ export default function KanbanColumn({
           ? { ...colProvided.draggableProps.style, transform: 'none' }
           : colProvided.draggableProps.style
       }
-      className={`flex flex-col w-72 shrink-0 h-full rounded-lg bg-[#f9f9f9] border select-none overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
+      className={`flex flex-col w-72 shrink-0 h-full rounded-lg bg-[#f9f9f9] dark:bg-[#0d1117] border select-none overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
         colSnapshot.isDragging
-          ? 'border-[#171717] shadow-md opacity-90'
+          ? 'border-[#171717] dark:border-[#30363d] shadow-md opacity-90'
           : isFocused
-            ? 'border-[#171717] shadow-sm'
-            : 'border-[#ebebeb] hover:border-[#d4d4d8]'
+            ? 'border-[#171717] dark:border-[#30363d] shadow-sm'
+            : 'border-[#ebebeb] dark:border-[#21262d] hover:border-[#d4d4d8] dark:hover:border-[#30363d]'
       }`}
     >
       {/* Top Hairline Accent Bar */}
@@ -113,19 +113,19 @@ export default function KanbanColumn({
             ? 'Колонка закреплена. Правая кнопка — действия с колонкой'
             : 'Перетащите для смены порядка колонок. Правая кнопка — действия с колонкой'
         }
-        className={`flex items-center h-9 px-3 border-b border-[#ebebeb] bg-white hover:bg-[#fafafa] transition-colors ${
+        className={`flex items-center h-9 px-3 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] hover:bg-[#fafafa] dark:hover:bg-[#1c2128] transition-colors ${
           isPinned ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
         } group overflow-hidden`}
       >
         <div className="flex items-center gap-2 min-w-0 w-full overflow-hidden">
-          <AgentIcon name={effectiveIcon} className="h-3.5 w-3.5 shrink-0 text-[#171717]" />
-          <h3 className="text-[13px] font-semibold text-[#171717] truncate leading-none">
+          <AgentIcon name={effectiveIcon} className="h-3.5 w-3.5 shrink-0 text-[#171717] dark:text-[#f0f6fc]" />
+          <h3 className="text-[13px] font-semibold text-[#171717] dark:text-[#f0f6fc] truncate leading-none">
             {column.title}
           </h3>
           {/* Task Counter (same baseline as the title) */}
           <span
             className={`text-[10px] font-mono tabular-nums whitespace-nowrap leading-none shrink-0 translate-y-[1px] ${
-              isAtWipLimit ? 'text-red-600' : 'text-[#8f8f8f]'
+              isAtWipLimit ? 'text-red-600 dark:text-red-400' : 'text-[#8f8f8f] dark:text-[#8b949e]'
             }`}
           >
             Всего задач: {displayTasks.length}
@@ -141,7 +141,7 @@ export default function KanbanColumn({
             {...provided.droppableProps}
             className={`flex-1 min-h-0 p-2 overflow-y-auto transition-colors ${
               snapshot.isDraggingOver
-                ? 'bg-[#f4f4f5] border border-dashed border-[#171717]/30 rounded-b-lg'
+                ? 'bg-[#f4f4f5] dark:bg-[#161b22]/50 border border-dashed border-[#171717]/30 dark:border-[#30363d] rounded-b-lg'
                 : 'bg-transparent'
             }`}
           >
@@ -153,9 +153,9 @@ export default function KanbanColumn({
               <button
                 type="button"
                 onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
-                className="w-full mt-1 mb-2 py-2 px-3 flex items-center justify-center gap-1.5 rounded-[6px] border border-[#ebebeb] bg-white hover:bg-[#f9f9f9] text-[#0d0d0d] font-mono text-xs font-medium transition-all duration-150 cursor-pointer shadow-xs active:bg-[#f4f4f5] select-none"
+                className="w-full mt-1 mb-2 py-2 px-3 flex items-center justify-center gap-1.5 rounded-[6px] border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:bg-[#f9f9f9] dark:hover:bg-[#21262d] text-[#0d0d0d] dark:text-[#f0f6fc] font-mono text-xs font-medium transition-all duration-150 cursor-pointer shadow-xs active:bg-[#f4f4f5] dark:active:bg-[#1c2128] select-none"
               >
-                <ChevronDown className="h-3.5 w-3.5 text-[#8f8f8f] transition-transform duration-150" />
+                <ChevronDown className="h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e] transition-transform duration-150" />
                 <span>Загрузить еще (еще {nextCount} из {remaining})</span>
               </button>
             )}

@@ -167,20 +167,20 @@ function renderInlineNodes(nodes: InlineNode[], prefix: string): React.ReactNode
         return (
           <code
             key={key}
-            className="px-1.5 py-0.5 rounded bg-[#f4f4f5] border border-[#ebebeb] text-[#171717] font-mono text-[13px]"
+            className="px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] font-mono text-[13px]"
           >
             {node.text}
           </code>
         );
       case 'bold':
         return (
-          <strong key={key} className="font-semibold text-[#171717]">
+          <strong key={key} className="font-semibold text-[#171717] dark:text-[#f0f6fc]">
             {renderInlineNodes(node.children, `${key}-b`)}
           </strong>
         );
       case 'italic':
         return (
-          <em key={key} className="italic text-[#171717]">
+          <em key={key} className="italic text-[#171717] dark:text-[#f0f6fc]">
             {renderInlineNodes(node.children, `${key}-i`)}
           </em>
         );
@@ -250,14 +250,14 @@ export function MarkdownContent({ content }: { content?: string }) {
           result.push(
             <div
               key={`code-${index}`}
-              className="my-2.5 rounded-md border border-[#ebebeb] bg-[#fafafa] overflow-hidden font-mono text-[13px]"
+              className="my-2.5 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22] overflow-hidden font-mono text-[13px]"
             >
               {codeLanguage && (
-                <div className="px-3 py-1 bg-[#f4f4f5] border-b border-[#ebebeb] text-xs text-[#666666] font-medium flex justify-between items-center">
+                <div className="px-3 py-1 bg-[#f4f4f5] dark:bg-[#0d1117] border-b border-[#ebebeb] dark:border-[#30363d] text-xs text-[#666666] dark:text-[#8b949e] font-medium flex justify-between items-center">
                   <span>{codeLanguage}</span>
                 </div>
               )}
-              <pre className="p-3 text-[#171717] overflow-x-auto leading-relaxed select-text font-mono text-[13px]">
+              <pre className="p-3 text-[#171717] dark:text-[#f0f6fc] overflow-x-auto leading-relaxed select-text font-mono text-[13px]">
                 {codeBuffer.join('\n')}
               </pre>
             </div>
@@ -359,25 +359,25 @@ export function MarkdownContent({ content }: { content?: string }) {
       // Headings
       if (trimmedLine.startsWith('#### ')) {
         result.push(
-          <h5 key={index} className="text-[13px] md:text-sm font-semibold text-[#171717] mt-2 mb-1">
+          <h5 key={index} className="text-[13px] md:text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] mt-2 mb-1">
             {formatInline(trimmedLine.slice(5), `h5-${index}`)}
           </h5>
         );
       } else if (trimmedLine.startsWith('### ')) {
         result.push(
-          <h4 key={index} className="text-sm font-semibold text-[#171717] mt-2.5 mb-1">
+          <h4 key={index} className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] mt-2.5 mb-1">
             {formatInline(trimmedLine.slice(4), `h4-${index}`)}
           </h4>
         );
       } else if (trimmedLine.startsWith('## ')) {
         result.push(
-          <h3 key={index} className="text-sm md:text-base font-semibold text-[#171717] mt-3 mb-1">
+          <h3 key={index} className="text-sm md:text-base font-semibold text-[#171717] dark:text-[#f0f6fc] mt-3 mb-1">
             {formatInline(trimmedLine.slice(3), `h3-${index}`)}
           </h3>
         );
       } else if (trimmedLine.startsWith('# ')) {
         result.push(
-          <h2 key={index} className="text-base md:text-lg font-bold text-[#171717] mt-3.5 mb-1.5">
+          <h2 key={index} className="text-base md:text-lg font-bold text-[#171717] dark:text-[#f0f6fc] mt-3.5 mb-1.5">
             {formatInline(trimmedLine.slice(2), `h2-${index}`)}
           </h2>
         );
@@ -386,8 +386,8 @@ export function MarkdownContent({ content }: { content?: string }) {
         const indent = numMatch[1].length;
         const mlClass = indent >= 4 ? 'ml-8' : indent >= 2 ? 'ml-6' : 'ml-4';
         result.push(
-          <div key={`num-${index}`} className={`${mlClass} text-sm leading-relaxed text-[#171717] flex items-start gap-1.5`}>
-            <span className="font-semibold text-[#171717] select-none shrink-0 font-mono text-[13px]">
+          <div key={`num-${index}`} className={`${mlClass} text-sm leading-relaxed text-[#171717] dark:text-[#f0f6fc] flex items-start gap-1.5`}>
+            <span className="font-semibold text-[#171717] dark:text-[#f0f6fc] select-none shrink-0 font-mono text-[13px]">
               {numMatch[2]}
             </span>
             <span className="flex-1 min-w-0">{formatInline(numMatch[4], `num-${index}`)}</span>
@@ -398,8 +398,8 @@ export function MarkdownContent({ content }: { content?: string }) {
         const indent = bulletMatch[1].length;
         const mlClass = indent >= 4 ? 'ml-8' : indent >= 2 ? 'ml-6' : 'ml-4';
         result.push(
-          <div key={`bullet-${index}`} className={`${mlClass} text-sm leading-relaxed text-[#171717] flex items-start gap-2`}>
-            <span className="text-[#666666] select-none shrink-0 leading-relaxed">•</span>
+          <div key={`bullet-${index}`} className={`${mlClass} text-sm leading-relaxed text-[#171717] dark:text-[#f0f6fc] flex items-start gap-2`}>
+            <span className="text-[#666666] dark:text-[#8b949e] select-none shrink-0 leading-relaxed">•</span>
             <span className="flex-1 min-w-0">{formatInline(bulletMatch[3], `bullet-${index}`)}</span>
           </div>
         );
@@ -407,7 +407,7 @@ export function MarkdownContent({ content }: { content?: string }) {
         result.push(<div key={index} className="h-1.5" />);
       } else {
         result.push(
-          <p key={index} className="text-sm leading-relaxed text-[#171717]">
+          <p key={index} className="text-sm leading-relaxed text-[#171717] dark:text-[#f0f6fc]">
             {formatInline(line, `p-${index}`)}
           </p>
         );
@@ -543,7 +543,7 @@ export default function DrawerActivityStream({
   }, [unifiedActivities]);
 
   return (
-    <div className="relative flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] overflow-hidden">
+    <div className="relative flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] dark:bg-[#090a0f] overflow-hidden transition-colors">
       {/* Warning Banner on agent run error */}
       {runError && (
         <div className="mx-4 md:mx-6 mt-3 px-3.5 py-2.5 rounded-lg bg-[#fef2f2] border border-[#fecaca] text-[#991b1b] flex items-center justify-between shadow-xs shrink-0 animate-in fade-in duration-150">
@@ -579,11 +579,11 @@ export default function DrawerActivityStream({
         <div className="max-w-4xl mx-auto space-y-3.5">
           {activeSubagentId ? (
             /* Subagent Atomic Objective Card */
-            <div className="rounded-lg border border-[#ebebeb] bg-white p-4 shadow-xs">
-              <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#ebebeb]">
+            <div className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-4 shadow-xs">
+              <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#ebebeb] dark:border-[#21262d]">
                 <div className="flex items-center space-x-2 min-w-0">
-                  <span className="text-[#171717] text-xs font-mono shrink-0">■</span>
-                  <span className="text-xs font-semibold text-[#171717] font-sans truncate">
+                  <span className="text-[#171717] dark:text-[#f0f6fc] text-xs font-mono shrink-0">■</span>
+                  <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans truncate">
                     Атомарная задача субагента: {activeSubagentTitle || 'Субагент'}
                   </span>
                 </div>
@@ -594,7 +594,7 @@ export default function DrawerActivityStream({
                   <button
                     type="button"
                     onClick={closeSubagent}
-                    className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-sans font-medium text-[#71717a] hover:text-[#171717] hover:bg-[#f4f4f5] border border-transparent hover:border-[#ebebeb] transition cursor-pointer"
+                    className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-sans font-medium text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] border border-transparent hover:border-[#ebebeb] dark:hover:border-[#30363d] transition cursor-pointer"
                     title="Вернуться к родительской задаче"
                   >
                     <ArrowLeft className="h-3.5 w-3.5" />
@@ -602,26 +602,26 @@ export default function DrawerActivityStream({
                   </button>
                 </div>
               </div>
-              <div className="text-sm text-[#171717] leading-relaxed whitespace-pre-wrap select-text font-sans bg-[#fafafa] p-3 rounded-md border border-[#ebebeb]">
+              <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed whitespace-pre-wrap select-text font-sans bg-[#fafafa] dark:bg-[#161b22] p-3 rounded-md border border-[#ebebeb] dark:border-[#30363d]">
                 {activeSubagentPrompt || 'Инструкция для субагента'}
               </div>
             </div>
           ) : (
             <>
               {/* a) Task Goal / User Objective Card */}
-              <div className="rounded-lg border border-[#ebebeb] bg-white p-4 shadow-xs">
-                <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#ebebeb]">
+              <div className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-4 shadow-xs">
+                <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#ebebeb] dark:border-[#21262d]">
                   <div className="flex items-center space-x-2">
-                    <Target className="h-4 w-4 text-[#171717]" />
-                    <span className="text-xs font-semibold text-[#171717] font-sans">
+                    <Target className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
+                    <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">
                       Цель задачи / Prompt
                     </span>
                   </div>
-                  <span className="text-[10px] font-mono text-[#8f8f8f]">
+                  <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e]">
                     Постановка задачи
                   </span>
                 </div>
-                <div className="text-sm text-[#171717] leading-relaxed whitespace-pre-wrap select-text font-sans">
+                <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed whitespace-pre-wrap select-text font-sans">
                   {getCleanPrompt(task.description, task.title)}
                 </div>
               </div>
@@ -741,10 +741,10 @@ export default function DrawerActivityStream({
               return (
                 <div
                   key={key}
-                  className="rounded-lg border border-[#ebebeb] bg-[#f9f9f9] p-3.5 shadow-xs"
+                  className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#0d1117] p-3.5 shadow-xs"
                 >
-                  <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-[#ebebeb] text-[10px] font-mono text-[#666666]">
-                    <div className="flex items-center space-x-1.5 text-[#171717] font-medium">
+                  <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-[#ebebeb] dark:border-[#21262d] text-[10px] font-mono text-[#666666] dark:text-[#8b949e]">
+                    <div className="flex items-center space-x-1.5 text-[#171717] dark:text-[#f0f6fc] font-medium">
                       <User className="h-3 w-3" />
                       <span>Указание пользователя (Steer)</span>
                     </div>
@@ -767,7 +767,7 @@ export default function DrawerActivityStream({
                       ))}
                     </div>
                   )}
-                  <p className="text-sm text-[#171717] whitespace-pre-wrap select-text leading-relaxed font-sans">
+                  <p className="text-sm text-[#171717] dark:text-[#f0f6fc] whitespace-pre-wrap select-text leading-relaxed font-sans">
                     {activity?.content ?? ''}
                   </p>
                 </div>
@@ -813,25 +813,25 @@ export default function DrawerActivityStream({
             return (
               <div
                 key={key}
-                className="rounded-lg border border-[#e4e4e7] bg-white shadow-xs overflow-hidden my-2"
+                className="rounded-lg border border-[#e4e4e7] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-xs overflow-hidden my-2"
               >
                 <div
                   onClick={() => toggleOutput(key)}
-                  className="flex items-center justify-between px-4 py-3 hover:bg-[#fafafa] cursor-pointer transition select-none"
+                  className="flex items-center justify-between px-4 py-3 hover:bg-[#fafafa] dark:hover:bg-[#161b22] cursor-pointer transition select-none"
                 >
-                  <div className="flex items-center space-x-2 text-[#171717]">
+                  <div className="flex items-center space-x-2 text-[#171717] dark:text-[#f0f6fc]">
                     {isOutputExpanded ? (
-                      <ChevronDown className="h-4 w-4 text-[#71717a] shrink-0" />
+                      <ChevronDown className="h-4 w-4 text-[#71717a] dark:text-[#8b949e] shrink-0" />
                     ) : (
-                      <ChevronRight className="h-4 w-4 text-[#71717a] shrink-0" />
+                      <ChevronRight className="h-4 w-4 text-[#71717a] dark:text-[#8b949e] shrink-0" />
                     )}
-                    <Sparkles className="h-4 w-4 text-[#171717] shrink-0" />
-                    <span className="text-sm font-semibold text-[#171717] font-sans">Ответ агента</span>
+                    <Sparkles className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
+                    <span className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">Ответ агента</span>
                   </div>
-                  <span className="text-xs font-mono text-[#71717a] tabular-nums">{activity?.timestamp ?? ''}</span>
+                  <span className="text-xs font-mono text-[#71717a] dark:text-[#8b949e] tabular-nums">{activity?.timestamp ?? ''}</span>
                 </div>
                 {isOutputExpanded && (
-                  <div className="px-4 pb-4 pt-3 border-t border-[#f4f4f5]">
+                  <div className="px-4 pb-4 pt-3 border-t border-[#f4f4f5] dark:border-[#21262d]">
                     {activity?.content ? (
                       <MarkdownContent content={activity.content} />
                     ) : (

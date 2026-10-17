@@ -134,12 +134,12 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
     return (
       <div
         onClick={() => openSubagent(subagentId, title, rawRole, prompt)}
-        className="group rounded-lg border border-[#ebebeb] bg-white hover:bg-[#f9f9f9] hover:border-[#171717]/40 p-3.5 shadow-xs transition-all duration-150 cursor-pointer select-none my-2.5"
+        className="group rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] hover:bg-[#f9f9f9] dark:hover:bg-[#1c2128] hover:border-[#171717]/40 dark:hover:border-[#30363d] p-3.5 shadow-xs transition-all duration-150 cursor-pointer select-none my-2.5"
         title="Нажмите, чтобы открыть вложенный чат субагента"
       >
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center space-x-2.5 min-w-0 flex-1 overflow-hidden">
-            <span className="text-[#171717] shrink-0 font-mono text-sm leading-none select-none">
+            <span className="text-[#171717] dark:text-[#f0f6fc] shrink-0 font-mono text-sm leading-none select-none">
               ■
             </span>
 
@@ -147,7 +147,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
               {roleUpper}
             </span>
 
-            <span className="font-sans font-medium text-xs md:text-sm text-[#0d0d0d] group-hover:text-[#171717] transition-colors truncate">
+            <span className="font-sans font-medium text-xs md:text-sm text-[#0d0d0d] dark:text-[#f0f6fc] group-hover:text-[#171717] dark:group-hover:text-white transition-colors truncate">
               {title}
             </span>
           </div>
@@ -720,11 +720,11 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   };
 
   return (
-    <div className="group rounded-md border border-[#ebebeb] bg-[#fafafa] hover:border-[#d4d4d8] overflow-hidden text-xs shadow-2xs transition-colors my-1">
+    <div className="group rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] hover:border-[#d4d4d8] dark:hover:border-[#30363d] overflow-hidden text-xs shadow-2xs transition-colors my-1">
       {/* Header Strip */}
       <div
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center justify-between px-2.5 py-1.5 hover:bg-[#f4f4f5] cursor-pointer transition select-none gap-2 text-xs min-h-[30px]"
+        className="flex items-center justify-between px-2.5 py-1.5 hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] cursor-pointer transition select-none gap-2 text-xs min-h-[30px]"
       >
         {isReadOp ? (
           /* Read operation tactile card: [Analyzed C# Transit.cs #L4270-4300] */
@@ -771,7 +771,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
                   {dirPath}/
                 </span>
               )}
-              <span className="font-semibold text-[#171717] truncate">
+              <span className="font-semibold text-[#171717] dark:text-[#f0f6fc] truncate">
                 {fileName || rawFilePath || 'file'}
               </span>
             </div>
@@ -837,7 +837,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
                   {dirPath}/
                 </span>
               )}
-              <span className="font-semibold text-[#171717] truncate">
+              <span className="font-semibold text-[#171717] dark:text-[#f0f6fc] truncate">
                 {fileName || rawFilePath || 'file'}
               </span>
             </div>
@@ -897,14 +897,14 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
               )}
             </span>
 
-            <span className="font-mono font-medium text-[#171717] shrink-0">
+            <span className="font-mono font-medium text-[#171717] dark:text-[#f0f6fc] shrink-0">
               {tool.toolName}{target ? ':' : ''}
             </span>
 
             {target && (
               <span
                 title={fullTarget}
-                className="font-mono text-[#52525b] truncate max-w-[260px] sm:max-w-[360px] md:max-w-[460px]"
+                className="font-mono text-[#52525b] dark:text-[#8b949e] truncate max-w-[260px] sm:max-w-[360px] md:max-w-[460px]"
               >
                 {target}
               </span>
@@ -952,7 +952,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
       {/* Expanded Details */}
       {isExpanded && (
-        <div className="p-3 border-t border-[#ebebeb] space-y-2.5 font-mono text-xs bg-white">
+        <div className="p-3 border-t border-[#ebebeb] dark:border-[#21262d] space-y-2.5 font-mono text-xs bg-white dark:bg-[#0d1117]">
           {isReadOp ? (
             <div className="space-y-2">
               {rawFilePath && (

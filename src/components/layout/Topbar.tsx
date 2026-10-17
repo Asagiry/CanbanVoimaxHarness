@@ -9,7 +9,10 @@ import {
   FolderOpen,
   Settings,
   Wrench,
+  Sun,
+  Moon,
 } from 'lucide-react';
+import { useThemeStore } from '../../stores/themeStore';
 
 export default function Topbar() {
   const { activeProject, openFolder } = useProjectStore();
@@ -17,6 +20,7 @@ export default function Topbar() {
   const { loadTasks } = useBoardStore();
   const { openSettings } = useSettingsStore();
   const { openModal: openToolPolicyModal } = useToolPolicyStore();
+  const { theme, toggleThemeWithAnimation } = useThemeStore();
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   const handleHeaderDoubleClick = (e: React.MouseEvent) => {
@@ -64,7 +68,7 @@ export default function Topbar() {
     <header
       data-tauri-drag-region
       onDoubleClick={handleHeaderDoubleClick}
-      className="h-10 w-full flex items-center justify-between pl-3 pr-0 border-b border-[#ebebeb] bg-white select-none text-xs text-[#171717] shrink-0 z-40"
+      className="h-10 w-full flex items-center justify-between pl-3 pr-0 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] select-none text-xs text-[#171717] dark:text-[#f0f6fc] shrink-0 z-40 transition-colors"
     >
       {/* Hidden Web Directory Picker */}
       <input
@@ -88,17 +92,17 @@ export default function Topbar() {
           data-no-drag
           onMouseDown={(e) => e.stopPropagation()}
           onClick={handleOpenFolderClick}
-          className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-white hover:bg-[#f9f9f9] border border-[#ebebeb] text-[#4d4d4d] hover:text-[#171717] transition cursor-pointer font-sans text-xs"
+          className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#4d4d4d] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer font-sans text-xs"
           title="Выбрать папку проекта"
         >
-          <FolderOpen className="h-3.5 w-3.5 text-[#666666]" />
+          <FolderOpen className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e]" />
           <span>Открыть папку</span>
         </button>
 
         {/* Current folder indicator: read-only caption, full path in tooltip */}
         {currentFolderName && (
           <span
-            className="font-mono text-[11px] text-[#8f8f8f] truncate max-w-[220px] cursor-default"
+            className="font-mono text-[11px] text-[#8f8f8f] dark:text-[#8b949e] truncate max-w-[220px] cursor-default"
             title={activeProject.rootPath || activeProject.name}
           >
             {currentFolderName}
@@ -113,7 +117,7 @@ export default function Topbar() {
           <button
             onMouseDown={(e) => e.stopPropagation()}
             onClick={openToolPolicyModal}
-            className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] border border-[#ebebeb] text-[#666666] hover:text-[#171717] transition cursor-pointer"
+            className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#666666] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer"
             title="Матрица инструментов — доступ тулов по агентам"
           >
             <Wrench className="h-3.5 w-3.5" />
@@ -121,15 +125,42 @@ export default function Topbar() {
           <button
             onMouseDown={(e) => e.stopPropagation()}
             onClick={openSettings}
-            className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] border border-[#ebebeb] text-[#666666] hover:text-[#171717] transition cursor-pointer"
+            className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#666666] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer"
             title="Настройки LLM"
           >
             <Settings className="h-3.5 w-3.5" />
           </button>
+
+          {/* Theme Toggle Button with Circular Wave Animation */}
+          <button
+            data-no-drag
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => toggleThemeWithAnimation(e)}
+            className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#666666] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer relative overflow-hidden group"
+            title={theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'}
+            aria-label="Сменить тему оформления"
+          >
+            <div className="relative h-3.5 w-3.5 flex items-center justify-center">
+              <Sun
+                className={`h-3.5 w-3.5 transition-all duration-300 transform absolute inset-0 ${
+                  theme === 'dark'
+                    ? 'rotate-90 scale-0 opacity-0'
+                    : 'rotate-0 scale-100 opacity-100 text-amber-500'
+                }`}
+              />
+              <Moon
+                className={`h-3.5 w-3.5 transition-all duration-300 transform absolute inset-0 ${
+                  theme === 'dark'
+                    ? 'rotate-0 scale-100 opacity-100 text-indigo-400'
+                    : '-rotate-90 scale-0 opacity-0'
+                }`}
+              />
+            </div>
+          </button>
         </div>
 
         {/* Vertical divider before window controls */}
-        <div className="h-4 w-px bg-[#ebebeb] mx-1" />
+        <div className="h-4 w-px bg-[#ebebeb] dark:bg-[#21262d] mx-1" />
 
         {/* Shared Frameless Window Controls */}
         <WindowControls />

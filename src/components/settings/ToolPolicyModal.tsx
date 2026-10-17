@@ -239,21 +239,21 @@ export default function ToolPolicyModal() {
   if (!isModalOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 backdrop-blur-xs p-3">
-      <div className="w-full max-w-4xl rounded-lg border border-[#ebebeb] bg-white shadow-xl overflow-hidden flex flex-col max-h-[85vh]">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 dark:bg-black/70 backdrop-blur-xs p-3">
+      <div className="w-full max-w-4xl rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] shadow-xl overflow-hidden flex flex-col max-h-[85vh] transition-colors">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#ebebeb] px-4 py-3 bg-white">
+        <div className="flex items-center justify-between border-b border-[#ebebeb] dark:border-[#21262d] px-4 py-3 bg-white dark:bg-[#0d1117]">
           <div>
-            <h2 className="text-sm font-semibold text-[#171717]">
+            <h2 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc]">
               Настройки матрицы инструментов
             </h2>
-            <p className="text-[11px] text-[#666666] font-mono mt-0.5">
+            <p className="text-[11px] text-[#666666] dark:text-[#8b949e] font-mono mt-0.5">
               Разграничение прав доступа инструментов по агентам
             </p>
           </div>
           <button
             onClick={closeModal}
-            className="p-1 rounded-md text-[#666666] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
+            className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
             title="Закрыть"
           >
             <X className="h-4 w-4" />
@@ -261,13 +261,13 @@ export default function ToolPolicyModal() {
         </div>
 
         {/* Tabs Bar */}
-        <div className="flex border-b border-[#ebebeb] bg-white px-4 font-mono text-xs">
+        <div className="flex border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] px-4 font-mono text-xs">
           <button
             onClick={() => setActiveTab('matrix')}
             className={`px-3.5 py-2.5 border-b-2 transition cursor-pointer ${
               activeTab === 'matrix'
-                ? 'border-[#171717] text-[#171717] font-semibold'
-                : 'border-transparent text-[#666666] hover:text-[#171717]'
+                ? 'border-[#171717] dark:border-[#f0f6fc] text-[#171717] dark:text-[#f0f6fc] font-semibold'
+                : 'border-transparent text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
             }`}
           >
             Матрица агентов
@@ -276,8 +276,8 @@ export default function ToolPolicyModal() {
             onClick={() => setActiveTab('global')}
             className={`px-3.5 py-2.5 border-b-2 transition cursor-pointer ${
               activeTab === 'global'
-                ? 'border-[#171717] text-[#171717] font-semibold'
-                : 'border-transparent text-[#666666] hover:text-[#171717]'
+                ? 'border-[#171717] dark:border-[#f0f6fc] text-[#171717] dark:text-[#f0f6fc] font-semibold'
+                : 'border-transparent text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
             }`}
           >
             Глобальный реестр
@@ -287,26 +287,26 @@ export default function ToolPolicyModal() {
         {/* Body Content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3 font-mono text-xs">
           {activeTab === 'matrix' && (
-            <div className="overflow-x-auto rounded-md border border-[#ebebeb] bg-white">
+            <div className="overflow-x-auto rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117]">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="border-b border-[#ebebeb] bg-[#f9f9f9] text-[#666666] text-[10px] uppercase">
+                  <tr className="border-b border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] text-[10px] uppercase">
                     <th className="py-2.5 px-3 font-medium">Инструмент</th>
                     <th className="py-2.5 px-2 text-right font-medium">Вес</th>
                     {agents.map((agent) => (
-                      <th key={agent.role} className="py-2.5 px-2 text-center font-medium border-l border-[#ebebeb] min-w-[95px]">
+                      <th key={agent.role} className="py-2.5 px-2 text-center font-medium border-l border-[#ebebeb] dark:border-[#21262d] min-w-[95px]">
                         <div className="flex flex-col items-center gap-1">
                           <div className="flex items-center gap-1.5 justify-center max-w-[110px]">
                             <AgentIcon
                               name={agent.icon || (agent.isBuiltin ? 'Cpu' : 'Bot')}
-                              className={`h-3.5 w-3.5 shrink-0 ${agent.isBuiltin ? 'text-indigo-600' : 'text-[#171717]'}`}
+                              className={`h-3.5 w-3.5 shrink-0 ${agent.isBuiltin ? 'text-indigo-600 dark:text-indigo-400' : 'text-[#171717] dark:text-[#f0f6fc]'}`}
                             />
-                            <span className="truncate block font-mono font-semibold text-[#171717]" title={agent.role}>
+                            <span className="truncate block font-mono font-semibold text-[#171717] dark:text-[#f0f6fc]" title={agent.role}>
                               {agent.role}
                             </span>
                           </div>
                           {agent.isBuiltin && (
-                            <span className="px-1 py-0.2 rounded text-[9px] font-sans font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            <span className="px-1 py-0.2 rounded text-[9px] font-sans font-medium bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                               встроенный
                             </span>
                           )}
@@ -315,17 +315,17 @@ export default function ToolPolicyModal() {
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#ebebeb]">
+                <tbody className="divide-y divide-[#ebebeb] dark:divide-[#21262d]">
                   {CATEGORY_ORDER.map((catKey) => {
                     const toolsInCat = AVAILABLE_TOOLS.filter((t) => t.category === catKey);
                     if (toolsInCat.length === 0) return null;
 
                     return (
                       <Fragment key={`cat-grp-${catKey}`}>
-                        <tr className="bg-[#f4f4f5]/90 border-y border-[#ebebeb]">
+                        <tr className="bg-[#f4f4f5]/90 dark:bg-[#161b22] border-y border-[#ebebeb] dark:border-[#21262d]">
                           <td
                             colSpan={2 + agents.length}
-                            className="py-1.5 px-3 text-[10px] font-semibold text-[#52525b] uppercase tracking-wider"
+                            className="py-1.5 px-3 text-[10px] font-semibold text-[#52525b] dark:text-[#8b949e] uppercase tracking-wider"
                           >
                             {CATEGORY_LABELS[catKey] || catKey}
                           </td>
@@ -338,8 +338,8 @@ export default function ToolPolicyModal() {
                           return (
                             <tr
                               key={tool.id}
-                              className={`hover:bg-[#fafafa] transition text-[#171717] ${
-                                isChild ? 'bg-[#fafafc]' : ''
+                              className={`hover:bg-[#fafafa] dark:hover:bg-[#161b22] transition text-[#171717] dark:text-[#f0f6fc] ${
+                                isChild ? 'bg-[#fafafc] dark:bg-[#090a0f]' : ''
                               }`}
                             >
                               <td className={`py-2.5 px-3 ${isChild ? 'pl-7' : ''}`}>
@@ -350,34 +350,34 @@ export default function ToolPolicyModal() {
                                   className="flex items-center gap-1.5 text-left cursor-pointer group"
                                 >
                                   {isChild && (
-                                    <span className="text-[#8f8f8f] font-mono text-xs select-none shrink-0 mr-1">
+                                    <span className="text-[#8f8f8f] dark:text-[#6e7681] font-mono text-xs select-none shrink-0 mr-1">
                                       {tool.id === 'subagent_sync' ? '├──' : '└──'}
                                     </span>
                                   )}
                                   <ChevronDown
-                                    className={`h-3.5 w-3.5 shrink-0 text-[#8f8f8f] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                    className={`h-3.5 w-3.5 shrink-0 text-[#8f8f8f] dark:text-[#6e7681] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                                   />
                                   <span>
                                     <span
-                                      className={`font-medium text-[#171717] group-hover:underline underline-offset-2 ${
+                                      className={`font-medium text-[#171717] dark:text-[#f0f6fc] group-hover:underline underline-offset-2 ${
                                         tool.isSubagentMaster ? 'font-semibold' : ''
                                       }`}
                                     >
                                       {tool.label}
                                     </span>
-                                    <span className="text-[10px] text-[#8f8f8f] block">
+                                    <span className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] block">
                                       {tool.name}
                                     </span>
                                   </span>
                                 </button>
                                 {isExpanded && (
-                                  <p className="text-[11px] text-[#666666] mt-1.5 font-sans leading-snug">
+                                  <p className="text-[11px] text-[#666666] dark:text-[#8b949e] mt-1.5 font-sans leading-snug">
                                     {tool.description}
                                   </p>
                                 )}
                               </td>
 
-                              <td className="py-2.5 px-2 text-right text-[#666666] tabular-nums text-[11px]">
+                              <td className="py-2.5 px-2 text-right text-[#666666] dark:text-[#8b949e] tabular-nums text-[11px]">
                                 {tool.tokenWeight}
                               </td>
 
@@ -389,7 +389,7 @@ export default function ToolPolicyModal() {
                                 const isDisabled = isChild && !isMasterAllowed;
 
                                 return (
-                                  <td key={agent.role} className="py-2 px-2 text-center border-l border-[#ebebeb]">
+                                  <td key={agent.role} className="py-2 px-2 text-center border-l border-[#ebebeb] dark:border-[#21262d]">
                                     {!isGloballyActive ? (
                                       <span className="text-[10px] text-[#8f8f8f] select-none">
                                         Выкл

@@ -113,16 +113,16 @@ export default function SettingsModal() {
 
   return (
     <>
-      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-100">
-        <div className="relative flex flex-col w-[500px] max-w-full rounded-lg border border-[#ebebeb] bg-white shadow-2xl p-5 text-[#171717]">
+      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 dark:bg-black/70 backdrop-blur-xs p-4 animate-in fade-in duration-100">
+        <div className="relative flex flex-col w-[500px] max-w-full rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-2xl p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors">
           {/* Header */}
-          <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb]">
+          <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#21262d]">
             <div className="flex items-center space-x-2">
-              <h2 className="text-sm font-semibold text-[#171717] tracking-tight">Настройки LLM</h2>
+              <h2 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] tracking-tight">Настройки LLM</h2>
             </div>
             <button
               onClick={closeSettings}
-              className="p-1 rounded-md text-[#666666] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
+              className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
               title="Закрыть"
             >
               <X className="h-4 w-4" />
@@ -133,7 +133,7 @@ export default function SettingsModal() {
           <form onSubmit={handleSubmit} className="mt-4 space-y-3.5 text-xs font-mono">
             {/* Provider */}
             <div className="space-y-1">
-              <label htmlFor={providerId} className="block text-[#4d4d4d] font-sans text-xs font-medium">
+              <label htmlFor={providerId} className="block text-[#4d4d4d] dark:text-[#8b949e] font-sans text-xs font-medium">
                 Провайдер
               </label>
               <div className="relative">
@@ -141,7 +141,7 @@ export default function SettingsModal() {
                   id={providerId}
                   value={settings.provider}
                   onChange={(e) => setSettings({ provider: e.target.value })}
-                  className="w-full rounded-md bg-[#fafafa] border border-[#ebebeb] px-2.5 py-1.5 text-[#171717] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono transition"
+                  className="w-full rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] px-2.5 py-1.5 text-[#171717] dark:text-[#f0f6fc] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-mono transition"
                 >
                   <option value="Antigravity Proxy">Antigravity Proxy</option>
                   <option value="OpenAI">OpenAI</option>
@@ -157,7 +157,7 @@ export default function SettingsModal() {
 
             {/* API Gateway URL */}
             <div className="space-y-1">
-              <label htmlFor={gatewayId} className="block text-[#4d4d4d] font-sans text-xs font-medium">
+              <label htmlFor={gatewayId} className="block text-[#4d4d4d] dark:text-[#8b949e] font-sans text-xs font-medium">
                 API Gateway URL
               </label>
               <div className="relative flex items-center">
@@ -168,7 +168,7 @@ export default function SettingsModal() {
                   value={settings.gatewayUrl}
                   onChange={(e) => setSettings({ gatewayUrl: e.target.value, baseUrl: e.target.value })}
                   placeholder="http://127.0.0.1:port/v1"
-                  className="w-full rounded-md bg-[#fafafa] border border-[#ebebeb] pl-8 pr-2.5 py-1.5 text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono transition"
+                  className="w-full rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#6e7681] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-mono transition"
                   required
                 />
               </div>
@@ -176,7 +176,7 @@ export default function SettingsModal() {
 
             {/* API Key (Masked) */}
             <div className="space-y-1">
-              <label htmlFor={apiKeyId} className="block text-[#4d4d4d] font-sans text-xs font-medium">
+              <label htmlFor={apiKeyId} className="block text-[#4d4d4d] dark:text-[#8b949e] font-sans text-xs font-medium">
                 API Key
               </label>
               <div className="relative flex items-center">
@@ -191,7 +191,7 @@ export default function SettingsModal() {
                       ? 'Не обязателен для локального прокси'
                       : 'sk-...'
                   }
-                  className="w-full rounded-md bg-[#fafafa] border border-[#ebebeb] pl-8 pr-8 py-1.5 text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono transition"
+                  className="w-full rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] pl-8 pr-8 py-1.5 text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#6e7681] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-mono transition"
                 />
                 <button
                   type="button"
@@ -207,14 +207,14 @@ export default function SettingsModal() {
             {/* Model Section */}
             <div className="space-y-1 pt-1">
               <div className="flex items-center justify-between">
-                <label htmlFor={modelId} className="block text-[#4d4d4d] font-sans text-xs font-medium">
+                <label htmlFor={modelId} className="block text-[#4d4d4d] dark:text-[#8b949e] font-sans text-xs font-medium">
                   Модель
                 </label>
                 <button
                   type="button"
                   onClick={handleFetchModels}
                   disabled={isFetchingModels}
-                  className="flex items-center space-x-1.5 text-[11px] font-sans font-medium text-[#171717] hover:text-[#4d4d4d] disabled:opacity-50 transition cursor-pointer px-1.5 py-0.5 rounded-md hover:bg-[#f4f4f5]"
+                  className="flex items-center space-x-1.5 text-[11px] font-sans font-medium text-[#171717] dark:text-[#f0f6fc] hover:text-[#4d4d4d] dark:hover:text-[#8b949e] disabled:opacity-50 transition cursor-pointer px-1.5 py-0.5 rounded-md hover:bg-[#f4f4f5] dark:hover:bg-[#161b22]"
                   title="Получить доступные модели с сервера"
                 >
                   <RefreshCw className={`h-3 w-3 ${isFetchingModels ? 'animate-spin' : ''}`} />
@@ -231,7 +231,7 @@ export default function SettingsModal() {
                     value={settings.model}
                     onChange={(e) => setSettings({ model: e.target.value })}
                     placeholder="Название модели..."
-                    className="w-full rounded-md bg-[#fafafa] border border-[#ebebeb] pl-8 pr-2.5 py-1.5 text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono transition"
+                    className="w-full rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#6e7681] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-mono transition"
                     required
                   />
                 </div>
@@ -242,7 +242,7 @@ export default function SettingsModal() {
                     id={modelId}
                     value={settings.model}
                     onChange={(e) => setSettings({ model: e.target.value })}
-                    className="w-full rounded-md bg-[#fafafa] border border-[#ebebeb] pl-8 pr-2.5 py-1.5 text-[#171717] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono text-xs transition cursor-pointer"
+                    className="w-full rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f0f6fc] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-mono text-xs transition cursor-pointer"
                   >
                     {!availableModels.includes(settings.model) && settings.model && (
                       <option value={settings.model}>{settings.model}</option>
@@ -271,8 +271,8 @@ export default function SettingsModal() {
             </div>
 
             {/* Compactor Model Section */}
-            <div className="space-y-1 pt-1 border-t border-[#f4f4f5]">
-              <label htmlFor={compactorModelId} className="block text-[#4d4d4d] font-sans text-xs font-medium">
+            <div className="space-y-1 pt-1 border-t border-[#f4f4f5] dark:border-[#21262d]">
+              <label htmlFor={compactorModelId} className="block text-[#4d4d4d] dark:text-[#8b949e] font-sans text-xs font-medium">
                 Модель компактора контекста
               </label>
               <div className="relative flex items-center">
@@ -281,7 +281,7 @@ export default function SettingsModal() {
                   id={compactorModelId}
                   value={settings.compactorModel || 'inherit'}
                   onChange={(e) => setSettings({ compactorModel: e.target.value })}
-                  className="w-full rounded-md bg-[#fafafa] border border-[#ebebeb] pl-8 pr-2.5 py-1.5 text-[#171717] focus:outline-hidden focus:border-[#171717] focus:bg-white font-mono text-xs transition cursor-pointer"
+                  className="w-full rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f0f6fc] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-mono text-xs transition cursor-pointer"
                 >
                   <option value="inherit">Наследовать модель задачи (Рекомендуется)</option>
                   {availableModels.map((m) => (
@@ -300,18 +300,18 @@ export default function SettingsModal() {
             </div>
 
             {/* Action buttons */}
-            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#ebebeb]">
+            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#ebebeb] dark:border-[#21262d]">
               <button
                 type="button"
                 onClick={closeSettings}
-                className="px-3 py-1.5 rounded-md bg-white border border-[#ebebeb] hover:bg-[#f4f4f5] text-[#171717] font-sans text-xs transition cursor-pointer"
+                className="px-3 py-1.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] font-sans text-xs transition cursor-pointer"
               >
                 Отмена
               </button>
               <button
                 type="submit"
                 disabled={isSaving}
-                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-md bg-[#171717] hover:bg-[#262626] text-white font-sans font-medium text-xs transition cursor-pointer disabled:opacity-50 shadow-xs"
+                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white font-sans font-medium text-xs transition cursor-pointer disabled:opacity-50 shadow-xs border border-transparent dark:border-[#30363d]"
               >
                 {saveStatus === 'saved' ? (
                   <>
@@ -329,10 +329,10 @@ export default function SettingsModal() {
 
       {/* Modal Dialog: "Choose models to add" */}
       {isChooseModelsModalOpen && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-100">
-          <div className="relative flex flex-col w-[520px] max-w-full rounded-lg border border-[#ebebeb] bg-white shadow-2xl p-5 text-[#171717]">
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 dark:bg-black/80 backdrop-blur-xs p-4 animate-in fade-in duration-100">
+          <div className="relative flex flex-col w-[520px] max-w-full rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-2xl p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors">
             {/* Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb]">
+            <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#21262d]">
               <div className="flex items-center space-x-2">
                 <Sparkles className="h-4 w-4 text-[#171717]" />
                 <h3 className="text-sm font-semibold text-[#171717] tracking-tight">Выбор моделей</h3>

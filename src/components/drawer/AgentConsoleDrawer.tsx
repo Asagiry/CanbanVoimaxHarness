@@ -342,7 +342,7 @@ export default function AgentConsoleDrawer() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col h-screen max-h-screen overflow-hidden bg-white text-[#171717] select-none animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex flex-col h-screen max-h-screen overflow-hidden bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] select-none animate-in fade-in duration-150 transition-colors">
       {/* Outer guard: header/banner are outside inner boundaries */}
       <ErrorBoundary scopeLabel="окно чата" onClose={closeDrawer}>
         {/* Modular Header with Window Dragging, Stage Stepper, Subagent Navigation, Close & Controls */}
@@ -366,7 +366,7 @@ export default function AgentConsoleDrawer() {
         {/* Obeying § 2.13 Viewport Overlay & Flex Boundary Invariants (min-h-0, min-w-0, overflow-hidden) */}
         <div className="flex-1 flex flex-row min-h-0 min-w-0 overflow-hidden">
           {/* Left Column: Activity Feed + Steer Bar */}
-          <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] overflow-hidden">
+          <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] dark:bg-[#090a0f] overflow-hidden transition-colors">
             <ErrorBoundary scopeLabel="чат задачи" onClose={closeDrawer}>
               {/* Modular Activity Stream: Objective card, Relay handoff, Live thinking, Tools, Subagent cards */}
               <DrawerActivityStream

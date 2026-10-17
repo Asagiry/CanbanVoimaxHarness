@@ -112,7 +112,7 @@ export default function TaskContextMenu({ task, x, y, onClose }: TaskContextMenu
     <div
       ref={menuRef}
       role="menu"
-      className="fixed z-50 w-56 rounded-md border border-[#ebebeb] bg-white py-1 font-mono text-xs text-[#171717] shadow-md"
+      className="fixed z-50 w-56 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] py-1 font-mono text-xs text-[#171717] dark:text-[#f0f6fc] shadow-md transition-colors"
       style={{ left: pos.left, top: pos.top }}
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
@@ -121,7 +121,7 @@ export default function TaskContextMenu({ task, x, y, onClose }: TaskContextMenu
         type="button"
         role="menuitem"
         onClick={handleOpen}
-        className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] cursor-pointer"
+        className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer"
       >
         Открыть
       </button>
@@ -129,7 +129,7 @@ export default function TaskContextMenu({ task, x, y, onClose }: TaskContextMenu
         type="button"
         role="menuitem"
         onClick={handleRunAgent}
-        className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] cursor-pointer"
+        className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer"
       >
         Запустить агента
       </button>
@@ -137,14 +137,14 @@ export default function TaskContextMenu({ task, x, y, onClose }: TaskContextMenu
         type="button"
         role="menuitem"
         onClick={handleCreateSubtask}
-        className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] cursor-pointer text-[#8b5cf6]"
+        className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer text-[#8b5cf6] dark:text-[#a855f7]"
       >
         + Создать подзадачу
       </button>
 
-      <div className="my-1 border-t border-[#ebebeb]" />
+      <div className="my-1 border-t border-[#ebebeb] dark:border-[#21262d]" />
 
-      <div className="px-3 py-1 text-[#8f8f8f] select-none">Переместить в:</div>
+      <div className="px-3 py-1 text-[#8f8f8f] dark:text-[#8b949e] select-none">Переместить в:</div>
       {columns.map((col) => {
         const isCurrent = col.id === task.columnId;
         return (
@@ -156,8 +156,8 @@ export default function TaskContextMenu({ task, x, y, onClose }: TaskContextMenu
             onClick={() => handleMove(col.id)}
             className={`w-full px-3 py-1.5 text-left ${
               isCurrent
-                ? 'text-[#8f8f8f] cursor-default'
-                : 'hover:bg-[#f4f4f5] cursor-pointer'
+                ? 'text-[#8f8f8f] dark:text-[#8b949e] cursor-default'
+                : 'hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer'
             }`}
           >
             {isCurrent ? `${col.title} (текущая)` : col.title}
@@ -165,13 +165,13 @@ export default function TaskContextMenu({ task, x, y, onClose }: TaskContextMenu
         );
       })}
 
-      <div className="my-1 border-t border-[#ebebeb]" />
+      <div className="my-1 border-t border-[#ebebeb] dark:border-[#21262d]" />
 
       <button
         type="button"
         role="menuitem"
         onClick={() => void handleDelete()}
-        className="w-full px-3 py-1.5 text-left text-[#b91c1c] hover:bg-[#fef2f2] cursor-pointer"
+        className="w-full px-3 py-1.5 text-left text-[#b91c1c] dark:text-[#f87171] hover:bg-[#fef2f2] dark:hover:bg-[#450a0a]/40 cursor-pointer"
       >
         Удалить задачу
       </button>

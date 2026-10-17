@@ -124,20 +124,20 @@ export default function ThinkingCard({
   const isTyping = !isFinished && displayedLength < fullText.length;
 
   return (
-    <div className="rounded-md border border-[#ebebeb] bg-[#fcfcfc] overflow-hidden shadow-xs transition duration-150 animate-in fade-in duration-300 slide-in-from-top-1">
+    <div className="rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fcfcfc] dark:bg-[#0d1117] overflow-hidden shadow-xs transition duration-150 animate-in fade-in duration-300 slide-in-from-top-1">
       {/* Header bar */}
       <div
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center justify-between px-3 py-2 bg-[#f8f8f9] hover:bg-[#f4f4f5] cursor-pointer transition select-none border-l-2 border-l-[#171717]"
+        className="flex items-center justify-between px-3 py-2 bg-[#f8f8f9] dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#1c2128] cursor-pointer transition select-none border-l-2 border-l-[#171717] dark:border-l-[#a855f7]"
       >
         <div className="flex items-center space-x-2">
           {isExpanded ? (
-            <ChevronDown className="h-3.5 w-3.5 text-[#666666]" />
+            <ChevronDown className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e]" />
           ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-[#666666]" />
+            <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e]" />
           )}
-          <Brain className="h-3.5 w-3.5 text-[#171717]" />
-          <span className="font-mono text-xs font-semibold text-[#171717]">
+          <Brain className="h-3.5 w-3.5 text-[#171717] dark:text-[#a855f7]" />
+          <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f0f6fc]">
             &lt;thinking&gt;
           </span>
           {!isFinished && isTaskRunning && (
@@ -177,11 +177,11 @@ export default function ThinkingCard({
 
       {/* Expanded body */}
       {isExpanded && (
-        <div className="px-3 pt-2.5 pb-2 border-t border-[#ebebeb] bg-[#ffffff] font-mono text-[13px] leading-relaxed text-[#333333] whitespace-pre-wrap select-text max-h-96 overflow-y-auto">
+        <div className="px-3 pt-2.5 pb-2 border-t border-[#ebebeb] dark:border-[#21262d] bg-[#ffffff] dark:bg-[#090a0f] font-mono text-[13px] leading-relaxed text-[#333333] dark:text-[#c9d1d9] whitespace-pre-wrap select-text max-h-96 overflow-y-auto">
           {visibleText}
           {isTyping && (
             <span
-              className="inline-block w-1.5 h-3.5 bg-[#171717] animate-pulse ml-0.5 align-middle select-none"
+              className="inline-block w-1.5 h-3.5 bg-[#171717] dark:bg-[#f0f6fc] animate-pulse ml-0.5 align-middle select-none"
               title="Думает..."
             />
           )}

@@ -98,7 +98,7 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
             e.stopPropagation();
             if (task.waitingForSubtaskId) openDrawer(task.waitingForSubtaskId);
           }}
-          className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#b45309] bg-[#fffbeb] border border-[#fde68a] hover:bg-[#fef3c7] hover:border-[#f59e0b] transition cursor-pointer"
+          className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#b45309] dark:text-[#fbbf24] bg-[#fffbeb] dark:bg-[#451a03]/40 border border-[#fde68a] dark:border-[#92400e] hover:bg-[#fef3c7] dark:hover:bg-[#451a03]/60 hover:border-[#f59e0b] transition cursor-pointer"
           title={task.waitingForSubtaskId ? `Открыть подзадачу ${task.waitingForSubtaskId}` : 'Ожидает завершения подзадачи'}
         >
           <span className="h-1.5 w-1.5 rounded-full bg-[#f59e0b] animate-pulse" />
@@ -110,40 +110,40 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
     switch (status) {
       case 'running':
         return (
-          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#15803d] bg-[#f0fdf4] border border-[#bbf7d0]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#15803d] animate-pulse" />
+          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#052e16]/40 border border-[#bbf7d0] dark:border-[#166534]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#15803d] dark:bg-[#4ade80] animate-pulse" />
             <span>В работе</span>
           </span>
         );
       case 'paused':
         return (
-          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#b45309] bg-[#fffbeb] border border-[#fde68a]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#b45309]" />
+          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#b45309] dark:text-[#fbbf24] bg-[#fffbeb] dark:bg-[#451a03]/40 border border-[#fde68a] dark:border-[#92400e]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#b45309] dark:bg-[#fbbf24]" />
             <span>Пауза</span>
           </span>
         );
       case 'waiting_review':
         return (
-          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#7e22ce] bg-[#faf5ff] border border-[#e9d5ff]">
+          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#7e22ce] dark:text-[#c084fc] bg-[#faf5ff] dark:bg-[#3b0764]/40 border border-[#e9d5ff] dark:border-[#7e22ce]">
             <span>Ревью</span>
           </span>
         );
       case 'done':
         return (
-          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#15803d] bg-[#f0fdf4] border border-[#bbf7d0]">
+          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#052e16]/40 border border-[#bbf7d0] dark:border-[#166534]">
             <span>Готово</span>
           </span>
         );
       case 'blocked':
         return (
-          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#b91c1c] bg-[#fef2f2] border border-[#fecaca]">
+          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#b91c1c] dark:text-[#f87171] bg-[#fef2f2] dark:bg-[#450a0a]/40 border border-[#fecaca] dark:border-[#991b1b]">
             <span>Блок</span>
           </span>
         );
       case 'idle':
       default:
         return (
-          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#666666] bg-[#f4f4f5] border border-[#ebebeb]">
+          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#666666] dark:text-[#8b949e] bg-[#f4f4f5] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#21262d]">
             <span>Ожидает</span>
           </span>
         );
@@ -166,16 +166,16 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
             onMouseLeave={() => setHoveredTaskId(null)}
             className={`group relative mb-2 rounded-md border p-3 cursor-pointer select-none transition duration-150 active:scale-[0.99] ${
               snapshot.isDragging
-                ? 'border-[#171717] shadow-md bg-white z-40'
+                ? 'border-[#171717] dark:border-[#30363d] shadow-md bg-white dark:bg-[#161b22] z-40'
                 : isHighlighted
-                ? 'border-[#8b5cf6] shadow-md ring-1 ring-[#8b5cf6]/40 bg-white'
-                : 'border-[#ebebeb] bg-white hover:border-[#d4d4d8] shadow-xs'
+                ? 'border-[#8b5cf6] shadow-md ring-1 ring-[#8b5cf6]/40 bg-white dark:bg-[#161b22]'
+                : 'border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] hover:border-[#d4d4d8] dark:hover:border-[#30363d] shadow-xs'
             }`}
           >
             {/* Header: ID, Play Button, Parent link & Concise Status */}
             <div className="flex items-center justify-between mb-2 gap-1.5 flex-wrap">
               <div className="flex items-center space-x-1.5">
-                <span className="font-mono text-[10px] font-semibold text-[#171717] bg-[#f4f4f5] px-1.5 py-0.5 rounded border border-[#ebebeb] tabular-nums">
+                <span className="font-mono text-[10px] font-semibold text-[#171717] dark:text-[#f0f6fc] bg-[#f4f4f5] dark:bg-[#0d1117] px-1.5 py-0.5 rounded border border-[#ebebeb] dark:border-[#30363d] tabular-nums">
                   {task.id}
                 </span>
 
@@ -187,10 +187,10 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
                       e.stopPropagation();
                       openDrawer(task.parentId!);
                     }}
-                    className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#6366f1] bg-[#eef2ff] border border-[#c7d2fe] hover:bg-[#e0e7ff] transition cursor-pointer"
+                    className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#6366f1] dark:text-[#a5b4fc] bg-[#eef2ff] dark:bg-[#312e81]/40 border border-[#c7d2fe] dark:border-[#4338ca] hover:bg-[#e0e7ff] dark:hover:bg-[#3730a3]/50 transition cursor-pointer"
                     title={`Родительская задача: ${task.parentId}`}
                   >
-                    <GitBranch className="h-2.5 w-2.5 text-[#6366f1]" />
+                    <GitBranch className="h-2.5 w-2.5 text-[#6366f1] dark:text-[#a5b4fc]" />
                     <span>{task.parentId}</span>
                   </button>
                 )}
@@ -199,7 +199,7 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
                   <button
                     type="button"
                     onClick={handleRunAgent}
-                    className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#171717] bg-[#f4f4f5] hover:bg-[#171717] hover:text-white border border-[#ebebeb] transition cursor-pointer"
+                    className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#171717] dark:text-[#f0f6fc] bg-[#f4f4f5] dark:bg-[#0d1117] hover:bg-[#171717] dark:hover:bg-[#21262d] hover:text-white border border-[#ebebeb] dark:border-[#30363d] transition cursor-pointer"
                     title="Запустить агента (run_agent)"
                   >
                     <Play className="h-2.5 w-2.5 fill-current" />
@@ -211,7 +211,7 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
             </div>
 
             {/* Title */}
-            <h4 className="text-xs font-medium text-[#171717] leading-snug mb-2 font-sans break-words">
+            <h4 className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc] leading-snug mb-2 font-sans break-words">
               {task.title}
             </h4>
 
@@ -220,23 +220,23 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
             {/* Relay Handoff / Handover Summary Preview (if present) */}
             {task.handoverSummary && (
               <div
-                className="mb-2 flex items-start gap-1.5 p-1.5 rounded-md bg-[#f5f3ff] border border-[#ddd6fe] text-[10px] text-[#5b21b6] font-mono select-none"
+                className="mb-2 flex items-start gap-1.5 p-1.5 rounded-md bg-[#f5f3ff] dark:bg-[#2e1065]/40 border border-[#ddd6fe] dark:border-[#581c87] text-[10px] text-[#5b21b6] dark:text-[#d8b4fe] font-mono select-none"
                 title={`Эстафета пайплайна:\n${task.handoverSummary}`}
                 onClick={(e) => e.stopPropagation()}
               >
-                <Sparkles className="h-3 w-3 text-[#7c3aed] shrink-0 mt-0.5" />
+                <Sparkles className="h-3 w-3 text-[#7c3aed] dark:text-[#a855f7] shrink-0 mt-0.5" />
                 <div className="truncate min-w-0">
-                  <span className="font-semibold text-[#6d28d9]">Эстафета: </span>
-                  <span className="text-[#4c1d95]">{task.handoverSummary}</span>
+                  <span className="font-semibold text-[#6d28d9] dark:text-[#c084fc]">Эстафета: </span>
+                  <span className="text-[#4c1d95] dark:text-[#e9d5ff]">{task.handoverSummary}</span>
                 </div>
               </div>
             )}
 
             {/* Footer: модель (строка 1, если задана), ветка + время в колонке (строка 2) */}
-            <div className="pt-2 border-t border-[#ebebeb]">
+            <div className="pt-2 border-t border-[#ebebeb] dark:border-[#21262d]">
               {task.model && task.model.trim().length > 0 && (
                 <div
-                  className="truncate font-mono text-[10px] text-[#666666] mb-1"
+                  className="truncate font-mono text-[10px] text-[#666666] dark:text-[#8b949e] mb-1"
                   title={`Модель: ${task.model}`}
                 >
                   {task.model}
@@ -244,14 +244,14 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
               )}
               <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
                 <span
-                  className="truncate text-[#8f8f8f] min-w-0"
+                  className="truncate text-[#8f8f8f] dark:text-[#8b949e] min-w-0"
                   title={task.branch ? `Ветка: ${task.branch}` : 'Ветка не задана'}
                 >
                   {task.branch || 'без ветки'}
                 </span>
                 <span
                   title="Время в текущей колонке"
-                  className="inline-flex items-center gap-1 text-[#8f8f8f] tabular-nums whitespace-nowrap shrink-0"
+                  className="inline-flex items-center gap-1 text-[#8f8f8f] dark:text-[#8b949e] tabular-nums whitespace-nowrap shrink-0"
                 >
                   <Clock className="h-3 w-3 shrink-0" />
                   <span>
@@ -262,7 +262,7 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
                 </span>
               </div>
               {(task.createdAt || currentTotalElapsed > 0) && (
-                <div className="mt-1 flex items-center gap-1 font-mono text-[10px] text-[#8f8f8f] tabular-nums whitespace-nowrap">
+                <div className="mt-1 flex items-center gap-1 font-mono text-[10px] text-[#8f8f8f] dark:text-[#8b949e] tabular-nums whitespace-nowrap">
                   {task.createdAt ? (
                     <span title="Дата создания задачи">созд. {formatCardDate(task.createdAt)}</span>
                   ) : null}
@@ -278,14 +278,14 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
 
             {/* In Done column: Collapsible list of completed subtasks with dialogue open */}
             {isDone && subtasks.length > 0 && (
-              <div className="mt-2.5 pt-2 border-t border-[#ebebeb]">
+              <div className="mt-2.5 pt-2 border-t border-[#ebebeb] dark:border-[#21262d]">
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     setIsSubtasksOpen(!isSubtasksOpen);
                   }}
-                  className="flex items-center justify-between w-full text-[10px] font-mono font-medium text-[#4d4d4d] hover:text-[#171717] transition cursor-pointer py-1 px-1 rounded hover:bg-[#f4f4f5]"
+                  className="flex items-center justify-between w-full text-[10px] font-mono font-medium text-[#4d4d4d] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] transition cursor-pointer py-1 px-1 rounded hover:bg-[#f4f4f5] dark:hover:bg-[#21262d]"
                   title="Раскрыть список завершенных этапов и подзадач"
                 >
                   <span className="flex items-center gap-1.5">
@@ -319,14 +319,14 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
                               e.stopPropagation();
                               if (subId) openDrawer(subId);
                             }}
-                          className="flex items-center justify-between p-1.5 rounded bg-[#f8f9fa] hover:bg-[#f1f3f5] border border-[#e9ecef] cursor-pointer transition text-[10px] font-mono group"
+                          className="flex items-center justify-between p-1.5 rounded bg-[#f8f9fa] dark:bg-[#0d1117] hover:bg-[#f1f3f5] dark:hover:bg-[#21262d] border border-[#e9ecef] dark:border-[#30363d] cursor-pointer transition text-[10px] font-mono group"
                           title={`Открыть диалог и мысли подзадачи ${sub.id}`}
                         >
                           <div className="flex items-center gap-1.5 truncate min-w-0">
                             <span className="font-semibold text-[#8b5cf6] shrink-0">
                               {subSuffix} {stageTitle}
                             </span>
-                            <span className="text-[#666666] truncate">
+                            <span className="text-[#666666] dark:text-[#8b949e] truncate">
                               {(sub?.title ?? '').replace(/^\[.*?\]\s*/, '')}
                             </span>
                           </div>

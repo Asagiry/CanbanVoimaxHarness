@@ -86,7 +86,7 @@ export default function WindowControls() {
         data-no-drag
         onMouseDown={(e) => e.stopPropagation()}
         onClick={() => void minimizeWindow()}
-        className="h-10 w-11 inline-flex items-center justify-center text-[#71717a] hover:text-[#18181b] hover:bg-[#f4f4f5] active:bg-[#e4e4e7] transition-colors cursor-pointer select-none"
+        className="h-10 w-11 inline-flex items-center justify-center text-[#71717a] hover:text-[#18181b] hover:bg-[#f4f4f5] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] dark:hover:bg-[#161b22] active:bg-[#e4e4e7] dark:active:bg-[#21262d] transition-colors cursor-pointer select-none"
         title="Свернуть"
         aria-label="Свернуть окно"
       >
@@ -99,7 +99,7 @@ export default function WindowControls() {
         data-no-drag
         onMouseDown={(e) => e.stopPropagation()}
         onClick={() => void toggleMaximizeWindow().then(setIsMaximized)}
-        className="h-10 w-11 inline-flex items-center justify-center text-[#71717a] hover:text-[#18181b] hover:bg-[#f4f4f5] active:bg-[#e4e4e7] transition-colors cursor-pointer select-none"
+        className="h-10 w-11 inline-flex items-center justify-center text-[#71717a] hover:text-[#18181b] hover:bg-[#f4f4f5] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] dark:hover:bg-[#161b22] active:bg-[#e4e4e7] dark:active:bg-[#21262d] transition-colors cursor-pointer select-none"
         title={isMaximized ? 'Восстановить' : 'Развернуть'}
         aria-label={isMaximized ? 'Восстановить окно' : 'Развернуть окно'}
       >
