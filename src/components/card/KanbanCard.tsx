@@ -20,15 +20,18 @@ function formatStageDuration(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
   if (s < 60) return `${s}с`;
   const minutesTotal = Math.floor(s / 60);
-  if (minutesTotal < 60) return `${minutesTotal}м`;
+  const sec = s % 60;
+  if (minutesTotal < 60) {
+    return sec > 0 ? `${minutesTotal}м ${sec}с` : `${minutesTotal}м`;
+  }
   const hoursTotal = Math.floor(minutesTotal / 60);
+  const min = minutesTotal % 60;
   if (hoursTotal < 24) {
-    const m = minutesTotal % 60;
-    return m > 0 ? `${hoursTotal}ч ${m}м` : `${hoursTotal}ч`;
+    return min > 0 ? `${hoursTotal}ч ${min}м` : `${hoursTotal}ч`;
   }
   const days = Math.floor(hoursTotal / 24);
   const h = hoursTotal % 24;
-  return `${days}д ${h}ч`;
+  return h > 0 ? `${days}д ${h}ч` : `${days}д`;
 }
 
 interface KanbanCardProps {
@@ -54,6 +57,19 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
 
   // Subtasks belonging to this task
   const subtasks = tasks.filter((t) => t.parentId === task.id);
+
+  const stageStart = task.stageEnteredAt || task.updatedAt || task.createdAt;
+  const currentStageDuration = isDone
+    ? (task.activeStageDuration ?? 0)
+    : stageStart
+    ? Math.max(0, Math.floor((Date.now() - stageStart) / 1000))
+    : (task.activeStageDuration ?? 0);
+
+  const currentTotalElapsed = isDone
+    ? (task.totalElapsed ?? 0)
+    : task.createdAt
+    ? Math.max(0, Math.floor((Date.now() - task.createdAt) / 1000))
+    : (task.totalElapsed ?? 0);
 
   // Check if this card is highlighted via hover on itself, its subtask, or its parent
   const isHighlighted =
@@ -216,15 +232,17 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
               </div>
             )}
 
-            {/* Footer: модель (строка 1), ветка + время в колонке (строка 2) */}
+            {/* Footer: модель (строка 1, если задана), ветка + время в колонке (строка 2) */}
             <div className="pt-2 border-t border-[#ebebeb]">
-              <div
-                className="truncate font-mono text-[10px] text-[#666666]"
-                title={task.model ? `Модель: ${task.model}` : 'Модель не задана'}
-              >
-                {task.model || 'модель не задана'}
-              </div>
-              <div className="mt-1 flex items-center justify-between gap-2 font-mono text-[10px]">
+              {task.model && task.model.trim().length > 0 && (
+                <div
+                  className="truncate font-mono text-[10px] text-[#666666] mb-1"
+                  title={`Модель: ${task.model}`}
+                >
+                  {task.model}
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
                 <span
                   className="truncate text-[#8f8f8f] min-w-0"
                   title={task.branch ? `Ветка: ${task.branch}` : 'Ветка не задана'}
@@ -237,21 +255,21 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
                 >
                   <Clock className="h-3 w-3 shrink-0" />
                   <span>
-                    {(task.activeStageDuration ?? 0) <= 0
+                    {currentStageDuration <= 0
                       ? 'только что'
-                      : `в колонке ${formatStageDuration(task.activeStageDuration ?? 0)}`}
+                      : `в колонке ${formatStageDuration(currentStageDuration)}`}
                   </span>
                 </span>
               </div>
-              {(task.createdAt || (task.totalElapsed ?? 0) > 0) && (
+              {(task.createdAt || currentTotalElapsed > 0) && (
                 <div className="mt-1 flex items-center gap-1 font-mono text-[10px] text-[#8f8f8f] tabular-nums whitespace-nowrap">
                   {task.createdAt ? (
                     <span title="Дата создания задачи">созд. {formatCardDate(task.createdAt)}</span>
                   ) : null}
-                  {task.createdAt && (task.totalElapsed ?? 0) > 0 ? <span>·</span> : null}
-                  {(task.totalElapsed ?? 0) > 0 ? (
+                  {task.createdAt && currentTotalElapsed > 0 ? <span>·</span> : null}
+                  {currentTotalElapsed > 0 ? (
                     <span title="Общее время выполнения задачи">
-                      идёт {formatStageDuration(task.totalElapsed ?? 0)}
+                      идёт {formatStageDuration(currentTotalElapsed)}
                     </span>
                   ) : null}
                 </div>

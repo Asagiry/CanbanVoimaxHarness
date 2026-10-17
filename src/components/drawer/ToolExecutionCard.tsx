@@ -244,6 +244,12 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
     }
   }
 
+  const isFailed =
+    tool.status === 'failed' ||
+    (tool.status as string) === 'error' ||
+    Boolean(tool.stderr && tool.stderr.trim().length > 0) ||
+    (tool.exitCode !== undefined && tool.exitCode !== null && tool.exitCode !== 0);
+
   // Label: "Created" (if new file) or "Edited" (if edit/overwrite)
   let opLabel: 'Created' | 'Edited' = 'Edited';
   if (isEditTool) {
@@ -795,15 +801,17 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
               />
             </button>
 
-            {/* Label: Created or Edited */}
+            {/* Label: Created or Edited or FAILED EDIT */}
             <span
               className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold uppercase tracking-wider shrink-0 select-none ${
-                opLabel === 'Created'
+                isFailed
+                  ? 'bg-[#fef2f2] text-[#b91c1c] border border-[#fecaca]'
+                  : opLabel === 'Created'
                   ? 'bg-[#ecfdf5] text-[#047857] border border-[#a7f3d0]'
                   : 'bg-[#eff6ff] text-[#1d4ed8] border border-[#bfdbfe]'
               }`}
             >
-              {opLabel}
+              {isFailed ? 'FAILED EDIT' : opLabel}
             </span>
 
             {/* Document icon */}
@@ -962,7 +970,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
               {oldString !== undefined && newString !== undefined ? (
                 <div>
                   <span className="text-[10px] text-[#666666] block mb-1">
-                    Изменения файлов (Diff)
+                    {isFailed ? 'Запланированные изменения (не применены)' : 'Изменения файлов (Diff)'}
                   </span>
                   {renderUnifiedDiff()}
                 </div>
@@ -988,7 +996,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
               )}
               <div>
                 <span className="text-[10px] text-[#666666] block mb-1">
-                  Изменения файлов (Diff)
+                  {isFailed ? 'Запланированные изменения (не применены)' : 'Изменения файлов (Diff)'}
                 </span>
                 {renderUnifiedDiff()}
               </div>
