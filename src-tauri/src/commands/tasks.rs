@@ -35,7 +35,7 @@ pub fn heal_task_board_and_column(task: &mut Task, config: &crate::config::Board
     };
 
     let target_board_id = if has_valid_board {
-        task.board_id.as_deref().unwrap().trim().to_string()
+        task.board_id.as_deref().unwrap_or_default().trim().to_string()
     } else {
         let fallback_id = if config.boards.iter().any(|b| b.id == config.active_board_id) {
             config.active_board_id.clone()
@@ -1737,19 +1737,20 @@ pub async fn run_agent(
                     );
 
                     if board_changed {
-                        let active_id = end_active_board_id.unwrap();
-                        let target_board = end_boards_cfg.as_ref().and_then(|bc| {
-                            bc.boards.iter().find(|b| b.id == active_id).cloned()
-                        });
-                        let terminal_col_id = target_board.as_ref().and_then(|b| {
-                            b.columns.iter().find(|c| c.terminal == Some(true) || stage_id_matches(&c.id, "ready") || stage_id_matches(&c.id, "done")).map(|c| c.id.clone())
-                                .or_else(|| b.columns.last().map(|c| c.id.clone()))
-                        }).unwrap_or_else(|| "ready".to_string());
+                        if let Some(active_id) = end_active_board_id {
+                            let target_board = end_boards_cfg.as_ref().and_then(|bc| {
+                                bc.boards.iter().find(|b| b.id == active_id).cloned()
+                            });
+                            let terminal_col_id = target_board.as_ref().and_then(|b| {
+                                b.columns.iter().find(|c| c.terminal == Some(true) || stage_id_matches(&c.id, "ready") || stage_id_matches(&c.id, "done")).map(|c| c.id.clone())
+                                    .or_else(|| b.columns.last().map(|c| c.id.clone()))
+                            }).unwrap_or_else(|| "ready".to_string());
 
-                        tasks[task_idx].board_id = Some(active_id);
-                        tasks[task_idx].stage_id = terminal_col_id;
-                        tasks[task_idx].status = Some("done".to_string());
-                        tasks[task_idx].updated_at = Utc::now().timestamp_millis();
+                            tasks[task_idx].board_id = Some(active_id);
+                            tasks[task_idx].stage_id = terminal_col_id;
+                            tasks[task_idx].status = Some("done".to_string());
+                            tasks[task_idx].updated_at = Utc::now().timestamp_millis();
+                        }
                     } else if tasks[task_idx].status.as_deref() == Some("running") {
                         tasks[task_idx].status = Some("idle".to_string());
                         tasks[task_idx].updated_at = Utc::now().timestamp_millis();
