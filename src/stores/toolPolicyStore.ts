@@ -6,13 +6,29 @@ export interface ToolMeta {
   name: string;
   label: string;
   description: string;
-  category: 'system' | 'fs' | 'web' | 'agent' | 'workflow' | 'interactive';
+  category: 'system' | 'fs' | 'web' | 'agent' | 'workflow' | 'interactive' | 'orchestration';
   tokenWeight: number;
   parentTool?: string;
   isSubagentMaster?: boolean;
 }
 
 export const AVAILABLE_TOOLS: ToolMeta[] = [
+  {
+    id: 'create_task',
+    name: 'create_task',
+    label: 'Создать задачу (Create Task)',
+    description: 'Декомпозиция требований и создание новой карточки задачи на Канбан-доске с привязкой к текущей задаче.',
+    category: 'orchestration',
+    tokenWeight: 260,
+  },
+  {
+    id: 'complete_task',
+    name: 'complete_task',
+    label: 'Завершить задачу оркестратором (Complete Task)',
+    description: 'Финализация задачи оркестратора и перевод в Готово. Защищено инвариантом Anti-Bypass.',
+    category: 'orchestration',
+    tokenWeight: 220,
+  },
   {
     id: 'question',
     name: 'question',
@@ -171,9 +187,19 @@ const DEFAULT_GLOBAL: Record<string, boolean> = {
   subagent_bg: true,
   todo_write: true,
   question: true,
+  create_task: true,
+  complete_task: true,
 };
 
 const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
+  backlog: {
+    create_task: true,
+    complete_task: true,
+  },
+  orchestrator: {
+    create_task: true,
+    complete_task: true,
+  },
   review: {
     advance_task: true,
     reject_task: true,
@@ -190,6 +216,8 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     subagent_bg: true,
     todo_write: true,
     question: true,
+    create_task: false,
+    complete_task: false,
   },
   dev: {
     advance_task: true,
@@ -207,6 +235,8 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     subagent_bg: true,
     todo_write: true,
     question: true,
+    create_task: true,
+    complete_task: true,
   },
   retro: {
     advance_task: true,
@@ -224,6 +254,8 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     subagent_bg: false,
     todo_write: true,
     question: true,
+    create_task: false,
+    complete_task: false,
   },
 };
 

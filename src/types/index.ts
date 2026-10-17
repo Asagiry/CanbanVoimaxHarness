@@ -50,6 +50,7 @@ export interface KanbanTask {
   subtaskIndex?: number;
   waitingForSubtaskId?: string;
   todos?: TodoItem[];
+  tags?: string[];
   handoverSummary?: string;
 }
 
