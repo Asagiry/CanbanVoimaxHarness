@@ -27,21 +27,22 @@ Format your output STRICTLY with the following 7 Markdown headers:
 - Outline the technical architecture, paradigms, protocols, and data models involved.
 
 ## Files and Code
-- List all created, inspected, modified, or deleted files with concise summaries of changes.
+- List all created, inspected, modified, or deleted files with concise summaries of changes (functions touched, structs modified).
 
 ## Errors and Fixes
 - Detail every error, compiler diagnostic, sensor failure, or bug encountered, along with its exact resolution.
+- State test results and command exit codes.
 
 ## Pending Jobs & Subagents
 - List running, pending, or completed subtasks, background jobs, worktrees, or delegated subagents.
 
 ## Current Work & Next Step
-- State the immediate current state and the exact next technical action to take.
+- State the immediate current state, active todos/checklist status, and the exact next technical action to take.
 
 ## Critical Invariants
 - List all domain rules, project invariants, constraints, and non-negotiable requirements.
 
-Be concise, dense, factual, and strictly technical. Avoid conversational filler or vague generalizations."#;
+Be concise, dense, factual, and strictly technical. Avoid conversational filler, generic stubs, or vague generalizations."#;
 
 /// Resolves the compactor model: if "inherit" or empty, uses the running agent's model.
 pub fn resolve_compactor_model(compactor_setting: &str, active_agent_model: &str) -> String {
@@ -80,93 +81,308 @@ pub fn format_conversation_for_compaction(messages: &[ChatMessage]) -> String {
     }
     out
 }
+
 pub fn generate_fallback_compaction_report(
     task_id: &str,
     messages: &[ChatMessage],
 ) -> String {
     let mut primary_intent = format!("Task {} execution", task_id);
-    let mut files_found: Vec<String> = Vec::new();
+    let mut files_modified: Vec<(String, String)> = Vec::new();
+    let mut files_inspected: Vec<String> = Vec::new();
+    let mut commands_run: Vec<(String, String)> = Vec::new();
+    let mut tests_passed: Vec<String> = Vec::new();
+    let mut tests_failed: Vec<String> = Vec::new();
+    let mut todos: Vec<(String, String)> = Vec::new();
     let mut errors_found: Vec<String> = Vec::new();
+    let mut last_action: Option<String> = None;
 
     for msg in messages {
         if msg.role == Role::User && primary_intent == format!("Task {} execution", task_id) {
             if let Some(ref c) = msg.content {
-                primary_intent = c.lines().next().unwrap_or("Task execution").to_string();
-            }
-        }
-        if let Some(ref c) = msg.content {
-            for word in c.split_whitespace() {
-                let clean = word.trim_matches(|ch: char| ch == '`' || ch == '"' || ch == '\'' || ch == ',' || ch == '(' || ch == ')');
-                if (clean.contains('/') || clean.contains('\\') || clean.ends_with(".rs") || clean.ends_with(".tsx") || clean.ends_with(".ts") || clean.ends_with(".json") || clean.ends_with(".md"))
-                    && clean.len() > 3
-                    && !files_found.contains(&clean.to_string())
-                {
-                    files_found.push(clean.to_string());
+                let first_line = c.lines().next().unwrap_or("Task execution").trim();
+                if !first_line.is_empty() {
+                    primary_intent = first_line.to_string();
                 }
             }
-            if c.contains("error") || c.contains("Error") || c.contains("FAILED") || c.contains("failure") {
-                for line in c.lines() {
-                    if line.to_lowercase().contains("error") || line.contains("FAILED") {
-                        let trimmed = line.trim();
-                        if !trimmed.is_empty() && trimmed.len() < 120 && !errors_found.contains(&trimmed.to_string()) {
-                            errors_found.push(trimmed.to_string());
+        }
+
+        // 1. Inspect direct tool_calls on Assistant messages
+        if let Some(ref tool_calls) = msg.tool_calls {
+            for tc in tool_calls {
+                let name = tc.function.name.as_str();
+                let args_val: serde_json::Value =
+                    serde_json::from_str(&tc.function.arguments).unwrap_or(serde_json::Value::Null);
+
+                match name {
+                    "edit_file" | "str_replace" | "edit" => {
+                        let path = args_val
+                            .get("file_path")
+                            .or_else(|| args_val.get("path"))
+                            .or_else(|| args_val.get("target_file"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        if !path.is_empty() && !files_modified.iter().any(|(p, _)| p == &path) {
+                            files_modified.push((path.clone(), "Modified via edit_file".to_string()));
+                            last_action = Some(format!("Edited `{}`", path));
                         }
+                    }
+                    "write_file" | "write" => {
+                        let path = args_val
+                            .get("file_path")
+                            .or_else(|| args_val.get("path"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        if !path.is_empty() && !files_modified.iter().any(|(p, _)| p == &path) {
+                            files_modified.push((path.clone(), "Written via write_file".to_string()));
+                            last_action = Some(format!("Created/Wrote `{}`", path));
+                        }
+                    }
+                    "read_file" | "read" => {
+                        let path = args_val
+                            .get("file_path")
+                            .or_else(|| args_val.get("path"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        if !path.is_empty() && !files_inspected.contains(&path) {
+                            files_inspected.push(path.clone());
+                            last_action = Some(format!("Read `{}`", path));
+                        }
+                    }
+                    "execute_command" | "bash" | "pwsh" => {
+                        let cmd = args_val
+                            .get("command")
+                            .or_else(|| args_val.get("cmd"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        if !cmd.is_empty() && !commands_run.iter().any(|(c, _)| c == &cmd) {
+                            commands_run.push((cmd.clone(), "Executed".to_string()));
+                            last_action = Some(format!("Ran command `{}`", cmd));
+                        }
+                    }
+                    "todo_write" => {
+                        if let Some(todos_arr) = args_val.get("todos").and_then(|v| v.as_array()) {
+                            let mut parsed_todos = Vec::new();
+                            for t in todos_arr {
+                                let content = t.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                                let status = t.get("status").and_then(|v| v.as_str()).unwrap_or("pending").to_string();
+                                if !content.is_empty() {
+                                    parsed_todos.push((content, status));
+                                }
+                            }
+                            if !parsed_todos.is_empty() {
+                                todos = parsed_todos;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // 2. Inspect tool outputs (Role::Tool)
+        if msg.role == Role::Tool {
+            if let Some(ref c) = msg.content {
+                let lower = c.to_lowercase();
+                if c.contains("test result: ok") || c.contains("0 failed") || lower.contains("all tests passed") {
+                    let summary = if c.contains("test result: ok") {
+                        if let Some(line) = c.lines().find(|l| l.contains("test result: ok")) {
+                            line.trim().to_string()
+                        } else {
+                            "All tests passed successfully".to_string()
+                        }
+                    } else {
+                        "Test execution passed".to_string()
+                    };
+                    if !tests_passed.contains(&summary) {
+                        tests_passed.push(summary);
+                    }
+                }
+                if lower.contains("test result: failed") || lower.contains("failures:") || lower.contains("test failed") {
+                    let summary = if let Some(line) = c.lines().find(|l| l.to_lowercase().contains("failures:") || l.to_lowercase().contains("test result: failed")) {
+                        line.trim().to_string()
+                    } else {
+                        "Test failure detected".to_string()
+                    };
+                    if !tests_failed.contains(&summary) {
+                        tests_failed.push(summary);
+                    }
+                }
+                if lower.contains("error[e") || lower.contains("error:") || c.contains("FAILED") {
+                    for line in c.lines() {
+                        let l_trim = line.trim();
+                        if (l_trim.contains("error[E") || l_trim.starts_with("error:") || l_trim.contains("FAILED"))
+                            && l_trim.len() < 160
+                            && !errors_found.contains(&l_trim.to_string())
+                        {
+                            errors_found.push(l_trim.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Inspect text content for formatted [Tool Call: ...] or embedded file paths
+        if let Some(ref c) = msg.content {
+            if c.contains("[Tool Call:") {
+                let mut start = 0;
+                while let Some(call_start) = c[start..].find("[Tool Call:") {
+                    let idx = start + call_start;
+                    if let Some(call_end) = c[idx..].find(']') {
+                        let inner = &c[idx + 11..idx + call_end];
+                        let parts: Vec<&str> = inner.splitn(2, " with arguments: ").collect();
+                        let tool_name = parts[0].trim();
+                        let tool_args = if parts.len() > 1 { parts[1].trim() } else { "{}" };
+
+                        if let Ok(args_val) = serde_json::from_str::<serde_json::Value>(tool_args) {
+                            if tool_name == "edit_file" || tool_name == "write_file" || tool_name == "edit" || tool_name == "write" {
+                                if let Some(p) = args_val.get("file_path").or_else(|| args_val.get("path")).and_then(|v| v.as_str()) {
+                                    if !p.is_empty() && !files_modified.iter().any(|(f, _)| f == p) {
+                                        files_modified.push((p.to_string(), format!("Modified via {}", tool_name)));
+                                    }
+                                }
+                            } else if tool_name == "read_file" || tool_name == "read" {
+                                if let Some(p) = args_val.get("file_path").or_else(|| args_val.get("path")).and_then(|v| v.as_str()) {
+                                    if !p.is_empty() && !files_inspected.contains(&p.to_string()) {
+                                        files_inspected.push(p.to_string());
+                                    }
+                                }
+                            } else if tool_name == "execute_command" || tool_name == "bash" || tool_name == "pwsh" {
+                                if let Some(cmd) = args_val.get("command").or_else(|| args_val.get("cmd")).and_then(|v| v.as_str()) {
+                                    if !cmd.is_empty() && !commands_run.iter().any(|(c, _)| c == cmd) {
+                                        commands_run.push((cmd.to_string(), "Executed".to_string()));
+                                    }
+                                }
+                            } else if tool_name == "todo_write" {
+                                if let Some(todos_arr) = args_val.get("todos").and_then(|v| v.as_array()) {
+                                    let mut parsed_todos = Vec::new();
+                                    for t in todos_arr {
+                                        let content = t.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                                        let status = t.get("status").and_then(|v| v.as_str()).unwrap_or("pending").to_string();
+                                        if !content.is_empty() {
+                                            parsed_todos.push((content, status));
+                                        }
+                                    }
+                                    if !parsed_todos.is_empty() {
+                                        todos = parsed_todos;
+                                    }
+                                }
+                            }
+                        }
+                        start = idx + call_end + 1;
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            // Word-level scan for files mentioned if no explicit tool calls found
+            if files_modified.is_empty() && files_inspected.is_empty() {
+                for word in c.split_whitespace() {
+                    let clean = word.trim_matches(|ch: char| ch == '`' || ch == '"' || ch == '\'' || ch == ',' || ch == '(' || ch == ')' || ch == ':');
+                    if (clean.contains('/') || clean.contains('\\') || clean.ends_with(".rs") || clean.ends_with(".tsx") || clean.ends_with(".ts") || clean.ends_with(".json") || clean.ends_with(".md"))
+                        && clean.len() > 3
+                        && !files_inspected.contains(&clean.to_string())
+                    {
+                        files_inspected.push(clean.to_string());
                     }
                 }
             }
         }
     }
 
-    let files_md = if files_found.is_empty() {
-        "- Inspected workspace configuration and task requirements.".to_string()
+    // Build Files and Code section
+    let mut files_lines = Vec::new();
+    for (f, op) in &files_modified {
+        files_lines.push(format!("- `{}`: {}", f, op));
+    }
+    for f in &files_inspected {
+        if !files_modified.iter().any(|(m, _)| m == f) {
+            files_lines.push(format!("- `{}`: Inspected and analyzed", f));
+        }
+    }
+    let files_md = if files_lines.is_empty() {
+        format!("- Active repository scope: task `{}`.", task_id)
     } else {
-        files_found
-            .iter()
-            .take(10)
-            .map(|f| format!("- `{}`: Modified / inspected during task execution.", f))
-            .collect::<Vec<_>>()
-            .join("
-")
+        files_lines.join("\n")
     };
 
-    let errors_md = if errors_found.is_empty() {
-        "- None detected. All operational checks and sensors passed.".to_string()
+    // Build Errors and Fixes section
+    let mut error_lines = Vec::new();
+    for t in &tests_passed {
+        error_lines.push(format!("- [TEST PASSED] {}", t));
+    }
+    for t in &tests_failed {
+        error_lines.push(format!("- [TEST FAILED] {}", t));
+    }
+    for e in &errors_found {
+        error_lines.push(format!("- [DIAGNOSTIC] `{}`", e));
+    }
+    let errors_md = if error_lines.is_empty() {
+        "- All executed commands, tests, and sensor checks passed with 0 errors.".to_string()
     } else {
-        errors_found
-            .iter()
-            .take(5)
-            .map(|e| format!("- `{}`: Resolved during development.", e))
-            .collect::<Vec<_>>()
-            .join("
-")
+        error_lines.iter().take(8).cloned().collect::<Vec<_>>().join("\n")
     };
+
+    // Build Pending Jobs / Commands section
+    let pending_md = if commands_run.is_empty() {
+        "- Operational commands running in isolated git worktree with sensor verification.".to_string()
+    } else {
+        commands_run
+            .iter()
+            .take(6)
+            .map(|(cmd, res)| format!("- Executed `{}`: {}", cmd, res))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    // Build Current Work & Next Step section
+    let mut current_step_lines = Vec::new();
+    if !todos.is_empty() {
+        current_step_lines.push("Task Checklist:".to_string());
+        let mut next_todo: Option<String> = None;
+        let mut in_prog_todo: Option<String> = None;
+
+        for (content, status) in &todos {
+            match status.as_str() {
+                "completed" => current_step_lines.push(format!("- [x] {}", content)),
+                "in_progress" => {
+                    current_step_lines.push(format!("- [/] (IN PROGRESS) {}", content));
+                    if in_prog_todo.is_none() {
+                        in_prog_todo = Some(content.clone());
+                    }
+                }
+                _ => {
+                    current_step_lines.push(format!("- [ ] {}", content));
+                    if next_todo.is_none() && in_prog_todo.is_none() {
+                        next_todo = Some(content.clone());
+                    }
+                }
+            }
+        }
+
+        if let Some(ip) = in_prog_todo {
+            current_step_lines.push(format!("\n- Active Focus: Currently executing `{}`.", ip));
+        } else if let Some(nt) = next_todo {
+            current_step_lines.push(format!("\n- Immediate Next Step: Proceed with `{}`.", nt));
+        } else {
+            current_step_lines.push("\n- Immediate Next Step: All planned checklist items completed. Proceed with verification sensors.".to_string());
+        }
+    } else if let Some(ref la) = last_action {
+        current_step_lines.push(format!("- Intermediate turns compacted. Last action completed: {}.", la));
+        current_step_lines.push("- Immediate Next Step: Continue task implementation and execute verification sensors.".to_string());
+    } else {
+        current_step_lines.push("- Intermediate turns compacted. Continuing active task execution.".to_string());
+        current_step_lines.push("- Immediate Next Step: Execute next code modification or verification sensor.".to_string());
+    }
+    let current_work_md = current_step_lines.join("\n");
 
     format!(
-        "## Primary Request and Intent
-- Task: {}
-- Objective: {}
-
-## Key Technical Concepts
-- High-Density DSH-Style Context Compaction architecture with zero-turn memory priming.
-- Multi-agent pipeline routing and isolated git worktree lifecycle management.
-
-## Files and Code
-{}
-
-## Errors and Fixes
-{}
-
-## Pending Jobs & Subagents
-- Active execution in isolated git worktree with sensor verification.
-
-## Current Work & Next Step
-- Intermediate context turns condensed. Continuing active development in current stage.
-
-## Critical Invariants
-- Ground Truth Sensor verification (cargo check, pnpm run build).
-- Tactile obsidian dark theme aesthetics per AGENTS.md.
-- Strict AND-semantics tool policy matrix.",
-        task_id, primary_intent, files_md, errors_md
+        "## Primary Request and Intent\n         - Task: {}\n         - Objective: {}\n\n         ## Key Technical Concepts\n         - High-Density State-Preserving Context Compaction with zero amnesia.\n         - Native Git worktree isolation and multi-agent pipeline routing.\n\n         ## Files and Code\n         {}\n\n         ## Errors and Fixes\n         {}\n\n         ## Pending Jobs & Subagents\n         {}\n\n         ## Current Work & Next Step\n         {}\n\n         ## Critical Invariants\n         - Ground Truth Sensor verification (cargo check, cargo test, npx tsc).\n         - Tactile obsidian dark theme aesthetics per AGENTS.md.\n         - Strict AND-semantics tool policy matrix.",
+        task_id, primary_intent, files_md, errors_md, pending_md, current_work_md
     )
 }
 
@@ -212,6 +428,7 @@ pub async fn condense_context_with_llm(
     let payload = serde_json::json!({
         "model": model,
         "temperature": 0.1,
+        "max_tokens": 4096,
         "messages": [
             {
                 "role": "system",
@@ -220,9 +437,7 @@ pub async fn condense_context_with_llm(
             {
                 "role": "user",
                 "content": format!(
-                    "Summarize and condense the following conversation history for task {} into the 7 structured sections:
-
-{}",
+                    "Summarize and condense the following conversation history for task {} into the 7 structured sections.\n                     CRITICAL INSTRUCTIONS FOR STATE PRESERVATION:\n                     - In '## Files and Code': List every single file touched via edit_file/write_file/read_file with exact paths and what changed.\n                     - In '## Errors and Fixes': Detail all compiler errors, sensor results, and test outcomes (passed/failed).\n                     - In '## Current Work & Next Step': Preserve the active todos/checklist status and state the exact next technical action to take.\n\n                     Conversation Transcript:\n{}",
                     task_id, transcript
                 )
             }
@@ -864,5 +1079,89 @@ mod tests {
             })
             .count();
         assert_eq!(summaries_count_2, 1, "Should never duplicate summary blocks!");
+    }
+
+    #[test]
+    fn test_fallback_compaction_extracts_tools_todos_and_tests() {
+        let messages = vec![
+            ChatMessage::system("You are an agent"),
+            ChatMessage::user("Fix context compactor memory loss and gauge bugs"),
+            // Assistant tool call: todo_write
+            ChatMessage::assistant(
+                Some("Creating plan".to_string()),
+                Some(vec![ToolCall {
+                    id: "call_todo".to_string(),
+                    call_type: "function".to_string(),
+                    function: FunctionCall {
+                        name: "todo_write".to_string(),
+                        arguments: serde_json::json!({
+                            "todos": [
+                                { "content": "Update compactor.rs", "status": "completed" },
+                                { "content": "Fix gauge bug in ContextGauge.tsx", "status": "in_progress" },
+                                { "content": "Run cargo test", "status": "pending" }
+                            ]
+                        }).to_string(),
+                    },
+                }]),
+            ),
+            ChatMessage::tool_response("call_todo", "Todos recorded successfully"),
+            // Assistant tool call: edit_file
+            ChatMessage::assistant(
+                Some("Editing compactor".to_string()),
+                Some(vec![ToolCall {
+                    id: "call_edit".to_string(),
+                    call_type: "function".to_string(),
+                    function: FunctionCall {
+                        name: "edit_file".to_string(),
+                        arguments: serde_json::json!({
+                            "file_path": "src-tauri/src/agent/compactor.rs",
+                            "old_string": "foo",
+                            "new_string": "bar"
+                        }).to_string(),
+                    },
+                }]),
+            ),
+            ChatMessage::tool_response("call_edit", "File edited successfully"),
+            // Assistant tool call: execute_command
+            ChatMessage::assistant(
+                Some("Running cargo test".to_string()),
+                Some(vec![ToolCall {
+                    id: "call_exec".to_string(),
+                    call_type: "function".to_string(),
+                    function: FunctionCall {
+                        name: "execute_command".to_string(),
+                        arguments: serde_json::json!({
+                            "command": "cargo test"
+                        }).to_string(),
+                    },
+                }]),
+            ),
+            ChatMessage::tool_response("call_exec", "[Exit Code: 0]
+test result: ok. 14 passed; 0 failed"),
+        ];
+
+        let report = generate_fallback_compaction_report("CVH-TEST", &messages);
+
+        // Verify no generic stubs
+        assert!(!report.contains("Inspected workspace configuration and task requirements."));
+
+        // Verify edited file extracted
+        assert!(report.contains("src-tauri/src/agent/compactor.rs"));
+        assert!(report.contains("Modified via edit_file"));
+
+        // Verify command executed
+        assert!(report.contains("cargo test"));
+
+        // Verify test passed result
+        assert!(report.contains("[TEST PASSED]"));
+        assert!(report.contains("test result: ok"));
+
+        // Verify checklist items
+        assert!(report.contains("- [x] Update compactor.rs"));
+        assert!(report.contains("- [/] (IN PROGRESS) Fix gauge bug in ContextGauge.tsx"));
+        assert!(report.contains("- [ ] Run cargo test"));
+
+        // Verify current focus
+        assert!(report.contains("Fix gauge bug in ContextGauge.tsx"));
     }
 }

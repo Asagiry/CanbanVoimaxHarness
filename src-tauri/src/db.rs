@@ -169,11 +169,13 @@ pub fn load_dialog_items(root: &Path, task_id: &str) -> Result<Vec<ActivityItem>
     Ok(items)
 }
 
-/// Persists a compacted summary item and marks old intermediate dialog items as 'compacted_archived'.
+/// Persists a compacted summary item and an optional tool execution item,
+/// and marks old intermediate dialog items as 'compacted_archived'.
 pub fn persist_compacted_dialog(
     root: &Path,
     task_id: &str,
     compacted_item: &ActivityItem,
+    tool_item: Option<&ActivityItem>,
     ids_to_archive: &[String],
 ) -> Result<(), String> {
     let mut conn = init_db(root).map_err(|e| format!("Failed to open database: {}", e))?;
@@ -189,8 +191,41 @@ pub fn persist_compacted_dialog(
         );
     }
 
-    // 2. Insert compacted item
     let now_millis = chrono::Utc::now().timestamp_millis();
+
+    // 2. Optionally insert the tool execution card for compact_context
+    if let Some(tool_act) = tool_item {
+        let tool_json = match &tool_act.tool {
+            Some(val) => Some(serde_json::to_string(val).map_err(|e| e.to_string())?),
+            None => None,
+        };
+        tx.execute(
+            "INSERT INTO dialog_items (
+                id, task_id, type, content, images_json, timestamp, created_at, tool_json, duration_ms
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            ON CONFLICT(id) DO UPDATE SET
+                type = excluded.type,
+                content = excluded.content,
+                images_json = excluded.images_json,
+                timestamp = excluded.timestamp,
+                tool_json = excluded.tool_json,
+                duration_ms = excluded.duration_ms",
+            params![
+                tool_act.id,
+                task_id,
+                tool_act.item_type,
+                tool_act.content,
+                None::<String>,
+                tool_act.timestamp,
+                now_millis,
+                tool_json,
+                tool_act.duration_ms,
+            ],
+        )
+        .map_err(|e| format!("Failed to insert compact tool item: {}", e))?;
+    }
+
+    // 3. Insert compacted summary accordion item (1ms later for deterministic ordering)
     let tool_json = match &compacted_item.tool {
         Some(val) => Some(serde_json::to_string(val).map_err(|e| e.to_string())?),
         None => None,
@@ -214,7 +249,7 @@ pub fn persist_compacted_dialog(
             compacted_item.content,
             None::<String>,
             compacted_item.timestamp,
-            now_millis,
+            now_millis + 1,
             tool_json,
             compacted_item.duration_ms,
         ],

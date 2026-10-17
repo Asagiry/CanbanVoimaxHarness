@@ -308,6 +308,7 @@ pub async fn create_task(
         todos: None,
         priority: None,
         tags: None,
+        current_tokens: None,
         created_at: now,
         updated_at: now,
     };
@@ -484,6 +485,7 @@ pub async fn create_subtask(
         todos: None,
         priority: tasks[parent_idx].priority.clone(),
         tags: None,
+        current_tokens: None,
         created_at: now,
         updated_at: now,
     };
@@ -1968,12 +1970,12 @@ pub async fn compact_context(
     // 3. Load dialogue items from SQLite
     let dialog_items = crate::db::load_dialog_items(&root, &task_id).unwrap_or_default();
 
-    // 4. Determine items to condense before the last 2 active turns
+    // 4. Determine items to condense before the last 4 active messages (2 full recent turns)
     let mut ids_to_archive: Vec<String> = Vec::new();
     let mut messages_to_condense: Vec<crate::llm::ChatMessage> = Vec::new();
 
-    if dialog_items.len() > 2 {
-        let split_idx = dialog_items.len().saturating_sub(2);
+    if dialog_items.len() > 4 {
+        let split_idx = dialog_items.len().saturating_sub(4);
         let items_slice = &dialog_items[..split_idx];
 
         for it in items_slice {
@@ -1996,6 +1998,21 @@ pub async fn compact_context(
                     if let Some(ref t) = it.tool {
                         let tool_id = t.get("id").and_then(|v| v.as_str()).unwrap_or("tool_call");
                         let stdout = t.get("stdout").and_then(|v| v.as_str()).unwrap_or("");
+                        let tool_name = t.get("toolName").and_then(|v| v.as_str()).unwrap_or("tool");
+                        let params = t.get("params").cloned().unwrap_or(serde_json::Value::Null);
+
+                        // Reconstruct Assistant ToolCall message so compactor extracts tool name and parameters
+                        messages_to_condense.push(crate::llm::ChatMessage::assistant(
+                            None,
+                            Some(vec![crate::llm::ToolCall {
+                                id: tool_id.to_string(),
+                                call_type: "function".to_string(),
+                                function: crate::llm::FunctionCall {
+                                    name: tool_name.to_string(),
+                                    arguments: params.to_string(),
+                                },
+                            }]),
+                        ));
                         messages_to_condense.push(crate::llm::ChatMessage::tool_response(
                             tool_id,
                             stdout.to_string(),
@@ -2023,8 +2040,8 @@ pub async fn compact_context(
         };
 
         if let Some(msgs) = mem_msgs {
-            if msgs.len() > 2 {
-                let split_idx = msgs.len().saturating_sub(2);
+            if msgs.len() > 4 {
+                let split_idx = msgs.len().saturating_sub(4);
                 messages_to_condense.extend(msgs[..split_idx].iter().cloned());
             }
         }
@@ -2064,7 +2081,30 @@ pub async fn compact_context(
         messages_to_condense.len().max(1)
     };
 
-    // 6. Persist compacted markdown into SQLite table dialog_items with type = 'compacted'
+    // 6. Build tool execution item and compacted summary item for SQLite and in-chat display
+    let stdout_msg = format!(
+        "Контекст успешно сжат. Сохранено {} токенов. Контекст сокращен с {} до {} токенов.",
+        saved_tokens, tokens_before, tokens_after
+    );
+    let tool_item_id = format!("compact_context-{}-{}", task_id, chrono::Utc::now().timestamp_millis());
+    let tool_act_item = crate::db::ActivityItem {
+        id: tool_item_id.clone(),
+        item_type: "tool".to_string(),
+        timestamp: chrono::Local::now().format("%H:%M:%S").to_string(),
+        content: None,
+        tool: Some(serde_json::json!({
+            "id": &tool_item_id,
+            "toolName": "compact_context",
+            "timestamp": chrono::Local::now().format("%H:%M:%S").to_string(),
+            "durationMs": 0,
+            "status": "success",
+            "params": { "taskId": &task_id },
+            "stdout": &stdout_msg,
+        })),
+        duration_ms: Some(0.0),
+        images: None,
+    };
+
     let compacted_item = crate::db::ActivityItem {
         id: format!("compacted-{}-{}", task_id, chrono::Utc::now().timestamp_millis()),
         item_type: "compacted".to_string(),
@@ -2081,10 +2121,25 @@ pub async fn compact_context(
         images: None,
     };
 
-    crate::db::persist_compacted_dialog(&root, &task_id, &compacted_item, &ids_to_archive)
+    crate::db::persist_compacted_dialog(&root, &task_id, &compacted_item, Some(&tool_act_item), &ids_to_archive)
         .map_err(|e| format!("Failed to persist compacted dialog: {}", e))?;
 
-    // 7. Update in-memory active agent context if present
+    // 7. Store task.current_tokens in memory and persist to disk (Fixes 100% gauge on re-entering drawer)
+    {
+        let mut disk_tasks = load_tasks_from_disk(&root).await;
+        if let Some(t) = disk_tasks.iter_mut().find(|t| t.id == task_id) {
+            t.current_tokens = Some(tokens_after);
+        }
+        let _ = save_tasks_to_disk(&root, &disk_tasks).await;
+
+        if let Ok(mut guard) = state.tasks.lock() {
+            if let Some(t) = guard.iter_mut().find(|t| t.id == task_id) {
+                t.current_tokens = Some(tokens_after);
+            }
+        }
+    }
+
+    // 8. Update in-memory active agent context if present (preserving Turn 0 anchors and last 4 messages)
     let context_state_opt = {
         if let Ok(map) = state.agent_contexts.lock() {
             map.get(&task_id).cloned()
@@ -2106,9 +2161,10 @@ pub async fn compact_context(
                 "# Compacted Context Summary\n\n{}",
                 compacted_markdown
             )));
-            if guard.messages.len() > 2 {
-                let tail_start = guard.messages.len().saturating_sub(2);
-                for msg in &guard.messages[tail_start..] {
+            if guard.messages.len() > 4 {
+                let tail_start = guard.messages.len().saturating_sub(4);
+                let actual_tail = tail_start.max(2);
+                for msg in &guard.messages[actual_tail..] {
                     new_messages.push(msg.clone());
                 }
             }
@@ -2125,7 +2181,26 @@ pub async fn compact_context(
         summary: Some(compacted_markdown),
     };
 
-    // 8. Emit Tauri events
+    // 9. Emit Tauri events for compact_context tool execution card, compaction report, and telemetry
+    let _ = app_handle.emit(
+        "agent:tool_call",
+        serde_json::json!({
+            "taskId": &task_id,
+            "id": &tool_item_id,
+            "name": "compact_context",
+            "arguments": serde_json::json!({ "taskId": &task_id }).to_string(),
+        }),
+    );
+    let _ = app_handle.emit(
+        "agent:tool_result",
+        serde_json::json!({
+            "taskId": &task_id,
+            "id": &tool_item_id,
+            "name": "compact_context",
+            "result": &stdout_msg,
+            "success": true,
+        }),
+    );
     let _ = app_handle.emit("agent:compacted", &report);
     let _ = app_handle.emit(
         "agent:telemetry",

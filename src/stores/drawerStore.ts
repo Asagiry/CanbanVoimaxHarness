@@ -616,53 +616,93 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const items = await invoke<DrawerActivityItem[]>('load_task_dialog', { taskId });
-      if (items && Array.isArray(items) && items.length > 0) {
-        set((state) => {
-          const currentFeed = state.activityFeed[taskId] || [];
-          if (currentFeed.length === 0 || items.length >= currentFeed.length) {
-            const tools: ToolExecution[] = [];
-            const thoughts: LiveStreamEntry[] = [];
-            const outputs: LiveStreamEntry[] = [];
+      if (items && Array.isArray(items)) {
+        let compactedTokens: number | undefined;
+        for (let i = items.length - 1; i >= 0; i--) {
+          const it = items[i];
+          if (it.type === 'compacted' && it.tool) {
+            const tData = it.tool as any;
+            if (typeof tData?.tokensAfter === 'number') {
+              compactedTokens = tData.tokensAfter;
+              break;
+            }
+          }
+        }
 
-            for (const item of items) {
-              if (item.type === 'tool' && item.tool) {
-                tools.unshift(item.tool);
-              } else if (item.type === 'thought') {
-                thoughts.push({
-                  id: item.id,
-                  timestamp: item.timestamp,
-                  type: 'thought',
-                  content: item.content || '',
-                  durationMs: item.durationMs,
-                });
-              } else {
-                outputs.push({
-                  id: item.id,
-                  timestamp: item.timestamp,
-                  type: (item.type === 'steer' || item.type === 'system' || item.type === 'error' || item.type === 'user' ? item.type : 'output') as any,
-                  content: item.content || '',
-                });
+        try {
+          const { useBoardStore } = await import('./boardStore');
+          const boardTask = useBoardStore.getState().tasks.find((t) => t.id === taskId);
+          if (compactedTokens === undefined && typeof boardTask?.currentTokens === 'number') {
+            compactedTokens = boardTask.currentTokens;
+          }
+        } catch {
+          // Board store optional
+        }
+
+        if (items.length > 0) {
+          set((state) => {
+            const currentFeed = state.activityFeed[taskId] || [];
+            const hasCompacted = items.some((it) => it.type === 'compacted');
+            const newOverrides = compactedTokens !== undefined
+              ? { ...state.tokenOverrides, [taskId]: compactedTokens }
+              : state.tokenOverrides;
+
+            if (currentFeed.length === 0 || items.length >= currentFeed.length || hasCompacted) {
+              const tools: ToolExecution[] = [];
+              const thoughts: LiveStreamEntry[] = [];
+              const outputs: LiveStreamEntry[] = [];
+
+              for (const item of items) {
+                if (item.type === 'tool' && item.tool) {
+                  tools.unshift(item.tool);
+                } else if (item.type === 'thought') {
+                  thoughts.push({
+                    id: item.id,
+                    timestamp: item.timestamp,
+                    type: 'thought',
+                    content: item.content || '',
+                    durationMs: item.durationMs,
+                  });
+                } else {
+                  outputs.push({
+                    id: item.id,
+                    timestamp: item.timestamp,
+                    type: (item.type === 'steer' || item.type === 'system' || item.type === 'error' || item.type === 'user' ? item.type : 'output') as any,
+                    content: item.content || '',
+                  });
+                }
               }
+
+              return {
+                activityFeed: {
+                  ...state.activityFeed,
+                  [taskId]: items,
+                },
+                toolExecutions: {
+                  ...state.toolExecutions,
+                  [taskId]: tools,
+                },
+                streamEntries: {
+                  ...state.streamEntries,
+                  [taskId]: { thoughts, outputs },
+                },
+                tokenOverrides: newOverrides,
+              };
             }
 
             return {
-              activityFeed: {
-                ...state.activityFeed,
-                [taskId]: items,
-              },
-              toolExecutions: {
-                ...state.toolExecutions,
-                [taskId]: tools,
-              },
-              streamEntries: {
-                ...state.streamEntries,
-                [taskId]: { thoughts, outputs },
-              },
+              tokenOverrides: newOverrides,
             };
-          }
-          return state;
-        });
-        return;
+          });
+          return;
+        } else if (compactedTokens !== undefined) {
+          set((state) => ({
+            tokenOverrides: {
+              ...state.tokenOverrides,
+              [taskId]: compactedTokens!,
+            },
+          }));
+        }
       }
     } catch (e) {
       console.info('load_task_dialog invoke error or web mode:', e);
