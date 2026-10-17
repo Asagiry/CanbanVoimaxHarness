@@ -26,6 +26,19 @@ interface TextBuffer {
   outputTimer?: ReturnType<typeof setTimeout>;
 }
 
+const NON_TEXT_INPUT_TYPES = new Set([
+  'button',
+  'checkbox',
+  'color',
+  'file',
+  'hidden',
+  'image',
+  'radio',
+  'range',
+  'reset',
+  'submit',
+]);
+
 /** Check if element is an editable text field or inside one (input, textarea, contenteditable) */
 function isEditableElement(el: HTMLElement | null): boolean {
   if (!el) return false;
@@ -36,19 +49,7 @@ function isEditableElement(el: HTMLElement | null): boolean {
   if (!input) return false;
   if (input instanceof HTMLTextAreaElement) return true;
   if (input instanceof HTMLInputElement) {
-    const nonTextTypes = new Set([
-      'button',
-      'checkbox',
-      'color',
-      'file',
-      'hidden',
-      'image',
-      'radio',
-      'range',
-      'reset',
-      'submit',
-    ]);
-    return !nonTextTypes.has(input.type.toLowerCase());
+    return !NON_TEXT_INPUT_TYPES.has(input.type.toLowerCase());
   }
   return false;
 }
