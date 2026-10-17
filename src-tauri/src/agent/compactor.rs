@@ -46,7 +46,7 @@ Be concise, dense, factual, and strictly technical. Avoid conversational filler 
 /// Resolves the compactor model: if "inherit" or empty, uses the running agent's model.
 pub fn resolve_compactor_model(compactor_setting: &str, active_agent_model: &str) -> String {
     let trimmed = compactor_setting.trim();
-    if trimmed.is_empty() || trimmed == "inherit" {
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("inherit") {
         active_agent_model.to_string()
     } else {
         trimmed.to_string()
@@ -611,5 +611,17 @@ mod tests {
         let report = compact_context_messages(&mut messages, 2);
         assert_eq!(report.evaporated_count, 0);
         assert_eq!(messages[3].content.as_ref().unwrap(), "short output 42 chars");
+    }
+
+    #[test]
+    fn test_resolve_compactor_model_inheritance() {
+        // "inherit" returns active_agent_model
+        assert_eq!(resolve_compactor_model("inherit", "claude-3-5-sonnet"), "claude-3-5-sonnet");
+        assert_eq!(resolve_compactor_model("INHERIT", "deepseek-chat"), "deepseek-chat");
+        // Empty returns active_agent_model
+        assert_eq!(resolve_compactor_model("", "gpt-4o"), "gpt-4o");
+        assert_eq!(resolve_compactor_model("   ", "gemini-3.8-flash-high"), "gemini-3.8-flash-high");
+        // Specific model override takes precedence
+        assert_eq!(resolve_compactor_model("gemini-1.5-flash", "claude-3-5-sonnet"), "gemini-1.5-flash");
     }
 }
