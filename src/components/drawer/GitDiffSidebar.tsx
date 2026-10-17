@@ -110,6 +110,15 @@ interface AccordionFileItemProps {
 
 function AccordionFileItem({ file, isExpanded, onToggle }: AccordionFileItemProps) {
   const [copied, setCopied] = useState(false);
+  const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimeoutRef.current) {
+        clearTimeout(copiedTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const parsedLines = useMemo(() => {
     return parseCleanDiff(file.patch);
@@ -132,7 +141,13 @@ function AccordionFileItem({ file, isExpanded, onToggle }: AccordionFileItemProp
     try {
       await navigator.clipboard.writeText(file.patch);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      if (copiedTimeoutRef.current) {
+        clearTimeout(copiedTimeoutRef.current);
+      }
+      copiedTimeoutRef.current = setTimeout(() => {
+        setCopied(false);
+        copiedTimeoutRef.current = null;
+      }, 1500);
     } catch {
       // ignore
     }

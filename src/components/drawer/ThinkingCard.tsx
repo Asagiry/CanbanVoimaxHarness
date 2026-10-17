@@ -22,7 +22,16 @@ export default function ThinkingCard({
 }: ThinkingCardProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [copied, setCopied] = useState(false);
+  const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const thinkingStart = useDrawerStore((s) => s.thinkingStartTime[taskId] ?? null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimeoutRef.current) {
+        clearTimeout(copiedTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const fullText = thought?.content ?? '';
 
@@ -117,7 +126,13 @@ export default function ThinkingCard({
     if (!fullText) return;
     navigator.clipboard.writeText(fullText);
     setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    if (copiedTimeoutRef.current) {
+      clearTimeout(copiedTimeoutRef.current);
+    }
+    copiedTimeoutRef.current = setTimeout(() => {
+      setCopied(false);
+      copiedTimeoutRef.current = null;
+    }, 1500);
   };
 
   const visibleText = (isFinished ? fullText : fullText.slice(0, displayedLength)).trimEnd();

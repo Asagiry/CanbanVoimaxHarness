@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { ToolExecution } from '../../types';
 import {
   Wrench,
@@ -18,6 +18,15 @@ interface ToolExecutionCardProps {
 export function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimeoutRef.current) {
+        clearTimeout(copiedTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -33,7 +42,13 @@ export function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
     );
     navigator.clipboard.writeText(data);
     setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    if (copiedTimeoutRef.current) {
+      clearTimeout(copiedTimeoutRef.current);
+    }
+    copiedTimeoutRef.current = setTimeout(() => {
+      setCopied(false);
+      copiedTimeoutRef.current = null;
+    }, 1500);
   };
 
   const hasParams = tool.params && Object.keys(tool.params).length > 0;

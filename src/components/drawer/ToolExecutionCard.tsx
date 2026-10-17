@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { ToolExecution } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
 import {
@@ -88,6 +88,16 @@ export function getRoleBadgeClass(role?: string | null): string {
 export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openSubagent = useDrawerStore((s) => s.openSubagent);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimeoutRef.current) {
+        clearTimeout(copiedTimeoutRef.current);
+      }
+    };
+  }, []);
 
   if (!tool) return null;
 
@@ -96,8 +106,6 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
     (tool as ToolExecution)?.params && typeof (tool as ToolExecution).params === 'object'
       ? ((tool as ToolExecution).params as Record<string, unknown>)
       : {};
-
-  const openSubagent = useDrawerStore((s) => s.openSubagent);
 
   // Subagent interactive card (OpenCode style per specifications)
   if (toolName === 'subagent' || toolName === 'subagent_bg') {
@@ -464,7 +472,13 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
     navigator.clipboard.writeText(content);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (copiedTimeoutRef.current) {
+      clearTimeout(copiedTimeoutRef.current);
+    }
+    copiedTimeoutRef.current = setTimeout(() => {
+      setCopied(false);
+      copiedTimeoutRef.current = null;
+    }, 2000);
   };
 
   const renderStatusIndicator = () => {

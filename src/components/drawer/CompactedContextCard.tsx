@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { DrawerActivityItem } from '../../stores/drawerStore';
 import { MarkdownContent } from './DrawerActivityStream';
 import {
@@ -16,6 +16,15 @@ interface CompactedContextCardProps {
 export default function CompactedContextCard({ activity }: CompactedContextCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimeoutRef.current) {
+        clearTimeout(copiedTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Extract metadata from activity.tool if present
   const toolData = activity.tool as any;
@@ -33,7 +42,13 @@ export default function CompactedContextCard({ activity }: CompactedContextCardP
     if (activity.content) {
       navigator.clipboard.writeText(activity.content);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copiedTimeoutRef.current) {
+        clearTimeout(copiedTimeoutRef.current);
+      }
+      copiedTimeoutRef.current = setTimeout(() => {
+        setCopied(false);
+        copiedTimeoutRef.current = null;
+      }, 2000);
     }
   };
 

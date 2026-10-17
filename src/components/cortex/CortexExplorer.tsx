@@ -1,4 +1,4 @@
-import { useState, useId, useEffect } from 'react';
+import { useState, useId, useEffect, useRef } from 'react';
 import { useCortexStore, cortexAgentDir, previewCortexFileName } from '../../stores/cortexStore';
 import type { CortexHookExt, CortexHookMoment, AgentPersonaInfo } from '../../stores/cortexStore';
 import { useBoardStore } from '../../stores/boardStore';
@@ -103,6 +103,16 @@ export default function CortexExplorer() {
   const [agentError, setAgentError] = useState<Record<string, string | null>>({});
   const [isRefreshingPersonas, setIsRefreshingPersonas] = useState(false);
 
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleRefreshPersonas = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isRefreshingPersonas) return;
@@ -110,7 +120,13 @@ export default function CortexExplorer() {
     try {
       await loadAgentPersonas();
     } finally {
-      setTimeout(() => setIsRefreshingPersonas(false), 500);
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
+      refreshTimerRef.current = setTimeout(() => {
+        setIsRefreshingPersonas(false);
+        refreshTimerRef.current = null;
+      }, 500);
     }
   };
 
@@ -358,7 +374,7 @@ export default function CortexExplorer() {
       </div>
 
       {/* Sections Tree */}
-      <div className="flex-1 overflow-y-auto p-2 space-y-1 font-mono text-xs">
+      <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1 font-mono text-xs">
         {/* СЕКЦИЯ 1: Колонки */}
         <section aria-label="Колонки">
           <SectionHeader
