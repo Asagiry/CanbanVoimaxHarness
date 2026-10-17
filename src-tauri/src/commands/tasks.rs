@@ -786,6 +786,36 @@ pub async fn internal_move_task_stage(
         }
     };
     let canonical_target_stage_id = target_col.id.clone();
+    let is_backlog = stage_id_matches(&canonical_target_stage_id, "backlog");
+    let target_has_autorun = !is_backlog && (target_col.persona.is_some() || target_col.auto_run == Some(true));
+    let was_running = current_task.status.as_deref() == Some("running");
+
+    // Immediate Cancellation (§ 2 specifications):
+    // If a task is moved to backlog (or any stage without autoRun / persona, or user moves a running task):
+    if is_backlog || !target_has_autorun || was_running {
+        if let Some(app) = app_handle {
+            if let Some(state_ref) = app.try_state::<AppState>() {
+                let entry = {
+                    let mut map = state_ref.active_agents.lock().ok();
+                    map.as_mut().and_then(|m| m.remove(task_id))
+                };
+                if let Some(agent_entry) = entry {
+                    agent_entry.abort_flag.store(true, Ordering::SeqCst);
+                    let maybe_handle = {
+                        let mut guard = agent_entry.join_handle.lock().await;
+                        guard.take()
+                    };
+                    if let Some(handle) = maybe_handle {
+                        handle.abort();
+                    }
+                    let _ = app.emit(
+                        "agent:status",
+                        serde_json::json!({ "taskId": task_id, "status": "idle" }),
+                    );
+                }
+            }
+        }
+    }
 
     // Worktree allocation: driven strictly by the configurable hook (builtin:create_worktree)
     if needs_builtin_worktree(&target_col, current_task, false) {
@@ -932,11 +962,13 @@ pub async fn internal_move_task_stage(
     let is_terminal_col = target_col.terminal == Some(true)
         || stage_id_matches(&canonical_target_stage_id, "ready")
         || stage_id_matches(&canonical_target_stage_id, "done");
-    if let Some(st) = status_override {
+    if is_backlog {
+        current_task.status = Some("idle".to_string());
+    } else if let Some(st) = status_override {
         current_task.status = Some(st);
     } else if is_terminal_col {
         current_task.status = Some("done".to_string());
-    } else if target_col.persona.is_some() || target_col.auto_run == Some(true) {
+    } else if target_has_autorun {
         current_task.status = Some("running".to_string());
     } else {
         current_task.status = Some("idle".to_string());
@@ -967,7 +999,7 @@ pub async fn internal_move_task_stage(
                 "task": &updated
             }),
         );
-        if target_col.persona.is_some() || target_col.auto_run == Some(true) {
+        if target_has_autorun {
             let _ = app.emit("agent:autorun", serde_json::json!({ "taskId": task_id }));
         }
     }
@@ -1735,32 +1767,55 @@ pub async fn run_agent(
                 }
             }
             Err(err) => {
+                let is_aborted = abort_flag_task.load(Ordering::SeqCst);
                 let err_str = err.to_string();
-                eprintln!("CVH [run_agent]: Agent execution failed for task {}: {}", tid, err_str);
-                let _ = app.emit(
-                    "agent:status",
-                    serde_json::json!({ "taskId": tid, "status": "error", "error": &err_str }),
-                );
-                let _ = app.emit(
-                    "agent:error",
-                    serde_json::json!({ "taskId": tid, "error": &err_str }),
-                );
-                let _ = app.emit(
-                    "agent:output",
-                    serde_json::json!({
-                        "taskId": tid,
-                        "output": format!("\n[LLM Error: {}]\n", &err_str),
-                        "content": format!("\n[LLM Error: {}]\n", &err_str),
-                    }),
-                );
-                let mut tasks = load_tasks_from_disk(&root_task).await;
-                if let Some(task_idx) = tasks.iter().position(|t| t.id == tid) {
-                    tasks[task_idx].status = Some("error".to_string());
-                    tasks[task_idx].updated_at = Utc::now().timestamp_millis();
-                    let _ = save_tasks_to_disk(&root_task, &tasks).await;
-                    if let Some(state_ref) = app.try_state::<AppState>() {
-                        if let Ok(mut guard) = state_ref.tasks.lock() {
-                            *guard = tasks.clone();
+                if is_aborted {
+                    eprintln!("CVH [run_agent]: Agent execution aborted by user for task {}", tid);
+                    let _ = app.emit(
+                        "agent:status",
+                        serde_json::json!({ "taskId": tid, "status": "idle" }),
+                    );
+                    let mut tasks = load_tasks_from_disk(&root_task).await;
+                    if let Some(task_idx) = tasks.iter().position(|t| t.id == tid) {
+                        if tasks[task_idx].status.as_deref() == Some("running") {
+                            tasks[task_idx].status = Some("idle".to_string());
+                            tasks[task_idx].updated_at = Utc::now().timestamp_millis();
+                            let _ = save_tasks_to_disk(&root_task, &tasks).await;
+                            if let Some(state_ref) = app.try_state::<AppState>() {
+                                if let Ok(mut guard) = state_ref.tasks.lock() {
+                                    *guard = tasks.clone();
+                                }
+                            }
+                            let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+                        }
+                    }
+                } else {
+                    eprintln!("CVH [run_agent]: Agent execution failed for task {}: {}", tid, err_str);
+                    let _ = app.emit(
+                        "agent:status",
+                        serde_json::json!({ "taskId": tid, "status": "error", "error": &err_str }),
+                    );
+                    let _ = app.emit(
+                        "agent:error",
+                        serde_json::json!({ "taskId": tid, "error": &err_str }),
+                    );
+                    let _ = app.emit(
+                        "agent:output",
+                        serde_json::json!({
+                            "taskId": tid,
+                            "output": format!("\n[LLM Error: {}]\n", &err_str),
+                            "content": format!("\n[LLM Error: {}]\n", &err_str),
+                        }),
+                    );
+                    let mut tasks = load_tasks_from_disk(&root_task).await;
+                    if let Some(task_idx) = tasks.iter().position(|t| t.id == tid) {
+                        tasks[task_idx].status = Some("error".to_string());
+                        tasks[task_idx].updated_at = Utc::now().timestamp_millis();
+                        let _ = save_tasks_to_disk(&root_task, &tasks).await;
+                        if let Some(state_ref) = app.try_state::<AppState>() {
+                            if let Ok(mut guard) = state_ref.tasks.lock() {
+                                *guard = tasks.clone();
+                            }
                         }
                     }
                 }
@@ -1788,7 +1843,11 @@ pub async fn run_agent(
 }
 
 #[tauri::command]
-pub async fn abort_agent(task_id: String, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn abort_agent(
+    task_id: String,
+    state: State<'_, AppState>,
+    app_handle: AppHandle,
+) -> Result<(), String> {
     let entry = {
         let mut map = state
             .active_agents
@@ -1797,6 +1856,7 @@ pub async fn abort_agent(task_id: String, state: State<'_, AppState>) -> Result<
         map.remove(&task_id)
     };
 
+    let had_entry = entry.is_some();
     if let Some(agent_entry) = entry {
         agent_entry.abort_flag.store(true, Ordering::SeqCst);
         let maybe_handle = {
@@ -1804,8 +1864,33 @@ pub async fn abort_agent(task_id: String, state: State<'_, AppState>) -> Result<
             guard.take()
         };
         if let Some(handle) = maybe_handle {
+            handle.abort();
             let _ = tokio::time::timeout(tokio::time::Duration::from_millis(2000), handle).await;
         }
+    }
+
+    let root = state.get_root();
+    let mut tasks = load_tasks_from_disk(&root).await;
+    let mut task_updated = false;
+    if let Some(t) = tasks.iter_mut().find(|t| t.id == task_id) {
+        t.status = Some("idle".to_string());
+        t.updated_at = Utc::now().timestamp_millis();
+        task_updated = true;
+    }
+
+    if task_updated {
+        if let Ok(mut guard) = state.tasks.lock() {
+            *guard = tasks.clone();
+        }
+        let _ = save_tasks_to_disk(&root, &tasks).await;
+        let _ = app_handle.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+        let _ = app_handle.emit(
+            "agent:status",
+            serde_json::json!({ "taskId": &task_id, "status": "idle" }),
+        );
+    }
+
+    if had_entry || task_updated {
         Ok(())
     } else {
         Err(format!("No running agent found for task {}", task_id))

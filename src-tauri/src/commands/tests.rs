@@ -1162,3 +1162,109 @@ use std::path::PathBuf;
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
+
+    #[tokio::test]
+    async fn test_move_task_to_backlog_resets_idle_status() {
+        let base = PathBuf::from("target").join(format!("cvh_backlog_abort_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        let cols = vec![
+            crate::config::PipelineColumn {
+                id: "backlog".to_string(),
+                title: "Backlog".to_string(),
+                color: None,
+                icon: None,
+                persona: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            crate::config::PipelineColumn {
+                id: "dev".to_string(),
+                title: "Dev".to_string(),
+                color: None,
+                icon: None,
+                persona: Some("developer".to_string()),
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+        ];
+
+        let boards_cfg = crate::config::BoardsConfig {
+            active_board_id: "default-board".to_string(),
+            boards: vec![
+                crate::config::BoardDef {
+                    id: "default-board".to_string(),
+                    name: "Default".to_string(),
+                    columns: cols,
+                },
+            ],
+        };
+        crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
+
+        // Seed a running task in dev
+        let task = Task {
+            id: "CVH-ABORT-1".to_string(),
+            title: "Running Task".to_string(),
+            description: "Desc".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("default-board".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("running".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            created_at: 0,
+            updated_at: 0,
+            handover_summary: None,
+            attachments: None,
+            cover_image: None,
+        };
+        save_tasks_to_disk(&base, &[task]).await.expect("save task");
+
+        // Move to backlog
+        let moved = internal_move_task_stage(
+            &base,
+            "CVH-ABORT-1",
+            "backlog",
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("move to backlog");
+
+        assert_eq!(moved.stage_id, "backlog");
+        assert_eq!(moved.status.as_deref(), Some("idle"));
+
+        let loaded = load_tasks_from_disk(&base).await;
+        assert_eq!(loaded[0].stage_id, "backlog");
+        assert_eq!(loaded[0].status.as_deref(), Some("idle"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
