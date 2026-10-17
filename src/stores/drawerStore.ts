@@ -44,6 +44,8 @@ interface DrawerState {
   activeSubagentTitle: string | null;
   activeSubagentRole: string | null;
   activeSubagentPrompt: string | null;
+  toolIdToSubagentId: Record<string, string>;
+  subagentIdToToolId: Record<string, string>;
 
   // Actions
   openDrawer: (taskId: string, initialTab?: DrawerTab) => void;
@@ -69,6 +71,7 @@ interface DrawerState {
   loadTaskDialog: (taskId: string) => Promise<void>;
   saveTaskDialog: (taskId: string) => Promise<void>;
   flushSaveDialog: (taskId: string) => Promise<void>;
+  registerSubagentMapping: (toolId: string, subagentId: string) => void;
   openSubagent: (subagentId: string, title: string, role: string, prompt: string) => void;
   closeSubagent: () => void;
   loadSubagentDialog: (parentTaskId: string, subagentId: string) => Promise<void>;
@@ -99,6 +102,22 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
   activeSubagentTitle: null,
   activeSubagentRole: null,
   activeSubagentPrompt: null,
+  toolIdToSubagentId: {},
+  subagentIdToToolId: {},
+
+  registerSubagentMapping: (toolId, subagentId) => {
+    if (!toolId || !subagentId) return;
+    set((state) => ({
+      toolIdToSubagentId: {
+        ...state.toolIdToSubagentId,
+        [toolId]: subagentId,
+      },
+      subagentIdToToolId: {
+        ...state.subagentIdToToolId,
+        [subagentId]: toolId,
+      },
+    }));
+  },
 
   openDrawer: (taskId, initialTab = 'thoughts') => {
     set({
@@ -298,6 +317,21 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
   },
 
   addToolExecution: (taskId, tool) => {
+    // If tool is a subagent execution, extract subagent_id if already present
+    if (tool.toolName === 'subagent' || tool.toolName === 'subagent_bg') {
+      const pSubId = (tool.params as Record<string, unknown> | undefined)?.subagent_id;
+      if (typeof pSubId === 'string' && pSubId) {
+        get().registerSubagentMapping(tool.id, pSubId);
+      } else if (tool.stdout) {
+        try {
+          const parsed = JSON.parse(tool.stdout);
+          if (parsed.subagent_id) get().registerSubagentMapping(tool.id, parsed.subagent_id);
+        } catch {}
+        const match = tool.stdout.match(/\[Subagent ID:\s*([^\s\]]+)\]/);
+        if (match && match[1]) get().registerSubagentMapping(tool.id, match[1]);
+      }
+    }
+
     set((state) => {
       const existing = state.toolExecutions[taskId] || [];
       const existingFeed = state.activityFeed[taskId] || [];
@@ -324,6 +358,21 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
   },
 
   updateToolExecution: (taskId, toolId, partial) => {
+    if (partial.params) {
+      const pSubId = (partial.params as Record<string, unknown> | undefined)?.subagent_id;
+      if (typeof pSubId === 'string' && pSubId) {
+        get().registerSubagentMapping(toolId, pSubId);
+      }
+    }
+    if (partial.stdout) {
+      try {
+        const parsed = JSON.parse(partial.stdout);
+        if (parsed.subagent_id) get().registerSubagentMapping(toolId, parsed.subagent_id);
+      } catch {}
+      const match = partial.stdout.match(/\[Subagent ID:\s*([^\s\]]+)\]/);
+      if (match && match[1]) get().registerSubagentMapping(toolId, match[1]);
+    }
+
     set((state) => {
       const existing = state.toolExecutions[taskId] || [];
       const updated = existing.map((t) => (t.id === toolId ? { ...t, ...partial } : t));
@@ -641,15 +690,51 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
   },
 
   openSubagent: (subagentId, title, role, prompt) => {
+    const state = get();
+    // Resolve subagentId using toolIdToSubagentId map if a tool ID was passed
+    let resolvedSubagentId = state.toolIdToSubagentId[subagentId] || subagentId;
+
+    // Fallback: search tool executions if still unresolved
+    if (resolvedSubagentId === subagentId && state.activeTaskId) {
+      const tools = state.toolExecutions[state.activeTaskId] || [];
+      const matched = tools.find((t) => t.id === subagentId);
+      if (matched) {
+        const pId = (matched.params as Record<string, unknown> | undefined)?.subagent_id;
+        if (typeof pId === 'string' && pId) {
+          resolvedSubagentId = pId;
+        } else if (matched.stdout) {
+          try {
+            const parsed = JSON.parse(matched.stdout);
+            if (parsed.subagent_id) resolvedSubagentId = parsed.subagent_id;
+          } catch {}
+          if (resolvedSubagentId === subagentId) {
+            const m = matched.stdout.match(/\[Subagent ID:\s*([^\s\]]+)\]/);
+            if (m && m[1]) resolvedSubagentId = m[1];
+          }
+        }
+      }
+    }
+
     set({
-      activeSubagentId: subagentId,
+      activeSubagentId: resolvedSubagentId,
       activeSubagentTitle: title,
       activeSubagentRole: role,
       activeSubagentPrompt: prompt,
+      toolIdToSubagentId:
+        resolvedSubagentId !== subagentId
+          ? { ...state.toolIdToSubagentId, [subagentId]: resolvedSubagentId }
+          : state.toolIdToSubagentId,
+      subagentIdToToolId:
+        resolvedSubagentId !== subagentId
+          ? { ...state.subagentIdToToolId, [resolvedSubagentId]: subagentId }
+          : state.subagentIdToToolId,
     });
     const parentTaskId = get().activeTaskId;
     if (parentTaskId) {
-      void get().loadSubagentDialog(parentTaskId, subagentId);
+      void get().loadSubagentDialog(parentTaskId, resolvedSubagentId);
+      if (resolvedSubagentId !== subagentId) {
+        void get().loadSubagentDialog(parentTaskId, subagentId);
+      }
     }
   },
 
@@ -671,12 +756,21 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         subagentId,
       });
       if (items && Array.isArray(items) && items.length > 0) {
-        set((state) => ({
-          activityFeed: {
+        set((state) => {
+          const nextFeed = {
             ...state.activityFeed,
             [subagentId]: items,
-          },
-        }));
+          };
+          const mappedToolId = state.subagentIdToToolId[subagentId];
+          if (mappedToolId) {
+            nextFeed[mappedToolId] = items;
+          }
+          const mappedSubId = state.toolIdToSubagentId[subagentId];
+          if (mappedSubId) {
+            nextFeed[mappedSubId] = items;
+          }
+          return { activityFeed: nextFeed };
+        });
       }
     } catch (err) {
       console.info('load_subagent_dialog invoke error or web mode:', err);
@@ -779,9 +873,26 @@ export async function initSubagentListeners() {
     await listen<{ parentTaskId?: string; subagentId?: string; title?: string; role?: string; prompt?: string; tools?: string[] }>(
       'subagent:spawned',
       (event) => {
-        const { subagentId, prompt } = event.payload || {};
+        const { parentTaskId, subagentId, prompt, title } = event.payload || {};
         if (!subagentId) return;
         const state = useDrawerStore.getState();
+
+        // Auto-map tool execution to subagent ID if matching tool is found in parentTaskId
+        if (parentTaskId) {
+          const tools = state.toolExecutions[parentTaskId] || [];
+          const matchingTool = tools.find(
+            (t) =>
+              (t.toolName === 'subagent' || t.toolName === 'subagent_bg') &&
+              !state.toolIdToSubagentId[t.id] &&
+              ((t.params as Record<string, unknown> | undefined)?.prompt === prompt ||
+                (t.params as Record<string, unknown> | undefined)?.title === title ||
+                t.status === 'running')
+          );
+          if (matchingTool) {
+            state.registerSubagentMapping(matchingTool.id, subagentId);
+          }
+        }
+
         const existingFeed = state.activityFeed[subagentId] || [];
         if (prompt && !existingFeed.some((i) => i.type === 'prompt')) {
           const promptItem: DrawerActivityItem = {
@@ -790,12 +901,16 @@ export async function initSubagentListeners() {
             timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
             content: prompt,
           };
-          useDrawerStore.setState({
-            activityFeed: {
-              ...state.activityFeed,
-              [subagentId]: [promptItem, ...existingFeed],
-            },
-          });
+          const nextFeed = [promptItem, ...existingFeed];
+          const nextFeeds: Record<string, DrawerActivityItem[]> = {
+            ...state.activityFeed,
+            [subagentId]: nextFeed,
+          };
+          const mappedToolId = state.subagentIdToToolId[subagentId];
+          if (mappedToolId) {
+            nextFeeds[mappedToolId] = nextFeed;
+          }
+          useDrawerStore.setState({ activityFeed: nextFeeds });
         }
       }
     );
@@ -815,12 +930,15 @@ export async function initSubagentListeners() {
         } else {
           nextFeed = [...existingFeed, activity];
         }
-        useDrawerStore.setState({
-          activityFeed: {
-            ...state.activityFeed,
-            [subagentId]: nextFeed,
-          },
-        });
+        const nextFeeds: Record<string, DrawerActivityItem[]> = {
+          ...state.activityFeed,
+          [subagentId]: nextFeed,
+        };
+        const mappedToolId = state.subagentIdToToolId[subagentId];
+        if (mappedToolId) {
+          nextFeeds[mappedToolId] = nextFeed;
+        }
+        useDrawerStore.setState({ activityFeed: nextFeeds });
       }
     );
 
@@ -838,12 +956,16 @@ export async function initSubagentListeners() {
             timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
             content: response,
           };
-          useDrawerStore.setState({
-            activityFeed: {
-              ...state.activityFeed,
-              [subagentId]: [...existingFeed, outItem],
-            },
-          });
+          const nextFeed = [...existingFeed, outItem];
+          const nextFeeds: Record<string, DrawerActivityItem[]> = {
+            ...state.activityFeed,
+            [subagentId]: nextFeed,
+          };
+          const mappedToolId = state.subagentIdToToolId[subagentId];
+          if (mappedToolId) {
+            nextFeeds[mappedToolId] = nextFeed;
+          }
+          useDrawerStore.setState({ activityFeed: nextFeeds });
         }
       }
     );

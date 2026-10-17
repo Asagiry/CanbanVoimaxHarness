@@ -667,18 +667,6 @@ function StageHeaderButton({
             {stage.stageTitle}
           </span>
 
-          {isBacklog && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-sans font-medium bg-slate-100 text-[#64748b] border border-[#64748b]/30 shrink-0 self-center leading-tight">
-              backlog
-            </span>
-          )}
-
-          {isReady && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-sans font-medium bg-emerald-50 text-[#10b981] border border-[#10b981]/30 shrink-0 self-center leading-tight">
-              ready
-            </span>
-          )}
-
           {isBuiltin && (
             <span className="px-1.5 py-0.5 rounded text-[10px] font-sans font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0 self-center translate-y-[0.5px] leading-tight">
               Встроенный
@@ -803,7 +791,7 @@ function ColumnStageCard({
       {/* Children */}
       {stage.isExpanded && (
         <div className="pl-4 pr-1 py-0.5 space-y-0.5 border-l border-[#ebebeb] ml-3 my-0.5">
-          {!isBacklogSystem && column && (
+          {!isBacklogSystem && !isReady && !column?.terminal && column && (
             <AgentField
               columnId={column.id}
               current={column.persona}

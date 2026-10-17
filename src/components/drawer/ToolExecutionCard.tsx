@@ -70,6 +70,20 @@ function getLanguageBadge(ext?: string): LangBadgeConfig | null {
   }
 }
 
+export function getRoleBadgeClass(role?: string | null): string {
+  const roleUpper = (role || 'general').toUpperCase();
+  if (roleUpper.includes('DEV')) {
+    return 'bg-[#f0fdf4] text-[#15803d] border-[#bbf7d0]';
+  }
+  if (roleUpper.includes('REV')) {
+    return 'bg-[#fefce8] text-[#854d0e] border-[#fef08a]';
+  }
+  if (roleUpper.includes('EXP') || roleUpper.includes('ARCH')) {
+    return 'bg-[#faf5ff] text-[#7c3aed] border-[#e9d5ff]';
+  }
+  return 'bg-[#f4f4f5] text-[#171717] border-[#ebebeb]';
+}
+
 export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -91,8 +105,12 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
     const title = (params?.title as string) || (params?.prompt as string)?.slice(0, 60) || 'Делегированная задача субагента';
     const prompt = (params?.prompt as string) || '';
 
-    // Extract subagent_id from params, or parsed JSON stdout (subagent_bg), or stdout regex (subagent)
+    // Extract subagent_id from params, or drawerStore toolIdToSubagentId map, or parsed JSON stdout (subagent_bg), or stdout regex (subagent)
     let subagentId = typeof params?.subagent_id === 'string' && params.subagent_id ? params.subagent_id : '';
+    if (!subagentId) {
+      const mapped = useDrawerStore.getState().toolIdToSubagentId[tool.id];
+      if (mapped) subagentId = mapped;
+    }
     if (!subagentId && tool.stdout) {
       try {
         const parsed = JSON.parse(tool.stdout);
@@ -107,14 +125,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       subagentId = tool.id;
     }
 
-    let roleBadgeClass = 'bg-[#1f6feb]/20 text-[#58a6ff] border-[#1f6feb]/40';
-    if (roleUpper.includes('DEV')) {
-      roleBadgeClass = 'bg-[#238636]/20 text-[#3fb950] border-[#238636]/40';
-    } else if (roleUpper.includes('REV')) {
-      roleBadgeClass = 'bg-[#d29922]/20 text-[#e3b341] border-[#d29922]/40';
-    } else if (roleUpper.includes('EXP') || roleUpper.includes('ARCH')) {
-      roleBadgeClass = 'bg-[#a371f7]/20 text-[#bc8cff] border-[#a371f7]/40';
-    }
+    const roleBadgeClass = getRoleBadgeClass(rawRole);
 
     const isRunning = tool.status === 'running';
     const isSuccess = tool.status === 'success';
@@ -122,12 +133,12 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
     return (
       <div
         onClick={() => openSubagent(subagentId, title, rawRole, prompt)}
-        className="group rounded-xl border border-[#27272a] bg-[#0d1117] hover:bg-[#161b22] hover:border-[#58a6ff]/50 p-3.5 shadow-sm transition cursor-pointer select-none my-2.5"
+        className="group rounded-lg border border-[#ebebeb] bg-white hover:bg-[#f9f9f9] hover:border-[#171717]/40 p-3.5 shadow-xs transition-all duration-150 cursor-pointer select-none my-2.5"
         title="Нажмите, чтобы открыть вложенный чат субагента"
       >
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center space-x-2.5 min-w-0 flex-1 overflow-hidden">
-            <span className="text-[#58a6ff] shrink-0 font-mono text-sm leading-none select-none">
+            <span className="text-[#171717] shrink-0 font-mono text-sm leading-none select-none">
               ■
             </span>
 
@@ -135,7 +146,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
               {roleUpper}
             </span>
 
-            <span className="font-sans font-medium text-xs md:text-sm text-[#f0f6fc] group-hover:text-[#58a6ff] transition-colors truncate">
+            <span className="font-sans font-medium text-xs md:text-sm text-[#0d0d0d] group-hover:text-[#171717] transition-colors truncate">
               {title}
             </span>
           </div>
@@ -143,25 +154,25 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
           <div className="flex items-center space-x-2.5 shrink-0">
             {isRunning ? (
               <div className="flex items-center space-x-1.5">
-                <span className="relative flex h-2.5 w-2.5 shrink-0" title="Субагент выполняется...">
+                <span className="relative flex h-2 w-2 shrink-0" title="Субагент выполняется...">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
                 </span>
-                <span className="text-[11px] font-mono text-[#8b949e]">Running</span>
+                <span className="text-[11px] font-mono text-[#71717a]">Выполняется</span>
               </div>
             ) : isSuccess ? (
               <div className="flex items-center space-x-1.5">
-                <Check className="h-4 w-4 text-[#3fb950] stroke-[2.5]" />
-                <span className="text-[11px] font-mono text-[#7ee787]">Done</span>
+                <Check className="h-3.5 w-3.5 text-[#15803d] stroke-[2.5]" />
+                <span className="text-[11px] font-mono font-medium text-[#15803d]">Готово</span>
               </div>
             ) : (
               <div className="flex items-center space-x-1.5">
-                <X className="h-4 w-4 text-[#f85149] stroke-[2.5]" />
-                <span className="text-[11px] font-mono text-[#f85149]">Error</span>
+                <X className="h-3.5 w-3.5 text-[#dc2626] stroke-[2.5]" />
+                <span className="text-[11px] font-mono font-medium text-[#dc2626]">Ошибка</span>
               </div>
             )}
 
-            <ChevronRight className="h-4 w-4 text-[#8b949e] group-hover:text-[#58a6ff] transition-colors shrink-0" />
+            <ChevronRight className="h-4 w-4 text-[#8f8f8f] group-hover:text-[#171717] group-hover:translate-x-0.5 transition-all shrink-0" />
           </div>
         </div>
       </div>
