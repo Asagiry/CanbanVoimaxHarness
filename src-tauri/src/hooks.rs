@@ -121,6 +121,47 @@ pub async fn kill_process_tree(pid: u32) {
     }
 }
 
+/// Checks if `pwsh` (PowerShell Core / 7+) is available on PATH.
+pub fn is_pwsh_available() -> bool {
+    if let Some(path_var) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path_var) {
+            #[cfg(target_os = "windows")]
+            {
+                if dir.join("pwsh.exe").is_file()
+                    || dir.join("pwsh.cmd").is_file()
+                    || dir.join("pwsh.bat").is_file()
+                {
+                    return true;
+                }
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                if dir.join("pwsh").is_file() {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Resolves the preferred PowerShell executable: prefers modern `pwsh` if available,
+/// falling back to `powershell.exe` on Windows (or `pwsh` on Unix).
+pub fn resolve_powershell_executable() -> &'static str {
+    if is_pwsh_available() {
+        "pwsh"
+    } else {
+        #[cfg(target_os = "windows")]
+        {
+            "powershell.exe"
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            "pwsh"
+        }
+    }
+}
+
 /// Executes a hook script (.bat, .cmd, .ps1, .sh) with environment variables injected.
 pub async fn execute_hook(
     script_path: impl AsRef<Path>,
@@ -159,7 +200,8 @@ pub async fn execute_hook(
             }
         }
         "ps1" => {
-            let mut c = Command::new("powershell.exe");
+            let exe = resolve_powershell_executable();
+            let mut c = Command::new(exe);
             c.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
                 .arg(script);
             c
@@ -378,5 +420,18 @@ mod tests {
     async fn test_kill_process_tree_zero_pid_is_noop() {
         // PID 0 must immediately return without killing system idle process or spawning taskkill
         kill_process_tree(0).await;
+    }
+
+    #[test]
+    fn test_resolve_powershell_executable() {
+        let exe = resolve_powershell_executable();
+        #[cfg(target_os = "windows")]
+        {
+            assert!(exe == "pwsh" || exe == "powershell.exe");
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            assert_eq!(exe, "pwsh");
+        }
     }
 }
