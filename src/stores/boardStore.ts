@@ -305,6 +305,9 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
     handoverSummary: typeof raw.handoverSummary === 'string'
       ? raw.handoverSummary
       : (typeof raw.handover_summary === 'string' ? raw.handover_summary : undefined),
+    currentTokens: typeof raw.currentTokens === 'number'
+      ? raw.currentTokens
+      : (typeof raw.current_tokens === 'number' ? raw.current_tokens : undefined),
   };
 }
 
@@ -369,6 +372,7 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
               status: td?.status === 'completed' || td?.status === 'in_progress' ? td.status : 'pending',
             }))
           : null,
+        currentTokens: typeof t.currentTokens === 'number' ? t.currentTokens : null,
         createdAt: t.createdAt || Date.now(),
         updatedAt: Date.now(),
       };

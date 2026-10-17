@@ -9,6 +9,7 @@ import {
   Wrench,
   FileCode2,
   FileText,
+  Minimize2,
 } from 'lucide-react';
 
 interface ToolExecutionCardProps {
@@ -349,6 +350,9 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       case 'subagent':
         raw = str(p.role) || str(p.description) || str(p.prompt) || '';
         break;
+      case 'compact_context':
+        raw = str(p.taskId) || '';
+        break;
       default: {
         const firstStr = Object.values(p).find(
           (v) => typeof v === 'string' && (v as string).trim().length > 0
@@ -392,6 +396,12 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             .split('\n')
             .filter((l) => l.trim().length > 0).length;
           return `${count} matches`;
+        }
+        return null;
+      }
+      case 'compact_context': {
+        if (tool.status === 'success') {
+          return 'compacted';
         }
         return null;
       }
@@ -878,9 +888,13 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
             <span
               className="flex items-center shrink-0 select-none text-[#8f8f8f]"
-              title="Инструмент"
+              title={tool.toolName === 'compact_context' ? 'Сжатие контекста' : 'Инструмент'}
             >
-              <Wrench className="h-3.5 w-3.5" />
+              {tool.toolName === 'compact_context' ? (
+                <Minimize2 className="h-3.5 w-3.5 text-indigo-600" />
+              ) : (
+                <Wrench className="h-3.5 w-3.5" />
+              )}
             </span>
 
             <span className="font-mono font-medium text-[#171717] shrink-0">

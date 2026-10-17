@@ -81,6 +81,8 @@ pub struct Task {
     pub priority: Option<String>,
     #[serde(default)]
     pub tags: Option<Vec<String>>,
+    #[serde(rename = "currentTokens", alias = "current_tokens", default)]
+    pub current_tokens: Option<usize>,
     #[serde(rename = "createdAt", alias = "created_at", default)]
     pub created_at: i64,
     #[serde(rename = "updatedAt", alias = "updated_at", default)]
@@ -1965,6 +1967,7 @@ Channel closed before completion", id)),
                     todos: None,
                     priority: input.priority,
                     tags: input.tags,
+                    current_tokens: None,
                     created_at: now,
                     updated_at: now,
                 };
@@ -3559,7 +3562,32 @@ where
         if should_compact {
             let compaction_res = compactor::compact_conversation(&mut messages, None);
             if compaction_res.saved_chars > 0 {
-                // If app_handle is present, persist to SQLite dialog_items
+                let tokens_after = compactor::estimate_tokens(&messages);
+                let saved_tokens = compaction_res.estimated_saved_tokens;
+                let stdout_msg = format!(
+                    "Контекст успешно сжат. Сохранено {} токенов. Контекст сокращен с {} до {} токенов.",
+                    saved_tokens, current_tokens, tokens_after
+                );
+                let tool_item_id = format!("compact_context-{}-{}", config.task_id, chrono::Utc::now().timestamp_millis());
+                let tool_act_item = crate::db::ActivityItem {
+                    id: tool_item_id.clone(),
+                    item_type: "tool".to_string(),
+                    timestamp: chrono::Local::now().format("%H:%M:%S").to_string(),
+                    content: None,
+                    tool: Some(serde_json::json!({
+                        "id": &tool_item_id,
+                        "toolName": "compact_context",
+                        "timestamp": chrono::Local::now().format("%H:%M:%S").to_string(),
+                        "durationMs": 0,
+                        "status": "success",
+                        "params": { "taskId": &config.task_id },
+                        "stdout": &stdout_msg,
+                    })),
+                    duration_ms: Some(0.0),
+                    images: None,
+                };
+
+                // If app_handle is present, persist to SQLite dialog_items and emit tool events
                 if let Some(ref app) = config.app_handle {
                     let summary_text = if !compaction_res.preserved_state_summary.is_empty() {
                         compaction_res.preserved_state_summary.clone()
@@ -3573,16 +3601,35 @@ where
                         content: Some(summary_text),
                         tool: Some(serde_json::json!({
                             "compactedCount": compaction_res.evaporated_tools_count,
-                            "savedTokens": compaction_res.estimated_saved_tokens,
+                            "savedTokens": saved_tokens,
                             "tokensBefore": current_tokens,
-                            "tokensAfter": compactor::estimate_tokens(&messages),
+                            "tokensAfter": tokens_after,
                             "autoCompacted": true,
                             "contextWindow": context_window,
                         })),
                         duration_ms: None,
                         images: None,
                     };
-                    let _ = crate::db::persist_compacted_dialog(&config.repo_root, &config.task_id, &compacted_item, &[]);
+                    let _ = crate::db::persist_compacted_dialog(&config.repo_root, &config.task_id, &compacted_item, Some(&tool_act_item), &[]);
+                    let _ = app.emit(
+                        "agent:tool_call",
+                        serde_json::json!({
+                            "taskId": &config.task_id,
+                            "id": &tool_item_id,
+                            "name": "compact_context",
+                            "arguments": serde_json::json!({ "taskId": &config.task_id }).to_string(),
+                        }),
+                    );
+                    let _ = app.emit(
+                        "agent:tool_result",
+                        serde_json::json!({
+                            "taskId": &config.task_id,
+                            "id": &tool_item_id,
+                            "name": "compact_context",
+                            "result": &stdout_msg,
+                            "success": true,
+                        }),
+                    );
                     let _ = app.emit("dialog:updated", serde_json::json!({ "taskId": config.task_id }));
                 }
 
@@ -4295,6 +4342,7 @@ mod tests {
             todos: None,
             priority: Some("high".to_string()),
             tags: Some(vec!["orchestrator".to_string()]),
+            current_tokens: None,
             created_at: 0,
             updated_at: 0,
         };
@@ -4408,6 +4456,7 @@ mod tests {
             todos: None,
             priority: None,
             tags: None,
+            current_tokens: None,
             created_at: 0,
             updated_at: 0,
         };
@@ -4474,6 +4523,7 @@ mod tests {
             todos: None,
             priority: None,
             tags: None,
+            current_tokens: None,
             created_at: 0,
             updated_at: 0,
         };
@@ -4669,6 +4719,7 @@ mod tests {
             todos: None,
             priority: None,
             tags: None,
+            current_tokens: None,
             created_at: 0,
             updated_at: 0,
             handover_summary: None,

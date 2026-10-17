@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useDrawerStore } from '../../stores/drawerStore';
+import { useBoardStore } from '../../stores/boardStore';
 import { CompactionReport } from '../../types';
 
 interface ContextGaugeProps {
@@ -28,12 +29,38 @@ export default function ContextGauge({
   const thoughts = useDrawerStore((s) => s.streamEntries[taskId]?.thoughts);
   const outputs = useDrawerStore((s) => s.streamEntries[taskId]?.outputs);
   const tools = useDrawerStore((s) => s.toolExecutions[taskId]);
+  const feed = useDrawerStore((s) => s.activityFeed[taskId]);
   const tokenOverride = useDrawerStore((s) => s.tokenOverrides[taskId]);
+  const taskCurrentTokens = useBoardStore((s) => s.tasks.find((t) => t.id === taskId)?.currentTokens);
   const telemetry = useDrawerStore((s) => s.taskTelemetry[taskId]);
   const thinkingStart = useDrawerStore((s) => s.thinkingStartTime[taskId] ?? null);
   const frozenTps = useDrawerStore((s) => s.finalTps[taskId] ?? null);
   const setTaskTokens = useDrawerStore((s) => s.setTaskTokens);
   const evaporateClientToolLogs = useDrawerStore((s) => s.evaporateClientToolLogs);
+
+  // Extract latest compacted tokens from activity feed if persisted
+  const latestCompactedTokens = useMemo(() => {
+    if (!feed || feed.length === 0) return undefined;
+    for (let i = feed.length - 1; i >= 0; i--) {
+      const it = feed[i];
+      if (it.type === 'compacted' && it.tool) {
+        const tData = it.tool as any;
+        if (typeof tData?.tokensAfter === 'number') {
+          return tData.tokensAfter;
+        }
+      }
+    }
+    return undefined;
+  }, [feed]);
+
+  const resolvedCompactTokens = tokenOverride ?? taskCurrentTokens ?? latestCompactedTokens;
+
+  // Prime in-memory token override if found from task state or feed
+  useEffect(() => {
+    if (resolvedCompactTokens !== undefined && tokenOverride === undefined) {
+      setTaskTokens?.(taskId, resolvedCompactTokens);
+    }
+  }, [taskId, resolvedCompactTokens, tokenOverride, setTaskTokens]);
 
   const [isCompacting, setIsCompacting] = useState(false);
   const [savingsBadge, setSavingsBadge] = useState<string | null>(null);
@@ -128,25 +155,26 @@ export default function ContextGauge({
       }
     }
 
-    // Tool-вклады пересчитываем полностью: тулов мало, это дёшево,
-    // а updateToolExecution меняет stdout на месте (дельта-кэш по длине не поймает).
-    let messageChars = textChars;
-    for (const t of toolsArr) {
-      messageChars += (t?.stdout?.length || 0);
-      messageChars += (t?.stderr?.length || 0);
-      messageChars += JSON.stringify(t?.params || {}).length;
-    }
-
-    const dynamicMsgTokens = Math.max(300, Math.round(messageChars / 4));
     const baseSystem = 3200;
     const baseTool = 2400;
-    const estimatedTotal = baseSystem + baseTool + dynamicMsgTokens;
 
-    const total = currentEstimatedTokens !== undefined
-      ? currentEstimatedTokens
-      : tokenOverride !== undefined
-      ? tokenOverride
-      : estimatedTotal;
+    // Fix 100% gauge bug: if the task was compacted, preserve the compacted token count
+    // rather than recalculating an uncompressed sum of character lengths from raw historical tool items!
+    let total: number;
+    if (currentEstimatedTokens !== undefined) {
+      total = currentEstimatedTokens;
+    } else if (resolvedCompactTokens !== undefined) {
+      total = resolvedCompactTokens;
+    } else {
+      let messageChars = textChars;
+      for (const t of toolsArr) {
+        messageChars += (t?.stdout?.length || 0);
+        messageChars += (t?.stderr?.length || 0);
+        messageChars += JSON.stringify(t?.params || {}).length;
+      }
+      const dynamicMsgTokens = Math.max(300, Math.round(messageChars / 4));
+      total = baseSystem + baseTool + dynamicMsgTokens;
+    }
 
     // Segment token allocation:
     let sys = baseSystem;
@@ -167,7 +195,7 @@ export default function ContextGauge({
       messageTokens: msg,
     };
     // Лёгкие deps: только слайсы текущей задачи, а не весь стор
-  }, [taskId, currentEstimatedTokens, tokenOverride, thoughts, outputs, tools]);
+  }, [taskId, currentEstimatedTokens, resolvedCompactTokens, thoughts, outputs, tools]);
 
   const percent = Math.min(100, Math.max(0, Math.round((totalUsedTokens / effectiveLimit) * 100)));
 
@@ -280,6 +308,7 @@ export default function ContextGauge({
         if (report) {
           setTaskTokens?.(taskId, report.tokens_after);
           saved = Math.max(saved, report.saved_tokens);
+          await useDrawerStore.getState().loadTaskDialog(taskId);
         }
       } catch {
         // Handled

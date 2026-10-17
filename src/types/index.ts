@@ -52,6 +52,7 @@ export interface KanbanTask {
   todos?: TodoItem[];
   tags?: string[];
   handoverSummary?: string;
+  currentTokens?: number;
 }
 
 export interface PipelineColumn {
