@@ -8,12 +8,10 @@ import SplashScreen from './components/splash/SplashScreen';
 import RuleEditorModal from './components/cortex/RuleEditorModal';
 import ToolPolicyModal from './components/settings/ToolPolicyModal';
 import SettingsModal from './components/settings/SettingsModal';
-import CopilotDock from './components/copilot/CopilotDock';
 import { useBoardStore, initBoardEventListeners } from './stores/boardStore';
 import { useProjectStore } from './stores/projectStore';
 import { useDrawerStore } from './stores/drawerStore';
 import { useCortexStore, initCortexEventListeners } from './stores/cortexStore';
-import { useCopilotStore, initCopilotStreamListener } from './stores/copilotStore';
 import { useUiZoom } from './hooks/useUiZoom';
 
 // Микробатчинг SSE-текста: один Zustand set() на пачку токенов вместо set() на токен.
@@ -67,18 +65,6 @@ export default function App() {
 
   const [isDataReady, setIsDataReady] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
-
-  // Global keyboard shortcut: Ctrl+B / Cmd+B toggles CVH Copilot Dock
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
-        e.preventDefault();
-        useCopilotStore.getState().toggleOpen();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
 
   // Global context menu suppression: eliminate default browser/WebView2 context menu across
   // canvas, headers, cards, and background while preserving custom app context menus and native text editing
@@ -433,8 +419,6 @@ export default function App() {
         unlisteners.push(unlistenBoardStore);
         const unlistenCortexStore = await initCortexEventListeners();
         unlisteners.push(unlistenCortexStore);
-        const unlistenCopilotStore = await initCopilotStreamListener();
-        unlisteners.push(unlistenCopilotStore);
       } catch (e) {
         console.info('Tauri event listeners not active in web mode:', e);
       }
@@ -471,9 +455,6 @@ export default function App() {
           <main className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
             <KanbanBoard />
           </main>
-
-          {/* Right: CVH Copilot Dock (Sidecar Architect) */}
-          <CopilotDock />
         </div>
 
         {/* Mind / Rule Editor Modal */}

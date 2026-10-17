@@ -5,12 +5,10 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { useToolPolicyStore } from '../../stores/toolPolicyStore';
 import Logo from '../common/Logo';
 import WindowControls, { toggleMaximizeWindow } from './WindowControls';
-import { useCopilotStore } from '../../stores/copilotStore';
 import {
   FolderOpen,
   Settings,
   Wrench,
-  Bot,
 } from 'lucide-react';
 
 export default function Topbar() {
@@ -19,7 +17,6 @@ export default function Topbar() {
   const { loadTasks } = useBoardStore();
   const { openSettings } = useSettingsStore();
   const { openModal: openToolPolicyModal } = useToolPolicyStore();
-  const { isOpen: isCopilotOpen, toggleOpen: toggleCopilot } = useCopilotStore();
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   const handleHeaderDoubleClick = (e: React.MouseEvent) => {
@@ -111,23 +108,8 @@ export default function Topbar() {
 
       {/* Right: Modals triggers & Custom Window Controls */}
       <div className="flex items-center h-full space-x-1 shrink-0" data-tauri-drag-region>
-        {/* Settings, Copilot & Tools Modal Triggers */}
+        {/* Settings & Tools Modal Triggers */}
         <div className="flex items-center space-x-1.5 pr-2" data-no-drag>
-          {/* Copilot Dock Toggle Button */}
-          <button
-            data-no-drag
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={toggleCopilot}
-            className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md border text-xs font-sans transition cursor-pointer ${
-              isCopilotOpen
-                ? 'bg-[#f5f3ff] border-[#ddd6fe] text-[#7c3aed] font-medium shadow-2xs'
-                : 'bg-white hover:bg-[#f9f9f9] border-[#ebebeb] text-[#4d4d4d] hover:text-[#171717]'
-            }`}
-            title="CVH Copilot — Sidecar Архитектор (Ctrl+B)"
-          >
-            <Bot className="h-3.5 w-3.5 text-[#7c3aed]" />
-            <span>Архитектор</span>
-          </button>
           <button
             onMouseDown={(e) => e.stopPropagation()}
             onClick={openToolPolicyModal}
