@@ -816,9 +816,24 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     set((state) => {
       const updatedTasks = state.tasks.map((t) => (t.id === taskId ? { ...t, ...partial } : t));
       persistTasksToLocalStorage(updatedTasks);
-      syncTasksBackend(updatedTasks);
       return { tasks: updatedTasks };
     });
+    void (async () => {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('update_task', {
+          taskId,
+          model: partial.model !== undefined ? partial.model : null,
+          title: partial.title ?? null,
+          description: partial.description ?? null,
+          status: partial.status ?? null,
+          verdict: partial.verdict ?? null,
+        });
+      } catch {
+        const tasks = get().tasks;
+        await syncTasksBackend(tasks);
+      }
+    })();
   },
 
   updateTaskStatus: (taskId, status) => {
@@ -856,6 +871,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         stageId: targetColumnId,
         boardId: boardId,
         skipWorktree,
+        model: input.model || undefined,
       });
       if (backendTask && typeof backendTask.id === 'string') {
         const mapped = mapBackendTaskToKanban(backendTask);

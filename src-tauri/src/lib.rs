@@ -98,6 +98,7 @@ pub fn run() {
             log_ui_error,
             create_task,
             create_subtask,
+            update_task,
             move_task_stage,
             advance_task,
             run_agent,

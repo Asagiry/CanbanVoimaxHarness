@@ -1273,3 +1273,97 @@ use std::path::PathBuf;
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
+
+    #[tokio::test]
+    async fn test_resolve_task_active_agent_model_strict_task_override() {
+        let base = PathBuf::from("target").join(format!("cvh_model_res_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        let mut llm_settings = crate::config::LlmSettings::default();
+        llm_settings.model = "global-default-model".to_string();
+
+        let mut task = Task {
+            id: "CVH-001".to_string(),
+            title: "Task".to_string(),
+            description: String::new(),
+            stage_id: "dev".to_string(),
+            board_id: None,
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: None,
+            model: Some("user-custom-model".to_string()),
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            created_at: 0,
+            updated_at: 0,
+            handover_summary: None,
+            attachments: None,
+            cover_image: None,
+        };
+
+        // 1. When task.model is set, it strictly overrides global model and column model!
+        let resolved = resolve_task_active_agent_model(&base, Some(&task), &llm_settings).await;
+        assert_eq!(resolved, "user-custom-model");
+
+        // 2. When task.model is None or empty, it falls back to global model
+        task.model = None;
+        let fallback_global = resolve_task_active_agent_model(&base, Some(&task), &llm_settings).await;
+        assert_eq!(fallback_global, "global-default-model");
+
+        task.model = Some("   ".to_string());
+        let fallback_whitespace = resolve_task_active_agent_model(&base, Some(&task), &llm_settings).await;
+        assert_eq!(fallback_whitespace, "global-default-model");
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_sync_tool_policies_to_personas_frontmatter() {
+        let base = PathBuf::from("target").join(format!("cvh_policy_sync_{}", uuid::Uuid::new_v4()));
+        let agent_dir = base.join(".cvh").join("agents").join("developer");
+        tokio::fs::create_dir_all(&agent_dir).await.expect("test dir");
+
+        let initial_persona = r#"---
+name: developer
+description: Developer persona
+tools: [read_file]
+---
+# Developer Instructions
+Write code.
+"#;
+        tokio::fs::write(agent_dir.join("persona.md"), initial_persona)
+            .await
+            .expect("write persona");
+
+        let mut policy = crate::config::ToolPolicyConfig::default();
+        let mut dev_map = std::collections::HashMap::new();
+        dev_map.insert("read_file".to_string(), true);
+        dev_map.insert("edit_file".to_string(), true);
+        dev_map.insert("write_file".to_string(), true);
+        dev_map.insert("execute_command".to_string(), true);
+        dev_map.insert("glob".to_string(), true);
+        dev_map.insert("grep".to_string(), true);
+        dev_map.insert("web_search".to_string(), false);
+        policy.stage_overrides.insert("dev".to_string(), dev_map);
+
+        crate::config::sync_tool_policies_to_personas(&base, &policy)
+            .await
+            .expect("sync policies");
+
+        let updated = tokio::fs::read_to_string(agent_dir.join("persona.md"))
+            .await
+            .expect("read updated");
+        assert!(updated.contains("tools: ["));
+        assert!(updated.contains("edit_file"));
+        assert!(updated.contains("write_file"));
+        assert!(!updated.contains("web_search"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }

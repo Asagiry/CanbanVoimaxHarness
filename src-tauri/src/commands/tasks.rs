@@ -259,12 +259,15 @@ pub fn get_next_subtask_index(tasks: &[Task], parent_id: &str) -> u32 {
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn create_task(
     title: String,
     description: String,
     stage_id: String,
     board_id: Option<String>,
     skip_worktree: Option<bool>,
+    model: Option<String>,
+    app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Task, String> {
     let root = state.get_root();
@@ -279,6 +282,12 @@ pub async fn create_task(
                 .unwrap_or_else(|_| "development".to_string())
         }
     };
+
+    let clean_model = model
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
 
     // Generate task ID — monotonic max+1 over on-disk tasks, never len+1
     let task_num = next_task_num(&tasks);
@@ -296,7 +305,7 @@ pub async fn create_task(
         verdict: None,
         custom_flow: None,
         status: None,
-        model: None,
+        model: clean_model,
         parent_id: None,
         subtask_index: None,
         waiting_for_subtask_id: None,
@@ -387,6 +396,7 @@ pub async fn create_task(
         *guard = tasks.clone();
     }
     save_tasks_to_disk(&root, &tasks).await?;
+    let _ = app_handle.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
 
     Ok(new_task)
 }
@@ -473,7 +483,7 @@ pub async fn create_subtask(
         verdict: None,
         custom_flow: None,
         status: Some(subtask_status.to_string()),
-        model: target_col.model_override.clone().or(parent_model),
+        model: parent_model.or(target_col.model_override.clone()),
         parent_id: Some(parent_id.clone()),
         subtask_index: Some(next_subtask_idx),
         waiting_for_subtask_id: None,
@@ -526,6 +536,59 @@ pub async fn create_subtask(
     }
 
     Ok(new_subtask)
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn update_task(
+    task_id: String,
+    model: Option<String>,
+    title: Option<String>,
+    description: Option<String>,
+    status: Option<String>,
+    verdict: Option<String>,
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Task, String> {
+    let root = state.get_root();
+    let mut tasks = load_tasks_from_disk(&root).await;
+    let task_idx = tasks
+        .iter()
+        .position(|t| t.id == task_id)
+        .ok_or_else(|| format!("Task {} not found", task_id))?;
+
+    let now = Utc::now().timestamp_millis();
+    let task = &mut tasks[task_idx];
+
+    if let Some(m) = model {
+        let trimmed = m.trim().to_string();
+        task.model = if trimmed.is_empty() { None } else { Some(trimmed) };
+    }
+    if let Some(t) = title {
+        task.title = t;
+    }
+    if let Some(d) = description {
+        task.description = d;
+    }
+    if let Some(s) = status {
+        task.status = Some(s);
+    }
+    if let Some(v) = verdict {
+        task.verdict = Some(v);
+    }
+    task.updated_at = now;
+
+    let updated = task.clone();
+    save_tasks_to_disk(&root, &tasks).await?;
+
+    if let Ok(mut guard) = state.tasks.lock() {
+        *guard = tasks.clone();
+    }
+
+    let _ = app_handle.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+    let _ = app_handle.emit("task:updated", serde_json::json!({ "task": &updated }));
+
+    Ok(updated)
 }
 
 pub async fn trigger_column_on_enter_script(
@@ -1301,36 +1364,30 @@ pub async fn run_agent(
 ) -> Result<String, String> {
     let root = app_handle.state::<AppState>().get_root();
 
-    // Check in-memory task registry first
-    let task_opt = {
-        if let Ok(guard) = app_handle.state::<AppState>().tasks.lock() {
-            guard.iter().find(|t| t.id == task_id).cloned()
-        } else {
-            None
-        }
-    };
+    // Check disk first to ensure task model override and steer updates are fresh
+    let disk_tasks = load_tasks_from_disk(&root).await;
+    let task_opt = disk_tasks.iter().find(|t| t.id == task_id).cloned().or_else(|| {
+        app_handle.state::<AppState>().tasks.lock().ok()?.iter().find(|t| t.id == task_id).cloned()
+    });
 
     let mut task = match task_opt {
-        Some(t) => t,
-        None => {
-            let disk_tasks = load_tasks_from_disk(&root).await;
-            if let Some(t) = disk_tasks.iter().find(|t| t.id == task_id).cloned() {
-                if let Ok(mut guard) = app_handle.state::<AppState>().tasks.lock() {
-                    *guard = disk_tasks;
-                }
-                t
-            } else {
-                let mem_count = app_handle.state::<AppState>().tasks.lock().map(|g| g.len()).unwrap_or(0);
-                eprintln!(
-                    "CVH [run_agent]: Task {} not found (in-memory tasks: {}, disk tasks in {:?}: {}, root: {:?})",
-                    task_id,
-                    mem_count,
-                    root.join(".cvh").join("tasks.json"),
-                    disk_tasks.len(),
-                    root
-                );
-                return Err(format!("Task {} not found", task_id));
+        Some(t) => {
+            if let Ok(mut guard) = app_handle.state::<AppState>().tasks.lock() {
+                *guard = disk_tasks;
             }
+            t
+        }
+        None => {
+            let mem_count = app_handle.state::<AppState>().tasks.lock().map(|g| g.len()).unwrap_or(0);
+            eprintln!(
+                "CVH [run_agent]: Task {} not found (in-memory tasks: {}, disk tasks in {:?}: {}, root: {:?})",
+                task_id,
+                mem_count,
+                root.join(".cvh").join("tasks.json"),
+                disk_tasks.len(),
+                root
+            );
+            return Err(format!("Task {} not found", task_id));
         }
     };
 
