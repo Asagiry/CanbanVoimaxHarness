@@ -297,3 +297,15 @@
   3. Compacted tokens from persisted dialogue feed.
   4. Verified server telemetry `inputTokens` + streamed turn output tokens (true model prompt context).
   5. Heuristic character estimation fallback.
+
+### 2.25 Drawer State Hygiene, Context Resolution & Popover Contrast Invariants
+- **Unconditional Drawer Memory Eviction on Task Deletion**: When deleting a task (`deleteTask` in `boardStore.ts`), `clearTaskLogs(id)` MUST be invoked unconditionally for every deleted task and cascaded subtask ID prior to backend IPC calls. Placing log clearance inside fallback or error catch blocks is strictly prohibited, preventing silent accumulation of orphaned dialogue history, activity feeds, and token telemetry in Zustand store memory.
+- **Defensive Zombie Drawer Auto-Close Invariant**: If the active task currently open in `AgentConsoleDrawer` (`drawerStore.activeTaskId`) is among the deleted tasks or subtasks, `useDrawerStore.getState().closeDrawer()` MUST execute immediately to avoid rendering stale, orphaned, or unmounted state in the console overlay.
+- **Empty Dialogue Load State Reset Invariant**: In `drawerStore.ts` (`loadTaskDialog`), if retrieved dialogue history is empty (`items.length === 0`), the store MUST explicitly reset all transient task state (`activityFeed = []`, `streamEntries = { thoughts: [], outputs: [] }`, `toolExecutions = []`, `tokenOverrides = undefined`, `cumulativeOutputTokens = 0`, `cumulativeGenerationSec = 0`). Failure to reset creates ghost streams and inaccurate context measurements when inspecting fresh tasks.
+- **Hierarchical Context Window Resolution Invariant**: `ContextGauge` limit resolution MUST prioritize:
+  1. Explicit `contextWindow` prop passed from parent (e.g. `DrawerSteerBar`).
+  2. Column context window resolved from `boardStore` columns by active task or column ID (`currentColumn?.contextWindow`).
+  3. Safe fallback `stageLimit` (default 128,000).
+- **Proportional Context Breakdown & Message Preservation**: When computing token segment allocations (System prompt, Tool definitions, Messages) in `ContextGauge`, if dialogue messages exist, tokens MUST be distributed proportionally across all three segments when total tokens are below base threshold, never squashing `messageTokens` to zero.
+- **Smooth Multi-Turn Cumulative TPS/RPM Averaging**: In multi-turn tasks, tokens-per-second (tok/s) MUST track both the latest turn's frozen TPS and the weighted cumulative average across all turns (`cumulativeOutputTokens / cumulativeGenerationSec`), eliminating erratic metric spikes on micro-turns (e.g. 1-token responses) and preserving honest execution cadence.
+- **Dedicated Context Popover & Deep Dark Mode Contrast**: The context gauge hover card MUST remain focused exclusively on context breakdown and compaction actions, avoiding redundant 2x2 telemetry duplicates. All popover text, rings, and badges MUST enforce paired dark mode classes (`dark:text-[#f0f6fc]`, `dark:text-[#8b949e]`, `dark:stroke-[#21262d]`, `dark:text-[#f59e0b]`) with zero unpainted light tokens.

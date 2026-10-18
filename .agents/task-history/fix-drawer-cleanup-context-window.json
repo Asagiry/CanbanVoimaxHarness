@@ -1,0 +1,48 @@
+{
+  "taskId": "CVH-FIX-DRAWER-CLEANUP-CONTEXT-WINDOW",
+  "task": "fix-drawer-cleanup-context-window",
+  "title": "Fix Task Deletion Memory Leak in DrawerStore, Empty Dialog Stale State, and Context Window Resolution with Cumulative Telemetry Smoothing",
+  "branch": "feat/fix-drawer-cleanup-context-window",
+  "commitHash": "f4d0728",
+  "commitMessage": "refactor(telemetry): smooth cumulative TPS/RPM averaging and focus popover on context breakdown",
+  "author": "agent-developer (react-tailwind-artisan & tauri-rust-engineer)",
+  "verdict": "APPROVED",
+  "date": "2026-10-18T17:16:18.369Z",
+  "timestamp": 1792343778370,
+  "sensors": {
+    "typescript": "pass (tsc --noEmit, 0 errors)",
+    "l2_reviewer": "APPROVED",
+    "l3_retro_verifier": "APPROVED"
+  },
+  "files": [
+    "src/stores/boardStore.ts",
+    "src/stores/drawerStore.ts",
+    "src/components/drawer/DrawerSteerBar.tsx",
+    "src/components/drawer/ContextGauge.tsx",
+    "src/App.tsx",
+    "src/components/drawer/AgentConsoleDrawer.tsx"
+  ],
+  "summary": "Resolved 3 critical state and telemetry issues in DrawerStore and ContextGauge: 1. Unconditionally clear task logs and SQLite dialogue on task deletion, auto-closing the drawer if activeTaskId is in toDelete to eliminate memory leaks and zombie drawer views. 2. Fully reset activityFeed, streamEntries, toolExecutions, tokenOverrides, and cumulative metrics when loading an empty dialog. 3. Resolved contextWindow properly from pipeline columns in DrawerSteerBar and ContextGauge, eliminated dark mode contrast issues (black-on-black text) in the popover card, fixed 3-segment token allocation to preserve message tokens proportionally, smoothed TPS and RPM cumulative averages across turns, and consolidated the compact context button into the popover while pruning the redundant 2x2 telemetry grid.",
+  "ftrAnalysis": {
+    "firstTimeRight": true,
+    "ftrScore": "92%",
+    "verdict": "APPROVED",
+    "rootCauses": [
+      {
+        "cause": "Task Deletion Memory Leak & Zombie Drawer View",
+        "detail": "clearTaskLogs was previously nested inside catch (backendErr) fallback in deleteTask, skipping log purge when the primary backend delete_task command succeeded. In addition, deleting an active card left activeTaskId pointing to a deleted ID with a zombie drawer open.",
+        "resolution": "Hoisted clearTaskLogs to run unconditionally for every deleted ID in toDelete prior to backend IPC, and added defensive auto-closing of the drawer when activeTaskId is deleted."
+      },
+      {
+        "cause": "Empty Dialog Load Stale Memory State",
+        "detail": "loadTaskDialog lacked an else branch when items.length === 0, leaving activityFeed, streamEntries, toolExecutions, tokenOverrides, and metrics populated with stale memory from previous tasks.",
+        "resolution": "Added explicit reset for all transient and cumulative state when items.length === 0."
+      },
+      {
+        "cause": "Context Window Resolution, Popover Contrast & Telemetry Volatility",
+        "detail": "ContextGauge was not receiving currentColumn.contextWindow and defaulted to stageLimit. Popover elements lacked dark: tokens leading to black-on-black text. Message tokens were squashed to 0 when total was under baseSystem + baseTool. Micro-turn TPS caused wild spikes, and the popover duplicated the 2x2 telemetry grid.",
+        "resolution": "Propagated currentColumn?.contextWindow from DrawerSteerBar with fallback to boardStore.columns, added paired dark theme tokens, implemented proportional 3-segment allocation, smoothed TPS/RPM cumulatively, and removed the duplicate 2x2 grid and standalone compact button."
+      }
+    ]
+  }
+}
