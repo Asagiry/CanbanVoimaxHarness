@@ -4148,7 +4148,38 @@ where
                 success,
             });
 
-            messages.push(ChatMessage::tool_response(tc.id, result_str));
+            messages.push(ChatMessage::tool_response(tc.id, result_str.clone()));
+
+            // Stage transition termination:
+            // When any executed tool call is "advance_task", "move_task", or "reject_task":
+            // The agent has handed over or finalized the task.
+            // Emit AgentEvent::Finished, break the ReAct loop, and return Ok(result_str) cleanly.
+            // Under NO circumstances send the result back to the LLM for an extra turn.
+            let is_stage_transition = matches!(
+                tc.function.name.as_str(),
+                "advance_task" | "move_task" | "reject_task"
+            ) || canonical_tool_name(&tc.function.name) == "advance_task";
+
+            if is_stage_transition {
+                // Synchronize messages to in-memory context state before exiting
+                if let Some(ref app) = config.app_handle {
+                    if let Some(state) = app.try_state::<crate::commands::AppState>() {
+                        if let Ok(map) = state.agent_contexts.lock() {
+                            if let Some(cs) = map.get(&config.task_id) {
+                                if let Ok(mut guard) = cs.lock() {
+                                    guard.current_turn = turn;
+                                    guard.messages = messages.clone();
+                                }
+                            }
+                        }
+                    }
+                }
+
+                event_sink(AgentEvent::Finished {
+                    final_response: result_str.clone(),
+                });
+                return Ok(result_str);
+            }
         }
 
         // Sync messages to in-memory context state
