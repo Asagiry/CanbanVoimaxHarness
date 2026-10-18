@@ -57,14 +57,14 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
           result.push(
             <div
               key={`code-${index}`}
-              className="my-2 rounded-md border border-[#ebebeb] bg-[#fafafa] overflow-hidden font-mono text-[12px]"
+              className="my-2 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] overflow-hidden font-mono text-[12px]"
             >
               {codeLanguage && (
-                <div className="px-3 py-1 bg-[#f4f4f5] border-b border-[#ebebeb] text-[11px] text-[#666666] font-medium flex justify-between items-center">
+                <div className="px-3 py-1 bg-[#f4f4f5] dark:bg-[#161b22] border-b border-[#ebebeb] dark:border-[#21262d] text-[11px] text-[#666666] dark:text-[#8b949e] font-medium flex justify-between items-center">
                   <span>{codeLanguage}</span>
                 </div>
               )}
-              <pre className="p-2.5 text-[#171717] overflow-x-auto leading-relaxed select-text font-mono text-[12px]">
+              <pre className="p-2.5 text-[#171717] dark:text-[#f0f6fc] overflow-x-auto leading-relaxed select-text font-mono text-[12px]">
                 {codeBuffer.join('\n')}
               </pre>
             </div>
@@ -111,7 +111,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
             j++;
           }
           result.push(
-            <div key={`table-${index}`} className="my-2 overflow-x-auto rounded-md border border-[#ebebeb]">
+            <div key={`table-${index}`} className="my-2 overflow-x-auto rounded-md border border-[#ebebeb] dark:border-[#21262d]">
               <table className="w-full border-collapse text-[12px] font-mono tabular-nums">
                 <thead>
                   <tr>
@@ -119,7 +119,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
                       <th
                         key={k}
                         style={{ textAlign: normAligns[k] }}
-                        className="border border-[#ebebeb] bg-[#f9f9f9] px-2 py-1 font-semibold text-[#171717]"
+                        className="border border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#161b22] px-2 py-1 font-semibold text-[#171717] dark:text-[#f0f6fc]"
                       >
                         {renderInline(cell)}
                       </th>
@@ -133,7 +133,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
                         <td
                           key={k}
                           style={{ textAlign: normAligns[k] }}
-                          className="border border-[#ebebeb] px-2 py-1 text-[#171717]"
+                          className="border border-[#ebebeb] dark:border-[#21262d] px-2 py-1 text-[#171717] dark:text-[#f0f6fc]"
                         >
                           {renderInline(cell)}
                         </td>
@@ -151,7 +151,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
 
       // HR
       if (isHrLine(line)) {
-        result.push(<hr key={`hr-${index}`} className="border-[#ebebeb] my-2" />);
+        result.push(<hr key={`hr-${index}`} className="border-[#ebebeb] dark:border-[#21262d] my-2" />);
         continue;
       }
 
@@ -161,7 +161,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
         result.push(
           <blockquote
             key={`quote-${index}`}
-            className="my-1.5 pl-3 border-l-2 border-[#7c3aed]/40 text-[#4d4d4d] italic text-xs leading-relaxed bg-[#fbfaff] py-1 pr-2 rounded-r"
+            className="my-1.5 pl-3 border-l-2 border-[#7c3aed]/40 text-[#4d4d4d] dark:text-[#c9d1d9] italic text-xs leading-relaxed bg-[#fbfaff] dark:bg-[#1e1b4b]/30 py-1 pr-2 rounded-r"
           >
             {renderInline(quoteText)}
           </blockquote>
@@ -172,28 +172,28 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
       // Headings
       if (trimmedLine.startsWith('#### ')) {
         result.push(
-          <h5 key={`h5-${index}`} className="text-xs font-semibold text-[#171717] mt-2 mb-0.5">
+          <h5 key={`h5-${index}`} className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] mt-2 mb-0.5">
             {renderInline(trimmedLine.slice(5))}
           </h5>
         );
         continue;
       } else if (trimmedLine.startsWith('### ')) {
         result.push(
-          <h4 key={`h4-${index}`} className="text-xs font-bold text-[#171717] mt-2.5 mb-1 flex items-center gap-1.5">
+          <h4 key={`h4-${index}`} className="text-xs font-bold text-[#171717] dark:text-[#f0f6fc] mt-2.5 mb-1 flex items-center gap-1.5">
             {renderInline(trimmedLine.slice(4))}
           </h4>
         );
         continue;
       } else if (trimmedLine.startsWith('## ')) {
         result.push(
-          <h3 key={`h3-${index}`} className="text-sm font-bold text-[#171717] mt-3 mb-1">
+          <h3 key={`h3-${index}`} className="text-sm font-bold text-[#171717] dark:text-[#f0f6fc] mt-3 mb-1">
             {renderInline(trimmedLine.slice(3))}
           </h3>
         );
         continue;
       } else if (trimmedLine.startsWith('# ')) {
         result.push(
-          <h2 key={`h2-${index}`} className="text-sm md:text-base font-bold text-[#171717] mt-3 mb-1.5">
+          <h2 key={`h2-${index}`} className="text-sm md:text-base font-bold text-[#171717] dark:text-[#f0f6fc] mt-3 mb-1.5">
             {renderInline(trimmedLine.slice(2))}
           </h2>
         );
@@ -206,7 +206,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
         const indent = match[1].length;
         const mlClass = indent >= 4 ? 'ml-6' : indent >= 2 ? 'ml-4' : 'ml-2';
         result.push(
-          <div key={`bullet-${index}`} className={`${mlClass} text-xs leading-relaxed text-[#171717] flex items-start gap-1.5 my-0.5`}>
+          <div key={`bullet-${index}`} className={`${mlClass} text-xs leading-relaxed text-[#171717] dark:text-[#f0f6fc] flex items-start gap-1.5 my-0.5`}>
             <span className="text-[#7c3aed] font-bold select-none">•</span>
             <div className="flex-1">{renderInline(match[3])}</div>
           </div>
@@ -220,8 +220,8 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
         const indent = match[1].length;
         const mlClass = indent >= 4 ? 'ml-6' : indent >= 2 ? 'ml-4' : 'ml-2';
         result.push(
-          <div key={`num-${index}`} className={`${mlClass} text-xs leading-relaxed text-[#171717] flex items-start gap-1.5 my-0.5`}>
-            <span className="font-mono text-[11px] text-[#666666] shrink-0 select-none">{match[2]}</span>
+          <div key={`num-${index}`} className={`${mlClass} text-xs leading-relaxed text-[#171717] dark:text-[#f0f6fc] flex items-start gap-1.5 my-0.5`}>
+            <span className="font-mono text-[11px] text-[#666666] dark:text-[#8b949e] shrink-0 select-none">{match[2]}</span>
             <div className="flex-1">{renderInline(match[4])}</div>
           </div>
         );
@@ -230,7 +230,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
 
       // Paragraph
       result.push(
-        <p key={`p-${index}`} className="text-xs leading-relaxed text-[#171717] my-0.5 select-text">
+        <p key={`p-${index}`} className="text-xs leading-relaxed text-[#171717] dark:text-[#f0f6fc] my-0.5 select-text">
           {renderInline(line)}
         </p>
       );
@@ -240,9 +240,9 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
       result.push(
         <div
           key="code-unfinished"
-          className="my-2 rounded-md border border-[#ebebeb] bg-[#fafafa] overflow-hidden font-mono text-[12px]"
+          className="my-2 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] overflow-hidden font-mono text-[12px]"
         >
-          <pre className="p-2.5 text-[#171717] overflow-x-auto leading-relaxed font-mono text-[12px]">
+          <pre className="p-2.5 text-[#171717] dark:text-[#f0f6fc] overflow-x-auto leading-relaxed font-mono text-[12px]">
             {codeBuffer.join('\n')}
           </pre>
         </div>
@@ -252,7 +252,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
     return result;
   }, [content]);
 
-  return <div className="space-y-0.5 text-xs text-[#171717] leading-relaxed break-words">{elements}</div>;
+  return <div className="space-y-0.5 text-xs text-[#171717] dark:text-[#f0f6fc] leading-relaxed break-words">{elements}</div>;
 }
 
 function renderInline(text: string): React.ReactNode {
@@ -298,7 +298,7 @@ function renderInline(text: string): React.ReactNode {
       parts.push(
         <code
           key={keyIdx++}
-          className="px-1.5 py-0.5 mx-0.5 bg-[#f4f4f5] border border-[#e4e4e7] rounded text-[11px] font-mono text-[#09090b] font-medium select-text"
+          className="px-1.5 py-0.5 mx-0.5 bg-[#f4f4f5] dark:bg-[#161b22] border border-[#e4e4e7] dark:border-[#30363d] rounded text-[11px] font-mono text-[#09090b] dark:text-[#f0f6fc] font-medium select-text"
         >
           {codeMatch[2]}
         </code>
@@ -307,7 +307,7 @@ function renderInline(text: string): React.ReactNode {
     } else if (closestType === 'bold' && boldMatch) {
       if (boldMatch[1]) parts.push(<span key={keyIdx++}>{boldMatch[1]}</span>);
       parts.push(
-        <strong key={keyIdx++} className="font-semibold text-[#171717]">
+        <strong key={keyIdx++} className="font-semibold text-[#171717] dark:text-[#f0f6fc]">
           {boldMatch[2]}
         </strong>
       );

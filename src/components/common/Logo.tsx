@@ -72,10 +72,10 @@ export function LogoWithWordmark({
     <div className={`inline-flex items-center gap-2 select-none ${className}`}>
       <Logo size={size} />
       <div className="flex items-baseline gap-1.5">
-        <span className="font-semibold text-xs tracking-tight text-[#171717] font-sans">
+        <span className="font-semibold text-xs tracking-tight text-[#171717] dark:text-[#f0f6fc] font-sans">
           CanbanVoimax
         </span>
-        <span className="font-mono text-[9px] uppercase tracking-wider text-[#8f8f8f] px-1 py-0.2 rounded border border-[#ebebeb] bg-[#fafafa]">
+        <span className="font-mono text-[9px] uppercase tracking-wider text-[#8f8f8f] dark:text-[#8b949e] px-1 py-0.2 rounded border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22]">
           HARNESS
         </span>
       </div>

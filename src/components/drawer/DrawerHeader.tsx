@@ -134,18 +134,18 @@ export default function DrawerHeader({
                       <button
                         type="button"
                         onClick={() => onOpenDrawer(rootTask.id)}
-                        className="font-mono text-xs text-[#71717a] hover:text-[#171717] px-1.5 py-0.5 rounded hover:bg-[#f4f4f5] transition cursor-pointer"
+                        className="font-mono text-xs text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] px-1.5 py-0.5 rounded hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
                         title={`К родительской задаче ${rootTask.id}`}
                       >
                         {rootTask.id}
                       </button>
-                      <ChevronRight className="h-3 w-3 text-[#a1a1aa] shrink-0" />
-                      <span className="font-mono text-xs font-semibold text-[#171717] px-2 py-0.5 rounded bg-[#f4f4f5] border border-[#ebebeb] shrink-0">
+                      <ChevronRight className="h-3 w-3 text-[#a1a1aa] dark:text-[#6e7681] shrink-0" />
+                      <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] px-2 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] shrink-0">
                         {task.id}
                       </span>
                     </div>
                   ) : (
-                    <span className="font-mono text-xs font-semibold text-[#171717] px-2 py-0.5 rounded bg-[#f4f4f5] border border-[#ebebeb] shrink-0 select-none pointer-events-auto">
+                    <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] px-2 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] shrink-0 select-none pointer-events-auto">
                       {task.id}
                     </span>
                   )
@@ -181,7 +181,7 @@ export default function DrawerHeader({
                   return (
                     <div key={col.id} className="flex items-center shrink-0">
                       {idx > 0 && (
-                        <ChevronRight className="h-3 w-3 text-[#d4d4d8] mx-0.5 shrink-0" />
+                        <ChevronRight className="h-3 w-3 text-[#a1a1aa] dark:text-[#6e7681] mx-0.5 shrink-0" />
                       )}
                       <button
                         data-no-drag
@@ -206,12 +206,12 @@ export default function DrawerHeader({
                             ? 'bg-[#f4f4f5] dark:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] font-semibold shadow-2xs cursor-default'
                             : targetTaskId
                             ? isPassed
-                              ? 'bg-[#f0fdf4] dark:bg-[#052e16]/50 text-[#15803d] dark:text-[#4ade80] border border-[#bbf7d0] dark:border-[#166534] hover:bg-[#dcfce7] dark:hover:bg-[#052e16]/80 cursor-pointer active:scale-95'
-                              : 'bg-white dark:bg-[#0d1117] text-[#71717a] dark:text-[#8b949e] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:border-[#d4d4d8] dark:hover:border-[#484f58] cursor-pointer active:scale-95'
-                            : 'bg-[#fafafa] dark:bg-[#0d1117] text-[#a1a1aa] dark:text-[#6e7681] border border-[#ebebeb]/60 dark:border-[#30363d]/60 cursor-default select-none opacity-60'
+                              ? 'bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] border border-[#bbf7d0] dark:border-[#238636] hover:bg-[#dcfce7] dark:hover:bg-[#173a2b] cursor-pointer active:scale-95'
+                              : 'bg-white dark:bg-[#161b22] text-[#171717] dark:text-[#c9d1d9] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:border-[#d4d4d8] dark:hover:border-[#484f58] cursor-pointer active:scale-95'
+                            : 'bg-[#fafafa] dark:bg-[#161b22] text-[#71717a] dark:text-[#8b949e] border border-[#ebebeb] dark:border-[#30363d] cursor-default select-none'
                         }`}
                       >
-                        {isPassed && <Check className="h-3 w-3 text-[#15803d] shrink-0" />}
+                        {isPassed && <Check className="h-3 w-3 text-[#15803d] dark:text-[#7ee787] shrink-0" />}
                         {isRunningStage && (
                           <span className="h-2 w-2 rounded-full bg-[#22c55e] animate-pulse shrink-0" />
                         )}
@@ -307,14 +307,14 @@ export default function DrawerHeader({
         <div className="flex items-center space-x-3">
           {isRunning ? (
             <div className="flex items-center space-x-2">
-              <span className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-mono text-[#15803d] bg-[#f0fdf4] border border-[#bbf7d0]">
-                <span className="h-2 w-2 rounded-full bg-[#15803d] animate-pulse" />
+              <span className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-mono text-[#15803d] dark:text-[#7ee787] bg-[#f0fdf4] dark:bg-[#12281e] border border-[#bbf7d0] dark:border-[#238636]">
+                <span className="h-2 w-2 rounded-full bg-[#15803d] dark:bg-[#22c55e] animate-pulse" />
                 <span>Агент выполняет задачу...</span>
               </span>
               <button
                 type="button"
                 onClick={onAbort}
-                className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono text-[#b91c1c] bg-[#fef2f2] hover:bg-[#fee2e2] border border-[#fecaca] transition cursor-pointer"
+                className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono text-[#b91c1c] dark:text-[#ff7b72] bg-[#fef2f2] dark:bg-[#3b1219] hover:bg-[#fee2e2] dark:hover:bg-[#4d1922] border border-[#fecaca] dark:border-[#da3633] transition cursor-pointer"
                 title="Остановить выполнение (abort_agent)"
               >
                 <Square className="h-3 w-3 fill-current" />
@@ -323,7 +323,7 @@ export default function DrawerHeader({
             </div>
           ) : (
             <div className="flex items-center space-x-2">
-              <span className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-mono text-[#666666] bg-[#f4f4f5] border border-[#ebebeb]">
+              <span className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-mono text-[#666666] dark:text-[#8b949e] bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d]">
                 <span>Ожидание указаний</span>
               </span>
             </div>

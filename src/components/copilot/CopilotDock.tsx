@@ -191,7 +191,7 @@ export default function CopilotDock() {
   return (
     <aside
       style={{ width: `${width}px` }}
-      className="h-full flex flex-col min-h-0 min-w-0 bg-white border-l border-[#ebebeb] relative shrink-0 z-20 select-none shadow-xs transition-[width] duration-75"
+      className="h-full flex flex-col min-h-0 min-w-0 bg-white dark:bg-[#0d1117] border-l border-[#ebebeb] dark:border-[#21262d] relative shrink-0 z-20 select-none shadow-xs transition-[width] duration-75"
     >
       {/* Resizable drag-handle on left edge */}
       <div
@@ -203,23 +203,23 @@ export default function CopilotDock() {
       />
 
       {/* Header Bar */}
-      <header className="h-11 px-3 border-b border-[#ebebeb] bg-white flex items-center justify-between shrink-0 select-none">
+      <header className="h-11 px-3 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] flex items-center justify-between shrink-0 select-none">
         {/* Left: Icon Bot + purple/indigo soft badge [АРХИТЕКТОР] / [COPILOT] */}
         <div className="flex items-center space-x-2 min-w-0">
-          <div className="w-6 h-6 rounded-md bg-[#f5f3ff] border border-[#ddd6fe] flex items-center justify-center text-[#7c3aed] shrink-0">
+          <div className="w-6 h-6 rounded-md bg-[#f5f3ff] dark:bg-[#2e1065]/50 border border-[#ddd6fe] dark:border-[#581c87] flex items-center justify-center text-[#7c3aed] dark:text-[#c084fc] shrink-0">
             <Bot className="w-3.5 h-3.5" />
           </div>
 
           <div className="flex flex-col min-w-0 justify-center">
             <div className="flex items-center space-x-1.5 min-w-0">
-              <span className="font-semibold text-xs text-[#171717] tracking-tight truncate">
+              <span className="font-semibold text-xs text-[#171717] dark:text-[#f0f6fc] tracking-tight truncate">
                 CVH Copilot
               </span>
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-[#f5f3ff] text-[#7c3aed] border border-[#ddd6fe] shrink-0">
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-[#f5f3ff] dark:bg-[#2e1065]/50 text-[#7c3aed] dark:text-[#c084fc] border border-[#ddd6fe] dark:border-[#581c87] shrink-0">
                 НАСТРОЙКА ПРОЕКТА
               </span>
             </div>
-            <span className="text-[10px] text-[#71717a] truncate max-w-[190px]" title="Спросить о настройке досок, пайплайнов, правил или персон проекта...">
+            <span className="text-[10px] text-[#71717a] dark:text-[#8b949e] truncate max-w-[190px]" title="Спросить о настройке досок, пайплайнов, правил или персон проекта...">
               Спросить о настройке досок, пайплайнов, правил или персон проекта...
             </span>
           </div>
@@ -239,10 +239,10 @@ export default function CopilotDock() {
             <button
               type="button"
               onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
-              className="px-2 py-0.5 rounded-full bg-[#f4f4f5] hover:bg-[#ebebeb] border border-[#e4e4e7] text-[11px] font-mono text-[#52525b] flex items-center space-x-1 cursor-pointer transition"
+              className="px-2 py-0.5 rounded-full bg-[#f4f4f5] dark:bg-[#21262d] hover:bg-[#ebebeb] dark:hover:bg-[#30363d] border border-[#e4e4e7] dark:border-[#30363d] text-[11px] font-mono text-[#52525b] dark:text-[#f0f6fc] flex items-center space-x-1 cursor-pointer transition"
               title="Выбор активной модели Архитектора"
             >
-              <Cpu className="w-3 h-3 text-[#71717a]" />
+              <Cpu className="w-3 h-3 text-[#71717a] dark:text-[#8b949e]" />
               <span className="truncate max-w-[110px]">
                 {selectedModel.replace(/-\d{8}$/, '')}
               </span>
@@ -250,8 +250,8 @@ export default function CopilotDock() {
             </button>
 
             {modelDropdownOpen && (
-              <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg border border-[#e4e4e7] shadow-lg py-1 z-50 text-xs">
-                <div className="px-3 py-1 font-mono text-[10px] uppercase text-[#a1a1aa] border-b border-[#f4f4f5]">
+              <div className="absolute right-0 top-full mt-1 w-52 bg-white dark:bg-[#161b22] rounded-lg border border-[#e4e4e7] dark:border-[#30363d] shadow-lg py-1 z-50 text-xs">
+                <div className="px-3 py-1 font-mono text-[10px] uppercase text-[#a1a1aa] dark:text-[#8b949e] border-b border-[#f4f4f5] dark:border-[#21262d]">
                   Модель Архитектора
                 </div>
                 {availableModels.map((m) => {
@@ -264,12 +264,12 @@ export default function CopilotDock() {
                         setSelectedModel(m);
                         setModelDropdownOpen(false);
                       }}
-                      className={`w-full text-left px-3 py-1.5 flex items-center justify-between font-mono text-[11px] hover:bg-[#f4f4f5] transition cursor-pointer ${
-                        isCurrent ? 'text-[#7c3aed] font-medium bg-[#f5f3ff]/50' : 'text-[#27272a]'
+                      className={`w-full text-left px-3 py-1.5 flex items-center justify-between font-mono text-[11px] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer ${
+                        isCurrent ? 'text-[#7c3aed] dark:text-[#c084fc] font-medium bg-[#f5f3ff]/50 dark:bg-[#2e1065]/30' : 'text-[#27272a] dark:text-[#c9d1d9]'
                       }`}
                     >
                       <span className="truncate">{m}</span>
-                      {isCurrent && <Check className="w-3 h-3 text-[#7c3aed] shrink-0 ml-1" />}
+                      {isCurrent && <Check className="w-3 h-3 text-[#7c3aed] dark:text-[#c084fc] shrink-0 ml-1" />}
                     </button>
                   );
                 })}
@@ -283,8 +283,8 @@ export default function CopilotDock() {
             onClick={handleClearClick}
             className={`px-2 py-1 rounded-md text-[11px] font-sans flex items-center space-x-1 border transition cursor-pointer ${
               confirmClear
-                ? 'bg-rose-50 border-rose-200 text-rose-600 font-medium'
-                : 'bg-white hover:bg-[#f9f9f9] border-[#ebebeb] text-[#71717a] hover:text-[#171717]'
+                ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400 font-medium'
+                : 'bg-white dark:bg-[#21262d] hover:bg-[#f9f9f9] dark:hover:bg-[#30363d] border-[#ebebeb] dark:border-[#30363d] text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
             }`}
             title="Очистить историю диалога"
           >
@@ -296,7 +296,7 @@ export default function CopilotDock() {
           <button
             type="button"
             onClick={() => setIsOpen(false)}
-            className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] border border-[#ebebeb] text-[#71717a] hover:text-[#171717] transition cursor-pointer"
+            className="p-1.5 rounded-md bg-white dark:bg-[#21262d] hover:bg-[#f9f9f9] dark:hover:bg-[#30363d] border border-[#ebebeb] dark:border-[#30363d] text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] transition cursor-pointer"
             title="Свернуть док (Ctrl+B)"
           >
             <PanelRightClose className="w-3.5 h-3.5" />
@@ -311,14 +311,14 @@ export default function CopilotDock() {
         className="flex-1 min-h-0 overflow-y-auto px-3.5 py-3 space-y-3.5 select-text relative"
       >
         {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center px-4 py-8 text-[#a1a1aa] select-none">
-            <div className="w-10 h-10 rounded-full bg-[#f5f3ff] border border-[#ddd6fe] flex items-center justify-center text-[#7c3aed] mb-3">
+          <div className="h-full flex flex-col items-center justify-center text-center px-4 py-8 text-[#a1a1aa] dark:text-[#8b949e] select-none">
+            <div className="w-10 h-10 rounded-full bg-[#f5f3ff] dark:bg-[#2e1065]/50 border border-[#ddd6fe] dark:border-[#581c87] flex items-center justify-center text-[#7c3aed] dark:text-[#c084fc] mb-3">
               <Sparkles className="w-5 h-5" />
             </div>
-            <h4 className="text-xs font-semibold text-[#18181b] mb-1">
+            <h4 className="text-xs font-semibold text-[#18181b] dark:text-[#f0f6fc] mb-1">
               Настройка проекта и окружения (.cvh)
             </h4>
-            <p className="text-[11px] text-[#71717a] max-w-[260px] leading-relaxed">
+            <p className="text-[11px] text-[#71717a] dark:text-[#8b949e] max-w-[260px] leading-relaxed">
               Спросить о настройке досок, пайплайнов, правил или персон проекта...
             </p>
           </div>
@@ -330,7 +330,7 @@ export default function CopilotDock() {
 
         {/* Live streaming status banner */}
         {isStreaming && (
-          <div className="p-2 rounded-lg bg-[#f5f3ff] border border-[#ddd6fe] flex items-center space-x-2 text-xs text-[#7c3aed] animate-pulse">
+          <div className="p-2 rounded-lg bg-[#f5f3ff] dark:bg-[#2e1065]/50 border border-[#ddd6fe] dark:border-[#581c87] flex items-center space-x-2 text-xs text-[#7c3aed] dark:text-[#c084fc] animate-pulse">
             <Sparkles className="w-3.5 h-3.5 shrink-0" />
             <span className="text-[11px] font-medium truncate">
               {statusText || 'Архитектор формирует архитектурное решение...'}
@@ -357,9 +357,9 @@ export default function CopilotDock() {
       )}
 
       {/* Steer Bar (Footer) */}
-      <footer className="p-3 border-t border-[#ebebeb] bg-white shrink-0 select-none">
+      <footer className="p-3 border-t border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] shrink-0 select-none">
         <form onSubmit={handleSubmit} className="relative">
-          <div className="rounded-xl border border-[#ebebeb] bg-[#fafafa] focus-within:bg-white focus-within:border-[#7c3aed]/50 focus-within:ring-2 focus-within:ring-[#7c3aed]/10 transition-all p-1.5 flex flex-col">
+          <div className="rounded-xl border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#0d1117] focus-within:bg-white dark:focus-within:bg-[#0d1117] focus-within:border-[#7c3aed]/50 focus-within:ring-2 focus-within:ring-[#7c3aed]/10 transition-all p-1.5 flex flex-col">
             <textarea
               ref={textareaRef}
               rows={1}
@@ -367,11 +367,11 @@ export default function CopilotDock() {
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               placeholder="Спросить о настройке досок, пайплайнов, правил или персон проекта..."
-              className="w-full bg-transparent border-0 resize-none text-xs text-[#171717] placeholder-[#a1a1aa] px-2 py-1 focus:outline-none max-h-40 leading-relaxed font-sans"
+              className="w-full bg-transparent border-0 resize-none text-xs text-[#171717] dark:text-[#f0f6fc] placeholder-[#a1a1aa] dark:placeholder-[#8b949e] px-2 py-1 focus:outline-none max-h-40 leading-relaxed font-sans"
             />
 
             {/* Bottom row: Hint + Submit / Stop Button */}
-            <div className="flex items-center justify-between pt-1 px-1.5 text-[10px] text-[#a1a1aa]">
+            <div className="flex items-center justify-between pt-1 px-1.5 text-[10px] text-[#a1a1aa] dark:text-[#8b949e]">
               <span className="font-mono">
                 Enter — отправить, Shift+Enter — перенос
               </span>
@@ -391,8 +391,8 @@ export default function CopilotDock() {
                   disabled={!input.trim()}
                   className={`w-7 h-7 rounded-full flex items-center justify-center transition shadow-xs cursor-pointer ${
                     input.trim()
-                      ? 'bg-[#18181b] hover:bg-black text-white'
-                      : 'bg-[#e4e4e7] text-[#a1a1aa] cursor-not-allowed'
+                      ? 'bg-[#18181b] dark:bg-[#f0f6fc] hover:bg-black dark:hover:bg-white text-white dark:text-[#090a0f]'
+                      : 'bg-[#e4e4e7] dark:bg-[#21262d] text-[#a1a1aa] dark:text-[#6e7681] cursor-not-allowed'
                   }`}
                   title="Отправить запрос Архитектору"
                 >
@@ -443,10 +443,10 @@ function MessageItem({ message }: { message: CopilotMessage }) {
       {/* Role Badge & Timestamp */}
       <div className="flex items-center justify-between text-[10px] text-[#71717a] px-0.5 select-none font-mono">
         <div className="flex items-center space-x-1.5">
-          <div className="w-4 h-4 rounded-full bg-[#f5f3ff] border border-[#ddd6fe] flex items-center justify-center text-[#7c3aed]">
+          <div className="w-4 h-4 rounded-full bg-[#f5f3ff] dark:bg-[#2e1065]/50 border border-[#ddd6fe] dark:border-[#581c87] flex items-center justify-center text-[#7c3aed] dark:text-[#c084fc]">
             <Bot className="w-2.5 h-2.5" />
           </div>
-          <span className="font-semibold text-[#18181b]">CVH Архитектор</span>
+          <span className="font-semibold text-[#18181b] dark:text-[#f0f6fc]">CVH Архитектор</span>
         </div>
         {message.timestamp && (
           <span className="text-[#a1a1aa] tabular-nums">{message.timestamp}</span>

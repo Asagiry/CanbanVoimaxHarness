@@ -34,11 +34,11 @@ function Toggle({
       title={title}
       aria-pressed={enabled}
       className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer shrink-0 ${
-        enabled ? 'bg-[#171717]' : 'bg-[#e4e4e7]'
+        enabled ? 'bg-[#171717] dark:bg-[#f0f6fc]' : 'bg-[#e4e4e7] dark:bg-[#30363d]'
       } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
     >
       <span
-        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${
+        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white dark:bg-[#0d1117] shadow transition-all ${
           enabled ? 'left-[18px]' : 'left-0.5'
         }`}
       />
@@ -434,7 +434,7 @@ export default function ToolPolicyModal() {
                     const isCustomExpanded = expandedToolId === customId;
 
                     return (
-                      <tr key={customId} className="hover:bg-[#fafafa] transition text-[#171717]">
+                      <tr key={customId} className="hover:bg-[#fafafa] dark:hover:bg-[#161b22] transition text-[#171717] dark:text-[#f0f6fc]">
                         <td className="py-2.5 px-3">
                           <button
                             type="button"
@@ -443,19 +443,19 @@ export default function ToolPolicyModal() {
                             className="flex items-center gap-1.5 text-left cursor-pointer group"
                           >
                             <ChevronDown
-                              className={`h-3.5 w-3.5 shrink-0 text-[#8f8f8f] transition-transform ${isCustomExpanded ? 'rotate-180' : ''}`}
+                              className={`h-3.5 w-3.5 shrink-0 text-[#8f8f8f] dark:text-[#8b949e] transition-transform ${isCustomExpanded ? 'rotate-180' : ''}`}
                             />
                             <span>
-                              <span className="font-medium text-[#171717] group-hover:underline underline-offset-2">
+                              <span className="font-medium text-[#171717] dark:text-[#f0f6fc] group-hover:underline underline-offset-2">
                                 {customTool.name}
                               </span>
-                              <span className="ml-1.5 inline-block rounded border border-[#ebebeb] bg-[#f4f4f5] px-1 py-px text-[10px] leading-none text-[#666666] align-middle">
+                              <span className="ml-1.5 inline-block rounded border border-[#ebebeb] dark:border-[#30363d] bg-[#f4f4f5] dark:bg-[#161b22] px-1 py-px text-[10px] leading-none text-[#666666] dark:text-[#8b949e] align-middle">
                                 свой
                               </span>
                             </span>
                           </button>
                           {isCustomExpanded && (
-                            <p className="text-[11px] text-[#666666] mt-1.5 font-sans leading-snug">
+                            <p className="text-[11px] text-[#666666] dark:text-[#8b949e] mt-1.5 font-sans leading-snug">
                               {customTool.description}
                             </p>
                           )}
@@ -524,11 +524,11 @@ export default function ToolPolicyModal() {
                           <div
                             key={tool.id}
                             className={`p-3 rounded-md border transition select-none ${
-                              isChild ? 'ml-4 bg-[#f9f9fb]' : ''
+                              isChild ? 'ml-4 bg-[#f9f9fb] dark:bg-[#090a0f]' : ''
                             } ${
                               isEnabled && !isDisabled
-                                ? 'border-[#ebebeb] bg-white hover:border-[#d4d4d8] shadow-xs'
-                                : 'border-[#ebebeb] bg-[#fafafa] opacity-60'
+                                ? 'border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:border-[#d4d4d8] dark:hover:border-[#484f58] shadow-xs'
+                                : 'border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] opacity-60'
                             }`}
                           >
                             <div className="flex items-center justify-between gap-3">
@@ -539,17 +539,17 @@ export default function ToolPolicyModal() {
                                 className="flex items-center gap-1.5 text-left cursor-pointer min-w-0"
                               >
                                 {isChild && (
-                                  <span className="text-[#8f8f8f] font-mono text-xs select-none shrink-0 mr-1">
+                                  <span className="text-[#8f8f8f] dark:text-[#8b949e] font-mono text-xs select-none shrink-0 mr-1">
                                     {tool.id === 'subagent_sync' ? '├──' : '└──'}
                                   </span>
                                 )}
                                 <ChevronDown
-                                  className={`h-3.5 w-3.5 shrink-0 text-[#8f8f8f] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                  className={`h-3.5 w-3.5 shrink-0 text-[#8f8f8f] dark:text-[#8b949e] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                                 />
-                                <span className={`font-mono font-medium text-xs text-[#171717] truncate ${tool.isSubagentMaster ? 'font-semibold' : ''}`}>
+                                <span className={`font-mono font-medium text-xs text-[#171717] dark:text-[#f0f6fc] truncate ${tool.isSubagentMaster ? 'font-semibold' : ''}`}>
                                   {tool.label}
                                 </span>
-                                <span className="text-[10px] text-[#8f8f8f] truncate">
+                                <span className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] truncate">
                                   ({tool.name})
                                 </span>
                               </button>
@@ -566,7 +566,7 @@ export default function ToolPolicyModal() {
                               />
                             </div>
                             {isExpanded && (
-                              <p className="text-[11px] text-[#666666] mt-1.5 font-sans leading-snug">
+                              <p className="text-[11px] text-[#666666] dark:text-[#8b949e] mt-1.5 font-sans leading-snug">
                                 {tool.description}
                               </p>
                             )}
@@ -606,7 +606,7 @@ export default function ToolPolicyModal() {
                     return (
                       <div
                         key={tool.name}
-                        className="p-3 rounded-md border border-[#ebebeb] bg-white"
+                        className="p-3 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22]"
                       >
                         <div className="flex items-center justify-between gap-3">
                           <button
@@ -616,9 +616,9 @@ export default function ToolPolicyModal() {
                             className="flex items-center gap-1.5 text-left cursor-pointer min-w-0"
                           >
                             <ChevronDown
-                              className={`h-3.5 w-3.5 shrink-0 text-[#8f8f8f] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                              className={`h-3.5 w-3.5 shrink-0 text-[#8f8f8f] dark:text-[#8b949e] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                             />
-                            <span className="font-mono font-medium text-xs text-[#171717] truncate">
+                            <span className="font-mono font-medium text-xs text-[#171717] dark:text-[#f0f6fc] truncate">
                               {tool.name}
                             </span>
                           </button>
@@ -626,19 +626,19 @@ export default function ToolPolicyModal() {
                             type="button"
                             onClick={() => void handleDeleteCustomTool(tool.name)}
                             title={`Удалить ${tool.name}`}
-                            className="p-1.5 rounded-md text-[#8f8f8f] hover:text-red-700 hover:bg-red-50 border border-transparent hover:border-red-200 transition cursor-pointer shrink-0"
+                            className="p-1.5 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 border border-transparent hover:border-red-200 dark:hover:border-red-900/50 transition cursor-pointer shrink-0"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
-                        <p className="text-[11px] text-[#666666] mt-1 font-sans leading-snug">
+                        <p className="text-[11px] text-[#666666] dark:text-[#8b949e] mt-1 font-sans leading-snug">
                           {tool.description}
                         </p>
                         {isExpanded && (
                           <div className="mt-2 space-y-1 text-[11px] font-sans">
-                            <p className="text-[#666666]">
-                              <span className="font-medium text-[#171717]">Команда: </span>
-                              <code className="font-mono bg-[#f4f4f5] rounded px-1 py-0.5 break-all">
+                            <p className="text-[#666666] dark:text-[#8b949e]">
+                              <span className="font-medium text-[#171717] dark:text-[#f0f6fc]">Команда: </span>
+                              <code className="font-mono bg-[#f4f4f5] dark:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] rounded px-1 py-0.5 break-all">
                                 {tool.command}
                               </code>
                             </p>
@@ -650,13 +650,13 @@ export default function ToolPolicyModal() {
                 </div>
 
                 {/* Форма добавления */}
-                <form onSubmit={(e) => void handleAddCustomTool(e)} className="mt-3 p-3 rounded-md border border-[#ebebeb] bg-[#fafafa] space-y-2.5">
-                  <p className="text-xs font-medium text-[#171717] font-sans">
+                <form onSubmit={(e) => void handleAddCustomTool(e)} className="mt-3 p-3 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#161b22] space-y-2.5">
+                  <p className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc] font-sans">
                     Добавить инструмент
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <div>
-                      <label className="block font-sans text-[#4d4d4d] font-medium mb-1 text-[11px]">
+                      <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1 text-[11px]">
                         Имя [a-z0-9_]
                       </label>
                       <input
@@ -664,11 +664,11 @@ export default function ToolPolicyModal() {
                         value={customName}
                         onChange={(e) => setCustomName(e.target.value)}
                         placeholder="my_tool"
-                        className="w-full px-3 py-1.5 rounded-md bg-white border border-[#ebebeb] text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] font-mono text-xs transition"
+                        className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] font-mono text-xs transition"
                       />
                     </div>
                     <div>
-                      <label className="block font-sans text-[#4d4d4d] font-medium mb-1 text-[11px]">
+                      <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1 text-[11px]">
                         Команда (шаблон shell с {'{args}'})
                       </label>
                       <input
@@ -676,12 +676,12 @@ export default function ToolPolicyModal() {
                         value={customCommand}
                         onChange={(e) => setCustomCommand(e.target.value)}
                         placeholder="my-script --input {args}"
-                        className="w-full px-3 py-1.5 rounded-md bg-white border border-[#ebebeb] text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] font-mono text-xs transition"
+                        className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] font-mono text-xs transition"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block font-sans text-[#4d4d4d] font-medium mb-1 text-[11px]">
+                    <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1 text-[11px]">
                       Описание
                     </label>
                     <input
@@ -689,11 +689,11 @@ export default function ToolPolicyModal() {
                       value={customDescription}
                       onChange={(e) => setCustomDescription(e.target.value)}
                       placeholder="Что делает инструмент"
-                      className="w-full px-3 py-1.5 rounded-md bg-white border border-[#ebebeb] text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] font-sans text-xs transition"
+                      className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] font-sans text-xs transition"
                     />
                   </div>
                   <div>
-                    <label className="block font-sans text-[#4d4d4d] font-medium mb-1 text-[11px]">
+                    <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1 text-[11px]">
                       Параметры (JSON-схема)
                     </label>
                     <textarea
@@ -702,11 +702,11 @@ export default function ToolPolicyModal() {
                       onChange={(e) => setCustomParamsText(e.target.value)}
                       placeholder={'{"type": "object", "properties": {}}'}
                       spellCheck={false}
-                      className="w-full px-3 py-1.5 rounded-md bg-white border border-[#ebebeb] text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] font-mono text-xs resize-y transition"
+                      className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] font-mono text-xs resize-y transition"
                     />
                   </div>
                   {customFormError && (
-                    <p className="text-[11px] font-sans text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-1.5">
+                    <p className="text-[11px] font-sans text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-md px-3 py-1.5">
                       {customFormError}
                     </p>
                   )}
@@ -714,7 +714,7 @@ export default function ToolPolicyModal() {
                     <button
                       type="submit"
                       disabled={customSaving}
-                      className="px-3.5 py-1.5 rounded-md bg-[#171717] hover:bg-[#262626] disabled:opacity-50 text-white font-medium transition cursor-pointer font-sans text-xs shadow-xs"
+                      className="px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#238636] hover:bg-[#262626] dark:hover:bg-[#2ea043] disabled:opacity-50 text-white font-medium transition cursor-pointer font-sans text-xs shadow-xs"
                     >
                       {customSaving ? 'Сохранение...' : 'Добавить'}
                     </button>
@@ -726,10 +726,10 @@ export default function ToolPolicyModal() {
         </div>
 
         {/* Footer */}
-        <div className="border-t border-[#ebebeb] bg-[#f9f9f9] px-4 py-2.5 flex items-center justify-end font-mono text-xs">
+        <div className="border-t border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#161b22] px-4 py-2.5 flex items-center justify-end font-mono text-xs">
           <button
             onClick={closeModal}
-            className="px-3.5 py-1.5 rounded-md bg-[#171717] hover:bg-[#262626] text-white font-medium transition cursor-pointer shadow-xs"
+            className="px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white font-medium transition cursor-pointer shadow-xs"
           >
             Закрыть
           </button>

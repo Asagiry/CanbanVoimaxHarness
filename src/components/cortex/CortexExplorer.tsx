@@ -341,26 +341,26 @@ export default function CortexExplorer() {
   };
 
   return (
-    <aside className="w-64 shrink-0 h-full flex flex-col bg-[#f9f9f9] border-r border-[#ebebeb] select-none text-[#171717]">
+    <aside className="w-64 shrink-0 h-full flex flex-col bg-[#f9f9f9] dark:bg-[#0d1117] border-r border-[#ebebeb] dark:border-[#21262d] select-none text-[#171717] dark:text-[#f0f6fc]">
       {/* Sidebar Header */}
-      <div className="px-3.5 py-2.5 border-b border-[#ebebeb] bg-white flex items-center justify-between">
-        <span className="text-xs font-semibold text-[#171717]">
+      <div className="px-3.5 py-2.5 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] flex items-center justify-between">
+        <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc]">
           Проводник разума агента
         </span>
         <button
           type="button"
           onClick={handleRefreshPersonas}
           title="Обновить агентов"
-          className="p-1 rounded hover:bg-[#e4e4e7] text-[#71717a] hover:text-[#171717] transition cursor-pointer"
+          className="p-1 rounded hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] transition cursor-pointer"
         >
           <RotateCw className={`h-3.5 w-3.5 ${isRefreshingPersonas ? 'animate-spin' : ''}`} />
         </button>
       </div>
 
       {/* Filter Search Input */}
-      <div className="p-2.5 border-b border-[#ebebeb] bg-[#f9f9f9]">
+      <div className="p-2.5 border-b border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#0d1117]">
         <div className="relative flex items-center">
-          <Search className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] pointer-events-none" />
+          <Search className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e] pointer-events-none" />
           <input
             id={searchInputId}
             name="cortexMindSearch"
@@ -368,7 +368,7 @@ export default function CortexExplorer() {
             value={filterQuery}
             onChange={(e) => setFilterQuery(e.target.value)}
             placeholder="Поиск колонок, агентов, файлов..."
-            className="w-full pl-8 pr-2.5 py-1 text-xs rounded-md bg-white border border-[#ebebeb] text-[#171717] placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] font-sans transition"
+            className="w-full pl-8 pr-2.5 py-1 text-xs rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] font-sans transition"
           />
         </div>
       </div>
@@ -386,22 +386,22 @@ export default function CortexExplorer() {
           {openSections.columns && (
             <div className="space-y-1">
               {stages.length === 0 && (
-                <div className="mx-1 mt-1 rounded-md border border-dashed border-[#d4d4d4] bg-white px-3 py-4 text-center space-y-1.5">
-                  <div className="text-xs font-sans font-semibold text-[#171717]">
+                <div className="mx-1 mt-1 rounded-md border border-dashed border-[#d4d4d4] dark:border-[#30363d] bg-white dark:bg-[#161b22] px-3 py-4 text-center space-y-1.5">
+                  <div className="text-xs font-sans font-semibold text-[#171717] dark:text-[#f0f6fc]">
                     Нет агентов
                   </div>
-                  <div className="text-[11px] font-sans text-[#666666] leading-relaxed">
+                  <div className="text-[11px] font-sans text-[#666666] dark:text-[#8b949e] leading-relaxed">
                     Создайте первую колонку-агента через + Колонка
                   </div>
-                  <div className="text-[10px] font-mono text-[#8f8f8f]">
+                  <div className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e]">
                     Свежий проект стартует только с backlog и ready
                   </div>
                 </div>
               )}
 
               {stages.length > 0 && filteredColumnStages.length === 0 && (
-                <div className="mx-1 mt-1 rounded-md border border-[#ebebeb] bg-white px-3 py-4 text-center">
-                  <div className="text-[11px] font-sans text-[#666666]">
+                <div className="mx-1 mt-1 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] px-3 py-4 text-center">
+                  <div className="text-[11px] font-sans text-[#666666] dark:text-[#8b949e]">
                     В колонках ничего не найдено
                   </div>
                 </div>
@@ -451,19 +451,19 @@ export default function CortexExplorer() {
           {openSections.agents && (
             <div className="space-y-1">
               {agentStages.length === 0 && (
-                <div className="mx-1 mt-1 rounded-md border border-dashed border-[#d4d4d4] bg-white px-3 py-4 text-center space-y-1.5">
-                  <div className="text-xs font-sans font-semibold text-[#171717]">
+                <div className="mx-1 mt-1 rounded-md border border-dashed border-[#d4d4d4] dark:border-[#30363d] bg-white dark:bg-[#161b22] px-3 py-4 text-center space-y-1.5">
+                  <div className="text-xs font-sans font-semibold text-[#171717] dark:text-[#f0f6fc]">
                     Нет доступных агентов
                   </div>
-                  <div className="text-[11px] font-sans text-[#666666] leading-relaxed">
+                  <div className="text-[11px] font-sans text-[#666666] dark:text-[#8b949e] leading-relaxed">
                     Агенты берутся из списка персон проекта
                   </div>
                 </div>
               )}
 
               {agentStages.length > 0 && filteredAgentStages.length === 0 && (
-                <div className="mx-1 mt-1 rounded-md border border-[#ebebeb] bg-white px-3 py-4 text-center">
-                  <div className="text-[11px] font-sans text-[#666666]">
+                <div className="mx-1 mt-1 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] px-3 py-4 text-center">
+                  <div className="text-[11px] font-sans text-[#666666] dark:text-[#8b949e]">
                     Среди агентов ничего не найдено
                   </div>
                 </div>
@@ -503,7 +503,7 @@ export default function CortexExplorer() {
       {/* Контекстное меню агента (ПКМ) */}
       {agentContextMenu && (
         <div
-          className="fixed z-50 min-w-[190px] bg-white rounded-lg shadow-xl border border-[#ebebeb] p-1 text-xs font-sans animate-in fade-in zoom-in-95 duration-100"
+          className="fixed z-50 min-w-[190px] bg-white dark:bg-[#161b22] rounded-lg shadow-xl border border-[#ebebeb] dark:border-[#30363d] p-1 text-xs font-sans animate-in fade-in zoom-in-95 duration-100"
           style={{
             top: Math.min(agentContextMenu.y, window.innerHeight - 120),
             left: Math.min(agentContextMenu.x, window.innerWidth - 210),
@@ -511,7 +511,7 @@ export default function CortexExplorer() {
           onClick={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
         >
-          <div className="px-3 py-1.5 text-[10px] font-semibold text-[#a1a1aa] uppercase tracking-wider border-b border-[#f4f4f5] mb-1 truncate">
+          <div className="px-3 py-1.5 text-[10px] font-semibold text-[#a1a1aa] dark:text-[#8b949e] uppercase tracking-wider border-b border-[#f4f4f5] dark:border-[#21262d] mb-1 truncate">
             Агент: {agentContextMenu.role}
           </div>
           <button
@@ -520,9 +520,9 @@ export default function CortexExplorer() {
               setAgentContextMenu(null);
               setEditingAgentPersona(persona);
             }}
-            className="w-full flex items-center space-x-2 px-3 py-1.5 text-left transition rounded-sm text-[#171717] hover:bg-[#f4f4f5] cursor-pointer"
+            className="w-full flex items-center space-x-2 px-3 py-1.5 text-left transition rounded-sm text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer"
           >
-            <Palette className="h-3.5 w-3.5 text-[#71717a]" />
+            <Palette className="h-3.5 w-3.5 text-[#71717a] dark:text-[#8b949e]" />
             <span>Настроить агента (цвет и иконка)</span>
           </button>
           <button
@@ -534,12 +534,12 @@ export default function CortexExplorer() {
             disabled={agentContextMenu.isBuiltin}
             className={`w-full flex items-center space-x-2 px-3 py-1.5 text-left transition rounded-sm ${
               agentContextMenu.isBuiltin
-                ? 'text-[#a1a1aa] cursor-not-allowed opacity-50'
-                : 'text-[#171717] hover:bg-[#f4f4f5] cursor-pointer'
+                ? 'text-[#a1a1aa] dark:text-[#6e7681] cursor-not-allowed opacity-50'
+                : 'text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer'
             }`}
             title={agentContextMenu.isBuiltin ? 'Нельзя переименовать встроенного агента' : undefined}
           >
-            <Pencil className="h-3.5 w-3.5 text-[#71717a]" />
+            <Pencil className="h-3.5 w-3.5 text-[#71717a] dark:text-[#8b949e]" />
             <span>Переименовать агента</span>
           </button>
           <button
@@ -552,8 +552,8 @@ export default function CortexExplorer() {
             disabled={agentContextMenu.isBuiltin}
             className={`w-full flex items-center space-x-2 px-3 py-1.5 text-left transition rounded-sm ${
               agentContextMenu.isBuiltin
-                ? 'text-[#a1a1aa] cursor-not-allowed opacity-50'
-                : 'text-red-600 hover:bg-red-50 hover:text-red-700 cursor-pointer'
+                ? 'text-[#a1a1aa] dark:text-[#6e7681] cursor-not-allowed opacity-50'
+                : 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-700 dark:hover:text-red-300 cursor-pointer'
             }`}
             title={agentContextMenu.isBuiltin ? 'Нельзя удалить встроенного агента' : undefined}
           >
@@ -659,9 +659,9 @@ function StageHeaderButton({
       >
         <div className="flex items-center space-x-2 min-w-0">
           {stage.isExpanded ? (
-            <ChevronDown className="h-3.5 w-3.5 text-[#666666] shrink-0" />
+            <ChevronDown className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
           ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-[#666666] shrink-0" />
+            <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
           )}
 
           {iconName ? (
@@ -939,13 +939,13 @@ function AgentStageCard({
 
           {/* Персона отсутствует на диске: плейсхолдер + создание шаблона */}
           {personaFile && personaIsMissing && (
-            <div className="px-2 py-1.5 rounded-md border border-dashed border-[#d4d4d4] bg-white space-y-1">
-              <div className="text-[11px] font-sans text-[#666666]">
+            <div className="px-2 py-1.5 rounded-md border border-dashed border-[#d4d4d4] dark:border-[#30363d] bg-white dark:bg-[#161b22] space-y-1">
+              <div className="text-[11px] font-sans text-[#666666] dark:text-[#8b949e]">
                 Персона не настроена — нет файла
               </div>
               <button
                 onClick={() => onCreatePersona(personaFile.id)}
-                className="flex items-center space-x-1 px-2 py-1 rounded-md text-[11px] font-mono bg-[#171717] hover:bg-[#262626] text-white transition cursor-pointer"
+                className="flex items-center space-x-1 px-2 py-1 rounded-md text-[11px] font-mono bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white dark:text-[#f0f6fc] transition cursor-pointer"
                 title="Создать шаблон персоны"
               >
                 <Plus className="h-3 w-3 shrink-0" />
@@ -1113,21 +1113,21 @@ function RulesFolderBlock({
           }}
           title="Новое правило"
           aria-label="Новое правило"
-          className="p-1 rounded-md text-[#8f8f8f] hover:text-[#171717] hover:bg-[#ebebeb]/60 transition cursor-pointer opacity-0 group-hover/folder:opacity-100 focus:opacity-100 focus-visible:opacity-100 shrink-0"
+          className="p-1 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d] transition cursor-pointer opacity-0 group-hover/folder:opacity-100 focus:opacity-100 focus-visible:opacity-100 shrink-0"
         >
           <Plus className="h-3 w-3" />
         </button>
       </div>
 
       {isOpen && files.length > 0 && (
-        <div className="pl-4 space-y-0.5 border-l border-[#ebebeb] ml-2">
+        <div className="pl-4 space-y-0.5 border-l border-[#ebebeb] dark:border-[#21262d] ml-2">
           {files.map((ruleFile) => (
             <FileTreeItem
               key={ruleFile.id}
               file={ruleFile}
               displayName={ruleFile.name}
               isActive={activeFileId === ruleFile.id}
-              icon={<FileText className="h-3.5 w-3.5 text-[#666666] shrink-0" />}
+              icon={<FileText className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />}
               onSelect={() => onOpen(ruleFile.id)}
             />
           ))}
@@ -1180,7 +1180,7 @@ function HooksFolderBlock({
             }}
             title="Новый хук"
             aria-label="Новый хук"
-            className="p-1 rounded-md text-[#8f8f8f] hover:text-[#171717] hover:bg-[#ebebeb]/60 transition cursor-pointer opacity-0 group-hover/folder:opacity-100 focus:opacity-100 focus-visible:opacity-100 shrink-0"
+            className="p-1 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d] transition cursor-pointer opacity-0 group-hover/folder:opacity-100 focus:opacity-100 focus-visible:opacity-100 shrink-0"
           >
             <Plus className="h-3 w-3" />
           </button>
@@ -1188,7 +1188,7 @@ function HooksFolderBlock({
       </div>
 
       {isOpen && files.length > 0 && (
-        <div className="pl-4 space-y-0.5 border-l border-[#ebebeb] ml-2">
+        <div className="pl-4 space-y-0.5 border-l border-[#ebebeb] dark:border-[#21262d] ml-2">
           {files.map((hookFile) => {
             const isBuiltin = hookFile.path === 'builtin:create_worktree' || hookFile.path.startsWith('builtin:');
             return (
@@ -1198,7 +1198,7 @@ function HooksFolderBlock({
                 displayName={hookFile.name}
                 isActive={activeFileId === hookFile.id}
                 badge={isBuiltin ? 'встроенный' : hookMomentOf(hookFile.name)}
-                icon={<Zap className="h-3.5 w-3.5 text-[#666666] shrink-0" />}
+                icon={<Zap className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />}
                 onSelect={() => onOpen(hookFile.id)}
               />
             );
@@ -1215,13 +1215,13 @@ function SettingMissingBlock({
   onCreate: () => void;
 }) {
   return (
-    <div className="px-2 py-1.5 rounded-md border border-dashed border-[#d4d4d4] bg-white space-y-1">
-      <div className="text-[11px] font-sans text-[#666666]">
+    <div className="px-2 py-1.5 rounded-md border border-dashed border-[#d4d4d4] dark:border-[#30363d] bg-white dark:bg-[#161b22] space-y-1">
+      <div className="text-[11px] font-sans text-[#666666] dark:text-[#8b949e]">
         Настройки не заданы — нет файла
       </div>
       <button
         onClick={onCreate}
-        className="flex items-center space-x-1 px-2 py-1 rounded-md text-[11px] font-mono bg-[#171717] hover:bg-[#262626] text-white transition cursor-pointer"
+        className="flex items-center space-x-1 px-2 py-1 rounded-md text-[11px] font-mono bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white dark:text-[#f0f6fc] transition cursor-pointer"
         title="Создать шаблон настроек"
       >
         <Plus className="h-3 w-3 shrink-0" />
@@ -1314,8 +1314,8 @@ function NewCortexFileForm({
   };
 
   return (
-    <div className="mx-1 mb-1 rounded-md border border-[#ebebeb] bg-white px-2 py-2 space-y-2">
-      <div className="text-[11px] font-sans font-semibold text-[#171717]">
+    <div className="mx-1 mb-1 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] px-2 py-2 space-y-2">
+      <div className="text-[11px] font-sans font-semibold text-[#171717] dark:text-[#f0f6fc]">
         Новый файл агента
       </div>
 
@@ -1332,21 +1332,21 @@ function NewCortexFileForm({
         }}
         placeholder={kind === 'rule' ? 'имя-правила' : 'имя-хука (можно пусто)'}
         autoFocus
-        className="w-full px-2 py-1 text-xs rounded-md bg-white border border-[#ebebeb] text-[#171717] font-mono placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] transition"
+        className="w-full px-2 py-1 text-xs rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] font-mono placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] transition"
       />
-      <div className="text-[10px] font-mono text-[#8f8f8f]">
+      <div className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e]">
         Латиница, цифры, - и _ (расширение добавится автоматически)
       </div>
 
       {!fixedKind && (
-        <div className="flex items-center gap-3 text-[11px] font-mono text-[#4d4d4d]">
+        <div className="flex items-center gap-3 text-[11px] font-mono text-[#4d4d4d] dark:text-[#c9d1d9]">
           <label className="flex items-center gap-1 cursor-pointer">
             <input
               type="radio"
               name={`cortex-kind-${stage.stageId}`}
               checked={kind === 'rule'}
               onChange={() => setKind('rule')}
-              className="accent-[#171717]"
+              className="accent-[#171717] dark:accent-[#f0f6fc]"
             />
             <span>Правило</span>
           </label>
@@ -1356,7 +1356,7 @@ function NewCortexFileForm({
               name={`cortex-kind-${stage.stageId}`}
               checked={kind === 'hook'}
               onChange={() => setKind('hook')}
-              className="accent-[#171717]"
+              className="accent-[#171717] dark:accent-[#f0f6fc]"
             />
             <span>Хук</span>
           </label>
@@ -1364,15 +1364,15 @@ function NewCortexFileForm({
       )}
 
       {kind === 'hook' && (
-        <div className="space-y-1.5 rounded-md bg-[#f9f9f9] border border-[#ebebeb] px-2 py-1.5">
-          <div className="flex items-center gap-3 text-[11px] font-mono text-[#4d4d4d]">
+        <div className="space-y-1.5 rounded-md bg-[#f9f9f9] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] px-2 py-1.5">
+          <div className="flex items-center gap-3 text-[11px] font-mono text-[#4d4d4d] dark:text-[#c9d1d9]">
             <label className="flex items-center gap-1 cursor-pointer">
               <input
                 type="radio"
                 name={`cortex-moment-${stage.stageId}`}
                 checked={hookMoment === 'on_enter'}
                 onChange={() => setHookMoment('on_enter')}
-                className="accent-[#171717]"
+                className="accent-[#171717] dark:accent-[#f0f6fc]"
               />
               <span>on_enter</span>
             </label>
@@ -1382,17 +1382,17 @@ function NewCortexFileForm({
                 name={`cortex-moment-${stage.stageId}`}
                 checked={hookMoment === 'on_finish'}
                 onChange={() => setHookMoment('on_finish')}
-                className="accent-[#171717]"
+                className="accent-[#171717] dark:accent-[#f0f6fc]"
               />
               <span>on_finish</span>
             </label>
           </div>
-          <label className="flex items-center gap-1.5 text-[11px] font-mono text-[#4d4d4d]">
+          <label className="flex items-center gap-1.5 text-[11px] font-mono text-[#4d4d4d] dark:text-[#c9d1d9]">
             <span>Тип:</span>
             <select
               value={hookExt}
               onChange={(e) => setHookExt(e.target.value as CortexHookExt)}
-              className="px-1.5 py-0.5 rounded-md bg-white border border-[#ebebeb] text-[#171717] font-mono text-[11px] focus:outline-hidden focus:border-[#171717] cursor-pointer"
+              className="px-1.5 py-0.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] font-mono text-[11px] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] cursor-pointer"
             >
               <option value="bat">.bat</option>
               <option value="ps1">.ps1</option>
@@ -1403,26 +1403,26 @@ function NewCortexFileForm({
         </div>
       )}
 
-      <div className="text-[10px] font-mono text-[#8f8f8f] truncate" title={`${targetDir}${previewName}`}>
+      <div className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] truncate" title={`${targetDir}${previewName}`}>
         {targetDir}{previewName}
       </div>
 
       {error && (
-        <div className="text-[11px] font-sans text-red-600">{error}</div>
+        <div className="text-[11px] font-sans text-red-600 dark:text-red-400">{error}</div>
       )}
 
       <div className="flex items-center gap-1.5">
         <button
           onClick={() => void handleSubmit()}
           disabled={isSaving}
-          className="px-2.5 py-1 rounded-md text-[11px] font-mono bg-[#171717] hover:bg-[#262626] text-white transition cursor-pointer disabled:opacity-50"
+          className="px-2.5 py-1 rounded-md text-[11px] font-mono bg-[#171717] dark:bg-[#238636] hover:bg-[#262626] dark:hover:bg-[#2ea043] text-white transition cursor-pointer disabled:opacity-50"
         >
           {isSaving ? 'Создание...' : 'Создать'}
         </button>
         <button
           onClick={onClose}
           disabled={isSaving}
-          className="px-2.5 py-1 rounded-md text-[11px] font-mono bg-white border border-[#ebebeb] text-[#4d4d4d] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer disabled:opacity-50"
+          className="px-2.5 py-1 rounded-md text-[11px] font-mono bg-white dark:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#4d4d4d] dark:text-[#c9d1d9] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#30363d] transition cursor-pointer disabled:opacity-50"
         >
           Отмена
         </button>
@@ -1585,7 +1585,7 @@ function EditAgentPersonaModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Имя роли */}
           <div>
-            <label className="block text-xs font-medium text-[#52525b] mb-1">
+            <label className="block text-xs font-medium text-[#52525b] dark:text-[#8b949e] mb-1">
               Имя агента (роль)
             </label>
             <input
@@ -1597,10 +1597,10 @@ function EditAgentPersonaModal({
                 setError(null);
               }}
               placeholder="имя-агента"
-              className="w-full px-3 py-1.5 rounded-lg border border-[#d4d4d8] text-xs font-mono focus:border-[#171717] focus:outline-hidden transition disabled:opacity-50 disabled:bg-[#f4f4f5]"
+              className="w-full px-3 py-1.5 rounded-lg border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#161b22] text-[#171717] dark:text-[#f0f6fc] text-xs font-mono focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:outline-hidden transition disabled:opacity-50 disabled:bg-[#f4f4f5] dark:disabled:bg-[#0d1117] disabled:text-[#8f8f8f] dark:disabled:text-[#6e7681]"
             />
             {isBuiltin && (
-              <p className="mt-1 text-[11px] text-[#71717a]">
+              <p className="mt-1 text-[11px] text-[#71717a] dark:text-[#8b949e]">
                 Встроенного агента 'cvh-dev' нельзя переименовать
               </p>
             )}
@@ -1609,14 +1609,14 @@ function EditAgentPersonaModal({
           {/* Палитра цветов агента */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-medium text-[#52525b]">
+              <label className="block text-xs font-medium text-[#52525b] dark:text-[#8b949e]">
                 Цвет агента
               </label>
-              <span className="text-[10px] font-mono text-[#71717a]">
+              <span className="text-[10px] font-mono text-[#71717a] dark:text-[#8b949e]">
                 {selectedColor}
               </span>
             </div>
-            <div className="p-2.5 rounded-lg border border-[#ebebeb] bg-[#fafafa] space-y-2">
+            <div className="p-2.5 rounded-lg border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22] space-y-2">
               <div className="flex flex-wrap gap-2 items-center">
                 {AGENT_PALETTE.map((c) => {
                   const isSelected = selectedColor.toLowerCase() === c.toLowerCase();
@@ -1627,7 +1627,7 @@ function EditAgentPersonaModal({
                       onClick={() => setSelectedColor(c)}
                       title={c}
                       className={`h-7 w-7 rounded-full transition-transform cursor-pointer flex items-center justify-center shadow-xs ${
-                        isSelected ? 'scale-110 ring-2 ring-offset-2 ring-[#171717]' : 'hover:scale-105'
+                        isSelected ? 'scale-110 ring-2 ring-offset-2 ring-[#171717] dark:ring-[#f0f6fc]' : 'hover:scale-105'
                       }`}
                       style={{ backgroundColor: c }}
                     >
@@ -1636,7 +1636,7 @@ function EditAgentPersonaModal({
                   );
                 })}
               </div>
-              <p className="text-[10px] font-sans text-[#71717a] leading-tight">
+              <p className="text-[10px] font-sans text-[#71717a] dark:text-[#8b949e] leading-tight">
                 Серый (#64748b) и зеленый (#10b981) зарезервированы за Backlog и Ready и исключены из палитры агентов.
               </p>
             </div>
@@ -1645,14 +1645,14 @@ function EditAgentPersonaModal({
           {/* Выбор SVG иконки */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-medium text-[#52525b]">
+              <label className="block text-xs font-medium text-[#52525b] dark:text-[#8b949e]">
                 SVG Иконка агента
               </label>
-              <span className="text-[10px] font-mono text-[#71717a]">
+              <span className="text-[10px] font-mono text-[#71717a] dark:text-[#8b949e]">
                 [{selectedIcon}]
               </span>
             </div>
-            <div className="p-2 rounded-lg border border-[#ebebeb] bg-[#fafafa]">
+            <div className="p-2 rounded-lg border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22]">
               <div className="grid grid-cols-6 gap-1.5 max-h-36 overflow-y-auto p-1">
                 {AGENT_ICONS.map((ic) => {
                   const isSelected = selectedIcon === ic;
@@ -1664,8 +1664,8 @@ function EditAgentPersonaModal({
                       title={ic}
                       className={`flex flex-col items-center justify-center p-2 rounded-md transition cursor-pointer ${
                         isSelected
-                          ? 'bg-white border-2 border-[#171717] shadow-xs'
-                          : 'hover:bg-white/80 border border-transparent text-[#71717a] hover:text-[#171717]'
+                          ? 'bg-white dark:bg-[#21262d] border-2 border-[#171717] dark:border-[#f0f6fc] shadow-xs'
+                          : 'hover:bg-white/80 dark:hover:bg-[#21262d]/80 border border-transparent text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
                       }`}
                     >
                       <AgentIcon
@@ -1681,24 +1681,24 @@ function EditAgentPersonaModal({
           </div>
 
           {error && (
-            <div className="text-xs text-red-600 bg-red-50 p-2 rounded-md border border-red-200">
+            <div className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 p-2 rounded-md border border-red-200 dark:border-red-900/50">
               {error}
             </div>
           )}
 
-          <div className="flex items-center justify-end space-x-2 pt-2 border-t border-[#f4f4f5]">
+          <div className="flex items-center justify-end space-x-2 pt-2 border-t border-[#f4f4f5] dark:border-[#21262d]">
             <button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-3 py-1.5 rounded-md text-xs font-medium text-[#71717a] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
+              className="px-3 py-1.5 rounded-md text-xs font-medium text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
             >
               Отмена
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-3.5 py-1.5 rounded-md text-xs font-medium bg-[#171717] hover:bg-[#262626] text-white transition cursor-pointer disabled:opacity-50 flex items-center space-x-1.5"
+              className="px-3.5 py-1.5 rounded-md text-xs font-medium bg-[#171717] dark:bg-[#238636] hover:bg-[#262626] dark:hover:bg-[#2ea043] text-white transition cursor-pointer disabled:opacity-50 flex items-center space-x-1.5"
             >
               {isSubmitting ? <span>Сохранение...</span> : <span>Сохранить</span>}
             </button>

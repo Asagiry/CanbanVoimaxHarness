@@ -86,17 +86,17 @@ export default function CompactedContextCard({ activity }: CompactedContextCardP
             <button
               type="button"
               onClick={handleCopy}
-              className="flex items-center space-x-1 px-2 py-0.5 text-[10px] font-mono text-[#666666] hover:text-[#0d0d0d] bg-white border border-[#ebebeb] hover:bg-[#f4f4f5] rounded transition cursor-pointer"
+              className="flex items-center space-x-1 px-2 py-0.5 text-[10px] font-mono text-[#666666] dark:text-[#8b949e] hover:text-[#0d0d0d] dark:hover:text-[#f0f6fc] bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] rounded transition cursor-pointer"
               title="Скопировать отчет сжатия"
             >
               {copied ? (
                 <>
-                  <Check className="h-3 w-3 text-emerald-600" />
-                  <span className="text-emerald-600">Скопировано</span>
+                  <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-emerald-600 dark:text-emerald-400">Скопировано</span>
                 </>
               ) : (
                 <>
-                  <Copy className="h-3 w-3 text-[#666666]" />
+                  <Copy className="h-3 w-3 text-[#666666] dark:text-[#8b949e]" />
                   <span>Копия</span>
                 </>
               )}
