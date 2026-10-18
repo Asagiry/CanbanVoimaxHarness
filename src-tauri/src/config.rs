@@ -1292,7 +1292,7 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
     } else if let Ok(content) = tokio::fs::read_to_string(&setting_path).await {
         // When seeding .cvh/agents/cvh-dev/setting, ensure 'context_window': 200000
         if let Ok(mut val) = serde_json::from_str::<serde_json::Value>(&content) {
-            let needs_update = val.get("context_window").and_then(|v| v.as_u64()).map_or(true, |w| w < 200000);
+            let needs_update = val.get("context_window").and_then(|v| v.as_u64()).is_none_or(|w| w < 200000);
             if needs_update {
                 val["context_window"] = serde_json::json!(200000);
                 if let Ok(updated) = serde_json::to_string_pretty(&val) {
