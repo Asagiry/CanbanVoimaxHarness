@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 import { Draggable, Droppable } from '@hello-pangea/dnd';
 import { ChevronDown } from 'lucide-react';
 import { PipelineColumn, KanbanTask } from '../../types';
@@ -18,7 +18,7 @@ interface KanbanColumnProps {
   onDeleteColumn?: (columnId: string) => void;
 }
 
-export default function KanbanColumn({
+function KanbanColumn({
   column,
   tasks,
   index,
@@ -27,10 +27,11 @@ export default function KanbanColumn({
 }: KanbanColumnProps) {
   // Клик по шапке больше не подсвечивает колонку и не трогает проводник
   // (фокус из проводника в доску оставлен, обратного нет).
-  const { focusedStageId, agentPersonas } = useCortexStore();
-  const assignedPersona = column.persona ? agentPersonas.find((p) => p.role === column.persona) : undefined;
+  const isFocused = useCortexStore((s) => s.focusedStageId === column.id);
+  const assignedPersona = useCortexStore((s) =>
+    column.persona ? s.agentPersonas.find((p) => p.role === column.persona) : undefined
+  );
   const effectiveIcon = column.icon || assignedPersona?.icon || 'Layers';
-  const isFocused = focusedStageId === column.id;
   const isDoneColumn = Boolean(
     column.terminal ||
     column.id === 'ready' ||
@@ -176,3 +177,39 @@ export default function KanbanColumn({
     </Draggable>
   );
 }
+
+function areColumnPropsEqual(prev: KanbanColumnProps, next: KanbanColumnProps): boolean {
+  if (prev.index !== next.index) return false;
+  if (prev.isPinned !== next.isPinned) return false;
+  if (prev.totalColumns !== next.totalColumns) return false;
+  if (prev.onDeleteColumn !== next.onDeleteColumn) return false;
+
+  // Compare column definition properties
+  const cA = prev.column;
+  const cB = next.column;
+  if (
+    cA.id !== cB.id ||
+    cA.title !== cB.title ||
+    cA.color !== cB.color ||
+    cA.icon !== cB.icon ||
+    cA.persona !== cB.persona ||
+    cA.wipLimit !== cB.wipLimit ||
+    cA.terminal !== cB.terminal
+  ) {
+    return false;
+  }
+
+  // Shallow comparison of tasks array
+  if (prev.tasks === next.tasks) return true;
+  if (prev.tasks.length !== next.tasks.length) return false;
+
+  for (let i = 0; i < prev.tasks.length; i++) {
+    if (prev.tasks[i] !== next.tasks[i]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+export default memo(KanbanColumn, areColumnPropsEqual);

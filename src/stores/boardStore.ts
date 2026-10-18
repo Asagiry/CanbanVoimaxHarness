@@ -860,60 +860,27 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     if (!title) return null;
     const description = input.description?.trim() || '';
 
-    // Preferred path: backend owns creation (IDs, on_enter hooks + worktree).
-    // Backend already persisted to disk — syncTasksBackend MUST NOT be called
-    // here (it would clobber hook-assigned worktreePath/branch via save_tasks).
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const backendTask = await invoke<any>('create_task', {
-        title,
-        description,
-        stageId: targetColumnId,
-        boardId: boardId,
-        skipWorktree,
-        model: input.model || undefined,
-      });
-      if (backendTask && typeof backendTask.id === 'string') {
-        const mapped = mapBackendTaskToKanban(backendTask);
-        const merged: KanbanTask = {
-          ...mapped,
-          model: mapped.model || input.model || undefined,
-        };
-        const updatedTasks = [merged, ...get().tasks];
-        set({ tasks: updatedTasks });
-        persistTasksToLocalStorage(updatedTasks);
-        // Keep the monotonic counter ahead of the backend-issued id.
-        syncTaskSeqWithTasks(updatedTasks);
-        const targetColDef = get().columns.find((c) => c.id === merged.columnId);
-        if (targetColDef?.autoRun ?? !!targetColDef?.persona) {
-          await triggerRunAgent(merged.id, merged.description);
-        }
-        return merged;
-      }
-      throw new Error('create_task returned empty task');
-    } catch (err) {
-      console.info('Backend create_task failed, falling back to local creation:', err);
-    }
-
-    // Fallback path (web mode / IPC error): local ID + save_tasks.
-    const fb = get();
-    const paddedId = formatTaskId(allocateNextTaskNum(fb.tasks));
-    const fbTargetCol = fb.columns.find((c) => c.id === targetColumnId);
-    const status: TaskStatus = fbTargetCol?.terminal
+    // OPTIMISTIC TASK CREATION:
+    // Generate optimistic monotonic task ID and append immediately so card appears on board in <1ms!
+    const optimisticNum = allocateNextTaskNum(state.tasks);
+    const optimisticId = formatTaskId(optimisticNum);
+    const targetColDef = state.columns.find((c) => c.id === targetColumnId);
+    const status: TaskStatus = targetColDef?.terminal
       ? 'done'
-      : fbTargetCol?.persona
+      : targetColDef?.persona
         ? 'running'
         : 'idle';
-    const fallbackTask: KanbanTask = {
-      id: paddedId,
+
+    const optimisticTask: KanbanTask = {
+      id: optimisticId,
       title,
       description: description || undefined,
       priority: 'high',
       columnId: targetColumnId,
       boardId,
-      persona: fbTargetCol?.persona ?? 'developer',
-      branch: `feat/${paddedId.toLowerCase()}`,
-      worktreePath: `.cvh/worktrees/${paddedId.toLowerCase()}`,
+      persona: targetColDef?.persona ?? 'developer',
+      branch: `feat/${optimisticId.toLowerCase()}`,
+      worktreePath: `.cvh/worktrees/${optimisticId.toLowerCase()}`,
       status,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -926,17 +893,61 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       verdict: 'NONE',
       model: input.model,
     };
-    const finalTasks = [fallbackTask, ...fb.tasks];
-    set({ tasks: finalTasks });
-    persistTasksToLocalStorage(finalTasks);
-    syncTaskSeqWithTasks(finalTasks);
-    await syncTasksBackend(finalTasks);
 
-    const fbTargetDef = get().columns.find((c) => c.id === fallbackTask.columnId);
-    if (fbTargetDef?.autoRun ?? !!fbTargetDef?.persona) {
-      await triggerRunAgent(fallbackTask.id, fallbackTask.description);
+    // Immediately update UI state!
+    const initialTasks = [optimisticTask, ...get().tasks];
+    set({ tasks: initialTasks });
+    persistTasksToLocalStorage(initialTasks);
+    syncTaskSeqWithTasks(initialTasks);
+
+    // Backend creation runs asynchronously and reconciles confirmed task ID / worktree details
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const backendTask = await invoke<any>('create_task', {
+        title,
+        description,
+        stageId: targetColumnId,
+        boardId,
+        skipWorktree,
+      });
+      if (backendTask && typeof backendTask.id === 'string') {
+        const mapped = mapBackendTaskToKanban(backendTask);
+        const confirmed: KanbanTask = {
+          ...mapped,
+          model: mapped.model || input.model || undefined,
+        };
+        const currentTasks = get().tasks;
+        // Reconcile: replace optimistic task with confirmed backend task
+        let reconciled: KanbanTask[];
+        if (currentTasks.some((t) => t.id === optimisticId)) {
+          reconciled = currentTasks.map((t) => (t.id === optimisticId ? confirmed : t));
+        } else if (!currentTasks.some((t) => t.id === confirmed.id)) {
+          reconciled = [confirmed, ...currentTasks];
+        } else {
+          reconciled = currentTasks.map((t) => (t.id === confirmed.id ? confirmed : t));
+        }
+        set({ tasks: reconciled });
+        persistTasksToLocalStorage(reconciled);
+        syncTaskSeqWithTasks(reconciled);
+
+        const colDef = get().columns.find((c) => c.id === confirmed.columnId);
+        if (colDef?.autoRun ?? !!colDef?.persona) {
+          await triggerRunAgent(confirmed.id, confirmed.description);
+        }
+        return confirmed;
+      }
+    } catch (err) {
+      console.info('Backend create_task failed or in web mode, syncing local state:', err);
+      // Fallback: sync optimistic task with disk
+      await syncTasksBackend(get().tasks);
+      const colDef = get().columns.find((c) => c.id === optimisticTask.columnId);
+      if (colDef?.autoRun ?? !!colDef?.persona) {
+        await triggerRunAgent(optimisticTask.id, optimisticTask.description);
+      }
+      return optimisticTask;
     }
-    return fallbackTask;
+
+    return optimisticTask;
   },
 
   createSubtask: async (parentId: string, targetColumnId?: string) => {
@@ -953,8 +964,6 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
     if (!targetCol) return null;
 
-    // Calculate subtask index — monotonic per parent: never re-issue an index
-    // of a deleted subtask (its dialog history may still be referenced).
     const existingSubtasks = tasks.filter(
       (t) => t.parentId === parentId || t.id.startsWith(`${parentId}.`)
     );
@@ -966,40 +975,13 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const nextIndex = Math.max(siblingMax + 1, readSeq(subSeqKey) + 1);
     const subtaskId = `${parentId}.${nextIndex}`;
 
-    // Try Tauri backend IPC first
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const backendSubtask = await invoke<any>('create_subtask', {
-        parentId,
-        targetStageId: targetCol.id,
-        title: null,
-      });
-      if (backendSubtask && typeof backendSubtask.id === 'string') {
-        // Backend computes its own index (max+1 over disk tasks): adopt the
-        // real id and raise our per-parent counter to it so later indexes
-        // never collide with it.
-        const usedIdx = parseInt(backendSubtask.id.split('.').pop() || '0', 10);
-        writeSeq(subSeqKey, Number.isFinite(usedIdx) && usedIdx > 0 ? Math.max(usedIdx, nextIndex) : nextIndex);
-        await get().loadTasks();
-        return get().tasks.find((t) => t.id === backendSubtask.id) || null;
-      }
-      if (backendSubtask) {
-        writeSeq(subSeqKey, nextIndex);
-        await get().loadTasks();
-        return get().tasks.find((t) => t.id === subtaskId) || null;
-      }
-    } catch (err) {
-      console.info('create_subtask invoke fallback to client state:', err);
-    }
-
-    // Web mode / client fallback
     const subtaskStatus: TaskStatus = targetCol.terminal
       ? 'done'
       : targetCol.persona
       ? 'running'
       : 'idle';
 
-    const newSubtask: KanbanTask = {
+    const optimisticSubtask: KanbanTask = {
       id: subtaskId,
       title: `[${targetCol.title}] ${parent.title}`,
       description: `### Подзадача этапа: ${targetCol.title}\nРодительская задача: ${parentId}\n\n${parent.description || ''}`,
@@ -1024,7 +1006,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       handoverSummary: undefined,
     };
 
-    const updatedTasks = tasks.map((t) => {
+    // OPTIMISTIC SUBTASK CREATION:
+    // Immediately update UI with new subtask and parent status:
+    const initialTasks = tasks.map((t) => {
       if (t.id === parentId) {
         return {
           ...t,
@@ -1034,25 +1018,52 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       }
       return t;
     });
+    const withOptimisticSubtask = [...initialTasks, optimisticSubtask];
+    set({ tasks: withOptimisticSubtask });
+    persistTasksToLocalStorage(withOptimisticSubtask);
+    writeSeq(subSeqKey, nextIndex);
 
-    const finalTasks = [...updatedTasks, newSubtask];
-    set({ tasks: finalTasks });
-    persistTasksToLocalStorage(finalTasks);
-    writeSeq(getSubtaskSeqStorageKey(parentId), nextIndex);
-    await syncTasksBackend(finalTasks);
-
-    if (targetCol.autoRun ?? !!targetCol.persona) {
-      await triggerRunAgent(subtaskId, newSubtask.description);
+    // Call backend IPC asynchronously and reconcile without disk reload
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const backendSubtask = await invoke<any>('create_subtask', {
+        parentId,
+        targetStageId: targetCol.id,
+        title: null,
+      });
+      if (backendSubtask && typeof backendSubtask.id === 'string') {
+        const mapped = mapBackendTaskToKanban(backendSubtask);
+        const usedIdx = parseInt(backendSubtask.id.split('.').pop() || '0', 10);
+        writeSeq(subSeqKey, Number.isFinite(usedIdx) && usedIdx > 0 ? Math.max(usedIdx, nextIndex) : nextIndex);
+        // Silently reconcile optimistic subtask with backend result, updating parent link if ID drifted
+        const currentTasks = get().tasks;
+        const reconciled = currentTasks.map((t) => {
+          if (t.id === subtaskId) return mapped;
+          if (t.id === parentId && t.waitingForSubtaskId === subtaskId) {
+            return { ...t, waitingForSubtaskId: mapped.id };
+          }
+          return t;
+        });
+        set({ tasks: reconciled });
+        persistTasksToLocalStorage(reconciled);
+        return mapped;
+      }
+    } catch (err) {
+      console.info('Backend create_subtask failed or in web mode, saving local state:', err);
+      await syncTasksBackend(get().tasks);
     }
 
-    return newSubtask;
+    if (targetCol.autoRun ?? !!targetCol.persona) {
+      await triggerRunAgent(subtaskId, optimisticSubtask.description);
+    }
+
+    return optimisticSubtask;
   },
 
   deleteTask: async (taskId) => {
-    const { tasks } = get();
-    const target = tasks.find((t) => t.id === taskId);
-    // Subtasks (CVH-012.1) share the parent's worktree/branch — only
-    // top-level tasks own git resources.
+    const prevTasks = get().tasks;
+    const prevSelectedTaskId = get().selectedTaskId;
+    const target = prevTasks.find((t) => t.id === taskId);
     const isSubtask = !!target?.parentId || taskId.includes('.');
 
     // Cascade: the task plus all its descendants (via parentId or id prefix).
@@ -1060,7 +1071,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     let grew = true;
     while (grew) {
       grew = false;
-      for (const t of tasks) {
+      for (const t of prevTasks) {
         if (toDelete.has(t.id)) continue;
         if ((t.parentId && toDelete.has(t.parentId)) || [...toDelete].some((id) => t.id.startsWith(`${id}.`))) {
           toDelete.add(t.id);
@@ -1070,34 +1081,54 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     }
     const ids = [...toDelete];
 
-    // (a) Worktree + branch cleanup (best-effort, never blocks deletion).
-    if (!isSubtask) {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('cleanup_task_worktree', { taskId });
-      } catch (err) {
-        console.info('cleanup_task_worktree invoke error or web mode:', err);
-      }
-    }
-
-    // (б) Dialog history cleanup via the drawer store action:
-    // invoke clear_task_dialog (.cvh/harness.db SQLite table dialog_items).
-    for (const id of ids) {
-      try {
-        await useDrawerStore.getState().clearTaskLogs(id);
-      } catch (err) {
-        console.info('clearTaskLogs error for task:', id, err);
-      }
-    }
-
-    // (в) Remove from store + persist + sync.
-    const updatedTasks = get().tasks.filter((t) => !toDelete.has(t.id));
+    // OPTIMISTIC TASK DELETION:
+    // Immediately filter out the deleted task ID from state.tasks in Zustand (<1ms),
+    // and if any remaining parent was waiting on a deleted subtask, auto-unlock it!
+    const updatedTasks = prevTasks
+      .filter((t) => !toDelete.has(t.id))
+      .map((t) => {
+        if (t.waitingForSubtaskId && toDelete.has(t.waitingForSubtaskId)) {
+          return {
+            ...t,
+            waitingForSubtaskId: undefined,
+            status: t.status === 'waiting_subtask' ? ('idle' as TaskStatus) : t.status,
+          };
+        }
+        return t;
+      });
     set({
       tasks: updatedTasks,
-      selectedTaskId: toDelete.has(get().selectedTaskId ?? '') ? null : get().selectedTaskId,
+      selectedTaskId: toDelete.has(prevSelectedTaskId ?? '') ? null : prevSelectedTaskId,
     });
     persistTasksToLocalStorage(updatedTasks);
-    await syncTasksBackend(updatedTasks);
+
+    // Background cleanup (worktree, SQLite dialogs, tasks.json)
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      // Preferred path: unified delete_task command in Rust backend
+      try {
+        await invoke('delete_task', { taskId });
+      } catch (backendErr) {
+        // Fallback: cleanup worktree, dialog logs, and sync tasks to disk
+        console.info('Backend delete_task command failed or fallback:', backendErr);
+        if (!isSubtask) {
+          await invoke('cleanup_task_worktree', { taskId }).catch(() => {});
+        }
+        for (const id of ids) {
+          try {
+            await useDrawerStore.getState().clearTaskLogs(id);
+          } catch {}
+        }
+        await syncTasksBackend(updatedTasks);
+      }
+    } catch (err) {
+      console.error('Critical failure during task deletion background sync:', err);
+      // Restore previous state if background sync totally failed
+      set({ tasks: prevTasks, selectedTaskId: prevSelectedTaskId });
+      persistTasksToLocalStorage(prevTasks);
+      const msg = typeof err === 'string' ? err : err instanceof Error ? err.message : JSON.stringify(err);
+      alert(`Не удалось удалить задачу на диске:\n${msg}`);
+    }
   },
 
   runTaskAgent: async (taskId) => {

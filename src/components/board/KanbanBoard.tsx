@@ -414,7 +414,7 @@ export default function KanbanBoard() {
     void moveTask(draggableId, destColId);
   };
 
-  const savePipelineConfig = async (next: PipelineColumn[]): Promise<boolean> => {
+  const savePipelineConfig = useCallback(async (next: PipelineColumn[]): Promise<boolean> => {
     try {
       await saveCurrentBoard(next);
       return true;
@@ -422,7 +422,7 @@ export default function KanbanBoard() {
       console.info('saveCurrentBoard failed, rolling back:', err);
       return false;
     }
-  };
+  }, [saveCurrentBoard]);
 
   const handleReorderColumns = async (sourceIndex: number, destinationIndex: number) => {
     if (sourceIndex === destinationIndex) return;
@@ -604,16 +604,17 @@ export default function KanbanBoard() {
     setIsAddColumnOpen(false);
   };
 
-  const handleDeleteColumn = async (columnId: string) => {
+  const handleDeleteColumn = useCallback(async (columnId: string) => {
     if (columnId === 'backlog' || columnId === 'ready') return;
-    if (columns.length <= 1) return;
-    const idx = columns.findIndex((c) => c.id === columnId);
+    const { columns: curCols, tasks: curTasks, setColumns: curSetCols, moveTask: curMoveTask } = useBoardStore.getState();
+    if (curCols.length <= 1) return;
+    const idx = curCols.findIndex((c) => c.id === columnId);
     if (idx === -1) return;
-    const col = columns[idx];
-    const neighbor = columns[idx - 1] ?? columns[idx + 1] ?? null;
+    const col = curCols[idx];
+    const neighbor = curCols[idx - 1] ?? curCols[idx + 1] ?? null;
     if (!neighbor) return;
 
-    const doomedTasks = tasks.filter((t) => t.columnId === columnId);
+    const doomedTasks = curTasks.filter((t) => t.columnId === columnId);
     const confirmed = window.confirm(
       doomedTasks.length === 0
         ? `Удалить колонку «${col.title}»?`
@@ -621,20 +622,20 @@ export default function KanbanBoard() {
     );
     if (!confirmed) return;
 
-    const prev = columns;
+    const prev = curCols;
     const next = prev.filter((c) => c.id !== columnId);
 
-    setColumns(next);
+    curSetCols(next);
     const saved = await savePipelineConfig(next);
     if (!saved) {
-      setColumns(prev);
+      curSetCols(prev);
       setColumnsError('Не удалось сохранить удаление колонки. Изменения откачены.');
       return;
     }
     for (const t of doomedTasks) {
-      await moveTask(t.id, neighbor.id);
+      await curMoveTask(t.id, neighbor.id);
     }
-  };
+  }, [savePipelineConfig]);
 
   // Filter tasks based on activeBoardId and searchQuery:
   // If a task's boardId is missing or doesn't match any board, fallback to activeBoardId.

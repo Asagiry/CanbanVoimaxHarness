@@ -99,6 +99,7 @@ pub fn run() {
             create_task,
             create_subtask,
             update_task,
+            delete_task,
             move_task_stage,
             advance_task,
             run_agent,
