@@ -1,4 +1,30 @@
 {
+    "CVH-PURGE-TOOL-HARDCODES": {
+        "taskId": "CVH-PURGE-TOOL-HARDCODES",
+        "title": "Comprehensive Audit & Complete Purge of Hidden Role/Stage Tool Hardcodes",
+        "author": "agent-retro-verifier",
+        "verdict": "APPROVED",
+        "commitHash": "337b7b9",
+        "commitMessage": "feat(policy): purge role and stage tool hardcodes in favor of dynamic policy matrix",
+        "summary": "Conducted comprehensive audit and purged hidden role and stage tool hardcodes: (1) Root cause: previous quick patches introduced hardcoded whitelists (CVH_DEV_TOOLS) in agent.rs (candidate tool filtering and runtime execution gating) and hardcoded role aliases in config.rs (sync_tool_policies_to_personas), violating the Two-Level Tool Policy Matrix invariant (§ 2.5) and hamstringing custom pipelines/personas; (2) Architectural fix: restored Tool Policy Matrix (.cvh/settings/tool-policy.json) and setting.allowed_tools as the sole authoritative deciders; (3) Replaced static role-to-stage aliases with dynamic persona -> column resolution across pipeline.json and boards.json; (4) Retained pure § 2.8 task card boundary enforcement (create_task, complete_task restricted to orchestrator/UI roles); (5) Corrected dev, review, and retro stage policy overrides (enabled web_search, web_fetch, subagent, subagent_bg; disabled task creation for dev/review/retro); (6) Added execution protocol in system prompt against premature final answer emission; (7) Verified via 116 passing unit tests, cargo clippy 0 warnings, and npx tsc --noEmit.",
+        "files": [
+            ".cvh/settings/tool-policy.json",
+            "AGENTS.md",
+            "src-tauri/src/agent.rs",
+            "src-tauri/src/agent/tests.rs",
+            "src-tauri/src/config.rs",
+            "src/stores/toolPolicyStore.ts"
+        ],
+        "affectedModules": [
+            "agent.rs",
+            "config.rs",
+            "ToolPolicyMatrix",
+            "sync_tool_policies_to_personas",
+            "compile_primed_system_prompt",
+            "toolPolicyStore"
+        ],
+        "timestamp": 1792353422680
+    },
     "CVH-EDIT-FILE-RESILIENT-DIFF": {
         "taskId": "CVH-EDIT-FILE-RESILIENT-DIFF",
         "title": "Harden edit_file (str_replace) with Resilient Whitespace-Relaxed Line Matching and Honest Multi-Line Diff Diagnostics",

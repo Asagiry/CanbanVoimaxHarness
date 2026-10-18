@@ -1,0 +1,59 @@
+{
+  "taskId": "CVH-PURGE-TOOL-HARDCODES",
+  "task": "purge-all-tool-hardcodes",
+  "title": "Comprehensive Audit & Complete Purge of Hidden Role/Stage Tool Hardcodes",
+  "branch": "feat/purge-all-tool-hardcodes",
+  "commitHash": "337b7b9",
+  "commitMessage": "feat(policy): purge role and stage tool hardcodes in favor of dynamic policy matrix",
+  "author": "agent-retro-verifier",
+  "verdict": "APPROVED",
+  "date": "2026-10-18T19:57:36.368Z",
+  "timestamp": 1792353456371,
+  "sensors": {
+    "typescript": "pass (tsc --noEmit, 0 errors)",
+    "rust_compiler": "pass (cargo check, 0 errors)",
+    "rust_clippy": "pass (cargo clippy -- -D warnings, 0 warnings)",
+    "rust_tests": "pass (cargo test, 116 passed, 0 failed)",
+    "l2_reviewer": "APPROVED_WITH_CAVEATS",
+    "l3_retro_verifier": "APPROVED"
+  },
+  "files": [
+    ".cvh/settings/tool-policy.json",
+    "AGENTS.md",
+    "src-tauri/src/agent.rs",
+    "src-tauri/src/agent/tests.rs",
+    "src-tauri/src/config.rs",
+    "src/stores/toolPolicyStore.ts"
+  ],
+  "affectedModules": [
+    "agent.rs",
+    "config.rs",
+    "ToolPolicyMatrix",
+    "sync_tool_policies_to_personas",
+    "compile_primed_system_prompt",
+    "toolPolicyStore"
+  ],
+  "summary": "Comprehensive audit and complete purge of hidden role and stage tool hardcodes: (1) Root cause: previous iterative patches introduced hardcoded whitelists (CVH_DEV_TOOLS) in agent.rs (filtering and runtime gating) and hardcoded role aliases in config.rs (sync_tool_policies_to_personas), violating the Two-Level Tool Policy Matrix invariant (§ 2.5); (2) Architectural fix: restored Tool Policy Matrix (.cvh/settings/tool-policy.json) and setting.allowed_tools as the sole authoritative deciders; (3) Replaced static role-to-stage aliases with dynamic persona -> column resolution across pipeline.json and boards.json; (4) Retained pure § 2.8 task card boundary enforcement (create_task, complete_task restricted to orchestrator/UI roles); (5) Corrected dev, review, and retro stage policy overrides (enabled web_search, web_fetch, subagent, subagent_bg; disabled task creation for dev/review/retro); (6) Added execution protocol in system prompt against premature final answer emission; (7) Verified via 116 passing unit tests, cargo clippy 0 warnings, and npx tsc --noEmit.",
+  "ftrAnalysis": {
+    "firstTimeRight": true,
+    "ftrScore": "98%",
+    "verdict": "APPROVED",
+    "rootCauses": [
+      {
+        "cause": "Hardcoded Tool Whitelist Circumventing Policy Matrix",
+        "detail": "CVH_DEV_TOOLS was hardcoded in agent.rs (get_agent_tools and execute_tool), stripping and rejecting tools regardless of .cvh/settings/tool-policy.json and setting.allowed_tools, preventing cvh-dev from utilizing permitted tools such as todo_write or web_fetch.",
+        "resolution": "Removed CVH_DEV_TOOLS filtering and runtime checks. Tool permissions are now governed authoritatively by is_tool_allowed(tool_policy, ...) and agent_allows_tool(setting.allowed_tools, ...)."
+      },
+      {
+        "cause": "Static Role-to-Stage Aliases in Policy Synchronization",
+        "detail": "In config.rs (sync_tool_policies_to_personas), role names were mapped to stages via rigid static string checks (e.g. developer -> dev, reviewer -> review), failing when custom pipelines or arbitrary persona names were introduced.",
+        "resolution": "Implemented dynamic persona -> column resolution by inspecting pipeline.json and boards.json for col.persona == role || col.id == role, falling back to conventions only for minimal setups."
+      },
+      {
+        "cause": "Stage Override Policy Inconsistencies and Role Boundary Violations",
+        "detail": "tool-policy.json and toolPolicyStore.ts disabled web_search for dev and retro stages, preventing necessary technical research. Conversely, dev stage allowed create_task and complete_task, violating § 2.8 role boundaries.",
+        "resolution": "Updated default overrides: enabled web_search, web_fetch, subagent, subagent_bg for dev, review, and retro stages; strictly disabled create_task and complete_task for non-orchestrator stages."
+      }
+    ]
+  }
+}
