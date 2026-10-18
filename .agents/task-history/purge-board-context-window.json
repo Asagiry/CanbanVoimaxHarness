@@ -1,0 +1,56 @@
+{
+  "taskId": "CVH-PURGE-BOARD-CONTEXT-WINDOW",
+  "task": "purge-board-context-window",
+  "title": "Decouple context window from boards and columns strictly into agent personas",
+  "branch": "feat/purge-board-context-window",
+  "commitHash": "e0ce150",
+  "commitMessage": "feat(context): decouple context window from boards and columns strictly into agent personas",
+  "author": "agent-developer (tauri-rust-engineer & react-tailwind-artisan)",
+  "verdict": "APPROVED",
+  "date": "2026-10-18T18:48:10.133Z",
+  "timestamp": 1792349290137,
+  "sensors": {
+    "typescript": "pass (tsc --noEmit, 0 errors)",
+    "rust_compiler": "pass (cargo check --tests, 0 errors)",
+    "rust_tests": "pass (cargo test --lib, 114 passed, 0 failed)",
+    "l2_reviewer": "APPROVED",
+    "l3_retro_verifier": "APPROVED"
+  },
+  "files": [
+    "AGENTS.md",
+    "src-tauri/src/agent.rs",
+    "src-tauri/src/commands/boards.rs",
+    "src-tauri/src/commands/tasks.rs",
+    "src-tauri/src/commands/tests.rs",
+    "src-tauri/src/config.rs",
+    "src-tauri/src/lib.rs",
+    "src/components/board/KanbanBoard.tsx",
+    "src/components/drawer/ContextGauge.tsx",
+    "src/components/drawer/DrawerSteerBar.tsx",
+    "src/stores/boardStore.ts",
+    "src/stores/cortexStore.ts",
+    "src/stores/mockData.ts",
+    "src/types/index.ts",
+    ".cvh/boards.json",
+    ".cvh/pipeline.json",
+    ".cvh/agents/cvh-dev/rules/boards.md"
+  ],
+  "summary": "Decoupled context window limits from boards and pipeline columns strictly into agent personas (.cvh/agents/<role>/setting). 1. Rust backend: Added #[serde(skip_serializing_if = \"Option::is_none\")] to PipelineColumn.context_window, purged hardcoded column context windows from default pipelines and templates in config.rs. Added context_window to AgentPersonaInfo in boards.rs dynamically loaded from agent settings. Added get_task_context_window Tauri IPC command in tasks.rs resolving persona setting overrides with fallback to 128,000, and updated run_agent to resolve context limits strictly from persona settings. Added comprehensive unit tests in commands/tests.rs. 2. Frontend: Purged column contextWindow from boardStore.ts, mockData.ts, and KanbanBoard.tsx. Made contextWindow optional in PipelineColumn (types/index.ts). Enhanced ContextGauge with persona prop, async get_task_context_window IPC resolution, and reactive fallback from cortexStore.agentPersonas. Updated DrawerSteerBar to resolve active persona (activeSubagentRole || currentColumn?.persona || 'developer') and propagate to ContextGauge. 3. Retro rule and configuration sweep: Purged remaining legacy contextWindow fields from .cvh/boards.json, .cvh/pipeline.json, and .cvh/agents/cvh-dev/rules/boards.md. Codified Decoupled Context Window & Persona Single-Source-of-Truth Invariant in AGENTS.md § 2.25.",
+  "ftrAnalysis": {
+    "firstTimeRight": true,
+    "ftrScore": "95%",
+    "verdict": "APPROVED",
+    "rootCauses": [
+      {
+        "cause": "Architectural Invariant Inconsistency (Context Window Couplings to Columns)",
+        "detail": "Context window was historically stored on PipelineColumn, coupling LLM capacity limits to board columns rather than agent personas. This created sync friction, hindered subagents with differing personas in the same column, and bloated board JSON definitions.",
+        "resolution": "Decoupled context window strictly to .cvh/agents/<role>/setting, added get_task_context_window Tauri command, and updated UI to dynamically resolve active persona limits."
+      },
+      {
+        "cause": "Legacy Configuration Residue in Repository Root",
+        "detail": "While backend types and frontend stores decoupled the schema, existing .cvh/boards.json, .cvh/pipeline.json, and .cvh/agents/cvh-dev/rules/boards.md files retained stale contextWindow fields.",
+        "resolution": "Retrospective cleanup pruned all stale fields across .cvh/ configurations and synchronized markdown documentation rules."
+      }
+    ]
+  }
+}

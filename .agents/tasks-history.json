@@ -1494,5 +1494,34 @@
         ],
         "summary": "Eliminated all unpainted white/light background blocks in dark mode across 21 UI components. Fixed GitDiffSidebar AccordionFileItem, ToolExecutionCard read/diff/preview renders and language badges, DrawerHeader stage stepper contrast and badges, CortexExplorer sidebar tree labels, modals, and context menus, as well as RuleEditorModal, DrawerActivityStream, DrawerSteerBar, CopilotDock, SettingsModal, and ToolPolicyModal. Deep token propagation verified with zero compiler or lint regressions.",
         "timestamp": 1792330800000
+    },
+    "CVH-PURGE-BOARD-CONTEXT-WINDOW": {
+        "taskId": "CVH-PURGE-BOARD-CONTEXT-WINDOW",
+        "title": "Decouple context window from boards and columns strictly into agent personas",
+        "author": "agent-developer (tauri-rust-engineer & react-tailwind-artisan)",
+        "verdict": "APPROVED",
+        "commitHash": "e0ce150614e4bc34b602dfac0c6cad9ade8463d6",
+        "commitMessage": "feat(context): decouple context window from boards and columns strictly into agent personas",
+        "summary": "Decoupled context window limits from boards and pipeline columns strictly into agent personas (.cvh/agents/<role>/setting). 1. Rust backend: Added #[serde(skip_serializing_if = \"Option::is_none\")] to PipelineColumn.context_window, purged hardcoded column context windows from default pipelines and templates in config.rs. Added context_window to AgentPersonaInfo in boards.rs dynamically loaded from agent settings. Added get_task_context_window Tauri IPC command in tasks.rs resolving persona setting overrides with fallback to 128,000, and updated run_agent to resolve context limits strictly from persona settings. Added unit test test_agent_setting_context_window_strict_resolution in commands/tests.rs. 2. Frontend: Purged column contextWindow from boardStore.ts, mockData.ts, and KanbanBoard.tsx. Made contextWindow optional in PipelineColumn (types/index.ts). Enhanced ContextGauge with persona prop, async get_task_context_window IPC resolution, and reactive fallback from cortexStore.agentPersonas. Updated DrawerSteerBar to resolve active persona (activeSubagentRole || currentColumn?.persona || 'developer') and propagate to ContextGauge. 3. Retro rule and configuration sweep: Purged remaining legacy contextWindow fields from .cvh/boards.json, .cvh/pipeline.json, and .cvh/agents/cvh-dev/rules/boards.md. Codified Decoupled Context Window & Persona Single-Source-of-Truth Invariant in AGENTS.md § 2.25.",
+        "files": [
+            "AGENTS.md",
+            "src-tauri/src/agent.rs",
+            "src-tauri/src/commands/boards.rs",
+            "src-tauri/src/commands/tasks.rs",
+            "src-tauri/src/commands/tests.rs",
+            "src-tauri/src/config.rs",
+            "src-tauri/src/lib.rs",
+            "src/components/board/KanbanBoard.tsx",
+            "src/components/drawer/ContextGauge.tsx",
+            "src/components/drawer/DrawerSteerBar.tsx",
+            "src/stores/boardStore.ts",
+            "src/stores/cortexStore.ts",
+            "src/stores/mockData.ts",
+            "src/types/index.ts",
+            ".cvh/boards.json",
+            ".cvh/pipeline.json",
+            ".cvh/agents/cvh-dev/rules/boards.md"
+        ],
+        "timestamp": 1792349359218
     }
 }
