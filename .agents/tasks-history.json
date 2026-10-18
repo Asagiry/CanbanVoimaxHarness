@@ -1,4 +1,28 @@
 {
+  "CVH-INITIAL-BOARD-CVH-DEV": {
+    "taskId": "CVH-INITIAL-BOARD-CVH-DEV",
+    "task": "initial-board-cvh-dev",
+    "title": "Set Initial Fresh-Project Board to 3 Columns: Backlog -> cvh-dev (Development) -> Ready, with cvh-dev Persona and 200k Context",
+    "branch": "feat/initial-board-cvh-dev",
+    "commitHash": "69dafb3",
+    "featureCommit": "45b72b2",
+    "polishCommit": "69dafb3",
+    "commitMessage": "fix(config): simplify map_or to is_none_or per clippy lint",
+    "author": "agent-developer (tauri-rust-engineer)",
+    "verdict": "APPROVED",
+    "summary": "Configured initial fresh-project default board to an agile 3-column architecture (Backlog -> cvh-dev / Development -> Ready), bound to cvh-dev persona with 200,000 token context window: (1) Updated scaffold_cvh_project in config.rs, DEFAULT_BOARDS_JSON, and DEFAULT_PIPELINE_JSON to generate 3 columns ('backlog', 'dev' with persona 'cvh-dev', and 'ready' with terminal: true); (2) Added auto-seeding of 200,000 tokens for cvh-dev setting on project scaffold if absent or lower; (3) Updated frontend default board state in boardStore.ts and mockData.ts to match 3-column layout; (4) Updated backend unit test in commands/tests.rs; (5) Resolved clippy::unnecessary_map_or lint by replacing map_or(true, |w| w < 200000) with is_none_or(|w| w < 200000); (6) Formulated Section 2.30 invariant in AGENTS.md; (7) Verified via all NASA Ground Truth Sensors (cargo check, cargo test 116 passed, cargo clippy 0 warnings, npx tsc 0 errors).",
+    "files": [
+      ".cvh/agents/cvh-dev/setting",
+      ".cvh/boards.json",
+      ".cvh/pipeline.json",
+      "src-tauri/src/commands/tests.rs",
+      "src-tauri/src/config.rs",
+      "src/stores/boardStore.ts",
+      "src/stores/mockData.ts",
+      "AGENTS.md"
+    ],
+    "timestamp": 1792353847251
+  },
   "CVH-PURGE-TOOL-HARDCODES": {
     "taskId": "CVH-PURGE-TOOL-HARDCODES",
     "title": "Comprehensive Audit & Complete Purge of Hidden Role/Stage Tool Hardcodes",
