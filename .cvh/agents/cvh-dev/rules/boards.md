@@ -34,7 +34,7 @@ Columns represent autonomous stages. Moving a card triggers stage automations an
   ```
 - `.cvh/pipeline.json`:
   Mirrors the active board's columns and lifecycle settings.
-  Stage properties: `id`, `title`, `persona`, `contextWindow`, `gatekeeperSensor`, `allowedTools`, `terminal`, `hooks`, `routes`.
+  Stage properties: `id`, `title`, `persona`, `gatekeeperSensor`, `allowedTools`, `terminal`, `hooks`, `routes`.
 
 ## 5. Persona Mapping Invariant: 1 Persona = Exactly 1 Directory
 - **Single Source of Truth**: Exactly 1 persona corresponds to 1 directory under `.cvh/agents/<persona>/`.
