@@ -4,7 +4,7 @@ import { KanbanTask, TaskStatus } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore, syncTasksBackend } from '../../stores/boardStore';
 import { useShallow } from 'zustand/react/shallow';
-import { Play, Clock, GitBranch, ChevronDown, MessageSquare, GitFork, Sparkles } from 'lucide-react';
+import { Play, GitBranch, ChevronDown, MessageSquare, GitFork, Sparkles } from 'lucide-react';
 import TaskContextMenu from './TaskContextMenu';
 
 function formatCardDate(ts?: number): string {
@@ -33,6 +33,17 @@ function formatStageDuration(totalSeconds: number): string {
   const days = Math.floor(hoursTotal / 24);
   const h = hoursTotal % 24;
   return h > 0 ? `${days}д ${h}ч` : `${days}д`;
+}
+
+function formatTimerMMSS(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const hrs = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+  if (hrs > 0) {
+    return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
 interface KanbanCardProps {
@@ -117,9 +128,9 @@ function KanbanCard({ task, index }: KanbanCardProps) {
     switch (status) {
       case 'running':
         return (
-          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#052e16]/40 border border-[#bbf7d0] dark:border-[#166534]">
+          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#052e16]/40 border border-[#bbf7d0] dark:border-[#166534]">
             <span className="h-1.5 w-1.5 rounded-full bg-[#15803d] dark:bg-[#4ade80] animate-pulse" />
-            <span>В работе</span>
+            <span>В работе {formatTimerMMSS(currentStageDuration)}</span>
           </span>
         );
       case 'paused':
@@ -255,17 +266,6 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                   title={task.branch ? `Ветка: ${task.branch}` : 'Ветка не задана'}
                 >
                   {task.branch || 'без ветки'}
-                </span>
-                <span
-                  title="Время в текущей колонке"
-                  className="inline-flex items-center gap-1 text-[#8f8f8f] dark:text-[#8b949e] tabular-nums whitespace-nowrap shrink-0"
-                >
-                  <Clock className="h-3 w-3 shrink-0" />
-                  <span>
-                    {currentStageDuration <= 0
-                      ? 'только что'
-                      : `в колонке ${formatStageDuration(currentStageDuration)}`}
-                  </span>
                 </span>
               </div>
               {(task.createdAt || currentTotalElapsed > 0) && (

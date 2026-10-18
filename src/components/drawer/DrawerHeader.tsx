@@ -155,7 +155,7 @@ export default function DrawerHeader({
                 {task && workingColumns.length > 0 && (
                   <div
                     data-no-drag
-                    className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg bg-[#f9fafb] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] shrink-0 select-none pointer-events-auto shadow-2xs overflow-x-auto no-scrollbar max-w-[500px]"
+                    className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg bg-[#f9fafb] dark:bg-[#161b22] shrink-0 select-none pointer-events-auto shadow-2xs overflow-x-auto no-scrollbar max-w-[500px]"
                   >
                 {workingColumns.map((col, idx) => {
                   const matchingSubtask = subtasks.find(

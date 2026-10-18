@@ -182,7 +182,7 @@ export default function DrawerSteerBar({
   };
 
   return (
-    <footer className="border-t border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa]/80 dark:bg-[#090a0f]/80 backdrop-blur-xs px-3 pb-3 pt-1 shrink-0 shadow-xs z-10 transition-colors">
+    <footer className="bg-[#fafafa]/80 dark:bg-[#090a0f]/80 backdrop-blur-xs px-3 pb-3 pt-1 shrink-0 shadow-xs z-10 transition-colors">
       <div className="max-w-4xl mx-auto">
         {/* Floating Modern Light Card */}
         <div

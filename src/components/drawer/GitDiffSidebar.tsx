@@ -352,21 +352,9 @@ export default function GitDiffSidebar({
 
       if (data?.files && data.files.length > 0) {
         if (!hasInitialLoadedRef.current) {
-          // Initial load for this task: auto-expand the first file (or 2 if total <= 2)
+          // Initial load for this task: all files collapsed by default
           hasInitialLoadedRef.current = true;
-          setExpandedFiles(() => {
-            const next = new Set<string>();
-            if (data.files.length <= 2) {
-              data.files.forEach((f) => {
-                if (!userCollapsedFilesRef.current.has(f.path)) {
-                  next.add(f.path);
-                }
-              });
-            } else if (data.files[0]?.path && !userCollapsedFilesRef.current.has(data.files[0].path)) {
-              next.add(data.files[0].path);
-            }
-            return next;
-          });
+          setExpandedFiles(new Set());
         } else {
           // Background sync (subsequent fetch on live tool events, etc.):
           // NEVER forcibly re-expand files that the user intentionally collapsed!
