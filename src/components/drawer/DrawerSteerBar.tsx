@@ -3,6 +3,7 @@ import type { KanbanTask } from '../../types';
 import ContextGauge from './ContextGauge';
 import TaskTodoWidget from './TaskTodoWidget';
 import { useDrawerStore } from '../../stores/drawerStore';
+import { useBoardStore } from '../../stores/boardStore';
 import { getRoleBadgeClass } from './ToolExecutionCard';
 import {
   ArrowLeft,
@@ -10,7 +11,6 @@ import {
   Plus,
   ChevronDown,
   Square,
-  Minimize2,
 } from 'lucide-react';
 
 export interface DrawerSteerBarProps {
@@ -40,28 +40,17 @@ export default function DrawerSteerBar({
   const [attachedImages, setAttachedImages] = useState<Array<{ id: string; name: string; dataUrl: string }>>([]);
   const [isDragOverChat, setIsDragOverChat] = useState(false);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
-  const [isCompacting, setIsCompacting] = useState(false);
   const chatFileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const {
-    compactTaskContext,
     activeSubagentId,
     activeSubagentRole,
     closeSubagent,
   } = useDrawerStore();
 
-  const handleCompact = async () => {
-    if (isCompacting || !task?.id) return;
-    setIsCompacting(true);
-    try {
-      await compactTaskContext(task.id);
-    } catch (err) {
-      console.warn('Failed to compact context:', err);
-    } finally {
-      setIsCompacting(false);
-    }
-  };
+  const columns = useBoardStore((s) => s.columns);
+  const currentColumn = columns.find((c) => c.id === task.columnId);
 
   // Reset input and attachments on task switch
   useEffect(() => {
@@ -352,19 +341,9 @@ export default function DrawerSteerBar({
           </div>
         </div>
 
-        {/* Elegant Telemetry Status Line (Кэш, TPS, Контекст) & Compactor Trigger */}
-        <div className="flex items-center justify-center gap-3">
-          <ContextGauge taskId={task.id} turns={turns} />
-          <div className="h-3 w-px bg-[#ebebeb] dark:bg-[#21262d]" />
-          <button
-            type="button"
-            onClick={handleCompact}
-            disabled={isCompacting}
-            className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] hover:border-[#d4d4d8] dark:hover:border-[#484f58] text-[#0d0d0d] dark:text-[#f0f6fc] hover:text-[#000000] dark:hover:text-[#ffffff] text-[11px] font-sans font-medium transition cursor-pointer shadow-2xs disabled:opacity-50 active:scale-[0.98]"
-          >
-            <Minimize2 className={`h-3 w-3 text-[#4d4d4d] dark:text-[#8b949e] ${isCompacting ? 'animate-spin' : ''}`} />
-            <span>{isCompacting ? 'Сжатие...' : 'Сжать контекст'}</span>
-          </button>
+        {/* Elegant Telemetry Status Line (Кэш, TPS, Контекст) */}
+        <div className="flex items-center justify-center">
+          <ContextGauge taskId={task.id} turns={turns} contextWindow={currentColumn?.contextWindow} />
         </div>
       </div>
     </footer>

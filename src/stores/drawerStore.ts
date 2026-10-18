@@ -45,7 +45,9 @@ interface DrawerState {
   taskEndTime: Record<string, number | null>;
   streamedTurnTokens: Record<string, number>;
   finalTps: Record<string, number | null>;
-  tokenOverrides: Record<string, number>;
+  tokenOverrides: Record<string, number | undefined>;
+  cumulativeOutputTokens: Record<string, number>;
+  cumulativeGenerationSec: Record<string, number>;
 
   // Nested Subagent View State
   activeSubagentId: string | null;
@@ -77,6 +79,7 @@ interface DrawerState {
   recordStreamedChars: (taskId: string, chars: number) => void;
   resetTurnStreamMetrics: (taskId: string) => void;
   setFinalTps: (taskId: string, v: number | null) => void;
+  recordTurnMetrics: (taskId: string, tokens: number, seconds: number) => void;
   sendSteerMessage: (taskId: string, message: string) => Promise<void>;
   injectOptimisticCompactTool: (taskId: string, customId?: string) => string;
   compactTaskContext: (taskId: string) => Promise<{ savedTokens: number; evaporatedCount: number }>;
@@ -121,6 +124,8 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
   streamedTurnTokens: {},
   finalTps: {},
   tokenOverrides: {},
+  cumulativeOutputTokens: {},
+  cumulativeGenerationSec: {},
   activeSubagentId: null,
   activeSubagentTitle: null,
   activeSubagentRole: null,
@@ -559,6 +564,29 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
     }));
   },
 
+  recordTurnMetrics: (taskId, tokens, seconds) => {
+    if (tokens <= 0 || seconds <= 0.01) return;
+    const tps = Number((tokens / seconds).toFixed(1));
+    set((state) => {
+      const prevTok = state.cumulativeOutputTokens[taskId] ?? 0;
+      const prevSec = state.cumulativeGenerationSec[taskId] ?? 0;
+      return {
+        finalTps: {
+          ...state.finalTps,
+          [taskId]: tps,
+        },
+        cumulativeOutputTokens: {
+          ...state.cumulativeOutputTokens,
+          [taskId]: prevTok + tokens,
+        },
+        cumulativeGenerationSec: {
+          ...state.cumulativeGenerationSec,
+          [taskId]: prevSec + seconds,
+        },
+      };
+    });
+  },
+
   sendSteerMessage: async (taskId, message) => {
     // 1. Append user steering message into output stream
     get().appendOutput(taskId, message, 'steer');
@@ -746,6 +774,14 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         ...state.taskEndTime,
         [taskId]: null,
       },
+      cumulativeOutputTokens: {
+        ...state.cumulativeOutputTokens,
+        [taskId]: 0,
+      },
+      cumulativeGenerationSec: {
+        ...state.cumulativeGenerationSec,
+        [taskId]: 0,
+      },
     }));
     try {
       const { invoke } = await import('@tauri-apps/api/core');
@@ -902,13 +938,16 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
             };
           });
           return;
-        } else if (compactedTokens !== undefined) {
+        } else {
           set((state) => ({
-            tokenOverrides: {
-              ...state.tokenOverrides,
-              [taskId]: compactedTokens!,
-            },
+            activityFeed: { ...state.activityFeed, [taskId]: [] },
+            streamEntries: { ...state.streamEntries, [taskId]: { thoughts: [], outputs: [] } },
+            toolExecutions: { ...state.toolExecutions, [taskId]: [] },
+            tokenOverrides: { ...state.tokenOverrides, [taskId]: undefined },
+            cumulativeOutputTokens: { ...state.cumulativeOutputTokens, [taskId]: 0 },
+            cumulativeGenerationSec: { ...state.cumulativeGenerationSec, [taskId]: 0 },
           }));
+          return;
         }
       }
     } catch (e) {

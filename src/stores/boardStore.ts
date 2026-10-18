@@ -1103,22 +1103,32 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     });
     persistTasksToLocalStorage(updatedTasks);
 
-    // Background cleanup (worktree, SQLite dialogs, tasks.json)
+    // Close drawer if active task is deleted
+    const drawerActiveTaskId = useDrawerStore.getState().activeTaskId;
+    if (drawerActiveTaskId && toDelete.has(drawerActiveTaskId)) {
+      useDrawerStore.getState().closeDrawer();
+    }
+
+    // ALWAYS clear logs and SQLite dialogue for every deleted ID in drawer store
+    for (const id of ids) {
+      try {
+        await useDrawerStore.getState().clearTaskLogs(id);
+      } catch (logErr) {
+        console.warn('Failed to clear task logs for deleted task:', id, logErr);
+      }
+    }
+
+    // Background cleanup (worktree, tasks.json)
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       // Preferred path: unified delete_task command in Rust backend
       try {
         await invoke('delete_task', { taskId });
       } catch (backendErr) {
-        // Fallback: cleanup worktree, dialog logs, and sync tasks to disk
+        // Fallback: cleanup worktree and sync tasks to disk
         console.info('Backend delete_task command failed or fallback:', backendErr);
         if (!isSubtask) {
           await invoke('cleanup_task_worktree', { taskId }).catch(() => {});
-        }
-        for (const id of ids) {
-          try {
-            await useDrawerStore.getState().clearTaskLogs(id);
-          } catch {}
         }
         await syncTasksBackend(updatedTasks);
       }

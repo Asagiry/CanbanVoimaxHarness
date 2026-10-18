@@ -1,4 +1,22 @@
 {
+    "CVH-FIX-DRAWER-CLEANUP-CONTEXT-WINDOW": {
+        "taskId": "CVH-FIX-DRAWER-CLEANUP-CONTEXT-WINDOW",
+        "title": "Fix Task Deletion Memory Leak in DrawerStore, Empty Dialog Stale State, and Context Window Resolution with Cumulative Telemetry Smoothing",
+        "author": "agent-developer (react-tailwind-artisan & tauri-rust-engineer)",
+        "verdict": "APPROVED",
+        "commitHash": "f4d0728",
+        "commitMessage": "refactor(telemetry): smooth cumulative TPS/RPM averaging and focus popover on context breakdown",
+        "summary": "Resolved 3 critical state and telemetry issues in DrawerStore and ContextGauge: 1. Unconditionally clear task logs and SQLite dialogue on task deletion, auto-closing the drawer if activeTaskId is in toDelete to eliminate memory leaks and zombie drawer views. 2. Fully reset activityFeed, streamEntries, toolExecutions, tokenOverrides, and cumulative metrics when loading an empty dialog. 3. Resolved contextWindow properly from pipeline columns in DrawerSteerBar and ContextGauge, eliminated dark mode contrast issues (black-on-black text) in the popover card, fixed 3-segment token allocation to preserve message tokens proportionally, smoothed TPS and RPM cumulative averages across turns, and consolidated the compact context button into the popover while pruning the redundant 2x2 telemetry grid.",
+        "files": [
+            "src/stores/boardStore.ts",
+            "src/stores/drawerStore.ts",
+            "src/components/drawer/DrawerSteerBar.tsx",
+            "src/components/drawer/ContextGauge.tsx",
+            "src/App.tsx",
+            "src/components/drawer/AgentConsoleDrawer.tsx"
+        ],
+        "timestamp": 1792343801800
+    },
     "CVH-BACKEND-TASK-SEQ-EDITFILE": {
         "taskId": "CVH-BACKEND-TASK-SEQ-EDITFILE",
         "title": "Backend Fixes: Persistent Monotonic Task ID Sequence, delete_task Worktree Cleanup & Broadcast, Windows CRLF edit_file Normalization",

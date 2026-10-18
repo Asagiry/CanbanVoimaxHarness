@@ -204,6 +204,18 @@
         "Client generates deterministic toolId passed across IPC; backend reuses it for agent:tool_call broadcast, agent:tool_result, and SQLite dialog_items persistence, guaranteeing zero card duplication or flicker upon reload.",
         "Native HTML title tooltips are strictly prohibited on labeled interactive buttons in desktop webview UI."
       ]
+    },
+    {
+      "name": "DrawerStateHygieneAndContextResolution",
+      "entityType": "Invariant",
+      "observations": [
+        "clearTaskLogs MUST run unconditionally for all deleted task IDs prior to backend IPC.",
+        "Active drawer automatically closes if the activeTaskId is in toDelete.",
+        "Empty dialog loads explicitly reset activityFeed, streamEntries, toolExecutions, tokenOverrides, and cumulative metrics.",
+        "ContextGauge resolves contextWindow hierarchically from props, boardStore columns, or stageLimit fallback.",
+        "Token allocation preserves messageTokens proportionally across System, Tool, and Messages segments.",
+        "TPS and RPM utilize cumulative averaging across turns to eliminate short-turn metric volatility."
+      ]
     }
   ],
   "relations": [
@@ -371,6 +383,11 @@
       "from": "StatePreservingContextCompactor",
       "to": "OptimisticFeedbackAndToolIdSyncInvariant",
       "relationType": "enforces"
+    },
+    {
+      "from": "DrawerStateHygieneAndContextResolution",
+      "to": "FrontendControlPlane",
+      "relationType": "ENFORCED_IN"
     }
   ]
 }
