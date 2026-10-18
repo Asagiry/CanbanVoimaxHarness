@@ -1,4 +1,18 @@
 {
+    "CVH-SHOWCASE-GOOGLE-EXHIBITION": {
+        "taskId": "CVH-SHOWCASE-GOOGLE-EXHIBITION",
+        "title": "Google Exhibition / Demo Showcase Readiness: Flagship README, Repository Hygiene & Git Prune",
+        "author": "agent-developer (react-tailwind-artisan & tauri-rust-engineer)",
+        "verdict": "APPROVED",
+        "commitHash": "c62a1bb",
+        "commitMessage": "docs(showcase): prepare exhibition-grade flagship README and cleanup repository hygiene",
+        "summary": "Prepared exhibition-grade flagship README.md showcasing CanbanVoimaxHarness architecture, benchmarks (~40MB RAM, sub-millisecond SQLite WAL), zero-turn memory priming, and two-tier tool policy matrix. Conducted complete repository hygiene cleanup: purged stray panic.log and dead test worktrees, ignored .pnpm-store/ in .gitignore, and pruned stale git registry pointers.",
+        "files": [
+            ".gitignore",
+            "README.md"
+        ],
+        "timestamp": 1792334400000
+    },
     "CVH-INIT": {
         "taskId": "CVH-INIT",
         "title": "Initialize CanbanVoimaxHarness architecture, AGENTS.md, .cvh/ pipeline, and skills",
