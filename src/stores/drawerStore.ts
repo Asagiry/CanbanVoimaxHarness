@@ -45,7 +45,7 @@ interface DrawerState {
   taskEndTime: Record<string, number | null>;
   streamedTurnTokens: Record<string, number>;
   finalTps: Record<string, number | null>;
-  tokenOverrides: Record<string, number>;
+  tokenOverrides: Record<string, number | undefined>;
 
   // Nested Subagent View State
   activeSubagentId: string | null;
@@ -902,13 +902,14 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
             };
           });
           return;
-        } else if (compactedTokens !== undefined) {
+        } else {
           set((state) => ({
-            tokenOverrides: {
-              ...state.tokenOverrides,
-              [taskId]: compactedTokens!,
-            },
+            activityFeed: { ...state.activityFeed, [taskId]: [] },
+            streamEntries: { ...state.streamEntries, [taskId]: { thoughts: [], outputs: [] } },
+            toolExecutions: { ...state.toolExecutions, [taskId]: [] },
+            tokenOverrides: { ...state.tokenOverrides, [taskId]: undefined },
           }));
+          return;
         }
       }
     } catch (e) {

@@ -21,7 +21,18 @@ export default function ContextGauge({
   onCompact,
   variant = 'status-bar',
 }: ContextGaugeProps) {
-  const effectiveLimit = contextWindow || stageLimit;
+  // Resolve contextWindow from boardStore columns if not passed as prop
+  const storeContextWindow = useBoardStore((s) => {
+    const task = s.tasks.find((t) => t.id === taskId);
+    const col = s.columns.find((c) => c.id === taskId || c.id === task?.columnId);
+    return col?.contextWindow;
+  });
+
+  const effectiveLimit =
+    contextWindow ||
+    storeContextWindow ||
+    useBoardStore.getState().columns.find((c) => c.id === taskId || c.id === useBoardStore.getState().tasks.find((t) => t.id === taskId)?.columnId)?.contextWindow ||
+    stageLimit;
 
   // Селективные подписки per taskId: гейдж чужой задачи не пересчитывается
   // при стриме активной (раньше подписка на весь стор дёргала все гейджи).
@@ -163,6 +174,20 @@ export default function ContextGauge({
     const baseSystem = 3200;
     const baseTool = 2400;
 
+    let messageChars = textChars;
+    for (const t of toolsArr) {
+      messageChars += (t?.stdout?.length || 0);
+      messageChars += (t?.stderr?.length || 0);
+      messageChars += JSON.stringify(t?.params || {}).length;
+    }
+    const hasMessages =
+      thoughtsArr.length > 0 ||
+      outputsArr.length > 0 ||
+      toolsArr.length > 0 ||
+      ((feed?.length ?? 0) > 0) ||
+      messageChars > 0;
+    const rawMsgTokens = Math.max(hasMessages ? 100 : 0, Math.round(messageChars / 4));
+
     // Fix 100% gauge bug: if the task was compacted, preserve the compacted token count
     // rather than recalculating an uncompressed sum of character lengths from raw historical tool items!
     // Priority order:
@@ -180,26 +205,50 @@ export default function ContextGauge({
       const out = (telemetry.outputTokens || 0) > 0 ? telemetry.outputTokens : streamedTurnTokens;
       total = telemetry.inputTokens + out;
     } else {
-      let messageChars = textChars;
-      for (const t of toolsArr) {
-        messageChars += (t?.stdout?.length || 0);
-        messageChars += (t?.stderr?.length || 0);
-        messageChars += JSON.stringify(t?.params || {}).length;
-      }
-      const dynamicMsgTokens = Math.max(300, Math.round(messageChars / 4));
+      const dynamicMsgTokens = Math.max(300, rawMsgTokens);
       total = baseSystem + baseTool + dynamicMsgTokens;
     }
 
     // Segment token allocation:
     let sys = baseSystem;
     let tool = baseTool;
-    let msg = Math.max(0, total - sys - tool);
+    let msg = 0;
 
-    if (total < sys + tool) {
-      const ratio = total / (sys + tool);
-      sys = Math.round(baseSystem * ratio);
-      tool = Math.round(baseTool * ratio);
-      msg = Math.max(0, total - sys - tool);
+    if (total <= 0) {
+      sys = 0;
+      tool = 0;
+      msg = 0;
+    } else if (hasMessages) {
+      const msgWeight = Math.max(1, rawMsgTokens);
+      const totalWeight = baseSystem + baseTool + msgWeight;
+
+      if (total < totalWeight) {
+        // Proportional allocation across all 3 segments: don't squash messageTokens to 0!
+        const ratio = total / totalWeight;
+        sys = Math.round(baseSystem * ratio);
+        tool = Math.round(baseTool * ratio);
+        msg = Math.max(1, total - sys - tool);
+        if (sys + tool + msg > total) {
+          if (tool > msg) tool = Math.max(0, total - sys - msg);
+          else sys = Math.max(0, total - tool - msg);
+        }
+      } else {
+        sys = baseSystem;
+        tool = baseTool;
+        msg = Math.max(1, total - sys - tool);
+      }
+    } else {
+      // No messages in conversation yet: allocate only to system and tool definitions
+      if (total < sys + tool) {
+        const ratio = total / (sys + tool);
+        sys = Math.round(baseSystem * ratio);
+        tool = Math.max(0, total - sys);
+        msg = 0;
+      } else {
+        sys = baseSystem;
+        tool = baseTool;
+        msg = Math.max(0, total - sys - tool);
+      }
     }
 
     return {
@@ -209,7 +258,7 @@ export default function ContextGauge({
       messageTokens: msg,
     };
     // Лёгкие deps: слайсы текущей задачи и серверная телеметрия
-  }, [taskId, currentEstimatedTokens, resolvedCompactTokens, telemetry?.inputTokens, streamedTurnTokens, thoughts, outputs, tools]);
+  }, [taskId, currentEstimatedTokens, resolvedCompactTokens, telemetry?.inputTokens, streamedTurnTokens, thoughts, outputs, tools, feed]);
 
   const percent = Math.min(100, Math.max(0, Math.round((totalUsedTokens / effectiveLimit) * 100)));
 
@@ -411,7 +460,7 @@ export default function ContextGauge({
           title={`Контекст: ${percent}% (~${usedTokensK}K / ${maxTokensK}K) · Кеш: ${cacheText} · TPS: ${tpsText}`}
         >
           <svg className="w-7 h-7 -rotate-90 transform" viewBox="0 0 28 28">
-            <circle cx="14" cy="14" r={radius} stroke="#e5e7eb" strokeWidth="2.5" fill="none" />
+            <circle cx="14" cy="14" r={radius} stroke="#e5e7eb" className="dark:stroke-[#21262d]" strokeWidth="2.5" fill="none" />
             <circle
               cx="14"
               cy="14"
@@ -425,7 +474,7 @@ export default function ContextGauge({
               className="transition-all duration-300"
             />
           </svg>
-          <span className="absolute inset-0 flex items-center justify-center text-[8.5px] font-mono font-semibold text-[#171717] tabular-nums">
+          <span className="absolute inset-0 flex items-center justify-center text-[8.5px] font-mono font-semibold text-[#171717] dark:text-[#f0f6fc] tabular-nums">
             {percent}%
           </span>
         </div>
@@ -471,7 +520,7 @@ export default function ContextGauge({
             />
           </svg>
         </div>
-        <span className="tabular-nums text-[#8f8f8f]">{percent}%</span>
+        <span className="tabular-nums text-[#8f8f8f] dark:text-[#8b949e]">{percent}%</span>
 
         {/* Floating Hover Card (pops UPWARDS above status bar) */}
         <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2.5 z-50 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-all duration-150 ease-out pointer-events-auto">
@@ -520,9 +569,9 @@ export default function ContextGauge({
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <span className="w-2.5 h-2.5 rounded-xs bg-[#71717a] shrink-0" />
-                  <span className="text-[#666666]">System prompt</span>
+                  <span className="text-[#666666] dark:text-[#8b949e]">System prompt</span>
                 </div>
-                <span className="font-mono text-xs text-[#171717] tabular-nums">
+                <span className="font-mono text-xs text-[#171717] dark:text-[#f0f6fc] tabular-nums">
                   ~{systemPromptTokens.toLocaleString('ru-RU')}
                 </span>
               </div>
@@ -530,9 +579,9 @@ export default function ContextGauge({
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <span className="w-2.5 h-2.5 rounded-xs bg-[#8b5cf6] shrink-0" />
-                  <span className="text-[#666666]">Tool definitions</span>
+                  <span className="text-[#666666] dark:text-[#8b949e]">Tool definitions</span>
                 </div>
-                <span className="font-mono text-xs text-[#171717] tabular-nums">
+                <span className="font-mono text-xs text-[#171717] dark:text-[#f0f6fc] tabular-nums">
                   ~{toolDefTokens.toLocaleString('ru-RU')}
                 </span>
               </div>
@@ -540,9 +589,9 @@ export default function ContextGauge({
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <span className="w-2.5 h-2.5 rounded-xs bg-[#3b82f6] shrink-0" />
-                  <span className="text-[#666666]">Messages</span>
+                  <span className="text-[#666666] dark:text-[#8b949e]">Messages</span>
                 </div>
-                <span className="font-mono text-xs text-[#171717] tabular-nums">
+                <span className="font-mono text-xs text-[#171717] dark:text-[#f0f6fc] tabular-nums">
                   ~{messageTokens.toLocaleString('ru-RU')}
                 </span>
               </div>

@@ -3,6 +3,7 @@ import type { KanbanTask } from '../../types';
 import ContextGauge from './ContextGauge';
 import TaskTodoWidget from './TaskTodoWidget';
 import { useDrawerStore } from '../../stores/drawerStore';
+import { useBoardStore } from '../../stores/boardStore';
 import { getRoleBadgeClass } from './ToolExecutionCard';
 import {
   ArrowLeft,
@@ -50,6 +51,9 @@ export default function DrawerSteerBar({
     activeSubagentRole,
     closeSubagent,
   } = useDrawerStore();
+
+  const columns = useBoardStore((s) => s.columns);
+  const currentColumn = columns.find((c) => c.id === task.columnId);
 
   const handleCompact = async () => {
     if (isCompacting || !task?.id) return;
@@ -354,7 +358,7 @@ export default function DrawerSteerBar({
 
         {/* Elegant Telemetry Status Line (Кэш, TPS, Контекст) & Compactor Trigger */}
         <div className="flex items-center justify-center gap-3">
-          <ContextGauge taskId={task.id} turns={turns} />
+          <ContextGauge taskId={task.id} turns={turns} contextWindow={currentColumn?.contextWindow} />
           <div className="h-3 w-px bg-[#ebebeb] dark:bg-[#21262d]" />
           <button
             type="button"
