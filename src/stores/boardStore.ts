@@ -909,6 +909,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         stageId: targetColumnId,
         boardId,
         skipWorktree,
+        model: input.model || undefined,
       });
       if (backendTask && typeof backendTask.id === 'string') {
         const mapped = mapBackendTaskToKanban(backendTask);
