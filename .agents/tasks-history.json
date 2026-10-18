@@ -1,4 +1,21 @@
 {
+    "CVH-BACKEND-TASK-SEQ-EDITFILE": {
+        "taskId": "CVH-BACKEND-TASK-SEQ-EDITFILE",
+        "title": "Backend Fixes: Persistent Monotonic Task ID Sequence, delete_task Worktree Cleanup & Broadcast, Windows CRLF edit_file Normalization",
+        "author": "Lead Systems Engineer (tauri-rust-engineer / agent-developer)",
+        "verdict": "APPROVED",
+        "commitHash": "d0d86a0",
+        "commitMessage": "feat(backend): monotonic task sequence, delete_task cleanup broadcast, and CRLF edit_file normalization",
+        "summary": "Resolved 3 critical backend and tool execution issues: (1) replaced volatile memory-only task ID generation with persistent monotonic sequence counter persisted in .cvh/settings/sequence.json and synchronized with .cvh/task-sequence.json, guaranteeing deleted task IDs are never recycled; (2) added AppHandle to delete_task IPC to broadcast 'tasks:updated' application-wide, implemented robust git worktree pruning via 'git worktree prune', and cleaned up associated branches; (3) implemented 4-tier progressive CRLF vs LF line ending normalization in edit_file (str_replace) to eliminate LLM multiline replacement failures on Windows while strictly preserving original file newline conventions.",
+        "files": [
+            "src-tauri/src/commands/tasks.rs",
+            "src-tauri/src/commands/tests.rs",
+            "src-tauri/src/agent.rs",
+            "src-tauri/src/agent/tests.rs",
+            "src-tauri/src/git.rs"
+        ],
+        "timestamp": 1792343870305
+    },
     "CVH-UI-PRECISION-REFINEMENTS": {
         "taskId": "CVH-UI-PRECISION-REFINEMENTS",
         "title": "Precision UI Refinements: Kanban Card Timer, Todo Contrast, Diff Sidebar Default Collapsed, Stepper Border, Steer Footer",
