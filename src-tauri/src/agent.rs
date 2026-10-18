@@ -3712,7 +3712,7 @@ where
         }
 
         // State-Preserving Dynamic Context Compactor:
-        // Reads active column's context_window (default 128,000, or custom).
+        // Reads active agent persona's context_window (strictly resolved from agent setting, default 128,000).
         // Triggers compaction strictly when current estimated tokens reach or exceed context_window (100%).
         let context_window = config.context_window.unwrap_or(128_000) as usize;
         let compaction_threshold = context_window;
