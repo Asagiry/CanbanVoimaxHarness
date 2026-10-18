@@ -110,6 +110,7 @@ use std::path::PathBuf;
             hooks: vec![],
             icon: Some("Code2".to_string()),
             color: Some("#0284c7".to_string()),
+            context_window: Some(400000),
         };
         let v = serde_json::to_value(&info).expect("serialize");
         assert_eq!(v.get("role").and_then(|x| x.as_str()), Some("developer"));
@@ -118,6 +119,7 @@ use std::path::PathBuf;
         assert_eq!(v.get("personaFile").and_then(|x| x.as_str()), Some("persona.md"));
         assert_eq!(v.get("icon").and_then(|x| x.as_str()), Some("Code2"));
         assert_eq!(v.get("color").and_then(|x| x.as_str()), Some("#0284c7"));
+        assert_eq!(v.get("contextWindow").and_then(|x| x.as_u64()), Some(400000));
         assert!(v.get("has_prompt").is_none());
         assert!(v.get("is_builtin").is_none());
 
@@ -130,6 +132,7 @@ use std::path::PathBuf;
             hooks: vec![],
             icon: Some("Cpu".to_string()),
             color: Some("#6366f1".to_string()),
+            context_window: Some(128000),
         };
         let vb = serde_json::to_value(&builtin).expect("serialize");
         assert_eq!(vb.get("isBuiltin").and_then(|x| x.as_bool()), Some(true));
@@ -1405,6 +1408,41 @@ Write code.
         assert!(updated.contains("edit_file"));
         assert!(updated.contains("write_file"));
         assert!(!updated.contains("web_search"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_agent_setting_context_window_strict_resolution() {
+        let base = PathBuf::from("target").join(format!("cvh_cw_test_{}", uuid::Uuid::new_v4()));
+        let dev_dir = base.join(".cvh").join("agents").join("developer");
+        tokio::fs::create_dir_all(&dev_dir).await.expect("create dev dir");
+        tokio::fs::write(
+            dev_dir.join("setting"),
+            r#"{"context_window": 400000, "model": "gemini-3.8-flash-high"}"#,
+        )
+        .await
+        .expect("write dev setting");
+
+        let custom_dir = base.join(".cvh").join("agents").join("architect");
+        tokio::fs::create_dir_all(&custom_dir).await.expect("create custom dir");
+        tokio::fs::write(
+            custom_dir.join("setting"),
+            r#"{"contextWindow": 300000}"#,
+        )
+        .await
+        .expect("write custom setting");
+
+        // 1. Resolved directly from agent setting
+        let dev_setting = crate::config::load_agent_setting(&base, "developer").await;
+        assert_eq!(dev_setting.context_window, Some(400000));
+
+        let custom_setting = crate::config::load_agent_setting(&base, "architect").await;
+        assert_eq!(custom_setting.context_window, Some(300000));
+
+        // 2. Fallback to 128_000 if not configured
+        let missing_setting = crate::config::load_agent_setting(&base, "non-existent").await;
+        assert_eq!(missing_setting.context_window.unwrap_or(128_000), 128_000);
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }

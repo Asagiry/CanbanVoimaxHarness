@@ -116,7 +116,7 @@ pub struct PipelineColumn {
     pub persona: Option<String>,
     #[serde(rename = "onEnterScript", default)]
     pub on_enter_script: Option<String>,
-    #[serde(rename = "contextWindow", default)]
+    #[serde(rename = "contextWindow", default, skip_serializing_if = "Option::is_none")]
     pub context_window: Option<u64>,
     #[serde(rename = "modelOverride", default)]
     pub model_override: Option<String>,
@@ -353,7 +353,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 icon: Some("Inbox".to_string()),
                 persona: None,
                 on_enter_script: None,
-                context_window: Some(128000),
+                context_window: None,
                 model_override: None,
                 reasoning_effort: None,
                 temperature: None,
@@ -377,7 +377,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 icon: Some("Code2".to_string()),
                 persona: Some("developer".to_string()),
                 on_enter_script: None,
-                context_window: Some(400000),
+                context_window: None,
                 model_override: None,
                 reasoning_effort: None,
                 temperature: Some(0.2),
@@ -403,7 +403,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 icon: Some("CheckSquare".to_string()),
                 persona: Some("reviewer".to_string()),
                 on_enter_script: None,
-                context_window: Some(200000),
+                context_window: None,
                 model_override: None,
                 reasoning_effort: None,
                 temperature: Some(0.1),
@@ -427,7 +427,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 icon: Some("History".to_string()),
                 persona: Some("retro".to_string()),
                 on_enter_script: None,
-                context_window: Some(128000),
+                context_window: None,
                 model_override: None,
                 reasoning_effort: None,
                 temperature: Some(0.2),
@@ -451,7 +451,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 icon: Some("CheckCircle2".to_string()),
                 persona: None,
                 on_enter_script: None,
-                context_window: Some(64000),
+                context_window: None,
                 model_override: None,
                 reasoning_effort: None,
                 temperature: None,
@@ -496,7 +496,7 @@ pub fn get_canonical_board_columns() -> Vec<PipelineColumn> {
             icon: Some("Inbox".to_string()),
             persona: None,
             on_enter_script: None,
-            context_window: Some(128000),
+            context_window: None,
             model_override: None,
             reasoning_effort: None,
             temperature: None,
@@ -520,7 +520,7 @@ pub fn get_canonical_board_columns() -> Vec<PipelineColumn> {
             icon: Some("Code2".to_string()),
             persona: Some("developer".to_string()),
             on_enter_script: None,
-            context_window: Some(400000),
+            context_window: None,
             model_override: None,
             reasoning_effort: None,
             temperature: Some(0.2),
@@ -546,7 +546,7 @@ pub fn get_canonical_board_columns() -> Vec<PipelineColumn> {
             icon: Some("CheckCircle2".to_string()),
             persona: None,
             on_enter_script: None,
-            context_window: Some(64000),
+            context_window: None,
             model_override: None,
             reasoning_effort: None,
             temperature: None,
@@ -574,7 +574,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 icon: Some("Lightbulb".to_string()),
                 persona: Some("concept-artist".to_string()),
                 on_enter_script: None,
-                context_window: Some(200000),
+                context_window: None,
                 model_override: None,
                 reasoning_effort: None,
                 temperature: Some(0.4),
@@ -596,7 +596,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 icon: Some("Box".to_string()),
                 persona: Some("modeler".to_string()),
                 on_enter_script: None,
-                context_window: Some(300000),
+                context_window: None,
                 model_override: None,
                 reasoning_effort: None,
                 temperature: Some(0.2),
@@ -621,7 +621,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 icon: Some("Palette".to_string()),
                 persona: Some("texture-artist".to_string()),
                 on_enter_script: None,
-                context_window: Some(200000),
+                context_window: None,
                 model_override: None,
                 reasoning_effort: None,
                 temperature: Some(0.2),
@@ -646,7 +646,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 icon: Some("CheckCircle2".to_string()),
                 persona: None,
                 on_enter_script: None,
-                context_window: Some(64000),
+                context_window: None,
                 model_override: None,
                 reasoning_effort: None,
                 temperature: None,
@@ -1050,7 +1050,7 @@ pub fn minimal_pipeline_config() -> PipelineConfig {
                 icon: Some("Inbox".to_string()),
                 persona: None,
                 on_enter_script: None,
-                context_window: Some(128000),
+                context_window: None,
                 model_override: None,
                 reasoning_effort: None,
                 temperature: None,
@@ -1074,7 +1074,7 @@ pub fn minimal_pipeline_config() -> PipelineConfig {
                 icon: Some("CheckCircle2".to_string()),
                 persona: None,
                 on_enter_script: None,
-                context_window: Some(64000),
+                context_window: None,
                 model_override: None,
                 reasoning_effort: None,
                 temperature: None,
@@ -1141,7 +1141,7 @@ Columns represent autonomous stages. Moving a card triggers stage automations an
   ```
 - `.cvh/pipeline.json`:
   Mirrors the active board's columns and lifecycle settings.
-  Stage properties: `id`, `title`, `persona`, `contextWindow`, `gatekeeperSensor`, `allowedTools`, `terminal`, `hooks`, `routes`.
+  Stage properties: `id`, `title`, `persona`, `gatekeeperSensor`, `allowedTools`, `terminal`, `hooks`, `routes`.
 
 ## 4. Persona Mapping Invariant: 1 Persona = Exactly 1 Directory
 - **Single Source of Truth**: Exactly 1 persona corresponds to 1 directory under `.cvh/agents/<persona>/`.

@@ -1672,7 +1672,7 @@ pub async fn run_agent(
                     icon: None,
                     persona: Some("developer".to_string()),
                     on_enter_script: None,
-                    context_window: Some(400000),
+                    context_window: None,
                     model_override: None,
                     reasoning_effort: None,
                     temperature: Some(0.2),
@@ -1706,12 +1706,11 @@ pub async fn run_agent(
         .unwrap_or_default();
 
     let agent_setting = crate::config::load_agent_setting(&root, &persona_role).await;
-    if let Some(cw) = agent_setting.context_window {
-        eprintln!(
-            "CVH [run_agent]: task_id={} persona='{}' context_window={}",
-            task.id, persona_role, cw
-        );
-    }
+    let resolved_context_window = agent_setting.context_window.unwrap_or(128_000);
+    eprintln!(
+        "CVH [run_agent]: task_id={} persona='{}' context_window={}",
+        task.id, persona_role, resolved_context_window
+    );
 
     let model = resolve_task_active_agent_model(&root, Some(&task), &llm_settings).await;
 
@@ -1848,7 +1847,7 @@ pub async fn run_agent(
         reasoning_effort: col.reasoning_effort.clone(),
         max_turns: 25,
         app_handle: Some(app_handle.clone()),
-        context_window: col.context_window.or(agent_setting.context_window),
+        context_window: Some(resolved_context_window),
     };
 
     let tid = task.id.clone();
@@ -2609,5 +2608,61 @@ pub async fn steer_agent(
     run_agent(task_id, Some(message), app_handle).await
 }
 
+/// Resolves the context window strictly for a task or agent persona role.
+/// Priority:
+/// 1. Direct persona override if provided (e.g. activeSubagentRole).
+/// 2. Active agent persona associated with the task's column.
+/// 3. Setting in `.cvh/agents/<role>/setting` (`context_window` or `contextWindow`).
+/// 4. Fallback strictly to 128_000.
+#[tauri::command]
+pub async fn get_task_context_window(
+    task_id: Option<String>,
+    persona: Option<String>,
+    app_handle: AppHandle,
+) -> Result<u64, String> {
+    let root = app_handle.state::<AppState>().get_root();
 
+    if let Some(ref p) = persona {
+        let p_trimmed = p.trim();
+        if !p_trimmed.is_empty() {
+            let setting = crate::config::load_agent_setting(&root, p_trimmed).await;
+            return Ok(setting.context_window.unwrap_or(128_000));
+        }
+    }
 
+    if let Some(ref tid) = task_id {
+        let tid_trimmed = tid.trim();
+        if !tid_trimmed.is_empty() {
+            let disk_tasks = load_tasks_from_disk(&root).await;
+            let task_opt = disk_tasks.iter().find(|t| t.id == tid_trimmed).cloned().or_else(|| {
+                app_handle.state::<AppState>().tasks.lock().ok()?.iter().find(|t| t.id == tid_trimmed).cloned()
+            });
+
+            if let Some(task) = task_opt {
+                let boards_cfg = load_boards_config(&root).await.ok();
+                let col = boards_cfg.as_ref().and_then(|bc| {
+                    let b = if let Some(ref bid) = task.board_id {
+                        bc.boards.iter().find(|b| b.id == *bid)
+                    } else {
+                        bc.boards.iter().find(|b| b.id == bc.active_board_id).or_else(|| bc.boards.first())
+                    };
+                    b.and_then(|board| board.columns.iter().find(|c| c.id == task.stage_id).cloned())
+                });
+
+                let persona_role = col
+                    .and_then(|c| c.persona)
+                    .unwrap_or_else(|| "developer".to_string());
+
+                let setting = crate::config::load_agent_setting(&root, &persona_role).await;
+                return Ok(setting.context_window.unwrap_or(128_000));
+            }
+
+            if crate::config::agent_dir(&root, tid_trimmed).exists() {
+                let setting = crate::config::load_agent_setting(&root, tid_trimmed).await;
+                return Ok(setting.context_window.unwrap_or(128_000));
+            }
+        }
+    }
+
+    Ok(128_000)
+}

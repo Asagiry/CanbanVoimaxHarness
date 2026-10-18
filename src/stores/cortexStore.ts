@@ -74,6 +74,7 @@ export interface AgentPersonaInfo {
   hooks?: string[];
   icon?: string;
   color?: string;
+  contextWindow?: number;
 }
 
 interface RawAgentPersona {
@@ -88,6 +89,8 @@ interface RawAgentPersona {
   hooks?: string[];
   icon?: string;
   color?: string;
+  contextWindow?: number;
+  context_window?: number;
 }
 
 // Каталог агента по новой схеме. Роль = persona колонки; фолбэк — stageId,
@@ -151,7 +154,7 @@ function buildSettingTemplate(role: string, stageTitle: string): string {
     `  "_comment": "Настройки агента ${role} (${stageTitle})",\n` +
     `  "model": null,\n` +
     `  "temperature": 0.2,\n` +
-    `  "contextWindow": 128000\n` +
+    `  "context_window": 128000\n` +
     `}\n`
   );
 }
@@ -672,6 +675,7 @@ export const useCortexStore = create<CortexState>((set, get) => ({
         hooks: Array.isArray(item.hooks) ? item.hooks : [],
         icon: item.icon,
         color: roleColor,
+        contextWindow: item.contextWindow ?? item.context_window,
       });
     }
     personas.sort((a, b) => a.role.localeCompare(b.role));

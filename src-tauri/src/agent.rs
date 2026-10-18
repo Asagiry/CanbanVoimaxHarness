@@ -166,8 +166,8 @@ Overview: bootstrap or repair CVH harness (boards, pipeline, personas, policy, h
 When NOT: not a coder for feature logic; not a reviewer (separate clean context); not a docs writer; not a task creator or task manager. If task needs code, delegate to `developer`, if audit to `reviewer`.
 Paths (repo-root relative, single source of truth):
 - `.cvh/boards.json {activeBoardId, boards[{id,name,columns}]}` defines `development` + `kanban` boards; `activeBoardId` selects one.
-- `.cvh/pipeline.json {id,title,columns[{id,title,persona,contextWindow,gatekeeperSensor,allowedTools,terminal}]}` mirrors active board columns.
-- `.cvh/settings/tool-policy.json {globalEnabled, stageOverrides}` is the only policy file; `.cvh/agents/<role>/persona.md` (directory structure; legacy `.cvh/agents/<role>.md` replaced) + `<role>/rules/*.md` hold personas; `.cvh/tools/<tool>.json` custom tools; `.cvh/hooks/` transition scripts; task work only in `worktrees/<slug>`.
+- `.cvh/pipeline.json {id,title,columns[{id,title,persona,gatekeeperSensor,allowedTools,terminal}]}` mirrors active board columns.
+- `.cvh/settings/tool-policy.json {globalEnabled, stageOverrides}` is the only policy file; `.cvh/agents/<role>/persona.md` (legacy `.cvh/agents/<role>.md` replaced) + `<role>/setting {contextWindow,model,temperature}` + `<role>/rules/*.md` hold personas; `.cvh/tools/<tool>.json` custom tools; `.cvh/hooks/` transition scripts; task work only in `worktrees/<slug>`.
 Frontmatter template for every generated `.cvh/agents/<role>/persona.md` (keep ≤30 lines, link detail, never copypaste):
 ---
 name: <role>
@@ -185,7 +185,7 @@ Load: rules/<topic>.md (progressive disclosure, each rule file ≤8KB).
 Boards skeleton (2 boards, minimal):
 {"activeBoardId":"development","boards":[{"id":"development","name":"Development","columns":[]},{"id":"kanban","name":"Kanban","columns":[]}]}
 Pipeline skeleton (ids/order must match board; backlog first, ready last):
-{"id":"development","title":"Development","columns":[{"id":"dev","title":"Dev","persona":"developer","contextWindow":400000},{"id":"review","title":"Review","persona":"reviewer","contextWindow":200000,"gatekeeperSensor":"cargo check"},{"id":"ready","title":"Ready","terminal":true}]}
+{"id":"development","title":"Development","columns":[{"id":"dev","title":"Dev","persona":"developer"},{"id":"review","title":"Review","persona":"reviewer","gatekeeperSensor":"cargo check"},{"id":"ready","title":"Ready","terminal":true}]}
 Tool-policy skeleton (AND-semantics: effective = globalEnabled && stageOverrides; global false cannot be re-enabled):
 {"globalEnabled":{"read_file":true,"glob":true,"grep":true,"execute_command":true,"edit_file":true,"write_file":true,"web_search":true,"web_fetch":true,"subagent":true},"stageOverrides":{"dev":{"web_search":false},"review":{"edit_file":false,"write_file":false}}}
 Rules (apply to every step):
