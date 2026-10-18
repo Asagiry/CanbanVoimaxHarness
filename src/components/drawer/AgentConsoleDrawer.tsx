@@ -295,6 +295,15 @@ export default function AgentConsoleDrawer() {
       setActiveAgentTask(task.id, false);
       if (activeSubagentId) {
         setActiveAgentTask(activeSubagentId, false);
+        const subTools = toolExecutions[activeSubagentId] || [];
+        for (const t of subTools) {
+          if (t.status === 'running') {
+            useDrawerStore.getState().updateToolExecution(activeSubagentId, t.id, {
+              status: 'failed',
+              stderr: 'Прервано пользователем',
+            });
+          }
+        }
       }
       const currTools = toolExecutions[task.id] || [];
       for (const t of currTools) {

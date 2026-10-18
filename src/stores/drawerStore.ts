@@ -165,7 +165,10 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         }
       }
 
-      if (lastOutputIdx !== -1) {
+      const hasInterveningTools = lastOutputIdx !== -1 &&
+        updatedFeed.slice(lastOutputIdx + 1).some((it) => it.type === 'tool' || Boolean((it as any).tool));
+
+      if (lastOutputIdx !== -1 && !hasInterveningTools) {
         const lastOutput = updatedFeed[lastOutputIdx];
         const content = lastOutput.content || '';
         if (response && response.length > 0 && !content.endsWith(response)) {
