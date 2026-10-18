@@ -1295,5 +1295,34 @@
         ],
         "summary": "Removed disruptive native browser tooltip from 'Сжать контекст' button in DrawerSteerBar and implemented immediate optimistic in-chat feedback for context compaction. Synchronized deterministic tool_id between React drawerStore and Rust backend compact_context command, broadcasting agent:tool_call at start, updating with execution duration and token savings badge (-X токенов) upon completion, and persisting under the exact same ID in SQLite dialog_items table to eliminate duplicate cards or UI flicker on dialog reload. Refactored ContextGauge to reuse compactTaskContext.",
         "timestamp": 1792329366132
+    },
+    "CVH-MODEL-OVERRIDE-COMPACTION-POLICY-SYNC": {
+        "taskId": "CVH-MODEL-OVERRIDE-COMPACTION-POLICY-SYNC",
+        "task": "fix-task-model-greeting",
+        "title": "Preserve task model override across lifecycles, set auto-compaction strictly at 100% context_window, and auto-sync tool policies to persona.md",
+        "branch": "feat/fix-task-model-greeting",
+        "commitHash": "1f610fdbe51a60ab9c29bc4a47553c2ca843b49f",
+        "commitMessage": "feat(tasks): preserve task model override, fix compaction threshold, and sync tool policies",
+        "author": "agent-developer (tauri-rust-engineer)",
+        "verdict": "APPROVED",
+        "timestamp": 1792329948977,
+        "date": "2026-10-18T13:25:48.977Z",
+        "sensors": {
+            "typescript": "pass (tsc --noEmit, 0 errors)",
+            "rust_compiler": "pass (cargo check --tests, 0 errors)",
+            "rust_clippy": "pass (cargo clippy -- -D warnings, 0 warnings)",
+            "rust_tests": "pass (cargo test, 106 passed, 0 failed)",
+            "l2_reviewer": "APPROVED",
+            "l3_retro_verifier": "APPROVED"
+        },
+        "files": [
+            "src-tauri/src/agent.rs",
+            "src-tauri/src/commands/tasks.rs",
+            "src-tauri/src/commands/tests.rs",
+            "src-tauri/src/config.rs",
+            "src-tauri/src/lib.rs",
+            "src/stores/boardStore.ts"
+        ],
+        "summary": "Fixed task model reset bug by accepting and persisting model in create_task, adding update_task command, inheriting parent_model in create_subtask, and reloading fresh tasks from disk in run_agent. Changed auto-compaction threshold to trigger strictly at current_tokens >= context_window (100%). Added sync_tool_policies_to_personas to auto-reconcile tool policy matrix with persona.md frontmatter."
     }
 }
