@@ -314,3 +314,27 @@
 - **Persistent Monotonic Task ID Invariant**: Task numeric sequences MUST be persisted to disk (`.cvh/settings/sequence.json` and mirrored in `.cvh/task-sequence.json`) and incremented monotonically (`allocate_next_task_num`). Task ID allocation MUST NEVER derive solely from in-memory or on-disk array maximums (`max_num_on_disk + 1`), guaranteeing that deleted tasks never have their numerical IDs re-issued or recycled under any circumstances.
 - **Symmetric Deletion Broadcasting & Worktree Pruning Invariant**: The `delete_task` Tauri IPC command MUST accept `app_handle: AppHandle` and broadcast `tasks:updated` across the application upon task removal. Additionally, task deletion MUST execute full cleanup: removing worktrees (`remove_worktree`), pruning dangling gitdir pointers (`prune_worktrees`), deleting feature branches, and clearing associated SQLite dialogue items.
 - **4-Tier Progressive CRLF/LF Normalization Invariant**: The `edit_file` (alias: `str_replace`) tool MUST implement progressive line ending normalization (`replace_text_normalized`) accommodating Windows CRLF (`\r\n`) vs Unix LF (`\n`) discrepancies. When LLMs supply search or replacement strings containing standard Unix LF, the engine MUST adapt line endings to match the target file without failing with false `NOT_FOUND` errors, while strictly preserving the file's original line ending convention upon saving.
+
+### 2.27 Stage Transition Natural Agent Loop Termination Invariant
+- **Natural Termination on Stage Transition**: When any executed tool call is `advance_task`, `move_task`, or `reject_task` (or aliases `move_task_stage`, `advance_stage`, `next_stage`), the agent has handed over or finalized the task. In `run_agent_loop`, the engine MUST:
+  1. Record `ChatMessage::tool_response` into the conversation history.
+  2. Synchronize messages to in-memory context state in `AppState` (if present).
+  3. Emit `AgentEvent::Finished { final_response: result_str.clone() }`.
+  4. Break the ReAct loop and return `Ok(result_str)` naturally and cleanly.
+  5. Under NO circumstances send the result back to the LLM for an extra turn.
+
+### 2.28 Resilient Line Matching & Honest Edit Diagnostics Invariants
+- **5-Tier Progressive Text Replacement Hierarchy**: The `edit_file` (alias: `str_replace`) tool MUST execute progressive matching in strict order:
+  1. Exact byte matching (`current.contains(old_string)`).
+  2. CRLF adaptation (file has CRLF, LLM supplies LF).
+  3. Reverse CRLF adaptation (file has LF, LLM supplies CRLF).
+  4. Normalized line endings fallback (normalizing both to LF and restoring file's original convention upon write).
+  5. Whitespace-relaxed line matching (`replace_whitespace_relaxed`): trimming leading and trailing whitespace on each line, adapting indentation differences proportionally, and preserving file newline endings.
+- **Greedy Non-Overlapping Replacement Invariant**: In `replace_whitespace_relaxed`, when `replace_all: true`, match advancement MUST step forward by the full matched block length (`idx += m`) rather than single lines (`idx += 1`), preventing corrupt overlapping replacements or duplicate substitutions.
+- **Ambiguous Match Rejection**: If `replace_all: false` and multiple blocks match under relaxed whitespace comparison, the tool MUST reject the edit with an informative `Ambiguous match` error requiring `replace_all: true` or wider surrounding context.
+- **Honest Mismatch Diagnostics & Zero-Fake-100% Invariant**: In `build_edit_mismatch_error`, similarity MUST NEVER be calculated from a single line when `old_string` spans multiple lines:
+  1. Candidate matching MUST use sliding window multi-line block similarity averaged across all search lines.
+  2. If any line or token in the candidate block differs from `old_string`, the reported similarity MUST NEVER reach or exceed 100% (`best_score.clamp(0.0, 99.0)`).
+  3. Diagnostics MUST output a structured line-by-line diff classifying lines as `EXACT MATCH`, `WHITESPACE MISMATCH`, or `MISMATCH`.
+  4. Mismatched lines MUST include token-level LCS diff diagnostics (`diff_line_tokens`) pinpointing expected vs actual tokens, missing tokens, or unexpected tokens.
+  5. The error message MUST output the candidate file block with `>>` margin markers and line numbers, followed by pre-computed `read_file(offset, limit)` recommendations to facilitate immediate LLM self-correction in Turn N+1.
