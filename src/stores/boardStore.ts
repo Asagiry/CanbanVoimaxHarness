@@ -1020,9 +1020,15 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         const mapped = mapBackendTaskToKanban(backendSubtask);
         const usedIdx = parseInt(backendSubtask.id.split('.').pop() || '0', 10);
         writeSeq(subSeqKey, Number.isFinite(usedIdx) && usedIdx > 0 ? Math.max(usedIdx, nextIndex) : nextIndex);
-        // Silently reconcile optimistic subtask with backend result
+        // Silently reconcile optimistic subtask with backend result, updating parent link if ID drifted
         const currentTasks = get().tasks;
-        const reconciled = currentTasks.map((t) => (t.id === subtaskId ? mapped : t));
+        const reconciled = currentTasks.map((t) => {
+          if (t.id === subtaskId) return mapped;
+          if (t.id === parentId && t.waitingForSubtaskId === subtaskId) {
+            return { ...t, waitingForSubtaskId: mapped.id };
+          }
+          return t;
+        });
         set({ tasks: reconciled });
         persistTasksToLocalStorage(reconciled);
         return mapped;
@@ -1062,8 +1068,19 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
     // OPTIMISTIC TASK DELETION:
     // Immediately filter out the deleted task ID from state.tasks in Zustand (<1ms),
-    // so the card vanishes instantly from the board!
-    const updatedTasks = prevTasks.filter((t) => !toDelete.has(t.id));
+    // and if any remaining parent was waiting on a deleted subtask, auto-unlock it!
+    const updatedTasks = prevTasks
+      .filter((t) => !toDelete.has(t.id))
+      .map((t) => {
+        if (t.waitingForSubtaskId && toDelete.has(t.waitingForSubtaskId)) {
+          return {
+            ...t,
+            waitingForSubtaskId: undefined,
+            status: t.status === 'waiting_subtask' ? ('idle' as TaskStatus) : t.status,
+          };
+        }
+        return t;
+      });
     set({
       tasks: updatedTasks,
       selectedTaskId: toDelete.has(prevSelectedTaskId ?? '') ? null : prevSelectedTaskId,

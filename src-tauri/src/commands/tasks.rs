@@ -582,6 +582,19 @@ pub async fn delete_task(
     }
 
     tasks.retain(|t| !to_delete.contains(&t.id));
+
+    // Auto-unlock any parent that was waiting on a deleted subtask
+    for t in &mut tasks {
+        if let Some(ref waiting_id) = t.waiting_for_subtask_id {
+            if to_delete.contains(waiting_id) {
+                t.waiting_for_subtask_id = None;
+                if t.status.as_deref() == Some("waiting_subtask") {
+                    t.status = Some("idle".to_string());
+                }
+            }
+        }
+    }
+
     save_tasks_to_disk(&root, &tasks).await?;
 
     if let Ok(mut guard) = state.tasks.lock() {
