@@ -21,6 +21,8 @@ export default function AgentConsoleDrawer() {
     openDrawer,
     appendOutput,
     activeSubagentId,
+    activeAgentTaskIds,
+    setActiveAgentTask,
   } = useDrawerStore();
 
   const { tasks, updateTask, columns } = useBoardStore();
@@ -86,6 +88,7 @@ export default function AgentConsoleDrawer() {
             // Immediate reset of running status on terminal states
             if (st === 'finished' || st === 'aborted' || st === 'error') {
               useBoardStore.getState().updateTaskStatus(task.id, 'idle');
+              useDrawerStore.getState().setActiveAgentTask(task.id, false);
               try {
                 const ds = useDrawerStore.getState();
                 ds.setGenerationEndTime(task.id, Date.now());
@@ -118,6 +121,7 @@ export default function AgentConsoleDrawer() {
         unlistenFinished = await listen<{ taskId?: string; response?: string }>('agent:finished', (event) => {
           if (event.payload?.taskId === task.id) {
             useBoardStore.getState().updateTaskStatus(task.id, 'idle');
+            useDrawerStore.getState().setActiveAgentTask(task.id, false);
             try {
               const ds = useDrawerStore.getState();
               ds.setThinkingStartTime(task.id, null);
@@ -132,6 +136,11 @@ export default function AgentConsoleDrawer() {
           if (event.payload && (!event.payload.taskId || event.payload.taskId === task.id)) {
             setRunError(event.payload.error || 'Произошла непредвиденная ошибка агента');
             useBoardStore.getState().updateTaskStatus(task.id, 'idle');
+            if (event.payload.taskId) {
+              useDrawerStore.getState().setActiveAgentTask(event.payload.taskId, false);
+            } else if (task?.id) {
+              useDrawerStore.getState().setActiveAgentTask(task.id, false);
+            }
             try {
               const ds = useDrawerStore.getState();
               ds.setThinkingStartTime(task.id, null);
@@ -249,11 +258,22 @@ export default function AgentConsoleDrawer() {
 
   if (!isOpen || !task) return null;
 
-  const isRunning = task.status === 'running';
+  const hasRunningTool = Boolean(
+    toolExecutions[task.id]?.some((t) => t.status === 'running') ||
+    (activeSubagentId && toolExecutions[activeSubagentId]?.some((t) => t.status === 'running'))
+  );
+
+  const isAgentActive = Boolean(
+    activeAgentTaskIds?.[task.id] ||
+    (activeSubagentId && activeAgentTaskIds?.[activeSubagentId])
+  );
+
+  const isRunning = task.status === 'running' || hasRunningTool || isAgentActive;
 
   const handleRunAgent = async () => {
     setRunError(null);
     updateTask(task.id, { status: 'running', isTimerRunning: true });
+    setActiveAgentTask(task.id, true);
     try {
       await syncTasksBackend(useBoardStore.getState().tasks);
       const { invoke } = await import('@tauri-apps/api/core');
@@ -263,6 +283,7 @@ export default function AgentConsoleDrawer() {
       const errMsg = err?.message || (typeof err === 'string' ? err : 'Не удалось запустить агента');
       setRunError(errMsg);
       updateTask(task.id, { status: 'idle', isTimerRunning: false });
+      setActiveAgentTask(task.id, false);
     }
   };
 
@@ -271,6 +292,28 @@ export default function AgentConsoleDrawer() {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('abort_agent', { taskId: task.id });
       updateTask(task.id, { status: 'paused', isTimerRunning: false });
+      setActiveAgentTask(task.id, false);
+      if (activeSubagentId) {
+        setActiveAgentTask(activeSubagentId, false);
+        const subTools = toolExecutions[activeSubagentId] || [];
+        for (const t of subTools) {
+          if (t.status === 'running') {
+            useDrawerStore.getState().updateToolExecution(activeSubagentId, t.id, {
+              status: 'failed',
+              stderr: 'Прервано пользователем',
+            });
+          }
+        }
+      }
+      const currTools = toolExecutions[task.id] || [];
+      for (const t of currTools) {
+        if (t.status === 'running') {
+          useDrawerStore.getState().updateToolExecution(task.id, t.id, {
+            status: 'failed',
+            stderr: 'Прервано пользователем',
+          });
+        }
+      }
     } catch (err) {
       console.info('abort_agent invoke failed or web mode:', err);
     }
@@ -292,7 +335,9 @@ export default function AgentConsoleDrawer() {
       : '';
     const fullMessage = `${mainText}${imageNotice}`;
 
+    setActiveAgentTask(task.id, true);
     if (activeSubagentId) {
+      setActiveAgentTask(activeSubagentId, true);
       // Append user steer message into subagent feed
       appendOutput(activeSubagentId, mainText, 'user', imageUrls.length > 0 ? imageUrls : undefined);
       useDrawerStore.getState().flushSaveDialog(activeSubagentId);

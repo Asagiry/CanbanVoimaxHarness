@@ -142,6 +142,7 @@ export interface ActivityItem {
   tool?: ToolExecution;
   durationMs?: number;
   images?: string[];
+  isFinal?: boolean;
 }
 
 export interface ProjectInfo {

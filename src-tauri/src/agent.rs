@@ -149,6 +149,12 @@ pub const CVH_DEV_TOOLS: &[&str] = &[
     "grep",
     "execute_command",
     "web_search",
+    "web_fetch",
+    "todo_write",
+    "subagent",
+    "subagent_bg",
+    "collect_subagent",
+    "question",
 ];
 
 pub const BUILTIN_CVH_DEV_PROMPT: &str = r#"# Role: CVH-DEV (Project Configuration & Environment Specialist)
@@ -160,7 +166,7 @@ pub const BUILTIN_CVH_DEV_PROMPT: &str = r#"# Role: CVH-DEV (Project Configurati
 
 Identity:
 - Columns = Agents: board IS the control plane; column `persona: <role>` on-enter runs `run_agent(taskId)`; flow `backlog` -> ... -> `ready`.
-- Configuration-only: you may inspect and configure .cvh/ via read_file/write_file/edit_file/glob/grep/execute_command/web_search. You do NOT create or complete task cards.
+- Configuration-only: you may inspect and configure .cvh/ via read_file/write_file/edit_file/glob/grep/execute_command/web_search/web_fetch/todo_write/subagent. You do NOT create or complete task cards.
 - 1 ticket = 1 vertical slice = 1 commit; tiers T0-spec / T1-scaffold / T2-verify / T3-commit; redact secrets at ingest, never log keys.
 Overview: bootstrap or repair CVH harness (boards, pipeline, personas, policy, hooks) then stop. No monolith prompt, no docs dump.
 When NOT: not a coder for feature logic; not a reviewer (separate clean context); not a docs writer; not a task creator or task manager. If task needs code, delegate to `developer`, if audit to `reviewer`.
@@ -202,7 +208,7 @@ Initializer flow (empty project):
 2. Spec: draft minimal boards.json + pipeline.json mapping statuses to columns (todo->backlog, review, done->ready).
 3. Scaffold: write personas (frontmatter above) + `<role>/rules/*.md` + hooks + sensors.
 4. Verify before declare done.
-Process (Explore->Plan->Code->Verify->Commit): Explore (glob/grep), Plan (todos + file:line checklist), Code (edit in worktree), Verify (gate sensors: `cargo check`, `cargo clippy -- -D warnings`, `tsc`, `vite build`), Commit (1 slice = 1 commit).
+Process (Explore->Plan->Code->Verify->Commit): Explore (glob/grep), Plan: ALWAYS call todo_write on Turn 1 or Turn 2 to publish your complete step-by-step execution plan (e.g. 1. Explore stack, 2. Design boards & pipeline, 3. Create personas, 4. Configure tool policies & hooks, 5. Verify). Mark each todo as completed as you finish it. Code (edit in worktree), Verify (gate sensors: `cargo check`, `cargo clippy -- -D warnings`, `tsc`, `vite build`), Commit (1 slice = 1 commit).
 Verdicts (reviewer is separate clean context; personas never invoke personas): `APPROVED` = auto-advance via routes.on_approved; `APPROVED_WITH_CAVEATS` = advance + log notes; `CHANGES_REQUESTED` = unlock dev, return `file:line -> fix` checklist, re-run sensors.
 Key patterns/recipes: scaffold-then-sense; sensor-first promotion (gatekeeperSensor must exit 0 or move rejected); spill large outputs (>100 lines/8KB) to `.cvh/spill/`, return head/tail 20.
 Pitfalls: monolith agent.md (>30 lines); copypaste instead of Load-link; writing outside worktree; re-enabling globally-disabled tool; stale board/pipeline drift.
@@ -303,7 +309,9 @@ pub async fn compile_primed_system_prompt(
         - When delegating work to a subagent, prefer `subagent` (oneshot sync) which blocks and waits for the full report before proceeding.\n\
         - If you use `subagent_bg` for background execution, you MUST call `collect_subagent` with the returned `subagent_id` to wait for and consume the subagent's report before taking subsequent actions or finishing the task. Never fire-and-forget background subagents without collecting them.\n\
         \n\
-        When finished, output your comprehensive final answer."
+        ## Execution Protocol & Final Answer Discipline:\n\
+        - While you are still planning, researching, writing files, or executing tools, do NOT write a concluding summary or farewell message in your turn content. Keep turn content focused strictly on immediate intent or leave content empty when issuing tool calls.\n\
+        - ONLY output your comprehensive final answer when ALL tools have finished executing, all verifications have passed, and NO further tool calls are required."
             .to_string(),
     );
 
@@ -1494,14 +1502,6 @@ pub async fn execute_tool(
                 role
             );
         }
-        if (role == "cvh-dev" || role == "copilot") && !CVH_DEV_TOOLS.contains(&normalized_tool_name) {
-            bail!(
-                "PermissionDenied: Агент '{}' ограничен только инструментами настройки проекта: {:?}. Попытка вызова '{}'",
-                role,
-                CVH_DEV_TOOLS,
-                normalized_tool_name
-            );
-        }
     }
 
     // Per-agent intersection: when the agent `setting` defines allowed_tools,
@@ -1511,6 +1511,35 @@ pub async fn execute_tool(
             "PermissionDenied: Инструмент '{}' запрещён настройками агента (setting.allowed_tools)",
             normalized_tool_name
         );
+    }
+
+    // § 2.8 Invariant: task card manipulation tools ("create_task", "complete_task")
+    // are reserved for UI/orchestrators (developers/reviewers/cvh-dev cannot create or complete tasks bypassing the board).
+    if normalized_tool_name == "create_task" {
+        let role = ctx.role.unwrap_or("");
+        let stage = ctx.stage_id.unwrap_or("");
+        let is_orchestrator = role.to_lowercase().contains("orchestrat")
+            || role.to_lowercase().contains("оркестрат")
+            || stage.to_lowercase().contains("orchestrat")
+            || stage.to_lowercase().contains("оркестрат")
+            || stage == "backlog"
+            || role == "copilot";
+        if !is_orchestrator {
+            bail!(
+                "PermissionDenied: Агент '{}' не может использовать '{}': создание карточек задач зарезервировано для оркестраторов (§ 2.8)",
+                role,
+                normalized_tool_name
+            );
+        }
+    }
+    if normalized_tool_name == "complete_task" {
+        if let Some(role) = ctx.role {
+            if role == "cvh-dev" {
+                bail!(
+                    "PermissionDenied: Агент 'cvh-dev' не может завершать задачи (§ 2.8). Завершение карточек зарезервировано для оркестратора и пользователя."
+                );
+            }
+        }
     }
 
     let raw_result = match normalized_tool_name {
@@ -4305,19 +4334,25 @@ where
     let agent_allowed = agent_setting.allowed_tools.clone();
 
     let all_tools = get_all_tools(&config.repo_root).await;
+    let is_orch = config.role.to_lowercase().contains("orchestrat")
+        || config.role.to_lowercase().contains("оркестрат")
+        || config.stage_id.to_lowercase().contains("orchestrat")
+        || config.stage_id.to_lowercase().contains("оркестрат")
+        || config.stage_id == "backlog"
+        || config.role == "copilot";
+
     let mut active_tools: Vec<ToolDefinition> = all_tools
         .into_iter()
         .filter(|t| {
-            is_tool_allowed(&tool_policy, Some(&config.stage_id), &t.function.name)
-                && is_tool_allowed(&tool_policy, Some(&config.role), &t.function.name)
-                && agent_allows_tool(agent_allowed.as_deref(), &t.function.name)
+            let name = &t.function.name;
+            if (name == "create_task" || name == "create_tasks" || name == "complete_task") && !is_orch {
+                return false;
+            }
+            is_tool_allowed(&tool_policy, Some(&config.stage_id), name)
+                && is_tool_allowed(&tool_policy, Some(&config.role), name)
+                && agent_allows_tool(agent_allowed.as_deref(), name)
         })
         .collect();
-
-    // If running as cvh-dev, restrict candidate tools strictly to project configuration tools
-    if config.role == "cvh-dev" {
-        active_tools.retain(|t| CVH_DEV_TOOLS.contains(&t.function.name.as_str()));
-    }
 
     // Deterministic sorting of tool definitions for prefix caching
     active_tools.sort_by(|a, b| a.function.name.cmp(&b.function.name));

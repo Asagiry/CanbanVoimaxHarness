@@ -228,12 +228,10 @@
   }
   ```
 
-### 2.16 CVH-DEV & Copilot Scope Invariant: Zero-Card-Management & 3-Tier Tool Gating
-- **Zero-Card-Management Invariant**: The `cvh-dev` persona and CVH Copilot Sidecar Dock are strictly Project Configuration & Environment Specialists (`.cvh/` infrastructure, boards, pipelines, agent personas, rules, and hooks). They are strictly forbidden from creating, completing, moving, or managing task cards. Card lifecycle is strictly reserved for the human user and the pipeline orchestrator.
-- **Symmetric 3-Tier Tool Gating**: The allowed configuration tools (`CVH_DEV_TOOLS`: `read_file`, `write_file`, `edit_file`, `glob`, `grep`, `execute_command`, `web_search`) MUST be enforced at all three layers of the architecture:
-  1. *Prompt Schema Definition*: Only the 7 configuration tools are compiled into the system prompt and tool definitions sent to the LLM.
-  2. *Candidate Tool Filtering*: `active_tools.retain(|t| CVH_DEV_TOOLS.contains(&t.function.name.as_str()))` before submission to LLM.
-  3. *Runtime Defense-in-Depth Execution Gate*: `execute_tool` in `agent.rs` MUST strictly check `(role == "cvh-dev" || role == "copilot") && !CVH_DEV_TOOLS.contains(&tool)` and reject unauthorized tool calls with `PermissionDenied`.
+### 2.16 CVH-DEV & Copilot Scope Invariant: Zero-Card-Management & Authoritative Tool Policy Matrix
+- **Zero-Card-Management Invariant**: The `cvh-dev` persona and CVH Copilot Sidecar Dock are strictly Project Configuration & Environment Specialists (`.cvh/` infrastructure, boards, pipelines, agent personas, rules, and hooks). They are strictly forbidden from creating, completing, or managing task cards (§ 2.8). Card lifecycle is strictly reserved for the human user and the pipeline orchestrator.
+- **Authoritative Tool Policy Matrix Decider**: Tool permissions for all agents (including `cvh-dev`, `developer`, `reviewer`) are governed authoritatively by the Two-Level Tool Policy Matrix (`tool-policy.json`) and per-agent setting (`setting.allowed_tools`). If a tool is enabled in `tool-policy.json`), the agent is permitted to use it. Hardcoded role-based tool whitelists are prohibited.
+- **Strict Role Boundary on Task Card Operations (§ 2.8)**: Task card manipulation tools (`create_task`, `create_tasks`, `complete_task`) are strictly reserved for Root Orchestrators (Level 0), human users via UI, and Sidecar Copilot. Development subagents, reviewer subagents, and `cvh-dev` are strictly forbidden from calling `create_task` or `complete_task`.
 - **UI Labeling Consistency**: UI surfaces for Copilot (`CopilotDock.tsx`, topbar badge, placeholders, empty states) MUST reflect "НАСТРОЙКА ПРОЕКТА" / "Project Configuration", never mislabeling configuration sidecars as general task creators.
 
 ### 2.17 Sidecar Copilot Dock Architecture
@@ -339,3 +337,18 @@
   3. Diagnostics MUST output a structured line-by-line diff classifying lines as `EXACT MATCH`, `WHITESPACE MISMATCH`, or `MISMATCH`.
   4. Mismatched lines MUST include token-level LCS diff diagnostics (`diff_line_tokens`) pinpointing expected vs actual tokens, missing tokens, or unexpected tokens.
   5. The error message MUST output the candidate file block with `>>` margin markers and line numbers, followed by pre-computed `read_file(offset, limit)` recommendations to facilitate immediate LLM self-correction in Turn N+1.
+
+### 2.29 Reactive Agent Running State & Honest Terminal Response Invariants
+- **Multi-Source Reactive Liveness Invariant**: The UI running state (`isRunning` in `AgentConsoleDrawer` and action controls) MUST NOT rely exclusively on `task.status === 'running'`. It MUST reactively evaluate multi-source liveness: `task.status === 'running' || hasRunningTool || isAgentActive`, where `hasRunningTool` tracks active tool executions across both parent task and active subagent, and `isAgentActive` tracks reactive store flags (`activeAgentTaskIds`). This guarantees the Stop button remains active and responsive whenever the backend is performing work.
+- **Symmetric In-Flight Tool Abort Teardown Invariant**: When an agent task or subagent is aborted by the user (`handleAbortAgent` / `abort_agent`), the client MUST immediately sweep all in-flight tools (`status === 'running'`) across both the parent task and active subagent, marking them as `failed` with diagnostic reason `"Прервано пользователем"` to eliminate dangling spinners and misleading UI indicators.
+- **Terminal Response vs Intermediate Commentary Differentiation Invariant**: In streaming activity feeds (`DrawerActivityStream`), assistant output items MUST NOT be unconditionally rendered as the final collapsible response card (`"✨ Ответ агента"`). Output preceding or intervening between tool calls represents intermediate intent or step explanation and MUST be rendered unboxed as natural step commentary (`"Пояснение агента"`). Only the true terminal output (explicitly flagged `isFinal: true` or terminating without subsequent tools/turns) may be rendered as the prominent terminal response card.
+- **Intervening Tool Output Preservation**: In `markFinalResponse`, if tool executions intervened after the last streamed output chunk, the store MUST NOT mutate or overwrite the prior commentary; it MUST append a new terminal response item preserving chronological fidelity.
+
+### 2.30 Initial Fresh-Project 3-Column Board, cvh-dev Persona & 200k Context Capacity Invariants
+- **Lean 3-Column Default Architecture Invariant**: In fresh projects and default configurations (`scaffold_cvh_project`, `.cvh/boards.json`, `.cvh/pipeline.json`, `DEFAULT_BOARDS_JSON`, `DEFAULT_PIPELINE_JSON`), the primary development board MUST default to an agile 3-column topology:
+  1. `backlog` (Intake stage, index 0, persona: none / system intake).
+  2. `dev` (Active development & environment configuration stage, persona: `"cvh-dev"`, stage name: `"Разработка"` / `"Development"`).
+  3. `ready` (Completion stage, final index, `terminal: true`, stage name: `"Готово"` / `"Ready"`).
+  The structurally immutable columns (`backlog` and `ready`) anchor intake and delivery, while `dev` serves as the single active autonomous execution stage for fresh projects.
+- **Unified cvh-dev Development Persona Invariant**: The default development column (`dev`) MUST bind to the `cvh-dev` persona (`persona: "cvh-dev"`), ensuring immediate alignment with project configuration, codebase modification, tactical planning (`todo_write`), subagent delegation, and environment inspection capabilities.
+- **200,000 Token Persona Context Window Invariant**: The default context window capacity for `cvh-dev` MUST be configured to 200,000 tokens (`context_window: 200000` in `.cvh/agents/cvh-dev/setting`). On project scaffold or initialization (`scaffold_cvh_project`), if `context_window` is absent or below 200,000 tokens (`val.get("context_window").and_then(|v| v.as_u64()).is_none_or(|w| w < 200000)`), the backend MUST automatically ensure and seed 200,000 tokens, providing ample context headroom for complex multi-turn development sessions.
