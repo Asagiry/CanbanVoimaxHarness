@@ -98,7 +98,7 @@ export default function AgentConsoleDrawer() {
                   if (start != null && outTokens > 0) {
                     const elapsedSec = (end - start) / 1000;
                     if (elapsedSec > 0.05) {
-                      ds.setFinalTps(task.id, outTokens / elapsedSec);
+                      ds.recordTurnMetrics(task.id, outTokens, elapsedSec);
                     }
                   }
                 }

@@ -50,6 +50,8 @@ export default function ContextGauge({
   const taskEnd = useDrawerStore((s) => s.taskEndTime[taskId] ?? null);
   const streamedTurnTokens = useDrawerStore((s) => s.streamedTurnTokens[taskId] ?? 0);
   const frozenTps = useDrawerStore((s) => s.finalTps[taskId] ?? null);
+  const cumulativeOutputTokens = useDrawerStore((s) => s.cumulativeOutputTokens[taskId] ?? 0);
+  const cumulativeGenerationSec = useDrawerStore((s) => s.cumulativeGenerationSec[taskId] ?? 0);
   const setTaskTokens = useDrawerStore((s) => s.setTaskTokens);
   const evaporateClientToolLogs = useDrawerStore((s) => s.evaporateClientToolLogs);
 
@@ -310,17 +312,26 @@ export default function ContextGauge({
   const liveTps =
     elapsedSec != null && elapsedSec >= 0.1 && outputTokens > 0 ? outputTokens / elapsedSec : null;
 
-  // Freeze exact TPS when generation settles (or from backend telemetry) so TPS never melts towards zero
-  const tpsValue = frozenTps != null ? frozenTps : liveTps;
+  const lastTurnTps = frozenTps != null ? frozenTps : liveTps;
+
+  // Smooth cumulative average across all turns of the task (eliminates wild dips/spikes on short turns)
+  const avgTps = useMemo(() => {
+    if (cumulativeGenerationSec > 0 && cumulativeOutputTokens > 0) {
+      return cumulativeOutputTokens / cumulativeGenerationSec;
+    }
+    return lastTurnTps;
+  }, [cumulativeGenerationSec, cumulativeOutputTokens, lastTurnTps]);
+
+  const tpsValue = avgTps != null ? avgTps : lastTurnTps;
   const tpsText = tpsValue != null && Number.isFinite(tpsValue) && tpsValue > 0
     ? tpsValue.toFixed(1)
     : '—';
 
   const tpsTitle =
-    frozenTps != null
-      ? `Скорость генерации на финише: ${outputTokens.toLocaleString('ru-RU')} токенов (${frozenTps.toFixed(1)} tok/s, замер зафиксирован)`
+    cumulativeGenerationSec > 0 && cumulativeOutputTokens > 0
+      ? `Средняя скорость генерации: ~${cumulativeOutputTokens.toLocaleString('ru-RU')} токенов за ${cumulativeGenerationSec.toFixed(1)} с (${(cumulativeOutputTokens / cumulativeGenerationSec).toFixed(1)} tok/s)`
       : tpsValue != null && elapsedSec != null
-        ? `Скорость генерации: ${outputTokens.toLocaleString('ru-RU')} токенов за ${elapsedSec.toFixed(1)} с (${tpsValue.toFixed(1)} tok/s)`
+        ? `Скорость генерации: ${outputTokens.toLocaleString('ru-RU')} токенов (${tpsValue.toFixed(1)} tok/s)`
         : 'Нет данных для расчёта скорости генерации';
 
   // Russian pluralization helper for turns
@@ -334,7 +345,7 @@ export default function ContextGauge({
     return 'шагов';
   };
 
-  // RPM (Requests Per Minute / Step Rate) calculation
+  // RPM (Requests Per Minute / Step Rate) smooth cumulative calculation over task duration
   const totalTaskSec = useMemo(() => {
     if (!taskStart) return null;
     const end = taskEnd ?? Date.now();
@@ -342,9 +353,11 @@ export default function ContextGauge({
   }, [taskStart, taskEnd]);
 
   const rpm = useMemo(() => {
-    if (effectiveTurns <= 0 || !totalTaskSec || totalTaskSec <= 0) return null;
-    return (effectiveTurns / (totalTaskSec / 60));
-  }, [effectiveTurns, totalTaskSec]);
+    if (effectiveTurns <= 0) return null;
+    const sec = totalTaskSec ?? (activeGenStart != null ? Math.max(1, (Date.now() - activeGenStart) / 1000) : null);
+    if (!sec || sec <= 0) return null;
+    return effectiveTurns / Math.max(0.1, sec / 60);
+  }, [effectiveTurns, totalTaskSec, activeGenStart]);
 
   const rpmText = rpm != null && Number.isFinite(rpm) && rpm > 0
     ? rpm.toFixed(1)
@@ -505,7 +518,7 @@ export default function ContextGauge({
           title={`Контекст: ${percent}% (~${usedTokensK}K / ${maxTokensK}K)`}
         >
           <svg className="w-3.5 h-3.5 -rotate-90 transform" viewBox="0 0 16 16">
-            <circle cx="8" cy="8" r="6" stroke="#ebebeb" strokeWidth="2" fill="none" />
+            <circle cx="8" cy="8" r="6" stroke="#ebebeb" className="dark:stroke-[#21262d]" strokeWidth="2" fill="none" />
             <circle
               cx="8"
               cy="8"
@@ -597,34 +610,6 @@ export default function ContextGauge({
               </div>
             </div>
 
-            {/* Telemetry & Performance Row */}
-            <div className="mt-3 pt-2.5 border-t border-[#ebebeb] dark:border-[#21262d] grid grid-cols-2 gap-2 text-xs">
-              <div>
-                <span className="text-[#8f8f8f] dark:text-[#8b949e] block text-[10px] uppercase font-mono">Скорость (TPS)</span>
-                <span className="font-mono text-[#171717] dark:text-[#f0f6fc] font-semibold tabular-nums">
-                  {tpsText} tok/s
-                </span>
-              </div>
-              <div>
-                <span className="text-[#8f8f8f] dark:text-[#8b949e] block text-[10px] uppercase font-mono">Темп (RPM)</span>
-                <span className="font-mono text-[#171717] dark:text-[#f0f6fc] font-semibold tabular-nums">
-                  {rpmText} шаг/мин
-                </span>
-              </div>
-              <div>
-                <span className="text-[#8f8f8f] dark:text-[#8b949e] block text-[10px] uppercase font-mono">Prompt Cache</span>
-                <span className="font-mono text-[#171717] dark:text-[#f0f6fc] font-semibold tabular-nums">
-                  {cacheText} {telemetry?.cacheReadTokens ? `(${(telemetry.cacheReadTokens || 0).toLocaleString('ru-RU')} tok)` : ''}
-                </span>
-              </div>
-              <div>
-                <span className="text-[#8f8f8f] dark:text-[#8b949e] block text-[10px] uppercase font-mono">Вывод терна</span>
-                <span className="font-mono text-[#171717] dark:text-[#f0f6fc] font-semibold tabular-nums">
-                  {outputTokens.toLocaleString('ru-RU')} tok
-                </span>
-              </div>
-            </div>
-
             {/* Action Row */}
             <div className="mt-3 pt-2.5 border-t border-[#ebebeb] dark:border-[#21262d] flex items-center justify-between">
               <button
@@ -633,11 +618,11 @@ export default function ContextGauge({
                 disabled={isCompacting}
                 className="px-2.5 py-1 rounded-md bg-[#fafafa] dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] text-[11px] font-mono transition cursor-pointer disabled:opacity-50 active:scale-[0.98]"
               >
-                {isCompacting ? 'Сжатие...' : 'Компактировать'}
+                {isCompacting ? 'Сжатие...' : 'Сжать контекст'}
               </button>
 
               {savingsBadge && (
-                <span className="text-[10px] font-mono text-[#b45309] truncate max-w-[130px]">
+                <span className="text-[10px] font-mono text-[#b45309] dark:text-[#f59e0b] truncate max-w-[130px]">
                   {savingsBadge}
                 </span>
               )}

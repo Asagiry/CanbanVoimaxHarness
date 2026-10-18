@@ -229,7 +229,7 @@ export default function App() {
               if (start != null && outTokens > 0) {
                 const elapsedSec = (end - start) / 1000;
                 if (elapsedSec > 0.05) {
-                  st.setFinalTps(taskId, outTokens / elapsedSec);
+                  st.recordTurnMetrics(taskId, outTokens, elapsedSec);
                 }
               }
             }
@@ -319,7 +319,10 @@ export default function App() {
           if (drawerState.generationEndTime[taskId] == null) {
             drawerState.setGenerationEndTime(taskId, Date.now());
           }
-          if (tpsVal > 0) {
+          const durSec = num(durationMs) > 0 ? num(durationMs) / 1000 : 0;
+          if (outTok > 0 && durSec > 0.05) {
+            drawerState.recordTurnMetrics(taskId, outTok, durSec);
+          } else if (tpsVal > 0) {
             drawerState.setFinalTps(taskId, tpsVal);
           }
         });
@@ -354,7 +357,7 @@ export default function App() {
                 if (start != null && outTokens > 0) {
                   const elapsedSec = (end - start) / 1000;
                   if (elapsedSec > 0.05) {
-                    st.setFinalTps(taskId, outTokens / elapsedSec);
+                    st.recordTurnMetrics(taskId, outTokens, elapsedSec);
                   }
                 }
               }
