@@ -1616,7 +1616,15 @@ pub async fn run_agent(
     let steer_prompt = if let Some(p) = prompt {
         let p_trimmed = p.trim();
         if !p_trimmed.is_empty() {
-            if task.description.trim().is_empty() {
+            let has_existing_context = app_handle
+                .state::<AppState>()
+                .agent_contexts
+                .lock()
+                .ok()
+                .and_then(|map| map.get(&task_id).and_then(|cs| cs.lock().map(|g| g.messages.len() > 2).ok()))
+                .unwrap_or(false);
+
+            if task.description.trim().is_empty() && !has_existing_context {
                 task.description = p_trimmed.to_string();
                 task.updated_at = Utc::now().timestamp_millis();
 
@@ -1791,10 +1799,9 @@ pub async fn run_agent(
             },
         );
         if let Ok(mut ctx_map) = state.agent_contexts.lock() {
-            ctx_map.insert(
-                task_id.clone(),
-                std::sync::Arc::new(std::sync::Mutex::new(crate::agent::compactor::AgentContextState::default())),
-            );
+            ctx_map.entry(task_id.clone()).or_insert_with(|| {
+                std::sync::Arc::new(std::sync::Mutex::new(crate::agent::compactor::AgentContextState::default()))
+            });
         };
     }
 
@@ -2545,6 +2552,15 @@ pub async fn steer_agent(
         }
     }
 
+    // Persist steer message into SQLite dialog_items via append_task_dialog_activity
+    let _ = append_task_dialog_activity(
+        &root,
+        &task_id,
+        "steer",
+        &message,
+        Some(&app_handle),
+    ).await;
+
     let steer_payload = serde_json::json!({
         "taskId": task_id,
         "content": message,
@@ -2590,17 +2606,6 @@ pub async fn steer_agent(
         if let Ok(mut guard) = state.tasks.lock() {
             if let Some(t) = guard.iter_mut().find(|t| t.id == task_id) {
                 t.updated_at = Utc::now().timestamp_millis();
-            }
-        }
-    }
-
-    if let Ok(contexts) = state.agent_contexts.lock() {
-        if let Some(cs) = contexts.get(&task_id) {
-            if let Ok(mut guard) = cs.lock() {
-                guard.messages.push(crate::llm::ChatMessage::user(format!(
-                    "[USER STEER]: {}",
-                    message
-                )));
             }
         }
     }

@@ -7,7 +7,7 @@ use crate::config::{
 };
 use crate::db::ActivityItem;
 use crate::hooks::{build_windows_cmd_args, kill_process_tree};
-use crate::llm::{ChatMessage, LlmClient, OpenAIChatRequest, StreamChunk, ToolCall, ToolDefinition};
+use crate::llm::{ChatMessage, LlmClient, OpenAIChatRequest, Role, StreamChunk, ToolCall, ToolDefinition};
 use anyhow::{bail, Context, Result};
 use tauri::{AppHandle, Emitter, Manager};
 use serde::{Deserialize, Serialize};
@@ -3995,6 +3995,159 @@ impl ThinkingStreamParser {
     }
 }
 
+/// Scans the conversation for any assistant messages with unclosed tool calls
+/// (e.g. when execution was aborted mid-tool) and appends synthetic tool responses
+/// so that the transcript remains strictly valid according to LLM API schemas.
+pub fn sanitize_unclosed_tool_calls(messages: &mut Vec<ChatMessage>) {
+    let mut i = 0;
+    while i < messages.len() {
+        if messages[i].role == Role::Assistant {
+            if let Some(tool_calls) = messages[i].tool_calls.clone() {
+                if !tool_calls.is_empty() {
+                    // Collect tool_call_ids answered immediately following this assistant message
+                    let mut answered_ids = std::collections::HashSet::new();
+                    let mut j = i + 1;
+                    while j < messages.len() && messages[j].role == Role::Tool {
+                        if let Some(ref tid) = messages[j].tool_call_id {
+                            answered_ids.insert(tid.clone());
+                        }
+                        j += 1;
+                    }
+
+                    // For any tool call that was not answered, synthesize a tool response
+                    for tc in tool_calls {
+                        if !answered_ids.contains(&tc.id) {
+                            eprintln!(
+                                "CVH [agent:sanitize]: Synthesizing tool response for unclosed tool call {} ({})",
+                                tc.id, tc.function.name
+                            );
+                            messages.insert(
+                                j,
+                                ChatMessage::tool_response(
+                                    tc.id.clone(),
+                                    "[Инструмент прерван указанием пользователя / Tool execution interrupted by user steer]",
+                                ),
+                            );
+                            j += 1;
+                        }
+                    }
+                    i = j;
+                    continue;
+                }
+            }
+        }
+        i += 1;
+    }
+}
+
+/// Reconstructs a list of ChatMessages from persisted SQLite dialog items
+/// when in-memory context has been lost (e.g. after process restart).
+pub fn reconstruct_messages_from_dialog(
+    system_prompt: &str,
+    initial_user_prompt: &str,
+    items: &[crate::db::ActivityItem],
+) -> Vec<ChatMessage> {
+    let mut messages = vec![
+        ChatMessage::system(system_prompt).with_cache_control(crate::llm::CacheControl::ephemeral()),
+        ChatMessage::user(initial_user_prompt).with_cache_control(crate::llm::CacheControl::ephemeral()),
+    ];
+
+    for item in items {
+        match item.item_type.as_str() {
+            "steer" => {
+                if let Some(ref c) = item.content {
+                    let trimmed = c.trim();
+                    if !trimmed.is_empty() {
+                        let formatted = if trimmed.starts_with("### [УКАЗАНИЕ ПОЛЬЗОВАТЕЛЯ") {
+                            trimmed.to_string()
+                        } else {
+                            format!(
+                                "### [УКАЗАНИЕ ПОЛЬЗОВАТЕЛЯ / USER STEER]\n{}\n\nПримите это указание во внимание немедленно и скорректируйте дальнейшие действия.",
+                                trimmed
+                            )
+                        };
+                        messages.push(ChatMessage::user(formatted));
+                    }
+                }
+            }
+            "user" => {
+                if let Some(ref c) = item.content {
+                    let trimmed = c.trim();
+                    if !trimmed.is_empty() && trimmed != initial_user_prompt.trim() {
+                        messages.push(ChatMessage::user(trimmed));
+                    }
+                }
+            }
+            "output" | "assistant" => {
+                if let Some(ref c) = item.content {
+                    let trimmed = c.trim();
+                    if !trimmed.is_empty() {
+                        messages.push(ChatMessage::assistant(Some(trimmed.to_string()), None));
+                    }
+                }
+            }
+            "tool" => {
+                if let Some(ref tool_val) = item.tool {
+                    let call_id = tool_val.get("id").and_then(|v| v.as_str()).unwrap_or(&item.id);
+                    let name = tool_val.get("name").and_then(|v| v.as_str()).unwrap_or("unknown_tool");
+                    let args = tool_val.get("arguments").and_then(|v| v.as_str()).unwrap_or("{}");
+                    let result = tool_val
+                        .get("result")
+                        .and_then(|v| v.as_str())
+                        .or(item.content.as_deref())
+                        .unwrap_or("");
+
+                    let tc = crate::llm::ToolCall {
+                        id: call_id.to_string(),
+                        call_type: "function".to_string(),
+                        function: crate::llm::FunctionCall {
+                            name: name.to_string(),
+                            arguments: args.to_string(),
+                        },
+                    };
+                    messages.push(ChatMessage::assistant(None, Some(vec![tc])));
+                    messages.push(ChatMessage::tool_response(call_id, result));
+                }
+            }
+            "compacted" => {
+                if let Some(ref c) = item.content {
+                    let trimmed = c.trim();
+                    if !trimmed.is_empty() {
+                        messages.push(ChatMessage::system(format!(
+                            "### [СВЕРНУТЫЙ КОНТЕКСТ / COMPACTED CONTEXT]\n{}",
+                            trimmed
+                        )));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    sanitize_unclosed_tool_calls(&mut messages);
+    messages
+}
+
+fn sync_context_state(
+    app_handle: &Option<AppHandle>,
+    task_id: &str,
+    turn: usize,
+    messages: &[ChatMessage],
+) {
+    if let Some(ref app) = app_handle {
+        if let Some(state) = app.try_state::<crate::commands::AppState>() {
+            if let Ok(map) = state.agent_contexts.lock() {
+                if let Some(cs) = map.get(task_id) {
+                    if let Ok(mut guard) = cs.lock() {
+                        guard.current_turn = turn;
+                        guard.messages = messages.to_vec();
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Executes the full ReAct loop for an agent session with deterministic prefix caching,
 /// zero-trust tool policy filtering, and state-preserving context compaction.
 pub async fn run_agent_loop<F>(
@@ -4026,25 +4179,113 @@ where
         config.task_description.trim()
     ));
 
-    let mut messages = vec![
-        ChatMessage::system(system_prompt).with_cache_control(crate::llm::CacheControl::ephemeral()),
-        ChatMessage::user(initial_user_prompt).with_cache_control(crate::llm::CacheControl::ephemeral()),
-    ];
+    // 1. Check if an existing in-memory context already exists for this task_id
+    let in_memory_context = if let Some(ref app) = config.app_handle {
+        if let Some(state) = app.try_state::<crate::commands::AppState>() {
+            state.agent_contexts.lock().ok().and_then(|map| {
+                map.get(&config.task_id).and_then(|cs| {
+                    let guard = cs.lock().ok()?;
+                    if guard.messages.len() > 2 {
+                        Some((guard.current_turn, guard.messages.clone()))
+                    } else {
+                        None
+                    }
+                })
+            })
+        } else {
+            None
+        }
+    } else {
+        None
+    };
 
+    // 2. Check SQLite history if in-memory context is absent or <= 2 messages
+    let sqlite_context = if in_memory_context.is_none() {
+        if let Ok(dialog_items) = crate::db::load_dialog_items(&config.repo_root, &config.task_id) {
+            let reconstructed = reconstruct_messages_from_dialog(&system_prompt, &initial_user_prompt, &dialog_items);
+            if reconstructed.len() > 2 {
+                Some((0, reconstructed))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // 3. Adopt existing messages or initialize fresh 2-message array
+    let (starting_turn, mut messages) = if let Some((cur_turn, msgs)) = in_memory_context {
+        eprintln!(
+            "CVH [agent]: Adopting existing in-memory context ({} messages, turn {}) for task {}",
+            msgs.len(), cur_turn, config.task_id
+        );
+        (cur_turn, msgs)
+    } else if let Some((cur_turn, msgs)) = sqlite_context {
+        eprintln!(
+            "CVH [agent]: Adopting reconstructed SQLite dialogue context ({} messages) for task {}",
+            msgs.len(), config.task_id
+        );
+        (cur_turn, msgs)
+    } else {
+        (
+            0,
+            vec![
+                ChatMessage::system(system_prompt).with_cache_control(crate::llm::CacheControl::ephemeral()),
+                ChatMessage::user(initial_user_prompt).with_cache_control(crate::llm::CacheControl::ephemeral()),
+            ],
+        )
+    };
+
+    // 4. Sanitize any unclosed tool calls (e.g. from an aborted turn mid-tool execution)
+    sanitize_unclosed_tool_calls(&mut messages);
+
+    // 5. Inject steer message if present
     if let Some(ref steer) = config.steer_prompt {
         let steer_trimmed = steer.trim();
         if !steer_trimmed.is_empty() {
-            messages.push(ChatMessage::user(format!("[USER STEER]: {}", steer_trimmed)));
+            let formatted_steer = format!(
+                "### [УКАЗАНИЕ ПОЛЬЗОВАТЕЛЯ / USER STEER]\n{}\n\nПримите это указание во внимание немедленно и скорректируйте дальнейшие действия.",
+                steer_trimmed
+            );
+
+            // Avoid duplicate identical steer if already at the very end of messages
+            let already_appended = messages.last().map(|m| {
+                m.role == Role::User && m.content.as_deref().unwrap_or("").contains(steer_trimmed)
+            }).unwrap_or(false);
+
+            if !already_appended {
+                messages.push(ChatMessage::user(formatted_steer));
+            }
+
+            // Persist steer message to SQLite dialog_items ("type": "steer") so load_task_dialog also retains it
+            let already_in_db = if let Ok(items) = crate::db::load_dialog_items(&config.repo_root, &config.task_id) {
+                items.last().map(|it| it.item_type == "steer" && it.content.as_deref() == Some(steer_trimmed)).unwrap_or(false)
+            } else {
+                false
+            };
+
+            if !already_in_db {
+                let _ = crate::commands::dialogs::append_task_dialog_activity(
+                    &config.repo_root,
+                    &config.task_id,
+                    "steer",
+                    steer_trimmed,
+                    config.app_handle.as_ref(),
+                ).await;
+            }
         }
     }
 
+    // 6. Synchronize active context state with AppState
     if let Some(ref app) = config.app_handle {
         if let Some(state) = app.try_state::<crate::commands::AppState>() {
             if let Ok(mut map) = state.agent_contexts.lock() {
                 map.insert(
                     config.task_id.clone(),
                     std::sync::Arc::new(std::sync::Mutex::new(compactor::AgentContextState {
-                        current_turn: 0,
+                        current_turn: starting_turn,
                         messages: messages.clone(),
                     })),
                 );
@@ -4086,10 +4327,11 @@ where
     // Безлимитный ReAct-цикл (лимит шагов убран по требованию): выход только
     // через терминальный ответ модели (текст без тул-коллов), abort_flag
     // (кнопка «Остановить») или ошибку LLM-стрима.
-    let mut turn: usize = 0;
+    let mut turn: usize = starting_turn;
     loop {
         turn += 1;
         if abort_flag.load(Ordering::SeqCst) {
+            sync_context_state(&config.app_handle, &config.task_id, turn, &messages);
             event_sink(AgentEvent::Aborted);
             bail!("Agent execution aborted by user");
         }
@@ -4282,6 +4524,7 @@ where
         while let Some(chunk) = rx.recv().await {
             received_any_chunk = true;
             if abort_flag.load(Ordering::SeqCst) {
+                sync_context_state(&config.app_handle, &config.task_id, turn, &messages);
                 event_sink(AgentEvent::Aborted);
                 bail!("Agent execution aborted by user");
             }
@@ -4447,6 +4690,10 @@ where
 
         // If no tool calls, terminal response reached
         if turn_tool_calls.is_empty() {
+            if !turn_content.is_empty() {
+                messages.push(ChatMessage::assistant(Some(turn_content.clone()), None));
+            }
+            sync_context_state(&config.app_handle, &config.task_id, turn, &messages);
             event_sink(AgentEvent::Finished {
                 final_response: turn_content.clone(),
             });
@@ -4480,6 +4727,8 @@ where
         // Execute each tool call and record response
         for tc in turn_tool_calls {
             if abort_flag.load(Ordering::SeqCst) {
+                sanitize_unclosed_tool_calls(&mut messages);
+                sync_context_state(&config.app_handle, &config.task_id, turn, &messages);
                 event_sink(AgentEvent::Aborted);
                 bail!("Agent execution aborted by user");
             }
@@ -4498,6 +4747,8 @@ where
             .await;
 
             if abort_flag.load(Ordering::SeqCst) {
+                sanitize_unclosed_tool_calls(&mut messages);
+                sync_context_state(&config.app_handle, &config.task_id, turn, &messages);
                 event_sink(AgentEvent::Aborted);
                 bail!("Agent execution aborted by user");
             }
@@ -4567,18 +4818,7 @@ where
 
             if is_stage_transition {
                 // Synchronize messages to in-memory context state before exiting
-                if let Some(ref app) = config.app_handle {
-                    if let Some(state) = app.try_state::<crate::commands::AppState>() {
-                        if let Ok(map) = state.agent_contexts.lock() {
-                            if let Some(cs) = map.get(&config.task_id) {
-                                if let Ok(mut guard) = cs.lock() {
-                                    guard.current_turn = turn;
-                                    guard.messages = messages.clone();
-                                }
-                            }
-                        }
-                    }
-                }
+                sync_context_state(&config.app_handle, &config.task_id, turn, &messages);
 
                 event_sink(AgentEvent::Finished {
                     final_response: result_str.clone(),
@@ -4588,18 +4828,7 @@ where
         }
 
         // Sync messages to in-memory context state
-        if let Some(ref app) = config.app_handle {
-            if let Some(state) = app.try_state::<crate::commands::AppState>() {
-                if let Ok(map) = state.agent_contexts.lock() {
-                    if let Some(cs) = map.get(&config.task_id) {
-                        if let Ok(mut guard) = cs.lock() {
-                            guard.current_turn = turn;
-                            guard.messages = messages.clone();
-                        }
-                    }
-                }
-            }
-        }
+        sync_context_state(&config.app_handle, &config.task_id, turn, &messages);
     }
 
     // Недостижимо: цикл выше бесконечен и выходит только через
