@@ -323,3 +323,19 @@
   3. Emit `AgentEvent::Finished { final_response: result_str.clone() }`.
   4. Break the ReAct loop and return `Ok(result_str)` naturally and cleanly.
   5. Under NO circumstances send the result back to the LLM for an extra turn.
+
+### 2.28 Resilient Line Matching & Honest Edit Diagnostics Invariants
+- **5-Tier Progressive Text Replacement Hierarchy**: The `edit_file` (alias: `str_replace`) tool MUST execute progressive matching in strict order:
+  1. Exact byte matching (`current.contains(old_string)`).
+  2. CRLF adaptation (file has CRLF, LLM supplies LF).
+  3. Reverse CRLF adaptation (file has LF, LLM supplies CRLF).
+  4. Normalized line endings fallback (normalizing both to LF and restoring file's original convention upon write).
+  5. Whitespace-relaxed line matching (`replace_whitespace_relaxed`): trimming leading and trailing whitespace on each line, adapting indentation differences proportionally, and preserving file newline endings.
+- **Greedy Non-Overlapping Replacement Invariant**: In `replace_whitespace_relaxed`, when `replace_all: true`, match advancement MUST step forward by the full matched block length (`idx += m`) rather than single lines (`idx += 1`), preventing corrupt overlapping replacements or duplicate substitutions.
+- **Ambiguous Match Rejection**: If `replace_all: false` and multiple blocks match under relaxed whitespace comparison, the tool MUST reject the edit with an informative `Ambiguous match` error requiring `replace_all: true` or wider surrounding context.
+- **Honest Mismatch Diagnostics & Zero-Fake-100% Invariant**: In `build_edit_mismatch_error`, similarity MUST NEVER be calculated from a single line when `old_string` spans multiple lines:
+  1. Candidate matching MUST use sliding window multi-line block similarity averaged across all search lines.
+  2. If any line or token in the candidate block differs from `old_string`, the reported similarity MUST NEVER reach or exceed 100% (`best_score.clamp(0.0, 99.0)`).
+  3. Diagnostics MUST output a structured line-by-line diff classifying lines as `EXACT MATCH`, `WHITESPACE MISMATCH`, or `MISMATCH`.
+  4. Mismatched lines MUST include token-level LCS diff diagnostics (`diff_line_tokens`) pinpointing expected vs actual tokens, missing tokens, or unexpected tokens.
+  5. The error message MUST output the candidate file block with `>>` margin markers and line numbers, followed by pre-computed `read_file(offset, limit)` recommendations to facilitate immediate LLM self-correction in Turn N+1.

@@ -1,0 +1,54 @@
+{
+  "taskId": "CVH-EDIT-FILE-RESILIENT-DIFF",
+  "task": "edit-file-resilient-diff",
+  "title": "Harden edit_file (str_replace) with Resilient Whitespace-Relaxed Line Matching and Honest Multi-Line Diff Diagnostics",
+  "branch": "feat/edit-file-resilient-diff",
+  "commitHash": "053105d",
+  "featureCommit": "6d20ad4",
+  "polishCommit": "053105d",
+  "commitMessage": "refactor(agent): address reviewer caveats with pattern matching and non-overlapping replace_all step",
+  "author": "agent-developer (tauri-rust-engineer)",
+  "verdict": "APPROVED_WITH_CAVEATS",
+  "postReviewVerdict": "APPROVED",
+  "date": "2026-10-18T18:48:00.000Z",
+  "timestamp": 1792349440540,
+  "sensors": {
+    "cargo_check": "pass (cargo check --tests, 0 errors, 0 warnings)",
+    "cargo_clippy": "pass (cargo clippy -- -D warnings, 0 warnings)",
+    "cargo_test": "pass (112 passed, 0 failed)",
+    "l2_reviewer": "APPROVED_WITH_CAVEATS",
+    "l3_retro_verifier": "APPROVED"
+  },
+  "files": [
+    "src-tauri/src/agent.rs",
+    "src-tauri/src/agent/tests.rs"
+  ],
+  "summary": "Hardened edit_file / str_replace tool in agent.rs: (1) Added 5th-tier resilient whitespace-relaxed line matching fallback (replace_whitespace_relaxed) with proportional indentation adaptation and non-overlapping greedy advancement (idx += m) when replace_all is true; (2) Replaced broken single-line 100% false similarity diagnostics with sliding window multi-line block similarity and zero-fake-100% clamping; (3) Added token-level LCS diff diagnostics (diff_line_tokens) with idiomatic tuple pattern matching to clearly explain exact token discrepancies; (4) Output structured candidate block with >> indicators and pre-computed read_file recommendations; (5) Verified across 112 unit tests and clippy with 0 warnings.",
+  "caveatsAddressed": [
+    {
+      "caveat": "Replaced guarded unwraps with idiomatic pattern matching tuple extraction in diff_line_tokens",
+      "resolution": "Converted raw_diffs iteration to use pattern matching tuple extraction `if let ((Some(exp), None), (None, Some(act))) = (raw_diffs[k], raw_diffs[k + 1])`."
+    },
+    {
+      "caveat": "Implemented greedy step non-overlapping matching advancement (idx += m) in replace_whitespace_relaxed when replace_all is true",
+      "resolution": "Updated replace_whitespace_relaxed match loop to increment by matched block size `m` when replace_all is true (`idx += m; continue;`)."
+    }
+  ],
+  "ftrAnalysis": {
+    "firstTimeRight": true,
+    "ftrScore": "96%",
+    "verdict": "APPROVED_WITH_CAVEATS (resolved in 053105d)",
+    "rootCauses": [
+      {
+        "cause": "Brittle Exact-String Matching and Whitespace Sensitivity in edit_file",
+        "detail": "LLMs frequently emit edits with standard 2-space or 4-space indentation or omit invisible trailing whitespaces present in source files, triggering immediate NOT_FOUND errors.",
+        "resolution": "Implemented 5th-tier whitespace-relaxed line matching in replace_whitespace_relaxed that trims leading/trailing whitespace, automatically adapts indentation, and preserves CRLF/LF line ending conventions."
+      },
+      {
+        "cause": "False 100% Similarity Hallucination in build_edit_mismatch_error",
+        "detail": "Diagnostics calculated similarity solely against the first line of old_string. When the first line matched a common header, it reported 'similarity: 100%' despite lines 2+ diverging completely.",
+        "resolution": "Implemented sliding window multi-line block similarity, zero-fake-100% clamping if lines differ, token-level LCS diffing (diff_line_tokens), and candidate context output with pre-calculated read_file recommendations."
+      }
+    ]
+  }
+}

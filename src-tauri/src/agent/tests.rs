@@ -1842,6 +1842,76 @@ line 2 again"
     }
 
     #[tokio::test]
+    async fn test_resilient_whitespace_relaxed_matching() {
+        // 1. Indentation mismatch: file has 4 spaces, LLM supplies 2 spaces in old_string and new_string
+        let file_content = "fn main() {\n    let price = 100;\n    let tax = 20;\n}\n";
+        let search = "  let price = 100;\n  let tax = 20;";
+        let replace = "  let price = 150;\n  let discount = 10;";
+        let result = replace_text_normalized(file_content, search, replace, false).expect("whitespace match");
+        assert!(result.contains("    let price = 150;\n    let discount = 10;\n"), "Must adapt indentation to match file");
+
+        // 2. Trailing spaces mismatch in file
+        let file_trailing = "fn run() {\r\n    step_one();   \r\n    step_two(); \r\n}\r\n";
+        let search_clean = "    step_one();\r\n    step_two();";
+        let replace_clean = "    step_three();";
+        let res_trailing = replace_text_normalized(file_trailing, search_clean, replace_clean, false).expect("trailing match");
+        assert!(res_trailing.contains("fn run() {\r\n    step_three();\r\n}\r\n"));
+        assert!(res_trailing.contains("\r\n"), "Must preserve CRLF");
+
+        // 3. Ambiguous match: same block occurs twice with relaxed whitespace
+        // File has 2 spaces on each line, search has 4 spaces (exact substring search fails)
+        let ambiguous_file = "  val a = 1;\n\n  val a = 1;\n";
+        let amb_search = "    val a = 1;";
+        let amb_replace = "    val a = 2;";
+        let amb_err = replace_text_normalized(ambiguous_file, amb_search, amb_replace, false).unwrap_err();
+        assert!(amb_err.contains("Ambiguous match"));
+        assert!(amb_err.contains("whitespace-relaxed"));
+
+        // With replace_all: true, both occurrences are replaced
+        let all_replaced = replace_text_normalized(ambiguous_file, amb_search, amb_replace, true).expect("replace all");
+        assert_eq!(all_replaced, "  val a = 2;\n\n  val a = 2;\n");
+    }
+
+    #[tokio::test]
+    async fn test_honest_mismatch_diagnostics_no_fake_100_percent() {
+        let content = r#"pub fn process_data(input: &str) -> Result<String> {
+    let sanitized = input.trim();
+    let validated = validate_input(sanitized)?;
+    let result = format!("processed: {}", validated);
+    Ok(result)
+}"#;
+
+        // old_string where line 1 ("pub fn process_data...") matches 100%, but line 2 differs!
+        let old_string_partial_match = r#"pub fn process_data(input: &str) -> Result<String> {
+    let sanitized = input.to_lowercase();
+    let validated = validate_input(sanitized)?;
+}"#;
+
+        let err_msg = build_edit_mismatch_error(content, "src/data.rs", old_string_partial_match);
+
+        // Verification 1: NEVER claim 100% similarity when subsequent lines differ!
+        assert!(!err_msg.contains("similarity: 100%"), "Must NOT claim 100% similarity when line 2 differs!");
+
+        // Verification 2: Block similarity must be reported honestly (< 100%)
+        assert!(err_msg.contains("block similarity:"), "Must report multi-line block similarity");
+
+        // Verification 3: Line-by-line diff must distinguish matches and mismatches
+        assert!(err_msg.contains("Line 1 (file line 1): EXACT MATCH"));
+        assert!(err_msg.contains("Line 2 (file line 2): MISMATCH"));
+
+        // Verification 4: Token-level diff must pinpoint the exact token discrepancy
+        assert!(err_msg.contains("expected 'to_lowercase', found 'trim'"));
+
+        // Verification 5: Must output candidate block with line indicators
+        assert!(err_msg.contains(">>    1 | pub fn process_data(input: &str) -> Result<String> {"));
+        assert!(err_msg.contains(">>    2 |     let sanitized = input.trim();"));
+        assert!(err_msg.contains(">>    3 |     let validated = validate_input(sanitized)?;"));
+
+        // Verification 6: Must include actionable recommendation
+        assert!(err_msg.contains("Recommendation: Use the exact candidate lines above or inspect with read_file"));
+    }
+
+    #[tokio::test]
     async fn test_worktree_glob_and_grep() {
         let base = std::path::PathBuf::from("target").join(format!("cvh_glob_grep_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(base.join("src").join("sub")).await.expect("test dirs");

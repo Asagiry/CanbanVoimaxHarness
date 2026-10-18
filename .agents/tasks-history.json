@@ -1,4 +1,18 @@
 {
+    "CVH-EDIT-FILE-RESILIENT-DIFF": {
+        "taskId": "CVH-EDIT-FILE-RESILIENT-DIFF",
+        "title": "Harden edit_file (str_replace) with Resilient Whitespace-Relaxed Line Matching and Honest Multi-Line Diff Diagnostics",
+        "author": "agent-developer (tauri-rust-engineer)",
+        "verdict": "APPROVED",
+        "commitHash": "053105d",
+        "commitMessage": "refactor(agent): address reviewer caveats with pattern matching and non-overlapping replace_all step",
+        "summary": "Hardened edit_file / str_replace tool in agent.rs: (1) Added 5th-tier resilient whitespace-relaxed line matching fallback (replace_whitespace_relaxed) with proportional indentation adaptation and non-overlapping greedy advancement (idx += m) when replace_all is true; (2) Replaced broken single-line 100% false similarity diagnostics with sliding window multi-line block similarity and zero-fake-100% clamping; (3) Added token-level LCS diff diagnostics (diff_line_tokens) with idiomatic tuple pattern matching to clearly explain exact token discrepancies; (4) Output structured candidate block with >> indicators and pre-computed read_file recommendations; (5) Verified across 112 unit tests and clippy with 0 warnings.",
+        "files": [
+            "src-tauri/src/agent.rs",
+            "src-tauri/src/agent/tests.rs"
+        ],
+        "timestamp": 1792349473036
+    },
     "CVH-AGENT-LOOP-NATURAL-EXIT": {
         "taskId": "CVH-AGENT-LOOP-NATURAL-EXIT",
         "title": "Implement clean, natural agent loop termination upon stage transition (advance_task, move_task, reject_task)",
