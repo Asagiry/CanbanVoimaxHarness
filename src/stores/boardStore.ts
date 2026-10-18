@@ -11,7 +11,6 @@ export const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
     color: '#64748b',
     icon: 'Inbox',
     persona: null,
-    contextWindow: 128000,
     modelOverride: null,
     wipLimit: 10,
     hooks: {},
@@ -22,7 +21,6 @@ export const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
     color: '#f59e0b',
     icon: 'Code2',
     persona: 'developer',
-    contextWindow: 400000,
     modelOverride: 'gemini-3.8-flash-high',
     temperature: 0.2,
     wipLimit: 3,
@@ -38,7 +36,6 @@ export const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
     icon: 'CheckCircle2',
     persona: null,
     terminal: true,
-    contextWindow: 64000,
     modelOverride: null,
     hooks: {
       on_enter: '.cvh/hooks/on_finish_done.bat',

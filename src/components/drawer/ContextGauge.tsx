@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
+import { useCortexStore } from '../../stores/cortexStore';
 
 interface ContextGaugeProps {
   taskId: string;
+  persona?: string;
   turns?: number;
   contextWindow?: number;
   stageLimit?: number;
@@ -14,6 +16,7 @@ interface ContextGaugeProps {
 
 export default function ContextGauge({
   taskId,
+  persona,
   turns,
   contextWindow,
   stageLimit = 128000,
@@ -21,17 +24,40 @@ export default function ContextGauge({
   onCompact,
   variant = 'status-bar',
 }: ContextGaugeProps) {
-  // Resolve contextWindow from boardStore columns if not passed as prop
-  const storeContextWindow = useBoardStore((s) => {
-    const task = s.tasks.find((t) => t.id === taskId);
-    const col = s.columns.find((c) => c.id === taskId || c.id === task?.columnId);
-    return col?.contextWindow;
-  });
+  // Resolve context window strictly from the active agent persona
+  const [resolvedPersonaLimit, setResolvedPersonaLimit] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    import('@tauri-apps/api/core')
+      .then(({ invoke }) => invoke<number>('get_task_context_window', { taskId, persona }))
+      .then((cw) => {
+        if (!cancelled && typeof cw === 'number' && cw > 0) {
+          setResolvedPersonaLimit(cw);
+        }
+      })
+      .catch(() => {
+        // Fallback for non-Tauri or test environments: read from persona info
+        const role =
+          persona ||
+          useBoardStore.getState().columns.find(
+            (c) => c.id === taskId || c.id === useBoardStore.getState().tasks.find((t) => t.id === taskId)?.columnId
+          )?.persona ||
+          'developer';
+        const pInfo = useCortexStore.getState().agentPersonas?.find((p) => p.role === role);
+        if (!cancelled && pInfo?.contextWindow) {
+          setResolvedPersonaLimit(pInfo.contextWindow);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [taskId, persona]);
 
   const effectiveLimit =
     contextWindow ||
-    storeContextWindow ||
-    useBoardStore.getState().columns.find((c) => c.id === taskId || c.id === useBoardStore.getState().tasks.find((t) => t.id === taskId)?.columnId)?.contextWindow ||
+    resolvedPersonaLimit ||
     stageLimit;
 
   // Селективные подписки per taskId: гейдж чужой задачи не пересчитывается

@@ -573,7 +573,6 @@ export default function KanbanBoard() {
       // Persona обязана сохраняться (select и свободный ввод): пустая подменяется значением по умолчанию,
       // чтобы колонка гарантированно попадала в проводник.
       persona: targetPersona,
-      contextWindow: 128000,
       modelOverride: null,
       hooks: {},
     };

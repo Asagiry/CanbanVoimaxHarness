@@ -66,7 +66,7 @@ export interface PipelineColumn {
   // terminal marks a sink column (task becomes done, no further promotion).
   autoRun?: boolean;
   terminal?: boolean;
-  contextWindow: number;
+  contextWindow?: number;
   modelOverride: string | null;
   temperature?: number;
   reasoningEffort?: string;

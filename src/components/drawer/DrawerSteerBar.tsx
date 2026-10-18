@@ -51,6 +51,7 @@ export default function DrawerSteerBar({
 
   const columns = useBoardStore((s) => s.columns);
   const currentColumn = columns.find((c) => c.id === task.columnId);
+  const activePersona = activeSubagentRole || currentColumn?.persona || 'developer';
 
   // Reset input and attachments on task switch
   useEffect(() => {
@@ -343,7 +344,7 @@ export default function DrawerSteerBar({
 
         {/* Elegant Telemetry Status Line (Кэш, TPS, Контекст) */}
         <div className="flex items-center justify-center">
-          <ContextGauge taskId={task.id} turns={turns} contextWindow={currentColumn?.contextWindow} />
+          <ContextGauge taskId={task.id} persona={activePersona} turns={turns} />
         </div>
       </div>
     </footer>

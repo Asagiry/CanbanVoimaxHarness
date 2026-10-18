@@ -348,6 +348,8 @@ pub struct AgentPersonaInfo {
     pub icon: Option<String>,
     #[serde(default)]
     pub color: Option<String>,
+    #[serde(default)]
+    pub context_window: Option<u64>,
 }
 
 /// Валидация имени персоны: ^[a-z0-9][a-z0-9-]*$
@@ -492,6 +494,9 @@ pub async fn list_agent_personas_in(root: &Path) -> Vec<AgentPersonaInfo> {
             }
         };
 
+        let setting = crate::config::load_agent_setting(root, &role).await;
+        let context_window = setting.context_window;
+
         out.push(AgentPersonaInfo {
             role,
             has_prompt,
@@ -501,6 +506,7 @@ pub async fn list_agent_personas_in(root: &Path) -> Vec<AgentPersonaInfo> {
             hooks,
             icon: Some(icon),
             color: Some(color),
+            context_window,
         });
     }
     out.sort_by(|a, b| a.role.cmp(&b.role));

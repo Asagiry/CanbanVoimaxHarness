@@ -113,6 +113,7 @@ pub fn run() {
             delete_custom_tool,
             compact_task_context,
             compact_context,
+            get_task_context_window,
             steer_agent,
             answer_agent_question,
             get_llm_settings,
