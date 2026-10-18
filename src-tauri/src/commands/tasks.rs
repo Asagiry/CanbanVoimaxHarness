@@ -11,7 +11,7 @@ use crate::config::{
 };
 use crate::hooks::{execute_hook, execute_sensor_command, HookContext};
 use chrono::Utc;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -526,6 +526,83 @@ pub async fn create_subtask(
     }
 
     Ok(new_subtask)
+}
+
+#[tauri::command]
+pub async fn delete_task(
+    task_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let root = state.get_root();
+    let mut tasks = load_tasks_from_disk(&root).await;
+
+    // Collect target and any cascaded subtasks
+    let mut to_delete = HashSet::new();
+    to_delete.insert(task_id.clone());
+    let mut grew = true;
+    while grew {
+        grew = false;
+        for t in &tasks {
+            if to_delete.contains(&t.id) {
+                continue;
+            }
+            if let Some(ref p) = t.parent_id {
+                if to_delete.contains(p) {
+                    to_delete.insert(t.id.clone());
+                    grew = true;
+                    continue;
+                }
+            }
+            if to_delete.iter().any(|id| t.id.starts_with(&format!("{}.", id))) {
+                to_delete.insert(t.id.clone());
+                grew = true;
+            }
+        }
+    }
+
+    // Abort active agents for any deleted task/subtask (drop std::sync::MutexGuard before await)
+    let handles: Vec<_> = {
+        let mut entries = Vec::new();
+        if let Ok(mut map) = state.active_agents.lock() {
+            for id in &to_delete {
+                if let Some(agent_entry) = map.remove(id) {
+                    agent_entry.abort_flag.store(true, Ordering::SeqCst);
+                    entries.push(agent_entry);
+                }
+            }
+        }
+        entries
+    };
+
+    for agent_entry in handles {
+        let mut guard = agent_entry.join_handle.lock().await;
+        if let Some(handle) = guard.take() {
+            handle.abort();
+        }
+    }
+
+    tasks.retain(|t| !to_delete.contains(&t.id));
+    save_tasks_to_disk(&root, &tasks).await?;
+
+    if let Ok(mut guard) = state.tasks.lock() {
+        *guard = tasks.clone();
+    }
+
+    // Best-effort cleanup of git worktree and branch if top-level task
+    let is_subtask = task_id.contains('.');
+    if !is_subtask {
+        let task_slug = task_id.to_lowercase();
+        let _ = crate::git::remove_worktree(&root, &task_slug).await;
+        let branch = format!("feat/{}", task_slug);
+        let _ = crate::git::delete_branch(&root, &branch, true).await;
+    }
+
+    // Best-effort cleanup of SQLite dialogue items
+    for id in &to_delete {
+        let _ = crate::db::clear_dialog_items(&root, id);
+    }
+
+    Ok(())
 }
 
 pub async fn trigger_column_on_enter_script(

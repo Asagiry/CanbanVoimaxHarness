@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { Draggable } from '@hello-pangea/dnd';
 import { KanbanTask, TaskStatus } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore, syncTasksBackend } from '../../stores/boardStore';
+import { useShallow } from 'zustand/react/shallow';
 import { Play, Clock, GitBranch, ChevronDown, MessageSquare, GitFork, Sparkles } from 'lucide-react';
 import TaskContextMenu from './TaskContextMenu';
 
@@ -39,9 +40,17 @@ interface KanbanCardProps {
   index: number;
 }
 
-export default function KanbanCard({ task, index }: KanbanCardProps) {
-  const { openDrawer } = useDrawerStore();
-  const { runTaskAgent, columns, hoveredTaskId, setHoveredTaskId, tasks } = useBoardStore();
+function KanbanCard({ task, index }: KanbanCardProps) {
+  const openDrawer = useDrawerStore((s) => s.openDrawer);
+  const runTaskAgent = useBoardStore((s) => s.runTaskAgent);
+  const setHoveredTaskId = useBoardStore((s) => s.setHoveredTaskId);
+  const columns = useBoardStore((s) => s.columns);
+  const isHighlighted = useBoardStore((s) =>
+    s.hoveredTaskId === task.id ||
+    (Boolean(task.waitingForSubtaskId) && s.hoveredTaskId === task.waitingForSubtaskId) ||
+    (Boolean(task.parentId) && s.hoveredTaskId === task.parentId)
+  );
+
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [isSubtasksOpen, setIsSubtasksOpen] = useState(false);
 
@@ -55,8 +64,10 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
     taskColumn?.title?.toLowerCase().includes('done')
   );
 
-  // Subtasks belonging to this task
-  const subtasks = tasks.filter((t) => t.parentId === task.id);
+  // Subtasks belonging to this task (queried only if card is in done column)
+  const subtasks = useBoardStore(
+    useShallow((s) => (isDone ? s.tasks.filter((t) => t.parentId === task.id) : []))
+  );
 
   const stageStart = task.stageEnteredAt || task.updatedAt || task.createdAt;
   const currentStageDuration = isDone
@@ -71,11 +82,7 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
     ? Math.max(0, Math.floor((Date.now() - task.createdAt) / 1000))
     : (task.totalElapsed ?? 0);
 
-  // Check if this card is highlighted via hover on itself, its subtask, or its parent
-  const isHighlighted =
-    hoveredTaskId === task.id ||
-    (task.waitingForSubtaskId && hoveredTaskId === task.waitingForSubtaskId) ||
-    (task.parentId && hoveredTaskId === task.parentId);
+
 
   const handleRunAgent = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -375,3 +382,42 @@ export default function KanbanCard({ task, index }: KanbanCardProps) {
     </>
   );
 }
+
+function areCardPropsEqual(prev: KanbanCardProps, next: KanbanCardProps): boolean {
+  if (prev.index !== next.index) return false;
+  if (prev.task === next.task) return true;
+
+  const a = prev.task;
+  const b = next.task;
+
+  return (
+    a.id === b.id &&
+    a.title === b.title &&
+    a.description === b.description &&
+    a.columnId === b.columnId &&
+    a.boardId === b.boardId &&
+    a.status === b.status &&
+    a.priority === b.priority &&
+    a.branch === b.branch &&
+    a.worktreePath === b.worktreePath &&
+    a.persona === b.persona &&
+    a.verdict === b.verdict &&
+    a.verdictNote === b.verdictNote &&
+    a.model === b.model &&
+    a.parentId === b.parentId &&
+    a.subtaskIndex === b.subtaskIndex &&
+    a.waitingForSubtaskId === b.waitingForSubtaskId &&
+    a.handoverSummary === b.handoverSummary &&
+    a.activeStageDuration === b.activeStageDuration &&
+    a.totalElapsed === b.totalElapsed &&
+    a.stageEnteredAt === b.stageEnteredAt &&
+    a.updatedAt === b.updatedAt &&
+    a.createdAt === b.createdAt &&
+    a.isTimerRunning === b.isTimerRunning &&
+    a.returnsCount === b.returnsCount &&
+    a.attachments === b.attachments &&
+    a.todos === b.todos
+  );
+}
+
+export default memo(KanbanCard, areCardPropsEqual);
