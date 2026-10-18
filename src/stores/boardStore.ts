@@ -7,7 +7,7 @@ import { useDrawerStore } from './drawerStore';
 export const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
   {
     id: 'backlog',
-    title: 'Ожидание',
+    title: 'Backlog',
     color: '#64748b',
     icon: 'Inbox',
     persona: null,
@@ -17,10 +17,10 @@ export const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
   },
   {
     id: 'dev',
-    title: 'В разработке',
+    title: 'CVH Development',
     color: '#f59e0b',
-    icon: 'Code2',
-    persona: 'developer',
+    icon: 'Bot',
+    persona: 'cvh-dev',
     modelOverride: 'gemini-3.8-flash-high',
     temperature: 0.2,
     wipLimit: 3,
@@ -31,7 +31,7 @@ export const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
   },
   {
     id: 'ready',
-    title: 'Готово',
+    title: 'Ready',
     color: '#10b981',
     icon: 'CheckCircle2',
     persona: null,
@@ -46,7 +46,7 @@ export const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
 
 export const DEFAULT_BOARD: BoardDef = {
   id: 'development',
-  name: 'Разработка',
+  name: 'Engineering Pipeline',
   columns: INITIAL_COLUMNS,
 };
 

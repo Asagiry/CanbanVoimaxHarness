@@ -7,7 +7,7 @@
       "columns": [
         {
           "id": "backlog",
-          "title": "Ожидание",
+          "title": "Backlog",
           "color": "#64748b",
           "icon": "Inbox",
           "persona": null,
@@ -30,10 +30,10 @@
         },
         {
           "id": "dev",
-          "title": "In Development",
+          "title": "CVH Development",
           "color": "#f59e0b",
-          "icon": "Code2",
-          "persona": null,
+          "icon": "Bot",
+          "persona": "cvh-dev",
           "onEnterScript": null,
           "modelOverride": "gemini-3.8-flash-high",
           "reasoningEffort": null,
@@ -46,7 +46,7 @@
             "write_file",
             "glob",
             "grep",
-            "subagent"
+            "web_search"
           ],
           "hooks": {},
           "routes": null,
@@ -55,7 +55,7 @@
         },
         {
           "id": "ready",
-          "title": "Готово",
+          "title": "Ready",
           "color": "#10b981",
           "icon": "CheckCircle2",
           "persona": null,
@@ -72,7 +72,7 @@
           "hooks": {},
           "routes": null,
           "autoRun": null,
-          "terminal": null
+          "terminal": true
         }
       ]
     }
