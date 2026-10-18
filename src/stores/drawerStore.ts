@@ -48,6 +48,7 @@ interface DrawerState {
   tokenOverrides: Record<string, number | undefined>;
   cumulativeOutputTokens: Record<string, number>;
   cumulativeGenerationSec: Record<string, number>;
+  activeAgentTaskIds: Record<string, boolean>;
 
   // Nested Subagent View State
   activeSubagentId: string | null;
@@ -58,6 +59,8 @@ interface DrawerState {
   subagentIdToToolId: Record<string, string>;
 
   // Actions
+  setActiveAgentTask: (taskId: string, isActive: boolean) => void;
+  markFinalResponse: (taskId: string, response?: string) => void;
   openDrawer: (taskId: string, initialTab?: DrawerTab) => void;
   closeDrawer: () => void;
   setActiveTab: (tab: DrawerTab) => void;
@@ -126,12 +129,79 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
   tokenOverrides: {},
   cumulativeOutputTokens: {},
   cumulativeGenerationSec: {},
+  activeAgentTaskIds: {},
   activeSubagentId: null,
   activeSubagentTitle: null,
   activeSubagentRole: null,
   activeSubagentPrompt: null,
   toolIdToSubagentId: {},
   subagentIdToToolId: {},
+
+  setActiveAgentTask: (taskId, isActive) => {
+    if (!taskId) return;
+    set((state) => {
+      if (Boolean(state.activeAgentTaskIds[taskId]) === isActive) return state;
+      return {
+        activeAgentTaskIds: {
+          ...state.activeAgentTaskIds,
+          [taskId]: isActive,
+        },
+      };
+    });
+  },
+
+  markFinalResponse: (taskId, response) => {
+    if (!taskId) return;
+    const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false });
+    set((state) => {
+      const feed = state.activityFeed[taskId] || [];
+      const updatedFeed = [...feed];
+
+      let lastOutputIdx = -1;
+      for (let i = updatedFeed.length - 1; i >= 0; i--) {
+        if (updatedFeed[i].type === 'output') {
+          lastOutputIdx = i;
+          break;
+        }
+      }
+
+      const hasInterveningTools = lastOutputIdx !== -1 &&
+        updatedFeed.slice(lastOutputIdx + 1).some((it) => it.type === 'tool' || Boolean((it as any).tool));
+
+      if (lastOutputIdx !== -1 && !hasInterveningTools) {
+        const lastOutput = updatedFeed[lastOutputIdx];
+        const content = lastOutput.content || '';
+        if (response && response.length > 0 && !content.endsWith(response)) {
+          updatedFeed[lastOutputIdx] = {
+            ...lastOutput,
+            content: content ? `${content}\n\n${response}` : response,
+            isFinal: true,
+          };
+        } else {
+          updatedFeed[lastOutputIdx] = {
+            ...lastOutput,
+            isFinal: true,
+          };
+        }
+      } else if (response && response.length > 0) {
+        updatedFeed.push({
+          id: `out-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          type: 'output',
+          timestamp: timeStr,
+          content: response,
+          isFinal: true,
+        });
+      }
+
+      return {
+        activityFeed: {
+          ...state.activityFeed,
+          [taskId]: updatedFeed,
+        },
+      };
+    });
+    scheduleDialogSave(taskId);
+  },
 
   registerSubagentMapping: (toolId, subagentId) => {
     if (!toolId || !subagentId) return;
@@ -777,6 +847,10 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       cumulativeOutputTokens: {
         ...state.cumulativeOutputTokens,
         [taskId]: 0,
+      },
+      activeAgentTaskIds: {
+        ...state.activeAgentTaskIds,
+        [taskId]: false,
       },
       cumulativeGenerationSec: {
         ...state.cumulativeGenerationSec,
