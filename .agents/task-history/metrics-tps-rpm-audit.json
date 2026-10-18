@@ -1,0 +1,69 @@
+{
+  "taskId": "CVH-TELEMETRY-TPS-RPM-AUDIT",
+  "task": "metrics-tps-rpm-audit",
+  "title": "Audit and verify that tokens/second (tok/s, TPS), RPM (requests per minute / step rate), token counts, cache hit rate, and execution duration are calculated accurately and displayed cleanly across the UI",
+  "branch": "feat/metrics-tps-rpm-audit",
+  "commitHash": "ca983b6",
+  "commitMessage": "feat(telemetry): audit and verify TPS, RPM, safe cache hit rate, and duration tracking",
+  "author": "agent-developer (Lead Telemetry & Performance Artisan)",
+  "verdict": "APPROVED",
+  "date": "2026-10-18T13:59:20.371Z",
+  "timestamp": 1792331960375,
+  "sensors": {
+    "typescript": "pass (tsc --noEmit, 0 errors)",
+    "cargo_check": "pass (cargo check --tests, 0 errors)",
+    "cargo_test": "pass (cargo test, 108 passed, 0 failed in 4.15s)",
+    "l2_reviewer": "APPROVED",
+    "l3_retro_verifier": "APPROVED"
+  },
+  "files": [
+    "src-tauri/src/agent.rs",
+    "src-tauri/src/commands/copilot.rs",
+    "src-tauri/src/commands/tasks.rs",
+    "src-tauri/src/llm/client.rs",
+    "src-tauri/src/llm/models.rs",
+    "src/App.tsx",
+    "src/components/drawer/AgentConsoleDrawer.tsx",
+    "src/components/drawer/ContextGauge.tsx",
+    "src/stores/drawerStore.ts"
+  ],
+  "summary": "Audited and verified tokens/second (tok/s, TPS), RPM (requests per minute / step rate), token counts, cache hit rate, and execution duration across backend LLM streaming and React tactical frontend. Added high-resolution Instant measurement from first to last token chunk (excluding TTFT), instant TPS freezing on settlement (telemetry, tool calls, finished) to eliminate melting TPS, fallback telemetry for proxies omitting usage chunks, safe cache hit rate calculation with division-by-zero guards, and priority-based true model context calculation in ContextGauge.",
+  "ftrAnalysis": {
+    "firstTimeRight": true,
+    "ftrScore": "100%",
+    "verdict": "APPROVED",
+    "rootCauses": [
+      {
+        "cause": "Melting / Decaying TPS Metric",
+        "detail": "Live TPS was previously calculated dynamically as outputTokens / (Date.now() - startTime). As time elapsed after generation settled, the denominator continued to grow indefinitely, causing TPS to decay towards zero.",
+        "resolution": "Freezes final TPS instantaneously in reactive state (finalTps) upon turn completion, tool invocation, or AgentEvent::Telemetry, and resets cleanly on subsequent turns."
+      },
+      {
+        "cause": "TTFT & Network Latency Throughput Distortion",
+        "detail": "Measuring generation duration from turn start bundled Time-To-First-Token (TTFT) and prompt evaluation latency into token throughput calculation, underestimating true generation speed.",
+        "resolution": "Clocks duration from first_token_instant to last_token_instant in agent.rs and generationStartTime in drawerStore."
+      },
+      {
+        "cause": "Missing Provider Stream Usage Options",
+        "detail": "OpenAI-compatible endpoints require stream_options: { include_usage: true } to return final usage statistics chunk.",
+        "resolution": "Added StreamOptions schema to OpenAIChatRequest and enabled it in agent.rs ReAct streaming."
+      },
+      {
+        "cause": "Absent Fallback Telemetry for Proxies Without Usage",
+        "detail": "Local AI proxies omitting usage chunks left the UI displaying dashes ('—') with zero telemetry feedback.",
+        "resolution": "Implemented heuristic fallback in agent.rs calculating output tokens from streamed characters and turn duration, emitting AgentEvent::Telemetry."
+      },
+      {
+        "cause": "Potential Division-by-Zero in Cache Hit Rate",
+        "detail": "Cache hit calculations without total input token checks could evaluate to NaN or infinite values.",
+        "resolution": "Enforced safe division guards: safeCacheHitRate = totalInput > 0 ? (cacheRead / totalInput) * 100 : 0 in backend and frontend."
+      },
+      {
+        "cause": "Missing Execution Velocity Cadence (RPM)",
+        "detail": "Operators had visibility into token throughput (TPS) but lacked visibility into step velocity across multi-turn ReAct workflows.",
+        "resolution": "Added RPM (requests per minute / step rate) calculation in ContextGauge with Russian pluralization and monospace formatting."
+      }
+    ],
+    "rulesPatched": "AGENTS.md § 2.24 Telemetry Accuracy & Non-Decaying TPS/RPM Metric Invariant"
+  }
+}
