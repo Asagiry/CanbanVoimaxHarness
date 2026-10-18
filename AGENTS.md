@@ -314,3 +314,11 @@
 - **Persistent Monotonic Task ID Invariant**: Task numeric sequences MUST be persisted to disk (`.cvh/settings/sequence.json` and mirrored in `.cvh/task-sequence.json`) and incremented monotonically (`allocate_next_task_num`). Task ID allocation MUST NEVER derive solely from in-memory or on-disk array maximums (`max_num_on_disk + 1`), guaranteeing that deleted tasks never have their numerical IDs re-issued or recycled under any circumstances.
 - **Symmetric Deletion Broadcasting & Worktree Pruning Invariant**: The `delete_task` Tauri IPC command MUST accept `app_handle: AppHandle` and broadcast `tasks:updated` across the application upon task removal. Additionally, task deletion MUST execute full cleanup: removing worktrees (`remove_worktree`), pruning dangling gitdir pointers (`prune_worktrees`), deleting feature branches, and clearing associated SQLite dialogue items.
 - **4-Tier Progressive CRLF/LF Normalization Invariant**: The `edit_file` (alias: `str_replace`) tool MUST implement progressive line ending normalization (`replace_text_normalized`) accommodating Windows CRLF (`\r\n`) vs Unix LF (`\n`) discrepancies. When LLMs supply search or replacement strings containing standard Unix LF, the engine MUST adapt line endings to match the target file without failing with false `NOT_FOUND` errors, while strictly preserving the file's original line ending convention upon saving.
+
+### 2.27 Stage Transition Natural Agent Loop Termination Invariant
+- **Natural Termination on Stage Transition**: When any executed tool call is `advance_task`, `move_task`, or `reject_task` (or aliases `move_task_stage`, `advance_stage`, `next_stage`), the agent has handed over or finalized the task. In `run_agent_loop`, the engine MUST:
+  1. Record `ChatMessage::tool_response` into the conversation history.
+  2. Synchronize messages to in-memory context state in `AppState` (if present).
+  3. Emit `AgentEvent::Finished { final_response: result_str.clone() }`.
+  4. Break the ReAct loop and return `Ok(result_str)` naturally and cleanly.
+  5. Under NO circumstances send the result back to the LLM for an extra turn.

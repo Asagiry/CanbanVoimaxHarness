@@ -1,4 +1,18 @@
 {
+    "CVH-AGENT-LOOP-NATURAL-EXIT": {
+        "taskId": "CVH-AGENT-LOOP-NATURAL-EXIT",
+        "title": "Implement clean, natural agent loop termination upon stage transition (advance_task, move_task, reject_task)",
+        "author": "agent-developer (tauri-rust-engineer)",
+        "verdict": "APPROVED",
+        "commitHash": "f8869bee7509c7683933a070c26089a38a17811b",
+        "commitMessage": "feat(agent): natural loop exit on stage transition (advance_task, move_task, reject_task)",
+        "summary": "Implemented clean, natural ReAct loop termination in run_agent_loop upon execution of stage transition tools (advance_task, move_task, reject_task). When any transition tool is executed, the agent has handed over or finalized the task; the engine records the tool response in message history, syncs state to AppState, emits AgentEvent::Finished { final_response }, and immediately breaks the loop returning Ok(result_str). Under no circumstances is the result sent back to the LLM for an extra turn.",
+        "files": [
+            "src-tauri/src/agent.rs",
+            "src-tauri/src/agent/tests.rs"
+        ],
+        "timestamp": 1792348960085
+    },
     "CVH-FIX-DRAWER-CLEANUP-CONTEXT-WINDOW": {
         "taskId": "CVH-FIX-DRAWER-CLEANUP-CONTEXT-WINDOW",
         "title": "Fix Task Deletion Memory Leak in DrawerStore, Empty Dialog Stale State, and Context Window Resolution with Cumulative Telemetry Smoothing",

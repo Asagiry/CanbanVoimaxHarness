@@ -1,0 +1,36 @@
+{
+  "taskId": "CVH-AGENT-LOOP-NATURAL-EXIT",
+  "task": "agent-loop-natural-exit",
+  "title": "Implement clean, natural agent loop termination upon stage transition (advance_task, move_task, reject_task)",
+  "branch": "feat/agent-loop-natural-exit",
+  "commitHash": "f8869bee7509c7683933a070c26089a38a17811b",
+  "commitMessage": "feat(agent): natural loop exit on stage transition (advance_task, move_task, reject_task)",
+  "author": "agent-developer (tauri-rust-engineer)",
+  "verdict": "APPROVED",
+  "date": "2026-10-18T18:39:44.352Z",
+  "timestamp": 1792348784355,
+  "sensors": {
+    "cargo_check": "pass (cargo check --tests, 0 errors, 0 warnings)",
+    "cargo_clippy": "pass (cargo clippy -- -D warnings, 0 warnings)",
+    "cargo_test": "pass (113 passed, 0 failed)",
+    "l2_reviewer": "APPROVED",
+    "l3_retro_verifier": "APPROVED"
+  },
+  "files": [
+    "src-tauri/src/agent.rs",
+    "src-tauri/src/agent/tests.rs"
+  ],
+  "summary": "Implemented clean, natural ReAct loop termination in run_agent_loop upon execution of stage transition tools (advance_task, move_task, reject_task). When any transition tool is executed, the agent has handed over or finalized the task; the engine records the tool response in message history, syncs state to AppState, emits AgentEvent::Finished { final_response }, and immediately breaks the loop returning Ok(result_str). Under no circumstances is the result sent back to the LLM for an extra turn.",
+  "ftrAnalysis": {
+    "firstTimeRight": true,
+    "ftrScore": "100%",
+    "verdict": "APPROVED",
+    "rootCauses": [
+      {
+        "cause": "Extra ReAct Loop Turn after Stage Handover",
+        "detail": "When an agent invoked advance_task, move_task, or reject_task, the tool execution moved the task card, but the agent loop appended tool_response and continued to turn N+1, sending the result back to the LLM for an unnecessary redundant turn.",
+        "resolution": "Intercepted stage transition tools in run_agent_loop, emitting AgentEvent::Finished and breaking the loop immediately with Ok(result_str)."
+      }
+    ]
+  }
+}
