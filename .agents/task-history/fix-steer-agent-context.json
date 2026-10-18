@@ -1,0 +1,53 @@
+{
+  "taskId": "CVH-FIX-STEER-CONTEXT",
+  "task": "fix-steer-agent-context",
+  "title": "Preserve conversation context, sanitize unclosed tool calls, and persist steer in SQLite",
+  "branch": "feat/fix-steer-agent-context",
+  "commitHash": "e3cf4ae",
+  "commitMessage": "fix(agent): preserve conversation context and sanitize tool calls on steer",
+  "author": "agent-developer (tauri-rust-engineer)",
+  "verdict": "APPROVED",
+  "date": "2026-10-18T20:21:59.981Z",
+  "timestamp": 1792354919983,
+  "sensors": {
+    "cargo_check": "pass (cargo check --tests, 0 errors, 0 warnings)",
+    "cargo_test": "pass (test_steer and test_sanitize passed, 0 failed)",
+    "tsc_check": "pass (tsc --noEmit, 0 errors)",
+    "l2_reviewer": "APPROVED",
+    "l3_retro_verifier": "APPROVED"
+  },
+  "files": [
+    "src-tauri/src/agent.rs",
+    "src-tauri/src/agent/tests.rs",
+    "src-tauri/src/commands/tasks.rs",
+    "AGENTS.md"
+  ],
+  "summary": "Fixed critical steer agent context loss and tool-call schema violations: (1) Preserved conversation continuity in run_agent_loop by adopting existing in-memory context (AppState::agent_contexts) when messages > 2 instead of wiping with a fresh 2-message array; (2) Added SQLite dialogue fallback reconstruction (reconstruct_messages_from_dialog) to recover full conversation history including user steer directives, tool calls, and assistant outputs after app restarts; (3) Prevented run_agent from overwriting state.agent_contexts by using entry.or_insert_with instead of unconditional insertion; (4) Added persistent SQLite logging for steer directives via append_task_dialog_activity ('type': 'steer') in steer_agent and run_agent_loop; (5) Implemented sanitize_unclosed_tool_calls to append synthetic tool responses ('[Инструмент прерван указанием пользователя]') for unclosed assistant tool_calls caused by aborts mid-execution, preventing LLM API 400 Bad Request errors; (6) Added sync_context_state on all abort/break checkpoints; (7) Formulated Section 2.31 invariant in AGENTS.md; (8) Added 3 comprehensive Rust unit tests covering sanitization, dialog reconstruction, and SQLite persistence.",
+  "ftrAnalysis": {
+    "firstTimeRight": true,
+    "ftrScore": "100%",
+    "verdict": "APPROVED",
+    "rootCauses": [
+      {
+        "cause": "run_agent_loop unconditionally overwrote in-memory context state with only a 2-message array on steer",
+        "detail": "At the start of run_agent_loop, messages was initialized to vec![ChatMessage::system(...), ChatMessage::user(...)], completely discarding turns 1..N of dialogue and intermediate tool executions.",
+        "resolution": "Inspect AppState::agent_contexts first for existing messages (>2); adopt existing turn and message history, or reconstruct from SQLite dialog items if absent."
+      },
+      {
+        "cause": "run_agent overwrote state.agent_contexts with AgentContextState::default()",
+        "detail": "In run_agent, ctx_map.insert(task_id, AgentContextState::default()) clobbered pre-existing conversation context whenever run_agent was re-invoked on steer.",
+        "resolution": "Replaced unconditional insert with ctx_map.entry(task_id).or_insert_with(...)."
+      },
+      {
+        "cause": "steer_agent missing SQLite dialog persistence ('type': 'steer')",
+        "detail": "steer_agent emitted IPC events and pushed to in-memory context but never appended a dialog item to SQLite, causing the steer card to vanish on task reload or application restart.",
+        "resolution": "Added append_task_dialog_activity with type 'steer' to both steer_agent and run_agent_loop."
+      },
+      {
+        "cause": "Aborting mid-tool execution left unclosed assistant tool_calls without tool responses",
+        "detail": "When an agent loop aborted while executing a tool, the assistant message declaring tool_calls lacked corresponding role: 'tool' responses, triggering HTTP 400 Bad Request on the next LLM call.",
+        "resolution": "Implemented sanitize_unclosed_tool_calls to detect missing tool responses and synthesize interruption placeholder messages."
+      }
+    ]
+  }
+}
