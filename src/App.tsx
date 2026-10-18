@@ -163,6 +163,7 @@ export default function App() {
 
     const queueThought = (taskId: string, text: string) => {
       const ds = useDrawerStore.getState();
+      ds.setActiveAgentTask(taskId, true);
       if (ds.generationStartTime[taskId] == null) {
         ds.setGenerationStartTime(taskId, Date.now());
       }
@@ -178,6 +179,7 @@ export default function App() {
 
     const queueOutput = (taskId: string, text: string) => {
       const ds = useDrawerStore.getState();
+      ds.setActiveAgentTask(taskId, true);
       if (ds.generationStartTime[taskId] == null) {
         ds.setGenerationStartTime(taskId, Date.now());
       }
@@ -215,7 +217,10 @@ export default function App() {
         const u3 = await listen<any>('agent:tool_call', (event) => {
           const { taskId, id, name, arguments: args } = event.payload || {};
           // Flush текста перед tool-событием, чтобы сохранить хронологию ленты.
-          if (taskId) flushTask(taskId);
+          if (taskId) {
+            useDrawerStore.getState().setActiveAgentTask(taskId, true);
+            flushTask(taskId);
+          }
           if (taskId) {
             const st = useDrawerStore.getState();
             if (st.generationEndTime[taskId] == null) {
@@ -333,6 +338,7 @@ export default function App() {
           if (taskId) {
             flushTask(taskId);
             useDrawerStore.getState().resetTurnStreamMetrics(taskId);
+            useDrawerStore.getState().setActiveAgentTask(taskId, true);
           }
         });
         unlisteners.push(uTurnStart);
@@ -344,6 +350,7 @@ export default function App() {
             // иначе дедуп ниже не увидит забутченные токены.
             flushTask(taskId);
             const st = useDrawerStore.getState();
+            st.setActiveAgentTask(taskId, false);
             st.setGenerationEndTime(taskId, Date.now());
             st.setTaskEndTime(taskId, Date.now());
 
@@ -364,18 +371,10 @@ export default function App() {
             } catch {
               // ignore
             }
-            // Дедуп финала: текст уже пристримился токенами agent:output,
-            // а бэкенд может прислать agent:finished дважды
-            if (response && response.length > 0) {
-              const feed = useDrawerStore.getState().activityFeed[taskId];
-              const last = feed?.[feed.length - 1];
-              const lastContent = last?.content || '';
-              if (!lastContent.endsWith(response)) {
-                useDrawerStore.getState().appendOutput(taskId, response, 'output');
-              }
-            }
+            // Дедуп финала и маркировка финального ответа
+            st.markFinalResponse(taskId, response);
             // Immediately flush task activity feed to disk upon turn finish
-            useDrawerStore.getState().flushSaveDialog(taskId);
+            st.flushSaveDialog(taskId);
             useBoardStore.getState().updateTaskStatus(taskId, 'idle');
           }
           loadTasks();
@@ -386,6 +385,7 @@ export default function App() {
           const { taskId } = event.payload || {};
           if (taskId) {
             flushTask(taskId);
+            useDrawerStore.getState().setActiveAgentTask(taskId, false);
             useDrawerStore.getState().flushSaveDialog(taskId);
             useBoardStore.getState().updateTaskStatus(taskId, 'idle');
             useDrawerStore.getState().setThinkingStartTime(taskId, null);
@@ -400,6 +400,7 @@ export default function App() {
           const { taskId, status } = event.payload || {};
           if (taskId && (status === 'finished' || status === 'aborted' || status === 'error')) {
             flushTask(taskId);
+            useDrawerStore.getState().setActiveAgentTask(taskId, false);
             useDrawerStore.getState().flushSaveDialog(taskId);
             useBoardStore.getState().updateTaskStatus(taskId, 'idle');
             useDrawerStore.getState().setThinkingStartTime(taskId, null);
