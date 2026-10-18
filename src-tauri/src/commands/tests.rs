@@ -424,6 +424,47 @@ use std::path::PathBuf;
         assert_eq!(next_task_num(&subs), 3);
     }
 
+    #[tokio::test]
+    async fn test_persistent_monotonic_sequence_prevent_deleted_id_reuse() {
+        let tmp = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("tmp")
+            .join(format!("cvh_test_seq_{}", uuid::Uuid::new_v4()));
+        let _ = tokio::fs::create_dir_all(&tmp).await;
+
+        let mut tasks: Vec<Task> = serde_json::from_value(serde_json::json!([
+            {"id": "CVH-001", "title": "t1", "stageId": "backlog"},
+            {"id": "CVH-002", "title": "t2", "stageId": "backlog"},
+            {"id": "CVH-003", "title": "t3", "stageId": "backlog"}
+        ])).unwrap();
+
+        // 1. Initial allocation on existing tasks -> must be CVH-004
+        let num1 = allocate_next_task_num(&tmp, &tasks).await;
+        assert_eq!(num1, 4);
+
+        // Verify sequence was persisted to disk in .cvh/settings/sequence.json
+        let seq_file = tmp.join(".cvh").join("settings").join("sequence.json");
+        assert!(seq_file.is_file());
+        let seq_on_disk = load_task_sequence(&tmp).await;
+        assert_eq!(seq_on_disk, 4);
+
+        // 2. User deletes CVH-004 and CVH-003 from tasks
+        tasks.retain(|t| t.id != "CVH-003");
+        // tasks now only has CVH-001 and CVH-002 (max_on_disk = 2).
+        // BUT sequence counter on disk is 4!
+        // Next allocation MUST NOT re-issue CVH-003 or CVH-004! It must be CVH-005.
+        let num2 = allocate_next_task_num(&tmp, &tasks).await;
+        assert_eq!(num2, 5, "Deleted task IDs (CVH-003, CVH-004) must NEVER be reissued!");
+
+        // 3. User deletes ALL tasks (empty tasks list)
+        tasks.clear();
+        // Even when all tasks are gone, the sequence counter must increment monotonically
+        let num3 = allocate_next_task_num(&tmp, &tasks).await;
+        assert_eq!(num3, 6, "Empty tasks list must continue monotonically from stored sequence!");
+
+        let _ = tokio::fs::remove_dir_all(&tmp).await;
+    }
+
     #[test]
     fn test_sanitize_task_id() {
         assert!(sanitize_task_id("CVH-001").is_ok());

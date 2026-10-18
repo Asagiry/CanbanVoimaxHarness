@@ -380,6 +380,13 @@ pub async fn remove_worktree(
     Ok(())
 }
 
+/// Prunes git worktree administrative records.
+pub async fn prune_worktrees(repo_root: impl AsRef<Path>) -> Result<()> {
+    let repo_path = repo_root.as_ref();
+    let _ = run_git(repo_path, &["worktree", "prune"]).await;
+    Ok(())
+}
+
 /// Merges a feature branch into the target branch.
 pub async fn merge_worktree_branch(
     repo_root: impl AsRef<Path>,
