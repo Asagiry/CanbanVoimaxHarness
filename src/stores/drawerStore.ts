@@ -25,6 +25,8 @@ export interface TaskTelemetry {
   cacheReadTokens: number;
   cacheCreationTokens: number;
   cacheHitRate: number;
+  durationMs?: number;
+  tps?: number;
 }
 
 interface DrawerState {
@@ -37,6 +39,11 @@ interface DrawerState {
   toolExecutions: Record<string, ToolExecution[]>;
   taskTelemetry: Record<string, TaskTelemetry>;
   thinkingStartTime: Record<string, number | null>;
+  generationStartTime: Record<string, number | null>;
+  generationEndTime: Record<string, number | null>;
+  taskStartTime: Record<string, number | null>;
+  taskEndTime: Record<string, number | null>;
+  streamedTurnTokens: Record<string, number>;
   finalTps: Record<string, number | null>;
   tokenOverrides: Record<string, number>;
 
@@ -63,6 +70,12 @@ interface DrawerState {
   updateToolExecution: (taskId: string, toolId: string, partial: Partial<ToolExecution>) => void;
   updateTelemetry: (taskId: string, telemetry: Partial<TaskTelemetry>) => void;
   setThinkingStartTime: (taskId: string, time: number | null) => void;
+  setGenerationStartTime: (taskId: string, time: number | null) => void;
+  setGenerationEndTime: (taskId: string, time: number | null) => void;
+  setTaskStartTime: (taskId: string, time: number | null) => void;
+  setTaskEndTime: (taskId: string, time: number | null) => void;
+  recordStreamedChars: (taskId: string, chars: number) => void;
+  resetTurnStreamMetrics: (taskId: string) => void;
   setFinalTps: (taskId: string, v: number | null) => void;
   sendSteerMessage: (taskId: string, message: string) => Promise<void>;
   injectOptimisticCompactTool: (taskId: string, customId?: string) => string;
@@ -101,6 +114,11 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
   toolExecutions: {},
   taskTelemetry: {},
   thinkingStartTime: {},
+  generationStartTime: {},
+  generationEndTime: {},
+  taskStartTime: {},
+  taskEndTime: {},
+  streamedTurnTokens: {},
   finalTps: {},
   tokenOverrides: {},
   activeSubagentId: null,
@@ -430,10 +448,15 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         cacheCreationTokens: 0,
         cacheHitRate: 0,
       };
+      const merged = { ...current, ...telemetry };
+      const totalInput = (merged.inputTokens || 0) + (merged.cacheReadTokens || 0);
+      if (typeof merged.cacheHitRate !== 'number' || !Number.isFinite(merged.cacheHitRate) || merged.cacheHitRate < 0) {
+        merged.cacheHitRate = totalInput > 0 ? ((merged.cacheReadTokens || 0) / totalInput) * 100 : 0;
+      }
       return {
         taskTelemetry: {
           ...state.taskTelemetry,
-          [taskId]: { ...current, ...telemetry },
+          [taskId]: merged,
         },
       };
     });
@@ -448,11 +471,90 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
     }));
   },
 
+  setGenerationStartTime: (taskId, time) => {
+    set((state) => ({
+      generationStartTime: {
+        ...state.generationStartTime,
+        [taskId]: time,
+      },
+    }));
+  },
+
+  setGenerationEndTime: (taskId, time) => {
+    set((state) => ({
+      generationEndTime: {
+        ...state.generationEndTime,
+        [taskId]: time,
+      },
+    }));
+  },
+
+  setTaskStartTime: (taskId, time) => {
+    set((state) => ({
+      taskStartTime: {
+        ...state.taskStartTime,
+        [taskId]: time,
+      },
+    }));
+  },
+
+  setTaskEndTime: (taskId, time) => {
+    set((state) => ({
+      taskEndTime: {
+        ...state.taskEndTime,
+        [taskId]: time,
+      },
+    }));
+  },
+
+  recordStreamedChars: (taskId, chars) => {
+    if (!chars || chars <= 0) return;
+    set((state) => {
+      const current = state.streamedTurnTokens[taskId] ?? 0;
+      const added = Math.max(1, Math.round(chars / 3.8));
+      return {
+        streamedTurnTokens: {
+          ...state.streamedTurnTokens,
+          [taskId]: current + added,
+        },
+      };
+    });
+  },
+
+  resetTurnStreamMetrics: (taskId) => {
+    set((state) => ({
+      finalTps: {
+        ...state.finalTps,
+        [taskId]: null,
+      },
+      generationStartTime: {
+        ...state.generationStartTime,
+        [taskId]: null,
+      },
+      generationEndTime: {
+        ...state.generationEndTime,
+        [taskId]: null,
+      },
+      streamedTurnTokens: {
+        ...state.streamedTurnTokens,
+        [taskId]: 0,
+      },
+      thinkingStartTime: {
+        ...state.thinkingStartTime,
+        [taskId]: Date.now(),
+      },
+      taskStartTime: {
+        ...state.taskStartTime,
+        [taskId]: state.taskStartTime[taskId] ?? Date.now(),
+      },
+    }));
+  },
+
   setFinalTps: (taskId, v) => {
     set((state) => ({
       finalTps: {
         ...state.finalTps,
-        [taskId]: v,
+        [taskId]: v != null && Number.isFinite(v) && v > 0 ? Number(v.toFixed(1)) : v,
       },
     }));
   },
@@ -622,6 +724,26 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       },
       finalTps: {
         ...state.finalTps,
+        [taskId]: null,
+      },
+      generationStartTime: {
+        ...state.generationStartTime,
+        [taskId]: null,
+      },
+      generationEndTime: {
+        ...state.generationEndTime,
+        [taskId]: null,
+      },
+      streamedTurnTokens: {
+        ...state.streamedTurnTokens,
+        [taskId]: 0,
+      },
+      taskStartTime: {
+        ...state.taskStartTime,
+        [taskId]: null,
+      },
+      taskEndTime: {
+        ...state.taskEndTime,
         [taskId]: null,
       },
     }));

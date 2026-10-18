@@ -279,6 +279,7 @@ async fn run_copilot_react_loop(
                 Some(active_tools.clone())
             },
             reasoning_effort: None,
+            stream_options: Some(crate::llm::StreamOptions { include_usage: true }),
         };
 
         let (tx, mut rx) = tokio::sync::mpsc::channel::<StreamChunk>(100);

@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
-import { CompactionReport } from '../../types';
 
 interface ContextGaugeProps {
   taskId: string;
@@ -34,6 +33,11 @@ export default function ContextGauge({
   const taskCurrentTokens = useBoardStore((s) => s.tasks.find((t) => t.id === taskId)?.currentTokens);
   const telemetry = useDrawerStore((s) => s.taskTelemetry[taskId]);
   const thinkingStart = useDrawerStore((s) => s.thinkingStartTime[taskId] ?? null);
+  const genStart = useDrawerStore((s) => s.generationStartTime[taskId] ?? null);
+  const genEnd = useDrawerStore((s) => s.generationEndTime[taskId] ?? null);
+  const taskStart = useDrawerStore((s) => s.taskStartTime[taskId] ?? null);
+  const taskEnd = useDrawerStore((s) => s.taskEndTime[taskId] ?? null);
+  const streamedTurnTokens = useDrawerStore((s) => s.streamedTurnTokens[taskId] ?? 0);
   const frozenTps = useDrawerStore((s) => s.finalTps[taskId] ?? null);
   const setTaskTokens = useDrawerStore((s) => s.setTaskTokens);
   const evaporateClientToolLogs = useDrawerStore((s) => s.evaporateClientToolLogs);
@@ -161,11 +165,20 @@ export default function ContextGauge({
 
     // Fix 100% gauge bug: if the task was compacted, preserve the compacted token count
     // rather than recalculating an uncompressed sum of character lengths from raw historical tool items!
+    // Priority order:
+    // 1. Explicit currentEstimatedTokens prop
+    // 2. In-memory token override (from compactor event)
+    // 3. Compacted tokens from persisted feed
+    // 4. Server telemetry inputTokens (true model context from last turn) + streamed turn output tokens
+    // 5. Fallback heuristic from uncompressed messages/tools
     let total: number;
     if (currentEstimatedTokens !== undefined) {
       total = currentEstimatedTokens;
     } else if (resolvedCompactTokens !== undefined) {
       total = resolvedCompactTokens;
+    } else if (telemetry?.inputTokens && telemetry.inputTokens > 0) {
+      const out = (telemetry.outputTokens || 0) > 0 ? telemetry.outputTokens : streamedTurnTokens;
+      total = telemetry.inputTokens + out;
     } else {
       let messageChars = textChars;
       for (const t of toolsArr) {
@@ -218,26 +231,79 @@ export default function ContextGauge({
   }, [tools, thoughts, outputs]);
   const effectiveTurns = turns !== undefined ? turns : calculatedTurns;
 
-  // Telemetry: cache hit % + output throughput (TPS) for the current measurement
+  // Telemetry: cache hit % + output throughput (TPS) + RPM step rate
+  const totalInputTokens = (telemetry?.inputTokens || 0) + (telemetry?.cacheReadTokens || 0);
+  const safeCacheHitRate = telemetry
+    ? typeof telemetry.cacheHitRate === 'number' && Number.isFinite(telemetry.cacheHitRate) && telemetry.cacheHitRate >= 0
+      ? telemetry.cacheHitRate
+      : totalInputTokens > 0
+        ? ((telemetry.cacheReadTokens || 0) / totalInputTokens) * 100
+        : 0
+    : 0;
 
-  const cacheText = telemetry ? `${Math.round(telemetry.cacheHitRate)}%` : '—';
+  const cacheText = telemetry ? `${Math.round(safeCacheHitRate)}%` : '—';
   const cacheTitle = telemetry
-    ? `Попадания в prompt cache: ${Math.round(telemetry.cacheHitRate)}% (из кеша прочитано ${telemetry.cacheReadTokens.toLocaleString('ru-RU')} из ${(telemetry.inputTokens + telemetry.cacheReadTokens).toLocaleString('ru-RU')} входных токенов терна)`
+    ? `Попадания в prompt cache: ${Math.round(safeCacheHitRate)}% (из кеша прочитано ${(telemetry.cacheReadTokens || 0).toLocaleString('ru-RU')} из ${totalInputTokens.toLocaleString('ru-RU')} входных токенов терна)`
     : 'Нет данных телеметрии от модели';
 
-  const elapsedSec = thinkingStart != null ? (Date.now() - thinkingStart) / 1000 : null;
-  const outputTokens = telemetry?.outputTokens ?? 0;
+  // Active generation time: starts from first token (genStart) or start of generation (thinkingStart)
+  const activeGenStart = genStart ?? thinkingStart;
+  const activeGenEnd = genEnd;
+  const elapsedSec = activeGenStart != null
+    ? Math.max(0.01, ((activeGenEnd ?? Date.now()) - activeGenStart) / 1000)
+    : null;
+
+  const outputTokens = (telemetry?.outputTokens && telemetry.outputTokens > 0)
+    ? telemetry.outputTokens
+    : streamedTurnTokens;
+
+  // Live TPS calculation while streaming (guarded against division by zero and micro-spikes)
   const liveTps =
-    elapsedSec != null && elapsedSec > 0 && outputTokens > 0 ? outputTokens / elapsedSec : null;
-  // После финиша показываем замороженное значение, чтобы TPS не «таял»
+    elapsedSec != null && elapsedSec >= 0.1 && outputTokens > 0 ? outputTokens / elapsedSec : null;
+
+  // Freeze exact TPS when generation settles (or from backend telemetry) so TPS never melts towards zero
   const tpsValue = frozenTps != null ? frozenTps : liveTps;
-  const tpsText = tpsValue != null ? tpsValue.toFixed(1) : '—';
+  const tpsText = tpsValue != null && Number.isFinite(tpsValue) && tpsValue > 0
+    ? tpsValue.toFixed(1)
+    : '—';
+
   const tpsTitle =
     frozenTps != null
-      ? `Скорость генерации на финише: ${outputTokens.toLocaleString('ru-RU')} токенов вывода (${frozenTps.toFixed(1)} TPS, замер остановлен)`
+      ? `Скорость генерации на финише: ${outputTokens.toLocaleString('ru-RU')} токенов (${frozenTps.toFixed(1)} tok/s, замер зафиксирован)`
       : tpsValue != null && elapsedSec != null
-        ? `Скорость генерации: ${outputTokens.toLocaleString('ru-RU')} токенов вывода за ${elapsedSec.toFixed(1)} с (замер от начала терна)`
+        ? `Скорость генерации: ${outputTokens.toLocaleString('ru-RU')} токенов за ${elapsedSec.toFixed(1)} с (${tpsValue.toFixed(1)} tok/s)`
         : 'Нет данных для расчёта скорости генерации';
+
+  // Russian pluralization helper for turns
+  const pluralizeTurns = (n: number) => {
+    const abs = Math.abs(n);
+    const mod100 = abs % 100;
+    const mod10 = abs % 10;
+    if (mod100 >= 11 && mod100 <= 19) return 'шагов';
+    if (mod10 === 1) return 'шаг';
+    if (mod10 >= 2 && mod10 <= 4) return 'шага';
+    return 'шагов';
+  };
+
+  // RPM (Requests Per Minute / Step Rate) calculation
+  const totalTaskSec = useMemo(() => {
+    if (!taskStart) return null;
+    const end = taskEnd ?? Date.now();
+    return Math.max(1, (end - taskStart) / 1000);
+  }, [taskStart, taskEnd]);
+
+  const rpm = useMemo(() => {
+    if (effectiveTurns <= 0 || !totalTaskSec || totalTaskSec <= 0) return null;
+    return (effectiveTurns / (totalTaskSec / 60));
+  }, [effectiveTurns, totalTaskSec]);
+
+  const rpmText = rpm != null && Number.isFinite(rpm) && rpm > 0
+    ? rpm.toFixed(1)
+    : '—';
+
+  const rpmTitle = rpm != null && totalTaskSec != null
+    ? `Темп выполнения: ${rpmText} шаг/мин (RPM) · ${effectiveTurns} ${pluralizeTurns(effectiveTurns)} за ${(totalTaskSec / 60).toFixed(1)} мин`
+    : `Шагов выполнено: ${effectiveTurns}`;
 
   // SVG circular gauge geometry (diameter 28px)
   const radius = 10;
@@ -267,11 +333,16 @@ export default function ContextGauge({
     const setupListener = async () => {
       try {
         const { listen } = await import('@tauri-apps/api/event');
-        unlisten = await listen<CompactionReport>('agent:compacted', (event) => {
+        unlisten = await listen<any>('agent:compacted', (event) => {
           if (event.payload) {
-            setTaskTokens?.(taskId, event.payload.tokens_after);
-            if (event.payload.saved_tokens > 0) {
-              triggerSavingsNotice(event.payload.saved_tokens);
+            const p = event.payload;
+            const after = p.tokens_after ?? p.tokensAfter;
+            const saved = p.saved_tokens ?? p.estimatedSavedTokens ?? p.savedTokens ?? 0;
+            if (typeof after === 'number' && Number.isFinite(after)) {
+              setTaskTokens?.(taskId, after);
+            }
+            if (saved > 0) {
+              triggerSavingsNotice(saved);
             }
           }
         });
@@ -365,9 +436,12 @@ export default function ContextGauge({
   // Elegant bottom status bar under chat input card
   return (
     <div className="font-mono text-xs text-[#8f8f8f] dark:text-[#8b949e] flex items-center justify-center gap-6 py-1.5 select-none">
-      {/* ⏱️ {turns} шагов · {tps} tok/s */}
-      <span className="flex items-center gap-1.5" title={tpsTitle}>
-        <span className="tabular-nums">{effectiveTurns} шагов · {tpsText} tok/s</span>
+      {/* ⏱️ {turns} шагов · {rpm} RPM · {tps} tok/s */}
+      <span className="flex items-center gap-1.5" title={`${tpsTitle} · ${rpmTitle}`}>
+        <span className="tabular-nums">
+          {effectiveTurns} {pluralizeTurns(effectiveTurns)}
+          {rpm != null && rpm > 0 ? ` · ${rpmText} RPM` : ''} · {tpsText} tok/s
+        </span>
       </span>
 
       {/* 💾 {tokens} tok · Кэш {cacheHitRate}% */}
@@ -470,6 +544,34 @@ export default function ContextGauge({
                 </div>
                 <span className="font-mono text-xs text-[#171717] tabular-nums">
                   ~{messageTokens.toLocaleString('ru-RU')}
+                </span>
+              </div>
+            </div>
+
+            {/* Telemetry & Performance Row */}
+            <div className="mt-3 pt-2.5 border-t border-[#ebebeb] dark:border-[#21262d] grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <span className="text-[#8f8f8f] dark:text-[#8b949e] block text-[10px] uppercase font-mono">Скорость (TPS)</span>
+                <span className="font-mono text-[#171717] dark:text-[#f0f6fc] font-semibold tabular-nums">
+                  {tpsText} tok/s
+                </span>
+              </div>
+              <div>
+                <span className="text-[#8f8f8f] dark:text-[#8b949e] block text-[10px] uppercase font-mono">Темп (RPM)</span>
+                <span className="font-mono text-[#171717] dark:text-[#f0f6fc] font-semibold tabular-nums">
+                  {rpmText} шаг/мин
+                </span>
+              </div>
+              <div>
+                <span className="text-[#8f8f8f] dark:text-[#8b949e] block text-[10px] uppercase font-mono">Prompt Cache</span>
+                <span className="font-mono text-[#171717] dark:text-[#f0f6fc] font-semibold tabular-nums">
+                  {cacheText} {telemetry?.cacheReadTokens ? `(${(telemetry.cacheReadTokens || 0).toLocaleString('ru-RU')} tok)` : ''}
+                </span>
+              </div>
+              <div>
+                <span className="text-[#8f8f8f] dark:text-[#8b949e] block text-[10px] uppercase font-mono">Вывод терна</span>
+                <span className="font-mono text-[#171717] dark:text-[#f0f6fc] font-semibold tabular-nums">
+                  {outputTokens.toLocaleString('ru-RU')} tok
                 </span>
               </div>
             </div>

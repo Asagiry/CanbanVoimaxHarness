@@ -1783,6 +1783,8 @@ pub async fn run_agent(
                     cache_read_tokens,
                     cache_creation_tokens,
                     cache_hit_rate,
+                    duration_ms,
+                    tps,
                 } => {
                     let _ = app_inner.emit(
                         "agent:telemetry",
@@ -1793,6 +1795,8 @@ pub async fn run_agent(
                             "cacheReadTokens": cache_read_tokens,
                             "cacheCreationTokens": cache_creation_tokens,
                             "cacheHitRate": cache_hit_rate,
+                            "durationMs": duration_ms,
+                            "tps": tps,
                         }),
                     );
                 }
@@ -1800,6 +1804,8 @@ pub async fn run_agent(
                     saved_chars,
                     estimated_saved_tokens,
                     evaporated_count,
+                    tokens_before,
+                    tokens_after,
                 } => {
                     let _ = app_inner.emit(
                         "agent:compacted",
@@ -1807,7 +1813,12 @@ pub async fn run_agent(
                             "taskId": tid_inner,
                             "savedChars": saved_chars,
                             "estimatedSavedTokens": estimated_saved_tokens,
+                            "saved_tokens": estimated_saved_tokens,
                             "evaporatedCount": evaporated_count,
+                            "tokens_before": tokens_before,
+                            "tokens_after": tokens_after,
+                            "tokensBefore": tokens_before,
+                            "tokensAfter": tokens_after,
                         }),
                     );
                 }

@@ -162,6 +162,11 @@ export default function App() {
     };
 
     const queueThought = (taskId: string, text: string) => {
+      const ds = useDrawerStore.getState();
+      if (ds.generationStartTime[taskId] == null) {
+        ds.setGenerationStartTime(taskId, Date.now());
+      }
+      ds.recordStreamedChars(taskId, text.length);
       const b = getBuf(taskId);
       b.thought += text;
       if (!b.thoughtTimer) {
@@ -172,6 +177,11 @@ export default function App() {
     };
 
     const queueOutput = (taskId: string, text: string) => {
+      const ds = useDrawerStore.getState();
+      if (ds.generationStartTime[taskId] == null) {
+        ds.setGenerationStartTime(taskId, Date.now());
+      }
+      ds.recordStreamedChars(taskId, text.length);
       const b = getBuf(taskId);
       b.output += text;
       if (!b.outputTimer) {
@@ -206,6 +216,24 @@ export default function App() {
           const { taskId, id, name, arguments: args } = event.payload || {};
           // Flush текста перед tool-событием, чтобы сохранить хронологию ленты.
           if (taskId) flushTask(taskId);
+          if (taskId) {
+            const st = useDrawerStore.getState();
+            if (st.generationEndTime[taskId] == null) {
+              st.setGenerationEndTime(taskId, Date.now());
+            }
+            if (st.finalTps[taskId] == null) {
+              const tele = st.taskTelemetry[taskId];
+              const outTokens = tele?.outputTokens || st.streamedTurnTokens[taskId] || 0;
+              const start = st.generationStartTime[taskId] ?? st.thinkingStartTime[taskId];
+              const end = st.generationEndTime[taskId] ?? Date.now();
+              if (start != null && outTokens > 0) {
+                const elapsedSec = (end - start) / 1000;
+                if (elapsedSec > 0.05) {
+                  st.setFinalTps(taskId, outTokens / elapsedSec);
+                }
+              }
+            }
+          }
           if (taskId && name) {
             let parsedParams: Record<string, unknown> = {};
             try {
@@ -254,20 +282,45 @@ export default function App() {
         unlisteners.push(uQuestion);
 
         const uTelemetry = await listen<any>('agent:telemetry', (event) => {
-          const { taskId, inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens, cacheHitRate } = event.payload || {};
+          const {
+            taskId,
+            inputTokens,
+            outputTokens,
+            cacheReadTokens,
+            cacheCreationTokens,
+            cacheHitRate,
+            durationMs,
+            tps,
+          } = event.payload || {};
           if (!taskId) return;
           const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+          const tpsVal = num(tps);
+          const outTok = num(outputTokens);
+          const inTok = num(inputTokens);
+          const cRead = num(cacheReadTokens);
+          const cCreate = num(cacheCreationTokens);
+          const totalIn = inTok + cRead;
+          const hitRate = num(cacheHitRate) || (totalIn > 0 ? (cRead / totalIn) * 100 : 0);
+
           updateTelemetry(taskId, {
-            inputTokens: num(inputTokens),
-            outputTokens: num(outputTokens),
-            cacheReadTokens: num(cacheReadTokens),
-            cacheCreationTokens: num(cacheCreationTokens),
-            cacheHitRate: num(cacheHitRate),
+            inputTokens: inTok,
+            outputTokens: outTok,
+            cacheReadTokens: cRead,
+            cacheCreationTokens: cCreate,
+            cacheHitRate: hitRate,
+            durationMs: num(durationMs),
+            tps: tpsVal,
           });
-          // Fallback замера длительности: если turn_start не пришёл, стартуем от первого события терна
+
           const drawerState = useDrawerStore.getState();
           if (drawerState.thinkingStartTime[taskId] == null) {
             drawerState.setThinkingStartTime(taskId, Date.now());
+          }
+          if (drawerState.generationEndTime[taskId] == null) {
+            drawerState.setGenerationEndTime(taskId, Date.now());
+          }
+          if (tpsVal > 0) {
+            drawerState.setFinalTps(taskId, tpsVal);
           }
         });
         unlisteners.push(uTelemetry);
@@ -276,8 +329,7 @@ export default function App() {
           const { taskId } = event.payload || {};
           if (taskId) {
             flushTask(taskId);
-            useDrawerStore.getState().setFinalTps(taskId, null);
-            setThinkingStartTime(taskId, Date.now());
+            useDrawerStore.getState().resetTurnStreamMetrics(taskId);
           }
         });
         unlisteners.push(uTurnStart);
@@ -288,16 +340,22 @@ export default function App() {
             // Принудительный flush буферов перед финальной обработкой,
             // иначе дедуп ниже не увидит забутченные токены.
             flushTask(taskId);
+            const st = useDrawerStore.getState();
+            st.setGenerationEndTime(taskId, Date.now());
+            st.setTaskEndTime(taskId, Date.now());
+
             // Заморозка TPS на финише: те же источники, что в ContextGauge
             try {
-              const st = useDrawerStore.getState();
-              const tele = st.taskTelemetry[taskId];
-              const start = st.thinkingStartTime[taskId];
-              if (tele && start != null) {
-                const elapsedSec = (Date.now() - start) / 1000;
-                const outTokens = tele.outputTokens ?? 0;
-                if (elapsedSec > 0 && outTokens > 0) {
-                  st.setFinalTps(taskId, outTokens / elapsedSec);
+              if (st.finalTps[taskId] == null) {
+                const tele = st.taskTelemetry[taskId];
+                const outTokens = tele?.outputTokens || st.streamedTurnTokens[taskId] || 0;
+                const start = st.generationStartTime[taskId] ?? st.thinkingStartTime[taskId];
+                const end = st.generationEndTime[taskId] ?? Date.now();
+                if (start != null && outTokens > 0) {
+                  const elapsedSec = (end - start) / 1000;
+                  if (elapsedSec > 0.05) {
+                    st.setFinalTps(taskId, outTokens / elapsedSec);
+                  }
                 }
               }
             } catch {
@@ -316,7 +374,6 @@ export default function App() {
             // Immediately flush task activity feed to disk upon turn finish
             useDrawerStore.getState().flushSaveDialog(taskId);
             useBoardStore.getState().updateTaskStatus(taskId, 'idle');
-            useDrawerStore.getState().setThinkingStartTime(taskId, null);
           }
           loadTasks();
         });

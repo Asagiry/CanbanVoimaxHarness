@@ -186,6 +186,11 @@ pub enum StreamChunk {
 // ============================================================================
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamOptions {
+    pub include_usage: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenAIChatRequest {
     pub model: String,
     pub messages: Vec<ChatMessage>,
@@ -196,6 +201,8 @@ pub struct OpenAIChatRequest {
     pub tools: Option<Vec<ToolDefinition>>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "reasoning_effort")]
     pub reasoning_effort: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "stream_options")]
+    pub stream_options: Option<StreamOptions>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -117,11 +117,15 @@ pub enum AgentEvent {
         cache_read_tokens: u64,
         cache_creation_tokens: u64,
         cache_hit_rate: f32,
+        duration_ms: f64,
+        tps: f32,
     },
     Compacted {
         saved_chars: usize,
         estimated_saved_tokens: usize,
         evaporated_count: usize,
+        tokens_before: usize,
+        tokens_after: usize,
     },
     Finished {
         final_response: String,
@@ -2448,6 +2452,7 @@ pub fn run_inprocess_subagent(
                 Some(active_sub_tool_defs.clone())
             },
             reasoning_effort: reasoning_effort.clone(),
+            stream_options: None,
         };
 
         let (tx, mut rx) = mpsc::channel::<StreamChunk>(100);
@@ -3699,6 +3704,8 @@ where
                     saved_chars: compaction_res.saved_chars,
                     estimated_saved_tokens: compaction_res.estimated_saved_tokens,
                     evaporated_count: compaction_res.evaporated_tools_count,
+                    tokens_before: current_tokens,
+                    tokens_after,
                 });
             }
         }
@@ -3748,6 +3755,7 @@ where
                 Some(active_tools.clone())
             },
             reasoning_effort: config.reasoning_effort.clone(),
+            stream_options: Some(crate::llm::StreamOptions { include_usage: true }),
         };
 
         let (tx, mut rx) = mpsc::channel::<StreamChunk>(100);
@@ -3767,6 +3775,11 @@ where
         let mut turn_tool_calls: Vec<ToolCall> = Vec::new();
         let mut thinking_parser = ThinkingStreamParser::new();
         let mut received_any_chunk = false;
+        let mut received_usage = false;
+        let turn_start_instant = std::time::Instant::now();
+        let mut first_token_instant: Option<std::time::Instant> = None;
+        let mut last_token_instant: Option<std::time::Instant> = None;
+        let mut turn_streamed_chars: usize = 0;
 
         while let Some(chunk) = rx.recv().await {
             received_any_chunk = true;
@@ -3777,6 +3790,11 @@ where
 
             match chunk {
                 StreamChunk::Token(token) => {
+                    if first_token_instant.is_none() {
+                        first_token_instant = Some(std::time::Instant::now());
+                    }
+                    last_token_instant = Some(std::time::Instant::now());
+                    turn_streamed_chars += token.len();
                     let parsed = thinking_parser.push(&token);
                     for (is_thought, text) in parsed {
                         if is_thought {
@@ -3788,12 +3806,27 @@ where
                     }
                 }
                 StreamChunk::Output(output) => {
+                    if first_token_instant.is_none() {
+                        first_token_instant = Some(std::time::Instant::now());
+                    }
+                    last_token_instant = Some(std::time::Instant::now());
+                    turn_streamed_chars += output.len();
                     event_sink(AgentEvent::Output(output));
                 }
                 StreamChunk::Thought(thought) => {
+                    if first_token_instant.is_none() {
+                        first_token_instant = Some(std::time::Instant::now());
+                    }
+                    last_token_instant = Some(std::time::Instant::now());
+                    turn_streamed_chars += thought.len();
                     event_sink(AgentEvent::Thought(thought));
                 }
                 StreamChunk::ToolCall { id, name, arguments } => {
+                    if first_token_instant.is_none() {
+                        first_token_instant = Some(std::time::Instant::now());
+                    }
+                    last_token_instant = Some(std::time::Instant::now());
+                    turn_streamed_chars += name.len() + arguments.len();
                     event_sink(AgentEvent::ToolCall {
                         id: id.clone(),
                         name: name.clone(),
@@ -3811,14 +3844,24 @@ where
                     cache_read_tokens,
                     cache_creation_tokens,
                 } => {
+                    received_usage = true;
                     let total_input = input_tokens + cache_read_tokens;
                     let cache_hit_rate = if total_input > 0 {
                         (cache_read_tokens as f32 / total_input as f32) * 100.0
                     } else {
                         0.0
                     };
+                    let start_time = first_token_instant.unwrap_or(turn_start_instant);
+                    let end_time = last_token_instant.unwrap_or_else(std::time::Instant::now);
+                    let duration_secs = end_time.duration_since(start_time).as_secs_f64();
+                    let duration_ms = duration_secs * 1000.0;
+                    let tps = if duration_secs > 0.05 && output_tokens > 0 {
+                        (output_tokens as f64 / duration_secs) as f32
+                    } else {
+                        0.0
+                    };
                     eprintln!(
-                        "CVH [cache] turn={} model={} input={} output={} cache_read={} cache_creation={} hit_rate={:.1}% prefix_hash={:016x}",
+                        "CVH [telemetry] turn={} model={} input={} output={} cache_read={} cache_creation={} hit_rate={:.1}% duration={:.2}s tps={:.1} prefix_hash={:016x}",
                         turn,
                         config.model,
                         input_tokens,
@@ -3826,6 +3869,8 @@ where
                         cache_read_tokens,
                         cache_creation_tokens,
                         cache_hit_rate,
+                        duration_secs,
+                        tps,
                         prefix_hash
                     );
                     event_sink(AgentEvent::Telemetry {
@@ -3834,6 +3879,8 @@ where
                         cache_read_tokens,
                         cache_creation_tokens,
                         cache_hit_rate,
+                        duration_ms,
+                        tps,
                     });
                 }
                 StreamChunk::Done => break,
@@ -3843,6 +3890,40 @@ where
                     bail!("LLM streaming error: {}", err);
                 }
             }
+        }
+
+        // Fallback telemetry if provider did not emit a usage chunk:
+        if !received_usage && received_any_chunk {
+            let start_time = first_token_instant.unwrap_or(turn_start_instant);
+            let end_time = last_token_instant.unwrap_or_else(std::time::Instant::now);
+            let duration_secs = end_time.duration_since(start_time).as_secs_f64();
+            let duration_ms = duration_secs * 1000.0;
+            let output_tokens = (compactor::estimate_text_tokens(&turn_content) as u64)
+                .max((turn_streamed_chars as f64 / 3.8).ceil() as u64);
+            let input_tokens = compactor::estimate_tokens(&messages) as u64;
+            let tps = if duration_secs > 0.05 && output_tokens > 0 {
+                (output_tokens as f64 / duration_secs) as f32
+            } else {
+                0.0
+            };
+            eprintln!(
+                "CVH [telemetry:fallback] turn={} model={} input={} output={} duration={:.2}s tps={:.1}",
+                turn,
+                config.model,
+                input_tokens,
+                output_tokens,
+                duration_secs,
+                tps
+            );
+            event_sink(AgentEvent::Telemetry {
+                input_tokens,
+                output_tokens,
+                cache_read_tokens: 0,
+                cache_creation_tokens: 0,
+                cache_hit_rate: 0.0,
+                duration_ms,
+                tps,
+            });
         }
 
         if !received_any_chunk && !abort_flag.load(Ordering::SeqCst) {
