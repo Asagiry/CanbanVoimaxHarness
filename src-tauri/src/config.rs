@@ -1915,7 +1915,136 @@ pub async fn save_tool_policies(root_path: impl AsRef<Path>, config: &ToolPolicy
     let serialized = serde_json::to_string_pretty(config)
         .context("Failed to serialize ToolPolicyConfig to JSON")?;
     atomic_write_file(&canonical, &serialized).await?;
+    let _ = sync_tool_policies_to_personas(root, config).await;
     Ok(())
+}
+
+/// Synchronizes allowed tools from `ToolPolicyConfig` into each agent persona's
+/// `.cvh/agents/<role>/persona.md` YAML frontmatter `tools: [...]`.
+pub async fn sync_tool_policies_to_personas(
+    root_path: impl AsRef<Path>,
+    config: &ToolPolicyConfig,
+) -> Result<()> {
+    let root = root_path.as_ref();
+    let agents_dir = root.join(".cvh").join("agents");
+    if !agents_dir.exists() {
+        return Ok(());
+    }
+
+    let mut dir_entries = match tokio::fs::read_dir(&agents_dir).await {
+        Ok(entries) => entries,
+        Err(_) => return Ok(()),
+    };
+
+    while let Ok(Some(entry)) = dir_entries.next_entry().await {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let role = match entry.file_name().to_str() {
+            Some(s) if !s.is_empty() => s.to_string(),
+            _ => continue,
+        };
+
+        let persona_file = if path.join("persona.md").is_file() {
+            path.join("persona.md")
+        } else if path.join("agent.md").is_file() {
+            path.join("agent.md")
+        } else {
+            continue;
+        };
+
+        let content = match tokio::fs::read_to_string(&persona_file).await {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        // Determine effective stage/role identifier for policy lookup
+        let stage_target: Option<&str> = if config.stage_overrides.contains_key(&role) {
+            Some(&role)
+        } else if role == "developer" || role == "dev" {
+            Some("dev")
+        } else if role == "reviewer" || role == "review" {
+            Some("review")
+        } else if role == "retrospective" || role == "retro" {
+            Some("retro")
+        } else if role == "orchestrator" {
+            Some("orchestrator")
+        } else {
+            None
+        };
+
+        let mut enabled_tools = Vec::new();
+        for &tool in CANONICAL_TOOLS {
+            // Respect special role restrictions
+            if role == "cvh-dev" && !crate::agent::CVH_DEV_TOOLS.contains(&tool) {
+                continue;
+            }
+            if (role == "developer" || role == "dev")
+                && (tool == "create_task" || tool == "complete_task")
+            {
+                // § 2.8 Development Subagents and cvh-dev are STRICTLY FORBIDDEN from calling create_task or complete_task
+                continue;
+            }
+            if is_tool_allowed(config, stage_target, tool) {
+                enabled_tools.push(tool);
+            }
+        }
+
+        let tools_line = format!("tools: [{}]", enabled_tools.join(", "));
+
+        let updated_content = update_frontmatter_tools(&content, &tools_line);
+        if updated_content != content {
+            let _ = atomic_write_file(&persona_file, &updated_content).await;
+        }
+    }
+
+    Ok(())
+}
+
+pub fn update_frontmatter_tools(content: &str, new_tools_line: &str) -> String {
+    let trimmed = content.trim_start();
+    if !trimmed.starts_with("---") {
+        return format!("---\n{}\n---\n{}", new_tools_line, content);
+    }
+
+    let rest = &trimmed[3..];
+    if let Some(end_idx) = rest.find("\n---") {
+        let frontmatter = &rest[..end_idx];
+        let body = &rest[end_idx + 4..];
+
+        let mut lines: Vec<String> = Vec::new();
+        let mut in_tools = false;
+        let mut replaced = false;
+
+        for line in frontmatter.lines() {
+            let line_trim = line.trim();
+            if line_trim.starts_with("tools:") {
+                lines.push(new_tools_line.to_string());
+                replaced = true;
+                in_tools = true;
+                continue;
+            }
+            if in_tools {
+                if line_trim.starts_with('-') || line_trim.starts_with("  ") {
+                    // Skip multiline tools array items
+                    continue;
+                } else {
+                    in_tools = false;
+                }
+            }
+            lines.push(line.to_string());
+        }
+
+        if !replaced {
+            lines.push(new_tools_line.to_string());
+        }
+
+        let new_frontmatter = lines.join("\n");
+        format!("---\n{}\n---{}", new_frontmatter.trim(), body)
+    } else {
+        content.to_string()
+    }
 }
 
 #[cfg(test)]

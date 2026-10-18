@@ -1802,6 +1802,7 @@ Channel closed before completion", id)),
                 board_id: Option<String>,
                 tags: Option<Vec<String>>,
                 priority: Option<String>,
+                model: Option<String>,
             }
 
             let mut inputs = Vec::new();
@@ -1848,6 +1849,12 @@ Channel closed before completion", id)),
                         .map(str::trim)
                         .filter(|s| !s.is_empty())
                         .map(str::to_string);
+                    let model = item
+                        .get("model")
+                        .and_then(|v| v.as_str())
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .map(str::to_string);
 
                     inputs.push(TaskInput {
                         title,
@@ -1856,6 +1863,7 @@ Channel closed before completion", id)),
                         board_id,
                         tags,
                         priority,
+                        model,
                     });
                 }
             } else {
@@ -1896,6 +1904,12 @@ Channel closed before completion", id)),
                     .map(str::trim)
                     .filter(|s| !s.is_empty())
                     .map(str::to_string);
+                let model = args
+                    .get("model")
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string);
 
                 inputs.push(TaskInput {
                     title,
@@ -1904,6 +1918,7 @@ Channel closed before completion", id)),
                     board_id,
                     tags,
                     priority,
+                    model,
                 });
             }
 
@@ -1972,7 +1987,7 @@ Channel closed before completion", id)),
                     verdict: None,
                     custom_flow: None,
                     status: Some("idle".to_string()),
-                    model: None,
+                    model: input.model.or_else(|| current_task_opt.as_ref().and_then(|ct| ct.model.clone())),
                     parent_id: task_id.map(|s| s.to_string()),
                     subtask_index: None,
                     waiting_for_subtask_id: None,
@@ -3599,14 +3614,13 @@ where
         }
 
         // State-Preserving Dynamic Context Compactor:
-        // Reads active column's context_window (default 128,000, or 64,000, etc.).
-        // Triggers compaction whenever estimated tokens exceed 70% of context_window,
-        // or > 20,000 tokens for long turns (turn > 3).
+        // Reads active column's context_window (default 128,000, or custom).
+        // Triggers compaction strictly when current estimated tokens reach or exceed context_window (100%).
         let context_window = config.context_window.unwrap_or(128_000) as usize;
-        let compaction_threshold = ((context_window as f64) * 0.70) as usize;
+        let compaction_threshold = context_window;
         let current_tokens = compactor::estimate_tokens(&messages);
 
-        let should_compact = current_tokens > compaction_threshold || (turn > 3 && current_tokens > 20_000);
+        let should_compact = current_tokens >= compaction_threshold;
         if should_compact {
             let compaction_res = compactor::compact_conversation(&mut messages, None);
             if compaction_res.saved_chars > 0 {
