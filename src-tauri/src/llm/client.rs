@@ -478,4 +478,32 @@ mod tests {
         assert_eq!(extract_openai_cache_read(&bare), 0);
         assert_eq!(extract_openai_cache_creation(&bare), 0);
     }
+
+    #[test]
+    fn test_token_usage_stats_cache_hit_rate_safe_division_by_zero() {
+        let mut stats = crate::llm::TokenUsageStats::default();
+        stats.compute_hit_rate();
+        assert_eq!(stats.cache_hit_rate, 0.0);
+
+        stats.input_tokens = 1000;
+        stats.cache_read_input_tokens = 500;
+        stats.compute_hit_rate();
+        // 500 / (1000 + 500) = 0.333333...
+        assert!((stats.cache_hit_rate - (1.0 / 3.0)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_stream_options_serialization() {
+        let req = crate::llm::OpenAIChatRequest {
+            model: "test-model".to_string(),
+            messages: vec![],
+            temperature: None,
+            stream: true,
+            tools: None,
+            reasoning_effort: None,
+            stream_options: Some(crate::llm::StreamOptions { include_usage: true }),
+        };
+        let serialized = serde_json::to_string(&req).unwrap();
+        assert!(serialized.contains(r#""stream_options":{"include_usage":true}"#));
+    }
 }

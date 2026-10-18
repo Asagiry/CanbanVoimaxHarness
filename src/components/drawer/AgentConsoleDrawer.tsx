@@ -88,18 +88,20 @@ export default function AgentConsoleDrawer() {
               useBoardStore.getState().updateTaskStatus(task.id, 'idle');
               try {
                 const ds = useDrawerStore.getState();
+                ds.setGenerationEndTime(task.id, Date.now());
+                ds.setTaskEndTime(task.id, Date.now());
                 if (ds.finalTps[task.id] == null) {
                   const tele = ds.taskTelemetry[task.id];
-                  const start = ds.thinkingStartTime[task.id];
-                  if (tele && start != null) {
-                    const elapsedSec = (Date.now() - start) / 1000;
-                    const outTokens = tele.outputTokens ?? 0;
-                    if (elapsedSec > 0 && outTokens > 0) {
+                  const outTokens = tele?.outputTokens || ds.streamedTurnTokens[task.id] || 0;
+                  const start = ds.generationStartTime[task.id] ?? ds.thinkingStartTime[task.id];
+                  const end = ds.generationEndTime[task.id] ?? Date.now();
+                  if (start != null && outTokens > 0) {
+                    const elapsedSec = (end - start) / 1000;
+                    if (elapsedSec > 0.05) {
                       ds.setFinalTps(task.id, outTokens / elapsedSec);
                     }
                   }
                 }
-                ds.setThinkingStartTime(task.id, null);
               } catch {
                 // ignore
               }
