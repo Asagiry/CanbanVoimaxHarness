@@ -304,7 +304,7 @@ export function MarkdownContent({ content }: { content?: string }) {
                       <th
                         key={k}
                         style={{ textAlign: normAligns[k] }}
-                        className="border border-[#ebebeb] bg-[#f9f9f9] px-2 py-1.5 font-semibold text-[#171717]"
+                        className="border border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#161b22] px-2 py-1.5 font-semibold text-[#171717] dark:text-[#f0f6fc]"
                       >
                         {formatInline(cell, `th-${index}-${k}`)}
                       </th>
@@ -318,7 +318,7 @@ export function MarkdownContent({ content }: { content?: string }) {
                         <td
                           key={k}
                           style={{ textAlign: normAligns[k] }}
-                          className="border border-[#ebebeb] px-2 py-1.5 text-[#171717]"
+                          className="border border-[#ebebeb] dark:border-[#21262d] px-2 py-1.5 text-[#171717] dark:text-[#f0f6fc]"
                         >
                           {formatInline(cell, `td-${index}-${r}-${k}`)}
                         </td>
@@ -336,7 +336,7 @@ export function MarkdownContent({ content }: { content?: string }) {
 
       // Thematic break outside tables
       if (isHrLine(line)) {
-        result.push(<hr key={index} className="border-[#ebebeb] my-2.5" />);
+        result.push(<hr key={index} className="border-[#ebebeb] dark:border-[#21262d] my-2.5" />);
         continue;
       }
 
@@ -344,7 +344,7 @@ export function MarkdownContent({ content }: { content?: string }) {
       const imgMatch = line.trim().match(/^!\[(.*?)\]\((.*?)\)$/);
       if (imgMatch) {
         result.push(
-          <div key={`img-${index}`} className="my-2 rounded-lg overflow-hidden border border-[#ebebeb] max-w-lg bg-[#f4f4f5] shadow-xs">
+          <div key={`img-${index}`} className="my-2 rounded-lg overflow-hidden border border-[#ebebeb] dark:border-[#21262d] max-w-lg bg-[#f4f4f5] dark:bg-[#161b22] shadow-xs">
             <img
               src={imgMatch[2]}
               alt={imgMatch[1] || 'Изображение'}
@@ -419,14 +419,14 @@ export function MarkdownContent({ content }: { content?: string }) {
       result.push(
         <div
           key="code-unfinished"
-          className="my-2.5 rounded-md border border-[#ebebeb] bg-[#fafafa] overflow-hidden font-mono text-[13px]"
+          className="my-2.5 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] overflow-hidden font-mono text-[13px]"
         >
           {codeLanguage && (
-            <div className="px-3 py-1 bg-[#f4f4f5] border-b border-[#ebebeb] text-xs text-[#666666] font-medium flex justify-between items-center">
+            <div className="px-3 py-1 bg-[#f4f4f5] dark:bg-[#161b22] border-b border-[#ebebeb] dark:border-[#21262d] text-xs text-[#666666] dark:text-[#8b949e] font-medium flex justify-between items-center">
               <span>{codeLanguage}</span>
             </div>
           )}
-          <pre className="p-3 text-[#171717] overflow-x-auto leading-relaxed select-text font-mono text-[13px]">
+          <pre className="p-3 text-[#171717] dark:text-[#f0f6fc] overflow-x-auto leading-relaxed select-text font-mono text-[13px]">
             {codeBuffer.join('\n')}
           </pre>
         </div>
@@ -546,9 +546,9 @@ export default function DrawerActivityStream({
     <div className="relative flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] dark:bg-[#090a0f] overflow-hidden transition-colors">
       {/* Warning Banner on agent run error */}
       {runError && (
-        <div className="mx-4 md:mx-6 mt-3 px-3.5 py-2.5 rounded-lg bg-[#fef2f2] border border-[#fecaca] text-[#991b1b] flex items-center justify-between shadow-xs shrink-0 animate-in fade-in duration-150">
+        <div className="mx-4 md:mx-6 mt-3 px-3.5 py-2.5 rounded-lg bg-[#fef2f2] dark:bg-[#3b1219] border border-[#fecaca] dark:border-[#da3633] text-[#991b1b] dark:text-[#ff7b72] flex items-center justify-between shadow-xs shrink-0 animate-in fade-in duration-150">
           <div className="flex items-center space-x-2.5 min-w-0 mr-3">
-            <AlertTriangle className="h-4 w-4 text-[#dc2626] shrink-0" />
+            <AlertTriangle className="h-4 w-4 text-[#dc2626] dark:text-[#ff7b72] shrink-0" />
             <div className="text-xs font-medium font-sans truncate">
               <span className="font-semibold">Ошибка выполнения:</span> {runError}
             </div>
@@ -557,7 +557,7 @@ export default function DrawerActivityStream({
             <button
               type="button"
               onClick={onRunAgent}
-              className="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-[#dc2626] hover:bg-[#b91c1c] text-white text-xs font-medium transition cursor-pointer shadow-xs active:scale-[0.98]"
+              className="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-[#dc2626] dark:bg-[#da3633] hover:bg-[#b91c1c] text-white text-xs font-medium transition cursor-pointer shadow-xs active:scale-[0.98]"
             >
               <Play className="h-3 w-3 fill-current" />
               <span>Повторить запуск</span>
@@ -565,7 +565,7 @@ export default function DrawerActivityStream({
             <button
               type="button"
               onClick={onClearRunError}
-              className="p-1 text-[#dc2626] hover:text-[#991b1b] rounded transition cursor-pointer"
+              className="p-1 text-[#dc2626] dark:text-[#ff7b72] hover:text-[#991b1b] dark:hover:text-[#ffa198] rounded transition cursor-pointer"
               title="Закрыть уведомление"
             >
               <X className="h-3.5 w-3.5" />
@@ -628,19 +628,19 @@ export default function DrawerActivityStream({
 
           {/* a2) Relay Handoff / Zero-Turn Memory Priming Card */}
           {task.handoverSummary && (
-            <div className="rounded-lg border border-[#c7d2fe] bg-[#f5f7ff] p-4 shadow-xs">
-              <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#e0e7ff]">
+            <div className="rounded-lg border border-[#c7d2fe] dark:border-[#3730a3] bg-[#f5f7ff] dark:bg-[#1e1b4b]/40 p-4 shadow-xs">
+              <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#e0e7ff] dark:border-[#3730a3]">
                 <div className="flex items-center space-x-2">
-                  <Sparkles className="h-4 w-4 text-[#6366f1]" />
-                  <span className="text-xs font-semibold text-[#4338ca] font-sans">
+                  <Sparkles className="h-4 w-4 text-[#6366f1] dark:text-[#818cf8]" />
+                  <span className="text-xs font-semibold text-[#4338ca] dark:text-[#a5b4fc] font-sans">
                     Эстафета пайплайна / Relay Handoff (Zero-Turn Memory Priming)
                   </span>
                 </div>
-                <span className="text-[10px] font-mono text-[#6366f1] bg-[#eef2ff] px-2 py-0.5 rounded border border-[#c7d2fe]">
+                <span className="text-[10px] font-mono text-[#6366f1] dark:text-[#a5b4fc] bg-[#eef2ff] dark:bg-[#312e81]/50 px-2 py-0.5 rounded border border-[#c7d2fe] dark:border-[#4338ca]">
                   Передано предыдущим этапом
                 </span>
               </div>
-              <div className="text-sm text-[#1e1b4b] leading-relaxed whitespace-pre-wrap select-text font-sans">
+              <div className="text-sm text-[#1e1b4b] dark:text-[#e0e7ff] leading-relaxed whitespace-pre-wrap select-text font-sans">
                 {task.handoverSummary}
               </div>
             </div>
@@ -648,9 +648,9 @@ export default function DrawerActivityStream({
 
           {/* Subagent Child Tasks Cards (if any) */}
           {subtasks && subtasks.length > 0 && onOpenDrawer && (
-            <div className="rounded-lg border border-[#e4e4e7] bg-white p-3 shadow-xs">
-              <div className="flex items-center space-x-2 pb-2 mb-2 border-b border-[#ebebeb] text-xs font-semibold text-[#171717]">
-                <Bot className="h-3.5 w-3.5 text-[#6366f1]" />
+            <div className="rounded-lg border border-[#e4e4e7] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-3 shadow-xs">
+              <div className="flex items-center space-x-2 pb-2 mb-2 border-b border-[#ebebeb] dark:border-[#21262d] text-xs font-semibold text-[#171717] dark:text-[#f0f6fc]">
+                <Bot className="h-3.5 w-3.5 text-[#6366f1] dark:text-[#818cf8]" />
                 <span>Дочерние подагенты ({subtasks.length})</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -659,18 +659,18 @@ export default function DrawerActivityStream({
                     key={st.id}
                     type="button"
                     onClick={() => onOpenDrawer(st.id)}
-                    className="flex items-center justify-between p-2 rounded-md border border-[#ebebeb] hover:border-[#d4d4d8] bg-[#f9fafb] hover:bg-[#f4f4f5] transition cursor-pointer text-left"
+                    className="flex items-center justify-between p-2 rounded-md border border-[#ebebeb] dark:border-[#30363d] hover:border-[#d4d4d8] dark:hover:border-[#484f58] bg-[#f9fafb] dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer text-left"
                   >
                     <div className="flex items-center space-x-2 min-w-0">
-                      <span className="font-mono text-xs font-semibold text-[#171717]">{st.id}</span>
-                      <span className="text-xs text-[#52525b] truncate">{st.title}</span>
+                      <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f0f6fc]">{st.id}</span>
+                      <span className="text-xs text-[#52525b] dark:text-[#8b949e] truncate">{st.title}</span>
                     </div>
                     <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${
                       st.status === 'running'
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        ? 'bg-emerald-50 dark:bg-[#12281e] text-emerald-700 dark:text-[#7ee787] border border-emerald-200 dark:border-[#238636]'
                         : st.status === 'done'
-                        ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                        : 'bg-zinc-100 text-zinc-600'
+                        ? 'bg-blue-50 dark:bg-[#172554] text-blue-700 dark:text-[#60a5fa] border border-blue-200 dark:border-[#1e40af]'
+                        : 'bg-zinc-100 dark:bg-[#21262d] text-zinc-600 dark:text-[#8b949e]'
                     }`}>
                       {st.status}
                     </span>
@@ -755,7 +755,7 @@ export default function DrawerActivityStream({
                       {images.map((imgUrl, i) => (
                         <div
                           key={i}
-                          className="relative rounded-lg overflow-hidden border border-[#ebebeb] max-w-[240px] max-h-40 bg-[#f4f4f5] shadow-xs"
+                          className="relative rounded-lg overflow-hidden border border-[#ebebeb] dark:border-[#21262d] max-w-[240px] max-h-40 bg-[#f4f4f5] dark:bg-[#161b22] shadow-xs"
                         >
                           <img
                             src={imgUrl}
@@ -779,11 +779,11 @@ export default function DrawerActivityStream({
               return (
                 <div
                   key={key}
-                  className="flex items-center space-x-2 rounded-md border border-[#ebebeb] bg-[#f4f4f5] px-3 py-2 text-xs text-[#4d4d4d] font-mono shadow-xs"
+                  className="flex items-center space-x-2 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#f4f4f5] dark:bg-[#161b22] px-3 py-2 text-xs text-[#4d4d4d] dark:text-[#c9d1d9] font-mono shadow-xs"
                 >
-                  <Info className="h-3.5 w-3.5 text-[#666666] shrink-0" />
+                  <Info className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
                   <span className="flex-1">{activity?.content ?? ''}</span>
-                  <span className="text-[10px] text-[#8f8f8f] tabular-nums">
+                  <span className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] tabular-nums">
                     {activity?.timestamp ?? ''}
                   </span>
                 </div>
@@ -795,13 +795,13 @@ export default function DrawerActivityStream({
               return (
                 <div
                   key={key}
-                  className="flex items-start space-x-2 rounded-md border border-[#fecaca] bg-[#fef2f2] p-3 text-xs text-[#991b1b] font-mono shadow-xs"
+                  className="flex items-start space-x-2 rounded-md border border-[#fecaca] dark:border-[#da3633] bg-[#fef2f2] dark:bg-[#3b1219] p-3 text-xs text-[#991b1b] dark:text-[#ff7b72] font-mono shadow-xs"
                 >
-                  <AlertTriangle className="h-4 w-4 text-[#dc2626] shrink-0 mt-0.5" />
+                  <AlertTriangle className="h-4 w-4 text-[#dc2626] dark:text-[#ff7b72] shrink-0 mt-0.5" />
                   <div className="flex-1 whitespace-pre-wrap select-text">
                     {activity?.content ?? ''}
                   </div>
-                  <span className="text-[10px] text-[#b91c1c] tabular-nums shrink-0">
+                  <span className="text-[10px] text-[#b91c1c] dark:text-[#ff7b72] tabular-nums shrink-0">
                     {activity?.timestamp ?? ''}
                   </span>
                 </div>

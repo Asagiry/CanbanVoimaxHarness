@@ -347,12 +347,12 @@ export default function SettingsModal() {
             {/* Header */}
             <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#21262d]">
               <div className="flex items-center space-x-2">
-                <Sparkles className="h-4 w-4 text-[#171717]" />
-                <h3 className="text-sm font-semibold text-[#171717] tracking-tight">Выбор моделей</h3>
+                <Sparkles className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
+                <h3 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] tracking-tight">Выбор моделей</h3>
               </div>
               <button
                 onClick={() => setIsChooseModelsModalOpen(false)}
-                className="p-1 rounded-md text-[#666666] hover:text-[#171717] hover:bg-[#f4f4f5] transition cursor-pointer"
+                className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
                 title="Закрыть"
               >
                 <X className="h-4 w-4" />
@@ -362,36 +362,36 @@ export default function SettingsModal() {
             {/* Search Input */}
             <div className="mt-4">
               <div className="relative flex items-center">
-                <Search className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] pointer-events-none" />
+                <Search className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e] pointer-events-none" />
                 <input
                   type="text"
                   value={searchFilter}
                   onChange={(e) => setSearchFilter(e.target.value)}
                   placeholder="Поиск моделей..."
-                  className="w-full rounded-md bg-[#fafafa] border border-[#ebebeb] pl-8 pr-2.5 py-1.5 text-[#171717] text-xs placeholder:text-[#8f8f8f] focus:outline-hidden focus:border-[#171717] focus:bg-white font-sans transition"
+                  className="w-full rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f0f6fc] text-xs placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-sans transition"
                   autoFocus
                 />
               </div>
             </div>
 
             {/* Selection Quick Action & Count */}
-            <div className="mt-2.5 flex items-center justify-between text-xs text-[#666666] px-0.5 select-none font-sans">
+            <div className="mt-2.5 flex items-center justify-between text-xs text-[#666666] dark:text-[#8b949e] px-0.5 select-none font-sans">
               <button
                 type="button"
                 onClick={handleToggleSelectAll}
-                className="text-[#171717] hover:underline font-medium cursor-pointer transition"
+                className="text-[#171717] dark:text-[#f0f6fc] hover:underline font-medium cursor-pointer transition"
               >
                 {selectedCandidateModels.size === filteredCandidates.length && filteredCandidates.length > 0
                   ? 'Снять выбор'
                   : 'Выбрать все'}
               </button>
-              <span className="text-[11px] text-[#8f8f8f] tabular-nums">
+              <span className="text-[11px] text-[#8f8f8f] dark:text-[#8b949e] tabular-nums">
                 Выбрано: {selectedCandidateModels.size} из {filteredCandidates.length}
               </span>
             </div>
 
             {/* Models Checkbox List */}
-            <div className="mt-2 border border-[#ebebeb] rounded-md bg-white max-h-64 overflow-y-auto divide-y divide-[#ebebeb]">
+            <div className="mt-2 border border-[#ebebeb] dark:border-[#30363d] rounded-md bg-white dark:bg-[#161b22] max-h-64 overflow-y-auto divide-y divide-[#ebebeb] dark:divide-[#21262d]">
               {filteredCandidates.length > 0 ? (
                 filteredCandidates.map((modelName) => {
                   const isChecked = selectedCandidateModels.has(modelName);
@@ -401,19 +401,19 @@ export default function SettingsModal() {
                       key={modelName}
                       onClick={() => toggleSelectCandidate(modelName)}
                       className={`flex items-center space-x-2.5 px-3 py-2 cursor-pointer transition select-none ${
-                        isChecked ? 'bg-[#f4f4f5]' : 'hover:bg-[#fafafa]'
+                        isChecked ? 'bg-[#f4f4f5] dark:bg-[#21262d]' : 'hover:bg-[#fafafa] dark:hover:bg-[#21262d]/50'
                       }`}
                     >
                       {isChecked ? (
-                        <CheckSquare className="h-4 w-4 text-[#171717] shrink-0" />
+                        <CheckSquare className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
                       ) : (
-                        <Square className="h-4 w-4 text-[#8f8f8f] shrink-0" />
+                        <Square className="h-4 w-4 text-[#8f8f8f] dark:text-[#8b949e] shrink-0" />
                       )}
-                      <span className="font-mono text-xs text-[#171717] truncate flex-1">
+                      <span className="font-mono text-xs text-[#171717] dark:text-[#f0f6fc] truncate flex-1">
                         {modelName}
                       </span>
                       {isAlreadyAdded && (
-                        <span className="text-[10px] text-[#666666] bg-[#f4f4f5] border border-[#ebebeb] px-1.5 py-0.5 rounded-md font-sans">
+                        <span className="text-[10px] text-[#666666] dark:text-[#8b949e] bg-[#f4f4f5] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] px-1.5 py-0.5 rounded-md font-sans">
                           добавлена
                         </span>
                       )}
@@ -421,18 +421,18 @@ export default function SettingsModal() {
                   );
                 })
               ) : (
-                <div className="p-6 text-center text-xs text-[#8f8f8f] font-sans">
+                <div className="p-6 text-center text-xs text-[#8f8f8f] dark:text-[#8b949e] font-sans">
                   Модели не найдены
                 </div>
               )}
             </div>
 
             {/* Footer Buttons */}
-            <div className="flex items-center justify-end space-x-2 pt-4 mt-3 border-t border-[#ebebeb]">
+            <div className="flex items-center justify-end space-x-2 pt-4 mt-3 border-t border-[#ebebeb] dark:border-[#21262d]">
               <button
                 type="button"
                 onClick={() => setIsChooseModelsModalOpen(false)}
-                className="px-3 py-1.5 rounded-md bg-white border border-[#ebebeb] hover:bg-[#f4f4f5] text-[#171717] font-sans text-xs transition cursor-pointer"
+                className="px-3 py-1.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] font-sans text-xs transition cursor-pointer"
               >
                 Отмена
               </button>
@@ -440,7 +440,7 @@ export default function SettingsModal() {
                 type="button"
                 onClick={handleAddSelectedModels}
                 disabled={selectedCandidateModels.size === 0}
-                className="px-3.5 py-1.5 rounded-md bg-[#171717] hover:bg-[#262626] text-white font-sans font-medium text-xs transition cursor-pointer disabled:opacity-50 shadow-xs"
+                className="px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#238636] hover:bg-[#262626] dark:hover:bg-[#2ea043] text-white font-sans font-medium text-xs transition cursor-pointer disabled:opacity-50 shadow-xs"
               >
                 Добавить выбранные ({selectedCandidateModels.size})
               </button>

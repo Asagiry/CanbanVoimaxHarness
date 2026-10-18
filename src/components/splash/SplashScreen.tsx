@@ -71,7 +71,7 @@ export default function SplashScreen({
   return (
     <div
       data-tauri-drag-region
-      className={`fixed inset-0 z-9999 flex items-center justify-center bg-[#fafafa] select-none transition-opacity duration-500 ease-out ${
+      className={`fixed inset-0 z-9999 flex items-center justify-center bg-[#fafafa] dark:bg-[#07090e] select-none transition-opacity duration-500 ease-out ${
         isFading ? 'opacity-0 pointer-events-none' : 'opacity-100'
       }`}
     >
@@ -106,13 +106,13 @@ export default function SplashScreen({
           {/* Right Column: Shipped / Done (75% opacity) */}
           <rect x="20.5" y="17.5" width="4.5" height="8" rx="1.2" fill="#ffffff" fillOpacity="0.72" />
         </svg>
-        <div className="mt-5 h-[2px] w-44 bg-[#ebebeb] rounded-full overflow-hidden">
+        <div className="mt-5 h-[2px] w-44 bg-[#ebebeb] dark:bg-[#21262d] rounded-full overflow-hidden">
           <div
-            className="h-full bg-[#171717] rounded-full transition-all duration-200 ease-out"
+            className="h-full bg-[#171717] dark:bg-[#f0f6fc] rounded-full transition-all duration-200 ease-out"
             style={{ width: `${progress}%` }}
           />
         </div>
-        <span className="mt-2.5 font-mono text-[10px] text-[#8f8f8f] tabular-nums">
+        <span className="mt-2.5 font-mono text-[10px] text-[#8f8f8f] dark:text-[#8b949e] tabular-nums">
           {progress}%
         </span>
       </div>

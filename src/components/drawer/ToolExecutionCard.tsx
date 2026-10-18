@@ -27,45 +27,45 @@ function getLanguageBadge(ext?: string): LangBadgeConfig | null {
   if (!ext) return null;
   switch (ext.toLowerCase()) {
     case 'cs':
-      return { label: 'C#', bg: 'bg-[#ecfeff]', text: 'text-[#0891b2]', border: 'border-[#a5f3fc]' };
+      return { label: 'C#', bg: 'bg-[#ecfeff] dark:bg-[#083344]', text: 'text-[#0891b2] dark:text-[#22d3ee]', border: 'border-[#a5f3fc] dark:border-[#155e75]' };
     case 'ts':
     case 'tsx':
-      return { label: 'TS', bg: 'bg-[#eff6ff]', text: 'text-[#2563eb]', border: 'border-[#bfdbfe]' };
+      return { label: 'TS', bg: 'bg-[#eff6ff] dark:bg-[#172554]', text: 'text-[#2563eb] dark:text-[#60a5fa]', border: 'border-[#bfdbfe] dark:border-[#1e40af]' };
     case 'js':
     case 'jsx':
-      return { label: 'JS', bg: 'bg-[#fefce8]', text: 'text-[#ca8a04]', border: 'border-[#fef08a]' };
+      return { label: 'JS', bg: 'bg-[#fefce8] dark:bg-[#422006]', text: 'text-[#ca8a04] dark:text-[#facc15]', border: 'border-[#fef08a] dark:border-[#713f12]' };
     case 'py':
-      return { label: 'PY', bg: 'bg-[#f0f9ff]', text: 'text-[#0284c7]', border: 'border-[#bae6fd]' };
+      return { label: 'PY', bg: 'bg-[#f0f9ff] dark:bg-[#082f49]', text: 'text-[#0284c7] dark:text-[#38bdf8]', border: 'border-[#bae6fd] dark:border-[#0369a1]' };
     case 'rs':
-      return { label: 'RS', bg: 'bg-[#fff7ed]', text: 'text-[#ea580c]', border: 'border-[#fed7aa]' };
+      return { label: 'RS', bg: 'bg-[#fff7ed] dark:bg-[#431407]', text: 'text-[#ea580c] dark:text-[#fb923c]', border: 'border-[#fed7aa] dark:border-[#9a3412]' };
     case 'json':
-      return { label: 'JSON', bg: 'bg-[#f4f4f5]', text: 'text-[#52525b]', border: 'border-[#e4e4e7]' };
+      return { label: 'JSON', bg: 'bg-[#f4f4f5] dark:bg-[#18181b]', text: 'text-[#52525b] dark:text-[#a1a1aa]', border: 'border-[#e4e4e7] dark:border-[#27272a]' };
     case 'html':
-      return { label: 'HTML', bg: 'bg-[#fff1f2]', text: 'text-[#e11d48]', border: 'border-[#fecdd3]' };
+      return { label: 'HTML', bg: 'bg-[#fff1f2] dark:bg-[#4c0519]', text: 'text-[#e11d48] dark:text-[#fb7185]', border: 'border-[#fecdd3] dark:border-[#9f1239]' };
     case 'css':
     case 'scss':
-      return { label: 'CSS', bg: 'bg-[#f0fdf4]', text: 'text-[#16a34a]', border: 'border-[#bbf7d0]' };
+      return { label: 'CSS', bg: 'bg-[#f0fdf4] dark:bg-[#052e16]', text: 'text-[#16a34a] dark:text-[#4ade80]', border: 'border-[#bbf7d0] dark:border-[#166534]' };
     case 'go':
-      return { label: 'GO', bg: 'bg-[#ecfeff]', text: 'text-[#06b6d4]', border: 'border-[#a5f3fc]' };
+      return { label: 'GO', bg: 'bg-[#ecfeff] dark:bg-[#083344]', text: 'text-[#06b6d4] dark:text-[#22d3ee]', border: 'border-[#a5f3fc] dark:border-[#155e75]' };
     case 'cpp':
     case 'c':
     case 'h':
     case 'hpp':
-      return { label: 'C++', bg: 'bg-[#fdf2f8]', text: 'text-[#db2777]', border: 'border-[#fbcfe8]' };
+      return { label: 'C++', bg: 'bg-[#fdf2f8] dark:bg-[#500724]', text: 'text-[#db2777] dark:text-[#f472b6]', border: 'border-[#fbcfe8] dark:border-[#9d174d]' };
     case 'sh':
     case 'bash':
     case 'ps1':
     case 'bat':
     case 'cmd':
-      return { label: 'SH', bg: 'bg-[#f8fafc]', text: 'text-[#475569]', border: 'border-[#cbd5e1]' };
+      return { label: 'SH', bg: 'bg-[#f8fafc] dark:bg-[#0f172a]', text: 'text-[#475569] dark:text-[#94a3b8]', border: 'border-[#cbd5e1] dark:border-[#334155]' };
     case 'md':
-      return { label: 'MD', bg: 'bg-[#fafafa]', text: 'text-[#71717a]', border: 'border-[#e4e4e7]' };
+      return { label: 'MD', bg: 'bg-[#fafafa] dark:bg-[#18181b]', text: 'text-[#71717a] dark:text-[#a1a1aa]', border: 'border-[#e4e4e7] dark:border-[#27272a]' };
     case 'toml':
     case 'yaml':
     case 'yml':
-      return { label: 'CFG', bg: 'bg-[#f4f4f5]', text: 'text-[#52525b]', border: 'border-[#e4e4e7]' };
+      return { label: 'CFG', bg: 'bg-[#f4f4f5] dark:bg-[#18181b]', text: 'text-[#52525b] dark:text-[#a1a1aa]', border: 'border-[#e4e4e7] dark:border-[#27272a]' };
     case 'sql':
-      return { label: 'SQL', bg: 'bg-[#faf5ff]', text: 'text-[#9333ea]', border: 'border-[#e9d5ff]' };
+      return { label: 'SQL', bg: 'bg-[#faf5ff] dark:bg-[#3b0764]', text: 'text-[#9333ea] dark:text-[#c084fc]', border: 'border-[#e9d5ff] dark:border-[#6b21a8]' };
     default:
       return null;
   }
@@ -74,15 +74,15 @@ function getLanguageBadge(ext?: string): LangBadgeConfig | null {
 export function getRoleBadgeClass(role?: string | null): string {
   const roleUpper = (role || 'general').toUpperCase();
   if (roleUpper.includes('DEV')) {
-    return 'bg-[#f0fdf4] text-[#15803d] border-[#bbf7d0]';
+    return 'bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] border-[#bbf7d0] dark:border-[#238636]';
   }
   if (roleUpper.includes('REV')) {
-    return 'bg-[#fefce8] text-[#854d0e] border-[#fef08a]';
+    return 'bg-[#fefce8] dark:bg-[#422006] text-[#854d0e] dark:text-[#facc15] border-[#fef08a] dark:border-[#713f12]';
   }
   if (roleUpper.includes('EXP') || roleUpper.includes('ARCH')) {
-    return 'bg-[#faf5ff] text-[#7c3aed] border-[#e9d5ff]';
+    return 'bg-[#faf5ff] dark:bg-[#3b0764] text-[#7c3aed] dark:text-[#c084fc] border-[#e9d5ff] dark:border-[#6b21a8]';
   }
-  return 'bg-[#f4f4f5] text-[#171717] border-[#ebebeb]';
+  return 'bg-[#f4f4f5] dark:bg-[#161b22] text-[#171717] dark:text-[#f0f6fc] border-[#ebebeb] dark:border-[#30363d]';
 }
 
 export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
@@ -519,34 +519,34 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       const newLines = newString ? newString.split('\n') : [];
 
       return (
-        <div className="rounded-md border border-[#ebebeb] bg-[#fafafa] overflow-hidden font-mono text-[11px]">
+        <div className="rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] overflow-hidden font-mono text-[11px]">
           {rawFilePath && (
-            <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#f4f4f5] border-b border-[#ebebeb] text-[#666666] text-[10px]">
-              <span className="truncate max-w-[340px] text-[#171717] font-semibold" title={rawFilePath}>
+            <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#f4f4f5] dark:bg-[#161b22] border-b border-[#ebebeb] dark:border-[#21262d] text-[#666666] dark:text-[#8b949e] text-[10px]">
+              <span className="truncate max-w-[340px] text-[#171717] dark:text-[#f0f6fc] font-semibold" title={rawFilePath}>
                 {rawFilePath}
               </span>
               <div className="flex items-center space-x-2 font-mono tabular-nums">
                 {oldLines.length > 0 && (
-                  <span className="text-[#dc2626]">-{oldLines.length}</span>
+                  <span className="text-[#dc2626] dark:text-[#ff7b72]">-{oldLines.length}</span>
                 )}
                 {newLines.length > 0 && (
-                  <span className="text-[#16a34a]">+{newLines.length}</span>
+                  <span className="text-[#16a34a] dark:text-[#7ee787]">+{newLines.length}</span>
                 )}
-                <span className="text-[#8f8f8f]">Различия</span>
+                <span className="text-[#8f8f8f] dark:text-[#8b949e]">Различия</span>
               </div>
             </div>
           )}
 
-          <div className="divide-y divide-[#ebebeb] select-text overflow-x-auto max-h-72 font-mono">
+          <div className="divide-y divide-[#ebebeb] dark:divide-[#21262d] select-text overflow-x-auto max-h-72 font-mono">
             {oldLines.map((line, idx) => (
               <div
                 key={`old-${idx}`}
-                className="flex items-start bg-[#fef2f2] text-[#991b1b] px-2 py-0.5 leading-relaxed font-mono"
+                className="flex items-start bg-[#fef2f2] dark:bg-[#3b1219] text-[#991b1b] dark:text-[#ff7b72] px-2 py-0.5 leading-relaxed font-mono"
               >
-                <span className="w-4 shrink-0 text-[#ef4444] select-none text-center font-bold">
+                <span className="w-4 shrink-0 text-[#ef4444] dark:text-[#ff7b72] select-none text-center font-bold">
                   -
                 </span>
-                <span className="w-8 shrink-0 text-[#8f8f8f] select-none text-right pr-2 tabular-nums">
+                <span className="w-8 shrink-0 text-[#8f8f8f] dark:text-[#8b949e] select-none text-right pr-2 tabular-nums">
                   {idx + 1}
                 </span>
                 <span className="whitespace-pre-wrap break-all">
@@ -558,12 +558,12 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             {newLines.map((line, idx) => (
               <div
                 key={`new-${idx}`}
-                className="flex items-start bg-[#f0fdf4] text-[#166534] px-2 py-0.5 leading-relaxed font-mono"
+                className="flex items-start bg-[#f0fdf4] dark:bg-[#12281e] text-[#166534] dark:text-[#7ee787] px-2 py-0.5 leading-relaxed font-mono"
               >
-                <span className="w-4 shrink-0 text-[#22c55e] select-none text-center font-bold">
+                <span className="w-4 shrink-0 text-[#22c55e] dark:text-[#7ee787] select-none text-center font-bold">
                   +
                 </span>
-                <span className="w-8 shrink-0 text-[#8f8f8f] select-none text-right pr-2 tabular-nums">
+                <span className="w-8 shrink-0 text-[#8f8f8f] dark:text-[#8b949e] select-none text-right pr-2 tabular-nums">
                   {idx + 1}
                 </span>
                 <span className="whitespace-pre-wrap break-all">
@@ -584,27 +584,27 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
     const lines = newString.split('\n');
 
     return (
-      <div className="rounded-md border border-[#ebebeb] bg-[#fafafa] overflow-hidden font-mono text-[11px]">
+      <div className="rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] overflow-hidden font-mono text-[11px]">
         {rawFilePath && (
-          <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#f4f4f5] border-b border-[#ebebeb] text-[#666666] text-[10px]">
-            <span className="truncate max-w-[340px] text-[#171717] font-semibold" title={rawFilePath}>
+          <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#f4f4f5] dark:bg-[#161b22] border-b border-[#ebebeb] dark:border-[#21262d] text-[#666666] dark:text-[#8b949e] text-[10px]">
+            <span className="truncate max-w-[340px] text-[#171717] dark:text-[#f0f6fc] font-semibold" title={rawFilePath}>
               {rawFilePath}
             </span>
-            <span className="text-[#8f8f8f] tabular-nums font-mono">
+            <span className="text-[#8f8f8f] dark:text-[#8b949e] tabular-nums font-mono">
               {lines.length} {lines.length === 1 ? 'строка' : 'строк'}
             </span>
           </div>
         )}
-        <div className="divide-y divide-[#f0f0f0] select-text overflow-x-auto max-h-72 font-mono bg-white">
+        <div className="divide-y divide-[#f0f0f0] dark:divide-[#21262d] select-text overflow-x-auto max-h-72 font-mono bg-white dark:bg-[#0d1117]">
           {lines.map((line, idx) => (
             <div
               key={`line-${idx}`}
-              className="flex items-start px-2 py-0.5 leading-relaxed hover:bg-[#fafafa]"
+              className="flex items-start px-2 py-0.5 leading-relaxed hover:bg-[#fafafa] dark:hover:bg-[#161b22]"
             >
-              <span className="w-8 shrink-0 text-[#a1a1aa] select-none text-right pr-2.5 tabular-nums text-[10px]">
+              <span className="w-8 shrink-0 text-[#a1a1aa] dark:text-[#8b949e] select-none text-right pr-2.5 tabular-nums text-[10px]">
                 {idx + 1}
               </span>
-              <span className="whitespace-pre-wrap break-all text-[#171717]">
+              <span className="whitespace-pre-wrap break-all text-[#171717] dark:text-[#f0f6fc]">
                 {line || ' '}
               </span>
             </div>
@@ -625,18 +625,18 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
     const baseLineNumber = startLine ?? 1;
 
     return (
-      <div className="rounded-md border border-[#ebebeb] bg-[#fafafa] overflow-hidden font-mono text-[11px]">
+      <div className="rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] overflow-hidden font-mono text-[11px]">
         {rawFilePath && (
-          <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#f4f4f5] border-b border-[#ebebeb] text-[#666666] text-[10px]">
-            <span className="truncate max-w-[340px] text-[#171717] font-semibold" title={rawFilePath}>
+          <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#f4f4f5] dark:bg-[#161b22] border-b border-[#ebebeb] dark:border-[#21262d] text-[#666666] dark:text-[#8b949e] text-[10px]">
+            <span className="truncate max-w-[340px] text-[#171717] dark:text-[#f0f6fc] font-semibold" title={rawFilePath}>
               {rawFilePath}
             </span>
-            <span className="text-[#8f8f8f] tabular-nums font-mono">
+            <span className="text-[#8f8f8f] dark:text-[#8b949e] tabular-nums font-mono">
               {lineRangeBadge || `${rawLines.length} строк`}
             </span>
           </div>
         )}
-        <div className="divide-y divide-[#f0f0f0] select-text overflow-x-auto max-h-80 font-mono bg-white">
+        <div className="divide-y divide-[#f0f0f0] dark:divide-[#21262d] select-text overflow-x-auto max-h-80 font-mono bg-white dark:bg-[#0d1117]">
           {rawLines.map((line, idx) => {
             const prefixMatch = line.match(/^(\d+)[:|]\s?(.*)$/);
             let displayLineNum: number | string = baseLineNumber + idx;
@@ -650,12 +650,12 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             return (
               <div
                 key={`readline-${idx}`}
-                className="flex items-start px-2 py-0.5 leading-relaxed hover:bg-[#fafafa]"
+                className="flex items-start px-2 py-0.5 leading-relaxed hover:bg-[#fafafa] dark:hover:bg-[#161b22]"
               >
-                <span className="w-10 shrink-0 text-[#a1a1aa] select-none text-right pr-2.5 tabular-nums text-[10px]">
+                <span className="w-10 shrink-0 text-[#a1a1aa] dark:text-[#8b949e] select-none text-right pr-2.5 tabular-nums text-[10px]">
                   {displayLineNum}
                 </span>
-                <span className="whitespace-pre-wrap break-all text-[#171717]">
+                <span className="whitespace-pre-wrap break-all text-[#171717] dark:text-[#f0f6fc]">
                   {displayContent || ' '}
                 </span>
               </div>
@@ -672,7 +672,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
     return (
       <div className="space-y-1.5">
-        <span className="text-[10px] text-[#666666] block font-mono">
+        <span className="text-[10px] text-[#666666] dark:text-[#8b949e] block font-mono">
           Параметры вызова
         </span>
         <div className="space-y-2">
@@ -695,13 +695,13 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
                 const lineCount = value.split('\n').length;
                 return (
                   <div key={key} className="space-y-1">
-                    <div className="flex items-center justify-between text-[10px] text-[#666666]">
-                      <span className="font-semibold text-[#171717] font-mono">{key}:</span>
-                      <span className="text-[#8f8f8f] tabular-nums font-mono text-[10px]">
+                    <div className="flex items-center justify-between text-[10px] text-[#666666] dark:text-[#8b949e]">
+                      <span className="font-semibold text-[#171717] dark:text-[#f0f6fc] font-mono">{key}:</span>
+                      <span className="text-[#8f8f8f] dark:text-[#8b949e] tabular-nums font-mono text-[10px]">
                         {lineCount > 1 ? `${lineCount} строк` : `${value.length} симв.`}
                       </span>
                     </div>
-                    <pre className="p-2.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[11px] text-[#171717] overflow-x-auto leading-relaxed max-h-64 whitespace-pre select-text font-mono">
+                    <pre className="p-2.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#21262d] text-[11px] text-[#171717] dark:text-[#f0f6fc] overflow-x-auto leading-relaxed max-h-64 whitespace-pre select-text font-mono">
                       {value}
                     </pre>
                   </div>
@@ -710,8 +710,8 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
               return (
                 <div key={key} className="flex items-baseline space-x-2 py-0.5 text-[11px] font-mono">
-                  <span className="text-[#666666] font-semibold shrink-0">{key}:</span>
-                  <span className="text-[#171717] select-text break-all">{value}</span>
+                  <span className="text-[#666666] dark:text-[#8b949e] font-semibold shrink-0">{key}:</span>
+                  <span className="text-[#171717] dark:text-[#f0f6fc] select-text break-all">{value}</span>
                 </div>
               );
             }
@@ -719,8 +719,8 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             if (typeof value === 'object' && value !== null) {
               return (
                 <div key={key} className="space-y-1">
-                  <span className="text-[10px] font-semibold text-[#171717] font-mono">{key}:</span>
-                  <pre className="p-2 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[11px] text-[#171717] overflow-x-auto leading-relaxed max-h-48 whitespace-pre-wrap select-text font-mono">
+                  <span className="text-[10px] font-semibold text-[#171717] dark:text-[#f0f6fc] font-mono">{key}:</span>
+                  <pre className="p-2 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#21262d] text-[11px] text-[#171717] dark:text-[#f0f6fc] overflow-x-auto leading-relaxed max-h-48 whitespace-pre-wrap select-text font-mono">
                     {JSON.stringify(value, null, 2)}
                   </pre>
                 </div>
@@ -729,8 +729,8 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
             return (
               <div key={key} className="flex items-baseline space-x-2 py-0.5 text-[11px] font-mono">
-                <span className="text-[#666666] font-semibold shrink-0">{key}:</span>
-                <span className="text-[#171717] select-text">{String(value)}</span>
+                <span className="text-[#666666] dark:text-[#8b949e] font-semibold shrink-0">{key}:</span>
+                <span className="text-[#171717] dark:text-[#f0f6fc] select-text">{String(value)}</span>
               </div>
             );
           })}
@@ -751,7 +751,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
           <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
             <button
               type="button"
-              className="p-0.5 text-[#8f8f8f] hover:text-[#171717] rounded shrink-0 transition cursor-pointer"
+              className="p-0.5 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] rounded shrink-0 transition cursor-pointer"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsExpanded(!isExpanded);
@@ -760,13 +760,13 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             >
               <ChevronRight
                 className={`h-3 w-3 transition-transform duration-150 ${
-                  isExpanded ? 'rotate-90 text-[#171717]' : ''
+                  isExpanded ? 'rotate-90 text-[#171717] dark:text-[#f0f6fc]' : ''
                 }`}
               />
             </button>
 
             {/* Label: Analyzed (cyan/teal tactile badge) */}
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold uppercase tracking-wider shrink-0 select-none bg-[#ecfeff] text-[#0e7490] border border-[#a5f3fc]">
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold uppercase tracking-wider shrink-0 select-none bg-[#ecfeff] dark:bg-[#083344] text-[#0e7490] dark:text-[#22d3ee] border border-[#a5f3fc] dark:border-[#155e75]">
               Analyzed
             </span>
 
@@ -778,7 +778,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
                 {langBadge.label}
               </span>
             ) : (
-              <DocIcon className="h-3.5 w-3.5 text-[#52525b] shrink-0" />
+              <DocIcon className="h-3.5 w-3.5 text-[#52525b] dark:text-[#8b949e] shrink-0" />
             )}
 
             {/* Clean filename with muted path */}
@@ -787,7 +787,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
               title={rawFilePath}
             >
               {dirPath && (
-                <span className="text-[#8f8f8f] truncate max-w-[120px] sm:max-w-[180px] shrink-0">
+                <span className="text-[#8f8f8f] dark:text-[#8b949e] truncate max-w-[120px] sm:max-w-[180px] shrink-0">
                   {dirPath}/
                 </span>
               )}
@@ -798,15 +798,15 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
             {/* Line range badge (#L4270-4300 or · 61 lines) */}
             {lineRangeBadge && (
-              <span className="font-mono text-[11px] text-[#71717a] tabular-nums shrink-0 ml-1">
+              <span className="font-mono text-[11px] text-[#71717a] dark:text-[#8b949e] tabular-nums shrink-0 ml-1">
                 {lineRangeBadge}
               </span>
             )}
 
             {durationText && (
               <>
-                <span className="text-[#a1a1aa] select-none text-[10px]">•</span>
-                <span className="font-mono text-[#71717a] shrink-0 tabular-nums text-[11px]">
+                <span className="text-[#a1a1aa] dark:text-[#6e7681] select-none text-[10px]">•</span>
+                <span className="font-mono text-[#71717a] dark:text-[#8b949e] shrink-0 tabular-nums text-[11px]">
                   {durationText}
                 </span>
               </>
@@ -817,7 +817,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
           <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
             <button
               type="button"
-              className="p-0.5 text-[#8f8f8f] hover:text-[#171717] rounded shrink-0 transition cursor-pointer"
+              className="p-0.5 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] rounded shrink-0 transition cursor-pointer"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsExpanded(!isExpanded);
@@ -826,7 +826,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             >
               <ChevronRight
                 className={`h-3 w-3 transition-transform duration-150 ${
-                  isExpanded ? 'rotate-90 text-[#171717]' : ''
+                  isExpanded ? 'rotate-90 text-[#171717] dark:text-[#f0f6fc]' : ''
                 }`}
               />
             </button>
@@ -835,17 +835,17 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             <span
               className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold uppercase tracking-wider shrink-0 select-none ${
                 isFailed
-                  ? 'bg-[#fef2f2] text-[#b91c1c] border border-[#fecaca]'
+                  ? 'bg-[#fef2f2] dark:bg-[#3b1219] text-[#b91c1c] dark:text-[#ff7b72] border border-[#fecaca] dark:border-[#da3633]'
                   : opLabel === 'Created'
-                  ? 'bg-[#ecfdf5] text-[#047857] border border-[#a7f3d0]'
-                  : 'bg-[#eff6ff] text-[#1d4ed8] border border-[#bfdbfe]'
+                  ? 'bg-[#ecfdf5] dark:bg-[#12281e] text-[#047857] dark:text-[#7ee787] border border-[#a7f3d0] dark:border-[#238636]'
+                  : 'bg-[#eff6ff] dark:bg-[#172554] text-[#1d4ed8] dark:text-[#60a5fa] border border-[#bfdbfe] dark:border-[#1e40af]'
               }`}
             >
               {isFailed ? 'FAILED EDIT' : opLabel}
             </span>
 
             {/* Document icon */}
-            <DocIcon className="h-3.5 w-3.5 text-[#52525b] shrink-0" />
+            <DocIcon className="h-3.5 w-3.5 text-[#52525b] dark:text-[#8b949e] shrink-0" />
 
             {/* Clean filename with muted path */}
             <div
@@ -853,7 +853,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
               title={rawFilePath}
             >
               {dirPath && (
-                <span className="text-[#8f8f8f] truncate max-w-[120px] sm:max-w-[180px] shrink-0">
+                <span className="text-[#8f8f8f] dark:text-[#8b949e] truncate max-w-[120px] sm:max-w-[180px] shrink-0">
                   {dirPath}/
                 </span>
               )}
@@ -866,12 +866,12 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             {(additions > 0 || deletions > 0) && (
               <div className="flex items-center space-x-1 font-mono text-[11px] tabular-nums font-semibold shrink-0 ml-1">
                 {additions > 0 && (
-                  <span className="text-[#16a34a] bg-[#f0fdf4] px-1 py-0.2 rounded border border-[#bbf7d0]">
+                  <span className="text-[#16a34a] dark:text-[#7ee787] bg-[#f0fdf4] dark:bg-[#12281e] px-1 py-0.2 rounded border border-[#bbf7d0] dark:border-[#238636]">
                     +{additions}
                   </span>
                 )}
                 {deletions > 0 && (
-                  <span className="text-[#dc2626] bg-[#fef2f2] px-1 py-0.2 rounded border border-[#fecaca]">
+                  <span className="text-[#dc2626] dark:text-[#ff7b72] bg-[#fef2f2] dark:bg-[#3b1219] px-1 py-0.2 rounded border border-[#fecaca] dark:border-[#da3633]">
                     -{deletions}
                   </span>
                 )}
@@ -880,8 +880,8 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
             {durationText && (
               <>
-                <span className="text-[#a1a1aa] select-none text-[10px]">•</span>
-                <span className="font-mono text-[#71717a] shrink-0 tabular-nums text-[11px]">
+                <span className="text-[#a1a1aa] dark:text-[#6e7681] select-none text-[10px]">•</span>
+                <span className="font-mono text-[#71717a] dark:text-[#8b949e] shrink-0 tabular-nums text-[11px]">
                   {durationText}
                 </span>
               </>
@@ -892,7 +892,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
           <div className="flex items-center space-x-1.5 min-w-0 flex-1 overflow-hidden">
             <button
               type="button"
-              className="p-0.5 text-[#8f8f8f] hover:text-[#171717] rounded shrink-0 transition cursor-pointer"
+              className="p-0.5 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] rounded shrink-0 transition cursor-pointer"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsExpanded(!isExpanded);
@@ -901,17 +901,17 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             >
               <ChevronRight
                 className={`h-3 w-3 transition-transform duration-150 ${
-                  isExpanded ? 'rotate-90 text-[#171717]' : ''
+                  isExpanded ? 'rotate-90 text-[#171717] dark:text-[#f0f6fc]' : ''
                 }`}
               />
             </button>
 
             <span
-              className="flex items-center shrink-0 select-none text-[#8f8f8f]"
+              className="flex items-center shrink-0 select-none text-[#8f8f8f] dark:text-[#8b949e]"
               title={tool.toolName === 'compact_context' ? 'Сжатие контекста' : 'Инструмент'}
             >
               {tool.toolName === 'compact_context' ? (
-                <Minimize2 className="h-3.5 w-3.5 text-indigo-600" />
+                <Minimize2 className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
               ) : (
                 <Wrench className="h-3.5 w-3.5" />
               )}
@@ -932,8 +932,8 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
             {extraInfo && (
               <>
-                <span className="text-[#a1a1aa] select-none text-[10px]">•</span>
-                <span className="font-mono text-[#71717a] shrink-0 tabular-nums text-[11px]">
+                <span className="text-[#a1a1aa] dark:text-[#6e7681] select-none text-[10px]">•</span>
+                <span className="font-mono text-[#71717a] dark:text-[#8b949e] shrink-0 tabular-nums text-[11px]">
                   {extraInfo}
                 </span>
               </>
@@ -941,8 +941,8 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
             {durationText && (
               <>
-                <span className="text-[#a1a1aa] select-none text-[10px]">•</span>
-                <span className="font-mono text-[#71717a] shrink-0 tabular-nums text-[11px]">
+                <span className="text-[#a1a1aa] dark:text-[#6e7681] select-none text-[10px]">•</span>
+                <span className="font-mono text-[#71717a] dark:text-[#8b949e] shrink-0 tabular-nums text-[11px]">
                   {durationText}
                 </span>
               </>
@@ -954,13 +954,13 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
           <button
             type="button"
             onClick={handleCopyLogs}
-            className={`p-1 rounded text-[#8f8f8f] hover:text-[#171717] hover:bg-white transition cursor-pointer ${
+            className={`p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-white dark:hover:bg-[#161b22] transition cursor-pointer ${
               isExpanded ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
             }`}
             title="Скопировать вывод"
           >
             {copied ? (
-              <Check className="h-3 w-3 text-emerald-600" />
+              <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
             ) : (
               <Copy className="h-3 w-3" />
             )}
@@ -977,13 +977,13 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             <div className="space-y-2">
               {rawFilePath && (
                 <div className="flex items-baseline space-x-2 py-0.5 text-[11px] font-mono">
-                  <span className="text-[#666666] font-semibold shrink-0">Файл:</span>
-                  <span className="text-[#171717] select-text break-all">{rawFilePath}</span>
+                  <span className="text-[#666666] dark:text-[#8b949e] font-semibold shrink-0">Файл:</span>
+                  <span className="text-[#171717] dark:text-[#f0f6fc] select-text break-all">{rawFilePath}</span>
                 </div>
               )}
               {tool.stdout ? (
                 <div>
-                  <span className="text-[10px] text-[#666666] block mb-1">
+                  <span className="text-[10px] text-[#666666] dark:text-[#8b949e] block mb-1">
                     Прочитанные строки {lineRangeBadge ? `(${lineRangeBadge})` : ''}
                   </span>
                   {renderReadContent()}
@@ -997,20 +997,20 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             <div className="space-y-2">
               {rawFilePath && (
                 <div className="flex items-baseline space-x-2 py-0.5 text-[11px] font-mono">
-                  <span className="text-[#666666] font-semibold shrink-0">Файл:</span>
-                  <span className="text-[#171717] select-text break-all">{rawFilePath}</span>
+                  <span className="text-[#666666] dark:text-[#8b949e] font-semibold shrink-0">Файл:</span>
+                  <span className="text-[#171717] dark:text-[#f0f6fc] select-text break-all">{rawFilePath}</span>
                 </div>
               )}
               {oldString !== undefined && newString !== undefined ? (
                 <div>
-                  <span className="text-[10px] text-[#666666] block mb-1">
+                  <span className="text-[10px] text-[#666666] dark:text-[#8b949e] block mb-1">
                     {isFailed ? 'Запланированные изменения (не применены)' : 'Изменения файлов (Diff)'}
                   </span>
                   {renderUnifiedDiff()}
                 </div>
               ) : newString ? (
                 <div>
-                  <span className="text-[10px] text-[#666666] block mb-1">
+                  <span className="text-[10px] text-[#666666] dark:text-[#8b949e] block mb-1">
                     Содержимое файла
                   </span>
                   {renderFileContentPreview()}
@@ -1024,12 +1024,12 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             <div className="space-y-2">
               {rawFilePath && (
                 <div className="flex items-baseline space-x-2 py-0.5 text-[11px] font-mono">
-                  <span className="text-[#666666] font-semibold shrink-0">Файл:</span>
-                  <span className="text-[#171717] select-text break-all">{rawFilePath}</span>
+                  <span className="text-[#666666] dark:text-[#8b949e] font-semibold shrink-0">Файл:</span>
+                  <span className="text-[#171717] dark:text-[#f0f6fc] select-text break-all">{rawFilePath}</span>
                 </div>
               )}
               <div>
-                <span className="text-[10px] text-[#666666] block mb-1">
+                <span className="text-[10px] text-[#666666] dark:text-[#8b949e] block mb-1">
                   {isFailed ? 'Запланированные изменения (не применены)' : 'Изменения файлов (Diff)'}
                 </span>
                 {renderUnifiedDiff()}
@@ -1042,10 +1042,10 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
           {tool.stdout && (
             <div>
-              <span className="text-[10px] text-[#666666] block mb-1">
+              <span className="text-[10px] text-[#666666] dark:text-[#8b949e] block mb-1">
                 Стандартный вывод (stdout)
               </span>
-              <pre className="p-2.5 rounded-md bg-[#fafafa] border border-[#ebebeb] text-[11px] text-[#171717] overflow-x-auto leading-relaxed max-h-48 whitespace-pre-wrap select-text">
+              <pre className="p-2.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#21262d] text-[11px] text-[#171717] dark:text-[#f0f6fc] overflow-x-auto leading-relaxed max-h-48 whitespace-pre-wrap select-text">
                 {tool.stdout}
               </pre>
             </div>
@@ -1053,16 +1053,16 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
           {tool.stderr && (
             <div>
-              <span className="text-[10px] text-[#b91c1c] block mb-1">
+              <span className="text-[10px] text-[#b91c1c] dark:text-[#ff7b72] block mb-1">
                 Трассировка ошибок (stderr)
               </span>
-              <pre className="p-2.5 rounded-md bg-[#fef2f2] border border-[#fecaca] text-[11px] text-[#991b1b] overflow-x-auto leading-relaxed max-h-48 whitespace-pre-wrap select-text">
+              <pre className="p-2.5 rounded-md bg-[#fef2f2] dark:bg-[#3b1219] border border-[#fecaca] dark:border-[#da3633] text-[11px] text-[#991b1b] dark:text-[#ff7b72] overflow-x-auto leading-relaxed max-h-48 whitespace-pre-wrap select-text">
                 {tool.stderr}
               </pre>
             </div>
           )}
 
-          <div className="flex items-center justify-between pt-1 border-t border-[#f4f4f5] text-[10px] text-[#8f8f8f]">
+          <div className="flex items-center justify-between pt-1 border-t border-[#f4f4f5] dark:border-[#21262d] text-[10px] text-[#8f8f8f] dark:text-[#8b949e]">
             <span>Статус: {tool.status} {tool.exitCode !== undefined ? `(код ${tool.exitCode})` : ''}</span>
             <span className="tabular-nums">{tool.timestamp}</span>
           </div>

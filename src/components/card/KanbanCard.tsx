@@ -342,10 +342,10 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                               <span
                                 className={`px-1 py-0.2 rounded text-[9px] font-mono ${
                                   sub?.verdict === 'APPROVED'
-                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    ? 'bg-emerald-50 dark:bg-[#12281e] text-emerald-700 dark:text-[#7ee787] border border-emerald-200 dark:border-[#238636]'
                                     : sub?.verdict === 'APPROVED_WITH_CAVEATS'
-                                    ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                    : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                    ? 'bg-amber-50 dark:bg-[#422006] text-amber-700 dark:text-[#facc15] border border-amber-200 dark:border-[#713f12]'
+                                    : 'bg-rose-50 dark:bg-[#3b1219] text-rose-700 dark:text-[#ff7b72] border border-rose-200 dark:border-[#da3633]'
                                 }`}
                               >
                                 {sub?.verdict === 'APPROVED'
@@ -355,11 +355,11 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                                   : 'REWORK'}
                               </span>
                             ) : (
-                              <span className="px-1 py-0.2 rounded text-[9px] font-mono bg-[#f4f4f5] text-[#666666] border border-[#ebebeb]">
+                              <span className="px-1 py-0.2 rounded text-[9px] font-mono bg-[#f4f4f5] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] border border-[#ebebeb] dark:border-[#30363d]">
                                 Готово
                               </span>
                             )}
-                            <MessageSquare className="h-3 w-3 text-[#8f8f8f] group-hover:text-[#171717] transition" />
+                            <MessageSquare className="h-3 w-3 text-[#8f8f8f] dark:text-[#8b949e] group-hover:text-[#171717] dark:group-hover:text-[#f0f6fc] transition" />
                           </div>
                         </div>
                       );

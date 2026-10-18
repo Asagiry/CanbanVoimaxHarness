@@ -178,7 +178,7 @@ export default function ThinkingCard({
           <button
             type="button"
             onClick={handleCopy}
-            className="p-1 rounded text-[#8f8f8f] hover:text-[#171717] hover:bg-white transition cursor-pointer"
+            className="p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-white dark:hover:bg-[#21262d] transition cursor-pointer"
             title="Скопировать размышления"
           >
             {copied ? (

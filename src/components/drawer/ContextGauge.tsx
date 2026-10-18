@@ -417,7 +417,7 @@ export default function ContextGauge({
             </div>
 
             {/* Segmented Progress Bar */}
-            <div className="w-full h-2 rounded-full bg-[#f4f4f5] overflow-hidden flex mb-3">
+            <div className="w-full h-2 rounded-full bg-[#f4f4f5] dark:bg-[#21262d] overflow-hidden flex mb-3">
               {systemPromptTokens > 0 && (
                 <div
                   style={{ width: `${systemPct}%` }}

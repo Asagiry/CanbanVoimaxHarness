@@ -130,10 +130,10 @@ function AccordionFileItem({ file, isExpanded, onToggle }: AccordionFileItemProp
 
   const statusColor =
     file.status === 'A'
-      ? 'bg-[#f0fdf4] text-[#15803d] border-[#bbf7d0]'
+      ? 'bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] border-[#bbf7d0] dark:border-[#238636]'
       : file.status === 'D'
-      ? 'bg-[#fef2f2] text-[#b91c1c] border-[#fecaca]'
-      : 'bg-[#fffbeb] text-[#b45309] border-[#fde68a]';
+      ? 'bg-[#fef2f2] dark:bg-[#3b1219] text-[#b91c1c] dark:text-[#ff7b72] border-[#fecaca] dark:border-[#da3633]'
+      : 'bg-[#fffbeb] dark:bg-[#2d2208] text-[#b45309] dark:text-[#d29922] border-[#fde68a] dark:border-[#9e6a03]';
 
   const handleCopyPatch = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -154,17 +154,17 @@ function AccordionFileItem({ file, isExpanded, onToggle }: AccordionFileItemProp
   };
 
   return (
-    <div className="rounded-md border border-[#ebebeb] bg-white overflow-hidden shadow-xs transition duration-150">
+    <div className="rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] overflow-hidden shadow-xs transition duration-150">
       {/* File Header Row (Clickable Accordion Trigger) */}
       <div
         onClick={onToggle}
-        className="flex items-center justify-between px-3 py-2 bg-[#fcfcfc] hover:bg-[#f4f4f5] cursor-pointer transition select-none"
+        className="flex items-center justify-between px-3 py-2 bg-[#fcfcfc] dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#1c2128] cursor-pointer transition select-none"
       >
         <div className="flex items-center space-x-2 min-w-0 mr-2">
           {isExpanded ? (
-            <ChevronDown className="h-3.5 w-3.5 text-[#666666] shrink-0" />
+            <ChevronDown className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
           ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-[#666666] shrink-0" />
+            <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
           )}
 
           <span
@@ -174,27 +174,27 @@ function AccordionFileItem({ file, isExpanded, onToggle }: AccordionFileItemProp
           </span>
 
           <span className="truncate text-xs font-mono" title={file.path}>
-            {dirPart && <span className="text-[#8f8f8f]">{dirPart}</span>}
-            <span className="font-semibold text-[#171717]">{filePart}</span>
+            {dirPart && <span className="text-[#8f8f8f] dark:text-[#8b949e]">{dirPart}</span>}
+            <span className="font-semibold text-[#171717] dark:text-[#f0f6fc]">{filePart}</span>
           </span>
         </div>
 
         <div className="flex items-center space-x-2 shrink-0 font-mono text-[11px] tabular-nums">
           {(file.additions ?? 0) > 0 && (
-            <span className="text-[#15803d] font-medium">+{file.additions}</span>
+            <span className="text-[#15803d] dark:text-[#4ade80] font-medium">+{file.additions}</span>
           )}
           {(file.deletions ?? 0) > 0 && (
-            <span className="text-[#b91c1c] font-medium">-{file.deletions}</span>
+            <span className="text-[#b91c1c] dark:text-[#f87171] font-medium">-{file.deletions}</span>
           )}
 
           <button
             type="button"
             onClick={handleCopyPatch}
-            className="p-1 rounded text-[#8f8f8f] hover:text-[#171717] hover:bg-[#ebebeb] transition cursor-pointer"
+            className="p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb] dark:hover:bg-[#21262d] transition cursor-pointer"
             title="Скопировать patch этого файла"
           >
             {copied ? (
-              <Check className="h-3 w-3 text-emerald-600" />
+              <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
             ) : (
               <Copy className="h-3 w-3" />
             )}
@@ -204,9 +204,9 @@ function AccordionFileItem({ file, isExpanded, onToggle }: AccordionFileItemProp
 
       {/* Expanded Clean Diff View */}
       {isExpanded && (
-        <div className="border-t border-[#ebebeb] bg-white font-mono text-[11px] leading-relaxed select-text overflow-x-auto max-h-[460px] overflow-y-auto">
+        <div className="border-t border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] font-mono text-[11px] leading-relaxed select-text overflow-x-auto max-h-[460px] overflow-y-auto">
           {parsedLines.length === 0 ? (
-            <div className="p-3 text-center text-[#8f8f8f] text-xs">
+            <div className="p-3 text-center text-[#8f8f8f] dark:text-[#8b949e] text-xs">
               Нет текстовых изменений (бинарный файл или пустой diff)
             </div>
           ) : (
@@ -215,7 +215,7 @@ function AccordionFileItem({ file, isExpanded, onToggle }: AccordionFileItemProp
                 return (
                   <div
                     key={idx}
-                    className="bg-[#f4f4f5] text-[#666666] border-y border-[#ebebeb] my-0.5 py-0.5 px-2 text-[10px] font-semibold select-text"
+                    className="bg-[#f4f4f5] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] border-y border-[#ebebeb] dark:border-[#21262d] my-0.5 py-0.5 px-2 text-[10px] font-semibold select-text"
                   >
                     {line.text}
                   </div>
@@ -226,15 +226,15 @@ function AccordionFileItem({ file, isExpanded, onToggle }: AccordionFileItemProp
                 return (
                   <div
                     key={idx}
-                    className="flex items-start bg-[#f0fdf4] text-[#166534] hover:bg-[#dcfce7] border-l-2 border-[#22c55e] py-0.5"
+                    className="flex items-start bg-[#f0fdf4] dark:bg-[#12281e] text-[#166534] dark:text-[#7ee787] hover:bg-[#dcfce7] dark:hover:bg-[#173a2b] border-l-2 border-[#22c55e] py-0.5"
                   >
-                    <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] select-none text-[10px]">
+                    <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] dark:text-[#8b949e] select-none text-[10px]">
                       {/* empty old line */}
                     </span>
-                    <span className="w-8 shrink-0 text-right pr-2 text-[#16a34a] select-none text-[10px] tabular-nums font-mono">
+                    <span className="w-8 shrink-0 text-right pr-2 text-[#16a34a] dark:text-[#7ee787] select-none text-[10px] tabular-nums font-mono">
                       {line.newNum}
                     </span>
-                    <span className="w-4 shrink-0 text-center text-[#16a34a] font-bold select-none">
+                    <span className="w-4 shrink-0 text-center text-[#16a34a] dark:text-[#7ee787] font-bold select-none">
                       +
                     </span>
                     <span className="flex-1 whitespace-pre-wrap break-all pr-2">
@@ -248,15 +248,15 @@ function AccordionFileItem({ file, isExpanded, onToggle }: AccordionFileItemProp
                 return (
                   <div
                     key={idx}
-                    className="flex items-start bg-[#fef2f2] text-[#991b1b] hover:bg-[#fee2e2] border-l-2 border-[#ef4444] py-0.5"
+                    className="flex items-start bg-[#fef2f2] dark:bg-[#3b1219] text-[#991b1b] dark:text-[#ff7b72] hover:bg-[#fee2e2] dark:hover:bg-[#4d1922] border-l-2 border-[#ef4444] py-0.5"
                   >
-                    <span className="w-8 shrink-0 text-right pr-2 text-[#ef4444] select-none text-[10px] tabular-nums font-mono">
+                    <span className="w-8 shrink-0 text-right pr-2 text-[#ef4444] dark:text-[#ff7b72] select-none text-[10px] tabular-nums font-mono">
                       {line.oldNum}
                     </span>
-                    <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] select-none text-[10px]">
+                    <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] dark:text-[#8b949e] select-none text-[10px]">
                       {/* empty new line */}
                     </span>
-                    <span className="w-4 shrink-0 text-center text-[#ef4444] font-bold select-none">
+                    <span className="w-4 shrink-0 text-center text-[#ef4444] dark:text-[#ff7b72] font-bold select-none">
                       -
                     </span>
                     <span className="flex-1 whitespace-pre-wrap break-all pr-2">
@@ -270,15 +270,15 @@ function AccordionFileItem({ file, isExpanded, onToggle }: AccordionFileItemProp
               return (
                 <div
                   key={idx}
-                  className="flex items-start hover:bg-[#f9f9f9] py-0.5 text-[#171717]"
+                  className="flex items-start hover:bg-[#f9f9f9] dark:hover:bg-[#161b22] py-0.5 text-[#171717] dark:text-[#f0f6fc]"
                 >
-                  <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] select-none text-[10px] tabular-nums font-mono">
+                  <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] dark:text-[#8b949e] select-none text-[10px] tabular-nums font-mono">
                     {line.oldNum}
                   </span>
-                  <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] select-none text-[10px] tabular-nums font-mono">
+                  <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] dark:text-[#8b949e] select-none text-[10px] tabular-nums font-mono">
                     {line.newNum}
                   </span>
-                  <span className="w-4 shrink-0 text-center text-[#8f8f8f] select-none">
+                  <span className="w-4 shrink-0 text-center text-[#8f8f8f] dark:text-[#8b949e] select-none">
                     {' '}
                   </span>
                   <span className="flex-1 whitespace-pre-wrap break-all pr-2">

@@ -207,10 +207,10 @@ export default function DrawerSteerBar({
               <button
                 type="button"
                 onClick={closeSubagent}
-                className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-sans font-medium text-[#71717a] hover:text-[#171717] hover:bg-[#f4f4f5] border border-transparent hover:border-[#ebebeb] transition cursor-pointer shrink-0"
+                className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-sans font-medium text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] border border-transparent hover:border-[#ebebeb] dark:hover:border-[#30363d] transition cursor-pointer shrink-0"
                 title="Вернуться к родительской задаче"
               >
-                <ArrowLeft className="h-3.5 w-3.5 text-[#171717]" />
+                <ArrowLeft className="h-3.5 w-3.5 text-[#171717] dark:text-[#f0f6fc]" />
                 <span>← Вернуться к задаче</span>
               </button>
             </div>
@@ -222,7 +222,7 @@ export default function DrawerSteerBar({
               {attachedImages.map((img) => (
                 <div
                   key={img.id}
-                  className="relative group shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-[#ebebeb] bg-[#f4f4f5]"
+                  className="relative group shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-[#ebebeb] dark:border-[#30363d] bg-[#f4f4f5] dark:bg-[#161b22]"
                 >
                   <img
                     src={img.dataUrl}
@@ -232,12 +232,12 @@ export default function DrawerSteerBar({
                   <button
                     type="button"
                     onClick={() => setAttachedImages((prev) => prev.filter((i) => i.id !== img.id))}
-                    className="absolute top-1 right-1 w-4 h-4 rounded-full bg-white/90 hover:bg-white text-[#171717] border border-[#ebebeb] flex items-center justify-center text-xs leading-none transition cursor-pointer"
+                    className="absolute top-1 right-1 w-4 h-4 rounded-full bg-white/90 dark:bg-[#161b22]/90 hover:bg-white dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] border border-[#ebebeb] dark:border-[#30363d] flex items-center justify-center text-xs leading-none transition cursor-pointer"
                     title="Удалить"
                   >
                     ×
                   </button>
-                  <div className="absolute inset-x-0 bottom-0 bg-white/90 px-1 py-0.5 text-[8.5px] font-mono text-[#666666] truncate text-center border-t border-[#ebebeb]">
+                  <div className="absolute inset-x-0 bottom-0 bg-white/90 dark:bg-[#161b22]/90 px-1 py-0.5 text-[8.5px] font-mono text-[#666666] dark:text-[#8b949e] truncate text-center border-t border-[#ebebeb] dark:border-[#30363d]">
                     {img.name}
                   </div>
                 </div>
@@ -332,7 +332,7 @@ export default function DrawerSteerBar({
                 <button
                   type="button"
                   onClick={onAbortAgent}
-                  className="w-8 h-8 rounded-full bg-[#fef2f2] hover:bg-[#fee2e2] text-[#b91c1c] border border-[#fecaca] flex items-center justify-center shadow-xs transition cursor-pointer active:scale-95"
+                  className="w-8 h-8 rounded-full bg-[#fef2f2] dark:bg-[#3b1219] hover:bg-[#fee2e2] dark:hover:bg-[#4d1922] text-[#b91c1c] dark:text-[#ff7b72] border border-[#fecaca] dark:border-[#da3633] flex items-center justify-center shadow-xs transition cursor-pointer active:scale-95"
                   title="Остановить выполнение (abort_agent)"
                 >
                   <Square className="h-3.5 w-3.5 fill-current" />

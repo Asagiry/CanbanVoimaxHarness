@@ -143,7 +143,7 @@ export const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
             <button
               type="button"
               onClick={() => setIsOpen(false)}
-              className="h-6 w-6 rounded-md hover:bg-[#f4f4f5] text-[#8f8f8f] hover:text-[#171717] flex items-center justify-center transition cursor-pointer"
+              className="h-6 w-6 rounded-md hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] flex items-center justify-center transition cursor-pointer"
               title="Закрыть (Esc)"
             >
               <X className="h-3.5 w-3.5" />
@@ -187,7 +187,7 @@ export const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
                 .
               </div>
             ) : (
-              <div className="max-h-64 sm:max-h-72 overflow-y-auto divide-y divide-[#f4f4f5] min-h-0">
+              <div className="max-h-64 sm:max-h-72 overflow-y-auto divide-y divide-[#f4f4f5] dark:divide-[#21262d] min-h-0">
                 {todos.map((item) => {
                   const isCompleted = item.status === 'completed';
                   const isInProgress = item.status === 'in_progress';
@@ -196,19 +196,19 @@ export const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
                     <div
                       key={item.id}
                       className={`flex items-start gap-2.5 px-3.5 py-2.5 min-w-0 transition-colors ${
-                        isInProgress ? 'bg-[#fffbeb]/50' : 'hover:bg-[#fafafa]'
+                        isInProgress ? 'bg-[#fffbeb]/50 dark:bg-[#422006]/30' : 'hover:bg-[#fafafa] dark:hover:bg-[#161b22]'
                       }`}
                     >
                       {/* Status indicator icon */}
                       <span className="mt-0.5 shrink-0" title={`Статус: ${item.status}`}>
                         {isCompleted ? (
-                          <CheckCircle2 className="h-4 w-4 text-[#15803d]" />
+                          <CheckCircle2 className="h-4 w-4 text-[#15803d] dark:text-[#7ee787]" />
                         ) : isInProgress ? (
                           <span className="h-4 w-4 flex items-center justify-center">
-                            <span className="h-1.5 w-1.5 rounded-full bg-[#b45309] animate-pulse" />
+                            <span className="h-1.5 w-1.5 rounded-full bg-[#b45309] dark:bg-[#facc15] animate-pulse" />
                           </span>
                         ) : (
-                          <Circle className="h-4 w-4 text-[#d4d4d8]" />
+                          <Circle className="h-4 w-4 text-[#d4d4d8] dark:text-[#6e7681]" />
                         )}
                       </span>
 
