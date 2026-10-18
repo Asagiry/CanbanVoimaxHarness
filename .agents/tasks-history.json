@@ -1,4 +1,22 @@
 {
+    "CVH-DRAWER-RUNNING-OUTPUT": {
+        "taskId": "CVH-DRAWER-RUNNING-OUTPUT",
+        "title": "Fix Stop Button Desync and Distinguish Intermediate Step Commentary from Final Response",
+        "author": "agent-developer (react-tailwind-artisan)",
+        "verdict": "APPROVED",
+        "commitHash": "bc5a0df",
+        "commitMessage": "fix(drawer): address review caveats on intervening tools and subagent abort cleanup",
+        "summary": "Fixed Stop Button desynchronization and premature 'Ответ агента' card rendering in AgentConsoleDrawer: (1) Derived isRunning reactively from task.status === 'running' || hasRunningTool || isAgentActive, managing activeAgentTaskIds in drawerStore across all agent lifecycle events; (2) Implemented in-flight tool abort cleanup marking running tools in both parent task and active subagent as failed with 'Прервано пользователем'; (3) Created isFinalResponseItem helper in DrawerActivityStream distinguishing intermediate commentary/intent before and between tools from true terminal responses; (4) Styled intermediate commentary as natural unboxed step explanation ('Пояснение агента' with Bot icon, timestamp, and unboxed markdown) and reserved the collapsible '✨ Ответ агента' card strictly for terminal output; (5) Added markFinalResponse in drawerStore with intervening tool guard ensuring past commentary is never overwritten; (6) Verified with npx tsc --noEmit (0 errors).",
+        "files": [
+            "src/App.tsx",
+            "src/components/drawer/AgentConsoleDrawer.tsx",
+            "src/components/drawer/DrawerActivityStream.tsx",
+            "src/stores/drawerStore.ts",
+            "src/types/index.ts",
+            "AGENTS.md"
+        ],
+        "timestamp": 1792352967971
+    },
     "CVH-EDIT-FILE-RESILIENT-DIFF": {
         "taskId": "CVH-EDIT-FILE-RESILIENT-DIFF",
         "title": "Harden edit_file (str_replace) with Resilient Whitespace-Relaxed Line Matching and Honest Multi-Line Diff Diagnostics",
