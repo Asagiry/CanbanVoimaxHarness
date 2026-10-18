@@ -1,174 +1,281 @@
 # 🚀 CanbanVoimaxHarness (CVH)
 
-> **The Next-Generation Lightweight Desktop Agentic IDE & Orchestrator**  
-> Built with **Rust 2021 (Tauri v2 Core)**, **Tokio**, **React 19**, **TypeScript**, and **Tailwind CSS v4**.
+> **Next-Generation Ultra-Lightweight Desktop Agentic IDE & Autonomous Control Plane**  
+> *Where the Kanban Board IS the Control Plane — Built for Mission-Critical Engineering at Scale.*
+
+[![Rust 2021](https://img.shields.io/badge/Rust-2021%20Edition-black?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![Tauri v2](https://img.shields.io/badge/Tauri-v2.0-24C8DB?style=for-the-badge&logo=tauri&logoColor=white)](https://v2.tauri.app/)
+[![React 19](https://img.shields.io/badge/React-19.0-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Tailwind CSS v4](https://img.shields.io/badge/Tailwind_CSS-v4.0-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![SQLite WAL](https://img.shields.io/badge/SQLite-WAL%20Mode-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://sqlite.org/)
+[![Memory Footprint](https://img.shields.io/badge/RAM_Footprint-~40MB-emerald?style=for-the-badge)](#technical-highlights)
+[![License MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 
 ---
 
-## 📚 Архитектурные руководства и документация (Documentation)
+## 🎯 Executive Overview & Value Proposition
 
-Полная документация по устройству и кастомизации CanbanVoimaxHarness находится в директории `docs/` (все этапы дорожной карты CVH-001—CVH-014 и архитектурные концепции Live Diff и Cortex Memory Ledger полностью реализованы в кодовой базе):
+**CanbanVoimaxHarness (CVH)** is a next-generation desktop agentic IDE designed from first principles for autonomous, multi-stage software engineering. While conventional AI coding assistants force developers into a single chaotic chat panel with unbounded context degradation and uncontrolled file writes, CVH establishes an immutable architectural paradigm:
 
-- **[📘 docs/GUIDE.md](docs/GUIDE.md)** — **Полный гайд по харнессу и `.cvh`**:
-  - Полная сверка всех подсистем, инвариантов и IPC-команд с кодом бэкенда на Rust и фронтенда.
-  - Пошаговые чеклисты настройки досок, колонок, персон, правил и хуков перехода.
+**The Kanban Board IS the Application Control Plane.**
 
-- **[🤖 docs/agents.md](docs/agents.md)** — **Руководство по архитектуре и персонам агентов**:
-  - Как устроен нативный ReAct-цикл в Rust и Zero-Turn Memory Priming.
-  - Описание персон в `.cvh/agents/<role>.md`.
-  - Двухуровневая матрица `.cvh/settings/tool-policy.json` с жесткой логикой `AND` и Zero-Trust вырезанием схем.
-  - Кастомные инструменты в `.cvh/tools/<tool>.json` с Output Spilling.
-  - Пошаговое руководство по переносу скиллов и ролей из сторонних проектов (например, carSmash).
-
-- **[📋 docs/board.md](docs/board.md)** — **Архитектура досок и колонок (Колонки = Агенты)**:
-  - Панель управления (Control Plane): почему колонки представляют активных агентов.
-  - Фундаментальный инвариант: задачи ВСЕГДА двигаются из `Backlog` в `Ready`.
-  - Мульти-доски в `.cvh/boards.json` и готовые шаблоны (`development`, `modeler`, `kanban`, `empty`).
-  - Автоматический роутинг между стадиями по вердиктам (`APPROVED`, `CHANGES_REQUESTED`) и иерархия подзадач.
-
-- **[⚡ docs/hooks.md](docs/hooks.md)** — **Автономные скрипты перехода на колонках**:
-  - Механизм хуков жизненного цикла (`.bat`, `.ps1`, `.sh`, `.py`).
-  - Контекстные переменные окружения (`CVH_TASK_ID`, `CVH_WORKTREE_PATH`, `CVH_BRANCH`, `CVH_STAGE_ID`, `CVH_VERDICT`).
-  - Сенсоры-привратники (`gatekeeperSensor`) для защиты от сломанных сборок.
-  - Готовые примеры: автоматическое создание Git worktree при взятии в работу и очистка при завершении.
+- 🏎️ **Ultra-Lightweight Footprint (~40MB RAM)**: Built with a native **Rust 2021 / Tauri v2** asynchronous core and a hyper-responsive **React 19** frontend. CVH delivers instantaneous desktop performance, consuming a tiny fraction of the memory overhead typical of legacy Electron-based IDEs (~1.5GB+).
+- 🌲 **Deterministic Worktree Isolation**: Every task executes strictly inside its own isolated Git worktree (`worktrees/<task-slug>`) on a dedicated feature branch. Concurrent agents never touch or pollute your active working tree or main branch.
+- 🗄️ **High-Performance SQLite Persistence in WAL Mode**: Every token, thought block, tool invocation, and duration metric streams directly into an ACID-compliant SQLite engine (`.cvh/harness.db`), guaranteeing atomic persistence with zero lock contention.
+- 🛡️ **Two-Tier Zero-Trust Tool Policy Matrix**: Ironclad `AND`-semantics ensure tools disabled globally can never be enabled by stages, while disabled tool schemas are completely purged from LLM requests—eliminating hallucinations and saving **2,400+ prompt tokens per step**.
+- 🗜️ **State-Preserving Context Compactor & Prefix Caching**: Automated log evaporation reclaims up to **80% of token context** without calling external LLM APIs, while deterministic alphabetical tool serialization preserves provider KV cache hit rates **above 90%**.
+- 🏃 **Relay Handoff Memory Priming**: As tasks advance across pipeline stages, structured handoff summaries are injected into top-level prompt banners (`[RELAY HANDOFF]`), achieving seamless context continuity with zero memory loss.
+- 🎨 **Obsidian Dark Aesthetic & Tactile Pop-Art Minimalism**: High-contrast obsidian dark palette (`#07090e`, `#0d1117`, `#161b22`), monospace tabular timers (`tabular-nums`), signature circular wave theme transitions, and zero AI-slop pastel gradients.
 
 ---
 
-## ⚡ Манифест быстрого онбординга новых проектов (Fast Onboarding Manifest)
+## 🏛️ System Architecture
 
-CanbanVoimaxHarness разработан для мгновенного развертывания поверх **любого существующего репозитория** без навязывания чужих зависимостей.
+CanbanVoimaxHarness decouples desktop OS interactions, asynchronous LLM streaming, and reactive state management into clean, unidirectional layers.
 
 ```text
-[Ваш репозиторий] + [.cvh/ конфигурация] = Автономная агентная IDE за 2 минуты
++----------------------------------------------------------------------------------------+
+|                                   CANBAN VOIMAX HARNESS                                |
+|                                (Tauri v2 + React 19 Shell)                             |
++-------------------------------------------+--------------------------------------------+
+|           REACT 19 TACTICAL UI            |               RUST 2021 BACKEND            |
+|       (Zustand + Tailwind CSS v4)         |           (Tokio Async Runtime Engine)     |
+|                                           |                                            |
+|  +-------------------------------------+  |  +--------------------------------------+  |
+|  |        KANBAN CONTROL PLANE         |  |  |         TAURI IPC ROUTER & CMDS      |  |
+|  |  * Multi-Board Engine (.cvh/boards) |<--+--|  * commands::tasks, commands::boards |  |
+|  |  * Reactive Columns (Columns=Agents)|  |  |  * commands::git, commands::cortex   |  |
+|  |  * Monospace Tabular Stage Timers   |  |  +------------------+-------------------+  |
+|  +------------------+------------------+  |                     |                      |
+|                     | (Card Click)        |                     v                      |
+|                     v                     |  +--------------------------------------+  |
+|  +-------------------------------------+  |  |        AUTONOMOUS REACT LOOP         |  |
+|  |          CARD-AS-A-CHAT             |  |  |  * Zero-Turn Memory Priming Engine   |  |
+|  |  * Live <thinking> Introspection    |<--+--|  * Universal SSE Streaming Client    |  |
+|  |  * Subagent Delegation Viewports    |  |  |  * Deterministic Prefix Caching      |  |
+|  |  * Real-Time Diff Viewer & Steer Bar|  |  +------------------+-------------------+  |
+|  +------------------+------------------+  |                     |                      |
+|                     |                     |                     v                      |
+|                     v                     |  +--------------------------------------+  |
+|  +-------------------------------------+  |  |     TWO-TIER TOOL POLICY MATRIX      |  |
+|  |          CORTEX EXPLORER            |  |  |  * Global Switches (Level A)         |  |
+|  |  * Agent Persona & Rule Inspector   |<--+--|  * Stage Overrides (Level B, AND-Sem)|  |
+|  |  * In-App Live Rule Editor (Ctrl+S) |  |  |  * Schema Stripping (-2,400+ tokens) |  |
+|  +-------------------------------------+  |  +------------------+-------------------+  |
+|                                           |                     |                      |
+|                                           |                     v                      |
+|  +-------------------------------------+  |  +--------------------------------------+  |
+|  |          CONTEXT GAUGE UI           |  |  |     STATE-PRESERVING COMPACTOR       |  |
+|  |  * Real-Time Token Ring Indicator   |<--+--|  * Zero-LLM Fast Evaporation (>500c) |  |
+|  |  * 100% Context Ceiling Compaction  |  |  |  * Collapsible Paper Accordion Feed  |  |
+|  +-------------------------------------+  |  +------------------+-------------------+  |
+|                                           |                     |                      |
++-------------------------------------------+---------------------+----------------------+
+|                             SUBSURFACE DATA LAYER               |                      |
+|                                                                 v                      |
+|  +---------------------------+  +----------------------------+  +-------------------+  |
+|  |  SQLite WAL (.cvh/harness)|  |  Git Worktree Subsystem    |  |  Tool Output Spill|  |
+|  |  * ACID dialogue logs     |  |  * Isolated task branches  |  |  * >100 lines /   |  |
+|  |  * Sub-ms upsert metrics  |  |  * Autonomous merge gates  |  |    >8KB to disk   |  |
+|  +---------------------------+  +----------------------------+  +-------------------+  |
++----------------------------------------------------------------------------------------+
 ```
-
-### 5 шагов для подключения проекта:
-1. **Откройте папку проекта в CVH**:
-   - При первом открытии бэкенд на Rust автоматически создаст легковесную структуру `.cvh/` (конфиг, пайплайн, папки для агентов, хуков и настроек) и добавит локальные секреты в `.gitignore`.
-2. **Выберите или настройте доску (`.cvh/boards.json`)**:
-   - Выберите готовый шаблон: классический 5-стадийный инженерный цикл (`development`), 3D-пайплайн (`modeler`) или минималистичный (`kanban`).
-3. **Определите персоны агентов (`.cvh/agents/<role>.md`)**:
-   - Добавьте файлы ролей под специфику вашего стека (например, `rust-engineer.md`, `react-artisan.md`, `security-auditor.md`).
-4. **Задайте границы безопасности (`.cvh/settings/tool-policy.json`)**:
-   - Настройте матрицу инструментов: разрешите запись только разработчикам, запретите модификацию файлов аудиторам, подключите кастомные скрипты сборки в `.cvh/tools/`.
-5. **Создайте первую задачу на доске**:
-   - Перетащите карточку из `Backlog` в `In Dev` — CVH мгновенно создаст изолированный Git worktree, скомпилирует контекст памяти и начнет решение задачи.
 
 ---
 
-## 🌟 Mission & Architectural Pillars
+## 🔄 Autonomous Pipeline & Relay Handoff Control Flow
 
-**CanbanVoimaxHarness (CVH)** is the world's first lightweight (~38MB RAM) desktop AI orchestrator where the **Kanban board is the First-Class Control Plane**, not an afterthought or side-panel. Tasks flow autonomously through customizable agent pipelines with native Git Worktree isolation, deterministic prefix caching, zero-turn memory priming, and a two-tier zero-trust tool policy matrix.
+In CanbanVoimaxHarness, **Columns Represent Autonomous Agent Personas**. When a card moves into a column, the agent loop executes with that column's primed persona, rules, and security boundaries.
 
-```
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                                   CANBAN VOIMAX HARNESS                                │
-│                                                                                        │
-│   ┌─────────────────────┐  ┌──────────────────────────────────────────────────────┐  │
-│   │   CORTEX EXPLORER   │  │                 KANBAN CONTROL PLANE                 │  │
-│   │  (Mind Explorer)    │  │                                                      │  │
-│   │                     │  │  [Backlog]  ➔  [In Dev]  ➔  [Review]  ➔  [Done]       │  │
-│   │  🔵 backlog/        │  │     │             │            │           │         │  │
-│   │  🟡 dev/            │  │     ▼             ▼            ▼           ▼         │  │
-│   │     persona.md      │  │  Card #1       Card #2      Card #3     Card #4      │  │
-│   │     rules/*.md      │  │  "Ideation"    "Backend"    "Audit"     "Shipped"    │  │
-│   │  🟣 review/         │  └──────────────────────┬───────────────────────────────┘  │
-│   │  🟢 ready/          │                         │ (Click Card)                     │
-│   └─────────────────────┘                         ▼                                  │
-│                                      ┌─────────────────────────┐                     │
-│                                      │     CARD-AS-A-CHAT      │                     │
-│                                      │  - Live Thinking Stream │                     │
-│                                      │  - Rich Markdown Viewer │                     │
-│                                      │  - Tool Diff Inspector  │                     │
-│                                      │  - Steer Agent Prompt   │                     │
-│                                      └─────────────────────────┘                     │
-└────────────────────────────────────────────────────────────────────────────────────────┘
+```text
+ +--------------+     +--------------+     +--------------+     +--------------+     +--------------+
+ |   BACKLOG    |---->|     DEV      |---->|    REVIEW    |---->|    RETRO     |---->|    READY     |
+ |  (Architect) |     | (Developer)  |     |  (Reviewer)  |     |  (Verifier)  |     |  (Terminal)  |
+ +--------------+     +------+-------+     +------+-------+     +------+-------+     +--------------+
+                             |                    |                    |                    ^
+                             |                    |                    |                    |
+              [Enter Stage]  v                    |                    |                    |
+           Creates Isolated Git Worktree          |                    |                    |
+           worktrees/<task-slug>                  |                    |                    |
+           feat/<task-slug> branch                |                    |                    |
+                             |                    |                    |                    |
+                             v                    |                    |                    |
+                   Executes Developer Agent       |                    |                    |
+                   (Tools: edit, bash, subagent)  |                    |                    |
+                             |                    |                    |                    |
+                             v                    |                    |                    |
+                 advance_task(summary)            |                    |                    |
+                             |                    |                    |                    |
+                             +-------------------->                    |                    |
+                             | Relay Handoff Priming                   |                    |
+                             v                                         |                    |
+                 Runs Gatekeeper Sensor                                |                    |
+                 (e.g., cargo check / tsc)                             |                    |
+                             |                                         |                    |
+                    +--------+--------+                                |                    |
+              [Pass]|           [Fail]|                                |                    |
+                    v                 v                                |                    |
+         Spawns Isolated Child   Transition Blocked                    |                    |
+         Review Subtask (<id>.1) Returns with error logs               |                    |
+         (Tools: read-only)           |                                |                    |
+                    |                 |                                |                    |
+         Audits Diffs & Security      |                                |                    |
+                    |                 |                                |                    |
+          +---------+---------+       |                                |                    |
+[APPROVED]| [CHANGES_REQUESTED|       |                                |                    |
+          |                   v       |                                |                    |
+          |         Unlocks Dev Card  |                                |                    |
+          |         Status -> 'idle'  |                                |                    |
+          |         Feedback Injected |                                |                    |
+          v                   |       |                                |                    |
+    advance_task(verdict)<----+-------+                                |                    |
+          |                                                            |                    |
+          +------------------------------------------------------------+                    |
+                                     | Relay Handoff Priming                                |
+                                     v                                                      |
+                         Executes Retro Agent                                               |
+                         * FTR Root-Cause Analysis                                          |
+                         * Rules & Ledger Update                                            |
+                                     |                                                      |
+                                     v advance_task()                                       |
+                         [Autonomous Worktree Cleanup] -------------------------------------+
+                         * Verifies zero compiler errors
+                         * Merges feat/<task-slug> into main
+                         * Removes worktree directory
+                         * Deletes feature branch
 ```
 
 ---
 
-## ✨ Killer Features
+## ⚡ Technical Highlights & Subsystems
 
-### 1. 📋 Kanban Board as the First-Class Control Plane
-- **Zero Chat Friction**: Rather than forcing work into a singular chaotic chat log, every unit of work lives in a Kanban card with strict stage transitions.
-- **Dynamic Pipelines & Multi-Boards (`.cvh/boards.json`)**: Arbitrary multi-column routing graph (`A -> B -> C -> D -> E` or `Ideation -> Spec -> Dev -> QA -> Prod`) with per-stage context window caps (`400k`, `200k`, `128k`) and model overrides.
-- **Monospace Tabular Timers (`font-mono tabular-nums`)**: Real-time stage timers (`Dev: 14m 23s`), frozen stage history timers, total elapsed duration, and glowing rework counters (`↩ Returns: 2x`).
-- **Fast-Track & Verdict Badges**: `⚡ Fast-Track: No Review`, `⚡ Fast-Track: No Retro`, and official verdicts (`✔ APPROVED`, `✔ APPROVED WITH CAVEATS`, `✖ CHANGES REQUESTED`).
+### 1. 🦀 Tauri v2 + Rust 2021 Tokio Async Engine
+The desktop runtime is engineered in Rust 2021 using the **Tokio** asynchronous runtime, eliminating GUI thread freezes. Tauri v2 provides zero-overhead native system integration (native menus, file dialogs, process spawns, window vibrancy, and single-instance locks) with rock-solid security boundaries and standard memory isolation.
 
-### 2. 💬 Card-as-a-Chat (Isolated Task Execution Streams)
-- **Individual Conversation Streams**: Clicking any task card on the board slides open the task conversation drawer.
-- **Live `<thinking>` Introspection**: Dedicated thinking block with dim monospace typography, glowing amber border, live reasoning indicator, and elapsed duration counters.
-- **Rich Markdown Viewer (`MarkdownViewer.tsx`)**: Syntax-highlighted code snippets, language headers, and one-click copy buttons.
-- **Interactive Tool Accordions & Visual Diff Viewer**:
-  - Direct exit codes, command traces, and execution timings.
-  - Dedicated **Line Gutter Diff Viewer** for `edit_file` / `str_replace` with red removals (`-`) and green additions (`+`).
-- **Interactive Steer Bar**: Bottom input bar allows injecting instructions or teaching the agent mid-flight (`steer_agent` IPC) with quick-action suggestion chips (`[▶ Продолжай]`, `[🔍 Тесты]`, `[🛑 Откати]`, `[⚡ Сжать]`).
+### 2. ⚛️ React 19 + Tailwind CSS v4 + Framer Motion
+- **React 19 Reactivity**: Utilizes fine-grained Zustand store subscriptions with `useShallow` selectors and custom `React.memo` shallow comparators to eliminate unnecessary board repaints on timer ticks or card drags.
+- **Tailwind CSS v4 Engine**: Built on the next-gen Tailwind v4 engine using native CSS variables and lightningcss compilation for instant styles.
+- **Framer Motion Micro-Interactions**: Smooth drawer reveals, animated status pills, and the signature circular wave theme reveal powered by the modern CSS View Transitions API.
 
-### 3. 🧠 Cortex Explorer («Проводник разума агентов»)
-- **VS Code-Style Mind Explorer**: Left sidebar visualizes agent minds instead of traditional filesystems.
-- **1-to-1 Column Color Sync**: Blue column = Blue folder with agent rules. Clicking any column header on the board automatically focuses and smoothly scrolls to the corresponding folder in Cortex Explorer.
-- **In-App Rule Editor (`RuleEditorModal.tsx`)**: Live syntax editing for `persona.md`, modular rules `rules/*.md`, and `settings.json` with line gutters, word counts, and `Ctrl+S` tactile persistence.
+### 3. 🗄️ High-Performance SQLite Database in WAL Mode (`.cvh/harness.db`)
+Task messages, streaming chunks, tool invocations, and thinking steps are persisted in SQLite configured with Write-Ahead Logging (`PRAGMA journal_mode = WAL`) and `PRAGMA synchronous = NORMAL`.
+- **Indexed Schema**: `dialog_items` table indexed by `(task_id, created_at)`.
+- **Zero Lock Contention**: Atomic sub-millisecond transactions prevent flat-file serialization corruption and allow simultaneous read/write access during heavy agent streaming.
 
-### 4. 🎛️ Tool Policy Matrix (Two-Level Zero-Trust Iron Barrier)
-- **Level A (Global Switches: Settings ➔ Tools)**: Master toggles for `execute_command` (bash), `read_file`,`edit_file`, `write_file`, `glob`, `grep`, `web_search`, `web_fetch`, `subagent`.
-- **Level B (Per-Stage Permissions)**: Column-level boundaries (e.g. in *Review Gate*, `edit_file` and `write_file` are locked off completely—the reviewer cannot mutate code).
-- **Strict AND-Semantics**: `effective = global_enabled && stage_override`. Stages cannot override a global disable.
-- **Zero-Trust Schema Exclusion**: Disabled tools are **completely stripped from the LLM request schemas**, saving ~2,400+ prompt tokens per step and eliminating hallucinations.
-- **Rust Iron Barrier**: Kernel-level interception in Rust returns `PermissionDenied` if a model attempts to invoke an unauthorized tool.
+### 4. 🌲 Deterministic Git Worktree Isolation Per Task
+Never suffer from AI tools overwriting your unstaged changes or breaking your active build:
+- Every task card automatically provisions an isolated worktree at `worktrees/<task-slug>` on branch `feat/<task-slug>`.
+- All file reads, edits, bash commands, and tests execute inside that dedicated directory.
+- Upon passing all review gates and receiving an `APPROVED` verdict, the branch merges cleanly into `main`, the worktree is safely unmounted and pruned, and temporary branches are reclaimed.
 
-### 5. 🗜️ State-Preserving Context Compactor & Prefix Caching
-- **Zero-LLM Log Evaporation**: Heavy terminal outputs and file dumps older than 3 turns (>500 chars) are automatically evaporated into lightweight summary tags (`[Output evaporated: 4,820 bytes. Exit: 0]`) without making LLM API calls, reclaiming up to 80% context tokens instantly.
-- **Deterministic Prefix Caching (Cache Hit Rate >= 90%)**: Tool definitions are deterministically sorted by name (`tools.sort_by(|a, b| a.name.cmp(&b.name))`) before serialization. Zero dynamic timestamps or random UUIDs in the System prompt prefix.
-- **Four Immutable Anchors**: System Prompt, initial Task Prompt (ТЗ), and the 2 most recent turns are strictly preserved to maintain KV prefix cache validity.
-- **`ContextGauge` UI**: Real-time token consumption ring gauge with one-click `⚡ Compact Context` trigger.
+### 5. 🗜️ State-Preserving Dynamic Context Compactor
+Long-running agent workflows inevitably encounter context window degradation and token exhaustion:
+- **Zero-LLM Fast Evaporation**: Terminal outputs and file dumps older than the last 2 active turns exceeding 500 characters are automatically evaporated into lightweight metadata summaries without spending a single API token.
+- **Deterministic Prefix Caching**: System messages and tool schemas are serialized in strict alphabetical order with zero dynamic timestamps or randomized session IDs in the prompt prefix, yielding **>90% provider cache hit rates**.
+- **100% Context Window Compaction Ceiling**: Compaction triggers precisely when context reaches the configured stage context window limit, ensuring full buffer utilization without premature token loss.
 
-### 6. 🌲 Native Git Worktree Isolation & Hooks
-- Managed natively by Rust via `tokio::process::Command` without shell injection or deadlocks.
-- Every task executes inside an isolated `worktrees/<task-slug>` directory on branch `feat/<task-slug>`.
-- **Custom Lifecycle Hooks**: Runs `.bat`, `.ps1`, or `.sh` on stage entry, exit, or completion with environment variables `%CVH_TASK_ID%`, `%CVH_WORKTREE_PATH%`, `%CVH_BRANCH%`, `%CVH_STAGE_ID%`, `%CVH_VERDICT%`.
+### 6. 🛡️ 2-Tier Zero-Trust Tool Policy Matrix (Strict AND-Semantics)
+Security is enforced as an ironclad barrier at both the configuration and runtime kernel levels:
+- **Level A (Global Switches)**: Enforced globally across all pipelines (`.cvh/settings/tool-policy.json`).
+- **Level B (Stage Overrides)**: Enforced per pipeline stage (e.g., Code Review stage disables `write_file` and `edit_file`).
+- **Strict AND-Semantics**: `effective(tool, stage) = global_enabled[tool] && stage_override[stage][tool]`. A stage can never re-enable a globally disabled tool.
+- **Zero-Trust Request Stripping**: Disabled tools are entirely pruned from the schema sent to the LLM, saving **~2,400+ prompt tokens per turn** and eliminating tool hallucination vectors.
 
-### 7. 🔍 Industrial SWE-bench Tools, Spilling & Custom Extensions
-- Industrial signatures: `execute_command` (alias `bash`), `read_file`, `edit_file` (`str_replace`), `write_file`, `glob`, `grep`, `subagent`.
-- **Dynamic Custom Tools**: Adding JSON schemas into `.cvh/tools/<tool>.json` auto-exposes custom commands with `{{args}}` templating.
-- **Tool Output Spilling**: Outputs >100 lines or >8 KB are saved to `.cvh/spill/<timestamp>-<tool>.log`, passing HEAD 20 + TAIL 20 lines to LLM context.
-- **`web_search`**: DuckDuckGo search (zero API key required) with Google/Bing fallback.
-- **`web_fetch`**: HTTP GET converting HTML into clean Markdown.
+### 7. 🏃 Relay Handoff Memory Priming
+Context fragmentation across multi-stage engineering pipelines is eliminated:
+- When a task transitions (`advance_task` or `reject_task`), the handover summary is recorded in `task.handover_summary`.
+- The subsequent agent receives this context pre-compiled into a top-level prompt banner:
+  ```text
+  ### [ЭСТАФЕТА ПАЙПЛАЙНА / RELAY HANDOFF]
+  Summary of previous stage execution, test results, and audit verdicts.
+  ```
+- The receiving agent starts Turn 1 with 100% memory primed—no wasted turns reading rule or log files.
 
-### 8. 🗄️ High-Performance SQLite Storage, SVG Icons & Relay Handoff
-- **SQLite Engine with WAL Mode (`.cvh/harness.db`)**: Chat messages and streaming deltas persist into an ACID SQLite database (`dialog_items` with index on `task_id, created_at`), replacing legacy flat JSON files.
-- **Relay Handoff Memory Priming**: Handover summaries from `advance_task` and `reject_task` are injected as top-level banners (`### [ЭСТАФЕТА ПАЙПЛАЙНА / RELAY HANDOFF]`), providing zero-degradation context across pipeline transitions.
-- **Backlog-to-Ready Invariant**: Inviolable board boundaries with immutable `backlog` (pos 0) and `ready` (terminal, last position) columns.
-- **SVG Persona Icons**: Full support for canonical SVG persona icons (`Bot`, `Brain`, `Cpu`, `Code2`, `ShieldCheck`, `Sparkles`, `Terminal`, `Zap`, `Flame`, `Radar`, etc.) persisted in frontmatter or JSON settings.
+### 8. 🧬 Native Subagent Delegation Hierarchy (Sync & Async)
+CVH implements a first-class subagent delegation tree:
+- **Sync Oneshot (`subagent`)**: Spawns an in-process child agent synchronously for focused subtasks, blocking until completion and returning a concise markdown report without moving cards or creating duplicate worktrees.
+- **Async Background (`subagent_bg`)**: Dispatches long-running background tasks returning an immediate `subagent_id`.
+- **Zero-Polling Collection (`collect_subagent`)**: Awaits background subagent completion via async notification channels without CPU-wasting polling loops.
+
+### 9. 🌑 Obsidian Dark Theme & Tactile Pop-Art Minimalism
+Designed for professional engineers who spend hours inside their IDE:
+- Deep obsidian dark palette (`#07090e`, `#0d1117`, `#161b22`, `#21262d`, `#f0f6fc`).
+- Monospace numerals with `tabular-nums` preventing layout shifts on live timers.
+- Deep token propagation across all nested inputs, textareas, and modals.
+- Crisp SVG iconography dynamically mapped to Lucide icons.
+- Strict anti-slop guidelines: zero pastel gradient soup, zero generic cartoon avatars, zero distracting fluff.
 
 ---
 
-## 🚀 Quickstart & Development
+## 🛠️ Industrial Tools Catalog
+
+CVH equips agents with an industrial-grade tool suite matching the SWE-bench standard:
+
+| Category | Tool | Description |
+| :--- | :--- | :--- |
+| **Pipeline Navigation** | `advance_task` / `move_task` | Moves task to next stage or specific `target_stage` with Relay Handoff summary. |
+| | `reject_task` | Rejects task with audit critique, returning card to previous stage and unlocking parent. |
+| **Subagent Hierarchy** | `subagent` | Synchronous in-process child task delegation with structured report return. |
+| | `subagent_bg` | Asynchronous background delegation returning `subagent_id`. |
+| | `collect_subagent` | Awaits completion of background subagents with zero polling overhead. |
+| **Human-in-the-Loop** | `question` / `ask_user` | Suspends agent execution and prompts the user with interactive option choices. |
+| | `todo_write` | Real-time tactical task checklist (`todos: [{content, status}]`). |
+| **Filesystem & Shell** | `read_file` | Reads UTF-8 file contents with line offsets and limits. |
+| | `write_file` | Writes full UTF-8 file contents to disk. |
+| | `edit_file` (`str_replace`) | Precise text replacement with unique pattern matching. |
+| | `glob` | Rapid pattern-based file discovery within the active worktree. |
+| | `grep` | High-speed regex text search across worktree source files. |
+| | `execute_command` (`bash`) | Runs shell commands with timeout enforcement and piped output. |
+| **Research & Web** | `web_search` | DuckDuckGo search integration with zero API key requirement. |
+| | `web_fetch` | Fetches webpage content converted into clean, readable Markdown. |
+| **Custom Tools** | `.cvh/tools/*.json` | Dynamic CLI tool integration with automatic `{{args}}` parameter interpolation. |
+
+*Note: Outputs exceeding 100 lines or 8 KB automatically spill to disk at `.cvh/spill/<timestamp>-<tool>.log`, returning only the head (20 lines) and tail (20 lines) to preserve LLM context.*
+
+---
+
+## 🚀 Quickstart Guide
 
 ### Prerequisites
-- **Node.js**: v20+ & pnpm v10+
-- **Rust Toolchain**: Rust 2021 (Cargo 1.80+)
-- **Windows Build Tools**: MSVC Build Tools for linking
+- **Node.js**: v20+ & **pnpm**: v10+
+- **Rust Toolchain**: Rust 2021 Edition (`rustc` / `cargo` 1.80+)
+- **Build Tools**:
+  - **Windows**: Visual Studio C++ Build Tools (MSVC) or MinGW
+  - **Linux**: `build-essential`, `libwebkit2gtk-4.1-dev`, `libssl-dev`
+  - **macOS**: Xcode Command Line Tools
 
-### 1. Run Web UI Control Plane (Dev Mode)
+### 1. Repository Setup & Dependencies
 ```bash
-# Start Vite development server with Hot Module Reloading
+# Clone the repository
+git clone https://github.com/voimax/CanbanVoimaxHarness.git
+cd CanbanVoimaxHarness
+
+# Install frontend dependencies
+pnpm install
+```
+
+### 2. Running in Web Development Mode
+Test and develop the React 19 interface in your web browser with instantaneous Hot Module Reloading (HMR):
+```bash
 pnpm run dev
 ```
 Open **[http://localhost:5173](http://localhost:5173)** in your browser.
 
-### 2. Run Native Desktop Application (Tauri v2)
+### 3. Running as Native Desktop Application (Tauri v2 Dev)
+Launch the desktop application with full native Rust IPC bindings, Git worktree management, and SQLite dialogue storage:
 ```bash
-# Launch native desktop application with full Rust IPC bindings
 pnpm run tauri dev
 ```
 
-### 3. Build Native Desktop Executable (`.exe`)
+### 4. Compiling Production Release Bundle
+Build a self-contained, optimized native executable:
 ```bash
-# Compiles the single self-contained binary (~22MB)
+# Build desktop release package (.exe on Windows, AppImage/.deb on Linux, .app on macOS)
 pnpm run tauri build
 ```
-Output executable:
-📁 `src-tauri/target/release/CanbanVoimaxHarness.exe`
+The optimized native binary is produced in:
+📁 `src-tauri/target/release/canban-voimax-harness.exe`
 
 ---
 
@@ -176,56 +283,85 @@ Output executable:
 
 ```text
 CanbanVoimaxHarness/
-├── AGENTS.md                # 3-Tier Governance & Multi-Agent Engineering Manual
-├── docs/                    # Architectural Guides & Manuals
-│   ├── GUIDE.md             # Complete harness & .cvh configuration manual
-│   ├── agents.md            # Agent ReAct loop, Personas, Tool Policy, and Migration
-│   ├── board.md             # Board Control Plane, Invariants, Multi-Boards, Auto-Routing
-│   └── hooks.md             # Stage transition scripts, env vars, and worktree scaffolding
-├── .cvh/                    # Project configuration for CVH
-│   ├── harness.db           # SQLite database with WAL mode (dialogue & stream storage)
-│   ├── boards.json          # Multi-board definitions & active board
-│   ├── pipeline.json        # Dynamic pipeline columns & routing graph
-│   ├── agents/              # Modular persona folders (<role>/persona.md, setting, rules/)
-│   ├── settings/            # Tool Policy Matrix (tool-policy.json)
-│   ├── tools/               # Dynamic custom tools (*.json)
-│   ├── hooks/               # Transition lifecycle scripts (.bat, .ps1)
-│   └── spill/               # Spilled tool execution logs (>100 lines / >8KB)
-├── .agents/
-│   ├── skills/              # Specialized skills catalog
-│   ├── tasks-history.json   # Machine-readable task ledger
-│   └── knowledge-graph.json # Architectural MCP knowledge graph
-├── src-tauri/               # Rust Desktop Core (Tauri v2)
+├── AGENTS.md                  # 3-Tier Multi-Agent Governance Manual & Invariants
+├── README.md                  # Showcase Presentation & Architecture Guide
+├── package.json               # Frontend dependencies (React 19, Tailwind v4, Vite)
+├── pnpm-lock.yaml             # Deterministic pnpm dependency lockfile
+├── vite.config.ts             # Vite bundling configuration
+├── tsconfig.json              # TypeScript strict configuration
+│
+├── .cvh/                      # Project Harness Control Plane Configuration
+│   ├── harness.db             # High-performance SQLite database (WAL mode)
+│   ├── boards.json            # Multi-board definitions & active board
+│   ├── pipeline.json          # Pipeline columns, routing, sensors, & hooks
+│   ├── agents/                # Modular persona definitions (<role>/persona.md)
+│   ├── settings/              # Tool Policy Matrix (tool-policy.json)
+│   ├── tools/                 # Dynamic custom CLI tools (<tool>.json)
+│   ├── hooks/                 # Transition scripts (.bat, .ps1, .sh)
+│   └── spill/                 # Spilled tool output logs (>100 lines / >8KB)
+│
+├── .agents/                   # Agent Skills Catalog & Task History
+│   ├── skills/                # Modular skills catalog
+│   ├── tasks-history.json     # Machine-readable task ledger
+│   └── knowledge-graph.json   # Architectural MCP knowledge graph
+│
+├── docs/                      # Authoritative Technical Manuals
+│   ├── GUIDE.md               # Complete harness configuration & IPC manual
+│   ├── agents.md              # ReAct loop, Personas, and Zero-Turn Priming
+│   ├── board.md               # Board Control Plane, Invariants & Multi-Boards
+│   └── hooks.md               # Stage transition lifecycle scripts & hooks
+│
+├── src-tauri/                 # Rust Desktop Core (Tauri v2)
 │   ├── src/
-│   │   ├── main.rs          # App entrypoint
-│   │   ├── lib.rs           # Tauri builder & plugin wiring
-│   │   ├── db.rs            # SQLite connection pooling & dialogue persistence
-│   │   ├── config.rs        # Dynamic .cvh parser & atomic disk writes
-│   │   ├── git.rs           # Native worktree & branch manager
-│   │   ├── hooks.rs         # Transition scripts (.bat/.ps1) runner
-│   │   ├── commands.rs      # Tauri IPC command layer
-│   │   ├── agent.rs         # ReAct loop, zero-turn priming, tool executor
+│   │   ├── main.rs            # Desktop entrypoint & crash handler
+│   │   ├── lib.rs             # Tauri plugin & IPC handler registration
+│   │   ├── db.rs              # SQLite connection pooling & WAL dialogue storage
+│   │   ├── config.rs          # .cvh config parser & auto-gitignore policy
+│   │   ├── git.rs             # Native worktree & branch manager
+│   │   ├── hooks.rs           # Stage transition script runner (.bat/.ps1/.sh)
+│   │   ├── agent.rs           # ReAct loop, zero-turn priming & tools engine
 │   │   ├── agent/
-│   │   │   └── compactor.rs # State-Preserving Context Compactor
-│   │   └── llm/
-│   │       ├── client.rs    # SSE client with deterministic prefix caching
-│   │       └── models.rs    # OpenAI & Anthropic request/response schemas
-│   ├── Cargo.toml
-│   └── tauri.conf.json
-└── src/                     # React 19 Frontend (TypeScript, Tailwind v4, Lucide)
+│   │   │   └── compactor.rs   # State-Preserving Dynamic Context Compactor
+│   │   ├── commands/          # Decoupled domain IPC submodules
+│   │   │   ├── boards.rs      # Multi-board IPC commands
+│   │   │   ├── tasks.rs       # Task lifecycle & optimistic state IPC
+│   │   │   ├── dialogs.rs     # Dialogue persistence IPC
+│   │   │   ├── git.rs         # Git worktree & diff IPC
+│   │   │   ├── cortex.rs      # Cortex rule exploration IPC
+│   │   │   ├── tools.rs       # Tool policy IPC
+│   │   │   ├── llm.rs         # Model configuration IPC
+│   │   │   └── state.rs       # Shared application state
+│   │   └── llm/               # Universal SSE streaming client & schema models
+│   ├── Cargo.toml             # Rust dependencies (Tauri, Tokio, Rusqlite, Serde)
+│   └── tauri.conf.json        # Tauri v2 bundle and window configuration
+│
+└── src/                       # React 19 Tactical Frontend
     ├── components/
-    │   ├── board/           # Dynamic Kanban Board & Columns
-    │   ├── card/            # Tactile Kanban Card & Monospace Timers
-    │   ├── cortex/          # Cortex Explorer («Проводник разума агентов»)
-    │   ├── drawer/          # Card-as-a-Chat, Live Thoughts, Diff Viewer, ContextGauge
-    │   ├── layout/          # Topbar & telemetry indicators
-    │   └── settings/        # Tool Policy Matrix Modal
-    ├── stores/              # Zustand reactive stores
-    └── App.tsx
+    │   ├── board/             # Kanban board, columns, and DND interactions
+    │   ├── card/              # Tactile Kanban card & tabular stage timers
+    │   ├── cortex/            # Cortex Explorer & in-app live rule editor
+    │   ├── drawer/            # Card-as-a-Chat, live thinking, diff sidebar
+    │   ├── layout/            # Topbar, status pills, and theme toggle
+    │   └── settings/          # Tool policy matrix & model configuration modal
+    ├── stores/                # Reactive Zustand state stores
+    ├── types/                 # Shared TypeScript domain interfaces
+    └── App.tsx                # Root layout, drag-and-drop context & overlays
 ```
 
 ---
 
-## ⚖️ License & Credits
+## 📚 Architectural Documentation Index
 
-Built with pride by the Voimax team. Designed for high-velocity autonomous engineering.
+For in-depth engineering documentation and guides:
+- **[📘 docs/GUIDE.md](docs/GUIDE.md)**: Complete harness specification, IPC API catalog, and `.cvh` configuration manual.
+- **[🤖 docs/agents.md](docs/agents.md)**: Agent ReAct loop mechanics, persona design, and tool policy enforcement.
+- **[📋 docs/board.md](docs/board.md)**: Board Control Plane invariants, multi-board templates, and automatic verdict routing.
+- **[⚡ docs/hooks.md](docs/hooks.md)**: Column transition scripts, gatekeeper sensors, and context environment variables.
+- **[🚨 AGENTS.md](AGENTS.md)**: 3-Tier Multi-Agent Governance manual, architectural invariants, and code hygiene standards.
+
+---
+
+## ⚖️ License & Open Source
+
+CanbanVoimaxHarness is licensed under the **[MIT License](LICENSE)**.  
+Engineered with precision by the Voimax team for high-velocity autonomous software development.

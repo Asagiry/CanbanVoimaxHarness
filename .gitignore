@@ -4,6 +4,7 @@
 
 # Node.js
 node_modules/
+.pnpm-store/
 dist/
 dist_app/
 .vite/
