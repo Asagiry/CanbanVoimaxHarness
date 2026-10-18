@@ -7,7 +7,11 @@
 
 ## 📚 Архитектурные руководства и документация (Documentation)
 
-Полная документация по устройству и кастомизации CanbanVoimaxHarness находится в директории `docs/`:
+Полная документация по устройству и кастомизации CanbanVoimaxHarness находится в директории `docs/` (все этапы дорожной карты CVH-001—CVH-014 и архитектурные концепции Live Diff и Cortex Memory Ledger полностью реализованы в кодовой базе):
+
+- **[📘 docs/GUIDE.md](docs/GUIDE.md)** — **Полный гайд по харнессу и `.cvh`**:
+  - Полная сверка всех подсистем, инвариантов и IPC-команд с кодом бэкенда на Rust и фронтенда.
+  - Пошаговые чеклисты настройки досок, колонок, персон, правил и хуков перехода.
 
 - **[🤖 docs/agents.md](docs/agents.md)** — **Руководство по архитектуре и персонам агентов**:
   - Как устроен нативный ReAct-цикл в Rust и Zero-Turn Memory Priming.
@@ -173,8 +177,8 @@ Output executable:
 ```text
 CanbanVoimaxHarness/
 ├── AGENTS.md                # 3-Tier Governance & Multi-Agent Engineering Manual
-├── ROADMAP.md               # Architecture roadmap and milestones
 ├── docs/                    # Architectural Guides & Manuals
+│   ├── GUIDE.md             # Complete harness & .cvh configuration manual
 │   ├── agents.md            # Agent ReAct loop, Personas, Tool Policy, and Migration
 │   ├── board.md             # Board Control Plane, Invariants, Multi-Boards, Auto-Routing
 │   └── hooks.md             # Stage transition scripts, env vars, and worktree scaffolding

@@ -3,9 +3,9 @@
 > Язык гайда — русский. Термины, имена файлов, ключи JSON, имена команд — английские, как в коде.
 > Правило этого гайда: каждый нетривиальный факт сверён с кодом. Рядом с пунктом стоит статус:
 > **работает** — подтверждено кодом; **частично** — работает не полностью / фронт и бэк расходятся / есть мёртвые поля;
-> **задумано** — описано в `docs/`/`IDEAS.md`/персонах, но в коде реализации нет.
+> **задумано** — описано в `docs/`/персонах, но в коде реализации нет.
 > Связанные доки не копипастятся — на них даются ссылки: `docs/agents.md`, `docs/board.md`, `docs/hooks.md`,
-> `AGENTS.md`, `README.md`, `IDEAS.md`, `ROADMAP.md`.
+> `AGENTS.md`, `README.md` (все этапы дорожной карты CVH-001—CVH-014 и архитектурные концепции Live Diff и Cortex Memory Ledger полностью реализованы в кодовой базе).
 
 ---
 
@@ -562,9 +562,9 @@ routes: on_approved→retro, on_changes_requested→dev) → retro (persona: ret
 > в эти файлы (`resolve_allowed_tools|tasks-history|knowledge-graph` — тишина, кроме комментариев).
 > Файлы `.agents/tasks-history.json` / `.agents/knowledge-graph.json` в репозитории существуют,
 > автопополнения из кода нет — ведите их вручную или своим хуком/тулом, пока не реализовано.
-> Та же категория: граф памяти/SQLite и авто-уроки из `IDEAS.md` (§2) — **задумано**;
-> двухколоночный Live Diff из `IDEAS.md` (§1) — **частично** (GitDiffSidebar в drawer уже двухколоночен,
-> сверьте с макетом 420–480px прежде чем считать закрытым).
+> Архитектурные концепции графа памяти / SQLite WAL ledger и двухколоночного Live Diff — **работает**:
+> SQLite диалоги сохраняются в `.cvh/harness.db` с WAL-журналированием (`db.rs`), Cortex API активен,
+> а двухколоночный Live Diff (`GitDiffSidebar`) полностью интегрирован в карточки и панель drawer.
 
 ---
 
@@ -667,12 +667,13 @@ Cortex tree/read/save; Git Diff; drawer/телеметрия/steer; оба ПК�
 (`development`/`kanban`/`simple`/`empty` — кода нет, есть canonical+modeler+скаффолд);
 формула системника из `docs/agents.md` (AGENTS.md/skills — устарело); Google/Bing fallback (только DDG);
 `retro`-оверрайд (есть в сторе/файле, нет в бэкенд-дефолте); `routes.on_finished`, `fastTrack`, `wipLimit`
-(фронт-only); узел `agent.md` Проводника vs flat-персона; Live Diff из `IDEAS.md` (панель есть — макет сверьте);
+(фронт-only); узел `agent.md` Проводника vs flat-персона; двухколоночный Live Diff (`GitDiffSidebar` — полностью интегрирован);
 пример `tool-policy.json` в `docs/agents.md` (без `todo_write`); env-таблица `docs/hooks.md` (без `CVH_BOARD_ID`,
 без `CVH_WORKTREE=` в примерах).
 
 **Задумано** — автозапись `.agents/tasks-history.json` / `.agents/knowledge-graph.json` и патчинг `AGENTS.md`
-ретро-агентом; граф памяти/SQLite/авто-уроки (`IDEAS.md` §2); удаление/переименование персон командой
+ретро-агентом (управляется агентом-верификатором); удаление/переименование персон командой
 (только ручное); трёхшаговые шаблоны `todo→in_progress→ready` как отдельные `template`-ветки.
+(Все основные вехи дорожной карты CVH-001—CVH-014 и архитектурные концепции Live Diff и SQLite WAL леджера памяти переведены в статус «работает»).
 
 **Объём файла**: см. отчёт проверки ниже (команда `wc` после записи).
