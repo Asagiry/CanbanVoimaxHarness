@@ -348,7 +348,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
         columns: vec![
             PipelineColumn {
                 id: "backlog".to_string(),
-                title: "Ожидание".to_string(),
+                title: "Backlog".to_string(),
                 color: Some("#64748b".to_string()),
                 icon: Some("Inbox".to_string()),
                 persona: None,
@@ -372,10 +372,10 @@ pub fn default_pipeline_config() -> PipelineConfig {
             },
             PipelineColumn {
                 id: "dev".to_string(),
-                title: "In Development".to_string(),
+                title: "CVH Development".to_string(),
                 color: Some("#f59e0b".to_string()),
-                icon: Some("Code2".to_string()),
-                persona: Some("developer".to_string()),
+                icon: Some("Bot".to_string()),
+                persona: Some("cvh-dev".to_string()),
                 on_enter_script: None,
                 context_window: None,
                 model_override: None,
@@ -389,55 +389,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
                     "write_file".to_string(),
                     "glob".to_string(),
                     "grep".to_string(),
-                    "subagent".to_string(),
-                ]),
-                hooks: HashMap::new(),
-                routes: None,
-                auto_run: None,
-                terminal: None,
-            },
-            PipelineColumn {
-                id: "review".to_string(),
-                title: "Review".to_string(),
-                color: Some("#8b5cf6".to_string()),
-                icon: Some("CheckSquare".to_string()),
-                persona: Some("reviewer".to_string()),
-                on_enter_script: None,
-                context_window: None,
-                model_override: None,
-                reasoning_effort: None,
-                temperature: Some(0.1),
-                gatekeeper_sensor: None,
-                allowed_tools: Some(vec![
-                    "execute_command".to_string(),
-                    "read_file".to_string(),
-                    "glob".to_string(),
-                    "grep".to_string(),
-                    "subagent".to_string(),
-                ]),
-                hooks: HashMap::new(),
-                routes: None,
-                auto_run: None,
-                terminal: None,
-            },
-            PipelineColumn {
-                id: "retro".to_string(),
-                title: "Retrospective".to_string(),
-                color: Some("#ec4899".to_string()),
-                icon: Some("History".to_string()),
-                persona: Some("retro".to_string()),
-                on_enter_script: None,
-                context_window: None,
-                model_override: None,
-                reasoning_effort: None,
-                temperature: Some(0.2),
-                gatekeeper_sensor: None,
-                allowed_tools: Some(vec![
-                    "read_file".to_string(),
-                    "glob".to_string(),
-                    "grep".to_string(),
-                    "write_file".to_string(),
-                    "edit_file".to_string(),
+                    "web_search".to_string(),
                 ]),
                 hooks: HashMap::new(),
                 routes: None,
@@ -446,7 +398,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
             },
             PipelineColumn {
                 id: "ready".to_string(),
-                title: "Ready / Done".to_string(),
+                title: "Ready".to_string(),
                 color: Some("#10b981".to_string()),
                 icon: Some("CheckCircle2".to_string()),
                 persona: None,
@@ -464,7 +416,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 hooks: HashMap::new(),
                 routes: None,
                 auto_run: None,
-                terminal: None,
+                terminal: Some(true),
             },
         ],
         boards: None,
@@ -475,7 +427,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
 pub fn default_board_def() -> BoardDef {
     BoardDef {
         id: "development".to_string(),
-        name: "Разработка".to_string(),
+        name: "Engineering Pipeline".to_string(),
         columns: default_pipeline_config().columns,
     }
 }
@@ -491,7 +443,7 @@ pub fn get_canonical_board_columns() -> Vec<PipelineColumn> {
     vec![
         PipelineColumn {
             id: "backlog".to_string(),
-            title: "Бэклог".to_string(),
+            title: "Backlog".to_string(),
             color: Some("#64748b".to_string()),
             icon: Some("Inbox".to_string()),
             persona: None,
@@ -515,10 +467,10 @@ pub fn get_canonical_board_columns() -> Vec<PipelineColumn> {
         },
         PipelineColumn {
             id: "dev".to_string(),
-            title: "В разработке".to_string(),
+            title: "CVH Development".to_string(),
             color: Some("#f59e0b".to_string()),
-            icon: Some("Code2".to_string()),
-            persona: Some("developer".to_string()),
+            icon: Some("Bot".to_string()),
+            persona: Some("cvh-dev".to_string()),
             on_enter_script: None,
             context_window: None,
             model_override: None,
@@ -532,7 +484,7 @@ pub fn get_canonical_board_columns() -> Vec<PipelineColumn> {
                 "write_file".to_string(),
                 "glob".to_string(),
                 "grep".to_string(),
-                "subagent".to_string(),
+                "web_search".to_string(),
             ]),
             hooks: HashMap::new(),
             routes: None,
@@ -541,7 +493,7 @@ pub fn get_canonical_board_columns() -> Vec<PipelineColumn> {
         },
         PipelineColumn {
             id: "ready".to_string(),
-            title: "Готово".to_string(),
+            title: "Ready".to_string(),
             color: Some("#10b981".to_string()),
             icon: Some("CheckCircle2".to_string()),
             persona: None,
@@ -887,7 +839,7 @@ pub async fn save_llm_settings_to_disk(repo_root: &Path, settings: &LlmSettings)
 
 pub const DEFAULT_AGENT_SETTING_JSON: &str = r#"{
   "model": "gemini-3.8-flash-high",
-  "context_window": 128000,
+  "context_window": 200000,
   "temperature": 0.2,
   "max_tokens": 8192
 }"#;
@@ -1034,9 +986,8 @@ pub fn resolve_hook_path(
     primary
 }
 
-/// Minimal fresh-project pipeline: exactly two columns — `backlog` (no
-/// persona, first) and `ready` (terminal, last). The first agent is created
-/// by the user via UI; the scaffold itself seeds no personas.
+/// Minimal fresh-project pipeline: 3 columns — `backlog` (no persona, first),
+/// `dev` (CVH Development with `cvh-dev` persona, middle), and `ready` (terminal, last).
 pub fn minimal_pipeline_config() -> PipelineConfig {
     PipelineConfig {
         id: "default-engineering".to_string(),
@@ -1068,8 +1019,34 @@ pub fn minimal_pipeline_config() -> PipelineConfig {
                 terminal: None,
             },
             PipelineColumn {
+                id: "dev".to_string(),
+                title: "CVH Development".to_string(),
+                color: Some("#f59e0b".to_string()),
+                icon: Some("Bot".to_string()),
+                persona: Some("cvh-dev".to_string()),
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: Some(0.2),
+                gatekeeper_sensor: None,
+                allowed_tools: Some(vec![
+                    "execute_command".to_string(),
+                    "read_file".to_string(),
+                    "edit_file".to_string(),
+                    "write_file".to_string(),
+                    "glob".to_string(),
+                    "grep".to_string(),
+                    "web_search".to_string(),
+                ]),
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            PipelineColumn {
                 id: "ready".to_string(),
-                title: "Ready / Done".to_string(),
+                title: "Ready".to_string(),
                 color: Some("#10b981".to_string()),
                 icon: Some("CheckCircle2".to_string()),
                 persona: None,
@@ -1158,7 +1135,7 @@ All agent definitions reside in dedicated directories under `.cvh/agents/<role>/
 ```text
 .cvh/agents/<role>/
 ├── persona.md       # Primary persona prompt with YAML frontmatter (or agent.md)
-├── setting          # JSON settings ({ "model": "gemini-3.8-flash-high", "context_window": 128000, "temperature": 0.2, "max_tokens": 8192 })
+├── setting          # JSON settings ({ "model": "gemini-3.8-flash-high", "context_window": 200000, "temperature": 0.2, "max_tokens": 8192 })
 └── rules/           # Modular rule files loaded during zero-turn priming
     ├── rule1.md
     └── ...
@@ -1262,11 +1239,11 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
         atomic_write_file(&config_path, &serde_json::to_string_pretty(&default_config)?).await?;
     }
 
-    // 2. pipeline.json if not present (minimal: backlog + ready only).
+    // 2. pipeline.json if not present (minimal 3 columns: backlog -> dev -> ready).
     // Если корень — git-репо (.git есть), backlog сразу получает
     // hooks {"on_enter": "builtin:create_worktree"}; иначе hooks {}.
     let pipeline_path = cvh_dir.join("pipeline.json");
-    if !pipeline_path.exists() {
+    let initial_columns = if !pipeline_path.exists() {
         let mut minimal_pipeline = minimal_pipeline_config();
         if repo_root.join(".git").exists() {
             if let Some(backlog) = minimal_pipeline.columns.iter_mut().find(|c| c.id == "backlog") {
@@ -1277,6 +1254,24 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
             }
         }
         atomic_write_file(&pipeline_path, &serde_json::to_string_pretty(&minimal_pipeline)?).await?;
+        minimal_pipeline.columns
+    } else {
+        load_pipeline_config(repo_root).await.map(|p| p.columns).unwrap_or_else(|_| minimal_pipeline_config().columns)
+    };
+
+    // 2b. boards.json if not present: seed default 3-column board with persona: 'cvh-dev'
+    let boards_path = cvh_dir.join("boards.json");
+    if !boards_path.exists() {
+        let default_board = BoardDef {
+            id: "development".to_string(),
+            name: "Engineering Pipeline".to_string(),
+            columns: initial_columns,
+        };
+        let boards_cfg = BoardsConfig {
+            active_board_id: "development".to_string(),
+            boards: vec![default_board],
+        };
+        atomic_write_file(&boards_path, &serde_json::to_string_pretty(&boards_cfg)?).await?;
     }
 
     // Seed modular cvh-dev router persona, settings, and progressive disclosure rules
@@ -1294,6 +1289,17 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
     let setting_path = cvh_dev_dir.join("setting");
     if !setting_path.exists() {
         atomic_write_file(&setting_path, DEFAULT_AGENT_SETTING_JSON).await?;
+    } else if let Ok(content) = tokio::fs::read_to_string(&setting_path).await {
+        // When seeding .cvh/agents/cvh-dev/setting, ensure 'context_window': 200000
+        if let Ok(mut val) = serde_json::from_str::<serde_json::Value>(&content) {
+            let needs_update = val.get("context_window").and_then(|v| v.as_u64()).map_or(true, |w| w < 200000);
+            if needs_update {
+                val["context_window"] = serde_json::json!(200000);
+                if let Ok(updated) = serde_json::to_string_pretty(&val) {
+                    let _ = atomic_write_file(&setting_path, &updated).await;
+                }
+            }
+        }
     }
     let boards_md_path = cvh_dev_rules_dir.join("boards.md");
     if !boards_md_path.exists() {
@@ -2115,9 +2121,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_scaffold_minimal_backlog_ready_only() {
-        // Fresh scaffold minimalism: pipeline.json holds exactly backlog
-        // (no persona, first) + ready (terminal, last); agents/ empty;
-        // the rest of the scaffold files stay in place.
+        // Fresh scaffold: pipeline.json holds exactly 3 columns:
+        // backlog (no persona, first), dev (cvh-dev persona), ready (terminal, last).
         let base_dir = std::path::PathBuf::from("target").join(format!("cvh_min_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&base_dir).await.expect("test dir");
 
@@ -2128,14 +2133,35 @@ mod tests {
             .await
             .expect("pipeline.json missing");
         let pipe: PipelineConfig = serde_json::from_str(&pipe_raw).expect("pipeline parse");
-        assert_eq!(pipe.columns.len(), 2, "minimal scaffold must have exactly 2 columns");
+        assert_eq!(pipe.columns.len(), 3, "minimal scaffold must have exactly 3 columns");
         assert_eq!(pipe.columns[0].id, "backlog");
+        assert_eq!(pipe.columns[0].title, "Backlog");
         assert_eq!(pipe.columns[0].persona, None, "backlog must have no persona");
-        assert_eq!(pipe.columns[1].id, "ready");
-        assert_eq!(pipe.columns[1].terminal, Some(true), "ready must be terminal last");
+        assert_eq!(pipe.columns[1].id, "dev");
+        assert_eq!(pipe.columns[1].title, "CVH Development");
+        assert_eq!(pipe.columns[1].persona.as_deref(), Some("cvh-dev"), "dev must have cvh-dev persona");
+        assert_eq!(pipe.columns[2].id, "ready");
+        assert_eq!(pipe.columns[2].title, "Ready");
+        assert_eq!(pipe.columns[2].terminal, Some(true), "ready must be terminal last");
+
+        // Verify boards.json is also created and has 3 columns with cvh-dev
+        let boards_raw = tokio::fs::read_to_string(cvh.join("boards.json"))
+            .await
+            .expect("boards.json missing");
+        let boards_cfg: BoardsConfig = serde_json::from_str(&boards_raw).expect("boards parse");
+        assert_eq!(boards_cfg.boards.len(), 1);
+        assert_eq!(boards_cfg.boards[0].columns.len(), 3);
+        assert_eq!(boards_cfg.boards[0].columns[1].persona.as_deref(), Some("cvh-dev"));
+
+        // cvh-dev setting must have context_window 200000
+        let cvh_dev = cvh.join("agents").join("cvh-dev");
+        let setting_raw = tokio::fs::read_to_string(cvh_dev.join("setting"))
+            .await
+            .expect("setting missing");
+        let parsed_setting: AgentSetting = serde_json::from_str(&setting_raw).expect("setting parse");
+        assert_eq!(parsed_setting.context_window, Some(200000));
 
         // cvh-dev seeded with modular rules, no flat personas
-        let cvh_dev = cvh.join("agents").join("cvh-dev");
         assert!(cvh_dev.join("persona.md").is_file());
         assert!(cvh_dev.join("rules").join("boards.md").is_file());
         let mut rd = tokio::fs::read_dir(cvh.join("agents")).await.expect("agents dir");
@@ -2367,8 +2393,8 @@ mod tests {
         assert_eq!(cfg.active_board_id, "development");
         assert_eq!(cfg.boards.len(), 1);
         assert_eq!(cfg.boards[0].id, "development");
-        assert_eq!(cfg.boards[0].name, "Разработка");
-        assert_eq!(cfg.boards[0].columns.len(), 5);
+        assert_eq!(cfg.boards[0].name, "Engineering Pipeline");
+        assert_eq!(cfg.boards[0].columns.len(), 3);
     }
 
     #[test]
@@ -2392,13 +2418,13 @@ mod tests {
         assert_eq!(cols.len(), 3);
         assert!(cols.iter().all(|c| c.model_override.is_none()));
         assert_eq!(cols[0].id, "backlog");
-        assert_eq!(cols[0].title, "Бэклог");
+        assert_eq!(cols[0].title, "Backlog");
         assert_eq!(cols[0].persona, None);
         assert_eq!(cols[1].id, "dev");
-        assert_eq!(cols[1].title, "В разработке");
-        assert_eq!(cols[1].persona.as_deref(), Some("developer"));
+        assert_eq!(cols[1].title, "CVH Development");
+        assert_eq!(cols[1].persona.as_deref(), Some("cvh-dev"));
         assert_eq!(cols[2].id, "ready");
-        assert_eq!(cols[2].title, "Готово");
+        assert_eq!(cols[2].title, "Ready");
         assert_eq!(cols[2].persona, None);
         assert_eq!(cols[2].terminal, Some(true));
     }
