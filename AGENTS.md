@@ -284,3 +284,16 @@
   2. `git worktree prune` (defensively purges any stale or dangling gitdir pointers from `.git/worktrees/`).
   3. `git branch -D <branch>` (purges merged feature branch).
 - **Test Worktree Isolation Policy**: Any automated test suite or script creating transient worktrees (such as `src-tauri/target/.../.cvh/worktrees/`) MUST register an explicit `Drop` or teardown hook that runs `git worktree prune` and deletes transient branches, guaranteeing zero metadata pollution in repository git status.
+
+### 2.24 Telemetry Accuracy & Non-Decaying TPS/RPM Metric Invariant
+- **Active Generation Time Bounding (TTFT Separation)**: Token generation speed (TPS / tok/s) MUST be measured strictly across active token generation (from `first_token_instant` to `last_token_instant`), completely excluding pre-generation reasoning setup, network latency, or Time-To-First-Token (TTFT) from output throughput calculations.
+- **Ironclad Non-Decaying TPS Invariant**: Generation speed (TPS) MUST freeze instantaneously upon generation finish (`AgentEvent::Telemetry`, tool call interception, or agent finish) and persist in reactive store state (`finalTps`). The UI is STRICTLY FORBIDDEN from calculating live TPS using continuously advancing `Date.now() - startTime` once generation ceases, preventing metrics from "melting" or decaying towards zero.
+- **Stream Options & Resilient Fallback Telemetry**: OpenAI-compatible streaming requests MUST include `stream_options: { include_usage: true }`. If a provider or local proxy fails to return an explicit usage chunk, the backend agent loop MUST autonomously calculate heuristic fallback telemetry (`estimate_text_tokens` + duration) and emit `AgentEvent::Telemetry`, guaranteeing the UI never displays dead dashes (`—`).
+- **Safe Prompt Cache Hit Rate Computation**: Cache hit percentages MUST be calculated defensively with division-by-zero guards: `safeCacheHitRate = total_input > 0 ? (cache_read / total_input) * 100.0 : 0.0`. NaN, infinite, or negative values are strictly prohibited.
+- **RPM (Requests Per Minute / Step Rate) Cadence Invariant**: Task execution cadence is tracked as `RPM = (effectiveTurns / (totalTaskSeconds / 60))` using Russian pluralization ("шаг", "шага", "шагов") and monospace numerals (`tabular-nums`), giving operators instantaneous insight into agent step velocity without UI jitter.
+- **Hierarchical Context Gauge Token Priority**: Token estimation in `ContextGauge` MUST strictly obey the resolution cascade:
+  1. Explicit `currentEstimatedTokens` prop.
+  2. In-memory compaction override (`tokenOverrides`).
+  3. Compacted tokens from persisted dialogue feed.
+  4. Verified server telemetry `inputTokens` + streamed turn output tokens (true model prompt context).
+  5. Heuristic character estimation fallback.

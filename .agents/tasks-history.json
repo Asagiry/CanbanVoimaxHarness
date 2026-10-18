@@ -1,4 +1,24 @@
 {
+    "CVH-TELEMETRY-TPS-RPM-AUDIT": {
+        "taskId": "CVH-TELEMETRY-TPS-RPM-AUDIT",
+        "title": "Audit & Verification of TPS, RPM, Safe Cache Hit Rate & Non-Decaying Telemetry",
+        "author": "agent-developer (react-tailwind-artisan & tauri-rust-engineer)",
+        "verdict": "APPROVED",
+        "commitHash": "ca983b6",
+        "commitMessage": "feat(telemetry): audit and verify TPS, RPM, safe cache hit rate, and duration tracking",
+        "summary": "Audited and verified tokens/second (tok/s, TPS), RPM step rate, token counts, cache hit rate, and execution duration across backend LLM streaming and React frontend. Added high-resolution Instant measurement from first to last token chunk, instant TPS freezing on settlement (telemetry, tool calls, finished), fallback telemetry for proxies omitting usage chunks, safe cache hit rate calculation, and priority-based true model context calculation in ContextGauge.",
+        "files": [
+            "src-tauri/src/agent.rs",
+            "src-tauri/src/llm/client.rs",
+            "src-tauri/src/llm/models.rs",
+            "src-tauri/src/commands/tasks.rs",
+            "src/stores/drawerStore.ts",
+            "src/App.tsx",
+            "src/components/drawer/AgentConsoleDrawer.tsx",
+            "src/components/drawer/ContextGauge.tsx"
+        ],
+        "timestamp": 1792336000000
+    },
     "CVH-SHOWCASE-GOOGLE-EXHIBITION": {
         "taskId": "CVH-SHOWCASE-GOOGLE-EXHIBITION",
         "title": "Google Exhibition / Demo Showcase Readiness: Flagship README, Repository Hygiene & Git Prune",
