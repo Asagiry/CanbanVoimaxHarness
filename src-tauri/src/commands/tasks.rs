@@ -1934,10 +1934,33 @@ pub async fn compact_task_context(
 #[tauri::command]
 pub async fn compact_context(
     task_id: String,
+    tool_id: Option<String>,
     app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<crate::agent::compactor::CompactionReport, String> {
     let root = state.get_root();
+
+    let tool_item_id = tool_id.unwrap_or_else(|| {
+        format!(
+            "compact_context-{}-{}",
+            task_id,
+            chrono::Utc::now().timestamp_millis()
+        )
+    });
+
+    // 0. Emit agent:tool_call immediately so chat feed displays running compact_context card
+    let _ = app_handle.emit(
+        "agent:tool_call",
+        serde_json::json!({
+            "taskId": &task_id,
+            "id": &tool_item_id,
+            "name": "compact_context",
+            "arguments": serde_json::json!({
+                "taskId": &task_id,
+                "title": "Сжатие контекста...",
+            }).to_string(),
+        }),
+    );
 
     // 1. Load LLM configuration and resolve active agent model
     let llm_settings = crate::config::load_llm_settings(&root).await.unwrap_or_default();
@@ -2083,7 +2106,6 @@ pub async fn compact_context(
         "Контекст успешно сжат. Сохранено {} токенов. Контекст сокращен с {} до {} токенов.",
         saved_tokens, tokens_before, tokens_after
     );
-    let tool_item_id = format!("compact_context-{}-{}", task_id, chrono::Utc::now().timestamp_millis());
     let tool_act_item = crate::db::ActivityItem {
         id: tool_item_id.clone(),
         item_type: "tool".to_string(),
@@ -2095,7 +2117,11 @@ pub async fn compact_context(
             "timestamp": chrono::Local::now().format("%H:%M:%S").to_string(),
             "durationMs": 0,
             "status": "success",
-            "params": { "taskId": &task_id },
+            "params": {
+                "taskId": &task_id,
+                "title": format!("Сжато (-{} токенов)", saved_tokens),
+                "savedTokens": saved_tokens,
+            },
             "stdout": &stdout_msg,
         })),
         duration_ms: Some(0.0),
@@ -2179,15 +2205,6 @@ pub async fn compact_context(
     };
 
     // 9. Emit Tauri events for compact_context tool execution card, compaction report, and telemetry
-    let _ = app_handle.emit(
-        "agent:tool_call",
-        serde_json::json!({
-            "taskId": &task_id,
-            "id": &tool_item_id,
-            "name": "compact_context",
-            "arguments": serde_json::json!({ "taskId": &task_id }).to_string(),
-        }),
-    );
     let _ = app_handle.emit(
         "agent:tool_result",
         serde_json::json!({
