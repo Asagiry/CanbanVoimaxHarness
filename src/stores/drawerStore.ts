@@ -32,6 +32,7 @@ interface DrawerState {
   activeTaskId: string | null;
   activeTab: DrawerTab;
   activityFeed: Record<string, DrawerActivityItem[]>;
+  dialogItems?: Record<string, DrawerActivityItem[]>;
   streamEntries: Record<string, { thoughts: LiveStreamEntry[]; outputs: LiveStreamEntry[] }>;
   toolExecutions: Record<string, ToolExecution[]>;
   taskTelemetry: Record<string, TaskTelemetry>;
@@ -64,6 +65,7 @@ interface DrawerState {
   setThinkingStartTime: (taskId: string, time: number | null) => void;
   setFinalTps: (taskId: string, v: number | null) => void;
   sendSteerMessage: (taskId: string, message: string) => Promise<void>;
+  injectOptimisticCompactTool: (taskId: string, customId?: string) => string;
   compactTaskContext: (taskId: string) => Promise<{ savedTokens: number; evaporatedCount: number }>;
   clearTaskLogs: (taskId: string) => Promise<void> | void;
   setTaskTokens: (taskId: string, tokens: number) => void;
@@ -92,6 +94,9 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
   activeTaskId: null,
   activeTab: 'thoughts',
   activityFeed: {},
+  get dialogItems() {
+    return this.activityFeed;
+  },
   streamEntries: {},
   toolExecutions: {},
   taskTelemetry: {},
@@ -343,14 +348,28 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         tool,
       };
 
+      const feedExists = existingFeed.some((item) => item.id === tool.id || item.tool?.id === tool.id);
+      const updatedFeed = feedExists
+        ? existingFeed.map((item) =>
+            item.id === tool.id || item.tool?.id === tool.id
+              ? { ...item, tool: { ...item.tool, ...tool } }
+              : item
+          )
+        : [...existingFeed, feedItem];
+
+      const toolExists = existing.some((t) => t.id === tool.id);
+      const updatedTools = toolExists
+        ? existing.map((t) => (t.id === tool.id ? { ...t, ...tool } : t))
+        : [tool, ...existing];
+
       return {
         toolExecutions: {
           ...state.toolExecutions,
-          [taskId]: [tool, ...existing],
+          [taskId]: updatedTools,
         },
         activityFeed: {
           ...state.activityFeed,
-          [taskId]: [...existingFeed, feedItem],
+          [taskId]: updatedFeed,
         },
       };
     });
@@ -457,7 +476,58 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
     }
   },
 
+  injectOptimisticCompactTool: (taskId, customId) => {
+    const toolId = customId || `compact_context-${taskId}-${Date.now()}`;
+    const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
+    const optimisticTool: ToolExecution = {
+      id: toolId,
+      toolName: 'compact_context',
+      timestamp,
+      durationMs: 0,
+      status: 'running',
+      params: {
+        taskId,
+        title: 'Сжатие контекста...',
+      },
+    };
+
+    const optimisticItem: DrawerActivityItem = {
+      id: toolId,
+      type: 'tool',
+      timestamp,
+      content: 'Сжатие контекста...',
+      tool: optimisticTool,
+    };
+
+    set((state) => {
+      const existingTools = state.toolExecutions[taskId] || [];
+      const existingFeed = state.activityFeed[taskId] || [];
+
+      const alreadyExists = existingFeed.some(
+        (it) => it.id === toolId || it.tool?.id === toolId
+      );
+      if (alreadyExists) return {};
+
+      return {
+        toolExecutions: {
+          ...state.toolExecutions,
+          [taskId]: [optimisticTool, ...existingTools],
+        },
+        activityFeed: {
+          ...state.activityFeed,
+          [taskId]: [...existingFeed, optimisticItem],
+        },
+      };
+    });
+
+    return toolId;
+  },
+
   compactTaskContext: async (taskId) => {
+    // 1. Immediately inject optimistic in-progress tool item into chat feed
+    const toolId = get().injectOptimisticCompactTool(taskId);
+    const startTime = performance.now();
+
     let savedTokens = 2450;
     let evaporatedCount = 0;
 
@@ -488,7 +558,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       try {
         const res = await invoke<CompactionReport>(
           'compact_context',
-          { taskId }
+          { taskId, toolId }
         );
         if (res?.saved_tokens) savedTokens = res.saved_tokens;
         if (res?.evaporated_count) evaporatedCount = Math.max(evaporatedCount, res.evaporated_count);
@@ -507,7 +577,22 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       // Keep local values
     }
 
-    // Refresh dialog feed from SQLite to load the persisted 'compacted' accordion card
+    const durationMs = Math.round(performance.now() - startTime);
+
+    // 2. Update optimistic tool item with success status & token savings
+    const stdoutMsg = `Контекст успешно сжат. Сохранено ${savedTokens} токенов.`;
+    get().updateToolExecution(taskId, toolId, {
+      status: 'success',
+      durationMs,
+      stdout: stdoutMsg,
+      params: {
+        taskId,
+        title: `Сжато (-${savedTokens} токенов)`,
+        savedTokens,
+      },
+    });
+
+    // 3. Refresh dialog feed from SQLite to load the persisted 'compacted' accordion card
     try {
       await get().loadTaskDialog(taskId);
     } catch (e) {

@@ -361,7 +361,6 @@ export default function DrawerSteerBar({
             onClick={handleCompact}
             disabled={isCompacting}
             className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] hover:border-[#d4d4d8] dark:hover:border-[#484f58] text-[#0d0d0d] dark:text-[#f0f6fc] hover:text-[#000000] dark:hover:text-[#ffffff] text-[11px] font-sans font-medium transition cursor-pointer shadow-2xs disabled:opacity-50 active:scale-[0.98]"
-            title="Сжать контекст (DSH-Style State-Preserving Compaction)"
           >
             <Minimize2 className={`h-3 w-3 text-[#4d4d4d] dark:text-[#8b949e] ${isCompacting ? 'animate-spin' : ''}`} />
             <span>{isCompacting ? 'Сжатие...' : 'Сжать контекст'}</span>

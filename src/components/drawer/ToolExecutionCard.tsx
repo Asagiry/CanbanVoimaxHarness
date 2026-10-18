@@ -359,7 +359,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
         raw = str(p.role) || str(p.description) || str(p.prompt) || '';
         break;
       case 'compact_context':
-        raw = str(p.taskId) || '';
+        raw = str(p.title) || str(p.taskId) || '';
         break;
       default: {
         const firstStr = Object.values(p).find(
@@ -408,7 +408,13 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
         return null;
       }
       case 'compact_context': {
+        if (tool.status === 'running') {
+          return 'сжатие...';
+        }
         if (tool.status === 'success') {
+          if (typeof p.savedTokens === 'number') {
+            return `-${p.savedTokens} токенов`;
+          }
           return 'compacted';
         }
         return null;

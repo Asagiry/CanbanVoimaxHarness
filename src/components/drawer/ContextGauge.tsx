@@ -311,12 +311,9 @@ export default function ContextGauge({
       }
     } else {
       try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const report = await invoke<CompactionReport>('compact_context', { taskId });
-        if (report) {
-          setTaskTokens?.(taskId, report.tokens_after);
-          saved = Math.max(saved, report.saved_tokens);
-          await useDrawerStore.getState().loadTaskDialog(taskId);
+        const res = await useDrawerStore.getState().compactTaskContext(taskId);
+        if (res) {
+          saved = Math.max(saved, res.savedTokens);
         }
       } catch {
         // Handled
