@@ -228,12 +228,10 @@
   }
   ```
 
-### 2.16 CVH-DEV & Copilot Scope Invariant: Zero-Card-Management & 3-Tier Tool Gating
-- **Zero-Card-Management Invariant**: The `cvh-dev` persona and CVH Copilot Sidecar Dock are strictly Project Configuration & Environment Specialists (`.cvh/` infrastructure, boards, pipelines, agent personas, rules, and hooks). They are strictly forbidden from creating, completing, moving, or managing task cards. Card lifecycle is strictly reserved for the human user and the pipeline orchestrator.
-- **Symmetric 3-Tier Tool Gating**: The allowed configuration tools (`CVH_DEV_TOOLS`: `read_file`, `write_file`, `edit_file`, `glob`, `grep`, `execute_command`, `web_search`) MUST be enforced at all three layers of the architecture:
-  1. *Prompt Schema Definition*: Only the 7 configuration tools are compiled into the system prompt and tool definitions sent to the LLM.
-  2. *Candidate Tool Filtering*: `active_tools.retain(|t| CVH_DEV_TOOLS.contains(&t.function.name.as_str()))` before submission to LLM.
-  3. *Runtime Defense-in-Depth Execution Gate*: `execute_tool` in `agent.rs` MUST strictly check `(role == "cvh-dev" || role == "copilot") && !CVH_DEV_TOOLS.contains(&tool)` and reject unauthorized tool calls with `PermissionDenied`.
+### 2.16 CVH-DEV & Copilot Scope Invariant: Zero-Card-Management & Authoritative Tool Policy Matrix
+- **Zero-Card-Management Invariant**: The `cvh-dev` persona and CVH Copilot Sidecar Dock are strictly Project Configuration & Environment Specialists (`.cvh/` infrastructure, boards, pipelines, agent personas, rules, and hooks). They are strictly forbidden from creating, completing, or managing task cards (§ 2.8). Card lifecycle is strictly reserved for the human user and the pipeline orchestrator.
+- **Authoritative Tool Policy Matrix Decider**: Tool permissions for all agents (including `cvh-dev`, `developer`, `reviewer`) are governed authoritatively by the Two-Level Tool Policy Matrix (`tool-policy.json`) and per-agent setting (`setting.allowed_tools`). If a tool is enabled in `tool-policy.json` (and not forbidden by `setting.allowed_tools`), the agent is permitted to use it. Hardcoded role-based tool whitelists are prohibited.
+- **Strict Role Boundary on Task Card Operations (§ 2.8)**: Task card manipulation tools (`create_task`, `create_tasks`, `complete_task`) are strictly reserved for Root Orchestrators (Level 0), human users via UI, and Sidecar Copilot. Development subagents, reviewer subagents, and `cvh-dev` are strictly forbidden from calling `create_task` or `complete_task`.
 - **UI Labeling Consistency**: UI surfaces for Copilot (`CopilotDock.tsx`, topbar badge, placeholders, empty states) MUST reflect "НАСТРОЙКА ПРОЕКТА" / "Project Configuration", never mislabeling configuration sidecars as general task creators.
 
 ### 2.17 Sidecar Copilot Dock Architecture
