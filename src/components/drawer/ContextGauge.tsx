@@ -208,8 +208,8 @@ export default function ContextGauge({
       toolDefTokens: tool,
       messageTokens: msg,
     };
-    // Лёгкие deps: только слайсы текущей задачи, а не весь стор
-  }, [taskId, currentEstimatedTokens, resolvedCompactTokens, thoughts, outputs, tools]);
+    // Лёгкие deps: слайсы текущей задачи и серверная телеметрия
+  }, [taskId, currentEstimatedTokens, resolvedCompactTokens, telemetry?.inputTokens, streamedTurnTokens, thoughts, outputs, tools]);
 
   const percent = Math.min(100, Math.max(0, Math.round((totalUsedTokens / effectiveLimit) * 100)));
 
@@ -583,7 +583,6 @@ export default function ContextGauge({
                 onClick={handleCompactClick}
                 disabled={isCompacting}
                 className="px-2.5 py-1 rounded-md bg-[#fafafa] dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] text-[11px] font-mono transition cursor-pointer disabled:opacity-50 active:scale-[0.98]"
-                title="Компактировать контекст (compact_context)"
               >
                 {isCompacting ? 'Сжатие...' : 'Компактировать'}
               </button>
