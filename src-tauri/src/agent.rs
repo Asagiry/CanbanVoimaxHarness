@@ -819,19 +819,14 @@ pub fn diff_line_tokens(expected: &str, actual: &str) -> String {
     let mut diffs = Vec::new();
     let mut k = 0;
     while k < raw_diffs.len() {
-        if k + 1 < raw_diffs.len()
-            && raw_diffs[k].0.is_some()
-            && raw_diffs[k].1.is_none()
-            && raw_diffs[k + 1].0.is_none()
-            && raw_diffs[k + 1].1.is_some()
-        {
-            diffs.push(format!(
-                "expected '{}', found '{}'",
-                raw_diffs[k].0.unwrap(),
-                raw_diffs[k + 1].1.unwrap()
-            ));
-            k += 2;
-        } else if let (Some(e), None) = raw_diffs[k] {
+        if k + 1 < raw_diffs.len() {
+            if let ((Some(exp), None), (None, Some(act))) = (raw_diffs[k], raw_diffs[k + 1]) {
+                diffs.push(format!("expected '{}', found '{}'", exp, act));
+                k += 2;
+                continue;
+            }
+        }
+        if let (Some(e), None) = raw_diffs[k] {
             diffs.push(format!("missing '{}'", e));
             k += 1;
         } else if let (None, Some(a)) = raw_diffs[k] {
@@ -1050,7 +1045,8 @@ fn replace_whitespace_relaxed(
     }
 
     let mut matches = Vec::new();
-    for idx in 0..=(file_lines.len() - m) {
+    let mut idx = 0;
+    while idx <= file_lines.len().saturating_sub(m) {
         let mut matched = true;
         for k in 0..m {
             if file_lines[idx + k].text.trim() != search_trimmed[k] {
@@ -1060,7 +1056,12 @@ fn replace_whitespace_relaxed(
         }
         if matched {
             matches.push(idx);
+            if replace_all {
+                idx += m;
+                continue;
+            }
         }
+        idx += 1;
     }
 
     if matches.is_empty() {
