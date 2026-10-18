@@ -12,6 +12,7 @@ use crate::config::{
 use crate::hooks::{execute_hook, execute_sensor_command, HookContext};
 use chrono::Utc;
 use std::collections::{HashMap, HashSet};
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -133,6 +134,15 @@ pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
         let _ = save_tasks_to_disk(repo_root, &tasks).await;
     }
 
+    // Monotonic sequence initialization: ensure persistent sequence is at least max_task_num_on_disk
+    let max_on_disk = max_task_num_on_disk(&tasks);
+    if max_on_disk > 0 {
+        let current_seq = load_task_sequence(repo_root).await;
+        if max_on_disk > current_seq {
+            let _ = save_task_sequence(repo_root, max_on_disk).await;
+        }
+    }
+
     tasks
 }
 
@@ -210,7 +220,73 @@ pub async fn save_tasks(tasks: Vec<Task>, state: State<'_, AppState>) -> Result<
     res
 }
 
-pub fn next_task_num(tasks: &[Task]) -> u32 {
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TaskSequence {
+    #[serde(default, alias = "sequence", alias = "last_task_num", alias = "lastTaskNum")]
+    pub last_task_num: u32,
+}
+
+pub async fn load_task_sequence(repo_root: &Path) -> u32 {
+    let paths = [
+        repo_root.join(".cvh").join("settings").join("sequence.json"),
+        repo_root.join(".cvh").join("task-sequence.json"),
+    ];
+
+    for path in &paths {
+        if path.exists() {
+            if let Ok(content) = tokio::fs::read_to_string(path).await {
+                let trimmed = content.trim();
+                if !trimmed.is_empty() {
+                    if let Ok(seq) = serde_json::from_str::<TaskSequence>(trimmed) {
+                        if seq.last_task_num > 0 {
+                            return seq.last_task_num;
+                        }
+                    }
+                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                        if let Some(n) = val.get("last_task_num").and_then(|v| v.as_u64()) {
+                            if n > 0 {
+                                return n as u32;
+                            }
+                        }
+                        if let Some(n) = val.get("sequence").and_then(|v| v.as_u64()) {
+                            if n > 0 {
+                                return n as u32;
+                            }
+                        }
+                    }
+                    if let Ok(n) = trimmed.parse::<u32>() {
+                        if n > 0 {
+                            return n;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    0
+}
+
+pub async fn save_task_sequence(repo_root: &Path, last_num: u32) -> Result<(), String> {
+    let settings_dir = repo_root.join(".cvh").join("settings");
+    let _ = tokio::fs::create_dir_all(&settings_dir).await;
+    let seq_path = settings_dir.join("sequence.json");
+    let content = serde_json::to_string_pretty(&serde_json::json!({
+        "last_task_num": last_num
+    }))
+    .map_err(|e| format!("Failed to serialize task sequence: {}", e))?;
+
+    atomic_write_file(&seq_path, &content)
+        .await
+        .map_err(|e| format!("Failed to save sequence file: {}", e))?;
+
+    // Also synchronize to .cvh/task-sequence.json for maximum reliability
+    let alt_path = repo_root.join(".cvh").join("task-sequence.json");
+    let _ = atomic_write_file(&alt_path, &content).await;
+
+    Ok(())
+}
+
+pub fn max_task_num_on_disk(tasks: &[Task]) -> u32 {
     let mut max_num: u32 = 0;
     for t in tasks {
         let base = t.id.split('.').next().unwrap_or(t.id.as_str());
@@ -221,12 +297,38 @@ pub fn next_task_num(tasks: &[Task]) -> u32 {
             }
         }
     }
-    // Belt & braces: skip any id that still collides (e.g. non-standard ids).
+    max_num
+}
+
+pub fn next_task_num(tasks: &[Task]) -> u32 {
+    let max_num = max_task_num_on_disk(tasks);
     let mut candidate = max_num.saturating_add(1).max(1);
     while tasks.iter().any(|t| t.id == format!("CVH-{:03}", candidate)) {
         candidate = candidate.saturating_add(1);
     }
     candidate
+}
+
+/// Allocates the next monotonic task ID, comparing stored sequence with max_on_disk.
+/// Increments monotonically: next_num = max(stored_seq, max_on_disk) + 1.
+/// Persists the incremented counter to disk immediately, preventing deleted ID reuse.
+pub async fn allocate_next_task_num(repo_root: &Path, tasks: &[Task]) -> u32 {
+    let stored_seq = load_task_sequence(repo_root).await;
+    let max_on_disk = max_task_num_on_disk(tasks);
+    let mut next_num = stored_seq.max(max_on_disk).saturating_add(1).max(1);
+
+    while tasks.iter().any(|t| t.id == format!("CVH-{:03}", next_num)) {
+        next_num = next_num.saturating_add(1);
+    }
+
+    if let Err(e) = save_task_sequence(repo_root, next_num).await {
+        eprintln!(
+            "CVH [allocate_next_task_num]: Warning - failed to persist sequence {}: {}",
+            next_num, e
+        );
+    }
+
+    next_num
 }
 
 pub fn get_next_subtask_index(tasks: &[Task], parent_id: &str) -> u32 {
@@ -289,8 +391,8 @@ pub async fn create_task(
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string());
 
-    // Generate task ID — monotonic max+1 over on-disk tasks, never len+1
-    let task_num = next_task_num(&tasks);
+    // Generate task ID — monotonic max(stored_seq, max_on_disk) + 1, persistent across deletions
+    let task_num = allocate_next_task_num(&root, &tasks).await;
     let task_id = format!("CVH-{:03}", task_num);
     let now = Utc::now().timestamp_millis();
 
@@ -594,6 +696,7 @@ pub async fn update_task(
 #[tauri::command]
 pub async fn delete_task(
     task_id: String,
+    app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let root = state.get_root();
@@ -623,6 +726,13 @@ pub async fn delete_task(
         }
     }
 
+    // Monotonic sequence preservation: ensure sequence counter records max before deletion
+    let pre_delete_max = max_task_num_on_disk(&tasks);
+    let current_seq = load_task_sequence(&root).await;
+    if pre_delete_max > current_seq {
+        let _ = save_task_sequence(&root, pre_delete_max).await;
+    }
+
     // Abort active agents for any deleted task/subtask (drop std::sync::MutexGuard before await)
     let handles: Vec<_> = {
         let mut entries = Vec::new();
@@ -641,6 +751,19 @@ pub async fn delete_task(
         let mut guard = agent_entry.join_handle.lock().await;
         if let Some(handle) = guard.take() {
             handle.abort();
+        }
+    }
+
+    // Collect branch info before removing from tasks vector
+    let is_subtask = task_id.contains('.');
+    let mut branches_to_delete = Vec::new();
+    for t in &tasks {
+        if to_delete.contains(&t.id) {
+            if let Some(ref b) = t.branch {
+                if !b.trim().is_empty() {
+                    branches_to_delete.push(b.clone());
+                }
+            }
         }
     }
 
@@ -664,8 +787,7 @@ pub async fn delete_task(
         *guard = tasks.clone();
     }
 
-    // Best-effort cleanup of git worktree and branch if top-level task
-    let is_subtask = task_id.contains('.');
+    // Robust cleanup of git worktree and branch if top-level task
     if !is_subtask {
         let task_slug = task_id.to_lowercase();
         let _ = crate::git::remove_worktree(&root, &task_slug).await;
@@ -673,10 +795,20 @@ pub async fn delete_task(
         let _ = crate::git::delete_branch(&root, &branch, true).await;
     }
 
+    for branch in branches_to_delete {
+        let _ = crate::git::delete_branch(&root, &branch, true).await;
+    }
+
+    // Defensively prune git worktree administrative records
+    let _ = crate::git::prune_worktrees(&root).await;
+
     // Best-effort cleanup of SQLite dialogue items
     for id in &to_delete {
         let _ = crate::db::clear_dialog_items(&root, id);
     }
+
+    // Broadcast tasks:updated event across application
+    let _ = app_handle.emit("tasks:updated", ());
 
     Ok(())
 }

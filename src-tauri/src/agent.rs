@@ -771,6 +771,105 @@ fn string_similarity(a: &str, b: &str) -> f32 {
     inter as f32 / union as f32
 }
 
+/// Performs string replacement with CRLF vs LF newline normalization.
+/// Handles cases where a file on Windows has `\r\n` but LLM sends `\n` (or vice versa),
+/// preserving the file's original line endings.
+pub fn replace_text_normalized(
+    current: &str,
+    old_string: &str,
+    new_string: &str,
+    replace_all: bool,
+) -> Result<String, String> {
+    // 1. Direct match first (fast path & exact match)
+    if current.contains(old_string) {
+        if !replace_all {
+            let count = current.matches(old_string).count();
+            if count > 1 {
+                return Err(format!(
+                    "Ambiguous match: 'old_string' occurs {} times in file. Set replace_all: true or supply more surrounding lines.",
+                    count
+                ));
+            }
+            return Ok(current.replacen(old_string, new_string, 1));
+        } else {
+            return Ok(current.replace(old_string, new_string));
+        }
+    }
+
+    // 2. Windows CRLF adaptation: file has \r\n, old_string has LF \n
+    let file_has_crlf = current.contains("\r\n");
+    if file_has_crlf && !old_string.contains("\r\n") && old_string.contains('\n') {
+        let crlf_old = old_string.replace('\n', "\r\n");
+        let crlf_new = new_string.replace("\r\n", "\n").replace('\n', "\r\n");
+        if current.contains(&crlf_old) {
+            if !replace_all {
+                let count = current.matches(&crlf_old).count();
+                if count > 1 {
+                    return Err(format!(
+                        "Ambiguous match: 'old_string' occurs {} times in file. Set replace_all: true or supply more surrounding lines.",
+                        count
+                    ));
+                }
+                return Ok(current.replacen(&crlf_old, &crlf_new, 1));
+            } else {
+                return Ok(current.replace(&crlf_old, &crlf_new));
+            }
+        }
+    }
+
+    // 3. Reverse adaptation: file has LF \n, old_string has CRLF \r\n
+    if !file_has_crlf && old_string.contains("\r\n") {
+        let lf_old = old_string.replace("\r\n", "\n");
+        let lf_new = new_string.replace("\r\n", "\n");
+        if current.contains(&lf_old) {
+            if !replace_all {
+                let count = current.matches(&lf_old).count();
+                if count > 1 {
+                    return Err(format!(
+                        "Ambiguous match: 'old_string' occurs {} times in file. Set replace_all: true or supply more surrounding lines.",
+                        count
+                    ));
+                }
+                return Ok(current.replacen(&lf_old, &lf_new, 1));
+            } else {
+                return Ok(current.replace(&lf_old, &lf_new));
+            }
+        }
+    }
+
+    // 4. Mixed line endings: normalize both to LF \n, perform replacement, then restore original convention
+    let norm_current = current.replace("\r\n", "\n");
+    let norm_old = old_string.replace("\r\n", "\n");
+    let norm_new = new_string.replace("\r\n", "\n");
+
+    if norm_current.contains(&norm_old) {
+        let count = norm_current.matches(&norm_old).count();
+        if !replace_all && count > 1 {
+            return Err(format!(
+                "Ambiguous match: 'old_string' occurs {} times in file. Set replace_all: true or supply more surrounding lines.",
+                count
+            ));
+        }
+
+        let norm_updated = if replace_all {
+            norm_current.replace(&norm_old, &norm_new)
+        } else {
+            norm_current.replacen(&norm_old, &norm_new, 1)
+        };
+
+        let final_updated = if file_has_crlf {
+            norm_updated.replace('\n', "\r\n")
+        } else {
+            norm_updated
+        };
+
+        return Ok(final_updated);
+    }
+
+    // Target not found under any normalization
+    Err("NOT_FOUND".to_string())
+}
+
 /// Execution context for tool calls, bundling path roots, policy, and abort handle.
 #[derive(Clone)]
 pub struct ToolContext<'a> {
@@ -1085,22 +1184,15 @@ pub async fn execute_tool(
                 .await
                 .with_context(|| format!("Failed to read file for edit: {:?}", rel_path))?;
 
-            if !current.contains(old_string) {
-                let informative_err = build_edit_mismatch_error(&current, rel_path, old_string);
-                bail!(informative_err);
-            }
-
-            let updated = if replace_all {
-                current.replace(old_string, new_string)
-            } else {
-                let count = current.matches(old_string).count();
-                if count > 1 {
-                    bail!(
-                        "Ambiguous match: 'old_string' occurs {} times in file. Set replace_all: true or supply more surrounding lines.",
-                        count
-                    );
+            let updated = match replace_text_normalized(&current, old_string, new_string, replace_all) {
+                Ok(u) => u,
+                Err(err) if err == "NOT_FOUND" => {
+                    let informative_err = build_edit_mismatch_error(&current, rel_path, old_string);
+                    bail!(informative_err);
                 }
-                current.replacen(old_string, new_string, 1)
+                Err(err) => {
+                    bail!(err);
+                }
             };
 
             crate::config::atomic_write_file(&target, &updated).await?;
@@ -1932,13 +2024,14 @@ Channel closed before completion", id)),
 
             let mut created_results = Vec::new();
             let now = chrono::Utc::now().timestamp_millis();
-            let mut next_num = crate::commands::tasks::next_task_num(&tasks);
+            let mut next_num = crate::commands::tasks::allocate_next_task_num(repo_root, &tasks).await;
 
             for input in inputs {
                 while tasks.iter().any(|t| t.id == format!("CVH-{:03}", next_num)) {
                     next_num = next_num.saturating_add(1);
                 }
                 let new_id = format!("CVH-{:03}", next_num);
+                let _ = crate::commands::tasks::save_task_sequence(repo_root, next_num).await;
                 next_num = next_num.saturating_add(1);
 
                 // Resolve target board (defaults to current task's board)

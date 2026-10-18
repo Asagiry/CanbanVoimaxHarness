@@ -1761,6 +1761,87 @@ line 2 again"
     }
 
     #[tokio::test]
+    async fn test_crlf_vs_lf_normalization_edit_file() {
+        let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("tmp")
+            .join(format!("cvh_crlf_test_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dirs");
+
+        let policy_json = r#"{"globalEnabled":{"edit_file":true,"read_file":true,"write_file":true}}"#;
+        let tool_policy: ToolPolicyConfig = serde_json::from_str(policy_json).unwrap();
+        let abort_flag = Arc::new(AtomicBool::new(false));
+
+        let tool_ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("dev"),
+            role: Some("developer"),
+            abort_handle: Arc::clone(&abort_flag),
+            tool_policy: &tool_policy,
+            task_id: None,
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: Some(0.0),
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        // 1. File on disk with Windows CRLF (\r\n)
+        let crlf_content = "line 1\r\nline 2\r\nline 3\r\nline 4\r\n";
+        let file_path = base.join("style.css");
+        tokio::fs::write(&file_path, crlf_content).await.unwrap();
+
+        // LLM sends old_string with LF (\n) - user screenshot 4 root cause
+        let old_str_lf = "line 2\nline 3\n";
+        let new_str_lf = "line 2_modified\nline 3_modified\n";
+
+        let edit_res = execute_tool(&tool_ctx, "edit_file", &serde_json::json!({
+            "file_path": "style.css",
+            "old_string": old_str_lf,
+            "new_string": new_str_lf
+        }))
+        .await
+        .expect("edit_file with CRLF file and LF old_string must succeed");
+
+        assert!(edit_res.contains("Successfully updated"));
+
+        // Verify the file on disk retains CRLF line endings
+        let updated_content = tokio::fs::read_to_string(&file_path).await.unwrap();
+        assert!(updated_content.contains("\r\n"), "File must retain CRLF line endings");
+        assert!(updated_content.contains("line 2_modified\r\nline 3_modified\r\n"));
+
+        // 2. Pure helper function unit tests for replace_text_normalized
+        let sample_crlf = "@layer base {\r\n  :root {\r\n    --bg: #000;\r\n  }\r\n}\r\n";
+        let search_lf = "  :root {\n    --bg: #000;\n  }";
+        let replace_lf = "  :root {\n    --bg: #111;\n  }";
+
+        let res = replace_text_normalized(sample_crlf, search_lf, replace_lf, false).unwrap();
+        assert!(res.contains("\r\n"), "Result must preserve CRLF");
+        assert!(res.contains("--bg: #111;\r\n"));
+
+        // 3. Reverse case: file has LF, LLM sends CRLF
+        let sample_lf = "first line\nsecond line\nthird line\n";
+        let search_crlf = "second line\r\n";
+        let replace_crlf = "2nd line\r\n";
+        let res_lf = replace_text_normalized(sample_lf, search_crlf, replace_crlf, false).unwrap();
+        assert!(!res_lf.contains("\r\n"), "Result must preserve LF");
+        assert!(res_lf.contains("first line\n2nd line\nthird line\n"));
+
+        // 4. Multiline string replacement with CRLF
+        let multiline_crlf = "header\r\nbody_part_1\r\nbody_part_2\r\nfooter\r\n";
+        let multi_search = "body_part_1\nbody_part_2";
+        let multi_replace = "new_body_content";
+        let res_multi = replace_text_normalized(multiline_crlf, multi_search, multi_replace, false).unwrap();
+        assert!(res_multi.contains("header\r\nnew_body_content\r\nfooter\r\n"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
     async fn test_worktree_glob_and_grep() {
         let base = std::path::PathBuf::from("target").join(format!("cvh_glob_grep_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(base.join("src").join("sub")).await.expect("test dirs");
