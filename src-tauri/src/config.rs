@@ -1099,7 +1099,7 @@ pub const DEFAULT_CVH_DEV_PERSONA_MD: &str = r#"---
 name: cvh-dev
 description: Use PROACTIVELY when setting up or repairing boards, pipelines, personas, or hooks.
 model: inherit
-tools: [read_file, write_file, edit_file, glob, grep, execute_command, web_search]
+tools: [read_file, write_file, edit_file, glob, grep, execute_command, web_search, web_fetch, todo_write, subagent, subagent_bg, collect_subagent, question]
 scope: gated-writes
 activation: on-enter dev runs run_agent(taskId)
 ---
@@ -1688,10 +1688,13 @@ pub const CANONICAL_TOOLS: &[&str] = &[
     "web_search",
     "web_fetch",
     "subagent",
+    "subagent_bg",
+    "collect_subagent",
     "todo_write",
     "advance_task",
     "move_task",
     "reject_task",
+    "question",
     "create_task",
     "complete_task",
 ];

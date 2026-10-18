@@ -2152,7 +2152,7 @@ line 2 again"
     }
 
     #[tokio::test]
-    async fn test_cvh_dev_seven_tools_gating_comprehensive() {
+    async fn test_cvh_dev_tools_gating_comprehensive() {
         let base = std::path::PathBuf::from("target").join(format!("cvh_dev_gate_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
 
@@ -2176,7 +2176,7 @@ line 2 again"
             call_id: None,
         };
 
-        // Allowed 7 configuration tools
+        // Allowed 13 configuration, research, delegation, and planning tools
         for tool in CVH_DEV_TOOLS {
             assert!(
                 CVH_DEV_TOOLS.contains(tool),
@@ -2184,22 +2184,38 @@ line 2 again"
                 tool
             );
         }
-        assert_eq!(CVH_DEV_TOOLS.len(), 7, "Strictly 7 tools allowed for cvh-dev");
+        assert_eq!(CVH_DEV_TOOLS.len(), 13, "Strictly 13 tools allowed for cvh-dev");
 
-        // Any non-configuration tool must be rejected with PermissionDenied
-        let forbidden_for_cvh_dev = [
+        for tool in &[
+            "read_file",
+            "write_file",
+            "edit_file",
+            "glob",
+            "grep",
+            "execute_command",
+            "web_search",
+            "web_fetch",
+            "todo_write",
             "subagent",
             "subagent_bg",
             "collect_subagent",
-            "todo_write",
+            "question",
+        ] {
+            assert!(
+                CVH_DEV_TOOLS.contains(tool),
+                "CVH_DEV_TOOLS must contain {}",
+                tool
+            );
+        }
+
+        // Any card management or pipeline progression tool must be rejected with PermissionDenied
+        let forbidden_for_cvh_dev = [
             "advance_task",
             "move_task",
             "reject_task",
-            "question",
             "create_task",
             "create_tasks",
             "complete_task",
-            "web_fetch",
         ];
 
         for tool in &forbidden_for_cvh_dev {

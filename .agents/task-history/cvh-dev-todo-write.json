@@ -1,0 +1,48 @@
+{
+  "taskId": "CVH-DEV-TODO-WRITE",
+  "task": "cvh-dev-todo-write",
+  "title": "Enable todo_write, Subagents, and Research/Questioning Tools for cvh-dev and Enforce Tactical Planning",
+  "branch": "feat/cvh-dev-todo-write",
+  "commitHash": "a54e239",
+  "commitMessage": "feat(agent): enable todo_write, subagents, and research tools for cvh-dev",
+  "author": "agent-developer (tauri-rust-engineer)",
+  "verdict": "APPROVED",
+  "date": "2026-10-18T19:44:32.179Z",
+  "timestamp": 1792352672182,
+  "sensors": {
+    "cargo_check": "pass (cargo check --tests, 0 errors, 0 warnings)",
+    "cargo_clippy": "pass (cargo clippy -- -D warnings, 0 warnings)",
+    "cargo_test": "pass (116 passed, 0 failed)",
+    "l2_reviewer": "APPROVED",
+    "l3_retro_verifier": "APPROVED"
+  },
+  "files": [
+    "AGENTS.md",
+    "src-tauri/src/agent.rs",
+    "src-tauri/src/agent/tests.rs",
+    "src-tauri/src/config.rs"
+  ],
+  "summary": "Expanded CVH_DEV_TOOLS to 13 tools (added todo_write, subagent, subagent_bg, collect_subagent, question, web_fetch) to eliminate silent Tool Policy Matrix bypass; updated BUILTIN_CVH_DEV_PROMPT process to mandate calling todo_write on Turn 1 or 2; updated CANONICAL_TOOLS and DEFAULT_CVH_DEV_PERSONA_MD frontmatter; updated Section 2.16 in AGENTS.md; and verified with test_cvh_dev_tools_gating_comprehensive.",
+  "ftrAnalysis": {
+    "firstTimeRight": true,
+    "ftrScore": "100%",
+    "verdict": "APPROVED",
+    "rootCauses": [
+      {
+        "cause": "Silent Tool Policy Matrix Bypass via Hardcoded CVH_DEV_TOOLS",
+        "detail": "In src-tauri/src/agent.rs, CVH_DEV_TOOLS hardcoded only 7 tools. Even when todo_write or subagents were enabled in tool-policy.json, active_tools.retain and execute_tool runtime gates rejected them with PermissionDenied.",
+        "resolution": "Expanded CVH_DEV_TOOLS to 13 configuration, research, delegation, and planning tools while keeping task card manipulation and pipeline progression strictly forbidden."
+      },
+      {
+        "cause": "Prompt Planning Omission",
+        "detail": "BUILTIN_CVH_DEV_PROMPT lacked an explicit instruction to publish a tactical step-by-step checklist upon startup.",
+        "resolution": "Updated BUILTIN_CVH_DEV_PROMPT under Process to mandate calling todo_write on Turn 1 or Turn 2."
+      },
+      {
+        "cause": "Frontmatter & Policy Matrix Asymmetry (CANONICAL_TOOLS)",
+        "detail": "CANONICAL_TOOLS in config.rs omitted subagent_bg, collect_subagent, and question, causing sync_persona_frontmatter_tools to drop them during policy saves.",
+        "resolution": "Added subagent_bg, collect_subagent, and question to CANONICAL_TOOLS and DEFAULT_CVH_DEV_PERSONA_MD frontmatter."
+      }
+    ]
+  }
+}
