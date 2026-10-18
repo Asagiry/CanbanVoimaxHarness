@@ -1,0 +1,42 @@
+{
+  "taskId": "CVH-DARK-THEME-COMPLETE-SWEEP",
+  "task": "dark-theme-complete-sweep",
+  "title": "Complete Dark Theme Token Sweep across all UI surfaces to eliminate EVERY unpainted/white block in dark mode",
+  "branch": "feat/dark-theme-complete-sweep",
+  "commitHash": "2561c6137683d7c04b093cbfd097d1842a3d41e6",
+  "commitMessage": "feat(ui): complete dark theme token sweep across all UI surfaces",
+  "author": "react-tailwind-artisan",
+  "verdict": "APPROVED",
+  "timestamp": 1792330800000,
+  "date": "2026-10-18T13:28:20.192Z",
+  "sensors": {
+    "typescript": "pass (tsc --noEmit, 0 errors)",
+    "rust_compiler": "pass (cargo check, 0 errors)",
+    "l2_reviewer": "APPROVED",
+    "l3_retro_verifier": "APPROVED"
+  },
+  "files": [
+    "src/components/drawer/GitDiffSidebar.tsx",
+    "src/components/drawer/ToolExecutionCard.tsx",
+    "src/components/drawer/DrawerHeader.tsx",
+    "src/components/cortex/CortexExplorer.tsx",
+    "src/components/cortex/RuleEditorModal.tsx",
+    "src/components/drawer/DrawerActivityStream.tsx",
+    "src/components/drawer/DrawerSteerBar.tsx",
+    "src/components/drawer/CompactedContextCard.tsx",
+    "src/components/drawer/ContextGauge.tsx",
+    "src/components/drawer/TaskTodoWidget.tsx",
+    "src/components/drawer/ThinkingCard.tsx",
+    "src/components/card/KanbanCard.tsx",
+    "src/components/settings/SettingsModal.tsx",
+    "src/components/settings/ToolPolicyModal.tsx",
+    "src/components/splash/SplashScreen.tsx",
+    "src/components/common/Logo.tsx",
+    "src/components/common/ErrorBoundary.tsx",
+    "src/components/copilot/CopilotDock.tsx",
+    "src/components/copilot/MarkdownContent.tsx",
+    "src/components/copilot/ThinkingCard.tsx",
+    "src/components/copilot/ToolExecutionCard.tsx"
+  ],
+  "summary": "Eliminated all unpainted white/light background blocks in dark mode across 21 UI components. Fixed GitDiffSidebar AccordionFileItem, ToolExecutionCard read/diff/preview renders and language badges, DrawerHeader stage stepper contrast and badges, CortexExplorer sidebar tree labels, modals, and context menus, as well as RuleEditorModal, DrawerActivityStream, DrawerSteerBar, CopilotDock, SettingsModal, and ToolPolicyModal. Deep token propagation verified with zero compiler or lint regressions."
+}

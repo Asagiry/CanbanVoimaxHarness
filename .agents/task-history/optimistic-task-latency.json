@@ -1,0 +1,51 @@
+{
+  "taskId": "CVH-OPTIMISTIC-TASK-LATENCY",
+  "task": "optimistic-task-latency",
+  "title": "Optimistic Task Creation & Deletion Latency on Kanban Board and React.memo Optimization",
+  "branch": "feat/optimistic-task-latency",
+  "commits": [
+    "39e93ff5f91b32cae8a4ce9bc34ad316837b558b",
+    "04d9e45b7ccde3cb1792834304dcaba0c8faea24"
+  ],
+  "commitHash": "04d9e45b7ccde3cb1792834304dcaba0c8faea24",
+  "commitMessage": "fix(board): auto-unlock parent on subtask deletion and reconcile drifting subtask id",
+  "author": "agent-developer (react-tailwind-artisan & tauri-rust-engineer)",
+  "verdict": "APPROVED_WITH_CAVEATS",
+  "caveatsAddressed": true,
+  "caveatsResolutionCommit": "04d9e45b7ccde3cb1792834304dcaba0c8faea24",
+  "timestamp": 1792329985532,
+  "date": "2026-10-18T13:26:25.532Z",
+  "sensors": {
+    "typescript": "pass (tsc --noEmit, 0 errors)",
+    "rust_compiler": "pass (cargo check --tests, 0 errors)",
+    "rust_tests": "pass (cargo test --lib, 104 passed, 0 failed)",
+    "l2_reviewer": "APPROVED_WITH_CAVEATS (all caveats resolved in commit 04d9e45)",
+    "l3_retro_verifier": "APPROVED"
+  },
+  "files": [
+    "src-tauri/src/commands/tasks.rs",
+    "src-tauri/src/lib.rs",
+    "src/components/board/KanbanBoard.tsx",
+    "src/components/board/KanbanColumn.tsx",
+    "src/components/card/KanbanCard.tsx",
+    "src/stores/boardStore.ts"
+  ],
+  "summary": "Eliminated Kanban board task creation and deletion latency (<1ms) via optimistic Zustand state updates and fine-grained React.memo rendering optimizations. 1. boardStore.addTask: Generates monotonic task ID and immediately displays optimistic task card on board before awaiting backend IPC, then silently reconciles confirmed ID and worktreePath. 2. boardStore.createSubtask: Optimistically creates subtasks and updates parent status to 'waiting_subtask' without full disk reloads (loadTasks), updating parent waitingForSubtaskId if subtask ID drifted. 3. boardStore.deleteTask & tasks.rs: Optimistically removes task and cascaded subtasks from state (<1ms) and auto-unlocks parent tasks waiting on deleted subtasks. Added delete_task IPC command with scoped mutex drops, active agent abort, worktree/branch cleanup, SQLite dialog purge, and state/disk synchronization. 4. React rendering: Wrapped KanbanCard and KanbanColumn in React.memo with custom shallow comparators (areCardPropsEqual, areColumnPropsEqual), replaced wholesale useBoardStore subscriptions with atomic selective subscriptions and useShallow, and stabilized KanbanBoard handlers with useCallback.",
+  "ftrAnalysis": {
+    "firstTimeRight": false,
+    "verdict": "APPROVED_WITH_CAVEATS",
+    "rootCauses": [
+      {
+        "cause": "Asymmetric parent-subtask deletion lifecycle",
+        "detail": "When a subtask was deleted independently, its parent card in 'waiting_subtask' status remained locked indefinitely because only downstream cascade deletion was handled, neglecting upstream parent status reset.",
+        "resolution": "Auto-unlock parent task on subtask deletion in both boardStore.deleteTask (optimistic) and Rust delete_task command by clearing waitingForSubtaskId and resetting status to 'idle'."
+      },
+      {
+        "cause": "Subtask ID drift without parent pointer reconciliation",
+        "detail": "If backend create_subtask allocated an index different from optimistic frontend prediction, the subtask in tasks array was mapped to the new ID, but parent.waitingForSubtaskId was not updated.",
+        "resolution": "Reconcile parent.waitingForSubtaskId in boardStore.createSubtask when mapping backend response."
+      }
+    ],
+    "rulesPatched": "AGENTS.md § 2.21: Optimistic Kanban Card Lifecycle & Symmetric State Invariants"
+  }
+}
