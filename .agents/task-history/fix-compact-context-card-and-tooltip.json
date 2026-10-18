@@ -1,0 +1,25 @@
+{
+  "taskId": "CVH-COMPACT-FEEDBACK-AND-TOOLTIP-REMOVAL",
+  "task": "fix-compact-context-card-and-tooltip",
+  "title": "Immediate in-chat feedback for Compact Context and removal of tooltip on 'Сжать контекст' button",
+  "branch": "feat/fix-compact-context-card-and-tooltip",
+  "commitHash": "81a4742",
+  "author": "agent-developer (tauri-rust-engineer & react-tailwind-artisan)",
+  "verdict": "APPROVED",
+  "timestamp": 1792329341009,
+  "date": "2026-10-18T13:15:41.009Z",
+  "sensors": {
+    "typescript": "pass (tsc --noEmit, 0 errors)",
+    "rust_compiler": "pass (cargo check --tests, 0 errors)",
+    "rust_tests": "pass (cargo test --lib, 104 passed, 0 failed)",
+    "l2_reviewer": "APPROVED"
+  },
+  "files": [
+    "src-tauri/src/commands/tasks.rs",
+    "src/components/drawer/ContextGauge.tsx",
+    "src/components/drawer/DrawerSteerBar.tsx",
+    "src/components/drawer/ToolExecutionCard.tsx",
+    "src/stores/drawerStore.ts"
+  ],
+  "summary": "Removed disruptive native browser tooltip from 'Сжать контекст' button in DrawerSteerBar and implemented immediate optimistic in-chat feedback for context compaction. Synchronized deterministic tool_id between React drawerStore and Rust backend compact_context command, broadcasting agent:tool_call at start, updating with execution duration and token savings badge (-X токенов) upon completion, and persisting under the exact same ID in SQLite dialog_items table to eliminate duplicate cards or UI flicker on dialog reload. Refactored ContextGauge to reuse compactTaskContext."
+}

@@ -195,6 +195,15 @@
         "Obeying § 2.13 Viewport Overlay & Flex Boundary Invariants (min-h-0, shrink-0 header, defensive flex bounds).",
         "Includes todo_write tool protocol in Rust backend agent loop with atomic persistence to tasks.json and task:updated event emission."
       ]
+    },
+    {
+      "name": "OptimisticFeedbackAndToolIdSyncInvariant",
+      "entityType": "Invariant",
+      "observations": [
+        "User-initiated heavy operations (such as context compaction) immediately inject optimistic running tool cards into activityFeed and dialogItems (<16ms).",
+        "Client generates deterministic toolId passed across IPC; backend reuses it for agent:tool_call broadcast, agent:tool_result, and SQLite dialog_items persistence, guaranteeing zero card duplication or flicker upon reload.",
+        "Native HTML title tooltips are strictly prohibited on labeled interactive buttons in desktop webview UI."
+      ]
     }
   ],
   "relations": [
@@ -352,6 +361,16 @@
       "from": "FrontendControlPlane",
       "to": "InteractiveTodoPlanWidget",
       "relationType": "contains"
+    },
+    {
+      "from": "CVH-COMPACT-FEEDBACK-AND-TOOLTIP-REMOVAL",
+      "to": "OptimisticFeedbackAndToolIdSyncInvariant",
+      "relationType": "implements"
+    },
+    {
+      "from": "StatePreservingContextCompactor",
+      "to": "OptimisticFeedbackAndToolIdSyncInvariant",
+      "relationType": "enforces"
     }
   ]
 }
