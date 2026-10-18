@@ -2152,3 +2152,263 @@ line 2 again"
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
+
+    // -------------------------------------------------------------------------
+    // Agent Loop Clean Natural Termination on Stage Transition
+    // -------------------------------------------------------------------------
+
+    async fn start_mock_sse_server(
+        sse_payload: &'static str,
+        counter: Arc<std::sync::atomic::AtomicUsize>,
+    ) -> (String, tokio::task::JoinHandle<()>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind mock listener");
+        let port = listener.local_addr().expect("local addr").port();
+        let base_url = format!("http://127.0.0.1:{}", port);
+
+        let handle = tokio::spawn(async move {
+            while let Ok((mut socket, _)) = listener.accept().await {
+                counter.fetch_add(1, Ordering::SeqCst);
+                tokio::spawn(async move {
+                    let mut buf = [0u8; 4096];
+                    let _ = socket.read(&mut buf).await;
+                    let body = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n{}",
+                        sse_payload
+                    );
+                    let _ = socket.write_all(body.as_bytes()).await;
+                    let _ = socket.flush().await;
+                    let _ = socket.shutdown().await;
+                });
+            }
+        });
+
+        (base_url, handle)
+    }
+
+    #[tokio::test]
+    async fn test_agent_loop_natural_exit_on_advance_task() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_natural_exit_adv_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+
+        let (boards_cfg, _) = make_test_board(&base);
+        crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
+
+        // Seed task in dev stage
+        let task = make_test_task("CVH-081", "dev", "test-board");
+        crate::commands::tasks::save_tasks_to_disk(&base, &[task]).await.expect("save task");
+
+        let sse_stream = "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_adv_01\",\"function\":{\"name\":\"advance_task\",\"arguments\":\"{\\\"summary\\\":\\\"Feature implemented successfully\\\"}\"}}]}}]}
+
+data: [DONE]
+
+";
+        let request_counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let (base_url, server_handle) = start_mock_sse_server(sse_stream, Arc::clone(&request_counter)).await;
+
+        let config = AgentSessionConfig {
+            repo_root: base.clone(),
+            worktree_path: base.clone(),
+            role: "developer".to_string(),
+            stage_id: "dev".to_string(),
+            task_id: "CVH-081".to_string(),
+            task_title: "Implement feature".to_string(),
+            task_description: "Do work".to_string(),
+            handover_summary: None,
+            steer_prompt: None,
+            base_url,
+            api_key: None,
+            model: "test-model".to_string(),
+            temperature: None,
+            reasoning_effort: None,
+            max_turns: 10,
+            app_handle: None,
+            context_window: None,
+        };
+
+        let abort_flag = Arc::new(AtomicBool::new(false));
+        let events = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let events_clone = Arc::clone(&events);
+
+        let result = run_agent_loop(config, abort_flag, move |ev| {
+            events_clone.lock().unwrap().push(ev);
+        })
+        .await
+        .expect("run_agent_loop must succeed");
+
+        server_handle.abort();
+
+        // 1. Result should indicate success
+        assert!(result.contains("УСПЕШНО"), "got: {}", result);
+        assert!(result.contains("review"), "got: {}", result);
+
+        // 2. Only 1 request was sent to the LLM (zero extra turns)
+        assert_eq!(request_counter.load(Ordering::SeqCst), 1, "Expected exactly 1 request to LLM, no extra turns");
+
+        // 3. Emitted events must contain Finished with final_response == result
+        let captured = events.lock().unwrap();
+        let finished_event = captured.iter().find(|e| matches!(e, AgentEvent::Finished { .. }));
+        assert!(finished_event.is_some(), "AgentEvent::Finished must be emitted");
+        if let Some(AgentEvent::Finished { final_response }) = finished_event {
+            assert_eq!(final_response, &result);
+        }
+
+        // 4. Verify task state on disk advanced to "review"
+        let tasks = crate::commands::tasks::load_tasks_from_disk(&base).await;
+        let t = tasks.iter().find(|t| t.id == "CVH-081").expect("task found");
+        assert_eq!(t.stage_id, "review");
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_agent_loop_natural_exit_on_move_task() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_natural_exit_mov_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+
+        let (boards_cfg, _) = make_test_board(&base);
+        crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
+
+        // Seed task in dev stage
+        let task = make_test_task("CVH-083", "dev", "test-board");
+        crate::commands::tasks::save_tasks_to_disk(&base, &[task]).await.expect("save task");
+
+        let sse_stream = "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_mov_01\",\"function\":{\"name\":\"move_task\",\"arguments\":\"{\\\"stage_id\\\":\\\"ready\\\",\\\"summary\\\":\\\"Fast-track to ready\\\"}\"}}]}}]}
+
+data: [DONE]
+
+";
+        let request_counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let (base_url, server_handle) = start_mock_sse_server(sse_stream, Arc::clone(&request_counter)).await;
+
+        let config = AgentSessionConfig {
+            repo_root: base.clone(),
+            worktree_path: base.clone(),
+            role: "developer".to_string(),
+            stage_id: "dev".to_string(),
+            task_id: "CVH-083".to_string(),
+            task_title: "Fast-track task".to_string(),
+            task_description: "Move straight to ready".to_string(),
+            handover_summary: None,
+            steer_prompt: None,
+            base_url,
+            api_key: None,
+            model: "test-model".to_string(),
+            temperature: None,
+            reasoning_effort: None,
+            max_turns: 10,
+            app_handle: None,
+            context_window: None,
+        };
+
+        let abort_flag = Arc::new(AtomicBool::new(false));
+        let events = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let events_clone = Arc::clone(&events);
+
+        let result = run_agent_loop(config, abort_flag, move |ev| {
+            events_clone.lock().unwrap().push(ev);
+        })
+        .await
+        .expect("run_agent_loop must succeed");
+
+        server_handle.abort();
+
+        // 1. Result should indicate success and target column ready
+        assert!(result.contains("УСПЕШНО"), "got: {}", result);
+        assert!(result.contains("ready"), "got: {}", result);
+
+        // 2. Only 1 request was sent to the LLM (zero extra turns)
+        assert_eq!(request_counter.load(Ordering::SeqCst), 1, "Expected exactly 1 request to LLM, no extra turns");
+
+        // 3. Emitted events must contain Finished with final_response == result
+        let captured = events.lock().unwrap();
+        let finished_event = captured.iter().find(|e| matches!(e, AgentEvent::Finished { .. }));
+        assert!(finished_event.is_some(), "AgentEvent::Finished must be emitted");
+        if let Some(AgentEvent::Finished { final_response }) = finished_event {
+            assert_eq!(final_response, &result);
+        }
+
+        // 4. Verify task state on disk advanced to "ready"
+        let tasks = crate::commands::tasks::load_tasks_from_disk(&base).await;
+        let t = tasks.iter().find(|t| t.id == "CVH-083").expect("task found");
+        assert_eq!(t.stage_id, "ready");
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_agent_loop_natural_exit_on_reject_task() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_natural_exit_rej_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+
+        let (boards_cfg, _) = make_test_board(&base);
+        crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
+
+        // Seed task in review stage
+        let task = make_test_task("CVH-082", "review", "test-board");
+        crate::commands::tasks::save_tasks_to_disk(&base, &[task]).await.expect("save task");
+
+        let sse_stream = "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_rej_01\",\"function\":{\"name\":\"reject_task\",\"arguments\":\"{\\\"reason\\\":\\\"Unit test failure\\\"}\"}}]}}]}
+
+data: [DONE]
+
+";
+        let request_counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let (base_url, server_handle) = start_mock_sse_server(sse_stream, Arc::clone(&request_counter)).await;
+
+        let config = AgentSessionConfig {
+            repo_root: base.clone(),
+            worktree_path: base.clone(),
+            role: "reviewer".to_string(),
+            stage_id: "review".to_string(),
+            task_id: "CVH-082".to_string(),
+            task_title: "Review feature".to_string(),
+            task_description: "Audit code".to_string(),
+            handover_summary: None,
+            steer_prompt: None,
+            base_url,
+            api_key: None,
+            model: "test-model".to_string(),
+            temperature: None,
+            reasoning_effort: None,
+            max_turns: 10,
+            app_handle: None,
+            context_window: None,
+        };
+
+        let abort_flag = Arc::new(AtomicBool::new(false));
+        let events = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let events_clone = Arc::clone(&events);
+
+        let result = run_agent_loop(config, abort_flag, move |ev| {
+            events_clone.lock().unwrap().push(ev);
+        })
+        .await
+        .expect("run_agent_loop must succeed");
+
+        server_handle.abort();
+
+        // 1. Result should indicate rejected / returned to dev
+        assert!(result.contains("Задача CVH-082 перемещена на этап 'dev'") || result.contains("ОТКЛОНЕНО") || result.contains("возвращена"), "got: {}", result);
+
+        // 2. Only 1 request was sent to the LLM (zero extra turns)
+        assert_eq!(request_counter.load(Ordering::SeqCst), 1, "Expected exactly 1 request to LLM, no extra turns");
+
+        // 3. Emitted events must contain Finished with final_response == result
+        let captured = events.lock().unwrap();
+        let finished_event = captured.iter().find(|e| matches!(e, AgentEvent::Finished { .. }));
+        assert!(finished_event.is_some(), "AgentEvent::Finished must be emitted");
+        if let Some(AgentEvent::Finished { final_response }) = finished_event {
+            assert_eq!(final_response, &result);
+        }
+
+        // 4. Verify task state on disk returned to "dev" with status "idle"
+        let tasks = crate::commands::tasks::load_tasks_from_disk(&base).await;
+        let t = tasks.iter().find(|t| t.id == "CVH-082").expect("task found");
+        assert_eq!(t.stage_id, "dev");
+        assert_eq!(t.status.as_deref(), Some("idle"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
