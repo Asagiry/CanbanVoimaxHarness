@@ -2152,7 +2152,7 @@ line 2 again"
     }
 
     #[tokio::test]
-    async fn test_cvh_dev_tools_gating_comprehensive() {
+    async fn test_cvh_dev_tool_policy_matrix_gating_and_card_invariants() {
         let base = std::path::PathBuf::from("target").join(format!("cvh_dev_gate_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
 
@@ -2176,52 +2176,12 @@ line 2 again"
             call_id: None,
         };
 
-        // Allowed 13 configuration, research, delegation, and planning tools
-        for tool in CVH_DEV_TOOLS {
-            assert!(
-                CVH_DEV_TOOLS.contains(tool),
-                "CVH_DEV_TOOLS must contain {}",
-                tool
-            );
-        }
-        assert_eq!(CVH_DEV_TOOLS.len(), 13, "Strictly 13 tools allowed for cvh-dev");
-
-        for tool in &[
-            "read_file",
-            "write_file",
-            "edit_file",
-            "glob",
-            "grep",
-            "execute_command",
-            "web_search",
-            "web_fetch",
-            "todo_write",
-            "subagent",
-            "subagent_bg",
-            "collect_subagent",
-            "question",
-        ] {
-            assert!(
-                CVH_DEV_TOOLS.contains(tool),
-                "CVH_DEV_TOOLS must contain {}",
-                tool
-            );
-        }
-
-        // Any card management or pipeline progression tool must be rejected with PermissionDenied
-        let forbidden_for_cvh_dev = [
-            "advance_task",
-            "move_task",
-            "reject_task",
-            "create_task",
-            "create_tasks",
-            "complete_task",
-        ];
-
-        for tool in &forbidden_for_cvh_dev {
-            let err = execute_tool(&cvh_dev_ctx, tool, &serde_json::json!({}))
+        // 1. § 2.8 Invariant: Task card manipulation tools are strictly forbidden for cvh-dev
+        let forbidden_card_tools = ["create_task", "create_tasks", "complete_task"];
+        for tool in &forbidden_card_tools {
+            let err = execute_tool(&cvh_dev_ctx, tool, &serde_json::json!({ "title": "Test" }))
                 .await
-                .expect_err(&format!("Tool '{}' must be forbidden for cvh-dev", tool));
+                .expect_err(&format!("Tool '{}' must be forbidden for cvh-dev per § 2.8", tool));
 
             assert!(
                 err.to_string().contains("PermissionDenied"),
@@ -2235,6 +2195,24 @@ line 2 again"
                 err
             );
         }
+
+        // 2. Tools allowed by the Tool Policy Matrix (including todo_write) work for cvh-dev
+        let todo_res = execute_tool(&cvh_dev_ctx, "todo_write", &serde_json::json!({
+            "todos": [{ "content": "Configure pipeline", "status": "in_progress" }]
+        })).await;
+        assert!(todo_res.is_ok(), "todo_write must succeed for cvh-dev when allowed by policy, got: {:?}", todo_res.err());
+
+        // 3. When policy disables a tool, cvh-dev is denied by the Tool Policy Matrix
+        let mut restricted_policy = ToolPolicyConfig::default();
+        restricted_policy.global_enabled.insert("web_search".to_string(), false);
+        let restricted_ctx = ToolContext {
+            tool_policy: &restricted_policy,
+            ..cvh_dev_ctx
+        };
+        let search_err = execute_tool(&restricted_ctx, "web_search", &serde_json::json!({ "query": "rust" }))
+            .await
+            .expect_err("web_search must be denied when disabled in tool-policy");
+        assert!(search_err.to_string().contains("PermissionDenied"));
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }

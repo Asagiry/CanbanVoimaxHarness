@@ -1738,7 +1738,7 @@ impl Default for ToolPolicyConfig {
     fn default() -> Self {
         let mut stage_overrides = HashMap::new();
 
-        // Review stage: read_file, grep, glob, bash read-only enabled; edit_file, write_file disabled; orchestrator tools disabled
+        // Review stage: read-only code tools; web, subagent, todo_write, navigation enabled; edit/write disabled; task card manipulation disabled (§ 2.8)
         let mut review_map = HashMap::new();
         review_map.insert("read_file".to_string(), true);
         review_map.insert("grep".to_string(), true);
@@ -1749,6 +1749,7 @@ impl Default for ToolPolicyConfig {
         review_map.insert("web_search".to_string(), true);
         review_map.insert("web_fetch".to_string(), true);
         review_map.insert("subagent".to_string(), true);
+        review_map.insert("subagent_bg".to_string(), true);
         review_map.insert("todo_write".to_string(), true);
         review_map.insert("advance_task".to_string(), true);
         review_map.insert("reject_task".to_string(), true);
@@ -1757,7 +1758,7 @@ impl Default for ToolPolicyConfig {
         review_map.insert("complete_task".to_string(), false);
         stage_overrides.insert("review".to_string(), review_map);
 
-        // Dev stage: write enabled, web_search disabled
+        // Dev stage: code editing, bash, search, fetch, subagent, todo_write enabled; card tools enabled for orchestrator tasks in dev
         let mut dev_map = HashMap::new();
         dev_map.insert("execute_command".to_string(), true);
         dev_map.insert("read_file".to_string(), true);
@@ -1765,9 +1766,10 @@ impl Default for ToolPolicyConfig {
         dev_map.insert("write_file".to_string(), true);
         dev_map.insert("glob".to_string(), true);
         dev_map.insert("grep".to_string(), true);
-        dev_map.insert("web_search".to_string(), false);
+        dev_map.insert("web_search".to_string(), true);
         dev_map.insert("web_fetch".to_string(), true);
         dev_map.insert("subagent".to_string(), true);
+        dev_map.insert("subagent_bg".to_string(), true);
         dev_map.insert("todo_write".to_string(), true);
         dev_map.insert("advance_task".to_string(), true);
         dev_map.insert("reject_task".to_string(), true);
@@ -1775,6 +1777,25 @@ impl Default for ToolPolicyConfig {
         dev_map.insert("create_task".to_string(), true);
         dev_map.insert("complete_task".to_string(), true);
         stage_overrides.insert("dev".to_string(), dev_map);
+
+        // Retro stage: audit and ledger logging enabled; search, fetch, subagent, todo enabled; edit/task-creation disabled
+        let mut retro_map = HashMap::new();
+        retro_map.insert("read_file".to_string(), true);
+        retro_map.insert("execute_command".to_string(), true);
+        retro_map.insert("write_file".to_string(), true);
+        retro_map.insert("glob".to_string(), true);
+        retro_map.insert("grep".to_string(), true);
+        retro_map.insert("web_search".to_string(), true);
+        retro_map.insert("web_fetch".to_string(), true);
+        retro_map.insert("subagent".to_string(), true);
+        retro_map.insert("subagent_bg".to_string(), true);
+        retro_map.insert("todo_write".to_string(), true);
+        retro_map.insert("advance_task".to_string(), true);
+        retro_map.insert("reject_task".to_string(), true);
+        retro_map.insert("question".to_string(), true);
+        retro_map.insert("create_task".to_string(), false);
+        retro_map.insert("complete_task".to_string(), false);
+        stage_overrides.insert("retro".to_string(), retro_map);
 
         // Backlog stage: orchestration enabled
         let mut backlog_map = HashMap::new();
@@ -1945,6 +1966,10 @@ pub async fn sync_tool_policies_to_personas(
         Err(_) => return Ok(()),
     };
 
+    // Load pipeline and boards dynamically to resolve persona -> stage column mapping
+    let pipeline = load_pipeline_config(root).await.ok();
+    let boards = load_boards_config(root).await.ok();
+
     while let Ok(Some(entry)) = dir_entries.next_entry().await {
         let path = entry.path();
         if !path.is_dir() {
@@ -1968,34 +1993,60 @@ pub async fn sync_tool_policies_to_personas(
             Err(_) => continue,
         };
 
-        // Determine effective stage/role identifier for policy lookup
-        let stage_target: Option<&str> = if config.stage_overrides.contains_key(&role) {
-            Some(&role)
-        } else if role == "developer" || role == "dev" {
-            Some("dev")
-        } else if role == "reviewer" || role == "review" {
-            Some("review")
-        } else if role == "retrospective" || role == "retro" {
-            Some("retro")
-        } else if role == "orchestrator" {
-            Some("orchestrator")
+        // Determine effective stage/role identifier for policy lookup dynamically:
+        // 1. Direct match in stage_overrides (e.g. stage_overrides has "reviewer" or "cvh-dev")
+        // 2. Column in pipeline where column.persona == role or column.id == role
+        // 3. Column in boards where column.persona == role or column.id == role
+        // 4. Fallback convention for minimal environments: developer -> dev, reviewer -> review, retro -> retro
+        let stage_target: Option<String> = if config.stage_overrides.contains_key(&role) {
+            Some(role.clone())
         } else {
-            None
+            let from_pipeline = pipeline.as_ref().and_then(|p| {
+                p.columns.iter().find(|col| {
+                    col.persona.as_deref() == Some(&role) || col.id == role
+                }).map(|col| col.id.clone())
+            });
+
+            let from_boards = from_pipeline.or_else(|| {
+                boards.as_ref().and_then(|b| {
+                    for board in &b.boards {
+                        if let Some(col) = board.columns.iter().find(|col| {
+                            col.persona.as_deref() == Some(&role) || col.id == role
+                        }) {
+                            return Some(col.id.clone());
+                        }
+                    }
+                    None
+                })
+            });
+
+            from_boards.or_else(|| {
+                if role == "developer" && config.stage_overrides.contains_key("dev") {
+                    Some("dev".to_string())
+                } else if role == "reviewer" && config.stage_overrides.contains_key("review") {
+                    Some("review".to_string())
+                } else if (role == "retrospective" || role == "retro") && config.stage_overrides.contains_key("retro") {
+                    Some("retro".to_string())
+                } else {
+                    None
+                }
+            })
         };
+
+        let is_orchestrator = role.to_lowercase().contains("orchestrat")
+            || role.to_lowercase().contains("оркестрат")
+            || stage_target.as_deref().map(|s| s.to_lowercase()).unwrap_or_default().contains("orchestrat")
+            || stage_target.as_deref().map(|s| s.to_lowercase()).unwrap_or_default().contains("оркестрат")
+            || stage_target.as_deref() == Some("backlog")
+            || role == "copilot";
 
         let mut enabled_tools = Vec::new();
         for &tool in CANONICAL_TOOLS {
-            // Respect special role restrictions
-            if role == "cvh-dev" && !crate::agent::CVH_DEV_TOOLS.contains(&tool) {
+            // § 2.8 Invariant: create_task and complete_task are strictly reserved for orchestrators
+            if (tool == "create_task" || tool == "complete_task") && !is_orchestrator {
                 continue;
             }
-            if (role == "developer" || role == "dev")
-                && (tool == "create_task" || tool == "complete_task")
-            {
-                // § 2.8 Development Subagents and cvh-dev are STRICTLY FORBIDDEN from calling create_task or complete_task
-                continue;
-            }
-            if is_tool_allowed(config, stage_target, tool) {
+            if is_tool_allowed(config, stage_target.as_deref(), tool) {
                 enabled_tools.push(tool);
             }
         }
