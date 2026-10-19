@@ -93,6 +93,7 @@ pub fn run() {
             save_task_dialog,
             load_task_dialog,
             load_subagent_dialog,
+            list_subagents,
             retry_subagent,
             clear_task_dialog,
             log_ui_error,

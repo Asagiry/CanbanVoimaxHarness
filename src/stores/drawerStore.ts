@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { LiveStreamEntry, ToolExecution, ActivityItem, ActivityType, CompactionReport } from '../types';
+import { LiveStreamEntry, ToolExecution, ActivityItem, ActivityType, CompactionReport, SubagentInfo, SubagentStatus } from '../types';
 
 export type DrawerTab = 'thoughts' | 'output' | 'tools';
 
@@ -57,6 +57,7 @@ interface DrawerState {
   activeSubagentPrompt: string | null;
   toolIdToSubagentId: Record<string, string>;
   subagentIdToToolId: Record<string, string>;
+  subagents: Record<string, SubagentInfo[]>;
 
   // Actions
   setActiveAgentTask: (taskId: string, isActive: boolean) => void;
@@ -96,6 +97,10 @@ interface DrawerState {
   openSubagent: (subagentId: string, title: string, role: string, prompt: string) => void;
   closeSubagent: () => void;
   loadSubagentDialog: (parentTaskId: string, subagentId: string) => Promise<void>;
+  loadSubagents: (parentTaskId: string) => Promise<void>;
+  registerSubagent: (parentTaskId: string, subagent: SubagentInfo) => void;
+  updateSubagentStatus: (subagentId: string, status: SubagentStatus, error?: string) => void;
+  recordSubagentStep: (subagentId: string, activity?: DrawerActivityItem) => void;
   addQuestion: (
     taskId: string,
     question: {
@@ -136,6 +141,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
   activeSubagentPrompt: null,
   toolIdToSubagentId: {},
   subagentIdToToolId: {},
+  subagents: {},
 
   setActiveAgentTask: (taskId, isActive) => {
     if (!taskId) return;
@@ -228,6 +234,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       activeSubagentPrompt: null,
     });
     get().loadTaskDialog(taskId);
+    get().loadSubagents(taskId);
   },
 
   closeDrawer: () => {
@@ -1165,6 +1172,146 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
     }
   },
 
+  loadSubagents: async (parentTaskId) => {
+    if (!parentTaskId) return;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const loaded = await invoke<SubagentInfo[]>('list_subagents', { parentTaskId });
+      if (loaded && Array.isArray(loaded)) {
+        set((state) => {
+          const existing = state.subagents[parentTaskId] || [];
+          const mergedMap = new Map<string, SubagentInfo>();
+          for (const item of loaded) {
+            mergedMap.set(item.id, item);
+          }
+          for (const ex of existing) {
+            if (mergedMap.has(ex.id)) {
+              const current = mergedMap.get(ex.id)!;
+              mergedMap.set(ex.id, {
+                ...current,
+                status: ex.status === 'running' ? 'running' : current.status,
+                stepsCount: Math.max(current.stepsCount, ex.stepsCount),
+                durationMs: ex.durationMs ?? current.durationMs,
+              });
+            } else {
+              mergedMap.set(ex.id, ex);
+            }
+          }
+          return {
+            subagents: {
+              ...state.subagents,
+              [parentTaskId]: Array.from(mergedMap.values()),
+            },
+          };
+        });
+      }
+    } catch {
+      // In web or mock mode, extract from toolExecutions & activityFeed
+      const state = get();
+      const tools = state.toolExecutions[parentTaskId] || [];
+      const derived: SubagentInfo[] = [];
+      for (const t of tools) {
+        if (t.toolName === 'subagent' || t.toolName === 'subagent_bg') {
+          const params = (t.params as any) || {};
+          const subId = params.subagent_id || state.toolIdToSubagentId[t.id] || t.id;
+          const feed = state.activityFeed[subId] || [];
+          derived.push({
+            id: subId,
+            parentTaskId,
+            toolCallId: t.id,
+            title: params.title || params.prompt?.slice(0, 50) || 'Субагент',
+            role: params.role || 'general',
+            prompt: params.prompt || '',
+            status: t.status === 'running' ? 'running' : t.status === 'failed' ? 'error' : 'finished',
+            durationMs: t.durationMs,
+            stepsCount: feed.length,
+          });
+        }
+      }
+      if (derived.length > 0) {
+        set((s) => ({
+          subagents: {
+            ...s.subagents,
+            [parentTaskId]: derived,
+          },
+        }));
+      }
+    }
+  },
+
+  registerSubagent: (parentTaskId, subagent) => {
+    if (!parentTaskId || !subagent?.id) return;
+    set((state) => {
+      const list = state.subagents[parentTaskId] || [];
+      const idx = list.findIndex(
+        (s) => s.id === subagent.id || (subagent.toolCallId && s.toolCallId === subagent.toolCallId)
+      );
+      let nextList: SubagentInfo[];
+      if (idx >= 0) {
+        nextList = [...list];
+        nextList[idx] = { ...nextList[idx], ...subagent };
+      } else {
+        nextList = [...list, subagent];
+      }
+      return {
+        subagents: {
+          ...state.subagents,
+          [parentTaskId]: nextList,
+        },
+      };
+    });
+  },
+
+  updateSubagentStatus: (subagentId, status, error) => {
+    if (!subagentId) return;
+    set((state) => {
+      let changed = false;
+      const nextSubagents: Record<string, SubagentInfo[]> = {};
+      for (const [taskId, list] of Object.entries(state.subagents)) {
+        let listChanged = false;
+        const updatedList = list.map((s) => {
+          if (s.id === subagentId || (s.toolCallId && s.toolCallId === subagentId)) {
+            listChanged = true;
+            changed = true;
+            return {
+              ...s,
+              status,
+              lastError: error || s.lastError,
+              durationMs: s.durationMs ?? (s.createdAt ? Date.now() - s.createdAt : undefined),
+            };
+          }
+          return s;
+        });
+        nextSubagents[taskId] = listChanged ? updatedList : list;
+      }
+      return changed ? { subagents: nextSubagents } : state;
+    });
+  },
+
+  recordSubagentStep: (subagentId, _activity) => {
+    if (!subagentId) return;
+    set((state) => {
+      let changed = false;
+      const nextSubagents: Record<string, SubagentInfo[]> = {};
+      for (const [taskId, list] of Object.entries(state.subagents)) {
+        let listChanged = false;
+        const updatedList = list.map((s) => {
+          if (s.id === subagentId || (s.toolCallId && s.toolCallId === subagentId)) {
+            listChanged = true;
+            changed = true;
+            return {
+              ...s,
+              stepsCount: (s.stepsCount || 0) + 1,
+            };
+          }
+          return s;
+        });
+        nextSubagents[taskId] = listChanged ? updatedList : list;
+      }
+      return changed ? { subagents: nextSubagents } : state;
+    });
+  },
+
   addQuestion: (taskId, question) => {
     const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false });
     const questionId = question.questionId;
@@ -1300,6 +1447,21 @@ export async function initSubagentListeners() {
           }
           useDrawerStore.setState({ activityFeed: nextFeeds });
         }
+
+        // Register subagent record into subagents panel
+        if (parentTaskId) {
+          const { role } = event.payload || {};
+          state.registerSubagent(parentTaskId, {
+            id: subagentId,
+            parentTaskId,
+            title: title || 'Субагент',
+            role: role || 'general',
+            prompt: prompt || '',
+            status: 'running',
+            createdAt: Date.now(),
+            stepsCount: 1,
+          });
+        }
       }
     );
 
@@ -1327,6 +1489,7 @@ export async function initSubagentListeners() {
           nextFeeds[mappedToolId] = nextFeed;
         }
         useDrawerStore.setState({ activityFeed: nextFeeds });
+        state.recordSubagentStep(subagentId, activity);
       }
     );
 
@@ -1355,6 +1518,16 @@ export async function initSubagentListeners() {
           }
           useDrawerStore.setState({ activityFeed: nextFeeds });
         }
+        state.updateSubagentStatus(subagentId, 'finished');
+      }
+    );
+
+    await listen<{ parentTaskId?: string; subagentId?: string; error?: string }>(
+      'subagent:error',
+      (event) => {
+        const { subagentId, error } = event.payload || {};
+        if (!subagentId) return;
+        useDrawerStore.getState().updateSubagentStatus(subagentId, 'error', error);
       }
     );
   } catch (err) {

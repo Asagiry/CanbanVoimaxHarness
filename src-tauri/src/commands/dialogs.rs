@@ -141,6 +141,201 @@ pub async fn load_subagent_dialog(
     crate::db::load_dialog_items(&root, &safe_id)
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubagentSummary {
+    pub id: String,
+    pub parent_task_id: String,
+    pub tool_call_id: Option<String>,
+    pub title: String,
+    pub role: String,
+    pub prompt: String,
+    pub status: String,
+    pub created_at: i64,
+    pub duration_ms: Option<f64>,
+    pub steps_count: usize,
+    pub last_error: Option<String>,
+}
+
+#[tauri::command]
+pub async fn list_subagents(
+    parent_task_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<SubagentSummary>, String> {
+    let root = state.get_root();
+    let p_trim = parent_task_id.trim();
+    if p_trim.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut result_map: std::collections::HashMap<String, SubagentSummary> = std::collections::HashMap::new();
+
+    // 1. In-memory sessions from SUBAGENT_SESSIONS
+    {
+        let sessions = crate::agent::SUBAGENT_SESSIONS.lock().await;
+        for (sub_id, session) in sessions.iter() {
+            let info = session.retry_info.lock().await;
+            if info.parent_task_id == p_trim {
+                let summary = SubagentSummary {
+                    id: sub_id.clone(),
+                    parent_task_id: p_trim.to_string(),
+                    tool_call_id: info.tool_call_id.clone(),
+                    title: info.title.clone(),
+                    role: info.role.clone(),
+                    prompt: info.prompt.clone(),
+                    status: info.status.clone(),
+                    created_at: chrono::Utc::now().timestamp_millis(),
+                    duration_ms: None,
+                    steps_count: 0,
+                    last_error: info.last_error.clone(),
+                };
+                result_map.insert(sub_id.clone(), summary);
+            }
+        }
+    }
+
+    // 2. Query parent task's dialog items to extract tool metadata (subagent/subagent_bg tool calls)
+    struct ParentSubagentTool {
+        call_id: Option<String>,
+        title: String,
+        role: String,
+        prompt: String,
+        duration: Option<f64>,
+        status: String,
+    }
+
+    let mut parent_subagent_tools: Vec<ParentSubagentTool> = Vec::new();
+    if let Ok(safe_pid) = sanitize_task_id(p_trim) {
+        if let Ok(parent_items) = crate::db::load_dialog_items(&root, &safe_pid) {
+            for it in parent_items {
+                if it.item_type == "tool" {
+                    if let Some(ref t) = it.tool {
+                        let t_name = t.get("toolName").and_then(|v| v.as_str()).unwrap_or("");
+                        if t_name == "subagent" || t_name == "subagent_bg" {
+                            let params = t.get("params");
+                            let title = params.and_then(|p| p.get("title")).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                            let role = params.and_then(|p| p.get("role")).and_then(|v| v.as_str()).unwrap_or("general").to_string();
+                            let prompt = params.and_then(|p| p.get("prompt")).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                            let call_id = t.get("id").and_then(|v| v.as_str()).map(|s| s.to_string());
+                            let duration = t.get("durationMs").and_then(|v| v.as_f64());
+                            let status = t.get("status").and_then(|v| v.as_str()).unwrap_or("running").to_string();
+                            parent_subagent_tools.push(ParentSubagentTool {
+                                call_id,
+                                title,
+                                role,
+                                prompt,
+                                duration,
+                                status,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Query SQLite for persisted subagent dialogues
+    if let Ok(keys) = crate::db::list_subagent_dialog_keys(&root, p_trim) {
+        for key in keys {
+            let raw_sub_id = key.strip_prefix(&format!("{}:sub:", p_trim)).unwrap_or(&key).to_string();
+            let items = crate::db::load_dialog_items(&root, &key).unwrap_or_default();
+            let steps_count = items.len();
+
+            let mut title = String::new();
+            let mut prompt = String::new();
+            let mut role = "general".to_string();
+            let mut status = "finished".to_string();
+            let mut duration_ms = 0.0f64;
+            let mut last_error: Option<String> = None;
+
+            for it in &items {
+                if it.item_type == "prompt" {
+                    if let Some(ref c) = it.content {
+                        prompt = c.clone();
+                    }
+                }
+                if it.item_type == "error" {
+                    status = "error".to_string();
+                    last_error = it.content.clone();
+                }
+                if let Some(dur) = it.duration_ms {
+                    duration_ms += dur;
+                }
+            }
+
+            let tool_call_id = raw_sub_id.rfind(".sub-").map(|pos| raw_sub_id[(pos + 5)..].to_string());
+
+            // Correlate with parent_subagent_tools if possible
+            if let Some(pt) = parent_subagent_tools.iter().find(|p| {
+                (p.call_id.is_some() && tool_call_id.is_some() && p.call_id == tool_call_id)
+                    || (!prompt.is_empty() && p.prompt == prompt)
+            }) {
+                if !pt.title.is_empty() {
+                    title = pt.title.clone();
+                }
+                if !pt.role.is_empty() {
+                    role = pt.role.clone();
+                }
+                if prompt.is_empty() && !pt.prompt.is_empty() {
+                    prompt = pt.prompt.clone();
+                }
+                if duration_ms == 0.0 {
+                    if let Some(d) = pt.duration {
+                        duration_ms = d;
+                    }
+                }
+                if status != "error" {
+                    if pt.status == "running" {
+                        status = "running".to_string();
+                    } else if pt.status == "failed" {
+                        status = "error".to_string();
+                    }
+                }
+            }
+
+            if title.is_empty() && !prompt.is_empty() {
+                let first_line = prompt.lines().next().unwrap_or("").trim();
+                let clean = first_line.trim_start_matches('#').trim();
+                if !clean.is_empty() {
+                    title = clean.chars().take(80).collect();
+                }
+            }
+            if title.is_empty() {
+                title = format!("Субагент {}", raw_sub_id);
+            }
+
+            if let Some(existing) = result_map.get_mut(&raw_sub_id) {
+                existing.steps_count = steps_count;
+                if existing.prompt.is_empty() {
+                    existing.prompt = prompt;
+                }
+                if duration_ms > 0.0 {
+                    existing.duration_ms = Some(duration_ms);
+                }
+            } else {
+                let summary = SubagentSummary {
+                    id: raw_sub_id.clone(),
+                    parent_task_id: p_trim.to_string(),
+                    tool_call_id,
+                    title,
+                    role,
+                    prompt,
+                    status,
+                    created_at: chrono::Utc::now().timestamp_millis(),
+                    duration_ms: if duration_ms > 0.0 { Some(duration_ms) } else { None },
+                    steps_count,
+                    last_error,
+                };
+                result_map.insert(raw_sub_id, summary);
+            }
+        }
+    }
+
+    let mut list: Vec<SubagentSummary> = result_map.into_values().collect();
+    list.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok(list)
+}
+
 #[tauri::command]
 pub async fn retry_subagent(
     parent_task_id: String,

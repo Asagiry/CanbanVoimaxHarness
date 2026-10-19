@@ -276,7 +276,7 @@ export default function DrawerSteerBar({
               />
 
               {/* Compact TaskTodoWidget pill & overlay popover */}
-              {(isToolAllowed('todo_write', task.columnId) || (task.todos && task.todos.length > 0)) && (
+              {(Boolean(activeSubagentId) || isToolAllowed('todo_write', task.columnId) || (task.todos && task.todos.length > 0)) && (
                 <TaskTodoWidget task={task} align="left" />
               )}
             </div>

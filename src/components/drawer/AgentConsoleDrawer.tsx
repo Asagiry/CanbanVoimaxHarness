@@ -9,6 +9,7 @@ import DrawerHeader from './DrawerHeader';
 import DrawerActivityStream from './DrawerActivityStream';
 import DrawerSteerBar from './DrawerSteerBar';
 import GitDiffSidebar from './GitDiffSidebar';
+import SubagentsSidebar from './SubagentsSidebar';
 
 export default function AgentConsoleDrawer() {
   const {
@@ -32,6 +33,7 @@ export default function AgentConsoleDrawer() {
 
   const [runError, setRunError] = useState<string | null>(null);
   const [isDiffCollapsed, setIsDiffCollapsed] = useState(false);
+  const [isSubagentsCollapsed, setIsSubagentsCollapsed] = useState(false);
 
   const rawTask = tasks.find((t) => t.id === activeTaskId);
   const fallbackBoardId = useBoardStore.getState().activeBoardId || 'development';
@@ -393,27 +395,51 @@ export default function AgentConsoleDrawer() {
     <div className="fixed inset-0 z-50 flex flex-col h-screen max-h-screen overflow-hidden bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] select-none animate-in fade-in duration-150 transition-colors">
       {/* Outer guard: header/banner are outside inner boundaries */}
       <ErrorBoundary scopeLabel="окно чата" onClose={closeDrawer}>
-        {/* Modular Header with Window Dragging, Stage Stepper, Subagent Navigation, Close & Controls */}
-        <DrawerHeader
-          task={task}
-          columns={columns}
-          subtasks={subtasks}
-          rootTask={rootTask}
-          activeTaskId={activeTaskId}
-          isRunning={isRunning}
-          isDiffCollapsed={isDiffCollapsed}
-          onClose={closeDrawer}
-          onAbort={handleAbortAgent}
-          onToggleDiff={() => setIsDiffCollapsed((prev) => !prev)}
-          onOpenDrawer={openDrawer}
-          onOpenToolPolicy={openToolPolicyModal}
-          onOpenSettings={openSettings}
-        />
+        {/* Count subagents for header badge */}
+        {(() => {
+          const storeSubagents = useDrawerStore.getState().subagents[task.id] || [];
+          const subagentToolsCount = (toolExecutions[task.id] || []).filter(
+            (t) => t.toolName === 'subagent' || t.toolName === 'subagent_bg'
+          ).length;
+          const boardSubtasksCount = tasks.filter((t) => t.parentId === task.id).length;
+          const subagentsCount = Math.max(storeSubagents.length, subagentToolsCount, boardSubtasksCount);
 
-        {/* Two-Column Layout: Left (Feed + Steer Bar) | Right (GitDiffSidebar) */}
+          return (
+            <DrawerHeader
+              task={task}
+              columns={columns}
+              subtasks={subtasks}
+              rootTask={rootTask}
+              activeTaskId={activeTaskId}
+              isRunning={isRunning}
+              isDiffCollapsed={isDiffCollapsed}
+              isSubagentsCollapsed={isSubagentsCollapsed}
+              subagentsCount={subagentsCount}
+              onClose={closeDrawer}
+              onAbort={handleAbortAgent}
+              onToggleDiff={() => setIsDiffCollapsed((prev) => !prev)}
+              onToggleSubagents={() => setIsSubagentsCollapsed((prev) => !prev)}
+              onOpenDrawer={openDrawer}
+              onOpenToolPolicy={openToolPolicyModal}
+              onOpenSettings={openSettings}
+            />
+          );
+        })()}
+
+        {/* Three-Column Layout: Left (SubagentsSidebar) | Center (Feed + Steer Bar) | Right (GitDiffSidebar) */}
         {/* Obeying § 2.13 Viewport Overlay & Flex Boundary Invariants (min-h-0, min-w-0, overflow-hidden) */}
         <div className="flex-1 flex flex-row min-h-0 min-w-0 overflow-hidden">
-          {/* Left Column: Activity Feed + Steer Bar */}
+          {/* Left Column: Subagents Interactive Sidebar */}
+          <ErrorBoundary scopeLabel="панель субагентов" onClose={() => setIsSubagentsCollapsed(true)}>
+            <SubagentsSidebar
+              taskId={task.id}
+              taskTitle={task.title}
+              isCollapsed={isSubagentsCollapsed}
+              onToggleCollapse={() => setIsSubagentsCollapsed((prev) => !prev)}
+            />
+          </ErrorBoundary>
+
+          {/* Center Column: Activity Feed + Steer Bar */}
           <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] dark:bg-[#090a0f] overflow-hidden transition-colors">
             <ErrorBoundary scopeLabel="чат задачи" onClose={closeDrawer}>
               {/* Modular Activity Stream: Objective card, Relay handoff, Live thinking, Tools, Subagent cards */}

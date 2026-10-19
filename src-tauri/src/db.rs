@@ -335,6 +335,27 @@ pub fn find_subagent_dialog_key(
     Ok(None)
 }
 
+/// Returns all distinct subagent dialog keys for a given parent task id.
+pub fn list_subagent_dialog_keys(
+    root: &Path,
+    parent_task_id: &str,
+) -> Result<Vec<String>, String> {
+    let conn = init_db(root).map_err(|e| format!("Failed to open database: {}", e))?;
+    let p_clean = parent_task_id.trim();
+    if p_clean.is_empty() {
+        return Ok(Vec::new());
+    }
+    let pattern = format!("{}:sub:%", p_clean);
+    let mut stmt = conn
+        .prepare("SELECT DISTINCT task_id FROM dialog_items WHERE task_id LIKE ?1 ORDER BY created_at ASC")
+        .map_err(|e| format!("Prepare failed: {}", e))?;
+    let rows = stmt
+        .query_map(params![pattern], |row| row.get::<_, String>(0))
+        .map_err(|e| format!("Query failed: {}", e))?;
+    let keys = rows.flatten().collect();
+    Ok(keys)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

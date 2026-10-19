@@ -186,3 +186,20 @@ export interface LlmSettings {
   model: string;
   temperature?: number;
 }
+
+export type SubagentRole = 'explorer' | 'developer' | 'reviewer' | 'general' | string;
+export type SubagentStatus = 'running' | 'finished' | 'error';
+
+export interface SubagentInfo {
+  id: string;
+  parentTaskId: string;
+  toolCallId?: string;
+  title: string;
+  role: SubagentRole;
+  prompt: string;
+  status: SubagentStatus;
+  createdAt?: number;
+  durationMs?: number;
+  stepsCount: number;
+  lastError?: string;
+}

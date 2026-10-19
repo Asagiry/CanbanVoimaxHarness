@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   ListTodo,
   CheckCircle2,
@@ -7,6 +7,8 @@ import {
   X,
 } from 'lucide-react';
 import { KanbanTask, TodoItem } from '../../types';
+import { useDrawerStore } from '../../stores/drawerStore';
+import { useBoardStore } from '../../stores/boardStore';
 
 interface TaskTodoWidgetProps {
   task: KanbanTask;
@@ -18,6 +20,7 @@ interface TaskTodoWidgetProps {
 // - Pill trigger sits compactly adjacent to steer bar / input controls with zero vertical layout shift
 // - Collapsible plan floats as an overlay popover (z-30 shadow-xl) above the steer bar without displacing chat feed
 // - Read-only plan strip: ONLY the agent fills it via todo_write tool
+// - When activeSubagentId is active, displays the subagent's own todos from its dialogue/session!
 export const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
   task,
   align = 'left',
@@ -26,7 +29,60 @@ export const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const todos: TodoItem[] = task.todos ?? [];
+  const {
+    activeSubagentId,
+    activeSubagentTitle,
+    activityFeed,
+    toolIdToSubagentId,
+    subagentIdToToolId,
+  } = useDrawerStore();
+
+  const todos: TodoItem[] = useMemo(() => {
+    if (activeSubagentId) {
+      // 1. If this activeSubagentId is a board subtask, inspect its todos
+      const boardSubtask = useBoardStore.getState().tasks.find((t) => t.id === activeSubagentId);
+      if (boardSubtask?.todos && boardSubtask.todos.length > 0) {
+        return boardSubtask.todos;
+      }
+
+      // 2. Search activity feed for the subagent's latest todo_write tool execution
+      const feed =
+        activityFeed[activeSubagentId] ||
+        (toolIdToSubagentId[activeSubagentId] ? activityFeed[toolIdToSubagentId[activeSubagentId]] : undefined) ||
+        (subagentIdToToolId[activeSubagentId] ? activityFeed[subagentIdToToolId[activeSubagentId]] : undefined) ||
+        [];
+
+      for (let i = feed.length - 1; i >= 0; i--) {
+        const item = feed[i];
+        const tool = item.tool;
+        const toolName = tool?.toolName || (item as any).toolName;
+        if (toolName === 'todo_write' && tool?.params) {
+          const rawTodos = (tool.params as Record<string, unknown>)?.todos;
+          if (Array.isArray(rawTodos)) {
+            return rawTodos
+              .filter((t: any) => t && typeof t.content === 'string' && t.content.trim().length > 0)
+              .map((t: any, idx: number) => ({
+                id: t.id || `todo-${idx + 1}`,
+                content: String(t.content).trim(),
+                status: (t.status === 'completed' || t.status === 'done'
+                  ? 'completed'
+                  : t.status === 'in_progress' || t.status === 'running'
+                  ? 'in_progress'
+                  : 'pending') as TodoItem['status'],
+              }));
+          }
+        }
+      }
+
+      // If active subagent has not called todo_write yet, return empty list!
+      // (STRICTLY FORBIDDEN from displaying the parent task's todos!)
+      return [];
+    }
+
+    // Main parent task view: show parent task's todos
+    return task.todos ?? [];
+  }, [activeSubagentId, task.todos, activityFeed, toolIdToSubagentId, subagentIdToToolId]);
+
   const completedCount = todos.filter((t) => t.status === 'completed').length;
   const inProgressCount = todos.filter((t) => t.status === 'in_progress').length;
   const pendingCount = todos.filter((t) => t.status === 'pending').length;
@@ -130,8 +186,12 @@ export const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
           <div className="px-3.5 py-2.5 bg-[#fafafa] dark:bg-[#161b22] border-b border-[#ebebeb] dark:border-[#21262d] flex items-center justify-between gap-2 select-none">
             <div className="flex items-center space-x-2 min-w-0">
               <ListTodo className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
-              <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] tracking-tight shrink-0">
-                План выполнения (To-dos)
+              <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] tracking-tight shrink-0 truncate max-w-[240px]">
+                {activeSubagentId
+                  ? activeSubagentTitle
+                    ? `План: ${activeSubagentTitle}`
+                    : 'План субагента (To-dos)'
+                  : 'План выполнения (To-dos)'}
               </span>
               {hasTodos && (
                 <span className="font-mono tabular-nums text-[11px] text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#052e16]/40 border border-[#dcfce7] dark:border-[#166534] px-1.5 py-0.5 rounded-full font-medium shrink-0">
@@ -180,11 +240,23 @@ export const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
           <div className="min-h-0 min-w-0">
             {!hasTodos ? (
               <div className="p-4 text-center text-xs text-[#8f8f8f] dark:text-[#8b949e] font-sans leading-relaxed">
-                План пока пуст. Шаги появятся здесь, когда агент вызовет инструмент{' '}
-                <code className="px-1.5 py-0.5 bg-[#f4f4f5] dark:bg-[#161b22] rounded border border-[#ebebeb] dark:border-[#30363d] text-[11px] font-mono text-[#171717] dark:text-[#f0f6fc]">
-                  todo_write
-                </code>
-                .
+                {activeSubagentId ? (
+                  <>
+                    Субагент пока не составил свой план задач. Шаги появятся здесь, когда он вызовет инструмент{' '}
+                    <code className="px-1.5 py-0.5 bg-[#f4f4f5] dark:bg-[#161b22] rounded border border-[#ebebeb] dark:border-[#30363d] text-[11px] font-mono text-[#171717] dark:text-[#f0f6fc]">
+                      todo_write
+                    </code>
+                    .
+                  </>
+                ) : (
+                  <>
+                    План пока пуст. Шаги появятся здесь, когда агент вызовет инструмент{' '}
+                    <code className="px-1.5 py-0.5 bg-[#f4f4f5] dark:bg-[#161b22] rounded border border-[#ebebeb] dark:border-[#30363d] text-[11px] font-mono text-[#171717] dark:text-[#f0f6fc]">
+                      todo_write
+                    </code>
+                    .
+                  </>
+                )}
               </div>
             ) : (
               <div className="max-h-64 sm:max-h-72 overflow-y-auto divide-y divide-[#f4f4f5] dark:divide-[#21262d] min-h-0">
