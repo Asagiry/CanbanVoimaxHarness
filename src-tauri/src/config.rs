@@ -1341,25 +1341,28 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
 // Automatic .gitignore Synchronization for .cvh Local Runtime
 // ============================================================================
 
-pub const CVH_GITIGNORE_HEADER: &str = "# CanbanVoimaxHarness Local Runtime";
+pub const CVH_GITIGNORE_HEADER: &str = "# CanbanVoimaxHarness Local Workspace";
+pub const CVH_GITIGNORE_LEGACY_HEADER: &str = "# CanbanVoimaxHarness Local Runtime";
 pub const CVH_RUNTIME_GITIGNORE_ENTRIES: &[&str] = &[
-    ".cvh/harness.db*",
-    ".cvh/spill/",
+    ".cvh/",
     ".cvh/worktrees/",
     ".cvh/llm.json",
+    ".cvh/harness.db*",
+    ".cvh/spill/",
     ".cvh/tasks.json",
 ];
 
 /// Ensures that `<repo_root>/.gitignore` exists and contains all required
 /// local CVH runtime entries:
-/// - `.cvh/harness.db*`
-/// - `.cvh/spill/`
+/// - `.cvh/`
 /// - `.cvh/worktrees/`
 /// - `.cvh/llm.json`
+/// - `.cvh/harness.db*`
+/// - `.cvh/spill/`
 /// - `.cvh/tasks.json`
 ///
 /// If any of these entries are missing (and no wildcard `.cvh/` or `.cvh` covers them),
-/// appends the missing lines with the clean section header `# CanbanVoimaxHarness Local Runtime`.
+/// appends the missing lines with the clean section header `# CanbanVoimaxHarness Local Workspace`.
 /// Never duplicates existing lines or existing section headers.
 pub fn ensure_project_gitignore(repo_root: &Path) -> std::io::Result<()> {
     let gitignore_path = repo_root.join(".gitignore");
@@ -1449,7 +1452,10 @@ pub fn ensure_project_gitignore(repo_root: &Path) -> std::io::Result<()> {
     }
 
     // 3. Append missing lines with clean section header without duplicating
-    let has_header = lines.iter().any(|l| l.trim() == CVH_GITIGNORE_HEADER);
+    let has_header = lines.iter().any(|l| {
+        let t = l.trim();
+        t == CVH_GITIGNORE_HEADER || t == CVH_GITIGNORE_LEGACY_HEADER
+    });
 
     let mut output = existing_content;
     if !has_header {
@@ -2631,7 +2637,7 @@ mod tests {
         assert_eq!(header_count, 1, "Header must appear exactly once");
 
         for entry in CVH_RUNTIME_GITIGNORE_ENTRIES {
-            let entry_count = content_second.matches(entry).count();
+            let entry_count = content_second.lines().filter(|l| l.trim() == *entry).count();
             assert_eq!(entry_count, 1, "Entry {} must appear exactly once", entry);
         }
 
@@ -2696,6 +2702,7 @@ mod tests {
         assert!(content.contains(".cvh/llm.json"));
         assert!(content.contains(".cvh/tasks.json"));
 
+        assert!(content.contains(".cvh/"));
         let cvh = base_dir.join(".cvh");
         assert!(cvh.is_dir());
         assert!(cvh.join("agents").is_dir());

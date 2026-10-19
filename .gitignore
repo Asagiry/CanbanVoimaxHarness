@@ -32,6 +32,9 @@ Thumbs.db
 .tmp/
 *.log
 .xwin-cache/
+# CanbanVoimaxHarness Local Workspace
+.cvh/
+
 # LLM Settings & Secrets (API Keys)
 .cvh/llm.json
 **/.cvh/llm.json

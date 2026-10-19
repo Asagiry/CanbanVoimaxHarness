@@ -93,6 +93,12 @@ function parseCleanDiff(patch?: string | null): ParsedDiffLine[] {
   return result;
 }
 
+export const isCvhPath = (p: string): boolean => {
+  if (!p) return false;
+  const norm = p.replace(/\\/g, '/');
+  return norm === '.cvh' || norm.startsWith('.cvh/') || norm.includes('/.cvh/') || norm.endsWith('/.cvh');
+};
+
 function formatFilesCount(count: number): string {
   const mod10 = count % 10;
   const mod100 = count % 100;
@@ -351,6 +357,9 @@ export default function GitDiffSidebar({
       setDiff(data ?? null);
 
       if (data?.files && data.files.length > 0) {
+        const filteredValidPaths = new Set(
+          data.files.filter((f) => f && !isCvhPath(f.path)).map((f) => f.path)
+        );
         if (!hasInitialLoadedRef.current) {
           // Initial load for this task: all files collapsed by default
           hasInitialLoadedRef.current = true;
@@ -360,11 +369,10 @@ export default function GitDiffSidebar({
           // NEVER forcibly re-expand files that the user intentionally collapsed!
           // Maintain currently expanded files, purging any paths no longer in diff
           setExpandedFiles((prev) => {
-            const currentValidPaths = new Set(data.files.map((f) => f.path));
             const next = new Set<string>();
             let changed = false;
             for (const path of prev) {
-              if (currentValidPaths.has(path) && !userCollapsedFilesRef.current.has(path)) {
+              if (filteredValidPaths.has(path) && !userCollapsedFilesRef.current.has(path)) {
                 next.add(path);
               } else {
                 changed = true;
@@ -525,22 +533,34 @@ export default function GitDiffSidebar({
     });
   };
 
+  const rawFiles = diff?.files ?? [];
+  const displayFiles = useMemo(
+    () => rawFiles.filter((f) => f && !isCvhPath(f.path)),
+    [rawFiles]
+  );
+
+  const totalAdditions = useMemo(
+    () => displayFiles.reduce((acc, f) => acc + (f.additions ?? 0), 0),
+    [displayFiles]
+  );
+  const totalDeletions = useMemo(
+    () => displayFiles.reduce((acc, f) => acc + (f.deletions ?? 0), 0),
+    [displayFiles]
+  );
+  const filesCount = displayFiles.length;
+  const files = displayFiles;
+
   const handleExpandAll = () => {
-    if (!diff?.files) return;
+    if (!displayFiles.length) return;
     userCollapsedFilesRef.current.clear();
-    setExpandedFiles(new Set(diff.files.map((f) => f.path)));
+    setExpandedFiles(new Set(displayFiles.map((f) => f.path)));
   };
 
   const handleCollapseAll = () => {
-    if (!diff?.files) return;
-    diff.files.forEach((f) => userCollapsedFilesRef.current.add(f.path));
+    if (!displayFiles.length) return;
+    displayFiles.forEach((f) => userCollapsedFilesRef.current.add(f.path));
     setExpandedFiles(new Set());
   };
-
-  const totalAdditions = diff?.totalAdditions ?? (diff as any)?.total_additions ?? 0;
-  const totalDeletions = diff?.totalDeletions ?? (diff as any)?.total_deletions ?? 0;
-  const filesCount = diff?.files?.length ?? 0;
-  const files = diff?.files ?? [];
 
   // Collapsed Rail View
   if (isCollapsed) {
@@ -558,21 +578,33 @@ export default function GitDiffSidebar({
         </button>
 
         <div className="mt-4 flex flex-col items-center space-y-2">
-          <GitCompare className="h-4 w-4 text-[#8f8f8f] dark:text-[#8b949e]" />
-          {filesCount > 0 && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-[#f4f4f5] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] border border-[#ebebeb] dark:border-[#30363d]">
-              {filesCount}
-            </span>
-          )}
-          {totalAdditions > 0 && (
-            <span className="text-[10px] font-mono font-medium text-[#15803d]">
-              +{totalAdditions}
-            </span>
-          )}
-          {totalDeletions > 0 && (
-            <span className="text-[10px] font-mono font-medium text-[#b91c1c]">
-              -{totalDeletions}
-            </span>
+          <GitCompare
+            className={`h-4 w-4 ${
+              isLoading
+                ? 'animate-pulse text-emerald-500'
+                : 'text-[#8f8f8f] dark:text-[#8b949e]'
+            }`}
+          />
+          {isLoading && filesCount === 0 ? (
+            <span className="w-3.5 h-3.5 rounded-full border-2 border-emerald-500/20 border-t-emerald-500 animate-spin" />
+          ) : (
+            <>
+              {filesCount > 0 && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-[#f4f4f5] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] border border-[#ebebeb] dark:border-[#30363d]">
+                  {filesCount}
+                </span>
+              )}
+              {totalAdditions > 0 && (
+                <span className="text-[10px] font-mono font-medium text-[#15803d]">
+                  +{totalAdditions}
+                </span>
+              )}
+              {totalDeletions > 0 && (
+                <span className="text-[10px] font-mono font-medium text-[#b91c1c]">
+                  -{totalDeletions}
+                </span>
+              )}
+            </>
           )}
         </div>
 
@@ -720,8 +752,30 @@ export default function GitDiffSidebar({
         </div>
       )}
 
-      {/* 2. Main Content Area: Accordion File List */}
-      {filesCount === 0 ? (
+      {/* 2. Main Content Area: Accordion File List or Loading Skeleton */}
+      {isLoading && (!diff || filesCount === 0) ? (
+        <div className="flex-1 overflow-y-auto p-3 space-y-2.5 min-h-0 bg-[#fafafa] dark:bg-[#090a0f]">
+          <div className="flex items-center justify-center py-4 space-x-2 text-xs text-[#8f8f8f] dark:text-[#8b949e]">
+            <RefreshCw className="h-3.5 w-3.5 animate-spin text-emerald-600 dark:text-emerald-400" />
+            <span>Загрузка изменений Git...</span>
+          </div>
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-3 animate-pulse space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="h-3.5 w-3.5 bg-[#e5e7eb] dark:bg-[#21262d] rounded" />
+                  <div className="h-3 w-36 bg-[#e5e7eb] dark:bg-[#21262d] rounded" />
+                </div>
+                <div className="h-3 w-10 bg-[#e5e7eb] dark:bg-[#21262d] rounded" />
+              </div>
+              <div className="h-2 w-24 bg-[#f3f4f6] dark:bg-[#161b22] rounded" />
+            </div>
+          ))}
+        </div>
+      ) : filesCount === 0 ? (
         // Clean empty state placeholder
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center bg-[#fafafa] dark:bg-[#090a0f]">
           <div className="h-12 w-12 rounded-full bg-[#f0fdf4] dark:bg-[#052e16]/50 border border-[#bbf7d0] dark:border-[#166534] flex items-center justify-center mb-3">
