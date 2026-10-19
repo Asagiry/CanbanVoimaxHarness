@@ -699,6 +699,7 @@ use std::path::PathBuf;
             priority: None,
             tags: None,
             current_tokens: None,
+            skip_worktree: None,
             created_at: 0,
             updated_at: 0,
         };
@@ -731,6 +732,7 @@ use std::path::PathBuf;
             priority: None,
             tags: None,
             current_tokens: None,
+            skip_worktree: None,
             created_at: 0,
             updated_at: 0,
         };
@@ -1148,6 +1150,7 @@ use std::path::PathBuf;
             priority: None,
             tags: None,
             current_tokens: None,
+            skip_worktree: None,
             created_at: 0,
             updated_at: 0,
             handover_summary: None,
@@ -1185,6 +1188,7 @@ use std::path::PathBuf;
             priority: None,
             tags: None,
             current_tokens: None,
+            skip_worktree: None,
             created_at: 0,
             updated_at: 0,
             handover_summary: None,
@@ -1287,6 +1291,7 @@ use std::path::PathBuf;
             priority: None,
             tags: None,
             current_tokens: None,
+            skip_worktree: None,
             created_at: 0,
             updated_at: 0,
             handover_summary: None,
@@ -1345,6 +1350,7 @@ use std::path::PathBuf;
             priority: None,
             tags: None,
             current_tokens: None,
+            skip_worktree: None,
             created_at: 0,
             updated_at: 0,
             handover_summary: None,
@@ -1468,4 +1474,134 @@ Write code.
         // Parent task must NEVER match child subagent
         assert!(!is_matching_subagent_key("CVH-001", "CVH-001.sub-abc123"));
         assert!(!is_matching_subagent_key("CVH-001", "abc123"));
+    }
+
+    #[test]
+    fn test_skip_worktree_flag_serialization_and_defaults() {
+        // Deserialization with skipWorktree = true
+        let t1: Task = serde_json::from_value(serde_json::json!({
+            "id": "CVH-101",
+            "title": "Skip wt task",
+            "stageId": "dev",
+            "skipWorktree": true
+        })).expect("deserialize t1");
+        assert_eq!(t1.skip_worktree, Some(true));
+
+        // Deserialization with alias skip_worktree = false
+        let t2: Task = serde_json::from_value(serde_json::json!({
+            "id": "CVH-102",
+            "title": "Don't skip wt task",
+            "stageId": "dev",
+            "skip_worktree": false
+        })).expect("deserialize t2");
+        assert_eq!(t2.skip_worktree, Some(false));
+
+        // Deserialization with default when omitted
+        let t3: Task = serde_json::from_value(serde_json::json!({
+            "id": "CVH-103",
+            "title": "Default wt task",
+            "stageId": "dev"
+        })).expect("deserialize t3");
+        assert_eq!(t3.skip_worktree, None);
+    }
+
+    #[tokio::test]
+    async fn test_skip_worktree_prevents_builtin_worktree_in_move_stage() {
+        let base = PathBuf::from("target").join(format!("cvh_skip_wt_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dir");
+
+        let pipe = crate::config::default_pipeline_config();
+        crate::config::save_pipeline_config(&base, &pipe).await.expect("save pipeline");
+
+        let task = Task {
+            id: "CVH-SKIP-1".to_string(),
+            title: "No Worktree Task".to_string(),
+            description: "Root only".to_string(),
+            stage_id: "backlog".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("idle".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: Some(true),
+            created_at: 0,
+            updated_at: 0,
+            handover_summary: None,
+            attachments: None,
+            cover_image: None,
+        };
+        save_tasks_to_disk(&base, &[task]).await.expect("save task");
+
+        // Move to dev stage
+        let moved = internal_move_task_stage(
+            &base,
+            "CVH-SKIP-1",
+            "dev",
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("move task stage");
+
+        // When skip_worktree is true, NO worktree or branch must be created!
+        assert_eq!(moved.stage_id, "dev");
+        assert_eq!(moved.worktree_path, None);
+        assert_eq!(moved.branch, None);
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[test]
+    fn test_active_agents_duplicate_run_check() {
+        let active_map = std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+        let task_id = "CVH-042".to_string();
+
+        // 1. Not in map -> not running
+        let is_running_initial = active_map.lock().map(|map| map.contains_key(&task_id)).unwrap_or(false);
+        assert!(!is_running_initial);
+
+        // 2. Insert dummy handle
+        let abort_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let join_slot = std::sync::Arc::new(tokio::sync::Mutex::new(None));
+        active_map.lock().unwrap().insert(
+            task_id.clone(),
+            crate::commands::ActiveAgentHandle {
+                abort_flag,
+                join_handle: join_slot,
+            },
+        );
+
+        // 3. Now in map -> is_running is true, reject duplicate run
+        let is_running_after = active_map.lock().map(|map| map.contains_key(&task_id)).unwrap_or(false);
+        assert!(is_running_after);
+    }
+
+    #[tokio::test]
+    async fn test_append_llm_debug_log() {
+        let base = PathBuf::from("target").join(format!("cvh_log_test_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        crate::agent::append_llm_debug_log(&base, "[TEST] Turn 1 Request
+").await;
+        crate::agent::append_llm_debug_log(&base, "[TEST] Turn 1 Response
+").await;
+
+        let log_file = base.join(".cvh").join("llm_debug.log");
+        assert!(log_file.exists());
+        let content = tokio::fs::read_to_string(log_file).await.expect("read log");
+        assert!(content.contains("[TEST] Turn 1 Request"));
+        assert!(content.contains("[TEST] Turn 1 Response"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
     }

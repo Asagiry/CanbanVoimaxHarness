@@ -315,6 +315,7 @@ use super::*;
             last_error: None,
             report: None,
             is_bg: false,
+            duration_ms: None,
         };
 
         let session = SubagentSession::new(Some(tx1), retry_info);
@@ -405,6 +406,7 @@ use super::*;
             priority: Some("high".to_string()),
             tags: Some(vec!["orchestrator".to_string()]),
             current_tokens: None,
+            skip_worktree: None,
             created_at: 0,
             updated_at: 0,
         };
@@ -519,6 +521,7 @@ use super::*;
             priority: None,
             tags: None,
             current_tokens: None,
+            skip_worktree: None,
             created_at: 0,
             updated_at: 0,
         };
@@ -586,6 +589,7 @@ use super::*;
             priority: None,
             tags: None,
             current_tokens: None,
+            skip_worktree: None,
             created_at: 0,
             updated_at: 0,
         };
@@ -782,6 +786,7 @@ use super::*;
             priority: None,
             tags: None,
             current_tokens: None,
+            skip_worktree: None,
             created_at: 0,
             updated_at: 0,
             handover_summary: None,
@@ -952,6 +957,7 @@ use super::*;
             priority: None,
             tags: None,
             current_tokens: None,
+            skip_worktree: None,
             created_at: 0,
             updated_at: 0,
             handover_summary: None,
@@ -1374,6 +1380,7 @@ use super::*;
                 last_error: None,
                 report: None,
                 is_bg: true,
+                duration_ms: None,
             },
         );
 
@@ -1392,6 +1399,7 @@ use super::*;
                 last_error: None,
                 report: None,
                 is_bg: true,
+                duration_ms: None,
             },
         );
 
@@ -2747,6 +2755,7 @@ data: [DONE]
             last_error: None,
             report: None,
             is_bg: true,
+            duration_ms: None,
         };
 
         let session = SubagentSession::new(Some(tx), info_bg);

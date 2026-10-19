@@ -418,13 +418,14 @@ pub async fn create_task(
         priority: None,
         tags: None,
         current_tokens: None,
+        skip_worktree: skip_worktree.or(Some(false)),
         created_at: now,
         updated_at: now,
     };
 
     // Check pipeline config for stage hooks (board-aware: first check columns
     // of effective_board_id, then fallback to pipeline.json).
-    let skip = skip_worktree.unwrap_or(false);
+    let skip = new_task.skip_worktree.unwrap_or(false);
     {
         let boards_cfg = load_boards_config(&root).await.ok();
         let col_from_board = boards_cfg.as_ref().and_then(|bc| {
@@ -596,6 +597,7 @@ pub async fn create_subtask(
         priority: tasks[parent_idx].priority.clone(),
         tags: None,
         current_tokens: None,
+        skip_worktree: tasks[parent_idx].skip_worktree,
         created_at: now,
         updated_at: now,
     };
@@ -1086,7 +1088,7 @@ pub async fn internal_move_task_stage(
     }
 
     // Worktree allocation: driven strictly by the configurable hook (builtin:create_worktree)
-    if needs_builtin_worktree(&target_col, current_task, false) {
+    if !current_task.skip_worktree.unwrap_or(false) && needs_builtin_worktree(&target_col, current_task, current_task.skip_worktree.unwrap_or(false)) {
         ensure_builtin_worktree(root, current_task).await;
     }
 
@@ -1204,7 +1206,7 @@ pub async fn internal_move_task_stage(
         }
         None => {}
     }
-    if needs_builtin_worktree(&target_col, current_task, false) {
+    if !current_task.skip_worktree.unwrap_or(false) && needs_builtin_worktree(&target_col, current_task, current_task.skip_worktree.unwrap_or(false)) {
         ensure_builtin_worktree(root, current_task).await;
     }
 
@@ -1585,6 +1587,17 @@ pub async fn run_agent(
     prompt: Option<String>,
     app_handle: AppHandle,
 ) -> Result<String, String> {
+    {
+        let is_running = {
+            let state = app_handle.state::<AppState>();
+            state.active_agents.lock().map(|map| map.contains_key(&task_id)).unwrap_or(false)
+        };
+        if is_running {
+            eprintln!("CVH [run_agent]: Task {} already has an active agent loop, rejecting duplicate run", task_id);
+            return Ok(format!("Agent already running for task {}", task_id));
+        }
+    }
+
     let root = app_handle.state::<AppState>().get_root();
 
     // Check disk first to ensure task model override and steer updates are fresh
@@ -1758,30 +1771,34 @@ pub async fn run_agent(
         .or(agent_setting.temperature)
         .or(col.temperature);
 
-    let worktree_dir = match &task.worktree_path {
-        Some(p) if !p.trim().is_empty() => {
-            let pb = Path::new(p.trim());
-            let abs = if pb.is_absolute() {
-                pb.to_path_buf()
-            } else {
-                root.join(pb)
-            };
-            if abs.exists() {
-                abs
-            } else {
+    let worktree_dir = if task.skip_worktree == Some(true) {
+        root.clone()
+    } else {
+        match &task.worktree_path {
+            Some(p) if !p.trim().is_empty() => {
+                let pb = Path::new(p.trim());
+                let abs = if pb.is_absolute() {
+                    pb.to_path_buf()
+                } else {
+                    root.join(pb)
+                };
+                if abs.exists() {
+                    abs
+                } else {
+                    eprintln!(
+                        "CVH [run_agent]: WARN task {} worktree {:?} does not exist — creating is forbidden, falling back to repo root {:?}",
+                        task_id, p, root
+                    );
+                    root.clone()
+                }
+            }
+            _ => {
                 eprintln!(
-                    "CVH [run_agent]: WARN task {} worktree {:?} does not exist — creating is forbidden, falling back to repo root {:?}",
-                    task_id, p, root
+                    "CVH [run_agent]: WARN task {} has no worktree_path — creating is forbidden, falling back to repo root {:?}",
+                    task_id, root
                 );
                 root.clone()
             }
-        }
-        _ => {
-            eprintln!(
-                "CVH [run_agent]: WARN task {} has no worktree_path — creating is forbidden, falling back to repo root {:?}",
-                task_id, root
-            );
-            root.clone()
         }
     };
 

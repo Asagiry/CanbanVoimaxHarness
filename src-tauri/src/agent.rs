@@ -83,6 +83,8 @@ pub struct Task {
     pub tags: Option<Vec<String>>,
     #[serde(rename = "currentTokens", alias = "current_tokens", default)]
     pub current_tokens: Option<usize>,
+    #[serde(rename = "skipWorktree", alias = "skip_worktree", default)]
+    pub skip_worktree: Option<bool>,
     #[serde(rename = "createdAt", alias = "created_at", default)]
     pub created_at: i64,
     #[serde(rename = "updatedAt", alias = "updated_at", default)]
@@ -1350,6 +1352,7 @@ pub struct SubagentRetryInfo {
     pub last_error: Option<String>,
     pub report: Option<String>,
     pub is_bg: bool,
+    pub duration_ms: Option<f64>,
 }
 
 pub type SubagentSessionInfo = SubagentRetryInfo;
@@ -1434,6 +1437,22 @@ pub async fn find_subagent_session(
     }
 
     None
+}
+
+/// Appends raw model request and response telemetry to `.cvh/llm_debug.log`
+pub async fn append_llm_debug_log(repo_root: &Path, text: &str) {
+    let cvh_dir = repo_root.join(".cvh");
+    let _ = tokio::fs::create_dir_all(&cvh_dir).await;
+    let log_path = cvh_dir.join("llm_debug.log");
+    if let Ok(mut file) = tokio::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path)
+        .await
+    {
+        use tokio::io::AsyncWriteExt;
+        let _ = file.write_all(text.as_bytes()).await;
+    }
 }
 
 /// Helper to look up a completed subagent's report from SQLite dialog_items.
@@ -1862,28 +1881,19 @@ pub async fn execute_tool(
             let is_this_exploratory = is_exploratory_role(role);
 
             // Deduplication check across sessions:
-            // 1. If an identical or exploratory subagent already completed with report, return it.
-            // 2. If an exploratory subagent is currently running for this parent, return an informative notice.
+            // If an identical or exploratory subagent already completed with report, return it.
             {
                 let sessions = SUBAGENT_SESSIONS.lock().await;
-                for (sid, sess) in sessions.iter() {
+                for sess in sessions.values() {
                     let info = sess.retry_info.lock().await;
                     if info.parent_task_id == parent_id {
                         let is_dup = (info.role.eq_ignore_ascii_case(role) && are_subagent_prompts_duplicate(&info.prompt, prompt))
                             || (is_this_exploratory && is_exploratory_role(&info.role));
 
-                        if is_dup {
-                            if info.status == "finished" {
-                                if let Some(ref rep) = info.report {
-                                    eprintln!("CVH [agent]: Reusing completed subagent report for request (role: '{}')", info.role);
-                                    return Ok(rep.clone());
-                                }
-                            } else if info.status == "running" {
-                                eprintln!("CVH [agent]: Exploratory subagent {} (role: '{}') is already running, returning notice", sid, info.role);
-                                return Ok(format!(
-                                    "[Субагент-исследователь '{}' уже выполняется с ID '{}'. Дождитесь завершения или используйте collect_subagent для получения отчета.]",
-                                    info.role, sid
-                                ));
+                        if is_dup && info.status == "finished" {
+                            if let Some(ref rep) = info.report {
+                                eprintln!("CVH [agent]: Reusing completed subagent report for request (role: '{}')", info.role);
+                                return Ok(rep.clone());
                             }
                         }
                     }
@@ -1918,6 +1928,7 @@ pub async fn execute_tool(
                 last_error: None,
                 report: None,
                 is_bg: false,
+                duration_ms: None,
             };
 
             let session = SubagentSession {
@@ -2067,6 +2078,7 @@ pub async fn execute_tool(
                 last_error: None,
                 report: None,
                 is_bg: true,
+                duration_ms: None,
             };
 
             let session = SubagentSession {
@@ -2873,6 +2885,7 @@ pub async fn execute_tool(
                     priority: input.priority,
                     tags: input.tags,
                     current_tokens: None,
+                    skip_worktree: None,
                     created_at: now,
                     updated_at: now,
                 };
@@ -3151,6 +3164,7 @@ pub fn run_inprocess_subagent(
     explicit_subagent_id: Option<String>,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String>> + Send>> {
     Box::pin(async move {
+    let start_instant = std::time::Instant::now();
     let parent_id = ctx.task_id.as_deref().unwrap_or("unknown").to_string();
     let subagent_suffix = match ctx.call_id.as_deref() {
         Some(cid) if !cid.trim().is_empty() => cid.trim().to_string(),
@@ -3326,6 +3340,29 @@ pub fn run_inprocess_subagent(
             stream_options: None,
         };
 
+        // Log raw request for complete transparency & debugging (§ llm_debug.log)
+        {
+            let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
+            let mut req_log = format!(
+                "[{}] [{}] Subagent Turn {} Request:
+Model: {}
+Messages count: {}
+",
+                ts, subagent_id, sub_turn, model, sub_messages.len()
+            );
+            if let Some(first) = sub_messages.first() {
+                if first.role == Role::System {
+                    req_log.push_str(&format!("System prompt:
+{}
+", first.content.as_deref().unwrap_or("")));
+                }
+            }
+            req_log.push_str(&format!("Tool calls requested ({}): {:?}
+
+", effective_sub_tools.len(), effective_sub_tools));
+            append_llm_debug_log(&ctx.repo_root, &req_log).await;
+        }
+
         let (tx, mut rx) = mpsc::channel::<StreamChunk>(100);
         let cl = llm_client.clone();
         let b_url = base_url.to_string();
@@ -3431,6 +3468,37 @@ pub fn run_inprocess_subagent(
             } else {
                 turn_content.push_str(&text);
             }
+        }
+
+        // Log raw response for complete transparency & debugging (§ llm_debug.log)
+        {
+            let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
+            let mut resp_log = format!(
+                "[{}] [{}] Subagent Turn {} Response:
+",
+                ts, subagent_id, sub_turn
+            );
+            if !turn_content.trim().is_empty() {
+                resp_log.push_str(&format!("Content:
+{}
+", turn_content.trim()));
+            }
+            if !turn_tool_calls.is_empty() {
+                resp_log.push_str(&format!("Tool calls received ({}):
+", turn_tool_calls.len()));
+                for tc in &turn_tool_calls {
+                    resp_log.push_str(&format!("  - {} (id: {}): {}
+", tc.function.name, tc.id, tc.function.arguments));
+                }
+            } else {
+                resp_log.push_str("Tool calls received: None (terminal response)
+");
+            }
+            resp_log.push_str("
+--------------------------------------------------------------------------------
+
+");
+            append_llm_debug_log(&ctx.repo_root, &resp_log).await;
         }
 
         if turn_tool_calls.is_empty() {
@@ -3610,13 +3678,14 @@ pub fn run_inprocess_subagent(
     // If the subagent encountered an error, record error, emit subagent:error,
     // and keep parent channel pending so parent context is never polluted!
     if let Some(err_msg) = sub_error {
+        let duration_ms = start_instant.elapsed().as_millis() as f64;
         let err_item = ActivityItem {
             id: format!("sub-err-{}", uuid::Uuid::new_v4()),
             item_type: "error".to_string(),
             timestamp: chrono::Utc::now().to_rfc3339(),
             content: Some(err_msg.clone()),
             tool: None,
-            duration_ms: None,
+            duration_ms: Some(duration_ms),
             images: None,
         };
         let _ = crate::db::append_dialog_items(&ctx.repo_root, &subagent_dialog_id, std::slice::from_ref(&err_item));
@@ -3625,6 +3694,7 @@ pub fn run_inprocess_subagent(
                 "parentTaskId": &parent_id,
                 "subagentId": &subagent_id,
                 "error": &err_msg,
+                "durationMs": duration_ms,
             }));
         }
 
@@ -3632,6 +3702,7 @@ pub fn run_inprocess_subagent(
             let mut info = session.retry_info.lock().await;
             info.status = "error".to_string();
             info.last_error = Some(err_msg.clone());
+            info.duration_ms = Some(duration_ms);
         }
 
         bail!("Subagent [{}] error: {}", subagent_id, err_msg);
@@ -3755,10 +3826,12 @@ Subagent [{}] '{}' report:
     );
 
     if ctx.abort_handle.load(Ordering::SeqCst) {
+        let duration_ms = start_instant.elapsed().as_millis() as f64;
         if let Some((_, session)) = find_subagent_session(Some(&parent_id), &subagent_id).await {
             let mut info = session.retry_info.lock().await;
             info.status = "aborted".to_string();
             info.last_error = Some("Прервано пользователем".to_string());
+            info.duration_ms = Some(duration_ms);
             if let Some(sender) = session.sender.lock().await.take() {
                 let _ = sender.send("[Субагент прерван пользователем / Subagent aborted by user]".to_string());
             }
@@ -3769,11 +3842,14 @@ Subagent [{}] '{}' report:
                 serde_json::json!({
                     "parentTaskId": &parent_id,
                     "subagentId": &subagent_id,
+                    "durationMs": duration_ms,
                 }),
             );
         }
         bail!("Subagent [{}] was aborted by user", subagent_id);
     }
+
+    let duration_ms = start_instant.elapsed().as_millis() as f64;
 
     // Subagent completed cleanly: deliver report to waiting parent channel!
     if let Some((_, session)) = find_subagent_session(Some(&parent_id), &subagent_id).await {
@@ -3781,6 +3857,7 @@ Subagent [{}] '{}' report:
         info.status = "finished".to_string();
         info.last_error = None;
         info.report = Some(report.clone());
+        info.duration_ms = Some(duration_ms);
         if let Some(sender) = session.sender.lock().await.take() {
             let _ = sender.send(report.clone());
         }
@@ -3793,6 +3870,7 @@ Subagent [{}] '{}' report:
                 "parentTaskId": &parent_id,
                 "subagentId": &subagent_id,
                 "response": &final_sub_response,
+                "durationMs": duration_ms,
             }),
         );
     }
@@ -5044,6 +5122,30 @@ where
             stream_options: Some(crate::llm::StreamOptions { include_usage: true }),
         };
 
+        // Log raw request for complete transparency & debugging (§ llm_debug.log)
+        {
+            let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
+            let mut req_log = format!(
+                "[{}] [{}] Turn {} Request:
+Model: {}
+Messages count: {}
+",
+                ts, config.task_id, turn, config.model, messages.len()
+            );
+            if let Some(first) = messages.first() {
+                if first.role == Role::System {
+                    req_log.push_str(&format!("System prompt:
+{}
+", first.content.as_deref().unwrap_or("")));
+                }
+            }
+            let tool_names: Vec<String> = active_tools.iter().map(|t| t.function.name.clone()).collect();
+            req_log.push_str(&format!("Tool calls requested ({}): {:?}
+
+", tool_names.len(), tool_names));
+            append_llm_debug_log(&config.repo_root, &req_log).await;
+        }
+
         let (tx, mut rx) = mpsc::channel::<StreamChunk>(100);
         let client = llm_client.clone();
         let base_url = config.base_url.clone();
@@ -5058,6 +5160,7 @@ where
         });
 
         let mut turn_content = String::new();
+        let mut turn_thoughts = String::new();
         let mut turn_tool_calls: Vec<ToolCall> = Vec::new();
         let mut thinking_parser = ThinkingStreamParser::new();
         let mut received_any_chunk = false;
@@ -5085,6 +5188,7 @@ where
                     let parsed = thinking_parser.push(&token);
                     for (is_thought, text) in parsed {
                         if is_thought {
+                            turn_thoughts.push_str(&text);
                             event_sink(AgentEvent::Thought(text));
                         } else {
                             turn_content.push_str(&text);
@@ -5106,6 +5210,7 @@ where
                     }
                     last_token_instant = Some(std::time::Instant::now());
                     turn_streamed_chars += thought.len();
+                    turn_thoughts.push_str(&thought);
                     event_sink(AgentEvent::Thought(thought));
                 }
                 StreamChunk::ToolCall { id, name, arguments } => {
@@ -5227,11 +5332,48 @@ where
         let flushed = thinking_parser.flush();
         for (is_thought, text) in flushed {
             if is_thought {
+                turn_thoughts.push_str(&text);
                 event_sink(AgentEvent::Thought(text));
             } else {
                 turn_content.push_str(&text);
                 event_sink(AgentEvent::Token(text));
             }
+        }
+
+        // Log raw response for complete transparency & debugging (§ llm_debug.log)
+        {
+            let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
+            let mut resp_log = format!(
+                "[{}] [{}] Turn {} Response:
+",
+                ts, config.task_id, turn
+            );
+            if !turn_thoughts.trim().is_empty() {
+                resp_log.push_str(&format!("Thoughts:
+{}
+", turn_thoughts.trim()));
+            }
+            if !turn_content.trim().is_empty() {
+                resp_log.push_str(&format!("Content:
+{}
+", turn_content.trim()));
+            }
+            if !turn_tool_calls.is_empty() {
+                resp_log.push_str(&format!("Tool calls received ({}):
+", turn_tool_calls.len()));
+                for tc in &turn_tool_calls {
+                    resp_log.push_str(&format!("  - {} (id: {}): {}
+", tc.function.name, tc.id, tc.function.arguments));
+                }
+            } else {
+                resp_log.push_str("Tool calls received: None (terminal turn)
+");
+            }
+            resp_log.push_str("
+--------------------------------------------------------------------------------
+
+");
+            append_llm_debug_log(&config.repo_root, &resp_log).await;
         }
 
         // If no tool calls, terminal response reached
