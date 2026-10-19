@@ -264,6 +264,17 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
   const returnsCount = typeof raw.returnsCount === 'number' && Number.isFinite(raw.returnsCount)
     ? raw.returnsCount
     : 0;
+
+  const skipWorktree = Boolean(raw.skipWorktree ?? raw.skip_worktree ?? false);
+  const branch = skipWorktree
+    ? (typeof raw.branch === 'string' && raw.branch.trim() !== '' ? raw.branch : undefined)
+    : (typeof raw.branch === 'string' && raw.branch.trim() !== '' ? raw.branch : `feat/${raw.id.toLowerCase()}`);
+  const worktreePath = skipWorktree
+    ? (typeof raw.worktreePath === 'string' && raw.worktreePath.trim() !== ''
+        ? raw.worktreePath
+        : (typeof raw.worktree_path === 'string' && raw.worktree_path.trim() !== '' ? raw.worktree_path : undefined))
+    : (raw.worktreePath || raw.worktree_path || `worktrees/${raw.id.toLowerCase()}`);
+
   return {
     id: raw.id,
     title: typeof raw.title === 'string' && raw.title.trim() !== '' ? raw.title : raw.id,
@@ -276,8 +287,8 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
     columnId,
     boardId,
     persona: col?.persona ?? (typeof raw.persona === 'string' ? raw.persona : 'developer'),
-    branch: raw.branch || `feat/${raw.id.toLowerCase()}`,
-    worktreePath: raw.worktreePath || raw.worktree_path || `worktrees/${raw.id.toLowerCase()}`,
+    branch,
+    worktreePath,
     status,
     activeStageDuration,
     stageDurations,
@@ -305,6 +316,7 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
     currentTokens: typeof raw.currentTokens === 'number'
       ? raw.currentTokens
       : (typeof raw.current_tokens === 'number' ? raw.current_tokens : undefined),
+    skipWorktree,
   };
 }
 
@@ -372,6 +384,7 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
         currentTokens: typeof t.currentTokens === 'number' ? t.currentTokens : null,
         createdAt: t.createdAt || Date.now(),
         updatedAt: Date.now(),
+        skipWorktree: t.skipWorktree ?? false,
       };
     });
     await invoke('save_tasks', { tasks: backendPayload });
@@ -874,8 +887,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       columnId: targetColumnId,
       boardId,
       persona: targetColDef?.persona ?? 'developer',
-      branch: `feat/${optimisticId.toLowerCase()}`,
-      worktreePath: `.cvh/worktrees/${optimisticId.toLowerCase()}`,
+      branch: skipWorktree ? undefined : `feat/${optimisticId.toLowerCase()}`,
+      worktreePath: skipWorktree ? undefined : `.cvh/worktrees/${optimisticId.toLowerCase()}`,
+      skipWorktree,
       status,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -986,6 +1000,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       persona: targetCol.persona || 'reviewer',
       branch: parent.branch,
       worktreePath: parent.worktreePath,
+      skipWorktree: parent.skipWorktree,
       status: subtaskStatus,
       createdAt: Date.now(),
       updatedAt: Date.now(),

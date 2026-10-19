@@ -652,7 +652,7 @@ export default function KanbanBoard() {
     return (
       task.id.toLowerCase().includes(q) ||
       task.title.toLowerCase().includes(q) ||
-      task.branch.toLowerCase().includes(q) ||
+      (task.branch ? task.branch.toLowerCase().includes(q) : false) ||
       (task.description && task.description.toLowerCase().includes(q))
     );
   });

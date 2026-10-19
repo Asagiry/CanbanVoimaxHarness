@@ -33,8 +33,8 @@ export interface KanbanTask {
   columnId: string;
   boardId?: string;
   persona: string;
-  branch: string;
-  worktreePath: string;
+  branch?: string;
+  worktreePath?: string;
   status: TaskStatus;
   activeStageDuration: number; // in seconds
   stageDurations: Record<string, number>; // stageId -> seconds

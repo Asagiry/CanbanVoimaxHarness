@@ -1721,7 +1721,7 @@ pub fn default_tool_settings() -> HashMap<String, serde_json::Value> {
     map.insert("read_file".to_string(), serde_json::json!({ "max_lines": 2000 }));
     map.insert("subagent".to_string(), serde_json::json!({ "max_concurrent": 3 }));
     map.insert("subagent_bg".to_string(), serde_json::json!({ "max_concurrent": 3 }));
-    map.insert("todo_write".to_string(), serde_json::json!({ "max_items": 15 }));
+    map.insert("todo_write".to_string(), serde_json::json!({ "min_items": 3, "max_items": 15 }));
     map.insert("execute_command".to_string(), serde_json::json!({ "timeout_sec": 180 }));
     map
 }

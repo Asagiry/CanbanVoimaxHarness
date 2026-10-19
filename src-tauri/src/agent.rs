@@ -2264,6 +2264,14 @@ pub async fn execute_tool(
                 .and_then(|v| v.as_array())
                 .context("Missing required parameter 'todos' (must be array)")?;
 
+            let _min_items = ctx
+                .tool_policy
+                .tool_settings
+                .get("todo_write")
+                .and_then(|v| v.get("min_items"))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(3) as usize;
+
             let max_items = ctx
                 .tool_policy
                 .tool_settings

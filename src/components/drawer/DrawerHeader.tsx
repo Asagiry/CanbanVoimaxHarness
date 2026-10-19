@@ -314,13 +314,13 @@ export default function DrawerHeader({
       {/* Worktree strip below the header */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] text-xs font-mono text-[#666666] dark:text-[#8b949e] shrink-0 transition-colors">
         <div className="flex items-center space-x-2.5">
-          {!task?.skipWorktree && task?.worktreePath && (
+          {!task?.skipWorktree && task?.worktreePath && task.worktreePath.trim() !== '' && (
             <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-[#f9f9f9] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d]">
               <FolderGit2 className="h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e]" />
               <span className="text-[#4d4d4d] dark:text-[#c9d1d9]">{task.worktreePath}</span>
             </div>
           )}
-          {!task?.skipWorktree && task?.worktreePath && task?.branch && (
+          {!task?.skipWorktree && task?.worktreePath && task.worktreePath.trim() !== '' && task?.branch && task.branch.trim() !== '' && (
             <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-[#f9f9f9] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d]">
               <GitBranch className="h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e]" />
               <span className="text-[#4d4d4d] dark:text-[#c9d1d9]">{task.branch}</span>
