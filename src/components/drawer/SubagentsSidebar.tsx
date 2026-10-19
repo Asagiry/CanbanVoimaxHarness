@@ -373,16 +373,25 @@ export default function SubagentsSidebar({
 
   if (isCollapsed) {
     return (
-      <div className="w-9 shrink-0 border-r border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#161b22] flex flex-col items-center py-2 transition-colors select-none">
+      <aside className={`w-11 shrink-0 border-r border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] flex flex-col items-center py-3 select-none transition-all duration-150 ${className || ''}`}>
         <button
           type="button"
           onClick={onToggleCollapse}
-          className="p-1.5 rounded-md text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] transition cursor-pointer"
+          className="p-1.5 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
           aria-label="Развернуть панель субагентов"
         >
           <PanelLeftOpen className="h-4 w-4" />
         </button>
-      </div>
+        <div
+          onClick={onToggleCollapse}
+          className="mt-6 flex-1 flex items-center justify-center cursor-pointer group"
+          aria-label="Развернуть панель субагентов"
+        >
+          <span className="text-[11px] font-mono text-[#8f8f8f] dark:text-[#8b949e] group-hover:text-[#171717] dark:group-hover:text-[#f0f6fc] transition tracking-wider [writing-mode:vertical-rl] rotate-180">
+            Субагенты
+          </span>
+        </div>
+      </aside>
     );
   }
 
@@ -455,18 +464,7 @@ export default function SubagentsSidebar({
         )}
 
         {allSubagents.length === 0 ? (
-          /* Empty State */
-          <div className="py-10 px-4 text-center flex flex-col items-center justify-center text-[#71717a] dark:text-[#8b949e]">
-            <div className="h-9 w-9 rounded-md bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] flex items-center justify-center mb-3">
-              <Bot className="h-5 w-5 text-[#a1a1aa] dark:text-[#6e7681]" />
-            </div>
-            <div className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc] mb-1">
-              Субагенты не вызывались
-            </div>
-            <p className="text-[11px] leading-relaxed text-[#71717a] dark:text-[#8b949e] max-w-[220px]">
-              Список субагентов появится здесь автоматически при вызове инструментов subagent или subagent_bg.
-            </p>
-          </div>
+          <div className="flex-1" />
         ) : (
           allSubagents.map((sub, idx) => {
             const isActive =

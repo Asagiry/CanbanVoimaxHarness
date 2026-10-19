@@ -721,7 +721,7 @@ export default function DrawerActivityStream({
     (p) => p.role.toLowerCase() === (activeSubagentRole || '').toLowerCase()
   );
 
-  const [expandedOutputs, setExpandedOutputs] = useState<Set<string>>(() => new Set());
+  const [collapsedOutputs, setCollapsedOutputs] = useState<Set<string>>(() => new Set());
   const [showNewButton, setShowNewButton] = useState(false);
   const isFirstBatchRef = useRef(true);
   const nearBottomRef = useRef(true);
@@ -767,7 +767,7 @@ export default function DrawerActivityStream({
   }, [unifiedActivities, isRunning]);
 
   const toggleOutput = (id: string) => {
-    setExpandedOutputs((prev) => {
+    setCollapsedOutputs((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
@@ -797,9 +797,9 @@ export default function DrawerActivityStream({
     }
   };
 
-  // Reset scroll and expanded state on task switch
+  // Reset scroll and collapsed state on task switch
   useEffect(() => {
-    setExpandedOutputs(new Set());
+    setCollapsedOutputs(new Set());
     setShowNewButton(false);
     isFirstBatchRef.current = true;
     nearBottomRef.current = true;
@@ -1114,7 +1114,7 @@ export default function DrawerActivityStream({
             }
 
             // True Final Response / Output Markdown Block (collapsible card)
-            const isOutputExpanded = expandedOutputs.has(key);
+            const isOutputExpanded = !collapsedOutputs.has(key);
             const outputDurationText = formatDurationCompact(activityDurations[idx] || activity?.durationMs);
             return (
               <div

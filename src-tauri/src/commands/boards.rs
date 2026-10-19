@@ -13,7 +13,7 @@ use tauri::{AppHandle, Emitter, State};
 pub const AGENT_ICONS: &[&str] = &[
     "Bot", "Brain", "Cpu", "Code2", "ShieldCheck", "Sparkles",
     "Terminal", "Zap", "Flame", "Radar", "Workflow", "Boxes",
-    "Wrench", "Rocket", "Fingerprint", "Compass", "Crosshair", "Layers",
+    "Wrench", "Rocket", "Compass", "Crosshair", "Layers",
 ];
 
 /// Каноническая палитра цветов для агентов.

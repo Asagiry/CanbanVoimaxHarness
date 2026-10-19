@@ -38,6 +38,7 @@ export const AGENT_ICONS: readonly string[] = [
   'Cpu',
   'Code2',
   'ShieldCheck',
+  'Sparkles',
   'History',
   'Terminal',
   'Zap',
@@ -47,7 +48,6 @@ export const AGENT_ICONS: readonly string[] = [
   'Boxes',
   'Wrench',
   'Rocket',
-  'Fingerprint',
   'Compass',
   'Crosshair',
   'Layers',
@@ -86,10 +86,13 @@ export function getDeterministicAgentIcon(role?: string | null): string {
   if (!role) return 'Bot';
   const trimmed = role.trim();
   if (!trimmed) return 'Bot';
-  if (trimmed === 'cvh-dev') return 'Cpu';
-  if (trimmed === 'developer' || trimmed === 'dev') return 'Code2';
-  if (trimmed === 'reviewer' || trimmed === 'review') return 'ShieldCheck';
-  if (trimmed === 'retro') return 'History';
+  const lower = trimmed.toLowerCase();
+  if (lower === 'cvh-dev') return 'Cpu';
+  if (lower === 'developer' || lower === 'dev') return 'Code2';
+  if (lower === 'reviewer' || lower === 'review') return 'ShieldCheck';
+  if (lower === 'retro') return 'History';
+  if (lower === 'oneshot') return 'Zap';
+  if (lower === 'general') return 'Sparkles';
 
   let hash = 5381;
   for (let i = 0; i < trimmed.length; i++) {
