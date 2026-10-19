@@ -260,9 +260,9 @@ function KanbanCard({ task, index }: KanbanCardProps) {
               <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
                 <span
                   className="truncate text-[#8f8f8f] dark:text-[#8b949e] min-w-0"
-                  title={task.branch ? `Ветка: ${task.branch}` : 'Ветка не задана'}
+                  title={task.skipWorktree ? 'Задача без ворктри' : (task.branch ? `Ветка: ${task.branch}` : 'Ветка не задана')}
                 >
-                  {task.branch || 'без ветки'}
+                  {task.skipWorktree ? 'без ворктри' : (task.branch || 'без ветки')}
                 </span>
               </div>
               {(task.createdAt || currentTotalElapsed > 0) && (

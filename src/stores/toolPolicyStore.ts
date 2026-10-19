@@ -191,7 +191,7 @@ export const TOOL_PARAM_DEFS: Record<string, ToolParamDef[]> = {
       label: 'Максимум параллельных субагентов',
       defaultValue: 3,
       min: 1,
-      max: 10,
+      max: 32,
       step: 1,
       unit: 'агентов',
     },
@@ -202,12 +202,21 @@ export const TOOL_PARAM_DEFS: Record<string, ToolParamDef[]> = {
       label: 'Максимум параллельных субагентов',
       defaultValue: 3,
       min: 1,
-      max: 10,
+      max: 32,
       step: 1,
       unit: 'агентов',
     },
   ],
   todo_write: [
+    {
+      key: 'min_items',
+      label: 'Минимум пунктов чеклиста',
+      defaultValue: 3,
+      min: 1,
+      max: 20,
+      step: 1,
+      unit: 'пунктов',
+    },
     {
       key: 'max_items',
       label: 'Максимум пунктов чеклиста',
@@ -237,7 +246,7 @@ export const DEFAULT_TOOL_SETTINGS: ToolSettings = {
   read_file: { max_lines: 2000 },
   subagent: { max_concurrent: 3 },
   subagent_bg: { max_concurrent: 3 },
-  todo_write: { max_items: 15 },
+  todo_write: { min_items: 3, max_items: 15 },
   execute_command: { timeout_sec: 180 },
 };
 
@@ -482,13 +491,19 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
       }>('get_tool_policies');
 
       if (policies) {
+        const mergedSettings: ToolSettings = { ...DEFAULT_TOOL_SETTINGS };
+        if (policies.toolSettings) {
+          for (const [tool, settings] of Object.entries(policies.toolSettings)) {
+            mergedSettings[tool] = {
+              ...(DEFAULT_TOOL_SETTINGS[tool] || {}),
+              ...settings,
+            };
+          }
+        }
         set({
           globalEnabled: policies.globalEnabled || DEFAULT_GLOBAL,
           stageOverrides: policies.stageOverrides || DEFAULT_OVERRIDES,
-          toolSettings: {
-            ...DEFAULT_TOOL_SETTINGS,
-            ...(policies.toolSettings || {}),
-          },
+          toolSettings: mergedSettings,
         });
       }
     } catch {
