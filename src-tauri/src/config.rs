@@ -1711,6 +1711,18 @@ pub struct ToolPolicyConfig {
     pub global_enabled: HashMap<String, bool>,
     #[serde(default, rename = "stageOverrides")]
     pub stage_overrides: HashMap<String, HashMap<String, bool>>,
+    #[serde(default = "default_tool_settings", rename = "toolSettings")]
+    pub tool_settings: HashMap<String, serde_json::Value>,
+}
+
+pub fn default_tool_settings() -> HashMap<String, serde_json::Value> {
+    let mut map = HashMap::new();
+    map.insert("read_file".to_string(), serde_json::json!({ "max_lines": 2000 }));
+    map.insert("subagent".to_string(), serde_json::json!({ "max_concurrent": 3 }));
+    map.insert("subagent_bg".to_string(), serde_json::json!({ "max_concurrent": 3 }));
+    map.insert("todo_write".to_string(), serde_json::json!({ "max_items": 15 }));
+    map.insert("execute_command".to_string(), serde_json::json!({ "timeout_sec": 180 }));
+    map
 }
 
 pub fn default_global_tools() -> HashMap<String, bool> {
@@ -1725,6 +1737,7 @@ pub fn default_global_tools() -> HashMap<String, bool> {
     map.insert("web_fetch".to_string(), true);
     map.insert("subagent".to_string(), true);
     map.insert("subagent_bg".to_string(), true);
+    map.insert("collect_subagent".to_string(), true);
     map.insert("todo_write".to_string(), true);
     map.insert("advance_task".to_string(), true);
     map.insert("reject_task".to_string(), true);
@@ -1750,6 +1763,7 @@ impl Default for ToolPolicyConfig {
         review_map.insert("web_fetch".to_string(), true);
         review_map.insert("subagent".to_string(), true);
         review_map.insert("subagent_bg".to_string(), true);
+        review_map.insert("collect_subagent".to_string(), true);
         review_map.insert("todo_write".to_string(), true);
         review_map.insert("advance_task".to_string(), true);
         review_map.insert("reject_task".to_string(), true);
@@ -1770,6 +1784,7 @@ impl Default for ToolPolicyConfig {
         dev_map.insert("web_fetch".to_string(), true);
         dev_map.insert("subagent".to_string(), true);
         dev_map.insert("subagent_bg".to_string(), true);
+        dev_map.insert("collect_subagent".to_string(), true);
         dev_map.insert("todo_write".to_string(), true);
         dev_map.insert("advance_task".to_string(), true);
         dev_map.insert("reject_task".to_string(), true);
@@ -1789,6 +1804,7 @@ impl Default for ToolPolicyConfig {
         retro_map.insert("web_fetch".to_string(), true);
         retro_map.insert("subagent".to_string(), true);
         retro_map.insert("subagent_bg".to_string(), true);
+        retro_map.insert("collect_subagent".to_string(), true);
         retro_map.insert("todo_write".to_string(), true);
         retro_map.insert("advance_task".to_string(), true);
         retro_map.insert("reject_task".to_string(), true);
@@ -1812,6 +1828,7 @@ impl Default for ToolPolicyConfig {
         Self {
             global_enabled: default_global_tools(),
             stage_overrides,
+            tool_settings: default_tool_settings(),
         }
     }
 }

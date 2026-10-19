@@ -8,6 +8,7 @@ import KanbanColumn from './KanbanColumn';
 import { PipelineColumn, BoardDef } from '../../types';
 import { Plus, X, Layout, Pencil, Trash2, Search } from 'lucide-react';
 import CreateBoardModal from './CreateBoardModal';
+import PersonaSelect from '../common/PersonaSelect';
 import { slugifyTitle, uniqueColumnId } from '../../lib/slug';
 import { AGENT_PALETTE, getDeterministicAgentColor, isAllowedAgentColor } from '../../lib/agentPalette';
 
@@ -820,30 +821,22 @@ export default function KanbanBoard() {
                 Агент
               </label>
               {usePersonaSelect ? (
-                <select
+                <PersonaSelect
                   value={isNewAgentSelected ? NEW_AGENT_OPTION : newColumnPersona}
-                  onChange={(e) => {
-                    if (e.target.value === NEW_AGENT_OPTION) {
+                  onChange={(val) => {
+                    if (val === NEW_AGENT_OPTION) {
                       setIsNewAgentSelected(true);
                     } else {
                       setIsNewAgentSelected(false);
-                      setNewColumnPersona(e.target.value);
+                      setNewColumnPersona(val);
                     }
                   }}
                   disabled={personasLoading}
-                  className="w-44 px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-mono transition cursor-pointer"
-                >
-                  {agentPersonas.map((p) => {
-                    const isBuiltin = p.role === 'cvh-dev' || Boolean(p.isBuiltin || p.is_builtin);
-                    const iconLabel = p.icon ? ` [${p.icon}]` : '';
-                    return (
-                      <option key={p.role} value={p.role} className="dark:bg-[#161b22] dark:text-[#f0f6fc]">
-                        {isBuiltin ? `${p.role} (Встроенный)${iconLabel}` : `${p.role}${iconLabel}`}
-                      </option>
-                    );
-                  })}
-                  <option value={NEW_AGENT_OPTION} className="dark:bg-[#161b22] dark:text-[#f0f6fc]">+ Новый агент</option>
-                </select>
+                  personas={agentPersonas}
+                  allowNewAgent={true}
+                  newAgentOptionValue={NEW_AGENT_OPTION}
+                  className="w-48"
+                />
               ) : (
                 <input
                   type="text"

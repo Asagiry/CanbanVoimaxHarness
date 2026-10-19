@@ -1595,8 +1595,19 @@ pub async fn execute_tool(
                 bail!("File does not exist: {:?}", rel_path);
             }
 
+            let default_limit = ctx
+                .tool_policy
+                .tool_settings
+                .get("read_file")
+                .and_then(|v| v.get("max_lines"))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(2000) as usize;
             let offset = args.get("offset").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
-            let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(2000) as usize;
+            let limit = args
+                .get("limit")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as usize)
+                .unwrap_or(default_limit);
 
             let content = tokio::fs::read_to_string(&target)
                 .await
@@ -1715,7 +1726,17 @@ pub async fn execute_tool(
                 .or_else(|| args.get("cmd"))
                 .and_then(|v| v.as_str())
                 .context("Missing required parameter 'command'")?;
-            let timeout_secs = args.get("timeout_seconds").and_then(|v| v.as_u64()).unwrap_or(60);
+            let default_timeout = ctx
+                .tool_policy
+                .tool_settings
+                .get("execute_command")
+                .and_then(|v| v.get("timeout_sec"))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(180);
+            let timeout_secs = args
+                .get("timeout_seconds")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(default_timeout);
 
             let res = run_scoped_command(worktree_dir, command_str, Duration::from_secs(timeout_secs), Arc::clone(&abort_handle)).await?;
             format!(
@@ -2000,12 +2021,23 @@ pub async fn execute_tool(
                 .and_then(|v| v.as_array())
                 .context("Missing required parameter 'todos' (must be array)")?;
 
+            let max_items = ctx
+                .tool_policy
+                .tool_settings
+                .get("todo_write")
+                .and_then(|v| v.get("max_items"))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(15) as usize;
+
             let mut parsed_todos: Vec<TodoItem> = Vec::new();
             let mut completed_cnt = 0;
             let mut in_progress_cnt = 0;
             let mut pending_cnt = 0;
 
             for (idx, item) in raw_todos.iter().enumerate() {
+                if parsed_todos.len() >= max_items {
+                    break;
+                }
                 let content = item
                     .get("content")
                     .and_then(|v| v.as_str())

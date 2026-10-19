@@ -16,7 +16,7 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
   {
     id: 'create_task',
     name: 'create_task',
-    label: 'Создать задачу (Create Task)',
+    label: 'Создать задачу',
     description: 'Декомпозиция требований и создание новой карточки задачи на Канбан-доске с привязкой к текущей задаче.',
     category: 'orchestration',
     tokenWeight: 260,
@@ -24,7 +24,7 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
   {
     id: 'complete_task',
     name: 'complete_task',
-    label: 'Завершить задачу оркестратором (Complete Task)',
+    label: 'Завершить задачу',
     description: 'Финализация задачи оркестратора и перевод в Готово. Защищено инвариантом Anti-Bypass.',
     category: 'orchestration',
     tokenWeight: 220,
@@ -32,7 +32,7 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
   {
     id: 'question',
     name: 'question',
-    label: 'Интерактивный вопрос (Human-in-the-Loop)',
+    label: 'Интерактивный вопрос',
     description: 'Задать уточняющий вопрос пользователю и ожидать ответа в интерфейсе. Алиас: ask_user.',
     category: 'interactive',
     tokenWeight: 240,
@@ -40,7 +40,7 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
   {
     id: 'advance_task',
     name: 'advance_task',
-    label: 'Передать задачу (Advance)',
+    label: 'Передать задачу',
     description: 'Передать задачу на следующий этап пайплайна (шаг вперед) с обязательным саммари проделанной работы.',
     category: 'workflow',
     tokenWeight: 220,
@@ -48,7 +48,7 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
   {
     id: 'reject_task',
     name: 'reject_task',
-    label: 'Вернуть задачу (Reject)',
+    label: 'Вернуть задачу',
     description: 'Вернуть задачу на предыдущий этап пайплайна (шаг назад) с указанием причины отклонения и замечаний.',
     category: 'workflow',
     tokenWeight: 220,
@@ -88,7 +88,7 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
   {
     id: 'glob',
     name: 'glob',
-    label: 'Поиск файлов (Glob)',
+    label: 'Поиск файлов',
     description: 'Поиск файлов по маске внутри каталога проекта.',
     category: 'fs',
     tokenWeight: 240,
@@ -96,7 +96,7 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
   {
     id: 'grep',
     name: 'grep',
-    label: 'Поиск по тексту (Grep)',
+    label: 'Поиск по коду',
     description: 'Поиск регулярных выражений с номерами строк.',
     category: 'fs',
     tokenWeight: 250,
@@ -120,8 +120,8 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
   {
     id: 'subagent',
     name: 'subagent',
-    label: "Вызов субагентов (мастер-тул: 'subagent')",
-    description: "Мастер-переключатель вызова субагентов. Если отключен, запуск как ваншот, так и фоновых субагентов заблокирован.",
+    label: 'Делегирование субагентам',
+    description: 'Мастер-переключатель вызова субагентов. Если отключен, запуск как синхронных, так и фоновых субагентов заблокирован.',
     category: 'agent',
     tokenWeight: 310,
     isSubagentMaster: true,
@@ -129,7 +129,7 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
   {
     id: 'subagent_sync',
     name: 'subagent',
-    label: 'subagent (Ваншот)',
+    label: 'Синхронный субагент',
     description: 'Синхронный запуск субагента с блокировкой на стороне Rust до получения финального отчёта.',
     category: 'agent',
     tokenWeight: 290,
@@ -138,32 +138,122 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
   {
     id: 'subagent_bg',
     name: 'subagent_bg',
-    label: 'subagent_bg (Фоновый)',
+    label: 'Фоновый субагент',
     description: 'Асинхронный запуск субагента в фоне с последующим получением результата через collect_subagent без поллинга.',
     category: 'agent',
     tokenWeight: 290,
     parentTool: 'subagent',
   },
   {
+    id: 'collect_subagent',
+    name: 'collect_subagent',
+    label: 'Собрать субагентов',
+    description: 'Ожидание завершения и получение отчетов фоновых субагентов по subagent_id без поллинга.',
+    category: 'agent',
+    tokenWeight: 260,
+    parentTool: 'subagent',
+  },
+  {
     id: 'todo_write',
     name: 'todo_write',
-    label: 'План To-dos',
+    label: 'План выполнения (To-dos)',
     description: 'Фиксация и обновление плана задачи: шаги pending | in_progress | completed',
     category: 'agent',
     tokenWeight: 280,
   },
 ];
 
+export interface ToolParamDef {
+  key: string;
+  label: string;
+  defaultValue: number;
+  min: number;
+  max: number;
+  step: number;
+  unit: string;
+}
+
+export const TOOL_PARAM_DEFS: Record<string, ToolParamDef[]> = {
+  read_file: [
+    {
+      key: 'max_lines',
+      label: 'Лимит чтения строк за раз',
+      defaultValue: 2000,
+      min: 50,
+      max: 10000,
+      step: 100,
+      unit: 'строк',
+    },
+  ],
+  subagent: [
+    {
+      key: 'max_concurrent',
+      label: 'Максимум параллельных субагентов',
+      defaultValue: 3,
+      min: 1,
+      max: 10,
+      step: 1,
+      unit: 'агентов',
+    },
+  ],
+  subagent_bg: [
+    {
+      key: 'max_concurrent',
+      label: 'Максимум параллельных субагентов',
+      defaultValue: 3,
+      min: 1,
+      max: 10,
+      step: 1,
+      unit: 'агентов',
+    },
+  ],
+  todo_write: [
+    {
+      key: 'max_items',
+      label: 'Максимум пунктов чеклиста',
+      defaultValue: 15,
+      min: 3,
+      max: 50,
+      step: 1,
+      unit: 'пунктов',
+    },
+  ],
+  execute_command: [
+    {
+      key: 'timeout_sec',
+      label: 'Таймаут выполнения в секундах',
+      defaultValue: 180,
+      min: 10,
+      max: 3600,
+      step: 10,
+      unit: 'сек',
+    },
+  ],
+};
+
+export type ToolSettings = Record<string, Record<string, number>>;
+
+export const DEFAULT_TOOL_SETTINGS: ToolSettings = {
+  read_file: { max_lines: 2000 },
+  subagent: { max_concurrent: 3 },
+  subagent_bg: { max_concurrent: 3 },
+  todo_write: { max_items: 15 },
+  execute_command: { timeout_sec: 180 },
+};
+
 export interface ToolPolicyState {
   isModalOpen: boolean;
   globalEnabled: Record<string, boolean>;
   stageOverrides: Record<string, Record<string, boolean>>;
+  toolSettings: ToolSettings;
 
   // Actions
   openModal: () => void;
   closeModal: () => void;
   toggleGlobalTool: (toolId: string) => void;
   setStageTool: (stageId: string, toolId: string, enabled: boolean) => void;
+  setToolSetting: (toolId: string, key: string, value: number) => void;
+  getToolSetting: (toolId: string, key: string, defaultValue: number) => number;
   isToolAllowed: (toolId: string, stageId?: string) => boolean;
   calculateSavedTokens: (stageId?: string) => number;
   resetDefaults: () => void;
@@ -185,6 +275,7 @@ const DEFAULT_GLOBAL: Record<string, boolean> = {
   subagent: true,
   subagent_sync: true,
   subagent_bg: true,
+  collect_subagent: true,
   todo_write: true,
   question: true,
   create_task: true,
@@ -214,6 +305,7 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     subagent: true,
     subagent_sync: true,
     subagent_bg: true,
+    collect_subagent: true,
     todo_write: true,
     question: true,
     create_task: false,
@@ -233,6 +325,7 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     subagent: true,
     subagent_sync: true,
     subagent_bg: true,
+    collect_subagent: true,
     todo_write: true,
     question: true,
     create_task: false,
@@ -252,6 +345,7 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     subagent: true,
     subagent_sync: true,
     subagent_bg: true,
+    collect_subagent: true,
     todo_write: true,
     question: true,
     create_task: false,
@@ -263,6 +357,7 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
   isModalOpen: false,
   globalEnabled: DEFAULT_GLOBAL,
   stageOverrides: DEFAULT_OVERRIDES,
+  toolSettings: DEFAULT_TOOL_SETTINGS,
 
   openModal: () => set({ isModalOpen: true }),
   closeModal: () => set({ isModalOpen: false }),
@@ -289,11 +384,30 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
     get().saveToTauri();
   },
 
+  setToolSetting: (toolId, key, value) => {
+    set((state) => {
+      const currentToolSettings = state.toolSettings[toolId] || {};
+      const nextToolSettings = { ...currentToolSettings, [key]: value };
+      return {
+        toolSettings: {
+          ...state.toolSettings,
+          [toolId]: nextToolSettings,
+        },
+      };
+    });
+    get().saveToTauri();
+  },
+
+  getToolSetting: (toolId, key, defaultValue) => {
+    const { toolSettings } = get();
+    return toolSettings[toolId]?.[key] ?? defaultValue;
+  },
+
   isToolAllowed: (toolId, stageOrAgentId) => {
     const { globalEnabled, stageOverrides } = get();
 
     // Hierarchical rule for subagent sub-options
-    if (toolId === 'subagent_sync' || toolId === 'subagent_bg') {
+    if (toolId === 'subagent_sync' || toolId === 'subagent_bg' || toolId === 'collect_subagent') {
       const masterGlobal = globalEnabled['subagent'] ?? true;
       if (!masterGlobal) return false;
       if (stageOrAgentId) {
@@ -353,6 +467,7 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
     set({
       globalEnabled: { ...DEFAULT_GLOBAL },
       stageOverrides: { ...DEFAULT_OVERRIDES },
+      toolSettings: { ...DEFAULT_TOOL_SETTINGS },
     });
     get().saveToTauri();
   },
@@ -363,12 +478,17 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
       const policies = await invoke<{
         globalEnabled?: Record<string, boolean>;
         stageOverrides?: Record<string, Record<string, boolean>>;
+        toolSettings?: ToolSettings;
       }>('get_tool_policies');
 
       if (policies) {
         set({
           globalEnabled: policies.globalEnabled || DEFAULT_GLOBAL,
           stageOverrides: policies.stageOverrides || DEFAULT_OVERRIDES,
+          toolSettings: {
+            ...DEFAULT_TOOL_SETTINGS,
+            ...(policies.toolSettings || {}),
+          },
         });
       }
     } catch {
@@ -379,11 +499,12 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
   saveToTauri: async () => {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const { globalEnabled, stageOverrides } = get();
+      const { globalEnabled, stageOverrides, toolSettings } = get();
       await invoke('save_tool_policies', {
         policies: {
           globalEnabled,
           stageOverrides,
+          toolSettings,
         },
       });
     } catch {

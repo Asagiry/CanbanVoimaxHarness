@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
-import { useToolPolicyStore, AVAILABLE_TOOLS } from '../../stores/toolPolicyStore';
+import { useToolPolicyStore, AVAILABLE_TOOLS, TOOL_PARAM_DEFS } from '../../stores/toolPolicyStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import AgentIcon from '../common/AgentIcon';
@@ -46,6 +46,95 @@ function Toggle({
   );
 }
 
+function ToolParamsEditor({ toolId }: { toolId: string }) {
+  const paramDefs = TOOL_PARAM_DEFS[toolId];
+  const { toolSettings, setToolSetting } = useToolPolicyStore();
+
+  if (!paramDefs || paramDefs.length === 0) return null;
+
+  return (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      className="mt-2.5 p-2.5 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9fb] dark:bg-[#07090e] space-y-2 select-none"
+    >
+      <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-[#666666] dark:text-[#8b949e] font-semibold border-b border-[#ebebeb] dark:border-[#21262d] pb-1.5">
+        <span>Параметры инструмента</span>
+        <span className="text-[9px] text-[#8f8f8f] dark:text-[#6e7681] lowercase font-normal">
+          сохраняются в политиках
+        </span>
+      </div>
+      {paramDefs.map((param) => {
+        const currentValue = toolSettings[toolId]?.[param.key] ?? param.defaultValue;
+
+        const updateValue = (nextVal: number) => {
+          const clamped = Math.max(param.min, Math.min(param.max, nextVal));
+          setToolSetting(toolId, param.key, clamped);
+        };
+
+        const handleStep = (delta: number) => {
+          updateValue(currentValue + delta);
+        };
+
+        const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+          const parsed = parseInt(e.target.value, 10);
+          if (!isNaN(parsed)) {
+            updateValue(parsed);
+          }
+        };
+
+        return (
+          <div key={param.key} className="flex items-center justify-between gap-3 text-xs">
+            <div className="min-w-0 flex-1">
+              <span className="text-[11px] font-mono text-[#171717] dark:text-[#f0f6fc] block">
+                {param.label}
+              </span>
+              <span className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] font-mono block">
+                диапазон: {param.min}–{param.max} (шаг {param.step})
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                disabled={currentValue <= param.min}
+                onClick={() => handleStep(-param.step)}
+                className="w-6 h-6 flex items-center justify-center rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] text-xs font-mono font-bold transition select-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                title={`Уменьшить на ${param.step}`}
+              >
+                -
+              </button>
+
+              <input
+                type="number"
+                min={param.min}
+                max={param.max}
+                step={param.step}
+                value={currentValue}
+                onChange={handleInputChange}
+                className="w-16 h-6 rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] font-mono text-xs tabular-nums text-center px-1 focus:outline-hidden focus:border-[#171717] dark:focus:border-[#58a6ff]"
+              />
+
+              <button
+                type="button"
+                disabled={currentValue >= param.max}
+                onClick={() => handleStep(param.step)}
+                className="w-6 h-6 flex items-center justify-center rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] text-xs font-mono font-bold transition select-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                title={`Увеличить на ${param.step}`}
+              >
+                +
+              </button>
+
+              <span className="text-[10px] text-[#666666] dark:text-[#8b949e] font-mono min-w-[42px] text-left">
+                {param.unit}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 const NAME_PATTERN = /^[a-z0-9_]+$/;
 
 const CATEGORY_ORDER: Array<'orchestration' | 'interactive' | 'workflow' | 'system' | 'fs' | 'web' | 'agent'> = [
@@ -60,12 +149,12 @@ const CATEGORY_ORDER: Array<'orchestration' | 'interactive' | 'workflow' | 'syst
 
 const CATEGORY_LABELS: Record<string, string> = {
   orchestration: 'Оркестрация и управление задачами',
-  interactive: 'Интерактивность (Human-in-the-Loop)',
-  workflow: 'Управление задачами (Workflow)',
-  system: 'Команды и терминал (System)',
-  fs: 'Файловая система (Filesystem)',
-  web: 'Сеть и документация (Web)',
-  agent: 'Подагенты и планирование (Agent)',
+  interactive: 'Интерактивный диалог',
+  workflow: 'Маршрутизация задач',
+  system: 'Команды и терминал',
+  fs: 'Файловая система',
+  web: 'Сеть и документация',
+  agent: 'Субагенты и планирование',
 };
 
 export default function ToolPolicyModal() {
@@ -88,8 +177,6 @@ export default function ToolPolicyModal() {
     isBuiltin: boolean;
   }
 
-  // В матрице отображаются именно АГЕНТЫ (персоны), а не колонки доски:
-  // пользователь управляет правами тулов для агентов (developer, reviewer, cvh-dev, red-team-reviewer и т.д.)
   const agents = useMemo<AgentMatrixItem[]>(() => {
     const map = new Map<string, AgentMatrixItem>();
 
@@ -248,7 +335,7 @@ export default function ToolPolicyModal() {
               Настройки матрицы инструментов
             </h2>
             <p className="text-[11px] text-[#666666] dark:text-[#8b949e] font-mono mt-0.5">
-              Разграничение прав доступа инструментов по агентам
+              Разграничение прав доступа и тонкая настройка параметров инструментов
             </p>
           </div>
           <button
@@ -342,42 +429,45 @@ export default function ToolPolicyModal() {
                                 isChild ? 'bg-[#fafafc] dark:bg-[#090a0f]' : ''
                               }`}
                             >
-                              <td className={`py-2.5 px-3 ${isChild ? 'pl-7' : ''}`}>
+                              <td className={`py-2.5 px-3 align-top ${isChild ? 'pl-7' : ''}`}>
                                 <button
                                   type="button"
                                   onClick={() => toggleExpanded(tool.id)}
                                   title={isExpanded ? 'Свернуть описание' : 'Показать описание'}
-                                  className="flex items-center gap-1.5 text-left cursor-pointer group"
+                                  className="flex items-start gap-1.5 text-left cursor-pointer group w-full"
                                 >
                                   {isChild && (
-                                    <span className="text-[#8f8f8f] dark:text-[#6e7681] font-mono text-xs select-none shrink-0 mr-1">
-                                      {tool.id === 'subagent_sync' ? '├──' : '└──'}
+                                    <span className="text-[#8f8f8f] dark:text-[#6e7681] font-mono text-xs select-none shrink-0 mt-0.5 leading-none">
+                                      {tool.id === 'collect_subagent' ? '└──' : '├──'}
                                     </span>
                                   )}
                                   <ChevronDown
-                                    className={`h-3.5 w-3.5 shrink-0 text-[#8f8f8f] dark:text-[#6e7681] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                    className={`w-4 h-4 shrink-0 mt-0.5 text-[#8f8f8f] dark:text-[#6e7681] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                                   />
-                                  <span>
-                                    <span
-                                      className={`font-medium text-[#171717] dark:text-[#f0f6fc] group-hover:underline underline-offset-2 ${
+                                  <div className="min-w-0 flex-1">
+                                    <div
+                                      className={`font-medium text-[#171717] dark:text-[#f0f6fc] group-hover:underline underline-offset-2 leading-tight ${
                                         tool.isSubagentMaster ? 'font-semibold' : ''
                                       }`}
                                     >
                                       {tool.label}
-                                    </span>
-                                    <span className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] block">
+                                    </div>
+                                    <div className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] font-mono leading-tight mt-0.5">
                                       {tool.name}
-                                    </span>
-                                  </span>
+                                    </div>
+                                  </div>
                                 </button>
                                 {isExpanded && (
-                                  <p className="text-[11px] text-[#666666] dark:text-[#8b949e] mt-1.5 font-sans leading-snug">
-                                    {tool.description}
-                                  </p>
+                                  <div className="mt-2 space-y-2">
+                                    <p className="text-[11px] text-[#666666] dark:text-[#8b949e] font-sans leading-snug">
+                                      {tool.description}
+                                    </p>
+                                    <ToolParamsEditor toolId={tool.id} />
+                                  </div>
                                 )}
                               </td>
 
-                              <td className="py-2.5 px-2 text-right text-[#666666] dark:text-[#8b949e] tabular-nums text-[11px]">
+                              <td className="py-2.5 px-2 text-right text-[#666666] dark:text-[#8b949e] tabular-nums text-[11px] align-top">
                                 {tool.tokenWeight}
                               </td>
 
@@ -389,13 +479,13 @@ export default function ToolPolicyModal() {
                                 const isDisabled = isChild && !isMasterAllowed;
 
                                 return (
-                                  <td key={agent.role} className="py-2 px-2 text-center border-l border-[#ebebeb] dark:border-[#21262d]">
+                                  <td key={agent.role} className="py-2.5 px-2 text-center border-l border-[#ebebeb] dark:border-[#21262d] align-top">
                                     {!isGloballyActive ? (
-                                      <span className="text-[10px] text-[#8f8f8f] select-none">
+                                      <span className="text-[10px] text-[#8f8f8f] select-none block pt-0.5">
                                         Выкл
                                       </span>
                                     ) : isDisabled ? (
-                                      <span className="inline-flex justify-center opacity-40">
+                                      <span className="inline-flex justify-center opacity-40 pt-0.5">
                                         <Toggle
                                           enabled={false}
                                           disabled={true}
@@ -404,7 +494,7 @@ export default function ToolPolicyModal() {
                                         />
                                       </span>
                                     ) : (
-                                      <span className="inline-flex justify-center">
+                                      <span className="inline-flex justify-center pt-0.5">
                                         <Toggle
                                           enabled={isAllowed}
                                           onToggle={() => {
@@ -435,24 +525,24 @@ export default function ToolPolicyModal() {
 
                     return (
                       <tr key={customId} className="hover:bg-[#fafafa] dark:hover:bg-[#161b22] transition text-[#171717] dark:text-[#f0f6fc]">
-                        <td className="py-2.5 px-3">
+                        <td className="py-2.5 px-3 align-top">
                           <button
                             type="button"
                             onClick={() => toggleExpanded(customId)}
                             title={isCustomExpanded ? 'Свернуть описание' : 'Показать описание'}
-                            className="flex items-center gap-1.5 text-left cursor-pointer group"
+                            className="flex items-start gap-1.5 text-left cursor-pointer group w-full"
                           >
                             <ChevronDown
-                              className={`h-3.5 w-3.5 shrink-0 text-[#8f8f8f] dark:text-[#8b949e] transition-transform ${isCustomExpanded ? 'rotate-180' : ''}`}
+                              className={`w-4 h-4 shrink-0 mt-0.5 text-[#8f8f8f] dark:text-[#8b949e] transition-transform ${isCustomExpanded ? 'rotate-180' : ''}`}
                             />
-                            <span>
-                              <span className="font-medium text-[#171717] dark:text-[#f0f6fc] group-hover:underline underline-offset-2">
+                            <div className="min-w-0 flex-1">
+                              <span className="font-medium text-[#171717] dark:text-[#f0f6fc] group-hover:underline underline-offset-2 leading-tight">
                                 {customTool.name}
                               </span>
                               <span className="ml-1.5 inline-block rounded border border-[#ebebeb] dark:border-[#30363d] bg-[#f4f4f5] dark:bg-[#161b22] px-1 py-px text-[10px] leading-none text-[#666666] dark:text-[#8b949e] align-middle">
                                 свой
                               </span>
-                            </span>
+                            </div>
                           </button>
                           {isCustomExpanded && (
                             <p className="text-[11px] text-[#666666] dark:text-[#8b949e] mt-1.5 font-sans leading-snug">
@@ -461,7 +551,7 @@ export default function ToolPolicyModal() {
                           )}
                         </td>
 
-                        <td className="py-2.5 px-2 text-right text-[#8f8f8f] tabular-nums text-[11px]">
+                        <td className="py-2.5 px-2 text-right text-[#8f8f8f] tabular-nums text-[11px] align-top">
                           —
                         </td>
 
@@ -469,13 +559,13 @@ export default function ToolPolicyModal() {
                           const isCustomAllowed = isToolAllowed(customTool.name, agent.role);
 
                           return (
-                            <td key={agent.role} className="py-2 px-2 text-center border-l border-[#ebebeb]">
+                            <td key={agent.role} className="py-2.5 px-2 text-center border-l border-[#ebebeb] dark:border-[#21262d] align-top">
                               {!isCustomGloballyActive ? (
-                                <span className="text-[10px] text-[#8f8f8f] select-none">
+                                <span className="text-[10px] text-[#8f8f8f] select-none block pt-0.5">
                                   Выкл
                                 </span>
                               ) : (
-                                <span className="inline-flex justify-center">
+                                <span className="inline-flex justify-center pt-0.5">
                                   <Toggle
                                     enabled={isCustomAllowed}
                                     onToggle={() => {
@@ -509,7 +599,7 @@ export default function ToolPolicyModal() {
 
                 return (
                   <div key={`global-cat-${catKey}`} className="space-y-2">
-                    <h3 className="text-[11px] font-semibold text-[#52525b] uppercase tracking-wider px-1">
+                    <h3 className="text-[11px] font-semibold text-[#52525b] dark:text-[#8b949e] uppercase tracking-wider px-1">
                       {CATEGORY_LABELS[catKey] || catKey}
                     </h3>
                     <div className="space-y-2">
@@ -531,44 +621,51 @@ export default function ToolPolicyModal() {
                                 : 'border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] opacity-60'
                             }`}
                           >
-                            <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-start justify-between gap-3">
                               <button
                                 type="button"
                                 onClick={() => toggleExpanded(tool.id)}
                                 title={isExpanded ? 'Свернуть описание' : 'Показать описание'}
-                                className="flex items-center gap-1.5 text-left cursor-pointer min-w-0"
+                                className="flex items-start gap-1.5 text-left cursor-pointer min-w-0 flex-1 group"
                               >
                                 {isChild && (
-                                  <span className="text-[#8f8f8f] dark:text-[#8b949e] font-mono text-xs select-none shrink-0 mr-1">
-                                    {tool.id === 'subagent_sync' ? '├──' : '└──'}
+                                  <span className="text-[#8f8f8f] dark:text-[#8b949e] font-mono text-xs select-none shrink-0 mt-0.5 leading-none">
+                                    {tool.id === 'collect_subagent' ? '└──' : '├──'}
                                   </span>
                                 )}
                                 <ChevronDown
-                                  className={`h-3.5 w-3.5 shrink-0 text-[#8f8f8f] dark:text-[#8b949e] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                  className={`w-4 h-4 shrink-0 mt-0.5 text-[#8f8f8f] dark:text-[#8b949e] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                                 />
-                                <span className={`font-mono font-medium text-xs text-[#171717] dark:text-[#f0f6fc] truncate ${tool.isSubagentMaster ? 'font-semibold' : ''}`}>
-                                  {tool.label}
-                                </span>
-                                <span className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] truncate">
-                                  ({tool.name})
-                                </span>
+                                <div className="min-w-0 flex-1">
+                                  <div className={`font-mono font-medium text-xs text-[#171717] dark:text-[#f0f6fc] truncate leading-tight group-hover:underline underline-offset-2 ${tool.isSubagentMaster ? 'font-semibold' : ''}`}>
+                                    {tool.label}
+                                  </div>
+                                  <div className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] font-mono leading-tight mt-0.5">
+                                    {tool.name}
+                                  </div>
+                                </div>
                               </button>
 
-                              <Toggle
-                                enabled={isEnabled && !isDisabled}
-                                disabled={isDisabled}
-                                onToggle={() => toggleGlobalTool(tool.id)}
-                                title={
-                                  isDisabled
-                                    ? `${tool.label} отключен (мастер-тул '${tool.parentTool}' выключен глобально)`
-                                    : `${tool.label}: ${isEnabled ? 'включено' : 'выключено'}`
-                                }
-                              />
+                              <div className="shrink-0 pt-0.5">
+                                <Toggle
+                                  enabled={isEnabled && !isDisabled}
+                                  disabled={isDisabled}
+                                  onToggle={() => toggleGlobalTool(tool.id)}
+                                  title={
+                                    isDisabled
+                                      ? `${tool.label} отключен (мастер-тул '${tool.parentTool}' выключен глобально)`
+                                      : `${tool.label}: ${isEnabled ? 'включено' : 'выключено'}`
+                                  }
+                                />
+                              </div>
                             </div>
                             {isExpanded && (
-                              <p className="text-[11px] text-[#666666] dark:text-[#8b949e] mt-1.5 font-sans leading-snug">
-                                {tool.description}
-                              </p>
+                              <div className="mt-2 space-y-2">
+                                <p className="text-[11px] text-[#666666] dark:text-[#8b949e] font-sans leading-snug">
+                                  {tool.description}
+                                </p>
+                                <ToolParamsEditor toolId={tool.id} />
+                              </div>
                             )}
                           </div>
                         );
@@ -580,21 +677,21 @@ export default function ToolPolicyModal() {
 
               {/* Свои инструменты */}
               <div className="pt-2">
-                <h3 className="text-xs font-semibold text-[#171717] font-sans">
+                <h3 className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">
                   Свои инструменты
                 </h3>
 
                 {customLoading && (
-                  <p className="text-[11px] text-[#666666] font-sans mt-2">Загрузка...</p>
+                  <p className="text-[11px] text-[#666666] dark:text-[#8b949e] font-sans mt-2">Загрузка...</p>
                 )}
                 {customListError && (
-                  <p className="text-[11px] font-sans mt-2 text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-1.5">
+                  <p className="text-[11px] font-sans mt-2 text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-md px-3 py-1.5">
                     {customListError}
                   </p>
                 )}
 
                 {!customLoading && !customListError && customTools.length === 0 && (
-                  <p className="text-[11px] text-[#8f8f8f] font-sans mt-2">
+                  <p className="text-[11px] text-[#8f8f8f] dark:text-[#8b949e] font-sans mt-2">
                     Пока нет своих инструментов.
                   </p>
                 )}
@@ -608,28 +705,35 @@ export default function ToolPolicyModal() {
                         key={tool.name}
                         className="p-3 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22]"
                       >
-                        <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-start justify-between gap-3">
                           <button
                             type="button"
                             onClick={() => toggleExpanded(expandId)}
                             title={isExpanded ? 'Свернуть описание' : 'Показать описание'}
-                            className="flex items-center gap-1.5 text-left cursor-pointer min-w-0"
+                            className="flex items-start gap-1.5 text-left cursor-pointer min-w-0 flex-1 group"
                           >
                             <ChevronDown
-                              className={`h-3.5 w-3.5 shrink-0 text-[#8f8f8f] dark:text-[#8b949e] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                              className={`w-4 h-4 shrink-0 mt-0.5 text-[#8f8f8f] dark:text-[#8b949e] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                             />
-                            <span className="font-mono font-medium text-xs text-[#171717] dark:text-[#f0f6fc] truncate">
-                              {tool.name}
-                            </span>
+                            <div className="min-w-0 flex-1">
+                              <span className="font-mono font-medium text-xs text-[#171717] dark:text-[#f0f6fc] truncate leading-tight group-hover:underline underline-offset-2">
+                                {tool.name}
+                              </span>
+                              <span className="ml-1.5 inline-block rounded border border-[#ebebeb] dark:border-[#30363d] bg-[#f4f4f5] dark:bg-[#161b22] px-1 py-px text-[10px] leading-none text-[#666666] dark:text-[#8b949e] align-middle">
+                                свой
+                              </span>
+                            </div>
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleDeleteCustomTool(tool.name)}
-                            title={`Удалить ${tool.name}`}
-                            className="p-1.5 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 border border-transparent hover:border-red-200 dark:hover:border-red-900/50 transition cursor-pointer shrink-0"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          <div className="shrink-0 pt-0.5">
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteCustomTool(tool.name)}
+                              title={`Удалить ${tool.name}`}
+                              className="p-1.5 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 border border-transparent hover:border-red-200 dark:hover:border-red-900/50 transition cursor-pointer"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </div>
                         <p className="text-[11px] text-[#666666] dark:text-[#8b949e] mt-1 font-sans leading-snug">
                           {tool.description}

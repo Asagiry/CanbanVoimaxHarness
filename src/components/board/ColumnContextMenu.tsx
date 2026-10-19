@@ -6,6 +6,7 @@ import { useCortexStore } from '../../stores/cortexStore';
 import { slugifyTitle } from '../../lib/slug';
 import { getDefaultColumnIcon } from '../../lib/columnIcons';
 import { getDeterministicAgentColor, isAllowedAgentColor } from '../../lib/agentPalette';
+import PersonaSelect from '../common/PersonaSelect';
 
 interface ColumnContextMenuProps {
   column: PipelineColumn;
@@ -291,8 +292,6 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
     onDeleteColumn?.(column.id);
   };
 
-  const selectedKnown = personas.some((p) => p.role === selectedPersona);
-
   const menu = (
     <div
       ref={menuRef}
@@ -400,33 +399,21 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
           <div className="text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">Агент колонки</div>
           <div className="mb-1.5 text-[#8f8f8f] dark:text-[#8b949e]">Текущий: {column.persona ?? 'не назначен'}</div>
           {usePersonaSelect ? (
-            <select
+            <PersonaSelect
               value={isNewAgentSelected ? NEW_AGENT_OPTION : selectedPersona}
-              onChange={(e) => {
-                if (e.target.value === NEW_AGENT_OPTION) {
+              onChange={(val) => {
+                if (val === NEW_AGENT_OPTION) {
                   setIsNewAgentSelected(true);
                 } else {
                   setIsNewAgentSelected(false);
-                  setSelectedPersona(e.target.value);
+                  setSelectedPersona(val);
                 }
               }}
               disabled={personasLoading || personaSaving}
-              className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#161b22] font-mono transition cursor-pointer"
-            >
-              {selectedPersona && !selectedKnown && (
-                <option value={selectedPersona}>{selectedPersona}</option>
-              )}
-              {personas.map((p) => {
-                const isBuiltin = p.role === 'cvh-dev' || Boolean(p.isBuiltin || p.is_builtin);
-                const iconLabel = p.icon ? ` [${p.icon}]` : '';
-                return (
-                  <option key={p.role} value={p.role}>
-                    {isBuiltin ? `${p.role} (Встроенный)${iconLabel}` : `${p.role}${iconLabel}`}
-                  </option>
-                );
-              })}
-              <option value={NEW_AGENT_OPTION}>+ Новый агент</option>
-            </select>
+              personas={personas}
+              allowNewAgent={true}
+              newAgentOptionValue={NEW_AGENT_OPTION}
+            />
           ) : (
             <input
               type="text"

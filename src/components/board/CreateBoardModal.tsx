@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, Layers, ArrowRight } from 'lucide-react';
 import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
+import PersonaSelect from '../common/PersonaSelect';
 
 interface CreateBoardModalProps {
   isOpen: boolean;
@@ -163,21 +164,11 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
             <label className="block text-xs font-medium text-[#171717] dark:text-[#f0f6fc] mb-1.5">
               Агент разработки
             </label>
-            <select
+            <PersonaSelect
               value={selectedPersona}
-              onChange={(e) => setSelectedPersona(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] text-xs font-mono focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] transition cursor-pointer"
-            >
-              {personas.map((p) => {
-                const isBuiltin = p.role === 'cvh-dev' || Boolean(p.isBuiltin);
-                const iconLabel = p.icon ? ` [${p.icon}]` : '';
-                return (
-                  <option key={p.role} value={p.role}>
-                    {isBuiltin ? `${p.role} (Встроенный)${iconLabel}` : `${p.role}${iconLabel}`}
-                  </option>
-                );
-              })}
-            </select>
+              onChange={(val) => setSelectedPersona(val)}
+              personas={personas}
+            />
           </div>
 
           {/* Invariant Visual Preview */}

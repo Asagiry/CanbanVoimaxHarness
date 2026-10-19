@@ -4,6 +4,7 @@ import type { CortexHookExt, CortexHookMoment, AgentPersonaInfo } from '../../st
 import { useBoardStore } from '../../stores/boardStore';
 import type { PipelineColumn, PipelineConfig } from '../../types';
 import AgentIcon from '../common/AgentIcon';
+import PersonaSelect from '../common/PersonaSelect';
 import { getDefaultColumnIcon } from '../../lib/columnIcons';
 import {
   BACKLOG_COLOR,
@@ -1009,8 +1010,6 @@ function AgentField({
     setDraft(current ?? '');
   }, [current]);
 
-  const known = personas.some((p) => p.role === currentValue);
-
   return (
     <div className="px-2 py-1">
       <div className="flex items-center gap-1.5">
@@ -1018,27 +1017,15 @@ function AgentField({
           Агент
         </span>
         {personas.length > 0 ? (
-          <select
+          <PersonaSelect
             value={currentValue}
             disabled={saving}
-            onChange={(e) => onChange(columnId, e.target.value)}
-            title="Агент колонки"
-            className="flex-1 min-w-0 px-1.5 py-0.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] font-mono text-[11px] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] cursor-pointer disabled:opacity-50 transition truncate"
-          >
-            <option value="">без агента</option>
-            {currentValue && !known && (
-              <option value={currentValue}>{currentValue}</option>
-            )}
-            {personas.map((p) => {
-              const isBuiltin = p.role === 'cvh-dev' || Boolean(p.isBuiltin);
-              const iconLabel = p.icon ? ` [${p.icon}]` : '';
-              return (
-                <option key={p.role} value={p.role}>
-                  {isBuiltin ? `${p.role} (Встроенный)${iconLabel}` : `${p.role}${iconLabel}`}
-                </option>
-              );
-            })}
-          </select>
+            onChange={(role) => onChange(columnId, role)}
+            allowEmpty={true}
+            emptyLabel="без агента"
+            personas={personas}
+            className="flex-1 min-w-0"
+          />
         ) : (
           <input
             type="text"
