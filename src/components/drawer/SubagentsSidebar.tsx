@@ -11,8 +11,6 @@ import {
 } from '../../lib/agentPalette';
 import {
   Bot,
-  CheckCircle2,
-  AlertCircle,
   Clock,
   Layers,
   ArrowLeft,
@@ -293,13 +291,13 @@ export default function SubagentsSidebar({
             onClick={closeSubagent}
             className="w-full flex items-center justify-between px-3 py-2 rounded-md bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] border border-[#bbf7d0] dark:border-[#238636] hover:bg-[#dcfce7] dark:hover:bg-[#173a2b] transition-colors font-sans text-xs font-semibold cursor-pointer shadow-xs mb-3 group"
           >
-            <div className="flex items-center space-x-2 truncate min-w-0">
-              <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">К задаче: {taskTitle || taskId}</span>
+            <div className="flex items-center space-x-1.5 truncate min-w-0">
+              <ArrowLeft className="h-3.5 w-3.5 shrink-0 transition-transform group-hover:-translate-x-0.5" />
+              <span className="text-[#15803d]/75 dark:text-[#7ee787]/75 shrink-0 font-normal">К задаче:</span>
+              <span className="font-bold text-[#14532d] dark:text-[#a7f3d0] truncate font-sans px-1.5 py-0.5 rounded bg-[#dcfce7]/60 dark:bg-[#163826] border border-[#86efac]/40 dark:border-[#238636]/40">
+                {taskTitle || taskId}
+              </span>
             </div>
-            <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded-md bg-white dark:bg-[#161b22] text-[#15803d] dark:text-[#7ee787] border border-[#bbf7d0] dark:border-[#238636] font-bold shrink-0 ml-1">
-              Главная
-            </span>
           </button>
         )}
 
@@ -376,12 +374,11 @@ export default function SubagentsSidebar({
                   </div>
 
                   {/* Status Indicator & Granular Stop Button */}
-                  <div className="shrink-0 flex items-center space-x-1.5">
+                  <div className="shrink-0 flex items-center space-x-1">
                     {sub.status === 'running' ? (
                       <>
-                        <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#15803d] dark:text-[#7ee787] bg-[#f0fdf4] dark:bg-[#12281e] border border-[#bbf7d0] dark:border-[#238636]">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
-                          <span>Работает</span>
+                        <span className="flex items-center justify-center h-5 w-5" title="Выполняется">
+                          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0 ring-2 ring-emerald-500/20" />
                         </span>
                         <button
                           type="button"
@@ -409,21 +406,19 @@ export default function SubagentsSidebar({
                               console.warn('Failed to abort subagent', sub.id, err);
                             }
                           }}
-                          className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#dc2626] dark:text-[#ff7b72] hover:bg-[#fef2f2] dark:hover:bg-[#3b1219] border border-[#fecaca] dark:border-[#da3633] transition cursor-pointer"
+                          className="flex items-center justify-center h-5 w-5 rounded text-[#dc2626] dark:text-[#ff7b72] hover:bg-[#fef2f2] dark:hover:bg-[#3b1219] border border-[#fecaca] dark:border-[#da3633] transition cursor-pointer shrink-0"
+                          aria-label="Остановить субагента"
                         >
                           <Square className="h-2.5 w-2.5 fill-current shrink-0" />
-                          <span>Остановить</span>
                         </button>
                       </>
                     ) : sub.status === 'error' || sub.status === 'stopped' ? (
-                      <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#b91c1c] dark:text-[#ff7b72] bg-[#fef2f2] dark:bg-[#3b1219] border border-[#fecaca] dark:border-[#da3633]">
-                        <AlertCircle className="h-3 w-3 shrink-0" />
-                        <span>{sub.status === 'stopped' ? 'Остановлен' : 'Ошибка'}</span>
+                      <span className="flex items-center justify-center h-5 w-5" title={sub.status === 'stopped' ? 'Остановлен' : 'Ошибка'}>
+                        <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
                       </span>
                     ) : (
-                      <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#52525b] dark:text-[#8b949e] bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d]">
-                        <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                        <span>Готово</span>
+                      <span className="flex items-center justify-center h-5 w-5" title="Завершено">
+                        <span className="h-2 w-2 rounded-full bg-[#a1a1aa] dark:bg-[#52525b] shrink-0" />
                       </span>
                     )}
                   </div>
