@@ -190,17 +190,7 @@ export default function DrawerSteerBar({
             isDragOverChat ? 'ring-2 ring-blue-500/30 bg-blue-50/40 dark:bg-blue-950/40' : ''
           }`}
         >
-          {/* Subagent Steer Guidance Banner */}
-          {activeSubagentId && (
-            <div className="flex items-center space-x-2 pb-1.5 mb-2 border-b border-[#ebebeb] dark:border-[#21262d] select-none min-w-0">
-              <span
-                style={getRoleBadgeStyle(activeSubagentRole)}
-                className="px-2 py-0.5 rounded text-[11px] font-mono font-bold tracking-wider border uppercase shrink-0 select-none"
-              >
-                СУБАГЕНТ #{subagentNumber || 1}
-              </span>
-            </div>
-          )}
+
 
           {/* Attached Images Thumbnail Preview Bar */}
           {attachedImages.length > 0 && (
@@ -274,6 +264,16 @@ export default function DrawerSteerBar({
               {/* Compact TaskTodoWidget pill & overlay popover */}
               {(Boolean(activeSubagentId) || isToolAllowed('todo_write', task.columnId) || (task.todos && task.todos.length > 0)) && (
                 <TaskTodoWidget task={task} align="left" />
+              )}
+
+              {/* Sleek Subagent Badge */}
+              {activeSubagentId && (
+                <span
+                  style={getRoleBadgeStyle(activeSubagentRole)}
+                  className="px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider border uppercase shrink-0 select-none"
+                >
+                  СУБАГЕНТ #{subagentNumber || 1}
+                </span>
               )}
             </div>
 

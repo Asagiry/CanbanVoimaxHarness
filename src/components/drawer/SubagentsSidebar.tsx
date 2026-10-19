@@ -147,7 +147,57 @@ export function getSubagentsForTask(
     }
   }
 
-  const result = Array.from(map.values());
+  const rawList = Array.from(map.values());
+
+  // Filter out duplicate ghost/phantom subagents:
+  // If multiple subagent entries share the exact same prompt (or title),
+  // and one has stepsCount === 0 && (!durationMs || durationMs === 0) while another has
+  // valid steps/duration or is finished/running, discard the 0-step phantom entry!
+  const result = rawList.filter((sub, idx, all) => {
+    const isPhantomCandidate =
+      (!sub.stepsCount || sub.stepsCount === 0) &&
+      (!sub.durationMs || sub.durationMs === 0);
+
+    if (!isPhantomCandidate) return true;
+
+    const subPrompt = sub.prompt?.trim();
+    const subTitle = sub.title?.trim();
+
+    const hasBetterDuplicate = all.some((other, otherIdx) => {
+      if (idx === otherIdx) return false;
+
+      const otherPrompt = other.prompt?.trim();
+      const otherTitle = other.title?.trim();
+
+      const samePrompt = Boolean(subPrompt && otherPrompt && subPrompt === otherPrompt);
+      const sameTitle = Boolean(
+        subTitle &&
+        otherTitle &&
+        subTitle === otherTitle &&
+        subTitle !== 'Делегированная задача' &&
+        subTitle !== 'Субагент' &&
+        (!subPrompt || !otherPrompt || subPrompt === otherPrompt)
+      );
+
+      if (!samePrompt && !sameTitle) return false;
+
+      const otherHasStepsOrDuration =
+        (typeof other.stepsCount === 'number' && other.stepsCount > 0) ||
+        (typeof other.durationMs === 'number' && other.durationMs > 0);
+
+      const otherIsValidStatus = other.status === 'running' || other.status === 'finished';
+
+      if (otherHasStepsOrDuration) return true;
+      if (otherIsValidStatus && (other.stepsCount || 0) > (sub.stepsCount || 0)) return true;
+      if (otherIsValidStatus && (other.durationMs || 0) > (sub.durationMs || 0)) return true;
+      if (otherIdx < idx && samePrompt && sameTitle) return true;
+
+      return false;
+    });
+
+    return !hasBetterDuplicate;
+  });
+
   // Sort stably by creation order: createdAt ascending
   result.sort((a, b) => {
     const aTime = a.createdAt || 0;
