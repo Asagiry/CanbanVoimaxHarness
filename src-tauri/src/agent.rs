@@ -2408,47 +2408,15 @@ pub async fn execute_tool(
                 .or(task_id)
                 .context("No active task ID for advance_task / move_task")?;
 
-            if let Some(target_stage_id) = target_stage {
-                let updated_task = crate::commands::internal_move_task_stage(
-                    repo_root,
-                    task_id,
-                    target_stage_id,
-                    Some("APPROVED".to_string()),
-                    None,
-                    Some(summary.to_string()),
-                    ctx.app_handle.as_ref(),
-                )
-                .await
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
-
-                let summary_content = format!("### Саммари этапа: {}
-
-{}", updated_task.stage_id, summary);
-                let _ = crate::commands::dialogs::append_task_dialog_activity(
-                    repo_root,
-                    task_id,
-                    "summary",
-                    &summary_content,
-                    ctx.app_handle.as_ref(),
-                )
-                .await;
-
-                format!(
-                    "УСПЕШНО: Задача {} перемещена на этап '{}', статус: {}",
-                    task_id,
-                    updated_task.stage_id,
-                    updated_task.status.as_deref().unwrap_or("idle")
-                )
-            } else {
-                crate::commands::internal_advance_task(
-                    repo_root,
-                    task_id,
-                    summary,
-                    ctx.app_handle.as_ref(),
-                )
-                .await
-                .map_err(|e| anyhow::anyhow!("{}", e))?
-            }
+            crate::commands::internal_advance_task_to_stage(
+                repo_root,
+                task_id,
+                target_stage,
+                summary,
+                ctx.app_handle.as_ref(),
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e))?
         }
 
         "reject_task" => {
@@ -2527,6 +2495,7 @@ pub async fn execute_tool(
                 Some("idle".to_string()),
                 Some(rejection_summary),
                 ctx.app_handle.as_ref(),
+                true, // is_autonomous_advance
             )
             .await
             .map_err(|e| anyhow::anyhow!("{}", e))?;

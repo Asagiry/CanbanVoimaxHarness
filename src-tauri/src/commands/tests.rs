@@ -1309,6 +1309,7 @@ use std::path::PathBuf;
             None,
             None,
             None,
+            false,
         )
         .await
         .expect("move to backlog");
@@ -1550,6 +1551,7 @@ Write code.
             None,
             None,
             None,
+            false,
         )
         .await
         .expect("move task stage");
@@ -1602,6 +1604,188 @@ Write code.
         let content = tokio::fs::read_to_string(log_file).await.expect("read log");
         assert!(content.contains("[TEST] Turn 1 Request"));
         assert!(content.contains("[TEST] Turn 1 Response"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_internal_advance_task_creates_review_subtask_and_no_self_abort() {
+        let base = PathBuf::from("target").join(format!("cvh_review_subtask_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        let cols = vec![
+            crate::config::PipelineColumn {
+                id: "backlog".to_string(),
+                title: "Backlog".to_string(),
+                color: None,
+                icon: None,
+                persona: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            crate::config::PipelineColumn {
+                id: "dev".to_string(),
+                title: "Development".to_string(),
+                color: None,
+                icon: None,
+                persona: Some("cvh-dev".to_string()),
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: Some(true),
+                terminal: None,
+            },
+            crate::config::PipelineColumn {
+                id: "review".to_string(),
+                title: "Review".to_string(),
+                color: None,
+                icon: None,
+                persona: Some("reviewer".to_string()),
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: Some(true),
+                terminal: None,
+            },
+            crate::config::PipelineColumn {
+                id: "ready".to_string(),
+                title: "Ready".to_string(),
+                color: None,
+                icon: None,
+                persona: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: Some(true),
+            },
+        ];
+
+        let boards_cfg = crate::config::BoardsConfig {
+            active_board_id: "dev-board".to_string(),
+            boards: vec![crate::config::BoardDef {
+                id: "dev-board".to_string(),
+                name: "Development".to_string(),
+                columns: cols,
+            }],
+        };
+        crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
+
+        // Seed parent task in 'dev' stage with running status and worktree details
+        let parent_task = Task {
+            id: "CVH-100".to_string(),
+            title: "Implement Review Subtask".to_string(),
+            description: "Implement § 2.2 Review Subtask Hierarchy".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("dev-board".to_string()),
+            worktree_path: Some("C:\\fake\\worktree".to_string()),
+            branch: Some("feat/CVH-100".to_string()),
+            verdict: None,
+            custom_flow: None,
+            status: Some("running".to_string()),
+            model: Some("custom-model".to_string()),
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            todos: None,
+            priority: Some("high".to_string()),
+            tags: None,
+            current_tokens: None,
+            skip_worktree: Some(false),
+            created_at: 1000,
+            updated_at: 1000,
+            handover_summary: None,
+            attachments: None,
+            cover_image: None,
+        };
+        save_tasks_to_disk(&base, &[parent_task]).await.expect("save parent task");
+
+        // 1. Advance task targeting review stage:
+        // Must create child subtask CVH-100.1 in 'review' column and set parent to 'waiting_subtask'
+        let adv_res = internal_advance_task(
+            &base,
+            "CVH-100",
+            "Handover: implemented feature and tests",
+            None,
+        )
+        .await
+        .expect("internal_advance_task must succeed");
+
+        assert!(adv_res.contains("УСПЕШНО: Создана подзадача ревью CVH-100.1 для задачи CVH-100"));
+
+        let loaded = load_tasks_from_disk(&base).await;
+        assert_eq!(loaded.len(), 2, "Must contain parent and child subtask");
+
+        let parent = loaded.iter().find(|t| t.id == "CVH-100").unwrap();
+        assert_eq!(parent.stage_id, "dev", "Parent must remain pinned in 'dev' stage (§ 2.2)");
+        assert_eq!(parent.status.as_deref(), Some("waiting_subtask"), "Parent status must be 'waiting_subtask'");
+        assert_eq!(parent.waiting_for_subtask_id.as_deref(), Some("CVH-100.1"), "Parent must be waiting for CVH-100.1");
+
+        let subtask = loaded.iter().find(|t| t.id == "CVH-100.1").unwrap();
+        assert_eq!(subtask.parent_id.as_deref(), Some("CVH-100"));
+        assert_eq!(subtask.subtask_index, Some(1));
+        assert_eq!(subtask.stage_id, "review", "Subtask must be in target review column");
+        assert_eq!(subtask.status.as_deref(), Some("running"), "Target has persona 'reviewer', status must be 'running'");
+        assert_eq!(subtask.title, "Implement Review Subtask (Ревью)");
+        assert_eq!(subtask.description, "Handover: implemented feature and tests");
+        assert_eq!(subtask.handover_summary.as_deref(), Some("Handover: implemented feature and tests"));
+        assert_eq!(subtask.worktree_path.as_deref(), Some("C:\\fake\\worktree"));
+        assert_eq!(subtask.branch.as_deref(), Some("feat/CVH-100"));
+        assert_eq!(subtask.skip_worktree, Some(false));
+        assert_eq!(subtask.model.as_deref(), Some("custom-model"));
+        assert_eq!(subtask.priority.as_deref(), Some("high"));
+
+        // Verify SQLite dialog items contain handover summaries for both parent and child
+        let parent_dialog = crate::db::load_dialog_items(&base, "CVH-100").expect("load parent dialog");
+        assert!(parent_dialog.iter().any(|d| d.content.as_deref().unwrap_or("").contains("Handover: implemented feature and tests")));
+
+        let subtask_dialog = crate::db::load_dialog_items(&base, "CVH-100.1").expect("load subtask dialog");
+        assert!(subtask_dialog.iter().any(|d| d.content.as_deref().unwrap_or("").contains("Handover: implemented feature and tests")));
+
+        // 2. Verify zero self-abort invariant:
+        // Advancing when is_autonomous_advance is true must never abort running tasks
+        let moved_autonomous = internal_move_task_stage(
+            &base,
+            "CVH-100.1",
+            "ready",
+            Some("APPROVED".to_string()),
+            Some("done".to_string()),
+            Some("Review approved".to_string()),
+            None,
+            true, // is_autonomous_advance = true!
+        )
+        .await
+        .expect("autonomous move to ready must succeed");
+
+        assert_eq!(moved_autonomous.stage_id, "ready");
+        assert_eq!(moved_autonomous.status.as_deref(), Some("done"));
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
