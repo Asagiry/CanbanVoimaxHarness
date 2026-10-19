@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
@@ -185,6 +185,10 @@ export function getSubagentOrderMap(
   return map;
 }
 
+const DEFAULT_SIDEBAR_WIDTH = 320;
+const MIN_SIDEBAR_WIDTH = 240;
+const MAX_SIDEBAR_WIDTH = 600;
+
 export default function SubagentsSidebar({
   taskId,
   taskTitle,
@@ -204,6 +208,82 @@ export default function SubagentsSidebar({
 
   const boardTasks = useBoardStore((s) => s.tasks);
   const agentPersonas = useCortexStore((s) => s.agentPersonas);
+
+  // Width & Resizability (default 320px, stored in localStorage)
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('cvh_subagents_sidebar_width');
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && parsed >= MIN_SIDEBAR_WIDTH && parsed <= MAX_SIDEBAR_WIDTH) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return DEFAULT_SIDEBAR_WIDTH;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  const isDraggingRef = useRef(false);
+  const startXRef = useRef(0);
+  const startWidthRef = useRef(sidebarWidth);
+  const activeMouseMoveRef = useRef<((e: MouseEvent) => void) | null>(null);
+  const activeMouseUpRef = useRef<(() => void) | null>(null);
+
+  // Drag handle resize logic
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDraggingRef.current = true;
+    startXRef.current = e.clientX;
+    startWidthRef.current = sidebarWidth;
+    setIsResizing(true);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      const delta = moveEvent.clientX - startXRef.current;
+      const maxAllowed = Math.min(MAX_SIDEBAR_WIDTH, window.innerWidth * 0.5);
+      const newWidth = Math.min(Math.max(MIN_SIDEBAR_WIDTH, startWidthRef.current + delta), maxAllowed);
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        setIsResizing(false);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        setSidebarWidth((finalWidth) => {
+          try {
+            localStorage.setItem('cvh_subagents_sidebar_width', String(Math.round(finalWidth)));
+          } catch {}
+          return finalWidth;
+        });
+      }
+      activeMouseMoveRef.current = null;
+      activeMouseUpRef.current = null;
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    activeMouseMoveRef.current = handleMouseMove;
+    activeMouseUpRef.current = handleMouseUp;
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    return () => {
+      if (activeMouseMoveRef.current) {
+        window.removeEventListener('mousemove', activeMouseMoveRef.current);
+      }
+      if (activeMouseUpRef.current) {
+        window.removeEventListener('mouseup', activeMouseUpRef.current);
+      }
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, []);
 
   const orderMap = useMemo(() => {
     return getSubagentOrderMap(taskId, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks);
@@ -241,7 +321,7 @@ export default function SubagentsSidebar({
           type="button"
           onClick={onToggleCollapse}
           className="p-1.5 rounded-md text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] transition cursor-pointer"
-          title="Развернуть панель субагентов"
+          aria-label="Развернуть панель субагентов"
         >
           <PanelLeftOpen className="h-4 w-4" />
         </button>
@@ -251,9 +331,25 @@ export default function SubagentsSidebar({
 
   return (
     <aside
-      className={`w-72 sm:w-80 shrink-0 border-r border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] flex flex-col min-h-0 overflow-hidden select-none transition-colors ${className}`}
+      style={{ width: `${sidebarWidth}px` }}
+      className={`relative shrink-0 border-r border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] flex flex-col min-h-0 overflow-hidden select-none transition-colors ${className}`}
       aria-label="Панель субагентов"
     >
+      {/* Right Resize Drag Handle */}
+      <div
+        onMouseDown={handleMouseDown}
+        className="group/handle absolute top-0 bottom-0 right-0 w-2 -mr-1 cursor-col-resize z-30 flex items-center justify-center select-none"
+        aria-label="Изменить ширину панели субагентов"
+      >
+        <div
+          className={`w-[2px] h-full transition-colors ${
+            isResizing
+              ? 'bg-[#15803d] dark:bg-[#7ee787]'
+              : 'group-hover/handle:bg-[#15803d]/60 dark:group-hover/handle:bg-[#7ee787]/60'
+          }`}
+        />
+      </div>
+
       {/* Sidebar Header */}
       <div className="h-10 px-3.5 border-b border-[#ebebeb] dark:border-[#21262d] flex items-center justify-between shrink-0 bg-[#fafafa] dark:bg-[#161b22]">
         <div className="flex items-center space-x-2 min-w-0">
@@ -276,7 +372,7 @@ export default function SubagentsSidebar({
           type="button"
           onClick={onToggleCollapse}
           className="p-1 rounded-md text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] transition cursor-pointer"
-          title="Скрыть панель субагентов"
+          aria-label="Скрыть панель субагентов"
         >
           <PanelLeftClose className="h-3.5 w-3.5" />
         </button>
