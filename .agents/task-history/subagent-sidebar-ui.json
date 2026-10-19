@@ -1,0 +1,37 @@
+{
+  "taskId": "CVH-SUBAGENT-SIDEBAR-UI",
+  "task": "subagent-sidebar-ui",
+  "title": "Subagent sidebar panel in drawer and isolated subagent To-dos widget",
+  "branch": "feat/subagent-sidebar-ui",
+  "commitHash": "b5d9a71",
+  "commitMessage": "feat(drawer): add subagents sidebar panel and fix subagent todo widget",
+  "author": "react-tailwind-artisan",
+  "verdict": "APPROVED",
+  "date": "2026-10-19T08:20:38.251Z",
+  "timestamp": 1792398038251,
+  "sensors": {
+    "cargo_check": "pass (cargo check --manifest-path src-tauri/Cargo.toml, 0 errors, 0 warnings)",
+    "cargo_clippy": "pass (cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings, 0 errors, 0 warnings)",
+    "pnpm_build": "pass (tsc && vite build, built successfully in 7.46s)",
+    "l2_reviewer": "APPROVED_WITH_CAVEATS"
+  },
+  "files": [
+    "src-tauri/src/commands/dialogs.rs",
+    "src-tauri/src/db.rs",
+    "src-tauri/src/lib.rs",
+    "src/components/drawer/AgentConsoleDrawer.tsx",
+    "src/components/drawer/DrawerHeader.tsx",
+    "src/components/drawer/DrawerSteerBar.tsx",
+    "src/components/drawer/SubagentsSidebar.tsx",
+    "src/components/drawer/TaskTodoWidget.tsx",
+    "src/stores/drawerStore.ts",
+    "src/types/index.ts"
+  ],
+  "summary": "Implemented SubagentsSidebar panel in AgentConsoleDrawer under Back button and worktree badge with role icons (explorer, developer, reviewer, general), title, status (running pulse dot, finished checkmark, error alert), execution duration, steps count, and click-to-view chat transcript. Fixed TaskTodoWidget to display the active subagent's todos from its dialogue/session rather than the parent task's todos, with proper fallback and isolated placeholders.",
+  "ftrAnalysis": {
+    "firstTimeRight": true,
+    "ftrScore": "100%",
+    "verdict": "APPROVED",
+    "rootCauses": []
+  }
+}
