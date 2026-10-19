@@ -5,7 +5,7 @@ import TaskTodoWidget from './TaskTodoWidget';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { getRoleBadgeStyle } from '../../lib/agentPalette';
-import { getSubagentOrderMap } from './SubagentsSidebar';
+import { getSubagentOrderMap, formatSubagentRoleDisplay } from './SubagentsSidebar';
 import { compressImageFile } from '../../lib/imageCompression';
 import {
   ArrowUp,
@@ -282,7 +282,7 @@ export default function DrawerSteerBar({
                   style={getRoleBadgeStyle(activeSubagentRole)}
                   className="px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider border uppercase shrink-0 select-none"
                 >
-                  СУБАГЕНТ #{subagentNumber || 1}
+                  {formatSubagentRoleDisplay(activeSubagentRole, subagentNumber || 1)}
                 </span>
               )}
             </div>

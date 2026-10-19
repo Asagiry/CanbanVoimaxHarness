@@ -5,7 +5,7 @@ import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import AgentIcon from '../common/AgentIcon';
 import { getRoleBadgeStyle } from '../../lib/agentPalette';
-import { formatSubagentDisplayTitle, getSubagentOrderMap } from './SubagentsSidebar';
+import { formatSubagentDisplayTitle, formatSubagentRoleDisplay, getSubagentOrderMap } from './SubagentsSidebar';
 import { formatDurationCompact } from './ThinkingCard';
 import { FileExtensionBadge, getLanguageBadgeConfig } from '../common/BrandFileIcons';
 import {
@@ -133,7 +133,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
               style={roleBadgeStyle}
               className="px-2 py-0.5 rounded text-[11px] font-mono font-bold tracking-wider border shrink-0 select-none uppercase"
             >
-              СУБАГЕНТ #{subagentNumber || 1}
+              {formatSubagentRoleDisplay(rawRole, subagentNumber || 1)}
             </span>
 
             <span className="font-sans font-medium text-xs text-[#0d0d0d] dark:text-[#f0f6fc] group-hover:text-[#171717] dark:group-hover:text-white transition-colors truncate">
