@@ -173,10 +173,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
           <div className="flex items-center space-x-2 shrink-0">
             {isRunning ? (
               <div className="flex items-center space-x-1.5">
-                <span className="relative flex h-2 w-2 shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                </span>
+                <span className="inline-flex rounded-full h-2 w-2 bg-emerald-500 shrink-0" />
                 <span className="text-[11px] font-mono text-[#15803d] dark:text-[#7ee787]">Выполняется</span>
               </div>
             ) : isSuccess ? (
@@ -249,10 +246,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
           <div className="flex items-center space-x-2 shrink-0">
             {isRunning ? (
               <div className="flex items-center space-x-1.5">
-                <span className="relative flex h-2 w-2 shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                </span>
+                <span className="inline-flex rounded-full h-2 w-2 bg-emerald-500 shrink-0" />
                 <span className="text-[11px] font-mono text-[#15803d] dark:text-[#7ee787]">Ожидание отчета</span>
               </div>
             ) : isSuccess ? (
@@ -582,13 +576,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   const renderStatusIndicator = () => {
     if (tool.status === 'running') {
       return (
-        <span
-          className="relative flex h-2 w-2 shrink-0"
-          title="Выполняется..."
-        >
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
-        </span>
+        <span className="inline-flex rounded-full h-2 w-2 bg-amber-500 shrink-0" />
       );
     }
     if (tool.status === 'success') {
@@ -1122,7 +1110,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
               )}
               <div>
                 <span className="text-[10px] text-[#666666] dark:text-[#8b949e] block mb-1">
-                  {isFailed ? 'Запланированные изменения (не применены)' : 'Изменения файлов (Diff)'}
+                  {isFailed ? 'Запланированные изменения (не применены)' : 'Дифф изменений'}
                 </span>
                 {renderUnifiedDiff()}
               </div>

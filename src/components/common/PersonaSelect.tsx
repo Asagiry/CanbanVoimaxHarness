@@ -141,7 +141,7 @@ export default function PersonaSelect({
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute z-[90] left-0 right-0 mt-1 min-w-[200px] max-h-60 overflow-y-auto rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] shadow-xl py-1 text-xs font-mono">
+        <div className="absolute z-[90] left-0 right-0 mt-1 min-w-[200px] max-h-60 overflow-y-auto rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] shadow-md py-1 text-xs font-mono">
           {allowEmpty && (
             <button
               type="button"

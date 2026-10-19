@@ -224,10 +224,7 @@ export default function CopilotDock() {
           </div>
 
           {isStreaming && (
-            <span className="flex h-2 w-2 relative shrink-0" title="Генерация ответа...">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-            </span>
+            <span className="inline-flex rounded-full h-2 w-2 bg-emerald-500 shrink-0" />
           )}
         </div>
 
@@ -473,8 +470,8 @@ function MessageItem({ message }: { message: CopilotMessage }) {
           <MarkdownContent content={markdownPart} />
         ) : (
           message.isStreaming && !combinedThought.trim() && (
-            <div className="flex items-center space-x-1.5 text-xs text-[#a1a1aa] font-mono italic">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#7c3aed] animate-ping" />
+            <div className="flex items-center space-x-1.5 text-xs text-[#71717a] dark:text-[#8b949e] font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#15803d] dark:bg-[#4ade80]" />
               <span>Формирование ответа...</span>
             </div>
           )

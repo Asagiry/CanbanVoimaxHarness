@@ -529,12 +529,12 @@ export default function App() {
 
         {/* Zoom Indicator Toast */}
         {showIndicator && (
-          <div className="fixed bottom-4 right-4 z-50 flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-[#171717]/90 text-white font-mono text-xs shadow-lg backdrop-blur-xs transition-opacity duration-150 animate-in fade-in select-none">
+          <div className="fixed bottom-4 right-4 z-50 flex items-center space-x-2 px-3 py-1.5 rounded-md bg-[#161b22] text-[#f0f6fc] border border-[#30363d] font-mono text-xs shadow-md transition-opacity duration-150 animate-in fade-in select-none">
             <span>Масштаб: {zoomPercent}%</span>
             {zoomPercent !== 100 && (
               <button
                 onClick={resetZoom}
-                className="text-[#a1a1aa] hover:text-white underline text-[11px] ml-1 cursor-pointer"
+                className="text-[#8b949e] hover:text-[#f0f6fc] underline text-[11px] ml-1 cursor-pointer"
               >
                 Сброс
               </button>
