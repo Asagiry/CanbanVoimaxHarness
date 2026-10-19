@@ -191,7 +191,6 @@ export default function SubagentsSidebar({
             type="button"
             onClick={closeSubagent}
             className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] border border-[#bbf7d0] dark:border-[#238636] hover:bg-[#dcfce7] dark:hover:bg-[#173a2b] transition font-sans text-xs font-semibold cursor-pointer shadow-xs active:scale-[0.98] mb-3 group"
-            title="Вернуться к родительской задаче"
           >
             <div className="flex items-center space-x-2 truncate min-w-0">
               <ArrowLeft className="h-3.5 w-3.5 shrink-0 transition-transform group-hover:-translate-x-0.5" />

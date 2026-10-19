@@ -346,7 +346,6 @@ export default function DrawerHeader({
                   ? 'bg-[#171717] dark:bg-[#21262d] text-white border-[#171717] dark:border-[#30363d] shadow-xs'
                   : 'bg-[#f4f4f5] dark:bg-[#161b22] text-[#171717] dark:text-[#f0f6fc] border-[#ebebeb] dark:border-[#30363d] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d]'
               }`}
-              title={isSubagentsCollapsed ? 'Развернуть панель субагентов' : 'Скрыть панель субагентов'}
             >
               <Bot className="h-3.5 w-3.5" />
               <span>Субагенты</span>

@@ -873,6 +873,10 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         ...state.cumulativeGenerationSec,
         [taskId]: 0,
       },
+      subagents: {
+        ...state.subagents,
+        [taskId]: [],
+      },
     }));
     try {
       const { invoke } = await import('@tauri-apps/api/core');
