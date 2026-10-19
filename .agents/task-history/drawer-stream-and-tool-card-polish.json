@@ -1,0 +1,49 @@
+{
+  "taskId": "CVH-DRAWER-STREAM-AND-TOOL-CARD-POLISH",
+  "task": "drawer-stream-and-tool-card-polish",
+  "title": "Polish DrawerActivityStream & ToolExecutionCard",
+  "branch": "feat/drawer-stream-and-tool-card-polish",
+  "commitHash": "52882e0",
+  "commitMessage": "feat(drawer): auto-scroll on token stream, purge redundant subagent card, fix tool card failure status and remove native titles",
+  "author": "react-tailwind-artisan",
+  "verdict": "APPROVED",
+  "date": "2026-10-19T19:46:06.000Z",
+  "timestamp": 1792440366000,
+  "sensors": {
+    "tsc_check": "pass (npx tsc --noEmit, 0 errors)",
+    "pnpm_build": "pass (npm run build, 0 errors)",
+    "l2_reviewer": "APPROVED"
+  },
+  "files": [
+    "src/components/drawer/DrawerActivityStream.tsx",
+    "src/components/drawer/ToolExecutionCard.tsx"
+  ],
+  "summary": "Polished DrawerActivityStream & ToolExecutionCard: (1) Added ResizeObserver to scrollRef.current.firstElementChild in DrawerActivityStream to automatically scroll down (el.scrollTop = el.scrollHeight) during live token and thought streaming when nearBottomRef.current is true, preserving user scroll-up intent; (2) Purged redundant subagent child tasks cards block (subtasks && subtasks.length > 0 && onOpenDrawer) and cleaned up unused props from DrawerActivityStreamProps; (3) Fixed tool card failure status (!isFailed && tool.status === 'success') in ToolExecutionCard so failed exit codes or error statuses do not display misleading green checkmarks; (4) Updated status text in ToolExecutionCard footer to display 'failed (код ...)' when isFailed is true; (5) Purged lingering native browser title attributes across subagent cards, file paths, and icons per § 2.20; (6) Formulated Section 2.36 invariant in AGENTS.md; (7) Verified Ground Truth via npx tsc --noEmit and npm run build (0 errors).",
+  "ftrAnalysis": {
+    "firstTimeRight": true,
+    "ftrScore": "100%",
+    "verdict": "APPROVED",
+    "rootCauses": [
+      {
+        "issue": "Missing auto-scroll during intra-item token and thought streaming",
+        "category": "Viewport & Streaming UX Deficiency",
+        "explanation": "DrawerActivityStream previously only triggered scrolling on unifiedActivities array reference changes. When tokens and thoughts streamed into existing items, content height expanded while unifiedActivities stayed the same reference, causing latest streamed text to drop below the viewport fold. Resolved via ResizeObserver watching firstElementChild with nearBottomRef scroll-up protection."
+      },
+      {
+        "issue": "Redundant subagent child tasks card in activity feed",
+        "category": "Scaffolding Debt & Layout Duplication",
+        "explanation": "A legacy static card rendering child subtasks remained at the bottom of DrawerActivityStream after dedicated SubagentsSidebar and ToolExecutionCard subagent cards were integrated. Purging this block eliminated UI duplication and cleaned up unused component props."
+      },
+      {
+        "issue": "False green checkmark and success status on failed tool executions",
+        "category": "State Classification & Honest Feedback Violation",
+        "explanation": "ToolExecutionCard evaluated tool.status === 'success' without checking isFailed, causing tools that completed with non-zero exit codes to display a green checkmark and 'success (код 1)'. Resolved by gating success on !isFailed and formatting status as 'failed (код X)'."
+      },
+      {
+        "issue": "Lingering native browser title attributes",
+        "category": "Design System Compliance (§ 2.20 Violation)",
+        "explanation": "ToolExecutionCard retained unstyled native HTML title attributes on subagent cards, raw file paths, and target spans, violating § 2.20 (Native Browser Tooltip Ban on Labeled Controls). All occurrences were systematically removed."
+      }
+    ]
+  }
+}
