@@ -15,6 +15,7 @@ import {
   ArrowLeft,
   PanelLeftClose,
   PanelLeftOpen,
+  Square,
 } from 'lucide-react';
 
 interface SubagentsSidebarProps {
@@ -37,6 +38,15 @@ export function getRoleIcon(role?: string | null) {
     return ShieldCheck;
   }
   return Bot;
+}
+
+export function formatSubagentDisplayTitle(title?: string | null): string {
+  if (!title) return 'Субагент';
+  if (title.includes('sub-call_')) {
+    const cleaned = title.replace(/(?:[A-Za-z0-9_-]+\.)?sub-call_\d+/g, 'субагент').trim();
+    return cleaned || 'Субагент';
+  }
+  return title;
 }
 
 export function getRoleActiveBorderClass(role?: string | null): string {
@@ -326,13 +336,46 @@ export default function SubagentsSidebar({
                     )}
                   </div>
 
-                  {/* Status Indicator */}
-                  <div className="shrink-0">
+                  {/* Status Indicator & Granular Stop Button */}
+                  <div className="shrink-0 flex items-center space-x-1.5">
                     {sub.status === 'running' ? (
-                      <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#15803d] dark:text-[#7ee787] bg-[#f0fdf4] dark:bg-[#12281e] border border-[#bbf7d0] dark:border-[#238636]">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
-                        <span>Работает</span>
-                      </span>
+                      <>
+                        <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#15803d] dark:text-[#7ee787] bg-[#f0fdf4] dark:bg-[#12281e] border border-[#bbf7d0] dark:border-[#238636]">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                          <span>Работает</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              const { invoke } = await import('@tauri-apps/api/core');
+                              await invoke('abort_agent', { taskId: sub.id });
+                              useDrawerStore.getState().setActiveAgentTask(sub.id, false);
+                              const boardTask = useBoardStore.getState().tasks.find((t) => t.id === sub.id);
+                              if (boardTask) {
+                                useBoardStore.getState().updateTask(sub.id, { status: 'paused', isTimerRunning: false });
+                              }
+                              const tools = useDrawerStore.getState().toolExecutions[sub.id] || [];
+                              for (const t of tools) {
+                                if (t.status === 'running') {
+                                  useDrawerStore.getState().updateToolExecution(sub.id, t.id, {
+                                    status: 'failed',
+                                    stderr: 'Прервано пользователем',
+                                  });
+                                }
+                              }
+                            } catch (err) {
+                              console.warn('Failed to abort subagent', sub.id, err);
+                            }
+                          }}
+                          className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#dc2626] dark:text-[#ff7b72] hover:bg-[#fef2f2] dark:hover:bg-[#3b1219] border border-[#fecaca] dark:border-[#da3633] transition cursor-pointer"
+                          title={`Остановить субагента ${sub.id}`}
+                        >
+                          <Square className="h-2.5 w-2.5 fill-current shrink-0" />
+                          <span>Остановить</span>
+                        </button>
+                      </>
                     ) : sub.status === 'error' ? (
                       <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#b91c1c] dark:text-[#ff7b72] bg-[#fef2f2] dark:bg-[#3b1219] border border-[#fecaca] dark:border-[#da3633]">
                         <AlertCircle className="h-3 w-3 shrink-0" />
@@ -349,7 +392,7 @@ export default function SubagentsSidebar({
 
                 {/* Subagent Title */}
                 <div className="font-sans font-medium text-xs text-[#171717] dark:text-[#f0f6fc] group-hover:text-black dark:group-hover:text-white transition-colors line-clamp-2 leading-snug mb-2">
-                  {sub.title}
+                  {formatSubagentDisplayTitle(sub.title)}
                 </div>
 
                 {/* Card Footer: Metrics (Duration + Steps) */}

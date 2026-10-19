@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { ToolExecution } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
+import { getRoleIcon, formatSubagentDisplayTitle } from './SubagentsSidebar';
 import {
   ChevronRight,
   Copy,
@@ -138,6 +139,8 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
     const roleBadgeClass = getRoleBadgeClass(rawRole);
     const isRunning = tool.status === 'running';
     const isSuccess = tool.status === 'success';
+    const RoleIcon = getRoleIcon(rawRole);
+    const displayTitle = formatSubagentDisplayTitle(title);
 
     return (
       <div
@@ -147,26 +150,24 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       >
         <div className="flex items-center justify-between gap-2.5">
           <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
-            <span className="text-[#171717] dark:text-[#f0f6fc] shrink-0 font-mono text-sm leading-none select-none">
-              ■
-            </span>
+            <RoleIcon className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
 
             <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider border shrink-0 select-none ${roleBadgeClass}`}>
               {roleUpper}
             </span>
 
-            {isBg && (
-              <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold tracking-wider uppercase bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 shrink-0">
+            {isBg ? (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold tracking-wider uppercase bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 shrink-0">
                 ФОН
+              </span>
+            ) : (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold tracking-wider uppercase bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 shrink-0">
+                СИНХР
               </span>
             )}
 
-            <span className="font-mono text-[11px] text-[#71717a] dark:text-[#8b949e] px-1.5 py-0.2 rounded bg-[#f4f4f5] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] shrink-0 hidden sm:inline tabular-nums">
-              {subagentId}
-            </span>
-
             <span className="font-sans font-medium text-xs text-[#0d0d0d] dark:text-[#f0f6fc] group-hover:text-[#171717] dark:group-hover:text-white transition-colors truncate">
-              {title}
+              {displayTitle}
             </span>
           </div>
 
@@ -239,7 +240,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             </span>
 
             <span className="font-mono text-[11px] text-[#71717a] dark:text-[#8b949e] px-1.5 py-0.2 rounded bg-[#f4f4f5] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] truncate">
-              {subagentIdParam || 'все субагенты'}
+              {subagentIdParam ? subagentIdParam.replace(/(?:[A-Za-z0-9_-]+\.)?sub-call_\d+/g, 'субагент') : 'все субагенты'}
             </span>
           </div>
 
@@ -1144,7 +1145,6 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
           <div className="flex items-center justify-between pt-1 border-t border-[#f4f4f5] dark:border-[#21262d] text-[10px] text-[#8f8f8f] dark:text-[#8b949e]">
             <span>Статус: {tool.status} {tool.exitCode !== undefined ? `(код ${tool.exitCode})` : ''}</span>
-            <span className="tabular-nums">{tool.timestamp}</span>
           </div>
         </div>
       )}
