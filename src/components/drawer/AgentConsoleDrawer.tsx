@@ -78,6 +78,10 @@ export default function AgentConsoleDrawer() {
     let unlistenStatus: (() => void) | undefined;
     let unlistenFinished: (() => void) | undefined;
     let unlistenError: (() => void) | undefined;
+    let unlistenSubagentStatus: (() => void) | undefined;
+    let unlistenSubagentAborted: (() => void) | undefined;
+    let unlistenSubagentFinished: (() => void) | undefined;
+    let unlistenSubagentError: (() => void) | undefined;
 
     const setupErrorListeners = async () => {
       try {
@@ -151,6 +155,96 @@ export default function AgentConsoleDrawer() {
             }
           }
         });
+
+        // Listen for subagent:status
+        unlistenSubagentStatus = await listen<{ subagentId?: string; status?: string; parentTaskId?: string }>(
+          'subagent:status',
+          (event) => {
+            const sid = event.payload?.subagentId;
+            const st = event.payload?.status;
+            if (sid) {
+              if (st === 'running') {
+                useDrawerStore.getState().updateSubagentStatus(sid, 'running');
+                useDrawerStore.getState().setActiveAgentTask(sid, true);
+                return;
+              }
+              const nextStatus = st === 'finished' ? 'finished' : (st === 'aborted' || st === 'stopped') ? 'stopped' : 'error';
+              useDrawerStore.getState().updateSubagentStatus(sid, nextStatus as any);
+              useDrawerStore.getState().setActiveAgentTask(sid, false);
+              const tools = useDrawerStore.getState().toolExecutions[sid] || [];
+              for (const t of tools) {
+                if (t.status === 'running') {
+                  useDrawerStore.getState().updateToolExecution(sid, t.id, {
+                    status: 'failed',
+                    stderr: 'Прервано пользователем',
+                  });
+                }
+              }
+            }
+          }
+        );
+
+        // Listen for subagent:aborted
+        unlistenSubagentAborted = await listen<{ subagentId?: string; parentTaskId?: string }>(
+          'subagent:aborted',
+          (event) => {
+            const sid = event.payload?.subagentId;
+            const pid = event.payload?.parentTaskId;
+            if (sid) {
+              useDrawerStore.getState().updateSubagentStatus(sid, 'stopped', 'Прервано пользователем');
+              useDrawerStore.getState().setActiveAgentTask(sid, false);
+              const tools = useDrawerStore.getState().toolExecutions[sid] || [];
+              for (const t of tools) {
+                if (t.status === 'running') {
+                  useDrawerStore.getState().updateToolExecution(sid, t.id, {
+                    status: 'failed',
+                    stderr: 'Прервано пользователем',
+                  });
+                }
+              }
+            } else if (pid && pid === task?.id) {
+              const list = useDrawerStore.getState().subagents[pid] || [];
+              for (const sub of list) {
+                useDrawerStore.getState().updateSubagentStatus(sub.id, 'stopped', 'Прервано пользователем');
+                useDrawerStore.getState().setActiveAgentTask(sub.id, false);
+                const tools = useDrawerStore.getState().toolExecutions[sub.id] || [];
+                for (const t of tools) {
+                  if (t.status === 'running') {
+                    useDrawerStore.getState().updateToolExecution(sub.id, t.id, {
+                      status: 'failed',
+                      stderr: 'Прервано пользователем',
+                    });
+                  }
+                }
+              }
+            }
+          }
+        );
+
+        // Listen for subagent:finished
+        unlistenSubagentFinished = await listen<{ subagentId?: string; parentTaskId?: string; response?: string }>(
+          'subagent:finished',
+          (event) => {
+            const sid = event.payload?.subagentId;
+            if (sid) {
+              useDrawerStore.getState().updateSubagentStatus(sid, 'finished');
+              useDrawerStore.getState().setActiveAgentTask(sid, false);
+            }
+          }
+        );
+
+        // Listen for subagent:error
+        unlistenSubagentError = await listen<{ subagentId?: string; parentTaskId?: string; error?: string }>(
+          'subagent:error',
+          (event) => {
+            const sid = event.payload?.subagentId;
+            const err = event.payload?.error;
+            if (sid) {
+              useDrawerStore.getState().updateSubagentStatus(sid, 'error', err);
+              useDrawerStore.getState().setActiveAgentTask(sid, false);
+            }
+          }
+        );
       } catch {
         // web mode fallback
       }
@@ -161,6 +255,10 @@ export default function AgentConsoleDrawer() {
       if (unlistenStatus) unlistenStatus();
       if (unlistenFinished) unlistenFinished();
       if (unlistenError) unlistenError();
+      if (unlistenSubagentStatus) unlistenSubagentStatus();
+      if (unlistenSubagentAborted) unlistenSubagentAborted();
+      if (unlistenSubagentFinished) unlistenSubagentFinished();
+      if (unlistenSubagentError) unlistenSubagentError();
     };
   }, [task?.id, updateTask]);
 
@@ -336,6 +434,22 @@ export default function AgentConsoleDrawer() {
             status: 'failed',
             stderr: 'Прервано пользователем',
           });
+        }
+      }
+
+      // Cascade abort all subagents of this task
+      const allSubagents = useDrawerStore.getState().subagents[task.id] || [];
+      for (const sub of allSubagents) {
+        setActiveAgentTask(sub.id, false);
+        useDrawerStore.getState().updateSubagentStatus(sub.id, 'stopped', 'Прервано пользователем');
+        const subTools = useDrawerStore.getState().toolExecutions[sub.id] || [];
+        for (const st of subTools) {
+          if (st.status === 'running') {
+            useDrawerStore.getState().updateToolExecution(sub.id, st.id, {
+              status: 'failed',
+              stderr: 'Прервано пользователем',
+            });
+          }
         }
       }
     } catch (err) {

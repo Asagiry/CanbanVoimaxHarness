@@ -24,6 +24,7 @@ export interface PersonaSelectProps {
   newAgentOptionValue?: string;
   className?: string;
   placeholder?: string;
+  compact?: boolean;
 }
 
 export default function PersonaSelect({
@@ -37,6 +38,7 @@ export default function PersonaSelect({
   newAgentOptionValue = '+new',
   className = '',
   placeholder = 'Выберите агента...',
+  compact = false,
 }: PersonaSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -87,41 +89,43 @@ export default function PersonaSelect({
         type="button"
         disabled={disabled}
         onClick={() => !disabled && setIsOpen((prev) => !prev)}
-        className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] hover:border-[#d4d4d8] dark:hover:border-[#484f58] transition cursor-pointer text-xs font-mono disabled:opacity-50 disabled:cursor-not-allowed select-none ${
+        className={`w-full flex items-center justify-between gap-1.5 ${
+          compact ? 'px-1.5 py-1 text-[11px]' : 'px-2.5 py-1.5 text-xs'
+        } rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] hover:border-[#d4d4d8] dark:hover:border-[#484f58] transition cursor-pointer font-mono disabled:opacity-50 disabled:cursor-not-allowed select-none min-w-0 ${
           isOpen ? 'border-[#171717] dark:border-[#f0f6fc]' : ''
         }`}
       >
         <div className="flex items-center gap-1.5 min-w-0 flex-1 text-left">
           {isNewAgent ? (
-            <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
               <Plus className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
               <span className="text-indigo-600 dark:text-indigo-400 font-medium truncate">
                 + Новый агент
               </span>
             </div>
           ) : !value && allowEmpty ? (
-            <div className="flex items-center gap-1.5 min-w-0 text-[#8f8f8f] dark:text-[#8b949e]">
+            <div className="flex items-center gap-1.5 min-w-0 flex-1 text-[#8f8f8f] dark:text-[#8b949e]">
               <UserX className="h-3.5 w-3.5 shrink-0" />
               <span className="font-sans truncate">{emptyLabel}</span>
             </div>
           ) : selected ? (
-            <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
               <div className="h-4 w-4 rounded flex items-center justify-center shrink-0" style={{ color }}>
                 <AgentIcon name={icon} className="h-3.5 w-3.5" />
               </div>
-              <span className="font-semibold truncate leading-none" style={{ color }}>
+              <span className="font-semibold truncate leading-none min-w-0 flex-1" style={{ color }} title={selected.role}>
                 {selected.role}
               </span>
               {isBuiltin && (
                 <span className="px-1 py-0.2 rounded text-[9px] font-sans font-medium bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shrink-0">
-                  встроенный
+                  {compact ? 'встр.' : 'встроенный'}
                 </span>
               )}
             </div>
           ) : value ? (
-            <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
               <AgentIcon name="Bot" className="h-3.5 w-3.5 text-[#8f8f8f] shrink-0" />
-              <span className="font-semibold truncate leading-none text-[#171717] dark:text-[#f0f6fc]">
+              <span className="font-semibold truncate leading-none text-[#171717] dark:text-[#f0f6fc] min-w-0 flex-1" title={value}>
                 {value}
               </span>
             </div>
