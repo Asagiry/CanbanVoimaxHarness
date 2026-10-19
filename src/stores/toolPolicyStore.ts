@@ -32,11 +32,7 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
   {
     id: 'question',
     name: 'question',
-<<<<<<< HEAD
-    label: 'Интерактивный вопрос',
-=======
     label: 'Вопрос пользователю',
->>>>>>> 3cc8fed (feat(anti-slop): total UI deslop sweep across 29 components based on kill-ai-slop)
     description: 'Задать уточняющий вопрос пользователю и ожидать ответа в интерфейсе. Алиас: ask_user.',
     category: 'interactive',
     tokenWeight: 240,
@@ -44,26 +40,16 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
   {
     id: 'advance_task',
     name: 'advance_task',
-<<<<<<< HEAD
-    label: 'Передать задачу',
-    description: 'Передать задачу на следующий этап пайплайна (шаг вперед) с обязательным саммари проделанной работы.',
-=======
     label: 'Передать этап',
     description: 'Передать задачу на следующий этап пайплайна с обязательным саммари проделанной работы.',
->>>>>>> 3cc8fed (feat(anti-slop): total UI deslop sweep across 29 components based on kill-ai-slop)
     category: 'workflow',
     tokenWeight: 220,
   },
   {
     id: 'reject_task',
     name: 'reject_task',
-<<<<<<< HEAD
-    label: 'Вернуть задачу',
-    description: 'Вернуть задачу на предыдущий этап пайплайна (шаг назад) с указанием причины отклонения и замечаний.',
-=======
     label: 'Вернуть на доработку',
     description: 'Вернуть задачу на предыдущий этап пайплайна с указанием причины отклонения и замечаний.',
->>>>>>> 3cc8fed (feat(anti-slop): total UI deslop sweep across 29 components based on kill-ai-slop)
     category: 'workflow',
     tokenWeight: 220,
   },
@@ -102,11 +88,7 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
   {
     id: 'glob',
     name: 'glob',
-<<<<<<< HEAD
-    label: 'Поиск файлов',
-=======
     label: 'Поиск по маске',
->>>>>>> 3cc8fed (feat(anti-slop): total UI deslop sweep across 29 components based on kill-ai-slop)
     description: 'Поиск файлов по маске внутри каталога проекта.',
     category: 'fs',
     tokenWeight: 240,
@@ -114,11 +96,7 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
   {
     id: 'grep',
     name: 'grep',
-<<<<<<< HEAD
-    label: 'Поиск по коду',
-=======
     label: 'Поиск по тексту',
->>>>>>> 3cc8fed (feat(anti-slop): total UI deslop sweep across 29 components based on kill-ai-slop)
     description: 'Поиск регулярных выражений с номерами строк.',
     category: 'fs',
     tokenWeight: 250,
@@ -142,11 +120,7 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
   {
     id: 'subagent',
     name: 'subagent',
-<<<<<<< HEAD
-    label: 'Делегирование субагентам',
-=======
     label: 'Вызов субагентов',
->>>>>>> 3cc8fed (feat(anti-slop): total UI deslop sweep across 29 components based on kill-ai-slop)
     description: 'Мастер-переключатель вызова субагентов. Если отключен, запуск как синхронных, так и фоновых субагентов заблокирован.',
     category: 'agent',
     tokenWeight: 310,
@@ -155,11 +129,7 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
   {
     id: 'subagent_sync',
     name: 'subagent',
-<<<<<<< HEAD
-    label: 'Синхронный субагент',
-=======
     label: 'Субагент (синхронный)',
->>>>>>> 3cc8fed (feat(anti-slop): total UI deslop sweep across 29 components based on kill-ai-slop)
     description: 'Синхронный запуск субагента с блокировкой на стороне Rust до получения финального отчёта.',
     category: 'agent',
     tokenWeight: 290,
@@ -168,11 +138,7 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
   {
     id: 'subagent_bg',
     name: 'subagent_bg',
-<<<<<<< HEAD
-    label: 'Фоновый субагент',
-=======
     label: 'Субагент (фоновый)',
->>>>>>> 3cc8fed (feat(anti-slop): total UI deslop sweep across 29 components based on kill-ai-slop)
     description: 'Асинхронный запуск субагента в фоне с последующим получением результата через collect_subagent без поллинга.',
     category: 'agent',
     tokenWeight: 290,
@@ -190,11 +156,7 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
   {
     id: 'todo_write',
     name: 'todo_write',
-<<<<<<< HEAD
-    label: 'План выполнения (To-dos)',
-=======
     label: 'План выполнения',
->>>>>>> 3cc8fed (feat(anti-slop): total UI deslop sweep across 29 components based on kill-ai-slop)
     description: 'Фиксация и обновление плана задачи: шаги pending | in_progress | completed',
     category: 'agent',
     tokenWeight: 280,

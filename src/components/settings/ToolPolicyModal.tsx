@@ -187,20 +187,12 @@ const CATEGORY_ORDER: Array<'orchestration' | 'interactive' | 'workflow' | 'syst
 
 const CATEGORY_LABELS: Record<string, string> = {
   orchestration: 'Оркестрация и управление задачами',
-<<<<<<< HEAD
-  interactive: 'Интерактивный диалог',
-=======
   interactive: 'Интерактивность',
->>>>>>> 3cc8fed (feat(anti-slop): total UI deslop sweep across 29 components based on kill-ai-slop)
   workflow: 'Маршрутизация задач',
   system: 'Команды и терминал',
   fs: 'Файловая система',
   web: 'Сеть и документация',
-<<<<<<< HEAD
-  agent: 'Субагенты и планирование',
-=======
   agent: 'Подагенты и планирование',
->>>>>>> 3cc8fed (feat(anti-slop): total UI deslop sweep across 29 components based on kill-ai-slop)
 };
 
 export default function ToolPolicyModal() {
