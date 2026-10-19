@@ -53,6 +53,7 @@ export interface KanbanTask {
   tags?: string[];
   handoverSummary?: string;
   currentTokens?: number;
+  skipWorktree?: boolean;
 }
 
 export interface PipelineColumn {
@@ -203,4 +204,5 @@ export interface SubagentInfo {
   stepsCount: number;
   lastError?: string;
   isBg?: boolean;
+  finishedAt?: number;
 }

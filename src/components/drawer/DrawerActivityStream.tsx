@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { KanbanTask } from '../../types';
 import type { DrawerActivityItem } from '../../stores/drawerStore';
 import ToolExecutionCard from './ToolExecutionCard';
-import ThinkingCard from './ThinkingCard';
+import ThinkingCard, { formatDurationCompact } from './ThinkingCard';
 import QuestionPromptCard from './QuestionPromptCard';
 import CompactedContextCard from './CompactedContextCard';
 import { useDrawerStore } from '../../stores/drawerStore';
@@ -593,14 +593,14 @@ function tryExtractTodos(text: string): { leadingText?: string; todos: ParsedTod
 interface AgentExplanationCardProps {
   activity: DrawerActivityItem;
   content?: string;
-  timestamp?: string;
+  durationMs?: number;
   hasNearbyTodoWrite?: boolean;
 }
 
 function AgentExplanationCard({
-  activity: _activity,
+  activity,
   content,
-  timestamp,
+  durationMs,
   hasNearbyTodoWrite,
 }: AgentExplanationCardProps) {
   const [isExpanded, setIsExpanded] = useState(true);
@@ -616,6 +616,8 @@ function AgentExplanationCard({
 
   const effectiveLeadingText = todoData?.leadingText;
   const effectiveTodos = (!hasNearbyTodoWrite && todoData?.todos) ? todoData.todos : null;
+  const effectiveDurationMs = durationMs ?? activity?.durationMs;
+  const durationText = formatDurationCompact(effectiveDurationMs);
 
   return (
     <div className="rounded-lg border border-[#e4e4e7] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-xs overflow-hidden my-2.5 transition duration-150">
@@ -638,9 +640,12 @@ function AgentExplanationCard({
             {effectiveTodos ? 'План действий' : 'Пояснение агента'}
           </span>
         </div>
-        <span className="text-[10px] font-mono text-[#71717a] dark:text-[#8b949e] tabular-nums">
-          {timestamp ?? ''}
-        </span>
+        {durationText && (
+          <span className="flex items-center space-x-1 text-[10px] font-mono text-[#71717a] dark:text-[#8b949e] tabular-nums">
+            <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
+            <span>{durationText}</span>
+          </span>
+        )}
       </div>
       {isExpanded && (
         <div className="px-3.5 py-3 border-t border-[#f4f4f5] dark:border-[#21262d] text-sm leading-relaxed text-[#27272a] dark:text-[#d4d4d8] select-text space-y-2.5">
@@ -721,6 +726,45 @@ export default function DrawerActivityStream({
   const isFirstBatchRef = useRef(true);
   const nearBottomRef = useRef(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Pre-compute elapsed duration for each activity item
+  const activityDurations = useMemo(() => {
+    const list = unifiedActivities || [];
+    const res: (number | undefined)[] = new Array(list.length);
+    for (let i = 0; i < list.length; i++) {
+      const act = list[i];
+      if (act?.durationMs && act.durationMs > 0) {
+        res[i] = act.durationMs;
+      } else if (act?.tool?.durationMs && act.tool.durationMs > 0) {
+        res[i] = act.tool.durationMs;
+      } else {
+        // Compute from timestamps between act and next activity
+        const curTime = act?.timestamp ? new Date(act.timestamp).getTime() : NaN;
+        if (!isNaN(curTime) && curTime > 0) {
+          let nextTime = NaN;
+          for (let j = i + 1; j < list.length; j++) {
+            const t = list[j]?.timestamp ? new Date(list[j].timestamp).getTime() : NaN;
+            if (!isNaN(t) && t > curTime) {
+              nextTime = t;
+              break;
+            }
+          }
+          if (!isNaN(nextTime) && nextTime >= curTime) {
+            const diff = nextTime - curTime;
+            if (diff > 50 && diff < 3600000) {
+              res[i] = diff;
+            }
+          } else if (i === list.length - 1 && isRunning) {
+            const diff = Date.now() - curTime;
+            if (diff > 50 && diff < 3600000) {
+              res[i] = diff;
+            }
+          }
+        }
+      }
+    }
+    return res;
+  }, [unifiedActivities, isRunning]);
 
   const toggleOutput = (id: string) => {
     setExpandedOutputs((prev) => {
@@ -953,16 +997,21 @@ export default function DrawerActivityStream({
                   isTaskRunning={isRunning}
                   isLive={isRunning && isLastActivity}
                   taskId={task.id}
+                  durationMs={activityDurations[idx] || activity.durationMs}
                 />
               );
             }
 
             // d) Inline Tool Execution Card (including subagent tool executions)
             if (activity?.type === 'tool' && activity?.tool) {
+              const toolWithDuration = {
+                ...activity.tool,
+                durationMs: activity.tool.durationMs || activityDurations[idx] || 0,
+              };
               return (
                 <ToolExecutionCard
                   key={key}
-                  tool={activity.tool}
+                  tool={toolWithDuration}
                 />
               );
             }
@@ -980,7 +1029,6 @@ export default function DrawerActivityStream({
                       <User className="h-3 w-3" />
                       <span>Корректировка пользователя</span>
                     </div>
-                    <span className="tabular-nums">{activity?.timestamp ?? ''}</span>
                   </div>
                   {images.length > 0 && (
                     <div className="flex items-center gap-2 mb-2.5 flex-wrap">
@@ -1015,9 +1063,6 @@ export default function DrawerActivityStream({
                 >
                   <Info className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
                   <span className="flex-1">{activity?.content ?? ''}</span>
-                  <span className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] tabular-nums">
-                    {activity?.timestamp ?? ''}
-                  </span>
                 </div>
               );
             }
@@ -1033,9 +1078,6 @@ export default function DrawerActivityStream({
                   <div className="flex-1 whitespace-pre-wrap select-text">
                     {activity?.content ?? ''}
                   </div>
-                  <span className="text-[10px] text-[#b91c1c] dark:text-[#ff7b72] tabular-nums shrink-0">
-                    {activity?.timestamp ?? ''}
-                  </span>
                 </div>
               );
             }
@@ -1065,7 +1107,7 @@ export default function DrawerActivityStream({
                   key={key}
                   activity={activity}
                   content={activity?.content}
-                  timestamp={activity?.timestamp}
+                  durationMs={activityDurations[idx] || activity?.durationMs}
                   hasNearbyTodoWrite={hasNearbyTodoWrite}
                 />
               );
@@ -1073,6 +1115,7 @@ export default function DrawerActivityStream({
 
             // True Final Response / Output Markdown Block (collapsible card)
             const isOutputExpanded = expandedOutputs.has(key);
+            const outputDurationText = formatDurationCompact(activityDurations[idx] || activity?.durationMs);
             return (
               <div
                 key={key}
@@ -1091,7 +1134,12 @@ export default function DrawerActivityStream({
                     <CheckCheck className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
                     <span className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">Ответ агента</span>
                   </div>
-                  <span className="text-xs font-mono text-[#71717a] dark:text-[#8b949e] tabular-nums">{activity?.timestamp ?? ''}</span>
+                  {outputDurationText && (
+                    <span className="flex items-center space-x-1 text-xs font-mono text-[#71717a] dark:text-[#8b949e] tabular-nums">
+                      <Clock className="h-3.5 w-3.5 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
+                      <span>{outputDurationText}</span>
+                    </span>
+                  )}
                 </div>
                 {isOutputExpanded && (
                   <div className="px-4 pb-4 pt-3 border-t border-[#f4f4f5] dark:border-[#21262d]">

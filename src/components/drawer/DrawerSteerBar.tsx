@@ -5,6 +5,7 @@ import TaskTodoWidget from './TaskTodoWidget';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { getRoleBadgeStyle } from '../../lib/agentPalette';
+import { getSubagentOrderMap } from './SubagentsSidebar';
 import {
   ArrowUp,
   Plus,
@@ -45,7 +46,17 @@ export default function DrawerSteerBar({
   const {
     activeSubagentId,
     activeSubagentRole,
+    subagents: storeSubagents,
+    toolExecutions,
+    toolIdToSubagentId,
   } = useDrawerStore();
+
+  const boardTasks = useBoardStore((s) => s.tasks);
+  const subagentNumber = React.useMemo(() => {
+    if (!activeSubagentId || !task?.id) return null;
+    const map = getSubagentOrderMap(task.id, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks);
+    return map.get(activeSubagentId) ?? (toolIdToSubagentId[activeSubagentId] ? map.get(toolIdToSubagentId[activeSubagentId]) : null) ?? 1;
+  }, [activeSubagentId, task?.id, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks]);
 
   const columns = useBoardStore((s) => s.columns);
   const currentColumn = columns.find((c) => c.id === task.columnId);
@@ -186,12 +197,9 @@ export default function DrawerSteerBar({
             <div className="flex items-center space-x-2 pb-1.5 mb-2 border-b border-[#ebebeb] dark:border-[#21262d] select-none min-w-0">
               <span
                 style={getRoleBadgeStyle(activeSubagentRole)}
-                className="px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider border uppercase shrink-0"
+                className="px-2 py-0.5 rounded text-[11px] font-mono font-bold tracking-wider border uppercase shrink-0 select-none"
               >
-                СУБАГЕНТ: {(activeSubagentRole || 'general').toUpperCase()}
-              </span>
-              <span className="text-xs font-sans text-[#71717a] truncate">
-                Уточнение задачи субагента
+                СУБАГЕНТ #{subagentNumber || 1}
               </span>
             </div>
           )}

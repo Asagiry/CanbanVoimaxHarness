@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { ToolExecution } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
+import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import AgentIcon from '../common/AgentIcon';
 import { getRoleBadgeStyle } from '../../lib/agentPalette';
-import { formatSubagentDisplayTitle } from './SubagentsSidebar';
+import { formatSubagentDisplayTitle, getSubagentOrderMap } from './SubagentsSidebar';
+import { formatDurationCompact } from './ThinkingCard';
 import {
   ChevronRight,
   Copy,
@@ -82,6 +84,11 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const openSubagent = useDrawerStore((s) => s.openSubagent);
   const agentPersonas = useCortexStore((s) => s.agentPersonas);
+  const activeTaskId = useDrawerStore((s) => s.activeTaskId);
+  const storeSubagents = useDrawerStore((s) => s.subagents);
+  const toolExecutions = useDrawerStore((s) => s.toolExecutions);
+  const toolIdToSubagentId = useDrawerStore((s) => s.toolIdToSubagentId);
+  const boardTasks = useBoardStore((s) => s.tasks);
 
   useEffect(() => {
     return () => {
@@ -135,6 +142,28 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
     const isSuccess = tool.status === 'success';
     const displayTitle = formatSubagentDisplayTitle(title);
 
+    const subagentNumber = (() => {
+      if (!activeTaskId) return 1;
+      const map = getSubagentOrderMap(activeTaskId, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks);
+      return map.get(subagentId) ?? map.get(tool.id) ?? (toolIdToSubagentId[subagentId] ? map.get(toolIdToSubagentId[subagentId]) : null) ?? 1;
+    })();
+
+    const subDurationText = (() => {
+      if (isRunning) return null;
+      if (toolName === 'subagent_bg') {
+        const list = storeSubagents[activeTaskId || ''] || [];
+        const sub = list.find((s) => s.id === subagentId || s.toolCallId === tool.id);
+        if (sub?.durationMs && (!sub.isBg || sub.durationMs >= 1000)) {
+          return formatDurationCompact(sub.durationMs);
+        }
+        if (sub?.createdAt && sub?.finishedAt) {
+          return formatDurationCompact(sub.finishedAt - sub.createdAt);
+        }
+        return null;
+      }
+      return formatDurationCompact(tool.durationMs);
+    })();
+
     return (
       <div
         onClick={() => openSubagent(subagentId, title, rawRole, prompt)}
@@ -154,9 +183,9 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
             <span
               style={roleBadgeStyle}
-              className="px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider border shrink-0 select-none uppercase"
+              className="px-2 py-0.5 rounded text-[11px] font-mono font-bold tracking-wider border shrink-0 select-none uppercase"
             >
-              СУБАГЕНТ
+              СУБАГЕНТ #{subagentNumber || 1}
             </span>
 
             <span className="font-sans font-medium text-xs text-[#0d0d0d] dark:text-[#f0f6fc] group-hover:text-[#171717] dark:group-hover:text-white transition-colors truncate">
@@ -180,6 +209,12 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
                 <X className="h-3.5 w-3.5 text-[#dc2626] dark:text-[#ff7b72] stroke-[2.5]" />
                 <span className="text-[11px] font-mono font-medium text-[#dc2626] dark:text-[#ff7b72]">Ошибка</span>
               </div>
+            )}
+
+            {subDurationText && (
+              <span className="font-mono text-[#71717a] dark:text-[#8b949e] shrink-0 tabular-nums text-[11px]">
+                {subDurationText}
+              </span>
             )}
 
             <ChevronRight className="h-4 w-4 text-[#8f8f8f] group-hover:text-[#171717] dark:group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
@@ -521,11 +556,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   };
 
   const formatDuration = (ms: number): string | null => {
-    if (!ms || ms <= 0) return null;
-    if (ms >= 1000) {
-      return `${(ms / 1000).toFixed(1)}s`;
-    }
-    return `${ms}ms`;
+    return formatDurationCompact(ms);
   };
 
   const { target, fullTarget } = getTarget();

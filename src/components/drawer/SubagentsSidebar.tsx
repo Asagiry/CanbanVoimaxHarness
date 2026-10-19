@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
-import { SubagentInfo } from '../../types';
+import type { SubagentInfo, ToolExecution, KanbanTask } from '../../types';
 import AgentIcon from '../common/AgentIcon';
 import {
   getDeterministicAgentIcon,
@@ -61,6 +61,132 @@ function formatSteps(count: number): string {
   return `${count} шагов`;
 }
 
+export function getSubagentsForTask(
+  taskId: string,
+  storeSubagents: Record<string, SubagentInfo[]>,
+  toolExecutions: Record<string, ToolExecution[]>,
+  toolIdToSubagentId: Record<string, string>,
+  boardTasks: KanbanTask[]
+): SubagentInfo[] {
+  const map = new Map<string, SubagentInfo>();
+
+  // 1. Explicit store subagents (from backend list_subagents + live events)
+  const list = storeSubagents[taskId] || [];
+  for (const sub of list) {
+    map.set(sub.id, {
+      ...sub,
+      createdAt: sub.createdAt || (sub.status === 'running' ? Date.now() : undefined),
+    });
+  }
+
+  // 2. Derive from parent task's tool executions if not yet tracked
+  const tools = toolExecutions[taskId] || [];
+  for (const t of tools) {
+    if (t.toolName === 'subagent' || t.toolName === 'subagent_bg') {
+      const params = (t.params as Record<string, unknown>) || {};
+      const subId =
+        (params?.subagent_id as string) ||
+        toolIdToSubagentId[t.id] ||
+        t.id;
+      const existing = map.get(subId);
+      const isBg =
+        t.toolName === 'subagent_bg' ||
+        (params?.is_bg === true) ||
+        (params?.isBg === true) ||
+        existing?.isBg === true;
+      const parsedTime = t.timestamp ? new Date(t.timestamp).getTime() : undefined;
+      const toolCreatedAt =
+        existing?.createdAt ||
+        (parsedTime && !isNaN(parsedTime) ? parsedTime : undefined) ||
+        (t.status === 'running' ? Date.now() : undefined);
+
+      if (!existing) {
+        map.set(subId, {
+          id: subId,
+          parentTaskId: taskId,
+          toolCallId: t.id,
+          title: (params?.title as string) || (params?.prompt as string)?.slice(0, 50) || 'Делегированная задача',
+          role: (params?.role as string) || 'general',
+          prompt: (params?.prompt as string) || '',
+          status: t.status === 'running' ? 'running' : t.status === 'failed' ? 'error' : 'finished',
+          createdAt: toolCreatedAt,
+          // CRITICAL: NEVER take durationMs from subagent_bg tool execution (which is 181ms spawn time)
+          durationMs: isBg ? undefined : t.durationMs,
+          stepsCount: 0,
+          isBg,
+        });
+      } else {
+        if (isBg) {
+          existing.isBg = true;
+        }
+        if (!existing.createdAt && toolCreatedAt) {
+          existing.createdAt = toolCreatedAt;
+        }
+        // Do NOT take durationMs from subagent_bg tool call!
+        if (!isBg && !existing.durationMs && t.durationMs) {
+          existing.durationMs = t.durationMs;
+        }
+      }
+    }
+  }
+
+  // 3. Subtasks on the Kanban board
+  const childTasks = (boardTasks || []).filter((t) => t.parentId === taskId);
+  for (const child of childTasks) {
+    if (!map.has(child.id)) {
+      const childCreated = (child as any).createdAt ? Number((child as any).createdAt) : undefined;
+      map.set(child.id, {
+        id: child.id,
+        parentTaskId: taskId,
+        title: child.title,
+        role: child.persona || 'developer',
+        prompt: child.description || '',
+        status: child.status === 'running' ? 'running' : child.status === 'done' ? 'finished' : 'finished',
+        createdAt: childCreated,
+        durationMs: child.totalElapsed ? child.totalElapsed * 1000 : undefined,
+        stepsCount: (child.todos || []).length,
+      });
+    }
+  }
+
+  const result = Array.from(map.values());
+  // Sort stably by creation order: createdAt ascending
+  result.sort((a, b) => {
+    const aTime = a.createdAt || 0;
+    const bTime = b.createdAt || 0;
+    if (aTime && bTime && aTime !== bTime) {
+      return aTime - bTime;
+    }
+    return 0;
+  });
+
+  return result;
+}
+
+export function getSubagentOrderMap(
+  taskId: string,
+  storeSubagents: Record<string, SubagentInfo[]>,
+  toolExecutions: Record<string, ToolExecution[]>,
+  toolIdToSubagentId: Record<string, string>,
+  boardTasks: KanbanTask[]
+): Map<string, number> {
+  const map = new Map<string, number>();
+  if (!taskId) return map;
+  const list = getSubagentsForTask(taskId, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks);
+  list.forEach((sub, idx) => {
+    const num = idx + 1;
+    map.set(sub.id, num);
+    if (sub.toolCallId) {
+      map.set(sub.toolCallId, num);
+    }
+    const mapped = toolIdToSubagentId[sub.id];
+    if (mapped) {
+      map.set(mapped, num);
+    }
+  });
+  return map;
+}
+
 export default function SubagentsSidebar({
   taskId,
   taskTitle,
@@ -80,92 +206,20 @@ export default function SubagentsSidebar({
 
   const boardTasks = useBoardStore((s) => s.tasks);
   const agentPersonas = useCortexStore((s) => s.agentPersonas);
+
+  const orderMap = useMemo(() => {
+    return getSubagentOrderMap(taskId, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks);
+  }, [taskId, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks]);
+
   const allSubagents = useMemo(() => {
-    const map = new Map<string, SubagentInfo>();
-
-    // 1. Explicit store subagents (from backend list_subagents + live events)
-    const list = storeSubagents[taskId] || [];
-    for (const sub of list) {
-      map.set(sub.id, {
+    const subs = getSubagentsForTask(taskId, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks);
+    return subs.map((sub) => {
+      const feed = activityFeed[sub.id] || (sub.toolCallId ? activityFeed[sub.toolCallId] : []) || [];
+      return {
         ...sub,
-        createdAt: sub.createdAt || (sub.status === 'running' ? Date.now() : undefined),
-      });
-    }
-
-    // 2. Derive from parent task's tool executions if not yet tracked
-    const tools = toolExecutions[taskId] || [];
-    for (const t of tools) {
-      if (t.toolName === 'subagent' || t.toolName === 'subagent_bg') {
-        const params = (t.params as Record<string, unknown>) || {};
-        const subId =
-          (params?.subagent_id as string) ||
-          toolIdToSubagentId[t.id] ||
-          t.id;
-        const feed = activityFeed[subId] || activityFeed[t.id] || [];
-        const existing = map.get(subId);
-        const isBg =
-          t.toolName === 'subagent_bg' ||
-          (params?.is_bg === true) ||
-          (params?.isBg === true) ||
-          existing?.isBg === true;
-        const parsedTime = t.timestamp ? new Date(t.timestamp).getTime() : undefined;
-        const toolCreatedAt =
-          existing?.createdAt ||
-          (parsedTime && !isNaN(parsedTime) ? parsedTime : undefined) ||
-          (t.status === 'running' ? Date.now() : undefined);
-
-        if (!existing) {
-          map.set(subId, {
-            id: subId,
-            parentTaskId: taskId,
-            toolCallId: t.id,
-            title: (params?.title as string) || (params?.prompt as string)?.slice(0, 50) || 'Делегированная задача',
-            role: (params?.role as string) || 'general',
-            prompt: (params?.prompt as string) || '',
-            status: t.status === 'running' ? 'running' : t.status === 'failed' ? 'error' : 'finished',
-            createdAt: toolCreatedAt,
-            durationMs: t.durationMs,
-            stepsCount: feed.length,
-            isBg,
-          });
-        } else {
-          // Augment with execution duration, isBg, createdAt and steps count if missing
-          if (isBg) {
-            existing.isBg = true;
-          }
-          if (!existing.createdAt && toolCreatedAt) {
-            existing.createdAt = toolCreatedAt;
-          }
-          if (!existing.durationMs && t.durationMs) {
-            existing.durationMs = t.durationMs;
-          }
-          if (existing.stepsCount <= 1 && feed.length > 1) {
-            existing.stepsCount = feed.length;
-          }
-        }
-      }
-    }
-
-    // 3. Subtasks on the Kanban board
-    const childTasks = boardTasks.filter((t) => t.parentId === taskId);
-    for (const child of childTasks) {
-      if (!map.has(child.id)) {
-        const childCreated = (child as any).createdAt ? Number((child as any).createdAt) : undefined;
-        map.set(child.id, {
-          id: child.id,
-          parentTaskId: taskId,
-          title: child.title,
-          role: child.persona || 'developer',
-          prompt: child.description || '',
-          status: child.status === 'running' ? 'running' : child.status === 'done' ? 'finished' : 'finished',
-          createdAt: childCreated,
-          durationMs: child.totalElapsed ? child.totalElapsed * 1000 : undefined,
-          stepsCount: (child.todos || []).length,
-        });
-      }
-    }
-
-    return Array.from(map.values());
+        stepsCount: Math.max(sub.stepsCount || 0, feed.length),
+      };
+    });
   }, [taskId, storeSubagents, toolExecutions, toolIdToSubagentId, activityFeed, boardTasks]);
 
   const hasRunningSubagents = allSubagents.some((s) => s.status === 'running');
@@ -263,7 +317,7 @@ export default function SubagentsSidebar({
             </p>
           </div>
         ) : (
-          allSubagents.map((sub) => {
+          allSubagents.map((sub, idx) => {
             const isActive =
               activeSubagentId === sub.id ||
               (sub.toolCallId && activeSubagentId === sub.toolCallId) ||
@@ -274,6 +328,7 @@ export default function SubagentsSidebar({
             const personaIcon = matchedPersona?.icon || (matchedPersona ? 'Bot' : getDeterministicAgentIcon(sub.role));
             const roleBadgeStyle = getRoleBadgeStyle(sub.role, matchedPersona?.color);
             const activeCardStyle = getRoleActiveCardStyle(sub.role, matchedPersona?.color);
+            const subIndex = orderMap.get(sub.id) ?? (sub.toolCallId ? orderMap.get(sub.toolCallId) : null) ?? (idx + 1);
 
             return (
               <div
@@ -314,9 +369,9 @@ export default function SubagentsSidebar({
                     )}
                     <span
                       style={roleBadgeStyle}
-                      className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold tracking-wider uppercase border shrink-0 select-none"
+                      className="px-2 py-0.5 rounded text-[11px] font-mono font-bold tracking-wider uppercase border shrink-0 select-none"
                     >
-                      СУБАГЕНТ
+                      СУБАГЕНТ #{subIndex}
                     </span>
                   </div>
 
@@ -386,10 +441,37 @@ export default function SubagentsSidebar({
                     <span className="tabular-nums">
                       {(() => {
                         const isSubRunning = sub.status === 'running';
-                        const liveMs = isSubRunning
-                          ? (sub.createdAt && sub.createdAt > 0 ? Math.max(0, now - sub.createdAt) : (sub.durationMs ?? 0))
-                          : sub.durationMs;
-                        return formatDuration(liveMs, isSubRunning);
+                        if (isSubRunning) {
+                          // Real elapsed from sub.createdAt to now for running subagents
+                          const liveMs = sub.createdAt && sub.createdAt > 0
+                            ? Math.max(0, now - sub.createdAt)
+                            : 0;
+                          return formatDuration(liveMs, true);
+                        }
+                        // For completed subagents: real durationMs or finish - start difference
+                        let finalMs = sub.durationMs;
+                        // Guard against 181ms spawn duration on bg subagents
+                        if (sub.isBg && finalMs !== undefined && finalMs < 1000 && sub.createdAt) {
+                          if (sub.finishedAt) {
+                            finalMs = Math.max(0, sub.finishedAt - sub.createdAt);
+                          } else {
+                            finalMs = undefined;
+                          }
+                        }
+                        if (!finalMs && sub.createdAt && sub.finishedAt) {
+                          finalMs = Math.max(0, sub.finishedAt - sub.createdAt);
+                        }
+                        if (!finalMs && sub.createdAt) {
+                          const feed = activityFeed[sub.id] || (sub.toolCallId ? activityFeed[sub.toolCallId] : []) || [];
+                          let feedDuration = 0;
+                          for (const it of feed) {
+                            if (it.durationMs && it.durationMs > 0) feedDuration += it.durationMs;
+                          }
+                          if (feedDuration > 0) {
+                            finalMs = feedDuration;
+                          }
+                        }
+                        return formatDuration(finalMs, false);
                       })()}
                     </span>
                   </div>

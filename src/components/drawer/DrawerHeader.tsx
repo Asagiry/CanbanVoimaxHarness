@@ -2,10 +2,11 @@ import React from 'react';
 import type { KanbanTask, PipelineColumn } from '../../types';
 import Logo from '../common/Logo';
 import { useDrawerStore } from '../../stores/drawerStore';
+import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import AgentIcon from '../common/AgentIcon';
 import { getRoleBadgeStyle } from '../../lib/agentPalette';
-import { formatSubagentDisplayTitle } from './SubagentsSidebar';
+import { formatSubagentDisplayTitle, getSubagentOrderMap } from './SubagentsSidebar';
 import WindowControls, { toggleMaximizeWindow } from '../layout/WindowControls';
 import {
   ArrowLeft,
@@ -72,12 +73,22 @@ export default function DrawerHeader({
     activeSubagentTitle,
     activeSubagentRole,
     closeSubagent,
+    subagents: storeSubagents,
+    toolExecutions,
+    toolIdToSubagentId,
   } = useDrawerStore();
+  const boardTasks = useBoardStore((s) => s.tasks);
   const agentPersonas = useCortexStore((s) => s.agentPersonas);
   const matchedPersona = agentPersonas.find(
     (p) => p.role.toLowerCase() === (activeSubagentRole || '').toLowerCase()
   );
   const { theme, toggleThemeWithAnimation } = useThemeStore();
+
+  const subagentNumber = React.useMemo(() => {
+    if (!activeSubagentId || !task?.id) return null;
+    const map = getSubagentOrderMap(task.id, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks);
+    return map.get(activeSubagentId) ?? (toolIdToSubagentId[activeSubagentId] ? map.get(toolIdToSubagentId[activeSubagentId]) : null) ?? 1;
+  }, [activeSubagentId, task?.id, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks]);
 
   const workingColumns = columns.filter(
     (c) => c.id !== 'backlog' && c.id !== 'ready' && !c.terminal
@@ -136,9 +147,9 @@ export default function DrawerHeader({
                 </span>
                 <span
                   style={getRoleBadgeStyle(activeSubagentRole, matchedPersona?.color)}
-                  className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border shrink-0"
+                  className="px-2 py-0.5 rounded text-[11px] font-mono font-bold uppercase tracking-wider border shrink-0 select-none"
                 >
-                  {(activeSubagentRole || 'general').toUpperCase()}
+                  СУБАГЕНТ #{subagentNumber || 1}
                 </span>
               </div>
             ) : (
@@ -305,13 +316,13 @@ export default function DrawerHeader({
       {/* Worktree strip below the header */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] text-xs font-mono text-[#666666] dark:text-[#8b949e] shrink-0 transition-colors">
         <div className="flex items-center space-x-2.5">
-          {task?.worktreePath && (
+          {!task?.skipWorktree && task?.worktreePath && (
             <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-[#f9f9f9] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d]">
               <FolderGit2 className="h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e]" />
               <span className="text-[#4d4d4d] dark:text-[#c9d1d9]">{task.worktreePath}</span>
             </div>
           )}
-          {task?.branch && (
+          {!task?.skipWorktree && task?.worktreePath && task?.branch && (
             <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-[#f9f9f9] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d]">
               <GitBranch className="h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e]" />
               <span className="text-[#4d4d4d] dark:text-[#c9d1d9]">{task.branch}</span>

@@ -103,9 +103,11 @@ export default function CompactedContextCard({ activity }: CompactedContextCardP
             </button>
           )}
 
-          <span className="text-[10px] font-mono text-[#8f8f8f] tabular-nums">
-            {activity.timestamp || ''}
-          </span>
+          {activity.durationMs ? (
+            <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] tabular-nums">
+              {activity.durationMs < 1000 ? `${Math.round(activity.durationMs)}ms` : `${(activity.durationMs / 1000).toFixed(1)}s`}
+            </span>
+          ) : null}
         </div>
       </div>
 

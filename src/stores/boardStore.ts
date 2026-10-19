@@ -792,9 +792,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         persistTasksToLocalStorage(updatedTasks);
         // NOTE: no syncTasksBackend here — backend already persisted the move;
         // pushing local state via save_tasks would clobber hook-assigned worktree.
-        if (targetColDef?.autoRun ?? !!targetColDef?.persona) {
-          await triggerRunAgent(taskId);
-        }
+        // NOTE: Backend move_task_stage already emits agent:autorun, handled by App.tsx.
         return;
       }
       throw new Error(`move_task_stage returned empty or invalid task for id "${taskId}"`);

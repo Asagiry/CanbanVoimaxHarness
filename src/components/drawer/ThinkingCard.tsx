@@ -2,11 +2,23 @@ import { useState, useEffect, useRef } from 'react';
 import { ChevronDown, ChevronRight, Brain, Clock, Copy, Check } from 'lucide-react';
 import { DrawerActivityItem, useDrawerStore } from '../../stores/drawerStore';
 
+export function formatDurationCompact(ms?: number | null): string | null {
+  if (ms === undefined || ms === null || !Number.isFinite(ms) || ms <= 0) return null;
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const secs = ms / 1000;
+  if (secs < 10) return `${secs.toFixed(1)}s`;
+  if (secs < 60) return `${Math.round(secs)}s`;
+  const mins = Math.floor(secs / 60);
+  const remSecs = Math.round(secs % 60);
+  return `${mins}m ${remSecs}s`;
+}
+
 export interface ThinkingCardProps {
   thought: DrawerActivityItem;
   isTaskRunning: boolean;
   taskId: string;
   isLive?: boolean;
+  durationMs?: number;
 }
 
 /**
@@ -19,6 +31,7 @@ export default function ThinkingCard({
   isTaskRunning,
   taskId,
   isLive,
+  durationMs,
 }: ThinkingCardProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -114,11 +127,12 @@ export default function ThinkingCard({
   }, [fullText.length, isFinished, displayedLength]);
 
   // Timer calculation: live or final duration
+  const effectiveDurationMs = durationMs ?? thought?.durationMs;
   let timerText = '';
   if (!isFinished && thinkingStart != null) {
-    timerText = `${((Date.now() - thinkingStart) / 1000).toFixed(1)}с`;
-  } else if (thought?.durationMs) {
-    timerText = `${(thought.durationMs / 1000).toFixed(thought.durationMs >= 10000 ? 0 : 1)}с`;
+    timerText = formatDurationCompact(Date.now() - thinkingStart) ?? '';
+  } else if (effectiveDurationMs && effectiveDurationMs > 0) {
+    timerText = formatDurationCompact(effectiveDurationMs) ?? '';
   }
 
   const handleCopy = (e: React.MouseEvent) => {
@@ -160,16 +174,12 @@ export default function ThinkingCard({
           )}
         </div>
 
-        <div className="flex items-center space-x-2.5 text-[10px] font-mono text-[#666666]">
+        <div className="flex items-center space-x-2.5 text-[10px] font-mono text-[#71717a] dark:text-[#8b949e]">
           {timerText && (
             <span className="flex items-center space-x-1 tabular-nums">
               <Clock className="h-3 w-3" />
               <span>{timerText}</span>
             </span>
-          )}
-
-          {thought?.timestamp && (
-            <span className="tabular-nums">{thought.timestamp}</span>
           )}
 
           <button

@@ -1277,11 +1277,20 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
           if (s.id === subagentId || (s.toolCallId && s.toolCallId === subagentId)) {
             listChanged = true;
             changed = true;
+            const nowTime = Date.now();
+            const finishedAt = (status === 'finished' || status === 'error' || status === 'stopped')
+              ? (s.finishedAt || nowTime)
+              : s.finishedAt;
+            const calculatedDuration = s.createdAt ? Math.max(0, (finishedAt || nowTime) - s.createdAt) : undefined;
+            const finalDurationMs = (s.isBg || !s.durationMs || (s.durationMs < 1000 && calculatedDuration && calculatedDuration >= 1000))
+              ? (calculatedDuration ?? s.durationMs)
+              : s.durationMs;
             return {
               ...s,
               status,
+              finishedAt,
               lastError: error || s.lastError,
-              durationMs: s.durationMs ?? (s.createdAt ? Date.now() - s.createdAt : undefined),
+              durationMs: finalDurationMs,
             };
           }
           return s;
