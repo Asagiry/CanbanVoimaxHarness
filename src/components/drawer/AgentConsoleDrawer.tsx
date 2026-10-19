@@ -163,6 +163,11 @@ export default function AgentConsoleDrawer() {
             const sid = event.payload?.subagentId;
             const st = event.payload?.status;
             if (sid) {
+              if (st === 'running') {
+                useDrawerStore.getState().updateSubagentStatus(sid, 'running');
+                useDrawerStore.getState().setActiveAgentTask(sid, true);
+                return;
+              }
               const nextStatus = st === 'finished' ? 'finished' : (st === 'aborted' || st === 'stopped') ? 'stopped' : 'error';
               useDrawerStore.getState().updateSubagentStatus(sid, nextStatus as any);
               useDrawerStore.getState().setActiveAgentTask(sid, false);
