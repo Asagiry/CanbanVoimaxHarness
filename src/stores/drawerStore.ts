@@ -264,11 +264,12 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       // Detect if this is a fresh thought block:
       // (1) No feed items yet, or
       // (2) Last feed item is not a thought (e.g. output or tool intervened), or
-      // (3) Coalescing window has passed (> 3000ms since thought block start/activity)
+      // (3) Coalescing window has passed (> 3000ms idle silence since last thought chunk)
+      const lastChunkTime = (lastFeedItem?.createdAt || now) + (lastFeedItem?.durationMs ?? 0);
       const isNewBlock =
         !lastFeedItem ||
         lastFeedItem.type !== 'thought' ||
-        (lastFeedItem.durationMs !== undefined && now - (lastFeedItem.createdAt || now) > 3000);
+        (now - lastChunkTime > 3000);
 
       const blockStart = isNewBlock
         ? now
