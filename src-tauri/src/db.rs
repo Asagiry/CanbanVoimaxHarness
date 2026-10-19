@@ -273,6 +273,138 @@ pub fn clear_dialog_items(root: &Path, task_id: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Finds all running tools in dialog_items for a task (or specific subagent)
+/// and updates them to status 'failed' with stderr 'Прервано пользователем'.
+/// Returns a list of (item_id, item_task_id, tool_id, tool_name) that were updated.
+pub fn mark_running_tools_as_aborted(
+    root: &Path,
+    task_id: &str,
+    is_subagent: bool,
+) -> Result<Vec<(String, String, String, String)>, String> {
+    let mut conn = init_db(root).map_err(|e| format!("Failed to open database: {}", e))?;
+    let p_clean = task_id.trim();
+    if p_clean.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let rows = if is_subagent {
+        // Match specific subagent: exact, or with :sub: prefix/suffix
+        let sub_core = p_clean.rsplit(":sub:").next().unwrap_or(p_clean);
+        let pattern1 = format!("%:sub:{}", sub_core);
+        let pattern2 = format!("%:sub:%{}", sub_core);
+        let mut stmt = conn
+            .prepare(
+                r#"SELECT id, task_id, content, tool_json FROM dialog_items
+                 WHERE (task_id = ?1 OR task_id LIKE ?2 OR task_id LIKE ?3)
+                   AND tool_json IS NOT NULL
+                   AND tool_json LIKE '%"status"%"running"%'"#,
+            )
+            .map_err(|e| e.to_string())?;
+
+        let res = stmt
+            .query_map(params![p_clean, pattern1, pattern2], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect::<Vec<_>>();
+        res
+    } else {
+        // Match parent task and any child subagents
+        let pattern_dot = format!("{}.sub-%", p_clean);
+        let pattern_colon = format!("{}:sub:%", p_clean);
+        let mut stmt = conn
+            .prepare(
+                r#"SELECT id, task_id, content, tool_json FROM dialog_items
+                 WHERE (task_id = ?1 OR task_id LIKE ?2 OR task_id LIKE ?3)
+                   AND tool_json IS NOT NULL
+                   AND tool_json LIKE '%"status"%"running"%'"#,
+            )
+            .map_err(|e| e.to_string())?;
+
+        let res = stmt
+            .query_map(params![p_clean, pattern_dot, pattern_colon], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect::<Vec<_>>();
+        res
+    };
+
+    if rows.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let tx = conn
+        .transaction()
+        .map_err(|e| format!("Failed to start transaction: {}", e))?;
+
+    let mut updated_tools = Vec::new();
+
+    {
+        let mut update_stmt = tx
+            .prepare_cached(
+                "UPDATE dialog_items
+                 SET content = ?1, tool_json = ?2, timestamp = ?3
+                 WHERE id = ?4",
+            )
+            .map_err(|e| e.to_string())?;
+
+        let now_iso = chrono::Utc::now().to_rfc3339();
+
+        for (item_id, item_task_id, content_opt, raw_tool_json) in rows {
+            if let Ok(mut val) = serde_json::from_str::<serde_json::Value>(&raw_tool_json) {
+                let status = val.get("status").and_then(|s| s.as_str()).unwrap_or("");
+                if status == "running" {
+                    let tool_id = val
+                        .get("id")
+                        .and_then(|s| s.as_str())
+                        .unwrap_or(&item_id)
+                        .to_string();
+                    let tool_name = val
+                        .get("toolName")
+                        .and_then(|s| s.as_str())
+                        .unwrap_or("unknown")
+                        .to_string();
+
+                    val["status"] = serde_json::json!("failed");
+                    val["stderr"] = serde_json::json!("Прервано пользователем");
+                    val["stdout"] = serde_json::json!("[Прервано пользователем / Aborted by user]");
+                    val["timestamp"] = serde_json::json!(&now_iso);
+
+                    let new_tool_json = serde_json::to_string(&val).unwrap_or(raw_tool_json);
+                    let new_content = match content_opt {
+                        Some(c) if !c.trim().is_empty() && c != "running" => Some(c),
+                        _ => Some("Прервано пользователем".to_string()),
+                    };
+
+                    update_stmt
+                        .execute(params![new_content, new_tool_json, now_iso, item_id])
+                        .map_err(|e| e.to_string())?;
+
+                    updated_tools.push((item_id, item_task_id, tool_id, tool_name));
+                }
+            }
+        }
+    }
+
+    tx.commit()
+        .map_err(|e| format!("Failed to commit transaction: {}", e))?;
+
+    Ok(updated_tools)
+}
+
 /// Searches SQLite for a subagent dialog key matching the given parent_task_id and/or subagent/tool_call_id.
 /// Checks for keys ending with `.sub-{tool_call_id}` or containing `:sub:`.
 pub fn find_subagent_dialog_key(
@@ -461,6 +593,72 @@ mod tests {
         // 4. Non-existent returns None
         let not_found = find_subagent_dialog_key(root, Some("CVH-42"), "call_nonexistent").expect("find non");
         assert_eq!(not_found, None);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn test_mark_running_tools_as_aborted() {
+        let root = PathBuf::from("target").join(format!("cvh_db_test_abort_{}", uuid::Uuid::new_v4()));
+        let _ = std::fs::create_dir_all(&root);
+        let root = root.as_path();
+
+        // 1. Add running tool to subagent
+        let sub_key = "CVH-10:sub:CVH-10.sub-agent_1";
+        let sub_tool = ActivityItem {
+            id: "call-sub-run".to_string(),
+            item_type: "tool".to_string(),
+            timestamp: "12:00:00".to_string(),
+            content: Some("running".to_string()),
+            tool: Some(serde_json::json!({
+                "id": "call-sub-run",
+                "toolName": "glob",
+                "status": "running"
+            })),
+            duration_ms: None,
+            images: None,
+        };
+        append_dialog_items(root, sub_key, &[sub_tool]).expect("append sub tool");
+
+        // 2. Abort subagent granularly
+        let updated = mark_running_tools_as_aborted(root, "CVH-10.sub-agent_1", true).expect("abort sub");
+        assert_eq!(updated.len(), 1);
+        assert_eq!(updated[0].2, "call-sub-run");
+        assert_eq!(updated[0].3, "glob");
+
+        // Verify status in DB
+        let loaded = load_dialog_items(root, sub_key).expect("load sub");
+        assert_eq!(loaded.len(), 1);
+        let tool_val = loaded[0].tool.as_ref().expect("tool");
+        assert_eq!(tool_val["status"], "failed");
+        assert_eq!(tool_val["stderr"], "Прервано пользователем");
+
+        // 3. Add running tool to parent task
+        let parent_tool = ActivityItem {
+            id: "call-parent-run".to_string(),
+            item_type: "tool".to_string(),
+            timestamp: "12:05:00".to_string(),
+            content: Some("running".to_string()),
+            tool: Some(serde_json::json!({
+                "id": "call-parent-run",
+                "toolName": "read_file",
+                "status": "running"
+            })),
+            duration_ms: None,
+            images: None,
+        };
+        append_dialog_items(root, "CVH-10", &[parent_tool]).expect("append parent tool");
+
+        // 4. Abort parent task
+        let updated_parent = mark_running_tools_as_aborted(root, "CVH-10", false).expect("abort parent");
+        assert_eq!(updated_parent.len(), 1);
+        assert_eq!(updated_parent[0].2, "call-parent-run");
+        assert_eq!(updated_parent[0].3, "read_file");
+
+        let loaded_parent = load_dialog_items(root, "CVH-10").expect("load parent");
+        let parent_tool_val = loaded_parent[0].tool.as_ref().expect("parent tool");
+        assert_eq!(parent_tool_val["status"], "failed");
+        assert_eq!(parent_tool_val["stderr"], "Прервано пользователем");
 
         let _ = std::fs::remove_dir_all(root);
     }

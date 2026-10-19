@@ -1558,6 +1558,21 @@ pub fn are_subagent_prompts_duplicate(p1: &str, p2: &str) -> bool {
     false
 }
 
+/// Determines if a subagent role is an exploratory/architect/researcher persona
+/// subject to single-turn or in-flight deduplication.
+pub fn is_exploratory_role(role: &str) -> bool {
+    let r = role.trim().to_lowercase();
+    r == "explorer"
+        || r == "architect"
+        || r == "researcher"
+        || r == "scout"
+        || r == "code_explorer"
+        || r == "system_architect"
+        || r.contains("explorer")
+        || r.contains("architect")
+        || r.contains("researcher")
+}
+
 /// Canonical tool name normalization for aliases and SWE-bench compatibility.
 pub fn canonical_tool_name(tool_name: &str) -> &str {
     match tool_name {
@@ -1867,19 +1882,32 @@ pub async fn execute_tool(
 
             let parent_id = ctx.task_id.unwrap_or("unknown");
 
-            // Deduplication check across sessions: if an identical subagent already completed with report, return it
+            let is_this_exploratory = is_exploratory_role(role);
+
+            // Deduplication check across sessions:
+            // 1. If an identical or exploratory subagent already completed with report, return it.
+            // 2. If an exploratory subagent is currently running for this parent, return an informative notice.
             {
                 let sessions = SUBAGENT_SESSIONS.lock().await;
-                for sess in sessions.values() {
+                for (sid, sess) in sessions.iter() {
                     let info = sess.retry_info.lock().await;
-                    if info.parent_task_id == parent_id
-                        && info.status == "finished"
-                        && info.role.eq_ignore_ascii_case(role)
-                        && are_subagent_prompts_duplicate(&info.prompt, prompt)
-                    {
-                        if let Some(ref rep) = info.report {
-                            eprintln!("CVH [agent]: Reusing completed subagent report for identical request");
-                            return Ok(rep.clone());
+                    if info.parent_task_id == parent_id {
+                        let is_dup = (info.role.eq_ignore_ascii_case(role) && are_subagent_prompts_duplicate(&info.prompt, prompt))
+                            || (is_this_exploratory && is_exploratory_role(&info.role));
+
+                        if is_dup {
+                            if info.status == "finished" {
+                                if let Some(ref rep) = info.report {
+                                    eprintln!("CVH [agent]: Reusing completed subagent report for request (role: '{}')", info.role);
+                                    return Ok(rep.clone());
+                                }
+                            } else if info.status == "running" {
+                                eprintln!("CVH [agent]: Exploratory subagent {} (role: '{}') is already running, returning notice", sid, info.role);
+                                return Ok(format!(
+                                    "[Субагент-исследователь '{}' уже выполняется с ID '{}'. Дождитесь завершения или используйте collect_subagent для получения отчета.]",
+                                    info.role, sid
+                                ));
+                            }
                         }
                     }
                 }
@@ -1968,13 +1996,21 @@ pub async fn execute_tool(
                     res = &mut rx => {
                         match res {
                             Ok(report) => break report,
-                            Err(_) => bail!("Subagent channel closed before completion"),
+                            Err(_) => {
+                                if sub_abort_handle.load(Ordering::SeqCst) {
+                                    return Ok("[Субагент прерван пользователем / Subagent aborted by user]".to_string());
+                                }
+                                bail!("Subagent channel closed before completion");
+                            }
                         }
                     }
                     _ = tokio::time::sleep(Duration::from_millis(200)) => {
-                        if abort_handle.load(Ordering::SeqCst) || sub_abort_handle.load(Ordering::SeqCst) {
+                        if abort_handle.load(Ordering::SeqCst) {
                             sub_abort_handle.store(true, Ordering::SeqCst);
                             bail!("Agent execution aborted while waiting for subagent");
+                        }
+                        if sub_abort_handle.load(Ordering::SeqCst) {
+                            return Ok("[Субагент прерван пользователем / Subagent aborted by user]".to_string());
                         }
                     }
                 }
@@ -2000,22 +2036,28 @@ pub async fn execute_tool(
             });
 
             let parent_id = ctx.task_id.unwrap_or("unknown");
+            let is_this_exploratory = is_exploratory_role(role);
 
-            // Deduplication check across sessions: if an identical subagent is already actively running or finished, reuse it
+            // Deduplication check across sessions: if an identical subagent is already actively running or finished, reuse it.
+            // Or if an exploratory subagent is already running or finished for this parent, do not spawn another clone!
             {
                 let sessions = SUBAGENT_SESSIONS.lock().await;
                 for (sid, sess) in sessions.iter() {
                     let info = sess.retry_info.lock().await;
                     if info.parent_task_id == parent_id
                         && (info.status == "running" || info.status == "finished")
-                        && info.role.eq_ignore_ascii_case(role)
-                        && are_subagent_prompts_duplicate(&info.prompt, prompt)
                     {
-                        eprintln!("CVH [agent]: Reusing existing subagent {} for duplicate subagent_bg request", sid);
-                        return Ok(serde_json::to_string(&serde_json::json!({
-                            "subagent_id": sid,
-                            "status": &info.status
-                        }))?);
+                        let is_dup = (info.role.eq_ignore_ascii_case(role) && are_subagent_prompts_duplicate(&info.prompt, prompt))
+                            || (is_this_exploratory && is_exploratory_role(&info.role));
+
+                        if is_dup {
+                            eprintln!("CVH [agent]: Reusing existing subagent {} (role: '{}') for duplicate subagent_bg request", sid, info.role);
+                            return Ok(serde_json::to_string(&serde_json::json!({
+                                "subagent_id": sid,
+                                "status": &info.status,
+                                "note": format!("Reused existing {} subagent to prevent duplicate exploration", info.role)
+                            }))?);
+                        }
                     }
                 }
             }
@@ -2142,6 +2184,13 @@ pub async fn execute_tool(
                             continue;
                         }
                         Err(_) => {
+                            if let Some((_, session)) = find_subagent_session(task_id, &resolved_id).await {
+                                let info = session.retry_info.lock().await;
+                                if info.status == "aborted" || session.abort_handle.load(Ordering::SeqCst) {
+                                    collected_reports.push((resolved_id, "[Субагент прерван пользователем / Subagent aborted by user]".to_string()));
+                                    continue;
+                                }
+                            }
                             bail!("Subagent [{}] channel closed before completion", resolved_id);
                         }
                     }
@@ -2152,6 +2201,10 @@ pub async fn execute_tool(
                     let info = session.retry_info.lock().await;
                     if let Some(ref rep) = info.report {
                         collected_reports.push((resolved_id, rep.clone()));
+                        continue;
+                    }
+                    if info.status == "aborted" || session.abort_handle.load(Ordering::SeqCst) {
+                        collected_reports.push((resolved_id, "[Субагент прерван пользователем / Subagent aborted by user]".to_string()));
                         continue;
                     }
                     if info.status == "error" {
@@ -3477,6 +3530,34 @@ pub fn run_inprocess_subagent(
 
             let exec_res = execute_tool(&sub_tool_ctx, &tc.function.name, &parsed_args).await;
             if ctx.abort_handle.load(Ordering::SeqCst) {
+                let duration_ms = (chrono::Utc::now().timestamp_millis() - start_time) as f64;
+                let tool_exec_aborted = serde_json::json!({
+                    "id": &tc.id,
+                    "toolName": &tc.function.name,
+                    "timestamp": chrono::Utc::now().to_rfc3339(),
+                    "durationMs": duration_ms,
+                    "status": "failed",
+                    "params": &parsed_args,
+                    "stderr": "Прервано пользователем",
+                    "stdout": "[Прервано пользователем / Aborted by user]",
+                });
+                let tool_act_aborted = ActivityItem {
+                    id: tool_item_id,
+                    item_type: "tool".to_string(),
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    content: Some("Прервано пользователем".to_string()),
+                    tool: Some(tool_exec_aborted),
+                    duration_ms: Some(duration_ms),
+                    images: None,
+                };
+                let _ = crate::db::append_dialog_items(&ctx.repo_root, &subagent_dialog_id, std::slice::from_ref(&tool_act_aborted));
+                if let Some(ref app) = ctx.app_handle {
+                    let _ = app.emit("subagent:activity", serde_json::json!({
+                        "parentTaskId": &parent_id,
+                        "subagentId": &subagent_id,
+                        "activity": &tool_act_aborted,
+                    }));
+                }
                 break;
             }
             let duration_ms = (chrono::Utc::now().timestamp_millis() - start_time) as f64;
@@ -3664,6 +3745,27 @@ Subagent [{}] '{}' report:
             final_sub_response.trim()
         }
     );
+
+    if ctx.abort_handle.load(Ordering::SeqCst) {
+        if let Some((_, session)) = find_subagent_session(Some(&parent_id), &subagent_id).await {
+            let mut info = session.retry_info.lock().await;
+            info.status = "aborted".to_string();
+            info.last_error = Some("Прервано пользователем".to_string());
+            if let Some(sender) = session.sender.lock().await.take() {
+                let _ = sender.send("[Субагент прерван пользователем / Subagent aborted by user]".to_string());
+            }
+        }
+        if let Some(ref app) = ctx.app_handle {
+            let _ = app.emit(
+                "subagent:aborted",
+                serde_json::json!({
+                    "parentTaskId": &parent_id,
+                    "subagentId": &subagent_id,
+                }),
+            );
+        }
+        bail!("Subagent [{}] was aborted by user", subagent_id);
+    }
 
     // Subagent completed cleanly: deliver report to waiting parent channel!
     if let Some((_, session)) = find_subagent_session(Some(&parent_id), &subagent_id).await {
@@ -5192,12 +5294,15 @@ where
                     .unwrap_or("")
                     .trim();
 
+                let is_this_exploratory = is_exploratory_role(role);
+
                 if let Some(prev) = executed_subagents_in_turn.iter().find(|p| {
-                    p.role.eq_ignore_ascii_case(role) && are_subagent_prompts_duplicate(&p.prompt, prompt)
+                    (p.role.eq_ignore_ascii_case(role) && are_subagent_prompts_duplicate(&p.prompt, prompt))
+                        || (is_this_exploratory && is_exploratory_role(&p.role))
                 }) {
                     eprintln!(
-                        "CVH [agent]: Deduplicated subagent call '{}' in turn {} (matches earlier call '{}')",
-                        tc.id, turn, prev.id
+                        "CVH [agent]: Deduplicated subagent call '{}' (role: '{}') in turn {} (matches earlier call '{}' with role '{}')",
+                        tc.id, role, turn, prev.id, prev.role
                     );
                     event_sink(AgentEvent::ToolResult {
                         id: tc.id.clone(),
@@ -5221,6 +5326,12 @@ where
             .await;
 
             if abort_flag.load(Ordering::SeqCst) {
+                event_sink(AgentEvent::ToolResult {
+                    id: tc.id.clone(),
+                    name: tc.function.name.clone(),
+                    result: "Прервано пользователем".to_string(),
+                    success: false,
+                });
                 sanitize_unclosed_tool_calls(&mut messages);
                 sync_context_state(&config.app_handle, &config.task_id, turn, &messages);
                 event_sink(AgentEvent::Aborted);

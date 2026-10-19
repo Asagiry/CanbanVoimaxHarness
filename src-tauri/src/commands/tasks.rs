@@ -2148,11 +2148,45 @@ pub async fn run_agent(
     Ok(format!("Agent launched for task {}", task_id))
 }
 
-/// Unconditional Agent & Child Subagent Abort (§ Directive 2):
-/// 1. Iterates state.active_agents and aborts parent task AND all subagents matching task_id, task_id.sub-*, task_id:sub:*.
-/// 2. Iterates SUBAGENT_SESSIONS and aborts all child subagents under this task.
-/// 3. Cleans up in-flight receivers in SUBAGENT_RECEIVERS.
-/// 4. Synchronizes task status to 'idle' on disk and in memory.
+/// Suffix/prefix matching helper for subagent keys across registries and dialog identifiers.
+pub fn is_matching_subagent_key(key: &str, target_sub_id: &str) -> bool {
+    let k_clean = key.trim();
+    let t_clean = target_sub_id.trim();
+    if k_clean == t_clean {
+        return true;
+    }
+    let k_core = k_clean.rsplit(":sub:").next().unwrap_or(k_clean);
+    let t_core = t_clean.rsplit(":sub:").next().unwrap_or(t_clean);
+    if k_core == t_core {
+        return true;
+    }
+    // Suffix match: e.g. "CVH-001.sub-call_xyz" matching ".sub-call_xyz" or "call_xyz"
+    if k_core.contains(".sub-") {
+        let suffix = k_core.rsplit(".sub-").next().unwrap_or(k_core);
+        if suffix == t_core || t_core.ends_with(suffix) {
+            return true;
+        }
+    }
+    if t_core.contains(".sub-") {
+        let suffix = t_core.rsplit(".sub-").next().unwrap_or(t_core);
+        if suffix == k_core || k_core.ends_with(suffix) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Agent & Child Subagent Abort:
+///
+/// If task_id is a child subagent:
+///   1. Aborts ONLY this specific subagent (sets abort_flag, handle.abort(), status = "aborted").
+///   2. Marks mid-flight running tools for this subagent as failed in SQLite.
+///   3. Leaves parent task and sibling subagents completely intact and running!
+///
+/// If task_id is a parent task:
+///   1. Aborts parent task handle and cascaded child subagents.
+///   2. Marks mid-flight running tools for parent and subagents as failed.
+///   3. Updates task status to 'idle' on disk and memory.
 pub async fn internal_abort_agent(
     root: &Path,
     task_id: &str,
@@ -2164,6 +2198,158 @@ pub async fn internal_abort_agent(
         return Ok(false);
     }
 
+    // Determine if task_id identifies a child subagent
+    let is_subagent = if p_trim.contains(".sub-") || p_trim.contains(":sub:") {
+        true
+    } else {
+        let in_sessions = {
+            let sessions = crate::agent::SUBAGENT_SESSIONS.lock().await;
+            sessions.contains_key(p_trim) || sessions.values().any(|sess| {
+                if let Ok(info) = sess.retry_info.try_lock() {
+                    info.subagent_id == p_trim
+                } else {
+                    false
+                }
+            })
+        };
+        if in_sessions {
+            true
+        } else {
+            let in_active = {
+                if let Ok(map) = state.active_agents.lock() {
+                    map.keys().any(|k| k == p_trim && (k.contains(".sub-") || k.contains(":sub:")))
+                } else {
+                    false
+                }
+            };
+            in_active
+        }
+    };
+
+    if is_subagent {
+        // =========================================================================
+        // 1. GRANULAR SUBAGENT ABORT:
+        //    Abort ONLY this specific subagent. DO NOT touch parent task or siblings!
+        // =========================================================================
+        let matching_handles: Vec<(String, ActiveAgentHandle)> = {
+            let mut map = state
+                .active_agents
+                .lock()
+                .map_err(|_| "Failed to lock active agents".to_string())?;
+
+            let mut matched = Vec::new();
+            let mut keys_to_remove = Vec::new();
+
+            for k in map.keys() {
+                if is_matching_subagent_key(k, p_trim) {
+                    keys_to_remove.push(k.clone());
+                }
+            }
+
+            for k in keys_to_remove {
+                if let Some(entry) = map.remove(&k) {
+                    matched.push((k, entry));
+                }
+            }
+            matched
+        };
+
+        let had_entry = !matching_handles.is_empty();
+
+        for (_k, agent_entry) in matching_handles {
+            agent_entry.abort_flag.store(true, Ordering::SeqCst);
+            let maybe_handle = {
+                let mut guard = agent_entry.join_handle.lock().await;
+                guard.take()
+            };
+            if let Some(handle) = maybe_handle {
+                handle.abort();
+                let _ = tokio::time::timeout(tokio::time::Duration::from_millis(500), handle).await;
+            }
+        }
+
+        // Abort matching session in SUBAGENT_SESSIONS
+        let mut subagent_session_matched = false;
+        {
+            let sessions = crate::agent::SUBAGENT_SESSIONS.lock().await;
+            for (sid, session) in sessions.iter() {
+                let is_this = {
+                    let mut info = session.retry_info.lock().await;
+                    if is_matching_subagent_key(sid, p_trim)
+                        || is_matching_subagent_key(&info.subagent_id, p_trim)
+                    {
+                        info.status = "aborted".to_string();
+                        info.last_error = Some("Прервано пользователем".to_string());
+                        info.ctx.abort_handle.store(true, Ordering::SeqCst);
+                        true
+                    } else {
+                        false
+                    }
+                };
+                if is_this {
+                    subagent_session_matched = true;
+                    session.abort_handle.store(true, Ordering::SeqCst);
+                    let mut guard = session.join_handle.lock().await;
+                    if let Some(h) = guard.take() {
+                        h.abort();
+                    }
+                    if let Some(sender) = session.sender.lock().await.take() {
+                        let _ = sender.send("[Субагент прерван пользователем / Subagent aborted by user]".to_string());
+                    }
+                }
+            }
+        }
+
+        // Clean up matching receiver from SUBAGENT_RECEIVERS
+        {
+            let mut receivers = crate::agent::SUBAGENT_RECEIVERS.lock().await;
+            let mut keys_to_remove = Vec::new();
+            for k in receivers.keys() {
+                if is_matching_subagent_key(k, p_trim) {
+                    keys_to_remove.push(k.clone());
+                }
+            }
+            for k in keys_to_remove {
+                receivers.remove(&k);
+            }
+        }
+
+        // Mark mid-flight running tools for this subagent as failed in SQLite
+        if let Ok(aborted_tools) = crate::db::mark_running_tools_as_aborted(root, p_trim, true) {
+            if let Some(app) = app_handle {
+                for (_item_id, item_task_id, tool_id, tool_name) in aborted_tools {
+                    let _ = app.emit(
+                        "agent:tool_result",
+                        serde_json::json!({
+                            "taskId": item_task_id,
+                            "id": tool_id,
+                            "name": tool_name,
+                            "result": "Прервано пользователем",
+                            "success": false,
+                        }),
+                    );
+                }
+            }
+        }
+
+        if let Some(app) = app_handle {
+            let _ = app.emit(
+                "subagent:status",
+                serde_json::json!({ "subagentId": p_trim, "status": "aborted" }),
+            );
+            let _ = app.emit(
+                "subagent:aborted",
+                serde_json::json!({ "subagentId": p_trim }),
+            );
+        }
+
+        return Ok(had_entry || subagent_session_matched);
+    }
+
+    // =========================================================================
+    // 2. PARENT TASK ABORT:
+    //    Abort parent task AND cascade abort to all its child subagents!
+    // =========================================================================
     // 1. Collect all matching handles from state.active_agents (parent + any subagents)
     let matching_handles: Vec<(String, ActiveAgentHandle)> = {
         let mut map = state
@@ -2220,6 +2406,7 @@ pub async fn internal_abort_agent(
                     || sid.starts_with(&format!("{}:sub:", p_trim))
                 {
                     info.status = "aborted".to_string();
+                    info.last_error = Some("Прервано пользователем".to_string());
                     info.ctx.abort_handle.store(true, Ordering::SeqCst);
                     true
                 } else {
@@ -2256,7 +2443,25 @@ pub async fn internal_abort_agent(
         }
     }
 
-    // 5. Update task status on disk & memory to "idle"
+    // 5. Mark all running mid-flight tools in SQLite for parent and subagents as failed
+    if let Ok(aborted_tools) = crate::db::mark_running_tools_as_aborted(root, p_trim, false) {
+        if let Some(app) = app_handle {
+            for (_item_id, item_task_id, tool_id, tool_name) in aborted_tools {
+                let _ = app.emit(
+                    "agent:tool_result",
+                    serde_json::json!({
+                        "taskId": item_task_id,
+                        "id": tool_id,
+                        "name": tool_name,
+                        "result": "Прервано пользователем",
+                        "success": false,
+                    }),
+                );
+            }
+        }
+    }
+
+    // 6. Update task status on disk & memory to "idle"
     let mut tasks = load_tasks_from_disk(root).await;
     let mut task_updated = false;
     if let Some(t) = tasks.iter_mut().find(|t| t.id == p_trim) {
@@ -2298,11 +2503,14 @@ pub async fn abort_agent(
     app_handle: AppHandle,
 ) -> Result<(), String> {
     let root = state.get_root();
+    let is_sub = task_id.contains(".sub-") || task_id.contains(":sub:");
     let _ = internal_abort_agent(&root, &task_id, &state, Some(&app_handle)).await?;
-    let _ = app_handle.emit(
-        "agent:status",
-        serde_json::json!({ "taskId": &task_id, "status": "idle" }),
-    );
+    if !is_sub {
+        let _ = app_handle.emit(
+            "agent:status",
+            serde_json::json!({ "taskId": &task_id, "status": "idle" }),
+        );
+    }
     Ok(())
 }
 

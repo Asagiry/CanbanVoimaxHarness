@@ -1446,3 +1446,26 @@ Write code.
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
+
+    #[test]
+    fn test_is_matching_subagent_key() {
+        use crate::commands::tasks::is_matching_subagent_key;
+
+        // Exact match
+        assert!(is_matching_subagent_key("CVH-001.sub-abc123", "CVH-001.sub-abc123"));
+
+        // Strip :sub: prefix
+        assert!(is_matching_subagent_key("CVH-001.sub-abc123", "CVH-001:sub:CVH-001.sub-abc123"));
+        assert!(is_matching_subagent_key("CVH-001:sub:CVH-001.sub-abc123", "CVH-001.sub-abc123"));
+
+        // Short suffix match
+        assert!(is_matching_subagent_key("CVH-001.sub-abc123", "CVH-001:sub:abc123"));
+        assert!(is_matching_subagent_key("CVH-001.sub-abc123", "abc123"));
+
+        // Sibling subagents must NEVER match
+        assert!(!is_matching_subagent_key("CVH-001.sub-xyz999", "CVH-001.sub-abc123"));
+
+        // Parent task must NEVER match child subagent
+        assert!(!is_matching_subagent_key("CVH-001", "CVH-001.sub-abc123"));
+        assert!(!is_matching_subagent_key("CVH-001", "abc123"));
+    }
