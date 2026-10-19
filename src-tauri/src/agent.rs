@@ -275,30 +275,6 @@ pub async fn compile_primed_system_prompt(
         sections.push(format!("# Role Persona: {}\nYou are an expert AI agent in {}.", role, role));
     }
 
-    // 1b. Per-agent rules: `.cvh/agents/<role>/rules/*.md`, alphabetical.
-    let rules_dir = crate::config::agent_rules_dir(repo_root, role);
-    if rules_dir.is_dir() {
-        if let Ok(mut entries) = tokio::fs::read_dir(&rules_dir).await {
-            let mut rules: Vec<(String, String)> = Vec::new();
-            while let Ok(Some(entry)) = entries.next_entry().await {
-                let path = entry.path();
-                if !path.is_file() {
-                    continue;
-                }
-                if path.extension().and_then(|e| e.to_str()) != Some("md") {
-                    continue;
-                }
-                let fname = entry.file_name().to_string_lossy().to_string();
-                if let Ok(content) = tokio::fs::read_to_string(&path).await {
-                    rules.push((fname, content));
-                }
-            }
-            rules.sort_by(|a, b| a.0.cmp(&b.0));
-            for (fname, content) in rules {
-                sections.push(format!("## Rule: {}\n\n{}", fname, content.trim()));
-            }
-        }
-    }
 
     // 2. Tool Instructions (SWE-bench Industrial Suite)
     sections.push(
@@ -1531,31 +1507,6 @@ pub struct ExecutedSubagentCall {
     pub result: String,
 }
 
-#[derive(Clone, Debug)]
-pub struct ExecutedToolCallInTurn {
-    pub id: String,
-    pub canonical_name: String,
-    pub parsed_args: serde_json::Value,
-    pub result: String,
-    pub success: bool,
-}
-
-/// Check if two tool argument strings are identical or represent equivalent JSON payloads.
-pub fn are_tool_arguments_equal(a: &str, b: &str) -> bool {
-    let a_trim = a.trim();
-    let b_trim = b.trim();
-    if a_trim == b_trim {
-        return true;
-    }
-    if let (Ok(val_a), Ok(val_b)) = (
-        serde_json::from_str::<serde_json::Value>(a_trim),
-        serde_json::from_str::<serde_json::Value>(b_trim),
-    ) {
-        val_a == val_b
-    } else {
-        false
-    }
-}
 
 /// Robust subagent prompt similarity check for single-turn deduplication.
 pub fn are_subagent_prompts_duplicate(p1: &str, p2: &str) -> bool {
@@ -3441,23 +3392,11 @@ pub fn run_inprocess_subagent(
                     }
                 }
                 StreamChunk::ToolCall { id, name, arguments } => {
-                    let norm_name = canonical_tool_name(&name);
-                    let is_dup = turn_tool_calls.iter().any(|existing| {
-                        canonical_tool_name(&existing.function.name) == norm_name
-                            && are_tool_arguments_equal(&existing.function.arguments, &arguments)
+                    turn_tool_calls.push(ToolCall {
+                        id,
+                        call_type: "function".to_string(),
+                        function: crate::llm::FunctionCall { name, arguments },
                     });
-                    if is_dup {
-                        eprintln!(
-                            "CVH [subagent]: Deduplicated parallel tool call '{}' with arguments '{}' in sub_turn {}",
-                            norm_name, arguments, sub_turn
-                        );
-                    } else {
-                        turn_tool_calls.push(ToolCall {
-                            id,
-                            call_type: "function".to_string(),
-                            function: crate::llm::FunctionCall { name, arguments },
-                        });
-                    }
                 }
                 StreamChunk::Done => break,
                 StreamChunk::Error(e) => {
@@ -3543,8 +3482,6 @@ pub fn run_inprocess_subagent(
             }
         }
 
-        let mut executed_tools_in_turn: Vec<ExecutedToolCallInTurn> = Vec::new();
-
         // Execute subagent tool calls
         for tc in turn_tool_calls {
             if ctx.abort_handle.load(Ordering::SeqCst) {
@@ -3552,18 +3489,6 @@ pub fn run_inprocess_subagent(
             }
             let parsed_args: serde_json::Value =
                 serde_json::from_str(&tc.function.arguments).unwrap_or_else(|_| serde_json::json!({}));
-            let norm_name = canonical_tool_name(&tc.function.name);
-
-            if let Some(prev) = executed_tools_in_turn.iter().find(|p| {
-                p.canonical_name == norm_name && p.parsed_args == parsed_args
-            }) {
-                eprintln!(
-                    "CVH [subagent]: Reusing executed result for duplicate tool call '{}' ('{}') in sub_turn {} (matches earlier call '{}')",
-                    tc.id, norm_name, sub_turn, prev.id
-                );
-                sub_messages.push(ChatMessage::tool_response(tc.id, prev.result.clone()));
-                continue;
-            }
 
             let tool_item_id = format!("sub-tool-{}", tc.id);
             let start_time = chrono::Utc::now().timestamp_millis();
@@ -3677,15 +3602,7 @@ pub fn run_inprocess_subagent(
                 }));
             }
 
-            sub_messages.push(ChatMessage::tool_response(tc.id.clone(), res_str.clone()));
-
-            executed_tools_in_turn.push(ExecutedToolCallInTurn {
-                id: tc.id.clone(),
-                canonical_name: norm_name.to_string(),
-                parsed_args: parsed_args.clone(),
-                result: res_str,
-                success: is_success,
-            });
+            sub_messages.push(ChatMessage::tool_response(tc.id, res_str));
         }
     }
 
@@ -5192,33 +5109,21 @@ where
                     event_sink(AgentEvent::Thought(thought));
                 }
                 StreamChunk::ToolCall { id, name, arguments } => {
-                    let norm_name = canonical_tool_name(&name);
-                    let is_dup = turn_tool_calls.iter().any(|existing| {
-                        canonical_tool_name(&existing.function.name) == norm_name
-                            && are_tool_arguments_equal(&existing.function.arguments, &arguments)
-                    });
-                    if is_dup {
-                        eprintln!(
-                            "CVH [agent]: Deduplicated parallel tool call '{}' with arguments '{}' in turn {}",
-                            norm_name, arguments, turn
-                        );
-                    } else {
-                        if first_token_instant.is_none() {
-                            first_token_instant = Some(std::time::Instant::now());
-                        }
-                        last_token_instant = Some(std::time::Instant::now());
-                        turn_streamed_chars += name.len() + arguments.len();
-                        event_sink(AgentEvent::ToolCall {
-                            id: id.clone(),
-                            name: name.clone(),
-                            arguments: arguments.clone(),
-                        });
-                        turn_tool_calls.push(ToolCall {
-                            id,
-                            call_type: "function".to_string(),
-                            function: crate::llm::FunctionCall { name, arguments },
-                        });
+                    if first_token_instant.is_none() {
+                        first_token_instant = Some(std::time::Instant::now());
                     }
+                    last_token_instant = Some(std::time::Instant::now());
+                    turn_streamed_chars += name.len() + arguments.len();
+                    event_sink(AgentEvent::ToolCall {
+                        id: id.clone(),
+                        name: name.clone(),
+                        arguments: arguments.clone(),
+                    });
+                    turn_tool_calls.push(ToolCall {
+                        id,
+                        call_type: "function".to_string(),
+                        function: crate::llm::FunctionCall { name, arguments },
+                    });
                 }
                 StreamChunk::Usage {
                     input_tokens,
@@ -5365,7 +5270,6 @@ where
             call_id: None,
         };
 
-        let mut executed_tools_in_turn: Vec<ExecutedToolCallInTurn> = Vec::new();
         let mut executed_subagents_in_turn: Vec<ExecutedSubagentCall> = Vec::new();
 
         // Execute each tool call and record response
@@ -5382,24 +5286,6 @@ where
 
             let norm_name = canonical_tool_name(&tc.function.name);
             let is_sub = norm_name == "subagent" || norm_name == "subagent_bg";
-
-            // If an identical tool call was already executed in this turn, reuse its result immediately!
-            if let Some(prev) = executed_tools_in_turn.iter().find(|p| {
-                p.canonical_name == norm_name && p.parsed_args == parsed_args
-            }) {
-                eprintln!(
-                    "CVH [agent]: Reusing executed result for duplicate tool call '{}' ('{}') in turn {} (matches earlier call '{}')",
-                    tc.id, norm_name, turn, prev.id
-                );
-                event_sink(AgentEvent::ToolResult {
-                    id: tc.id.clone(),
-                    name: tc.function.name.clone(),
-                    result: prev.result.clone(),
-                    success: prev.success,
-                });
-                messages.push(ChatMessage::tool_response(tc.id, prev.result.clone()));
-                continue;
-            }
 
             // In-turn Subagent Deduplication (§ Directive 4):
             // If the model in a single turn emits multiple subagent calls with identical/virtually identical
@@ -5533,15 +5419,7 @@ where
                 success,
             });
 
-            messages.push(ChatMessage::tool_response(tc.id.clone(), result_str.clone()));
-
-            executed_tools_in_turn.push(ExecutedToolCallInTurn {
-                id: tc.id.clone(),
-                canonical_name: norm_name.to_string(),
-                parsed_args: parsed_args.clone(),
-                result: result_str.clone(),
-                success,
-            });
+            messages.push(ChatMessage::tool_response(tc.id, result_str.clone()));
 
             // Stage transition termination:
             // When any executed tool call is "advance_task", "move_task", or "reject_task":
