@@ -341,7 +341,12 @@ pub fn resolve_actual_repo_root(path: &Path) -> PathBuf {
         if let Ok(content) = std::fs::read_to_string(&git_file) {
             for line in content.lines() {
                 if let Some(gitdir) = line.strip_prefix("gitdir:") {
-                    let gitdir_path = PathBuf::from(gitdir.trim());
+                    let raw_path = PathBuf::from(gitdir.trim());
+                    let gitdir_path = if raw_path.is_relative() {
+                        path.join(raw_path)
+                    } else {
+                        raw_path
+                    };
                     for ancestor in gitdir_path.ancestors() {
                         if ancestor.join(".cvh").exists() {
                             return ancestor.to_path_buf();
