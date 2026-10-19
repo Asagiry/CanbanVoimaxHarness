@@ -1,0 +1,32 @@
+{
+  "taskId": "CVH-FIX-SUBAGENTS-AND-STEER",
+  "task": "fix-subagents-and-steer",
+  "title": "Fix steer message duplication and subagent report synthesis and collection",
+  "branch": "feat/fix-subagents-and-steer",
+  "commitHash": "f5b3ea7",
+  "commitMessage": "feat(agent): fix steer deduplication and subagent report synthesis",
+  "author": "tauri-rust-engineer",
+  "verdict": "APPROVED",
+  "date": "2026-10-19T08:01:32.498Z",
+  "timestamp": 1792396892498,
+  "sensors": {
+    "cargo_check": "pass (cargo check --manifest-path src-tauri/Cargo.toml, 0 errors, 0 warnings)",
+    "cargo_clippy": "pass (cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings, 0 errors, 0 warnings)",
+    "pnpm_build": "pass (tsc && vite build, built successfully in 11.25s)",
+    "l2_reviewer": "APPROVED"
+  },
+  "files": [
+    "src-tauri/src/agent.rs",
+    "src-tauri/src/commands/tasks.rs",
+    "src/components/drawer/AgentConsoleDrawer.tsx",
+    "src/stores/boardStore.ts",
+    "src/stores/drawerStore.ts"
+  ],
+  "summary": "Resolved two critical pipeline issues: (1) Eliminated steer and prompt duplication when moving cards between columns or auto-running agents by removing description injection in boardStore.ts, adding backend equivalence guard (prompt == task.description => None), and implementing store-level and SQLite-level deduplication across last 3 items for steer messages; (2) Removed artificial step limit 'sub_turn > 15' in run_inprocess_subagent, implemented autonomous synthesis turn (tools: None) when tool execution ends without text, stored subagent reports in SubagentRetryInfo, implemented 3-tier subagent collection in collect_subagent (channels -> sessions -> SQLite DB), and persisted subagent todo_write execution into SQLite dialog items.",
+  "ftrAnalysis": {
+    "firstTimeRight": true,
+    "ftrScore": "100%",
+    "verdict": "APPROVED",
+    "rootCauses": []
+  }
+}
