@@ -1642,6 +1642,9 @@ pub async fn run_agent(
                     }
                 }
                 None
+            } else if p_trimmed == task.description.trim() {
+                // If prompt matches task description, this is an autorun / task run, NOT a steer!
+                None
             } else {
                 Some(p_trimmed.to_string())
             }
@@ -2553,13 +2556,25 @@ pub async fn steer_agent(
     }
 
     // Persist steer message into SQLite dialog_items via append_task_dialog_activity
-    let _ = append_task_dialog_activity(
-        &root,
-        &task_id,
-        "steer",
-        &message,
-        Some(&app_handle),
-    ).await;
+    // only if not already persisted (e.g. from optimistic client save)
+    let already_in_db = if let Ok(items) = crate::db::load_dialog_items(&root, &task_id) {
+        items.iter().rev().take(3).any(|it| {
+            (it.item_type == "steer" || it.item_type == "user")
+                && it.content.as_deref().map(str::trim) == Some(message.trim())
+        })
+    } else {
+        false
+    };
+
+    if !already_in_db {
+        let _ = append_task_dialog_activity(
+            &root,
+            &task_id,
+            "steer",
+            &message,
+            Some(&app_handle),
+        ).await;
+    }
 
     let steer_payload = serde_json::json!({
         "taskId": task_id,

@@ -343,6 +343,16 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       const activityType: ActivityType =
         type === 'steer' ? 'steer' : type === 'system' ? 'system' : type === 'error' ? 'error' : type === 'user' ? 'user' : 'output';
 
+      // Deduplication guard for consecutive identical steer / user messages
+      if (
+        (activityType === 'steer' || activityType === 'user') &&
+        lastFeedItem &&
+        (lastFeedItem.type === 'steer' || lastFeedItem.type === 'user') &&
+        lastFeedItem.content?.trim() === content.trim()
+      ) {
+        return state;
+      }
+
       // Stream coalescing for outputs of same type (output or user) when no images
       if (!images?.length && last && last.type === type && (type === 'output' || type === 'user')) {
         const updated = [...existing.outputs];
@@ -965,11 +975,29 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
               : state.tokenOverrides;
 
             if (currentFeed.length === 0 || items.length >= currentFeed.length || hasCompacted) {
+              // Deduplicate adjacent identical steer / user messages
+              const dedupedItems: DrawerActivityItem[] = [];
+              for (const item of items) {
+                const prev = dedupedItems[dedupedItems.length - 1];
+                if (
+                  prev &&
+                  (item.type === 'steer' || item.type === 'user') &&
+                  (prev.type === 'steer' || prev.type === 'user') &&
+                  item.content?.trim() === prev.content?.trim()
+                ) {
+                  if (item.type === 'steer') {
+                    prev.type = 'steer';
+                  }
+                  continue;
+                }
+                dedupedItems.push(item);
+              }
+
               const tools: ToolExecution[] = [];
               const thoughts: LiveStreamEntry[] = [];
               const outputs: LiveStreamEntry[] = [];
 
-              for (const item of items) {
+              for (const item of dedupedItems) {
                 if (item.type === 'tool' && item.tool) {
                   tools.unshift(item.tool);
                 } else if (item.type === 'thought') {
@@ -993,7 +1021,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
               return {
                 activityFeed: {
                   ...state.activityFeed,
-                  [taskId]: items,
+                  [taskId]: dedupedItems,
                 },
                 toolExecutions: {
                   ...state.toolExecutions,

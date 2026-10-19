@@ -1358,6 +1358,7 @@ pub struct SubagentRetryInfo {
     pub ctx: OwnedToolContext,
     pub status: String,
     pub last_error: Option<String>,
+    pub report: Option<String>,
 }
 
 #[derive(Clone)]
@@ -1422,6 +1423,45 @@ pub async fn find_subagent_session(
         for (k, v) in sessions.iter() {
             if k.ends_with(&suffix) {
                 return Some((k.clone(), v.clone()));
+            }
+        }
+    }
+
+    None
+}
+
+/// Helper to look up a completed subagent's report from SQLite dialog_items.
+pub fn find_subagent_report_from_db(
+    root: &Path,
+    parent_task_id: Option<&str>,
+    subagent_id: &str,
+) -> Option<String> {
+    let p_trim = parent_task_id.map(str::trim).unwrap_or("");
+    let s_trim = subagent_id.trim();
+
+    let candidate_keys = [
+        if s_trim.contains(":sub:") { Some(s_trim.to_string()) } else { None },
+        if !p_trim.is_empty() { Some(format!("{}:sub:{}", p_trim, s_trim)) } else { None },
+        if !p_trim.is_empty() && !s_trim.contains(".sub-") {
+            Some(format!("{}:sub:{}.sub-{}", p_trim, p_trim, s_trim))
+        } else {
+            None
+        },
+        Some(s_trim.to_string()),
+    ];
+
+    for key_opt in candidate_keys.into_iter().flatten() {
+        if let Ok(safe_id) = crate::commands::dialogs::sanitize_task_id(&key_opt) {
+            if let Ok(items) = crate::db::load_dialog_items(root, &safe_id) {
+                if let Some(out_item) = items.iter().rev().find(|it| {
+                    it.item_type == "output"
+                        && it.content.as_ref().map(|c| !c.trim().is_empty()).unwrap_or(false)
+                }) {
+                    if let Some(ref text) = out_item.content {
+                        return Some(format!("[Subagent ID: {}]
+{}", s_trim, text.trim()));
+                    }
+                }
             }
         }
     }
@@ -1744,6 +1784,7 @@ pub async fn execute_tool(
                 ctx: ctx.to_owned(),
                 status: "running".to_string(),
                 last_error: None,
+                report: None,
             };
 
             let session = SubagentSession {
@@ -1834,6 +1875,7 @@ pub async fn execute_tool(
                 ctx: ctx.to_owned(),
                 status: "running".to_string(),
                 last_error: None,
+                report: None,
             };
 
             let session = SubagentSession {
@@ -1893,45 +1935,58 @@ pub async fn execute_tool(
                 bail!("Missing required parameter: provide either 'subagent_id' or 'subagent_ids'");
             }
 
-            if ids.len() == 1 {
-                let subagent_id = &ids[0];
+            let mut collected_reports: Vec<(String, String)> = Vec::new();
+
+            for subagent_id in &ids {
+                // 1. Check SUBAGENT_RECEIVERS (in-flight background subagents)
                 let rx_opt = {
                     let mut reg = SUBAGENT_RECEIVERS.lock().await;
                     remove_subagent_receiver(&mut reg, subagent_id)
                 };
 
-                match rx_opt {
-                    Some((resolved_id, rx)) => match rx.await {
-                        Ok(report) => report,
-                        Err(_) => bail!("Subagent [{}] channel closed before completion", resolved_id),
-                    },
-                    None => bail!("Subagent [{}] not found in background registry (already collected or invalid ID)", subagent_id),
-                }
-            } else {
-                let mut receivers = Vec::new();
-                {
-                    let mut reg = SUBAGENT_RECEIVERS.lock().await;
-                    for id in &ids {
-                        if let Some((resolved_id, rx)) = remove_subagent_receiver(&mut reg, id) {
-                            receivers.push((resolved_id, rx));
+                if let Some((resolved_id, rx)) = rx_opt {
+                    match rx.await {
+                        Ok(report) => {
+                            collected_reports.push((resolved_id, report));
+                            continue;
+                        }
+                        Err(_) => {
+                            bail!("Subagent [{}] channel closed before completion", resolved_id);
                         }
                     }
                 }
 
-                if receivers.is_empty() {
-                    bail!("None of the requested subagents {:?} were found in background registry", ids);
-                }
-
-                let mut reports = Vec::new();
-                for (id, rx) in receivers {
-                    match rx.await {
-                        Ok(report) => reports.push(format!("### Subagent [{}]
-{}", id, report)),
-                        Err(_) => reports.push(format!("### Subagent [{}]
-Channel closed before completion", id)),
+                // 2. Check SUBAGENT_SESSIONS (synchronous or already completed subagents)
+                if let Some((resolved_id, session)) = find_subagent_session(task_id, subagent_id).await {
+                    let info = session.retry_info.lock().await;
+                    if let Some(ref rep) = info.report {
+                        collected_reports.push((resolved_id, rep.clone()));
+                        continue;
+                    }
+                    if info.status == "error" {
+                        let err = info.last_error.as_deref().unwrap_or("Unknown error");
+                        bail!("Subagent [{}] failed with error: {}", resolved_id, err);
                     }
                 }
-                reports.join("
+
+                // 3. Check SQLite dialog_items for persisted subagent output report
+                if let Some(db_report) = find_subagent_report_from_db(repo_root, task_id, subagent_id) {
+                    collected_reports.push((subagent_id.clone(), db_report));
+                    continue;
+                }
+
+                bail!("Subagent [{}] not found in background registry or session history", subagent_id);
+            }
+
+            if collected_reports.len() == 1 {
+                collected_reports.remove(0).1
+            } else {
+                collected_reports
+                    .into_iter()
+                    .map(|(id, report)| format!("### Subagent [{}]
+{}", id, report))
+                    .collect::<Vec<_>>()
+                    .join("
 
 ---
 
@@ -1991,17 +2046,43 @@ Channel closed before completion", id)),
                 parsed_todos.push(TodoItem { id, content, status });
             }
 
-            // If task_id provided, atomically persist to .cvh/tasks.json
+            // If task_id provided, atomically persist to .cvh/tasks.json or SQLite dialog
             if let Some(tid) = task_id {
-                let tasks_path = repo_root.join(".cvh").join("tasks.json");
-                if tasks_path.exists() {
-                    if let Ok(content) = tokio::fs::read_to_string(&tasks_path).await {
-                        if let Ok(mut tasks) = serde_json::from_str::<Vec<Task>>(&content) {
-                            if let Some(target_task) = tasks.iter_mut().find(|t| t.id == tid) {
-                                target_task.todos = Some(parsed_todos.clone());
-                                target_task.updated_at = chrono::Utc::now().timestamp_millis();
-                                if let Ok(serialized) = serde_json::to_string_pretty(&tasks) {
-                                    let _ = crate::config::atomic_write_file(&tasks_path, &serialized).await;
+                if tid.contains(".sub-") {
+                    let subagent_dialog_id = if tid.contains(":sub:") {
+                        tid.to_string()
+                    } else if let Some((parent_id, _)) = tid.split_once(".sub-") {
+                        format!("{}:sub:{}", parent_id, tid)
+                    } else {
+                        tid.to_string()
+                    };
+                    let todo_act = ActivityItem {
+                        id: format!("sub-todos-{}", chrono::Utc::now().timestamp_millis()),
+                        item_type: "todos".to_string(),
+                        timestamp: chrono::Utc::now().to_rfc3339(),
+                        content: serde_json::to_string(&parsed_todos).ok(),
+                        tool: None,
+                        duration_ms: None,
+                        images: None,
+                    };
+                    let _ = crate::db::append_dialog_items(repo_root, &subagent_dialog_id, std::slice::from_ref(&todo_act));
+                    if let Some(ref app) = ctx.app_handle {
+                        let _ = app.emit("subagent:activity", serde_json::json!({
+                            "subagentId": tid,
+                            "activity": &todo_act,
+                        }));
+                    }
+                } else {
+                    let tasks_path = repo_root.join(".cvh").join("tasks.json");
+                    if tasks_path.exists() {
+                        if let Ok(content) = tokio::fs::read_to_string(&tasks_path).await {
+                            if let Ok(mut tasks) = serde_json::from_str::<Vec<Task>>(&content) {
+                                if let Some(target_task) = tasks.iter_mut().find(|t| t.id == tid) {
+                                    target_task.todos = Some(parsed_todos.clone());
+                                    target_task.updated_at = chrono::Utc::now().timestamp_millis();
+                                    if let Ok(serialized) = serde_json::to_string_pretty(&tasks) {
+                                        let _ = crate::config::atomic_write_file(&tasks_path, &serialized).await;
+                                    }
                                 }
                             }
                         }
@@ -2964,7 +3045,7 @@ pub fn run_inprocess_subagent(
 
     loop {
         sub_turn += 1;
-        if sub_turn > 15 || ctx.abort_handle.load(Ordering::SeqCst) {
+        if ctx.abort_handle.load(Ordering::SeqCst) {
             break;
         }
 
@@ -3265,27 +3346,129 @@ pub fn run_inprocess_subagent(
         bail!("Subagent [{}] error: {}", subagent_id, err_msg);
     }
 
-    let report = if final_sub_response.trim().is_empty() {
-        format!(
-            "[Subagent ID: {}]
-Subagent [{}] '{}' executed in-process. Work complete.",
-            subagent_id, role, title
-        )
-    } else {
-        format!(
-            "[Subagent ID: {}]
+    // If the subagent completed its steps without emitting a final response, perform a synthesis turn
+    if sub_error.is_none() && final_sub_response.trim().is_empty() && !ctx.abort_handle.load(Ordering::SeqCst) {
+        sub_messages.push(ChatMessage::user(
+            "Предоставь краткий и исчерпывающий финальный отчет о результатах выполненной работы и найденных данных (Provide a concise, comprehensive final report summarizing your findings and work done)."
+        ));
+
+        let req = OpenAIChatRequest {
+            model: model.to_string(),
+            messages: sub_messages.clone(),
+            temperature,
+            stream: true,
+            tools: None,
+            reasoning_effort: reasoning_effort.clone(),
+            stream_options: None,
+        };
+
+        let (tx, mut rx) = mpsc::channel::<StreamChunk>(100);
+        let cl = llm_client.clone();
+        let b_url = base_url.to_string();
+        let a_key = api_key.map(|s| s.to_string());
+
+        tokio::spawn(async move {
+            if let Err(e) = cl.stream_openai(&b_url, a_key.as_deref(), req, tx.clone()).await {
+                let _ = tx.send(StreamChunk::Error(format!("Subagent synthesis stream failed: {}", e))).await;
+            }
+        });
+
+        let mut synth_content = String::new();
+        let mut thinking_parser = ThinkingStreamParser::new();
+        while let Some(chunk) = rx.recv().await {
+            if ctx.abort_handle.load(Ordering::SeqCst) {
+                break;
+            }
+            match chunk {
+                StreamChunk::Token(token) => {
+                    let parsed = thinking_parser.push(&token);
+                    for (is_thought, text) in parsed {
+                        if !is_thought {
+                            synth_content.push_str(&text);
+                        }
+                    }
+                }
+                StreamChunk::Done => break,
+                StreamChunk::Error(e) => {
+                    eprintln!("CVH [subagent synthesis]: error: {}", e);
+                    break;
+                }
+                _ => {}
+            }
+        }
+        for (is_thought, text) in thinking_parser.flush() {
+            if !is_thought {
+                synth_content.push_str(&text);
+            }
+        }
+
+        if !synth_content.trim().is_empty() {
+            final_sub_response = synth_content.trim().to_string();
+            let out_item = ActivityItem {
+                id: format!("sub-out-{}", subagent_suffix),
+                item_type: "output".to_string(),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                content: Some(final_sub_response.clone()),
+                tool: None,
+                duration_ms: None,
+                images: None,
+            };
+            let _ = crate::db::append_dialog_items(&ctx.repo_root, &subagent_dialog_id, std::slice::from_ref(&out_item));
+            if let Some(ref app) = ctx.app_handle {
+                let _ = app.emit("subagent:activity", serde_json::json!({
+                    "parentTaskId": &parent_id,
+                    "subagentId": &subagent_id,
+                    "activity": &out_item,
+                }));
+            }
+        }
+    }
+
+    // Fallback: if still empty, collect last tool results and assistant messages
+    if final_sub_response.trim().is_empty() {
+        let mut collected = Vec::new();
+        for msg in sub_messages.iter().rev() {
+            if msg.role == Role::Tool || msg.role == Role::Assistant {
+                if let Some(ref c) = msg.content {
+                    let trimmed = c.trim();
+                    if !trimmed.is_empty() {
+                        collected.push(trimmed.to_string());
+                        if collected.len() >= 3 {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        if !collected.is_empty() {
+            collected.reverse();
+            final_sub_response = collected.join("
+
+");
+        }
+    }
+
+    let report = format!(
+        "[Subagent ID: {}]
 Subagent [{}] '{}' report:
 
 {}",
-            subagent_id, role, title, final_sub_response.trim()
-        )
-    };
+        subagent_id,
+        role,
+        title,
+        if final_sub_response.trim().is_empty() {
+            "Subagent completed work."
+        } else {
+            final_sub_response.trim()
+        }
+    );
 
     // Subagent completed cleanly: deliver report to waiting parent channel!
     if let Some((_, session)) = find_subagent_session(Some(&parent_id), &subagent_id).await {
         let mut info = session.retry_info.lock().await;
         info.status = "finished".to_string();
         info.last_error = None;
+        info.report = Some(report.clone());
         if let Some(sender) = session.sender.lock().await.take() {
             let _ = sender.send(report.clone());
         }
@@ -3341,6 +3524,7 @@ pub async fn retry_subagent_execution(
     }
     info.status = "running".to_string();
     info.last_error = None;
+    info.report = None;
 
     {
         let mut session_info = session.retry_info.lock().await;
@@ -4290,7 +4474,10 @@ where
 
             // Persist steer message to SQLite dialog_items ("type": "steer") so load_task_dialog also retains it
             let already_in_db = if let Ok(items) = crate::db::load_dialog_items(&config.repo_root, &config.task_id) {
-                items.last().map(|it| it.item_type == "steer" && it.content.as_deref() == Some(steer_trimmed)).unwrap_or(false)
+                items.iter().rev().take(3).any(|it| {
+                    (it.item_type == "steer" || it.item_type == "user")
+                        && it.content.as_deref().map(str::trim) == Some(steer_trimmed)
+                })
             } else {
                 false
             };

@@ -793,7 +793,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         // NOTE: no syncTasksBackend here — backend already persisted the move;
         // pushing local state via save_tasks would clobber hook-assigned worktree.
         if (targetColDef?.autoRun ?? !!targetColDef?.persona) {
-          await triggerRunAgent(taskId, merged.description);
+          await triggerRunAgent(taskId);
         }
         return;
       }
@@ -930,7 +930,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
         const colDef = get().columns.find((c) => c.id === confirmed.columnId);
         if (colDef?.autoRun ?? !!colDef?.persona) {
-          await triggerRunAgent(confirmed.id, confirmed.description);
+          await triggerRunAgent(confirmed.id);
         }
         return confirmed;
       }
@@ -940,7 +940,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       await syncTasksBackend(get().tasks);
       const colDef = get().columns.find((c) => c.id === optimisticTask.columnId);
       if (colDef?.autoRun ?? !!colDef?.persona) {
-        await triggerRunAgent(optimisticTask.id, optimisticTask.description);
+        await triggerRunAgent(optimisticTask.id);
       }
       return optimisticTask;
     }
@@ -1052,7 +1052,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     }
 
     if (targetCol.autoRun ?? !!targetCol.persona) {
-      await triggerRunAgent(subtaskId, optimisticSubtask.description);
+      await triggerRunAgent(subtaskId);
     }
 
     return optimisticSubtask;
@@ -1148,7 +1148,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     if (taskCol?.persona) {
       updateTask(taskId, { status: 'running', isTimerRunning: true });
       await syncTasksBackend(get().tasks);
-      await triggerRunAgent(taskId, task.description);
+      await triggerRunAgent(taskId);
     } else {
       // Task sits in a non-agent column: move to the FIRST column with a persona
       // (moveTask auto-runs the agent on entry).
