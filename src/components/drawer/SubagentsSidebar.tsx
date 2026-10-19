@@ -370,7 +370,6 @@ export default function SubagentsSidebar({
                             }
                           }}
                           className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#dc2626] dark:text-[#ff7b72] hover:bg-[#fef2f2] dark:hover:bg-[#3b1219] border border-[#fecaca] dark:border-[#da3633] transition cursor-pointer"
-                          title={`Остановить субагента ${sub.id}`}
                         >
                           <Square className="h-2.5 w-2.5 fill-current shrink-0" />
                           <span>Остановить</span>
