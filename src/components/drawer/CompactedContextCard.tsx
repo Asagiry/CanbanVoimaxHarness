@@ -115,7 +115,7 @@ export default function CompactedContextCard({ activity }: CompactedContextCardP
           <div className="mb-3 pb-2 border-b border-[#ebebeb] dark:border-[#21262d] flex items-center justify-between">
             <div className="flex items-center space-x-1.5 text-[11px] font-mono text-[#666666] dark:text-[#8b949e]">
               <Minimize2 className="h-3.5 w-3.5 text-[#0d0d0d] dark:text-[#f0f6fc]" />
-              <span className="font-semibold text-[#0d0d0d] dark:text-[#f0f6fc]">DSH Context Compactor Report</span>
+              <span className="font-semibold text-[#0d0d0d] dark:text-[#f0f6fc]">Сводка сжатия контекста</span>
             </div>
             {toolData?.compactorModel && (
               <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] bg-[#f4f4f5] dark:bg-[#161b22] px-1.5 py-0.5 rounded border border-[#ebebeb] dark:border-[#30363d]">
@@ -134,8 +134,8 @@ export default function CompactedContextCard({ activity }: CompactedContextCardP
             </div>
           )}
 
-          <div className="mt-4 pt-2.5 border-t border-[#ebebeb] flex items-center justify-between text-[11px] font-mono text-[#8f8f8f]">
-            <span>Сохранено в SQLite dialog_items (type: compacted)</span>
+          <div className="mt-4 pt-2.5 border-t border-[#ebebeb] dark:border-[#21262d] flex items-center justify-between text-[11px] font-mono text-[#8f8f8f] dark:text-[#8b949e]">
+            <span>Контекст оптимизирован</span>
             <button
               type="button"
               onClick={() => setIsExpanded(false)}

@@ -143,7 +143,7 @@ export default function ThinkingCard({
       {/* Header bar */}
       <div
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center justify-between px-3 py-2 bg-[#f8f8f9] dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#1c2128] cursor-pointer transition select-none border-l-2 border-l-[#171717] dark:border-l-[#a855f7]"
+        className="flex items-center justify-between px-3 py-2 bg-[#f8f8f9] dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#1c2128] cursor-pointer transition select-none"
       >
         <div className="flex items-center space-x-2">
           {isExpanded ? (
@@ -151,15 +151,12 @@ export default function ThinkingCard({
           ) : (
             <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e]" />
           )}
-          <Brain className="h-3.5 w-3.5 text-[#171717] dark:text-[#a855f7]" />
+          <Brain className="h-3.5 w-3.5 text-[#171717] dark:text-[#8b949e]" />
           <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f0f6fc]">
             &lt;thinking&gt;
           </span>
           {!isFinished && isTaskRunning && (
-            <span className="flex h-1.5 w-1.5 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#15803d] opacity-75" />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#15803d]" />
-            </span>
+            <span className="h-1.5 w-1.5 rounded-full bg-[#15803d] dark:bg-[#4ade80]" />
           )}
         </div>
 

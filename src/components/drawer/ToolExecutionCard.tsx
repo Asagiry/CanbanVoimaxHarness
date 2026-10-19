@@ -905,7 +905,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             )}
           </div>
         ) : isFileOp ? (
-          /* File operation card in screenshot style: [Edited 📄 MainWindow.xaml +4 -2] */
+          /* File operation card: [Edited MainWindow.xaml +4 -2] */
           <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
             <button
               type="button"
@@ -1096,7 +1096,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
               {oldString !== undefined && newString !== undefined ? (
                 <div>
                   <span className="text-[10px] text-[#666666] dark:text-[#8b949e] block mb-1">
-                    {isFailed ? 'Запланированные изменения (не применены)' : 'Изменения файлов (Diff)'}
+                    {isFailed ? 'Запланированные изменения (не применены)' : 'Дифф изменений'}
                   </span>
                   {renderUnifiedDiff()}
                 </div>
@@ -1135,7 +1135,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
           {tool.stdout && (
             <div>
               <span className="text-[10px] text-[#666666] dark:text-[#8b949e] block mb-1">
-                Стандартный вывод (stdout)
+                Вывод команды
               </span>
               <pre className="p-2.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#21262d] text-[11px] text-[#171717] dark:text-[#f0f6fc] overflow-x-auto leading-relaxed max-h-48 whitespace-pre-wrap select-text">
                 {tool.stdout}
@@ -1146,7 +1146,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
           {tool.stderr && (
             <div>
               <span className="text-[10px] text-[#b91c1c] dark:text-[#ff7b72] block mb-1">
-                Трассировка ошибок (stderr)
+                Ошибки выполнения
               </span>
               <pre className="p-2.5 rounded-md bg-[#fef2f2] dark:bg-[#3b1219] border border-[#fecaca] dark:border-[#da3633] text-[11px] text-[#991b1b] dark:text-[#ff7b72] overflow-x-auto leading-relaxed max-h-48 whitespace-pre-wrap select-text">
                 {tool.stderr}

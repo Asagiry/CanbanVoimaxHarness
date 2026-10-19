@@ -10,7 +10,7 @@ export function getDefaultColumnIcon(columnId: string, fallback?: string): strin
     case 'review':
       return 'ShieldCheck';
     case 'retro':
-      return 'Sparkles';
+      return 'History';
     case 'ready':
       return 'CheckCircle2';
     default:

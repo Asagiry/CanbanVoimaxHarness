@@ -253,8 +253,8 @@ export default function RuleEditorModal() {
   const isHook = activeFile.type === 'hook';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/75 backdrop-blur-xs p-3">
-      <div className="relative flex flex-col h-[80vh] w-[840px] max-w-full rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 p-3">
+      <div className="relative flex flex-col h-[80vh] w-[840px] max-w-full rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-md overflow-hidden">
         {/* Editor Top Bar */}
         <div className="flex items-center justify-between border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] px-4 py-2.5">
           <div className="flex items-center space-x-2 min-w-0">
@@ -309,7 +309,7 @@ export default function RuleEditorModal() {
             <button
               onClick={closeEditor}
               className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer"
-              title="Закрыть (Esc)"
+              aria-label="Закрыть"
             >
               <X className="h-4 w-4" />
             </button>

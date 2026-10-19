@@ -187,12 +187,20 @@ const CATEGORY_ORDER: Array<'orchestration' | 'interactive' | 'workflow' | 'syst
 
 const CATEGORY_LABELS: Record<string, string> = {
   orchestration: 'Оркестрация и управление задачами',
+<<<<<<< HEAD
   interactive: 'Интерактивный диалог',
+=======
+  interactive: 'Интерактивность',
+>>>>>>> 3cc8fed (feat(anti-slop): total UI deslop sweep across 29 components based on kill-ai-slop)
   workflow: 'Маршрутизация задач',
   system: 'Команды и терминал',
   fs: 'Файловая система',
   web: 'Сеть и документация',
+<<<<<<< HEAD
   agent: 'Субагенты и планирование',
+=======
+  agent: 'Подагенты и планирование',
+>>>>>>> 3cc8fed (feat(anti-slop): total UI deslop sweep across 29 components based on kill-ai-slop)
 };
 
 export default function ToolPolicyModal() {
@@ -364,8 +372,8 @@ export default function ToolPolicyModal() {
   if (!isModalOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 dark:bg-black/70 backdrop-blur-xs p-3">
-      <div className="w-full max-w-4xl rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] shadow-xl overflow-hidden flex flex-col max-h-[85vh] transition-colors">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 dark:bg-black/80 p-3">
+      <div className="w-full max-w-4xl rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] shadow-md overflow-hidden flex flex-col max-h-[85vh] transition-colors">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#ebebeb] dark:border-[#21262d] px-4 py-3 bg-white dark:bg-[#0d1117]">
           <div>

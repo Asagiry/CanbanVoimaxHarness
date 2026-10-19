@@ -115,31 +115,26 @@ export const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
 
   return (
     <div ref={containerRef} className={`relative inline-flex items-center ${className}`}>
-      {/* Compact Pill Trigger */}
+      {/* Compact Trigger */}
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         aria-expanded={isOpen}
         aria-label="План выполнения задач агента"
-        className={`group px-2.5 py-1 rounded-full text-xs font-sans transition-all cursor-pointer flex items-center gap-1.5 select-none border ${
+        className={`group px-2.5 py-1 rounded-md text-xs font-sans transition-colors cursor-pointer flex items-center gap-1.5 select-none border ${
           isOpen
-            ? 'bg-[#e4e4e7] dark:bg-[#21262d] border-[#d4d4d8] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] shadow-xs'
+            ? 'bg-[#e4e4e7] dark:bg-[#21262d] border-[#d4d4d8] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc]'
             : hasTodos
             ? 'bg-[#f4f4f5] dark:bg-[#161b22] hover:bg-[#ececee] dark:hover:bg-[#21262d] border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc]'
             : 'bg-[#f4f4f5]/60 dark:bg-[#161b22]/60 hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] border-[#ebebeb] dark:border-[#30363d] text-[#737373] dark:text-[#8b949e]'
         }`}
-        title={
-          hasTodos
-            ? `To-dos: ${completedCount}/${todos.length} готово${inProgressCount > 0 ? `, ${inProgressCount} в работе` : ''}`
-            : 'To-dos: план задач пуст'
-        }
       >
         <ListTodo
           className={`h-3.5 w-3.5 shrink-0 transition-colors ${
             hasTodos ? 'text-[#171717] dark:text-[#f0f6fc]' : 'text-[#8f8f8f] dark:text-[#8b949e]'
           }`}
         />
-        <span className="font-medium text-xs tracking-tight">To-dos</span>
+        <span className="font-medium text-xs tracking-tight">Задачи</span>
 
         {hasTodos ? (
           <div className="flex items-center space-x-1 pl-0.5">
@@ -155,12 +150,9 @@ export const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
           <span className="font-mono tabular-nums text-[11px] text-[#8f8f8f] dark:text-[#8b949e]">0</span>
         )}
 
-        {/* Pulsing indicator when an item is currently in progress */}
+        {/* Static indicator when an item is currently in progress */}
         {inProgressCount > 0 && (
-          <span className="relative flex h-1.5 w-1.5 ml-0.5" title="Выполняется шаг...">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75" />
-            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500 dark:bg-amber-400" />
-          </span>
+          <span className="inline-flex rounded-full h-1.5 w-1.5 bg-amber-500 dark:bg-amber-400 ml-0.5" />
         )}
 
         <ChevronDown
@@ -177,10 +169,7 @@ export const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
           aria-label="Список задач агента"
           className={`absolute bottom-full mb-2 ${
             align === 'right' ? 'right-0' : 'left-0'
-          } w-[340px] sm:w-[420px] max-w-[calc(100vw-2rem)] z-30 bg-white dark:bg-[#0d1117] rounded-xl border border-[#ebebeb] dark:border-[#21262d] overflow-hidden select-text font-sans text-[#171717] dark:text-[#f0f6fc]`}
-          style={{
-            boxShadow: '0 12px 32px -4px rgba(0, 0, 0, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.08)',
-          }}
+          } w-[340px] sm:w-[420px] max-w-[calc(100vw-2rem)] z-30 bg-white dark:bg-[#0d1117] rounded-lg border border-[#ebebeb] dark:border-[#21262d] shadow-md overflow-hidden select-text font-sans text-[#171717] dark:text-[#f0f6fc]`}
         >
           {/* Popover Header */}
           <div className="px-3.5 py-2.5 bg-[#fafafa] dark:bg-[#161b22] border-b border-[#ebebeb] dark:border-[#21262d] flex items-center justify-between gap-2 select-none">
@@ -190,11 +179,11 @@ export const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
                 {activeSubagentId
                   ? activeSubagentTitle
                     ? `План: ${activeSubagentTitle}`
-                    : 'План субагента (To-dos)'
-                  : 'План выполнения (To-dos)'}
+                    : 'План субагента'
+                  : 'План выполнения'}
               </span>
               {hasTodos && (
-                <span className="font-mono tabular-nums text-[11px] text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#052e16]/40 border border-[#dcfce7] dark:border-[#166534] px-1.5 py-0.5 rounded-full font-medium shrink-0">
+                <span className="font-mono tabular-nums text-[11px] text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#052e16]/40 border border-[#dcfce7] dark:border-[#166534] px-1.5 py-0.5 rounded-md font-medium shrink-0">
                   {completedCount}/{todos.length}
                 </span>
               )}
@@ -204,7 +193,7 @@ export const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
               type="button"
               onClick={() => setIsOpen(false)}
               className="h-6 w-6 rounded-md hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] flex items-center justify-center transition cursor-pointer"
-              title="Закрыть (Esc)"
+              aria-label="Закрыть"
             >
               <X className="h-3.5 w-3.5" />
             </button>

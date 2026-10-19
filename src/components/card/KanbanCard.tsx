@@ -4,7 +4,7 @@ import { KanbanTask, TaskStatus } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore, syncTasksBackend } from '../../stores/boardStore';
 import { useShallow } from 'zustand/react/shallow';
-import { Play, GitBranch, ChevronDown, MessageSquare, GitFork, Sparkles } from 'lucide-react';
+import { Play, GitBranch, ChevronDown, MessageSquare, GitFork, CornerDownRight } from 'lucide-react';
 import TaskContextMenu from './TaskContextMenu';
 
 function formatCardDate(ts?: number): string {
@@ -116,10 +116,9 @@ function KanbanCard({ task, index }: KanbanCardProps) {
             e.stopPropagation();
             if (task.waitingForSubtaskId) openDrawer(task.waitingForSubtaskId);
           }}
-          className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#b45309] dark:text-[#fbbf24] bg-[#fffbeb] dark:bg-[#451a03]/40 border border-[#fde68a] dark:border-[#92400e] hover:bg-[#fef3c7] dark:hover:bg-[#451a03]/60 hover:border-[#f59e0b] transition cursor-pointer"
-          title={task.waitingForSubtaskId ? `Открыть подзадачу ${task.waitingForSubtaskId}` : 'Ожидает завершения подзадачи'}
+          className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#d97706] dark:text-[#f59e0b] bg-[#fefce8] dark:bg-[#161b22] border border-[#fef08a] dark:border-[#30363d] hover:border-[#f59e0b] transition cursor-pointer"
         >
-          <span className="h-1.5 w-1.5 rounded-full bg-[#f59e0b] animate-pulse" />
+          <span className="h-1.5 w-1.5 rounded-full bg-[#f59e0b]" />
           <span>Ждем подзадачу {task.waitingForSubtaskId || ''}</span>
         </button>
       );
@@ -128,33 +127,33 @@ function KanbanCard({ task, index }: KanbanCardProps) {
     switch (status) {
       case 'running':
         return (
-          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#052e16]/40 border border-[#bbf7d0] dark:border-[#166534]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#15803d] dark:bg-[#4ade80] animate-pulse" />
+          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#161b22] border border-[#bbf7d0] dark:border-[#30363d]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#15803d] dark:bg-[#4ade80]" />
             <span>В работе {formatTimerMMSS(currentStageDuration)}</span>
           </span>
         );
       case 'paused':
         return (
-          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#b45309] dark:text-[#fbbf24] bg-[#fffbeb] dark:bg-[#451a03]/40 border border-[#fde68a] dark:border-[#92400e]">
+          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#b45309] dark:text-[#fbbf24] bg-[#fefce8] dark:bg-[#161b22] border border-[#fef08a] dark:border-[#30363d]">
             <span className="h-1.5 w-1.5 rounded-full bg-[#b45309] dark:bg-[#fbbf24]" />
             <span>Пауза</span>
           </span>
         );
       case 'waiting_review':
         return (
-          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#7e22ce] dark:text-[#c084fc] bg-[#faf5ff] dark:bg-[#3b0764]/40 border border-[#e9d5ff] dark:border-[#7e22ce]">
+          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#7e22ce] dark:text-[#c084fc] bg-[#faf5ff] dark:bg-[#161b22] border border-[#e9d5ff] dark:border-[#30363d]">
             <span>Ревью</span>
           </span>
         );
       case 'done':
         return (
-          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#052e16]/40 border border-[#bbf7d0] dark:border-[#166534]">
+          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#161b22] border border-[#bbf7d0] dark:border-[#30363d]">
             <span>Готово</span>
           </span>
         );
       case 'blocked':
         return (
-          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#b91c1c] dark:text-[#f87171] bg-[#fef2f2] dark:bg-[#450a0a]/40 border border-[#fecaca] dark:border-[#991b1b]">
+          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#b91c1c] dark:text-[#f87171] bg-[#fef2f2] dark:bg-[#161b22] border border-[#fecaca] dark:border-[#30363d]">
             <span>Блок</span>
           </span>
         );
@@ -218,7 +217,6 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                     type="button"
                     onClick={handleRunAgent}
                     className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#171717] dark:text-[#f0f6fc] bg-[#f4f4f5] dark:bg-[#0d1117] hover:bg-[#171717] dark:hover:bg-[#21262d] hover:text-white border border-[#ebebeb] dark:border-[#30363d] transition cursor-pointer"
-                    title="Запустить агента (run_agent)"
                   >
                     <Play className="h-2.5 w-2.5 fill-current" />
                     <span>Пуск</span>
@@ -238,14 +236,13 @@ function KanbanCard({ task, index }: KanbanCardProps) {
             {/* Relay Handoff / Handover Summary Preview (if present) */}
             {task.handoverSummary && (
               <div
-                className="mb-2 flex items-start gap-1.5 p-1.5 rounded-md bg-[#f5f3ff] dark:bg-[#2e1065]/40 border border-[#ddd6fe] dark:border-[#581c87] text-[10px] text-[#5b21b6] dark:text-[#d8b4fe] font-mono select-none"
-                title={`Эстафета пайплайна:\n${task.handoverSummary}`}
+                className="mb-2 flex items-start gap-1.5 p-1.5 rounded-md bg-[#f9fafb] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[10px] text-[#4d4d4d] dark:text-[#c9d1d9] font-mono select-none"
                 onClick={(e) => e.stopPropagation()}
               >
-                <Sparkles className="h-3 w-3 text-[#7c3aed] dark:text-[#a855f7] shrink-0 mt-0.5" />
+                <CornerDownRight className="h-3 w-3 text-[#666666] dark:text-[#8b949e] shrink-0 mt-0.5" />
                 <div className="truncate min-w-0">
-                  <span className="font-semibold text-[#6d28d9] dark:text-[#c084fc]">Эстафета: </span>
-                  <span className="text-[#4c1d95] dark:text-[#e9d5ff]">{task.handoverSummary}</span>
+                  <span className="font-semibold text-[#171717] dark:text-[#f0f6fc]">Эстафета: </span>
+                  <span className="text-[#4d4d4d] dark:text-[#8b949e]">{task.handoverSummary}</span>
                 </div>
               </div>
             )}
@@ -342,10 +339,10 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                               <span
                                 className={`px-1 py-0.2 rounded text-[9px] font-mono ${
                                   sub?.verdict === 'APPROVED'
-                                    ? 'bg-emerald-50 dark:bg-[#12281e] text-emerald-700 dark:text-[#7ee787] border border-emerald-200 dark:border-[#238636]'
+                                    ? 'bg-[#f0fdf4] dark:bg-[#161b22] text-[#15803d] dark:text-[#7ee787] border border-[#bbf7d0] dark:border-[#238636]'
                                     : sub?.verdict === 'APPROVED_WITH_CAVEATS'
-                                    ? 'bg-amber-50 dark:bg-[#422006] text-amber-700 dark:text-[#facc15] border border-amber-200 dark:border-[#713f12]'
-                                    : 'bg-rose-50 dark:bg-[#3b1219] text-rose-700 dark:text-[#ff7b72] border border-rose-200 dark:border-[#da3633]'
+                                    ? 'bg-[#fffbeb] dark:bg-[#161b22] text-[#b45309] dark:text-[#facc15] border border-[#fde68a] dark:border-[#713f12]'
+                                    : 'bg-[#fef2f2] dark:bg-[#161b22] text-[#b91c1c] dark:text-[#ff7b72] border border-[#fecaca] dark:border-[#da3633]'
                                 }`}
                               >
                                 {sub?.verdict === 'APPROVED'

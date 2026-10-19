@@ -225,8 +225,8 @@ export default function SubagentsSidebar({
             {allSubagents.length}
           </span>
           {runningCount > 0 && (
-            <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded-full bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] text-[10px] font-mono border border-[#bbf7d0] dark:border-[#238636]">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded-md bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] text-[10px] font-mono border border-[#bbf7d0] dark:border-[#238636]">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
               <span>{runningCount} в работе</span>
             </span>
           )}
@@ -249,13 +249,13 @@ export default function SubagentsSidebar({
           <button
             type="button"
             onClick={closeSubagent}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] border border-[#bbf7d0] dark:border-[#238636] hover:bg-[#dcfce7] dark:hover:bg-[#173a2b] transition font-sans text-xs font-semibold cursor-pointer shadow-xs active:scale-[0.98] mb-3 group"
+            className="w-full flex items-center justify-between px-3 py-2 rounded-md bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] border border-[#bbf7d0] dark:border-[#238636] hover:bg-[#dcfce7] dark:hover:bg-[#173a2b] transition-colors font-sans text-xs font-semibold cursor-pointer shadow-xs mb-3 group"
           >
             <div className="flex items-center space-x-2 truncate min-w-0">
-              <ArrowLeft className="h-3.5 w-3.5 shrink-0 transition-transform group-hover:-translate-x-0.5" />
+              <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">К задаче: {taskTitle || taskId}</span>
             </div>
-            <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/60 font-bold shrink-0 ml-1">
+            <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded-md bg-white dark:bg-[#161b22] text-[#15803d] dark:text-[#7ee787] border border-[#bbf7d0] dark:border-[#238636] font-bold shrink-0 ml-1">
               Главная
             </span>
           </button>
@@ -264,7 +264,7 @@ export default function SubagentsSidebar({
         {allSubagents.length === 0 ? (
           /* Empty State */
           <div className="py-10 px-4 text-center flex flex-col items-center justify-center text-[#71717a] dark:text-[#8b949e]">
-            <div className="h-10 w-10 rounded-full bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] flex items-center justify-center mb-3">
+            <div className="h-9 w-9 rounded-md bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] flex items-center justify-center mb-3">
               <Bot className="h-5 w-5 text-[#a1a1aa] dark:text-[#6e7681]" />
             </div>
             <div className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc] mb-1">
@@ -330,7 +330,7 @@ export default function SubagentsSidebar({
                   <div className="shrink-0">
                     {sub.status === 'running' ? (
                       <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#15803d] dark:text-[#7ee787] bg-[#f0fdf4] dark:bg-[#12281e] border border-[#bbf7d0] dark:border-[#238636]">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
                         <span>Работает</span>
                       </span>
                     ) : sub.status === 'error' ? (

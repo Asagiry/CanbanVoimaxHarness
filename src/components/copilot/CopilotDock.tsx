@@ -7,7 +7,6 @@ import {
   Square,
   ChevronDown,
   ArrowDown,
-  Sparkles,
   Check,
   Cpu,
 } from 'lucide-react';
@@ -312,8 +311,8 @@ export default function CopilotDock() {
       >
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center px-4 py-8 text-[#a1a1aa] dark:text-[#8b949e] select-none">
-            <div className="w-10 h-10 rounded-full bg-[#f5f3ff] dark:bg-[#2e1065]/50 border border-[#ddd6fe] dark:border-[#581c87] flex items-center justify-center text-[#7c3aed] dark:text-[#c084fc] mb-3">
-              <Sparkles className="w-5 h-5" />
+            <div className="w-9 h-9 rounded-md bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] flex items-center justify-center text-[#171717] dark:text-[#f0f6fc] mb-3">
+              <Cpu className="w-4 h-4" />
             </div>
             <h4 className="text-xs font-semibold text-[#18181b] dark:text-[#f0f6fc] mb-1">
               Настройка проекта и окружения (.cvh)
@@ -330,10 +329,10 @@ export default function CopilotDock() {
 
         {/* Live streaming status banner */}
         {isStreaming && (
-          <div className="p-2 rounded-lg bg-[#f5f3ff] dark:bg-[#2e1065]/50 border border-[#ddd6fe] dark:border-[#581c87] flex items-center space-x-2 text-xs text-[#7c3aed] dark:text-[#c084fc] animate-pulse">
-            <Sparkles className="w-3.5 h-3.5 shrink-0" />
+          <div className="p-2 rounded-md bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] flex items-center space-x-2 text-xs text-[#171717] dark:text-[#f0f6fc]">
+            <Cpu className="w-3.5 h-3.5 text-[#71717a] dark:text-[#8b949e] shrink-0" />
             <span className="text-[11px] font-medium truncate">
-              {statusText || 'Архитектор формирует архитектурное решение...'}
+              {statusText || 'Анализ файлов проекта...'}
             </span>
           </div>
         )}
@@ -349,7 +348,7 @@ export default function CopilotDock() {
             setUserScrolledUp(false);
             scrollToBottom(true);
           }}
-          className="absolute bottom-24 right-4 z-30 px-2.5 py-1 rounded-full bg-[#18181b]/90 text-white font-mono text-[11px] shadow-md flex items-center space-x-1 cursor-pointer hover:bg-black transition backdrop-blur-xs"
+          className="absolute bottom-24 right-4 z-30 px-2.5 py-1 rounded-md bg-[#18181b] dark:bg-[#21262d] text-white font-mono text-[11px] shadow-sm flex items-center space-x-1 cursor-pointer hover:bg-black transition"
         >
           <ArrowDown className="w-3 h-3" />
           <span>Вниз</span>
@@ -359,7 +358,7 @@ export default function CopilotDock() {
       {/* Steer Bar (Footer) */}
       <footer className="p-3 border-t border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] shrink-0 select-none">
         <form onSubmit={handleSubmit} className="relative">
-          <div className="rounded-xl border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#0d1117] focus-within:bg-white dark:focus-within:bg-[#0d1117] focus-within:border-[#7c3aed]/50 focus-within:ring-2 focus-within:ring-[#7c3aed]/10 transition-all p-1.5 flex flex-col">
+          <div className="rounded-lg border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#0d1117] focus-within:bg-white dark:focus-within:bg-[#0d1117] focus-within:border-[#71717a] dark:focus-within:border-[#8b949e] transition-colors p-1.5 flex flex-col">
             <textarea
               ref={textareaRef}
               rows={1}

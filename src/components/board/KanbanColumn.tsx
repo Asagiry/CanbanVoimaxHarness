@@ -154,10 +154,10 @@ function KanbanColumn({
               <button
                 type="button"
                 onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
-                className="w-full mt-1 mb-2 py-2 px-3 flex items-center justify-center gap-1.5 rounded-[6px] border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:bg-[#f9f9f9] dark:hover:bg-[#21262d] text-[#0d0d0d] dark:text-[#f0f6fc] font-mono text-xs font-medium transition-all duration-150 cursor-pointer shadow-xs active:bg-[#f4f4f5] dark:active:bg-[#1c2128] select-none"
+                className="w-full mt-1 mb-2 py-2 px-3 flex items-center justify-center gap-1.5 rounded-[6px] border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:bg-[#f9f9f9] dark:hover:bg-[#21262d] text-[#0d0d0d] dark:text-[#f0f6fc] font-mono text-xs font-medium transition-colors duration-150 cursor-pointer shadow-xs active:bg-[#f4f4f5] dark:active:bg-[#1c2128] select-none"
               >
                 <ChevronDown className="h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e] transition-transform duration-150" />
-                <span>Загрузить еще (еще {nextCount} из {remaining})</span>
+                <span>Загрузить еще ({nextCount} из {remaining})</span>
               </button>
             )}
           </div>

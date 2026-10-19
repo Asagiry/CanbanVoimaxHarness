@@ -170,14 +170,14 @@ export default function DrawerSteerBar({
   };
 
   return (
-    <footer className="bg-[#fafafa]/80 dark:bg-[#090a0f]/80 backdrop-blur-xs px-3 pb-3 pt-1 shrink-0 shadow-xs z-10 transition-colors">
+    <footer className="bg-[#fafafa] dark:bg-[#090a0f] px-3 pb-3 pt-1 shrink-0 shadow-xs z-10 transition-colors">
       <div className="max-w-4xl mx-auto">
-        {/* Floating Modern Light Card */}
+        {/* Floating Modern Card */}
         <div
           onDragOver={handleChatDragOver}
           onDragLeave={handleChatDragLeave}
           onDrop={handleChatDrop}
-          className={`rounded-2xl bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] transition-all shadow-xs p-3 ${
+          className={`rounded-xl bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] transition-colors shadow-xs p-3 ${
             isDragOverChat ? 'ring-2 ring-blue-500/30 bg-blue-50/40 dark:bg-blue-950/40' : ''
           }`}
         >
@@ -304,13 +304,13 @@ export default function DrawerSteerBar({
                 )}
               </div>
 
-              {/* Round Action Button: Abort when running, Send when idle */}
+              {/* Action Button: Abort when running, Send when idle */}
               {isRunning ? (
                 <button
                   type="button"
                   onClick={onAbortAgent}
-                  className="w-8 h-8 rounded-full bg-[#fef2f2] dark:bg-[#3b1219] hover:bg-[#fee2e2] dark:hover:bg-[#4d1922] text-[#b91c1c] dark:text-[#ff7b72] border border-[#fecaca] dark:border-[#da3633] flex items-center justify-center shadow-xs transition cursor-pointer active:scale-95"
-                  title="Остановить выполнение (abort_agent)"
+                  className="w-8 h-8 rounded-full bg-[#fef2f2] dark:bg-[#3b1219] hover:bg-[#fee2e2] dark:hover:bg-[#4d1922] text-[#b91c1c] dark:text-[#ff7b72] border border-[#fecaca] dark:border-[#da3633] flex items-center justify-center shadow-xs transition-colors cursor-pointer"
+                  aria-label="Остановить выполнение"
                 >
                   <Square className="h-3.5 w-3.5 fill-current" />
                 </button>
@@ -319,8 +319,8 @@ export default function DrawerSteerBar({
                   type="button"
                   onClick={() => handleSubmit()}
                   disabled={!interactiveInput.trim() && attachedImages.length === 0}
-                  className="w-8 h-8 rounded-full bg-[#171717] dark:bg-[#f0f6fc] hover:bg-black dark:hover:bg-white disabled:opacity-40 disabled:hover:bg-[#171717] dark:disabled:hover:bg-[#f0f6fc] disabled:cursor-not-allowed text-white dark:text-[#090a0f] flex items-center justify-center shadow-xs transition cursor-pointer active:scale-95"
-                  title="Отправить сообщение агенту (Enter)"
+                  className="w-8 h-8 rounded-full bg-[#171717] dark:bg-[#f0f6fc] hover:bg-black dark:hover:bg-white disabled:opacity-40 disabled:hover:bg-[#171717] dark:disabled:hover:bg-[#f0f6fc] disabled:cursor-not-allowed text-white dark:text-[#090a0f] flex items-center justify-center shadow-xs transition-colors cursor-pointer"
+                  aria-label="Отправить сообщение агенту"
                 >
                   <ArrowUp className="h-4 w-4 stroke-[2.5]" />
                 </button>

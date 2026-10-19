@@ -566,12 +566,12 @@ export default function ContextGauge({
           {/* Invisible hit bridge to prevent losing hover on cursor transition */}
           <div className="absolute -bottom-3 left-0 right-0 h-3" />
 
-          <div className="w-72 rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-3.5 shadow-xl text-[#171717] dark:text-[#f0f6fc] select-none font-sans">
+          <div className="w-72 rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-3.5 shadow-md text-[#171717] dark:text-[#f0f6fc] select-none font-sans">
             {/* Top Line */}
             <div className="flex items-center justify-between mb-2">
               <div>
                 <span className="font-semibold text-xs text-[#171717] dark:text-[#f0f6fc]">{percent}%</span>{' '}
-                <span className="text-xs text-[#666666] dark:text-[#8b949e]">of context used</span>
+                <span className="text-xs text-[#666666] dark:text-[#8b949e]">заполнено</span>
               </div>
               <span className="font-mono text-xs text-[#666666] dark:text-[#8b949e] tabular-nums">
                 ~{usedTokensK}K / {maxTokensK}K
@@ -608,7 +608,7 @@ export default function ContextGauge({
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <span className="w-2.5 h-2.5 rounded-xs bg-[#71717a] shrink-0" />
-                  <span className="text-[#666666] dark:text-[#8b949e]">System prompt</span>
+                  <span className="text-[#666666] dark:text-[#8b949e]">Системный промпт</span>
                 </div>
                 <span className="font-mono text-xs text-[#171717] dark:text-[#f0f6fc] tabular-nums">
                   ~{systemPromptTokens.toLocaleString('ru-RU')}
@@ -618,7 +618,7 @@ export default function ContextGauge({
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <span className="w-2.5 h-2.5 rounded-xs bg-[#8b5cf6] shrink-0" />
-                  <span className="text-[#666666] dark:text-[#8b949e]">Tool definitions</span>
+                  <span className="text-[#666666] dark:text-[#8b949e]">Схемы инструментов</span>
                 </div>
                 <span className="font-mono text-xs text-[#171717] dark:text-[#f0f6fc] tabular-nums">
                   ~{toolDefTokens.toLocaleString('ru-RU')}
@@ -628,7 +628,7 @@ export default function ContextGauge({
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <span className="w-2.5 h-2.5 rounded-xs bg-[#3b82f6] shrink-0" />
-                  <span className="text-[#666666] dark:text-[#8b949e]">Messages</span>
+                  <span className="text-[#666666] dark:text-[#8b949e]">Сообщения диалога</span>
                 </div>
                 <span className="font-mono text-xs text-[#171717] dark:text-[#f0f6fc] tabular-nums">
                   ~{messageTokens.toLocaleString('ru-RU')}

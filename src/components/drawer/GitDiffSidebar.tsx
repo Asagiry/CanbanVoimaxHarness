@@ -226,7 +226,7 @@ function AccordionFileItem({ file, isExpanded, onToggle }: AccordionFileItemProp
                 return (
                   <div
                     key={idx}
-                    className="flex items-start bg-[#f0fdf4] dark:bg-[#12281e] text-[#166534] dark:text-[#7ee787] hover:bg-[#dcfce7] dark:hover:bg-[#173a2b] border-l-2 border-[#22c55e] py-0.5"
+                    className="flex items-start bg-[#f0fdf4] dark:bg-[#12281e] text-[#166534] dark:text-[#7ee787] hover:bg-[#dcfce7] dark:hover:bg-[#173a2b] py-0.5"
                   >
                     <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] dark:text-[#8b949e] select-none text-[10px]">
                       {/* empty old line */}
@@ -248,7 +248,7 @@ function AccordionFileItem({ file, isExpanded, onToggle }: AccordionFileItemProp
                 return (
                   <div
                     key={idx}
-                    className="flex items-start bg-[#fef2f2] dark:bg-[#3b1219] text-[#991b1b] dark:text-[#ff7b72] hover:bg-[#fee2e2] dark:hover:bg-[#4d1922] border-l-2 border-[#ef4444] py-0.5"
+                    className="flex items-start bg-[#fef2f2] dark:bg-[#3b1219] text-[#991b1b] dark:text-[#ff7b72] hover:bg-[#fee2e2] dark:hover:bg-[#4d1922] py-0.5"
                   >
                     <span className="w-8 shrink-0 text-right pr-2 text-[#ef4444] dark:text-[#ff7b72] select-none text-[10px] tabular-nums font-mono">
                       {line.oldNum}
@@ -697,8 +697,8 @@ export default function GitDiffSidebar({
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer"
-            title="Свернуть панель (Git Diff)"
+            className="p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition-colors cursor-pointer"
+            aria-label="Свернуть панель Git Diff"
           >
             <PanelRightClose className="h-3.5 w-3.5" />
           </button>

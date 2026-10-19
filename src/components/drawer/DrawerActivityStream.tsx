@@ -11,7 +11,8 @@ import {
   ArrowLeft,
   ChevronDown,
   ChevronRight,
-  Sparkles,
+  CornerDownRight,
+  CheckCheck,
   User,
   AlertTriangle,
   Info,
@@ -710,7 +711,7 @@ export default function DrawerActivityStream({
                   <div className="flex items-center space-x-2">
                     <Target className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
                     <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">
-                      Цель задачи / Prompt
+                      Постановка задачи
                     </span>
                   </div>
                   <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e]">
@@ -722,21 +723,21 @@ export default function DrawerActivityStream({
                 </div>
               </div>
 
-          {/* a2) Relay Handoff / Zero-Turn Memory Priming Card */}
+          {/* a2) Relay Handoff Card */}
           {task.handoverSummary && (
-            <div className="rounded-lg border border-[#c7d2fe] dark:border-[#3730a3] bg-[#f5f7ff] dark:bg-[#1e1b4b]/40 p-4 shadow-xs">
-              <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#e0e7ff] dark:border-[#3730a3]">
+            <div className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-[#fcfcfc] dark:bg-[#0d1117] p-4 shadow-xs">
+              <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#ebebeb] dark:border-[#21262d]">
                 <div className="flex items-center space-x-2">
-                  <Sparkles className="h-4 w-4 text-[#6366f1] dark:text-[#818cf8]" />
-                  <span className="text-xs font-semibold text-[#4338ca] dark:text-[#a5b4fc] font-sans">
-                    Эстафета пайплайна / Relay Handoff (Zero-Turn Memory Priming)
+                  <CornerDownRight className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
+                  <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">
+                    Контекст предыдущего этапа
                   </span>
                 </div>
-                <span className="text-[10px] font-mono text-[#6366f1] dark:text-[#a5b4fc] bg-[#eef2ff] dark:bg-[#312e81]/50 px-2 py-0.5 rounded border border-[#c7d2fe] dark:border-[#4338ca]">
+                <span className="text-[10px] font-mono text-[#71717a] dark:text-[#8b949e] bg-[#f4f4f5] dark:bg-[#161b22] px-2 py-0.5 rounded border border-[#ebebeb] dark:border-[#30363d]">
                   Передано предыдущим этапом
                 </span>
               </div>
-              <div className="text-sm text-[#1e1b4b] dark:text-[#e0e7ff] leading-relaxed whitespace-pre-wrap select-text font-sans">
+              <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed whitespace-pre-wrap select-text font-sans">
                 {task.handoverSummary}
               </div>
             </div>
@@ -842,7 +843,7 @@ export default function DrawerActivityStream({
                   <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-[#ebebeb] dark:border-[#21262d] text-[10px] font-mono text-[#666666] dark:text-[#8b949e]">
                     <div className="flex items-center space-x-1.5 text-[#171717] dark:text-[#f0f6fc] font-medium">
                       <User className="h-3 w-3" />
-                      <span>Указание пользователя (Steer)</span>
+                      <span>Корректировка пользователя</span>
                     </div>
                     <span className="tabular-nums">{activity?.timestamp ?? ''}</span>
                   </div>
@@ -856,7 +857,7 @@ export default function DrawerActivityStream({
                           <img
                             src={imgUrl}
                             alt={`Прикреплённое изображение ${i + 1}`}
-                            className="w-full h-full max-h-40 object-cover hover:scale-105 transition-transform duration-150 cursor-pointer"
+                            className="w-full h-full max-h-40 object-cover hover:opacity-90 transition-opacity cursor-pointer"
                             onClick={() => window.open(imgUrl, '_blank')}
                           />
                         </div>
@@ -919,7 +920,7 @@ export default function DrawerActivityStream({
               );
             }
 
-            // True Final Response / Output Markdown Block (collapsible card titled "✨ Ответ агента")
+            // True Final Response / Output Markdown Block (collapsible card)
             const isOutputExpanded = expandedOutputs.has(key);
             return (
               <div
@@ -936,7 +937,7 @@ export default function DrawerActivityStream({
                     ) : (
                       <ChevronRight className="h-4 w-4 text-[#71717a] dark:text-[#8b949e] shrink-0" />
                     )}
-                    <Sparkles className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
+                    <CheckCheck className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
                     <span className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">Ответ агента</span>
                   </div>
                   <span className="text-xs font-mono text-[#71717a] dark:text-[#8b949e] tabular-nums">{activity?.timestamp ?? ''}</span>

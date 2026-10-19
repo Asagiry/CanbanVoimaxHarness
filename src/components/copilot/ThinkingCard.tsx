@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Brain, ChevronDown, ChevronRight, Copy, Check, Sparkles } from 'lucide-react';
+import { Brain, ChevronDown, ChevronRight, Copy, Check } from 'lucide-react';
 
 interface ThinkingCardProps {
   thought: string;
@@ -44,19 +44,12 @@ export function ThinkingCard({ thought, isLive }: ThinkingCardProps) {
         className="w-full px-3 py-1.5 flex items-center justify-between bg-white dark:bg-[#161b22] hover:bg-[#f9f9f9] dark:hover:bg-[#1c2128] border-b border-[#f0f0f0] dark:border-[#21262d] cursor-pointer text-[#4d4d4d] dark:text-[#c9d1d9] select-none transition"
       >
         <div className="flex items-center space-x-2">
-          {isLive ? (
-            <Sparkles className="w-3.5 h-3.5 text-[#7c3aed] dark:text-[#a855f7] animate-pulse shrink-0" />
-          ) : (
-            <Brain className="w-3.5 h-3.5 text-[#71717a] dark:text-[#8b949e] shrink-0" />
-          )}
+          <Brain className="w-3.5 h-3.5 text-[#71717a] dark:text-[#8b949e] shrink-0" />
           <span className="font-medium text-[#171717] dark:text-[#f0f6fc] text-[11px] uppercase tracking-wider">
-            {isLive ? 'Архитектор размышляет...' : 'Мысли архитектора'}
+            {isLive ? 'Анализ контекста...' : 'Ход рассуждений'}
           </span>
           {isLive && (
-            <span className="flex h-1.5 w-1.5 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#7c3aed] opacity-75" />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#7c3aed]" />
-            </span>
+            <span className="h-1.5 w-1.5 rounded-full bg-[#15803d] dark:bg-[#4ade80]" />
           )}
         </div>
 

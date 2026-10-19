@@ -898,7 +898,7 @@ export default function KanbanBoard() {
             </div>
 
             {columnFormError && (
-              <div className="w-full text-xs font-sans text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-1.5">
+              <div className="w-full text-xs font-sans text-[#ef4444] bg-[#fef2f2] dark:bg-[#161b22] border border-[#fecaca] dark:border-[#3b1219] rounded-md px-3 py-1.5">
                 {columnFormError}
               </div>
             )}
@@ -907,7 +907,7 @@ export default function KanbanBoard() {
       )}
 
       {columnsError && (
-        <div className="mx-3.5 mt-2 flex items-center justify-between gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-sans text-red-700">
+        <div className="mx-3.5 mt-2 flex items-center justify-between gap-2 rounded-md border border-[#fecaca] dark:border-[#3b1219] bg-[#fef2f2] dark:bg-[#161b22] px-3 py-1.5 text-xs font-sans text-[#ef4444]">
           <span>{columnsError}</span>
           <button
             type="button"
@@ -988,7 +988,7 @@ export default function KanbanBoard() {
                     onMouseEnter={() => setHoveredTaskId(thread.subtaskId)}
                     onMouseLeave={() => setHoveredTaskId(null)}
                   >
-                    <title>{`Нить: ${thread.parentId} ➔ ${thread.subtaskId} (нажмите для открытия консоли подзадачи)`}</title>
+                    <title>{`Нить: ${thread.parentId} -> ${thread.subtaskId} (нажмите для открытия консоли подзадачи)`}</title>
                   </path>
 
                   {/* Node at parent */}
@@ -1014,12 +1014,11 @@ export default function KanbanBoard() {
                     <circle
                       cx={thread.x2}
                       cy={thread.y2}
-                      r={7}
+                      r={6}
                       fill="none"
                       stroke={thread.subtaskColor}
                       strokeWidth={1.5}
-                      opacity={0.8}
-                      className="animate-ping"
+                      opacity={0.5}
                     />
                   )}
 
@@ -1103,8 +1102,8 @@ export default function KanbanBoard() {
 
       {/* Add Task Modal */}
       {isNewTaskModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/70 backdrop-blur-xs p-3 animate-in fade-in duration-100">
-          <div className="relative flex flex-col w-[480px] max-w-full rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-xl p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 p-3 animate-in fade-in duration-100">
+          <div className="relative flex flex-col w-[480px] max-w-full rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-md p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors">
             <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#21262d]">
               <h3 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc]">
                 Новая задача
@@ -1201,7 +1200,7 @@ export default function KanbanBoard() {
         if (!targetBoard) return null;
         return (
           <div
-            className="fixed z-50 min-w-[190px] bg-white dark:bg-[#161b22] rounded-lg shadow-xl border border-[#ebebeb] dark:border-[#30363d] py-1 text-xs font-sans animate-in fade-in zoom-in-95 duration-100 select-none"
+            className="fixed z-50 min-w-[190px] bg-white dark:bg-[#161b22] rounded-lg shadow-md border border-[#ebebeb] dark:border-[#30363d] py-1 text-xs font-sans animate-in fade-in zoom-in-95 duration-100 select-none"
             style={{
               top: Math.min(boardContextMenu.y, window.innerHeight - 120),
               left: Math.min(boardContextMenu.x, window.innerWidth - 200),

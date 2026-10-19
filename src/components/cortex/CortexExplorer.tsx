@@ -504,7 +504,7 @@ export default function CortexExplorer() {
       {/* Контекстное меню агента (ПКМ) */}
       {agentContextMenu && (
         <div
-          className="fixed z-50 min-w-[190px] bg-white dark:bg-[#161b22] rounded-lg shadow-xl border border-[#ebebeb] dark:border-[#30363d] p-1 text-xs font-sans animate-in fade-in zoom-in-95 duration-100"
+          className="fixed z-50 min-w-[190px] bg-white dark:bg-[#161b22] rounded-lg shadow-md border border-[#ebebeb] dark:border-[#30363d] p-1 text-xs font-sans animate-in fade-in zoom-in-95 duration-100"
           style={{
             top: Math.min(agentContextMenu.y, window.innerHeight - 120),
             left: Math.min(agentContextMenu.x, window.innerWidth - 210),
@@ -524,7 +524,7 @@ export default function CortexExplorer() {
             className="w-full flex items-center space-x-2 px-3 py-1.5 text-left transition rounded-sm text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer"
           >
             <Palette className="h-3.5 w-3.5 text-[#71717a] dark:text-[#8b949e]" />
-            <span>Настроить агента (цвет и иконка)</span>
+            <span>Настроить цвет и иконку</span>
           </button>
           <button
             onClick={() => {
@@ -1549,11 +1549,11 @@ function EditAgentPersonaModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/75 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 p-4 animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-xl border border-[#e4e4e7] dark:border-[#21262d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
+        className="w-full max-w-md rounded-lg border border-[#e4e4e7] dark:border-[#21262d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] p-5 shadow-md space-y-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[#f4f4f5] dark:border-[#21262d] pb-3">
@@ -1573,7 +1573,7 @@ function EditAgentPersonaModal({
           {/* Имя роли */}
           <div>
             <label className="block text-xs font-medium text-[#52525b] dark:text-[#8b949e] mb-1">
-              Имя агента (роль)
+              Имя роли агента
             </label>
             <input
               type="text"

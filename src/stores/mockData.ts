@@ -155,7 +155,7 @@ export const INITIAL_CORTEX_STAGES: CortexAgentStage[] = [
     stageId: 'retro',
     stageTitle: 'Ретроспектива',
     color: '#0284c7',
-    icon: 'Sparkles',
+    icon: 'History',
     personaName: 'Ретро-инженер',
     isExpanded: false,
     files: [

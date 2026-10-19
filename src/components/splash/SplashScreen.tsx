@@ -8,8 +8,8 @@ export interface SplashScreenProps {
 
 export default function SplashScreen({
   isReady = true,
-  // Искусственно держим сплэш подольше — красивый вход в приложение.
-  minDisplayTimeMs = 2400,
+  // Минимальная задержка для плавного отображения без искусственного удержания.
+  minDisplayTimeMs = 350,
   onFinish,
 }: SplashScreenProps) {
   const [stepIndex, setStepIndex] = useState<number>(0);
@@ -17,27 +17,27 @@ export default function SplashScreen({
   const [isFading, setIsFading] = useState<boolean>(false);
   const startTimeRef = useRef<number>(Date.now());
 
-  // Staggered boot sequence (timing only — no phrases rendered)
+  // Fast boot sequence without artificial sluggishness
   useEffect(() => {
     const timer1 = setTimeout(() => {
       setStepIndex(1);
       setProgress(35);
-    }, 400);
+    }, 60);
 
     const timer2 = setTimeout(() => {
       setStepIndex(2);
       setProgress(65);
-    }, 900);
+    }, 140);
 
     const timer3 = setTimeout(() => {
       setStepIndex(3);
       setProgress(90);
-    }, 1400);
+    }, 220);
 
     const timer4 = setTimeout(() => {
       setStepIndex(4);
       setProgress(100);
-    }, 1900);
+    }, 300);
 
     return () => {
       clearTimeout(timer1);

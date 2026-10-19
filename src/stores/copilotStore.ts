@@ -207,9 +207,9 @@ export const useCopilotStore = create<CopilotStoreState>((set, get) => ({
       ];
 
       const simContent = [
-        '### 📐 План Архитектора CVH',
+        '### План конфигурации проекта',
         '',
-        `По вашему запросу **"${trimmed}"** подготовлена следующая архитектурная схема:`,
+        `По запросу **"${trimmed}"** подготовлена следующая конфигурация:`,
         '',
         '1. **Декомпозиция задачи**:',
         '   - Выделение интерфейсного слоя (React 19 + Tailwind v4).',
@@ -217,12 +217,10 @@ export const useCopilotStore = create<CopilotStoreState>((set, get) => ({
         '   - Обеспечение инвариантов строгой типизации TypeScript.',
         '',
         '2. **Рекомендуемые стадии**:',
-        '   - \x60backlog\x60 ➔ Формирование спецификации.',
-        '   - \x60dev\x60 ➔ Реализация в изолированном worktree.',
-        '   - \x60review\x60 ➔ Контроль инвариантов и аудит качества.',
-        '   - \x60ready\x60 ➔ Финальный merge.',
-        '',
-        '> *Вы можете напрямую поручить агентам выполнение каждого этапа или создать карточки на доске.*'
+        '   - \x60backlog\x60 -> Формирование спецификации.',
+        '   - \x60dev\x60 -> Реализация в изолированном worktree.',
+        '   - \x60review\x60 -> Контроль инвариантов и аудит качества.',
+        '   - \x60ready\x60 -> Финальный merge.'
       ].join('\n');
 
       (async () => {
@@ -382,7 +380,7 @@ export async function initCopilotStreamListener(): Promise<() => void> {
               ? {
                   ...m,
                   isStreaming: false,
-                  content: m.content + `\n\n⚠️ **Ошибка**: ${p.error}`,
+                  content: m.content + `\n\n**Ошибка**: ${p.error}`,
                 }
               : m
           ),

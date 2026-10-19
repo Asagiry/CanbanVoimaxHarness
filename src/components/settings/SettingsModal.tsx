@@ -12,7 +12,6 @@ import {
   Search,
   CheckSquare,
   Square,
-  Sparkles,
 } from 'lucide-react';
 
 export default function SettingsModal() {
@@ -126,8 +125,8 @@ export default function SettingsModal() {
 
   return (
     <>
-      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 dark:bg-black/70 backdrop-blur-xs p-4 animate-in fade-in duration-100">
-        <div className="relative flex flex-col w-[500px] max-w-full rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-2xl p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors">
+      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 dark:bg-black/80 p-4 animate-in fade-in duration-100">
+        <div className="relative flex flex-col w-[500px] max-w-full rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-md p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors">
           {/* Header */}
           <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#21262d]">
             <div className="flex items-center space-x-2">
@@ -289,14 +288,14 @@ export default function SettingsModal() {
                 Модель компактора контекста
               </label>
               <div className="relative flex items-center">
-                <Sparkles className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] pointer-events-none" />
+                <Cpu className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] pointer-events-none" />
                 <select
                   id={compactorModelId}
                   value={settings.compactorModel || 'inherit'}
                   onChange={(e) => setSettings({ compactorModel: e.target.value })}
                   className="w-full rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f0f6fc] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-mono text-xs transition cursor-pointer"
                 >
-                  <option value="inherit">Наследовать модель задачи (Рекомендуется)</option>
+                  <option value="inherit">Наследовать модель задачи</option>
                   {availableModels.map((m) => (
                     <option key={m} value={m}>
                       {m}
@@ -342,12 +341,12 @@ export default function SettingsModal() {
 
       {/* Modal Dialog: "Choose models to add" */}
       {isChooseModelsModalOpen && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 dark:bg-black/80 backdrop-blur-xs p-4 animate-in fade-in duration-100">
-          <div className="relative flex flex-col w-[520px] max-w-full rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-2xl p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors">
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 dark:bg-black/80 p-4 animate-in fade-in duration-100">
+          <div className="relative flex flex-col w-[520px] max-w-full rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-md p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors">
             {/* Header */}
             <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#21262d]">
               <div className="flex items-center space-x-2">
-                <Sparkles className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
+                <Cpu className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
                 <h3 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] tracking-tight">Выбор моделей</h3>
               </div>
               <button

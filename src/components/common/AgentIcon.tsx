@@ -17,6 +17,7 @@ import {
   Compass,
   Crosshair,
   Layers,
+  History,
   Inbox,
   ListTodo,
   CheckCircle2,
@@ -44,6 +45,7 @@ export const CANONICAL_AGENT_ICONS = [
   'Compass',
   'Crosshair',
   'Layers',
+  'History',
 ] as const;
 
 export const AGENT_ICON_MAP: Record<string, ComponentType<LucideProps>> = {
@@ -65,6 +67,7 @@ export const AGENT_ICON_MAP: Record<string, ComponentType<LucideProps>> = {
   Compass,
   Crosshair,
   Layers,
+  History,
   Inbox,
   ListTodo,
   CheckCircle2,

@@ -137,7 +137,7 @@ export default function TaskContextMenu({ task, x, y, onClose }: TaskContextMenu
         type="button"
         role="menuitem"
         onClick={handleCreateSubtask}
-        className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer text-[#8b5cf6] dark:text-[#a855f7]"
+        className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer text-[#171717] dark:text-[#f0f6fc]"
       >
         + Создать подзадачу
       </button>

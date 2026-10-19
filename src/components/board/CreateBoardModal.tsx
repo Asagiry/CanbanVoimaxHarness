@@ -103,11 +103,11 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/70 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 p-4 animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md bg-white dark:bg-[#0d1117] rounded-xl shadow-2xl border border-[#ebebeb] dark:border-[#21262d] overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col transition-colors"
+        className="w-full max-w-md bg-white dark:bg-[#0d1117] rounded-lg shadow-md border border-[#ebebeb] dark:border-[#21262d] overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col transition-colors"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -138,7 +138,7 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-5 space-y-4 text-xs font-sans">
           {error && (
-            <div className="p-2.5 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs">
+            <div className="p-2.5 rounded-md bg-[#fef2f2] dark:bg-[#161b22] border border-[#fecaca] dark:border-[#3b1219] text-[#ef4444] text-xs">
               {error}
             </div>
           )}

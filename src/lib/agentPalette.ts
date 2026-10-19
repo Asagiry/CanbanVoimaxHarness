@@ -36,7 +36,7 @@ export const AGENT_ICONS: readonly string[] = [
   'Cpu',
   'Code2',
   'ShieldCheck',
-  'Sparkles',
+  'History',
   'Terminal',
   'Zap',
   'Flame',

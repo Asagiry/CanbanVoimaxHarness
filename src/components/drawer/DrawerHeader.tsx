@@ -94,8 +94,8 @@ export default function DrawerHeader({
               type="button"
               onMouseDown={(e) => e.stopPropagation()}
               onClick={activeSubagentId ? closeSubagent : onClose}
-              className="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] border border-[#ebebeb] dark:border-[#30363d] transition font-sans text-xs font-medium cursor-pointer shadow-xs active:scale-[0.98] select-none pointer-events-auto"
-              title={activeSubagentId ? "Назад к родительской задаче" : "Назад к доске (Esc)"}
+              className="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] border border-[#ebebeb] dark:border-[#30363d] transition font-sans text-xs font-medium cursor-pointer shadow-xs select-none pointer-events-auto"
+              aria-label={activeSubagentId ? "Назад к родительской задаче" : "Назад к доске"}
             >
               <ArrowLeft className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
               <span>{activeSubagentId ? "К задаче" : "Назад"}</span>
@@ -219,7 +219,7 @@ export default function DrawerHeader({
                       >
                         {isPassed && <Check className="h-3 w-3 text-[#15803d] dark:text-[#7ee787] shrink-0" />}
                         {isRunningStage && (
-                          <span className="h-2 w-2 rounded-full bg-[#22c55e] animate-pulse shrink-0" />
+                          <span className="h-2 w-2 rounded-full bg-[#22c55e] shrink-0" />
                         )}
                         <span className="truncate max-w-[85px]">{col.title}</span>
                       </button>
@@ -314,14 +314,13 @@ export default function DrawerHeader({
           {isRunning ? (
             <div className="flex items-center space-x-2">
               <span className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-mono text-[#15803d] dark:text-[#7ee787] bg-[#f0fdf4] dark:bg-[#12281e] border border-[#bbf7d0] dark:border-[#238636]">
-                <span className="h-2 w-2 rounded-full bg-[#15803d] dark:bg-[#22c55e] animate-pulse" />
+                <span className="h-2 w-2 rounded-full bg-[#15803d] dark:bg-[#22c55e] shrink-0" />
                 <span>Агент выполняет задачу...</span>
               </span>
               <button
                 type="button"
                 onClick={onAbort}
                 className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono text-[#b91c1c] dark:text-[#ff7b72] bg-[#fef2f2] dark:bg-[#3b1219] hover:bg-[#fee2e2] dark:hover:bg-[#4d1922] border border-[#fecaca] dark:border-[#da3633] transition cursor-pointer"
-                title="Остановить выполнение (abort_agent)"
               >
                 <Square className="h-3 w-3 fill-current" />
                 <span>Остановить</span>
