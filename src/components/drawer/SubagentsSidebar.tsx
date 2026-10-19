@@ -38,6 +38,14 @@ export function formatSubagentDisplayTitle(title?: string | null): string {
 }
 
 
+export function formatSubagentRoleDisplay(role?: string | null, subIndex?: number): string {
+  const r = (role || '').trim().toLowerCase();
+  if (r === 'reviewer' || r === 'review') return 'РЕВЬЮЕР';
+  if (r === 'developer' || r === 'dev') return 'РАЗРАБОТЧИК';
+  if (r === 'cvh-dev') return 'CVH-DEV';
+  if (role && r !== 'general') return role.toUpperCase();
+  return subIndex != null ? `СУБАГЕНТ #${subIndex}` : 'СУБАГЕНТ';
+}
 function formatDuration(ms?: number, isRunning?: boolean): string {
   if (ms === undefined || ms === null || !Number.isFinite(ms) || ms < 0) {
     return isRunning ? '0s' : '—';
@@ -478,6 +486,7 @@ export default function SubagentsSidebar({
             const roleBadgeStyle = getRoleBadgeStyle(sub.role, matchedPersona?.color);
             const activeCardStyle = getRoleActiveCardStyle(sub.role, matchedPersona?.color);
             const subIndex = orderMap.get(sub.id) ?? (sub.toolCallId ? orderMap.get(sub.toolCallId) : null) ?? (idx + 1);
+            const roleDisplay = formatSubagentRoleDisplay(sub.role, subIndex);
 
             return (
               <div
@@ -520,7 +529,7 @@ export default function SubagentsSidebar({
                       style={roleBadgeStyle}
                       className="px-2 py-0.5 rounded text-[11px] font-mono font-bold tracking-wider uppercase border shrink-0 select-none"
                     >
-                      СУБАГЕНТ #{subIndex}
+                      {roleDisplay}
                     </span>
                   </div>
 

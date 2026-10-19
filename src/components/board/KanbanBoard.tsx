@@ -679,6 +679,7 @@ export default function KanbanBoard() {
             const isActive = b.id === activeBoardId;
             const isRenaming = renamingBoardId === b.id;
             const boardTasksCount = tasks.filter((t) => {
+              if (t.parentId) return false;
               const hasMatchingBoard = boards.some((board) => board.id === t.boardId);
               const effectiveBoardId = hasMatchingBoard ? t.boardId : activeBoardId;
               return effectiveBoardId === b.id;
@@ -772,7 +773,7 @@ export default function KanbanBoard() {
           <div className="hidden sm:flex items-center space-x-1.5 text-[#666666] dark:text-[#8b949e] text-xs">
             <span>Задач на доске:</span>
             <span className="text-[#171717] dark:text-[#f0f6fc] font-semibold tabular-nums font-mono">
-              {currentBoardTasks.length}
+              {currentBoardTasks.filter((t) => !t.parentId).length}
             </span>
           </div>
 
