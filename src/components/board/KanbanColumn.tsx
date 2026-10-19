@@ -77,9 +77,9 @@ function KanbanColumn({
     )
   );
 
-  const agentColor =
-    column.color ||
-    (column.persona ? getDeterministicAgentColor(column.persona) : getDeterministicAgentColor(column.id));
+  const assignedAgentColor = column.persona
+    ? (assignedPersona?.color || getDeterministicAgentColor(column.persona))
+    : (column.color || getDeterministicAgentColor(column.id));
 
   return (
     <Draggable draggableId={column.id} index={index} isDragDisabled={isPinned}>
@@ -91,7 +91,7 @@ function KanbanColumn({
         ...(isPinned
           ? { ...colProvided.draggableProps.style, transform: 'none' }
           : colProvided.draggableProps.style),
-        borderColor: colSnapshot.isDragging ? undefined : isFocused ? undefined : `${agentColor}40`,
+        borderColor: colSnapshot.isDragging ? undefined : isFocused ? undefined : `${assignedAgentColor}40`,
       }}
       className={`flex flex-col w-72 shrink-0 h-full rounded-lg bg-[#f9f9f9] dark:bg-[#0d1117] border select-none overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
         colSnapshot.isDragging
@@ -104,7 +104,7 @@ function KanbanColumn({
       {/* Top Hairline Accent Bar */}
       <div
         className="h-[2px] w-full shrink-0"
-        style={{ backgroundColor: column.color || agentColor || '#171717' }}
+        style={{ backgroundColor: assignedAgentColor }}
       />
 
       {/* Column Header (drag handle для смены порядка колонок; ПКМ — действия с колонкой) */}

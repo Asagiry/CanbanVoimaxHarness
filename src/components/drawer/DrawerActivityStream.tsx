@@ -824,6 +824,21 @@ export default function DrawerActivityStream({
     }
   }, [unifiedActivities]);
 
+  // Auto-scroll on content resize (e.g. streaming thinking / tokens) with scroll-up protection
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const contentEl = el.firstElementChild as HTMLElement;
+    if (!contentEl) return;
+    const ro = new ResizeObserver(() => {
+      if (nearBottomRef.current) {
+        el.scrollTop = el.scrollHeight;
+      }
+    });
+    ro.observe(contentEl);
+    return () => ro.disconnect();
+  }, []);
+
   return (
     <div className="relative flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] dark:bg-[#090a0f] overflow-hidden transition-colors">
       {/* Warning Banner on agent run error */}

@@ -13,7 +13,6 @@ import {
   Bot,
   Clock,
   Layers,
-  ArrowLeft,
   PanelLeftClose,
   PanelLeftOpen,
   Square,
@@ -38,12 +37,19 @@ export function formatSubagentDisplayTitle(title?: string | null): string {
 }
 
 
-export function formatSubagentRoleDisplay(role?: string | null, subIndex?: number): string {
-  const r = (role || '').trim().toLowerCase();
-  if (r === 'reviewer' || r === 'review') return 'РЕВЬЮЕР';
-  if (r === 'developer' || r === 'dev') return 'РАЗРАБОТЧИК';
-  if (r === 'cvh-dev') return 'CVH-DEV';
-  if (role && r !== 'general') return role.toUpperCase();
+export function formatSubagentRoleDisplay(
+  role?: string | null,
+  subIndex?: number,
+  isBoardSubtask?: boolean
+): string {
+  if (isBoardSubtask) {
+    const r = (role || '').trim().toLowerCase();
+    if (r === 'reviewer' || r === 'review') return 'РЕВЬЮЕР';
+    if (r === 'developer' || r === 'dev') return 'РАЗРАБОТЧИК';
+    if (r === 'cvh-dev') return 'CVH-DEV';
+    if (role && r !== 'general') return role.toUpperCase();
+    return 'ПОДЗАДАЧА';
+  }
   return subIndex != null ? `СУБАГЕНТ #${subIndex}` : 'СУБАГЕНТ';
 }
 function formatDuration(ms?: number, isRunning?: boolean): string {
@@ -145,12 +151,13 @@ export function getSubagentsForTask(
         id: child.id,
         parentTaskId: taskId,
         title: child.title,
-        role: child.persona || 'developer',
+        role: child.persona || 'reviewer',
         prompt: child.description || '',
         status: child.status === 'running' ? 'running' : child.status === 'done' ? 'finished' : 'finished',
         createdAt: childCreated,
         durationMs: child.totalElapsed ? child.totalElapsed * 1000 : undefined,
         stepsCount: (child.todos || []).length,
+        isBoardSubtask: true,
       });
     }
   }
@@ -256,7 +263,7 @@ const MAX_SIDEBAR_WIDTH = 600;
 
 export default function SubagentsSidebar({
   taskId,
-  taskTitle,
+  taskTitle: _taskTitle = '',
   isCollapsed,
   onToggleCollapse,
   className = '',
@@ -454,23 +461,6 @@ export default function SubagentsSidebar({
 
       {/* Subagents List */}
       <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
-        {/* Prominent 'Back to Main Task' Button when a subagent is currently active */}
-        {activeSubagentId && (
-          <button
-            type="button"
-            onClick={closeSubagent}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-md bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] border border-[#bbf7d0] dark:border-[#238636] hover:bg-[#dcfce7] dark:hover:bg-[#173a2b] transition-colors font-sans text-xs font-semibold cursor-pointer shadow-xs mb-3 group"
-          >
-            <div className="flex items-center space-x-1.5 truncate min-w-0">
-              <ArrowLeft className="h-3.5 w-3.5 shrink-0 transition-transform group-hover:-translate-x-0.5" />
-              <span className="text-[#15803d]/75 dark:text-[#7ee787]/75 shrink-0 font-normal">К задаче:</span>
-              <span className="font-bold text-[#14532d] dark:text-[#a7f3d0] truncate font-sans px-1.5 py-0.5 rounded bg-[#dcfce7]/60 dark:bg-[#163826] border border-[#86efac]/40 dark:border-[#238636]/40">
-                {taskTitle || taskId}
-              </span>
-            </div>
-          </button>
-        )}
-
         {allSubagents.length === 0 ? (
           <div className="flex-1" />
         ) : (
@@ -486,7 +476,8 @@ export default function SubagentsSidebar({
             const roleBadgeStyle = getRoleBadgeStyle(sub.role, matchedPersona?.color);
             const activeCardStyle = getRoleActiveCardStyle(sub.role, matchedPersona?.color);
             const subIndex = orderMap.get(sub.id) ?? (sub.toolCallId ? orderMap.get(sub.toolCallId) : null) ?? (idx + 1);
-            const roleDisplay = formatSubagentRoleDisplay(sub.role, subIndex);
+            const isBoardSubtask = Boolean(sub.isBoardSubtask || boardTasks.some((t) => t.id === sub.id));
+            const roleDisplay = formatSubagentRoleDisplay(sub.role, subIndex, isBoardSubtask);
 
             return (
               <div

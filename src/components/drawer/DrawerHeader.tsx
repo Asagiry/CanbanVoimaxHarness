@@ -16,8 +16,6 @@ import {
   Settings,
   FolderGit2,
   GitBranch,
-  Square,
-  GitCompare,
   Sun,
   Moon,
 } from 'lucide-react';
@@ -29,14 +27,14 @@ export interface DrawerHeaderProps {
   subtasks: KanbanTask[];
   rootTask: KanbanTask | null;
   activeTaskId: string | null;
-  isRunning: boolean;
-  isDiffCollapsed: boolean;
+  isRunning?: boolean;
+  isDiffCollapsed?: boolean;
   isSubagentsCollapsed?: boolean;
   subagentsCount?: number;
   onClose: () => void;
   onAbort?: () => void;
   onAbortAgent?: () => void;
-  onToggleDiff: () => void;
+  onToggleDiff?: () => void;
   onToggleSubagents?: () => void;
   onOpenDrawer: (taskId: string) => void;
   onOpenToolPolicy: () => void;
@@ -49,20 +47,19 @@ export default function DrawerHeader({
   subtasks,
   rootTask,
   activeTaskId,
-  isRunning,
-  isDiffCollapsed,
+  isRunning = false,
+  isDiffCollapsed: _isDiffCollapsed = true,
   isSubagentsCollapsed: _isSubagentsCollapsed = false,
   subagentsCount: _subagentsCount = 0,
   onClose,
-  onAbort,
-  onAbortAgent,
-  onToggleDiff,
+  onAbort: _onAbort,
+  onAbortAgent: _onAbortAgent,
+  onToggleDiff: _onToggleDiff,
   onToggleSubagents: _onToggleSubagents,
   onOpenDrawer,
   onOpenToolPolicy,
   onOpenSettings,
 }: DrawerHeaderProps) {
-  const handleAbort = onAbortAgent || onAbort;
   const handleHeaderDoubleClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     if (target.closest('button, input, select, textarea, [data-no-drag]')) {
@@ -91,6 +88,11 @@ export default function DrawerHeader({
     return map.get(activeSubagentId) ?? (toolIdToSubagentId[activeSubagentId] ? map.get(toolIdToSubagentId[activeSubagentId]) : null) ?? 1;
   }, [activeSubagentId, task?.id, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks]);
 
+  const isBoardSubtask = React.useMemo(() => {
+    if (!activeSubagentId) return false;
+    return boardTasks.some((t) => t.id === activeSubagentId);
+  }, [activeSubagentId, boardTasks]);
+
   const workingColumns = columns.filter(
     (c) => c.id !== 'backlog' && c.id !== 'ready' && !c.terminal
   );
@@ -118,67 +120,38 @@ export default function DrawerHeader({
             <span>{activeSubagentId ? "К задаче" : "Назад"}</span>
           </button>
 
-          {/* Breadcrumbs / Task badge */}
-          {activeSubagentId ? (
-            /* Subagent Breadcrumb: <Parent Task Title> / <Subagent Task Title> */
-            <div
-              data-no-drag
-              className="flex items-center space-x-2 px-3 py-1 rounded-md bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-xs font-mono min-w-0 max-w-[420px] overflow-hidden select-none pointer-events-auto shadow-2xs"
-            >
-              <button
-                type="button"
-                onClick={closeSubagent}
-                className="flex items-center space-x-1.5 text-[#52525b] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:underline cursor-pointer truncate max-w-[140px] font-medium transition"
-                title={`Вернуться к задаче: ${task?.title || task?.id || 'Родительская задача'}`}
-              >
-                <ArrowLeft className="h-3.5 w-3.5 shrink-0 text-[#171717] dark:text-[#f0f6fc]" />
-                <span className="truncate">{task?.title || task?.id || 'Задача'}</span>
-              </button>
-              <span className="text-[#a1a1aa] dark:text-[#6e7681] shrink-0 font-sans">/</span>
-              <span className="flex items-center space-x-1.5 font-semibold text-[#171717] dark:text-[#f0f6fc] truncate max-w-[180px]">
-                <AgentIcon name={matchedPersona?.icon} className="h-3.5 w-3.5 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
-                <span className="truncate">{formatSubagentDisplayTitle(activeSubagentTitle)}</span>
-              </span>
-              <span
-                style={getRoleBadgeStyle(activeSubagentRole, matchedPersona?.color)}
-                className="px-2 py-0.5 rounded text-[11px] font-mono font-bold uppercase tracking-wider border shrink-0 select-none"
-              >
-                {formatSubagentRoleDisplay(activeSubagentRole, subagentNumber || 1)}
-              </span>
-            </div>
-          ) : (
-            task?.id && (
-              rootTask && rootTask.id !== task.id ? (
-                <div className="flex items-center space-x-1 shrink-0 select-none pointer-events-auto" data-no-drag>
-                  <button
-                    type="button"
-                    onClick={() => onOpenDrawer(rootTask.id)}
-                    className="font-mono text-xs text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] px-1.5 py-0.5 rounded hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
-                    title={`К родительской задаче ${rootTask.id}`}
-                  >
-                    {rootTask.id}
-                  </button>
-                  <ChevronRight className="h-3 w-3 text-[#a1a1aa] dark:text-[#6e7681] shrink-0" />
-                  <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] px-2 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] shrink-0">
-                    {task.id}
-                  </span>
-                </div>
-              ) : (
-                <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] px-2 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] shrink-0 select-none pointer-events-auto">
+          {/* Breadcrumbs / Task badge (only when NOT in subagent mode) */}
+          {!activeSubagentId && task?.id && (
+            rootTask && rootTask.id !== task.id ? (
+              <div className="flex items-center space-x-1 shrink-0 select-none pointer-events-auto" data-no-drag>
+                <button
+                  type="button"
+                  onClick={() => onOpenDrawer(rootTask.id)}
+                  className="font-mono text-xs text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] px-1.5 py-0.5 rounded hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
+                  title={`К родительской задаче ${rootTask.id}`}
+                >
+                  {rootTask.id}
+                </button>
+                <ChevronRight className="h-3 w-3 text-[#a1a1aa] dark:text-[#6e7681] shrink-0" />
+                <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] px-2 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] shrink-0">
                   {task.id}
                 </span>
-              )
+              </div>
+            ) : (
+              <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] px-2 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] shrink-0 select-none pointer-events-auto">
+                {task.id}
+              </span>
             )
           )}
 
           {/* Directly adjacent to the title/breadcrumbs, render the compact worktree/branch badges */}
-          {!task?.skipWorktree && task?.worktreePath && (
+          {!activeSubagentId && !task?.skipWorktree && task?.worktreePath && (
             <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[11px] font-mono shrink-0">
               <FolderGit2 className="h-3 w-3 text-[#8f8f8f] dark:text-[#8b949e]" />
               <span className="text-[#4d4d4d] dark:text-[#c9d1d9] max-w-[140px] truncate">{task.worktreePath}</span>
             </div>
           )}
-          {!task?.skipWorktree && task?.branch && (
+          {!activeSubagentId && !task?.skipWorktree && task?.branch && (
             <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[11px] font-mono shrink-0">
               <GitBranch className="h-3 w-3 text-[#8f8f8f] dark:text-[#8b949e]" />
               <span className="text-[#4d4d4d] dark:text-[#c9d1d9] max-w-[140px] truncate">{task.branch}</span>
@@ -186,12 +159,30 @@ export default function DrawerHeader({
           )}
         </div>
 
-        {/* Center: Stage Stepper */}
+        {/* Center: Stage Stepper OR Centered Subagent Breadcrumb/Badge */}
         <div
           className="flex-1 flex items-center justify-center space-x-2 px-2 overflow-hidden select-none"
           data-tauri-drag-region
         >
-          {!activeSubagentId && task && workingColumns.length > 0 && (
+          {activeSubagentId ? (
+            <div
+              data-no-drag
+              className="flex items-center space-x-2 px-3 py-1 rounded-md bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-xs font-mono max-w-xl mx-auto shadow-2xs select-none pointer-events-auto min-w-0"
+            >
+              <span className="flex items-center space-x-1.5 font-semibold text-[#171717] dark:text-[#f0f6fc] truncate min-w-0">
+                <AgentIcon name={matchedPersona?.icon} className="h-3.5 w-3.5 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
+                <span className="truncate" title={activeSubagentTitle || undefined}>
+                  {formatSubagentDisplayTitle(activeSubagentTitle)}
+                </span>
+              </span>
+              <span
+                style={getRoleBadgeStyle(activeSubagentRole, matchedPersona?.color)}
+                className="px-2 py-0.5 rounded text-[11px] font-mono font-bold uppercase tracking-wider border shrink-0 select-none"
+              >
+                {formatSubagentRoleDisplay(activeSubagentRole, subagentNumber || 1, isBoardSubtask)}
+              </span>
+            </div>
+          ) : task && workingColumns.length > 0 ? (
             <div
               data-no-drag
               className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg bg-[#f9fafb] dark:bg-[#161b22] shrink-0 select-none pointer-events-auto shadow-2xs overflow-x-auto no-scrollbar max-w-[500px]"
@@ -260,46 +251,12 @@ export default function DrawerHeader({
                 );
               })}
             </div>
-          )}
+          ) : null}
         </div>
 
-        {/* Right: controls, live running/stop, Git Diff, window controls */}
+        {/* Right: tool policy, settings, theme toggle, window controls */}
         <div className="flex items-center h-full space-x-2 shrink-0 select-none pointer-events-auto pr-0" data-tauri-drag-region>
           <div className="flex items-center space-x-2 select-none pointer-events-auto" data-no-drag>
-            {/* Live running status + Stop button (when isRunning is true) */}
-            {isRunning && (
-              <>
-                <div className="flex items-center space-x-1.5 px-2 py-1 rounded-md bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] border border-[#bbf7d0] dark:border-[#238636] font-mono text-[11px] select-none">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="hidden sm:inline">Агент выполняет задачу...</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleAbort}
-                  className="flex items-center space-x-1 px-2 py-1 rounded-md bg-[#fef2f2] dark:bg-[#3b1219] hover:bg-[#fee2e2] text-[#dc2626] dark:text-[#ff7b72] border border-[#fecaca] dark:border-[#da3633] font-mono text-[11px] font-medium transition cursor-pointer"
-                  aria-label="Остановить выполнение"
-                >
-                  <Square className="h-2.5 w-2.5 fill-current" />
-                  <span>Остановить</span>
-                </button>
-              </>
-            )}
-
-            {/* Git Diff toggle button */}
-            <button
-              type="button"
-              onClick={onToggleDiff}
-              className={`flex items-center space-x-1.5 px-2 py-1 rounded-md text-[11px] font-mono transition cursor-pointer ${
-                !isDiffCollapsed
-                  ? 'bg-[#171717] dark:bg-[#f0f6fc] text-white dark:text-[#090a0f] font-semibold'
-                  : 'bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] text-[#666666] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] border border-[#ebebeb] dark:border-[#30363d]'
-              }`}
-              aria-label="Переключить Git Diff"
-            >
-              <GitCompare className="h-3 w-3" />
-              <span>Git Diff</span>
-            </button>
-
             <button
               data-no-drag
               type="button"

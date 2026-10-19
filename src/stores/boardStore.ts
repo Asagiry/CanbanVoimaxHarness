@@ -18,7 +18,7 @@ export const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
   {
     id: 'dev',
     title: 'CVH Development',
-    color: '#f59e0b',
+    color: '#6366f1',
     icon: 'Bot',
     persona: 'cvh-dev',
     modelOverride: 'gemini-3.8-flash-high',
@@ -46,7 +46,7 @@ export const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
 
 export const DEFAULT_BOARD: BoardDef = {
   id: 'development',
-  name: 'Engineering Pipeline',
+  name: 'cvh-board',
   columns: INITIAL_COLUMNS,
 };
 

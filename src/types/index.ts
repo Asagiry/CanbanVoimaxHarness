@@ -207,4 +207,5 @@ export interface SubagentInfo {
   lastError?: string;
   isBg?: boolean;
   finishedAt?: number;
+  isBoardSubtask?: boolean;
 }

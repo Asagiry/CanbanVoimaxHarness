@@ -66,11 +66,9 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const [isSubtasksOpen, setIsSubtasksOpen] = useState(false);
 
   const taskColumn = columns.find((c) => c.id === task.columnId);
-  const columnColor =
-    taskColumn?.color ||
-    (taskColumn?.persona
-      ? getDeterministicAgentColor(taskColumn.persona)
-      : getDeterministicAgentColor(task.columnId));
+  const assignedAgentColor = taskColumn?.persona
+    ? getDeterministicAgentColor(taskColumn.persona)
+    : (taskColumn?.color || getDeterministicAgentColor(task.columnId));
   const isDone = Boolean(
     task.status === 'done' ||
     taskColumn?.terminal === true ||
@@ -183,7 +181,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                 ? undefined
                 : isHighlighted
                 ? undefined
-                : `${columnColor}50`,
+                : `${assignedAgentColor}50`,
             }}
             className={`group relative mb-2 rounded-md border p-3 cursor-pointer select-none transition duration-150 active:scale-[0.99] ${
               snapshot.isDragging
@@ -250,14 +248,13 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                   {task.model}
                 </div>
               )}
-              <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
-                <span
-                  className="truncate text-[#8f8f8f] dark:text-[#8b949e] min-w-0"
-                  title={task.skipWorktree ? 'Задача без ворктри' : (task.branch ? `Ветка: ${task.branch}` : 'Ветка не задана')}
-                >
-                  {task.skipWorktree ? 'без ворктри' : (task.branch || 'без ветки')}
-                </span>
-              </div>
+              {task.branch ? (
+                <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
+                  <span className="truncate text-[#8f8f8f] dark:text-[#8b949e] min-w-0">
+                    {task.branch}
+                  </span>
+                </div>
+              ) : null}
               {(task.createdAt || currentTotalElapsed > 0) && (
                 <div className="mt-1 flex items-center gap-1 font-mono text-[10px] text-[#8f8f8f] dark:text-[#8b949e] tabular-nums whitespace-nowrap">
                   {task.createdAt ? (

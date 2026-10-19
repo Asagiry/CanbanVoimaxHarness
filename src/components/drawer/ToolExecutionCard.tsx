@@ -116,7 +116,6 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       <div
         onClick={() => openSubagent(subagentId, title, rawRole, prompt)}
         className="group rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] hover:bg-[#f9f9f9] dark:hover:bg-[#1c2128] hover:border-[#171717]/40 dark:hover:border-[#30363d] p-3 shadow-xs transition-all duration-150 cursor-pointer select-none my-2"
-        title="Нажмите, чтобы открыть вложенный чат субагента"
       >
         <div className="flex items-center justify-between gap-2.5">
           <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
@@ -507,7 +506,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
     return formatDurationCompact(ms);
   };
 
-  const { target, fullTarget } = getTarget();
+  const { target } = getTarget();
   const extraInfo = getExtraInfo();
   const durationText = formatDuration(tool.durationMs);
 
@@ -552,15 +551,15 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
         <span className="inline-flex rounded-full h-2 w-2 bg-amber-500 shrink-0" />
       );
     }
-    if (tool.status === 'success') {
+    if (!isFailed && tool.status === 'success') {
       return (
-        <span title={`Успешно (код ${tool.exitCode ?? 0})`} className="flex items-center shrink-0">
+        <span className="flex items-center shrink-0">
           <Check className="h-3.5 w-3.5 text-emerald-600 stroke-[2.5]" />
         </span>
       );
     }
     return (
-      <span title={`Ошибка (код ${tool.exitCode ?? 1})`} className="flex items-center shrink-0">
+      <span className="flex items-center shrink-0">
         <X className="h-3.5 w-3.5 text-rose-600 stroke-[2.5]" />
       </span>
     );
@@ -575,7 +574,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
         <div className="rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] overflow-hidden font-mono text-[11px]">
           {rawFilePath && (
             <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#f4f4f5] dark:bg-[#161b22] border-b border-[#ebebeb] dark:border-[#21262d] text-[#666666] dark:text-[#8b949e] text-[10px]">
-              <span className="truncate max-w-[340px] text-[#171717] dark:text-[#f0f6fc] font-semibold" title={rawFilePath}>
+              <span className="truncate max-w-[340px] text-[#171717] dark:text-[#f0f6fc] font-semibold">
                 {rawFilePath}
               </span>
               <div className="flex items-center space-x-2 font-mono tabular-nums">
@@ -640,7 +639,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       <div className="rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] overflow-hidden font-mono text-[11px]">
         {rawFilePath && (
           <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#f4f4f5] dark:bg-[#161b22] border-b border-[#ebebeb] dark:border-[#21262d] text-[#666666] dark:text-[#8b949e] text-[10px]">
-            <span className="truncate max-w-[340px] text-[#171717] dark:text-[#f0f6fc] font-semibold" title={rawFilePath}>
+            <span className="truncate max-w-[340px] text-[#171717] dark:text-[#f0f6fc] font-semibold">
               {rawFilePath}
             </span>
             <span className="text-[#8f8f8f] dark:text-[#8b949e] tabular-nums font-mono">
@@ -681,7 +680,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       <div className="rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] overflow-hidden font-mono text-[11px]">
         {rawFilePath && (
           <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#f4f4f5] dark:bg-[#161b22] border-b border-[#ebebeb] dark:border-[#21262d] text-[#666666] dark:text-[#8b949e] text-[10px]">
-            <span className="truncate max-w-[340px] text-[#171717] dark:text-[#f0f6fc] font-semibold" title={rawFilePath}>
+            <span className="truncate max-w-[340px] text-[#171717] dark:text-[#f0f6fc] font-semibold">
               {rawFilePath}
             </span>
             <span className="text-[#8f8f8f] dark:text-[#8b949e] tabular-nums font-mono">
@@ -833,7 +832,6 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             {/* Clean filename with muted path */}
             <div
               className="flex items-center min-w-0 font-mono text-xs overflow-hidden"
-              title={rawFilePath}
             >
               {dirPath && (
                 <span className="text-[#8f8f8f] dark:text-[#8b949e] truncate max-w-[120px] sm:max-w-[180px] shrink-0">
@@ -903,7 +901,6 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             {/* Clean filename with muted path */}
             <div
               className="flex items-center min-w-0 font-mono text-xs overflow-hidden"
-              title={rawFilePath}
             >
               {dirPath && (
                 <span className="text-[#8f8f8f] dark:text-[#8b949e] truncate max-w-[120px] sm:max-w-[180px] shrink-0">
@@ -961,7 +958,6 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
             <span
               className="flex items-center shrink-0 select-none text-[#8f8f8f] dark:text-[#8b949e]"
-              title={tool.toolName === 'compact_context' ? 'Сжатие контекста' : 'Инструмент'}
             >
               {tool.toolName === 'compact_context' ? (
                 <Minimize2 className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
@@ -976,7 +972,6 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
             {target && (
               <span
-                title={fullTarget}
                 className="font-mono text-[#52525b] dark:text-[#8b949e] truncate max-w-[260px] sm:max-w-[360px] md:max-w-[460px]"
               >
                 {target}
@@ -1116,7 +1111,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
           )}
 
           <div className="flex items-center justify-between pt-1 border-t border-[#f4f4f5] dark:border-[#21262d] text-[10px] text-[#8f8f8f] dark:text-[#8b949e]">
-            <span>Статус: {tool.status} {tool.exitCode !== undefined ? `(код ${tool.exitCode})` : ''}</span>
+            <span>Статус: {isFailed && tool.status === 'success' ? `failed (exit ${tool.exitCode ?? 1})` : tool.status} {tool.exitCode !== undefined && !isFailed ? `(код ${tool.exitCode})` : ''}</span>
           </div>
         </div>
       )}

@@ -564,7 +564,7 @@ export default function AgentConsoleDrawer() {
 
         {/* Three-Column Layout: Left (SubagentsSidebar) | Center (Feed + Steer Bar) | Right (GitDiffSidebar) */}
         {/* Obeying § 2.13 Viewport Overlay & Flex Boundary Invariants (min-h-0, min-w-0, overflow-hidden) */}
-        <div className="flex-1 flex flex-row min-h-0 min-w-0 overflow-hidden">
+        <div className="flex-1 flex flex-row min-h-0 min-w-0 overflow-hidden bg-[#f4f4f5] dark:bg-[#0d1117]">
           {/* Left Column: Subagents Interactive Sidebar */}
           <ErrorBoundary scopeLabel="панель субагентов" onClose={() => setIsSubagentsCollapsed(true)}>
             <SubagentsSidebar
@@ -575,8 +575,8 @@ export default function AgentConsoleDrawer() {
             />
           </ErrorBoundary>
 
-          {/* Center Column: Activity Feed + Steer Bar */}
-          <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] dark:bg-[#090a0f] overflow-hidden transition-colors">
+          {/* Center Column: Activity Feed + Steer Bar - DSH-style inset cockpit card */}
+          <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] dark:bg-[#090a0f] overflow-hidden transition-colors rounded-tl-xl rounded-tr-xl border-t border-x border-[#ebebeb] dark:border-[#21262d] shadow-2xs mt-1 mx-1.5">
             <ErrorBoundary scopeLabel="чат задачи" onClose={closeDrawer}>
               {/* Modular Activity Stream: Objective card, Relay handoff, Live thinking, Tools, Subagent cards */}
               <DrawerActivityStream

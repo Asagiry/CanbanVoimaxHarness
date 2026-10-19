@@ -971,6 +971,14 @@ pub async fn delete_board(
         .position(|b| b.id == board_id)
         .ok_or_else(|| format!("Доска '{}' не найдена", board_id))?;
 
+    let target_board = &config.boards[pos];
+    if target_board.id == "cvh-board"
+        || target_board.id == "development"
+        || target_board.name.to_lowercase() == "cvh-board"
+    {
+        return Err("Нельзя удалить защищенную изначальную доску 'cvh-board'".to_string());
+    }
+
     config.boards.remove(pos);
 
     if config.active_board_id == board_id {

@@ -57,6 +57,11 @@ export default function DrawerSteerBar({
     return map.get(activeSubagentId) ?? (toolIdToSubagentId[activeSubagentId] ? map.get(toolIdToSubagentId[activeSubagentId]) : null) ?? 1;
   }, [activeSubagentId, task?.id, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks]);
 
+  const isBoardSubtask = React.useMemo(() => {
+    if (!activeSubagentId) return false;
+    return boardTasks.some((t) => t.id === activeSubagentId);
+  }, [activeSubagentId, boardTasks]);
+
   const columns = useBoardStore((s) => s.columns);
   const currentColumn = columns.find((c) => c.id === task.columnId);
   const activePersona = activeSubagentRole || currentColumn?.persona || 'developer';
@@ -282,7 +287,7 @@ export default function DrawerSteerBar({
                   style={getRoleBadgeStyle(activeSubagentRole)}
                   className="px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider border uppercase shrink-0 select-none"
                 >
-                  {formatSubagentRoleDisplay(activeSubagentRole, subagentNumber || 1)}
+                  {formatSubagentRoleDisplay(activeSubagentRole, subagentNumber || 1, isBoardSubtask)}
                 </span>
               )}
             </div>

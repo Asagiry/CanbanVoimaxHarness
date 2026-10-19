@@ -379,7 +379,7 @@ pub async fn persist_active_project(path: &Path) {
 pub fn default_pipeline_config() -> PipelineConfig {
     PipelineConfig {
         id: "default-engineering".to_string(),
-        title: "Engineering Pipeline".to_string(),
+        title: "cvh-board".to_string(),
         tool_permissions: None,
         columns: vec![
             PipelineColumn {
@@ -409,7 +409,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
             PipelineColumn {
                 id: "dev".to_string(),
                 title: "CVH Development".to_string(),
-                color: Some("#f59e0b".to_string()),
+                color: Some("#6366f1".to_string()),
                 icon: Some("Bot".to_string()),
                 persona: Some("cvh-dev".to_string()),
                 on_enter_script: None,
@@ -463,7 +463,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
 pub fn default_board_def() -> BoardDef {
     BoardDef {
         id: "development".to_string(),
-        name: "Engineering Pipeline".to_string(),
+        name: "cvh-board".to_string(),
         columns: default_pipeline_config().columns,
     }
 }
@@ -504,7 +504,7 @@ pub fn get_canonical_board_columns() -> Vec<PipelineColumn> {
         PipelineColumn {
             id: "dev".to_string(),
             title: "CVH Development".to_string(),
-            color: Some("#f59e0b".to_string()),
+            color: Some("#6366f1".to_string()),
             icon: Some("Bot".to_string()),
             persona: Some("cvh-dev".to_string()),
             on_enter_script: None,
@@ -1027,7 +1027,7 @@ pub fn resolve_hook_path(
 pub fn minimal_pipeline_config() -> PipelineConfig {
     PipelineConfig {
         id: "default-engineering".to_string(),
-        title: "Engineering Pipeline".to_string(),
+        title: "cvh-board".to_string(),
         tool_permissions: None,
         columns: vec![
             PipelineColumn {
@@ -1057,7 +1057,7 @@ pub fn minimal_pipeline_config() -> PipelineConfig {
             PipelineColumn {
                 id: "dev".to_string(),
                 title: "CVH Development".to_string(),
-                color: Some("#f59e0b".to_string()),
+                color: Some("#6366f1".to_string()),
                 icon: Some("Bot".to_string()),
                 persona: Some("cvh-dev".to_string()),
                 on_enter_script: None,
@@ -1138,6 +1138,7 @@ Columns represent autonomous stages. Moving a card triggers stage automations an
 - **Ready**: id `"ready"` (with `terminal: true`) MUST ALWAYS exist at the final index.
 - **Middle stages**: Preserve relative pipeline order (e.g. `dev` -> `review` -> `qa`).
 - Deleting `backlog` or `ready` is strictly prohibited on all boards. If omitted in a payload, the harness automatically re-injects them.
+- **Initial Board Protection**: The initial board 'cvh-board' must NEVER be deleted or renamed. When configuring new boards (e.g. 'fast', 'complex'), keep 'cvh-board' intact or configure its columns.
 
 ## 3. Configuration Files
 - `.cvh/boards.json`:
@@ -1147,7 +1148,7 @@ Columns represent autonomous stages. Moving a card triggers stage automations an
     "boards": [
       {
         "id": "development",
-        "name": "Development",
+        "name": "cvh-board",
         "columns": [ ... ]
       }
     ]
@@ -1348,7 +1349,7 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
     if !boards_path.exists() {
         let default_board = BoardDef {
             id: "development".to_string(),
-            name: "Engineering Pipeline".to_string(),
+            name: "cvh-board".to_string(),
             columns: initial_columns,
         };
         let boards_cfg = BoardsConfig {
@@ -2545,7 +2546,7 @@ mod tests {
         assert_eq!(cfg.active_board_id, "development");
         assert_eq!(cfg.boards.len(), 1);
         assert_eq!(cfg.boards[0].id, "development");
-        assert_eq!(cfg.boards[0].name, "Engineering Pipeline");
+        assert_eq!(cfg.boards[0].name, "cvh-board");
         assert_eq!(cfg.boards[0].columns.len(), 3);
     }
 
