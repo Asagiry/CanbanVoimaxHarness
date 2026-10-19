@@ -279,7 +279,7 @@ export default function AgentConsoleDrawer() {
     try {
       await syncTasksBackend(useBoardStore.getState().tasks);
       const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('run_agent', { taskId: task.id, prompt: task.description || null });
+      await invoke('run_agent', { taskId: task.id, prompt: null });
     } catch (err: any) {
       console.info('run_agent invoke failed or web mode:', err);
       const errMsg = err?.message || (typeof err === 'string' ? err : 'Не удалось запустить агента');
