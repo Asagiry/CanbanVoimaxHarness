@@ -202,4 +202,5 @@ export interface SubagentInfo {
   durationMs?: number;
   stepsCount: number;
   lastError?: string;
+  isBg?: boolean;
 }

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { SubagentInfo } from '../../types';
@@ -14,6 +14,7 @@ import {
   Layers,
   ArrowLeft,
   PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 
 interface SubagentsSidebarProps {
@@ -38,12 +39,29 @@ export function getRoleIcon(role?: string | null) {
   return Bot;
 }
 
-function formatDuration(ms?: number): string {
-  if (ms === undefined || ms === null || !Number.isFinite(ms) || ms <= 0) return '—';
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-  const mins = Math.floor(ms / 60000);
-  const secs = Math.round((ms % 60000) / 1000);
+export function getRoleActiveBorderClass(role?: string | null): string {
+  const r = (role || 'general').toUpperCase();
+  if (r.includes('DEV')) {
+    return 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-500/70 dark:border-emerald-500/60 ring-1 ring-emerald-500/25 shadow-xs';
+  }
+  if (r.includes('REV')) {
+    return 'bg-amber-50/40 dark:bg-amber-950/20 border-amber-500/70 dark:border-amber-500/60 ring-1 ring-amber-500/25 shadow-xs';
+  }
+  if (r.includes('EXP') || r.includes('ARCH')) {
+    return 'bg-purple-50/40 dark:bg-purple-950/20 border-purple-500/70 dark:border-purple-500/60 ring-1 ring-purple-500/25 shadow-xs';
+  }
+  return 'bg-sky-50/40 dark:bg-sky-950/20 border-sky-500/70 dark:border-sky-500/60 ring-1 ring-sky-500/25 shadow-xs';
+}
+
+function formatDuration(ms?: number, isRunning?: boolean): string {
+  if (ms === undefined || ms === null || !Number.isFinite(ms) || ms < 0) {
+    return isRunning ? '0s' : '—';
+  }
+  if (!isRunning && ms < 1000) return `${Math.round(ms)}ms`;
+  const totalSecs = Math.floor(ms / 1000);
+  if (totalSecs < 60) return `${totalSecs}s`;
+  const mins = Math.floor(totalSecs / 60);
+  const secs = totalSecs % 60;
   return `${mins}m ${secs}s`;
 }
 
@@ -74,18 +92,16 @@ export default function SubagentsSidebar({
   } = useDrawerStore();
 
   const boardTasks = useBoardStore((s) => s.tasks);
-
-  // Combine and deduplicate subagents from all available sources:
-  // 1. drawerStore.subagents[taskId]
-  // 2. toolExecutions[taskId] (where toolName === 'subagent' || 'subagent_bg')
-  // 3. board tasks with parentId === taskId
   const allSubagents = useMemo(() => {
     const map = new Map<string, SubagentInfo>();
 
     // 1. Explicit store subagents (from backend list_subagents + live events)
     const list = storeSubagents[taskId] || [];
     for (const sub of list) {
-      map.set(sub.id, { ...sub });
+      map.set(sub.id, {
+        ...sub,
+        createdAt: sub.createdAt || (sub.status === 'running' ? Date.now() : undefined),
+      });
     }
 
     // 2. Derive from parent task's tool executions if not yet tracked
@@ -99,6 +115,16 @@ export default function SubagentsSidebar({
           t.id;
         const feed = activityFeed[subId] || activityFeed[t.id] || [];
         const existing = map.get(subId);
+        const isBg =
+          t.toolName === 'subagent_bg' ||
+          (params?.is_bg === true) ||
+          (params?.isBg === true) ||
+          existing?.isBg === true;
+        const parsedTime = t.timestamp ? new Date(t.timestamp).getTime() : undefined;
+        const toolCreatedAt =
+          existing?.createdAt ||
+          (parsedTime && !isNaN(parsedTime) ? parsedTime : undefined) ||
+          (t.status === 'running' ? Date.now() : undefined);
 
         if (!existing) {
           map.set(subId, {
@@ -109,11 +135,19 @@ export default function SubagentsSidebar({
             role: (params?.role as string) || 'general',
             prompt: (params?.prompt as string) || '',
             status: t.status === 'running' ? 'running' : t.status === 'failed' ? 'error' : 'finished',
+            createdAt: toolCreatedAt,
             durationMs: t.durationMs,
             stepsCount: feed.length,
+            isBg,
           });
         } else {
-          // Augment with execution duration and steps count if missing
+          // Augment with execution duration, isBg, createdAt and steps count if missing
+          if (isBg) {
+            existing.isBg = true;
+          }
+          if (!existing.createdAt && toolCreatedAt) {
+            existing.createdAt = toolCreatedAt;
+          }
           if (!existing.durationMs && t.durationMs) {
             existing.durationMs = t.durationMs;
           }
@@ -128,6 +162,7 @@ export default function SubagentsSidebar({
     const childTasks = boardTasks.filter((t) => t.parentId === taskId);
     for (const child of childTasks) {
       if (!map.has(child.id)) {
+        const childCreated = (child as any).createdAt ? Number((child as any).createdAt) : undefined;
         map.set(child.id, {
           id: child.id,
           parentTaskId: taskId,
@@ -135,6 +170,7 @@ export default function SubagentsSidebar({
           role: child.persona || 'developer',
           prompt: child.description || '',
           status: child.status === 'running' ? 'running' : child.status === 'done' ? 'finished' : 'finished',
+          createdAt: childCreated,
           durationMs: child.totalElapsed ? child.totalElapsed * 1000 : undefined,
           stepsCount: (child.todos || []).length,
         });
@@ -144,11 +180,34 @@ export default function SubagentsSidebar({
     return Array.from(map.values());
   }, [taskId, storeSubagents, toolExecutions, toolIdToSubagentId, activityFeed, boardTasks]);
 
-  if (isCollapsed) {
-    return null;
-  }
+  const hasRunningSubagents = allSubagents.some((s) => s.status === 'running');
+  const [now, setNow] = useState(() => Date.now());
+
+  // Dynamic 1-second live ticker only when subagents are actively running
+  useEffect(() => {
+    if (!hasRunningSubagents) return;
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [hasRunningSubagents]);
 
   const runningCount = allSubagents.filter((s) => s.status === 'running').length;
+
+  if (isCollapsed) {
+    return (
+      <div className="w-9 shrink-0 border-r border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#161b22] flex flex-col items-center py-2 transition-colors select-none">
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          className="p-1.5 rounded-md text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] transition cursor-pointer"
+          title="Развернуть панель субагентов"
+        >
+          <PanelLeftOpen className="h-4 w-4" />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <aside
@@ -245,16 +304,11 @@ export default function SubagentsSidebar({
                 }}
                 className={`group relative rounded-lg border p-2.5 transition-all duration-150 cursor-pointer select-none text-left ${
                   isActive
-                    ? 'bg-[#f4f4f5] dark:bg-[#161b22] border-[#171717] dark:border-[#58a6ff] ring-1 ring-[#171717]/20 dark:ring-[#58a6ff]/40 shadow-xs'
+                    ? getRoleActiveBorderClass(sub.role)
                     : 'bg-white dark:bg-[#0d1117] border-[#ebebeb] dark:border-[#21262d] hover:bg-[#fafafa] dark:hover:bg-[#161b22] hover:border-[#d4d4d8] dark:hover:border-[#30363d]'
                 }`}
               >
-                {/* Active left indicator stripe */}
-                {isActive && (
-                  <div className="absolute left-0 top-2 bottom-2 w-1 rounded-r bg-[#171717] dark:bg-[#58a6ff]" />
-                )}
-
-                {/* Card Top Row: Role Icon + Role Badge + Status */}
+                {/* Card Top Row: Role Icon + Role Badge + [BG] + Status */}
                 <div className="flex items-center justify-between gap-1.5 mb-1.5">
                   <div className="flex items-center space-x-1.5 min-w-0">
                     <RoleIcon className="h-3.5 w-3.5 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
@@ -263,6 +317,13 @@ export default function SubagentsSidebar({
                     >
                       {sub.role}
                     </span>
+                    {sub.isBg && (
+                      <span
+                        className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold tracking-wider uppercase bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 shrink-0"
+                      >
+                        ФОН
+                      </span>
+                    )}
                   </div>
 
                   {/* Status Indicator */}
@@ -295,9 +356,16 @@ export default function SubagentsSidebar({
                 <div className="flex items-center justify-between text-[11px] font-mono text-[#71717a] dark:text-[#8b949e] pt-1.5 border-t border-[#f4f4f5] dark:border-[#21262d]/60">
                   <div className="flex items-center space-x-1">
                     <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
-                    <span className="tabular-nums">{formatDuration(sub.durationMs)}</span>
+                    <span className="tabular-nums">
+                      {(() => {
+                        const isSubRunning = sub.status === 'running';
+                        const liveMs = isSubRunning
+                          ? (sub.createdAt && sub.createdAt > 0 ? Math.max(0, now - sub.createdAt) : (sub.durationMs ?? 0))
+                          : sub.durationMs;
+                        return formatDuration(liveMs, isSubRunning);
+                      })()}
+                    </span>
                   </div>
-
                   <div className="flex items-center space-x-1">
                     <Layers className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
                     <span className="tabular-nums">{formatSteps(sub.stepsCount || 0)}</span>

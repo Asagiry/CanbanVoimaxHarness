@@ -6,7 +6,6 @@ import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { getRoleBadgeClass } from './ToolExecutionCard';
 import {
-  ArrowLeft,
   ArrowUp,
   Plus,
   ChevronDown,
@@ -46,7 +45,6 @@ export default function DrawerSteerBar({
   const {
     activeSubagentId,
     activeSubagentRole,
-    closeSubagent,
   } = useDrawerStore();
 
   const columns = useBoardStore((s) => s.columns);
@@ -185,24 +183,13 @@ export default function DrawerSteerBar({
         >
           {/* Subagent Steer Guidance Banner */}
           {activeSubagentId && (
-            <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#ebebeb] dark:border-[#21262d] select-none">
-              <div className="flex items-center space-x-2 min-w-0">
-                <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider border uppercase shrink-0 ${getRoleBadgeClass(activeSubagentRole)}`}>
-                  СУБАГЕНТ: {(activeSubagentRole || 'general').toUpperCase()}
-                </span>
-                <span className="text-xs font-sans text-[#71717a] truncate">
-                  Уточнение задачи субагента
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={closeSubagent}
-                className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-sans font-medium text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] border border-transparent hover:border-[#ebebeb] dark:hover:border-[#30363d] transition cursor-pointer shrink-0"
-                title="Вернуться к родительской задаче"
-              >
-                <ArrowLeft className="h-3.5 w-3.5 text-[#171717] dark:text-[#f0f6fc]" />
-                <span>← Вернуться к задаче</span>
-              </button>
+            <div className="flex items-center space-x-2 pb-1.5 mb-2 border-b border-[#ebebeb] dark:border-[#21262d] select-none min-w-0">
+              <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider border uppercase shrink-0 ${getRoleBadgeClass(activeSubagentRole)}`}>
+                СУБАГЕНТ: {(activeSubagentRole || 'general').toUpperCase()}
+              </span>
+              <span className="text-xs font-sans text-[#71717a] truncate">
+                Уточнение задачи субагента
+              </span>
             </div>
           )}
 

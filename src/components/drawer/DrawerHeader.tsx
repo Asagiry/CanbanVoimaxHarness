@@ -16,7 +16,6 @@ import {
   GitCompare,
   Sun,
   Moon,
-  Bot,
 } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 
@@ -47,12 +46,12 @@ export default function DrawerHeader({
   activeTaskId,
   isRunning,
   isDiffCollapsed,
-  isSubagentsCollapsed = false,
-  subagentsCount = 0,
+  isSubagentsCollapsed: _isSubagentsCollapsed = false,
+  subagentsCount: _subagentsCount = 0,
   onClose,
   onAbort,
   onToggleDiff,
-  onToggleSubagents,
+  onToggleSubagents: _onToggleSubagents,
   onOpenDrawer,
   onOpenToolPolicy,
   onOpenSettings,
@@ -334,27 +333,6 @@ export default function DrawerHeader({
                 <span>Ожидание указаний</span>
               </span>
             </div>
-          )}
-
-          {/* Subagents Sidebar Toggle Button */}
-          {onToggleSubagents && (
-            <button
-              type="button"
-              onClick={onToggleSubagents}
-              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-mono border transition cursor-pointer ${
-                !isSubagentsCollapsed
-                  ? 'bg-[#171717] dark:bg-[#21262d] text-white border-[#171717] dark:border-[#30363d] shadow-xs'
-                  : 'bg-[#f4f4f5] dark:bg-[#161b22] text-[#171717] dark:text-[#f0f6fc] border-[#ebebeb] dark:border-[#30363d] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d]'
-              }`}
-            >
-              <Bot className="h-3.5 w-3.5" />
-              <span>Субагенты</span>
-              {subagentsCount > 0 && (
-                <span className="font-mono text-[10px] px-1 py-0.2 rounded-full bg-white/20 dark:bg-white/10 text-current tabular-nums">
-                  {subagentsCount}
-                </span>
-              )}
-            </button>
           )}
 
           {/* Git Diff Toggle Button */}

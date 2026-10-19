@@ -468,42 +468,92 @@ function isFinalResponseItem(
 ): boolean {
   if (activity.type !== 'output') return false;
 
-  // 1. Explicitly marked as final response
-  if (activity.isFinal === true) return true;
-
-  // 2. Inspect items following this activity in the same turn (up until the next user prompt or end):
+  // 1. Inspect subsequent items in the turn:
   let turnHasEnded = false;
+  let hasInterveningToolsOrOutputs = false;
+
   for (let i = idx + 1; i < activities.length; i++) {
     const next = activities[i];
-    // If next user message starts, the current turn ended.
+    // If next user message starts, the current turn ended
     if (next.type === 'user' || next.type === 'steer' || next.type === 'prompt') {
       turnHasEnded = true;
       break;
     }
-    // If any tool call occurs after this output in the same turn,
-    // this output was intermediate intent/commentary before or between tools!
-    if (next.type === 'tool' || (next as any).tool) {
-      return false;
-    }
-    // If another output occurs later in the same turn, this one was intermediate
-    if (next.type === 'output') {
-      return false;
+    // If any tool call or another output occurs after this in the same turn,
+    // this output was intermediate commentary!
+    if (next.type === 'tool' || (next as any).tool || next.type === 'output') {
+      hasInterveningToolsOrOutputs = true;
+      break;
     }
   }
 
-  // If a subsequent user message already followed, this turn is definitely completed
-  if (turnHasEnded) {
-    return true;
-  }
-
-  // If this is the active in-flight stream/turn and the agent is still running,
-  // it has not reached the final response yet
-  if (isRunning) {
+  // If followed by tools or outputs in the same turn, it is definitely intermediate
+  if (hasInterveningToolsOrOutputs) {
     return false;
   }
 
-  // Otherwise, the agent has finished its work and this is the turn's true final response
-  return true;
+  // If this turn is currently in-flight and the agent is still working,
+  // it MUST NOT render as final response card until completion!
+  if (!turnHasEnded && isRunning) {
+    return false;
+  }
+
+  // If turn completed or agent finished without intervening tools,
+  // this is the turn's true final response
+  if (turnHasEnded || !isRunning) {
+    return true;
+  }
+
+  return false;
+}
+
+interface AgentExplanationCardProps {
+  activity: DrawerActivityItem;
+  content?: string;
+  timestamp?: string;
+}
+
+function AgentExplanationCard({
+  activity: _activity,
+  content,
+  timestamp,
+}: AgentExplanationCardProps) {
+  const [isExpanded, setIsExpanded] = useState(true);
+
+  return (
+    <div className="rounded-lg border border-[#e4e4e7] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-xs overflow-hidden my-2.5 transition duration-150">
+      <div
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center justify-between px-3.5 py-2.5 bg-[#f8f8f9] dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#1c2128] cursor-pointer transition select-none border-l-2 border-l-[#171717] dark:border-l-[#58a6ff]"
+      >
+        <div className="flex items-center space-x-2 text-[#171717] dark:text-[#f0f6fc]">
+          {isExpanded ? (
+            <ChevronDown className="h-3.5 w-3.5 text-[#71717a] dark:text-[#8b949e] shrink-0" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 text-[#71717a] dark:text-[#8b949e] shrink-0" />
+          )}
+          <Bot className="h-3.5 w-3.5 text-[#171717] dark:text-[#58a6ff] shrink-0" />
+          <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">
+            Пояснение агента
+          </span>
+        </div>
+        <span className="text-[10px] font-mono text-[#71717a] dark:text-[#8b949e] tabular-nums">
+          {timestamp ?? ''}
+        </span>
+      </div>
+      {isExpanded && (
+        <div className="px-3.5 py-3 border-t border-[#f4f4f5] dark:border-[#21262d] text-sm leading-relaxed text-[#27272a] dark:text-[#d4d4d8] select-text">
+          {content ? (
+            <MarkdownContent content={content} />
+          ) : (
+            <div className="text-xs text-[#8f8f8f] font-mono animate-pulse">
+              Формирование шага...
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function DrawerActivityStream({
@@ -858,29 +908,14 @@ export default function DrawerActivityStream({
             const isFinal = isFinalResponseItem(activity, idx, unifiedActivities ?? [], isRunning);
 
             if (!isFinal) {
-              // Intermediate assistant commentary / intent text before or between tool calls
+              // Intermediate assistant commentary / step explanation rendered as collapsible chat card
               return (
-                <div
+                <AgentExplanationCard
                   key={key}
-                  className="my-3 py-1 px-1 text-sm text-[#171717] dark:text-[#f0f6fc]"
-                >
-                  <div className="flex items-center space-x-1.5 mb-1.5 text-xs font-sans text-[#71717a] dark:text-[#8b949e] select-none">
-                    <Bot className="h-3.5 w-3.5 text-[#71717a] dark:text-[#8b949e] shrink-0" />
-                    <span className="font-semibold text-[#171717] dark:text-[#f0f6fc]">Пояснение агента</span>
-                    <span className="text-[10px] font-mono text-[#a1a1aa] dark:text-[#6e7681] tabular-nums ml-auto">
-                      {activity?.timestamp ?? ''}
-                    </span>
-                  </div>
-                  <div className="text-sm leading-relaxed text-[#27272a] dark:text-[#d4d4d8] select-text">
-                    {activity?.content ? (
-                      <MarkdownContent content={activity.content} />
-                    ) : (
-                      <div className="text-xs text-[#8f8f8f] font-mono animate-pulse">
-                        Формирование шага...
-                      </div>
-                    )}
-                  </div>
-                </div>
+                  activity={activity}
+                  content={activity?.content}
+                  timestamp={activity?.timestamp}
+                />
               );
             }
 

@@ -107,12 +107,13 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       ? ((tool as ToolExecution).params as Record<string, unknown>)
       : {};
 
-  // Subagent interactive card (OpenCode style per specifications)
+  // Subagent interactive card (subagent and subagent_bg)
   if (toolName === 'subagent' || toolName === 'subagent_bg') {
     const rawRole = (params?.role as string) || 'general';
     const roleUpper = rawRole.toUpperCase();
     const title = (params?.title as string) || (params?.prompt as string)?.slice(0, 60) || 'Делегированная задача субагента';
     const prompt = (params?.prompt as string) || '';
+    const isBg = toolName === 'subagent_bg' || (params?.is_bg === true) || (params?.isBg === true);
 
     // Extract subagent_id from params, or drawerStore toolIdToSubagentId map, or parsed JSON stdout (subagent_bg), or stdout regex (subagent)
     let subagentId = typeof params?.subagent_id === 'string' && params.subagent_id ? params.subagent_id : '';
@@ -135,18 +136,17 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
     }
 
     const roleBadgeClass = getRoleBadgeClass(rawRole);
-
     const isRunning = tool.status === 'running';
     const isSuccess = tool.status === 'success';
 
     return (
       <div
         onClick={() => openSubagent(subagentId, title, rawRole, prompt)}
-        className="group rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] hover:bg-[#f9f9f9] dark:hover:bg-[#1c2128] hover:border-[#171717]/40 dark:hover:border-[#30363d] p-3.5 shadow-xs transition-all duration-150 cursor-pointer select-none my-2.5"
+        className="group rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] hover:bg-[#f9f9f9] dark:hover:bg-[#1c2128] hover:border-[#171717]/40 dark:hover:border-[#30363d] p-3 shadow-xs transition-all duration-150 cursor-pointer select-none my-2"
         title="Нажмите, чтобы открыть вложенный чат субагента"
       >
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center space-x-2.5 min-w-0 flex-1 overflow-hidden">
+        <div className="flex items-center justify-between gap-2.5">
+          <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
             <span className="text-[#171717] dark:text-[#f0f6fc] shrink-0 font-mono text-sm leading-none select-none">
               ■
             </span>
@@ -155,39 +155,131 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
               {roleUpper}
             </span>
 
-            <span className="font-sans font-medium text-xs md:text-sm text-[#0d0d0d] dark:text-[#f0f6fc] group-hover:text-[#171717] dark:group-hover:text-white transition-colors truncate">
+            {isBg && (
+              <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold tracking-wider uppercase bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 shrink-0">
+                ФОН
+              </span>
+            )}
+
+            <span className="font-mono text-[11px] text-[#71717a] dark:text-[#8b949e] px-1.5 py-0.2 rounded bg-[#f4f4f5] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] shrink-0 hidden sm:inline tabular-nums">
+              {subagentId}
+            </span>
+
+            <span className="font-sans font-medium text-xs text-[#0d0d0d] dark:text-[#f0f6fc] group-hover:text-[#171717] dark:group-hover:text-white transition-colors truncate">
               {title}
             </span>
           </div>
 
-          <div className="flex items-center space-x-2.5 shrink-0">
+          <div className="flex items-center space-x-2 shrink-0">
             {isRunning ? (
               <div className="flex items-center space-x-1.5">
-                <span className="relative flex h-2 w-2 shrink-0" title="Субагент выполняется...">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                 </span>
-                <span className="text-[11px] font-mono text-[#71717a]">Выполняется</span>
+                <span className="text-[11px] font-mono text-[#15803d] dark:text-[#7ee787]">Выполняется</span>
               </div>
             ) : isSuccess ? (
               <div className="flex items-center space-x-1.5">
-                <Check className="h-3.5 w-3.5 text-[#15803d] stroke-[2.5]" />
-                <span className="text-[11px] font-mono font-medium text-[#15803d]">Готово</span>
+                <Check className="h-3.5 w-3.5 text-[#15803d] dark:text-[#7ee787] stroke-[2.5]" />
+                <span className="text-[11px] font-mono font-medium text-[#15803d] dark:text-[#7ee787]">Готово</span>
               </div>
             ) : (
               <div className="flex items-center space-x-1.5">
-                <X className="h-3.5 w-3.5 text-[#dc2626] stroke-[2.5]" />
-                <span className="text-[11px] font-mono font-medium text-[#dc2626]">Ошибка</span>
+                <X className="h-3.5 w-3.5 text-[#dc2626] dark:text-[#ff7b72] stroke-[2.5]" />
+                <span className="text-[11px] font-mono font-medium text-[#dc2626] dark:text-[#ff7b72]">Ошибка</span>
               </div>
             )}
 
-            <ChevronRight className="h-4 w-4 text-[#8f8f8f] group-hover:text-[#171717] group-hover:translate-x-0.5 transition-all shrink-0" />
+            <ChevronRight className="h-4 w-4 text-[#8f8f8f] group-hover:text-[#171717] dark:group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
           </div>
         </div>
+
+        {/* Subagent Prompt Snippet if available */}
+        {prompt && (
+          <div className="mt-2 pt-2 border-t border-[#f4f4f5] dark:border-[#21262d] text-[11px] font-mono text-[#52525b] dark:text-[#8b949e] line-clamp-2 leading-relaxed">
+            {prompt}
+          </div>
+        )}
       </div>
     );
   }
 
+  // Collect subagent interactive card
+  if (toolName === 'collect_subagent') {
+    const subagentIdParam =
+      (params?.subagent_id as string) ||
+      (Array.isArray(params?.subagent_ids) ? (params.subagent_ids as string[]).join(', ') : '') ||
+      '';
+    const isRunning = tool.status === 'running';
+    const isSuccess = tool.status === 'success';
+
+    return (
+      <div
+        onClick={() => {
+          if (subagentIdParam && !subagentIdParam.includes(',')) {
+            openSubagent(subagentIdParam, `Субагент ${subagentIdParam}`, 'general', '');
+          }
+        }}
+        className={`group rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] hover:bg-[#f9f9f9] dark:hover:bg-[#1c2128] p-3 shadow-xs transition-all duration-150 select-none my-2 ${
+          subagentIdParam && !subagentIdParam.includes(',')
+            ? 'cursor-pointer hover:border-[#171717]/40 dark:hover:border-[#30363d]'
+            : 'cursor-default'
+        }`}
+      >
+        <div className="flex items-center justify-between gap-2.5">
+          <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
+            <span className="text-[#171717] dark:text-[#58a6ff] shrink-0 font-mono text-sm leading-none select-none">
+              ▼
+            </span>
+
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase border border-sky-200 dark:border-sky-800/60 bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 shrink-0">
+              СБОР
+            </span>
+
+            <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] shrink-0">
+              collect_subagent
+            </span>
+
+            <span className="font-mono text-[11px] text-[#71717a] dark:text-[#8b949e] px-1.5 py-0.2 rounded bg-[#f4f4f5] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] truncate">
+              {subagentIdParam || 'все субагенты'}
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-2 shrink-0">
+            {isRunning ? (
+              <div className="flex items-center space-x-1.5">
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+                <span className="text-[11px] font-mono text-[#15803d] dark:text-[#7ee787]">Ожидание отчета</span>
+              </div>
+            ) : isSuccess ? (
+              <div className="flex items-center space-x-1.5">
+                <Check className="h-3.5 w-3.5 text-[#15803d] dark:text-[#7ee787] stroke-[2.5]" />
+                <span className="text-[11px] font-mono font-medium text-[#15803d] dark:text-[#7ee787]">Отчет получен</span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-1.5">
+                <X className="h-3.5 w-3.5 text-[#dc2626] dark:text-[#ff7b72] stroke-[2.5]" />
+                <span className="text-[11px] font-mono font-medium text-[#dc2626] dark:text-[#ff7b72]">Ошибка сбора</span>
+              </div>
+            )}
+
+            <ChevronRight className="h-4 w-4 text-[#8f8f8f] group-hover:text-[#171717] dark:group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
+          </div>
+        </div>
+
+        {/* Report excerpt if available */}
+        {tool.stdout && (
+          <div className="mt-2 pt-2 border-t border-[#f4f4f5] dark:border-[#21262d] text-[11px] font-mono text-[#52525b] dark:text-[#8b949e] line-clamp-2 leading-relaxed">
+            {tool.stdout}
+          </div>
+        )}
+      </div>
+    );
+  }
   // Check if tool is a file modification/creation operation
   const isFileOp =
     toolName === 'write_file' ||
