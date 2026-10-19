@@ -7,6 +7,7 @@ import AgentIcon from '../common/AgentIcon';
 import { getRoleBadgeStyle } from '../../lib/agentPalette';
 import { formatSubagentDisplayTitle, getSubagentOrderMap } from './SubagentsSidebar';
 import { formatDurationCompact } from './ThinkingCard';
+import { FileExtensionBadge, getLanguageBadgeConfig } from '../common/BrandFileIcons';
 import {
   ChevronRight,
   Copy,
@@ -23,60 +24,7 @@ interface ToolExecutionCardProps {
   tool: ToolExecution;
 }
 
-interface LangBadgeConfig {
-  label: string;
-  bg: string;
-  text: string;
-  border: string;
-}
-
-function getLanguageBadge(ext?: string): LangBadgeConfig | null {
-  if (!ext) return null;
-  switch (ext.toLowerCase()) {
-    case 'cs':
-      return { label: 'C#', bg: 'bg-[#ecfeff] dark:bg-[#083344]', text: 'text-[#0891b2] dark:text-[#22d3ee]', border: 'border-[#a5f3fc] dark:border-[#155e75]' };
-    case 'ts':
-    case 'tsx':
-      return { label: 'TS', bg: 'bg-[#eff6ff] dark:bg-[#172554]', text: 'text-[#2563eb] dark:text-[#60a5fa]', border: 'border-[#bfdbfe] dark:border-[#1e40af]' };
-    case 'js':
-    case 'jsx':
-      return { label: 'JS', bg: 'bg-[#fefce8] dark:bg-[#422006]', text: 'text-[#ca8a04] dark:text-[#facc15]', border: 'border-[#fef08a] dark:border-[#713f12]' };
-    case 'py':
-      return { label: 'PY', bg: 'bg-[#f0f9ff] dark:bg-[#082f49]', text: 'text-[#0284c7] dark:text-[#38bdf8]', border: 'border-[#bae6fd] dark:border-[#0369a1]' };
-    case 'rs':
-      return { label: 'RS', bg: 'bg-[#fff7ed] dark:bg-[#431407]', text: 'text-[#ea580c] dark:text-[#fb923c]', border: 'border-[#fed7aa] dark:border-[#9a3412]' };
-    case 'json':
-      return { label: 'JSON', bg: 'bg-[#f4f4f5] dark:bg-[#18181b]', text: 'text-[#52525b] dark:text-[#a1a1aa]', border: 'border-[#e4e4e7] dark:border-[#27272a]' };
-    case 'html':
-      return { label: 'HTML', bg: 'bg-[#fff1f2] dark:bg-[#4c0519]', text: 'text-[#e11d48] dark:text-[#fb7185]', border: 'border-[#fecdd3] dark:border-[#9f1239]' };
-    case 'css':
-    case 'scss':
-      return { label: 'CSS', bg: 'bg-[#f0fdf4] dark:bg-[#052e16]', text: 'text-[#16a34a] dark:text-[#4ade80]', border: 'border-[#bbf7d0] dark:border-[#166534]' };
-    case 'go':
-      return { label: 'GO', bg: 'bg-[#ecfeff] dark:bg-[#083344]', text: 'text-[#06b6d4] dark:text-[#22d3ee]', border: 'border-[#a5f3fc] dark:border-[#155e75]' };
-    case 'cpp':
-    case 'c':
-    case 'h':
-    case 'hpp':
-      return { label: 'C++', bg: 'bg-[#fdf2f8] dark:bg-[#500724]', text: 'text-[#db2777] dark:text-[#f472b6]', border: 'border-[#fbcfe8] dark:border-[#9d174d]' };
-    case 'sh':
-    case 'bash':
-    case 'ps1':
-    case 'bat':
-    case 'cmd':
-      return { label: 'SH', bg: 'bg-[#f8fafc] dark:bg-[#0f172a]', text: 'text-[#475569] dark:text-[#94a3b8]', border: 'border-[#cbd5e1] dark:border-[#334155]' };
-    case 'md':
-      return { label: 'MD', bg: 'bg-[#fafafa] dark:bg-[#18181b]', text: 'text-[#71717a] dark:text-[#a1a1aa]', border: 'border-[#e4e4e7] dark:border-[#27272a]' };
-    case 'toml':
-    case 'yaml':
-    case 'yml':
-      return { label: 'CFG', bg: 'bg-[#f4f4f5] dark:bg-[#18181b]', text: 'text-[#52525b] dark:text-[#a1a1aa]', border: 'border-[#e4e4e7] dark:border-[#27272a]' };
-    case 'sql':
-      return { label: 'SQL', bg: 'bg-[#faf5ff] dark:bg-[#3b0764]', text: 'text-[#9333ea] dark:text-[#c084fc]', border: 'border-[#e9d5ff] dark:border-[#6b21a8]' };
-    default:
-      return null;
-  }
-}
+const getLanguageBadge = getLanguageBadgeConfig;
 
 export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -861,7 +809,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
                 e.stopPropagation();
                 setIsExpanded(!isExpanded);
               }}
-              title={isExpanded ? 'Свернуть подробности' : 'Развернуть подробности'}
+              aria-label={isExpanded ? 'Свернуть подробности' : 'Развернуть подробности'}
             >
               <ChevronRight
                 className={`h-3 w-3 transition-transform duration-150 ${
@@ -875,13 +823,9 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
               Analyzed
             </span>
 
-            {/* Language badge or document icon */}
+            {/* Brand SVG language badge or document icon */}
             {langBadge ? (
-              <span
-                className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold uppercase tracking-wider shrink-0 select-none ${langBadge.bg} ${langBadge.text} border ${langBadge.border}`}
-              >
-                {langBadge.label}
-              </span>
+              <FileExtensionBadge ext={ext} />
             ) : (
               <DocIcon className="h-3.5 w-3.5 text-[#52525b] dark:text-[#8b949e] shrink-0" />
             )}
@@ -927,7 +871,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
                 e.stopPropagation();
                 setIsExpanded(!isExpanded);
               }}
-              title={isExpanded ? 'Свернуть подробности' : 'Развернуть подробности'}
+              aria-label={isExpanded ? 'Свернуть подробности' : 'Развернуть подробности'}
             >
               <ChevronRight
                 className={`h-3 w-3 transition-transform duration-150 ${
@@ -949,8 +893,12 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
               {isFailed ? 'FAILED EDIT' : opLabel}
             </span>
 
-            {/* Document icon */}
-            <DocIcon className="h-3.5 w-3.5 text-[#52525b] dark:text-[#8b949e] shrink-0" />
+            {/* Brand SVG language badge or document icon */}
+            {langBadge ? (
+              <FileExtensionBadge ext={ext} />
+            ) : (
+              <DocIcon className="h-3.5 w-3.5 text-[#52525b] dark:text-[#8b949e] shrink-0" />
+            )}
 
             {/* Clean filename with muted path */}
             <div
@@ -1002,7 +950,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
                 e.stopPropagation();
                 setIsExpanded(!isExpanded);
               }}
-              title={isExpanded ? 'Свернуть подробности' : 'Развернуть подробности'}
+              aria-label={isExpanded ? 'Свернуть подробности' : 'Развернуть подробности'}
             >
               <ChevronRight
                 className={`h-3 w-3 transition-transform duration-150 ${
@@ -1062,7 +1010,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             className={`p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-white dark:hover:bg-[#161b22] transition cursor-pointer ${
               isExpanded ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
             }`}
-            title="Скопировать вывод"
+            aria-label="Скопировать вывод"
           >
             {copied ? (
               <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />

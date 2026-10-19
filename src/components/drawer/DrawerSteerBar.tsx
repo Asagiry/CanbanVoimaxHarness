@@ -6,6 +6,7 @@ import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { getRoleBadgeStyle } from '../../lib/agentPalette';
 import { getSubagentOrderMap } from './SubagentsSidebar';
+import { compressImageFile } from '../../lib/imageCompression';
 import {
   ArrowUp,
   Plus,
@@ -80,27 +81,36 @@ export default function DrawerSteerBar({
     adjustTextareaHeight(e.target);
   };
 
-  const handleAddChatImages = (files: FileList | File[]) => {
+  const handleAddChatImages = async (files: FileList | File[]) => {
     const validFiles = Array.from(files).filter(
-      (f) => f.type.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(f.name)
+      (f) => f.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|svg)$/i.test(f.name)
     );
     if (validFiles.length === 0) return;
 
-    validFiles.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = reader.result as string;
-        setAttachedImages((prev) => [
-          ...prev,
-          {
-            id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-            name: file.name,
-            dataUrl,
-          },
-        ]);
-      };
-      reader.readAsDataURL(file);
-    });
+    try {
+      const results = await Promise.all(
+        validFiles.map(async (file) => {
+          try {
+            const dataUrl = await compressImageFile(file, 1568, 0.85);
+            return {
+              id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+              name: file.name,
+              dataUrl,
+            };
+          } catch (err) {
+            console.error('[DrawerSteerBar] Failed to process image:', file.name, err);
+            return null;
+          }
+        })
+      );
+
+      const successful = results.filter((item): item is { id: string; name: string; dataUrl: string } => item !== null);
+      if (successful.length > 0) {
+        setAttachedImages((prev) => [...prev, ...successful]);
+      }
+    } catch (err) {
+      console.error('[DrawerSteerBar] Error handling images:', err);
+    }
   };
 
   const handleChatFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -209,7 +219,7 @@ export default function DrawerSteerBar({
                     type="button"
                     onClick={() => setAttachedImages((prev) => prev.filter((i) => i.id !== img.id))}
                     className="absolute top-1 right-1 w-4 h-4 rounded-full bg-white/90 dark:bg-[#161b22]/90 hover:bg-white dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] border border-[#ebebeb] dark:border-[#30363d] flex items-center justify-center text-xs leading-none transition cursor-pointer"
-                    title="Удалить"
+                    aria-label="Удалить прикрепленное изображение"
                   >
                     ×
                   </button>
@@ -246,7 +256,7 @@ export default function DrawerSteerBar({
                 type="button"
                 onClick={() => chatFileInputRef.current?.click()}
                 className="w-7 h-7 rounded-full bg-[#f4f4f5] dark:bg-[#161b22] hover:bg-[#171717] dark:hover:bg-[#f0f6fc] text-[#171717] dark:text-[#f0f6fc] hover:text-white dark:hover:text-[#090a0f] flex items-center justify-center transition cursor-pointer"
-                title="Прикрепить изображение (PNG, JPG, WebP) или файл"
+                aria-label="Прикрепить изображение или файл"
               >
                 <Plus className="h-4 w-4" />
               </button>
@@ -285,7 +295,7 @@ export default function DrawerSteerBar({
                   type="button"
                   onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
                   className="px-2.5 py-1 rounded-full bg-[#f4f4f5] dark:bg-[#161b22] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] font-mono text-xs border border-[#ebebeb] dark:border-[#30363d] transition cursor-pointer flex items-center gap-1.5 max-w-[200px]"
-                  title={`Модель задачи: ${effectiveModel}`}
+                  aria-label={`Модель задачи: ${effectiveModel}`}
                 >
                   <span className="truncate">{effectiveModel}</span>
                   <ChevronDown className="h-3 w-3 text-[#8f8f8f] dark:text-[#8b949e] shrink-0" />
