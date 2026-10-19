@@ -6,7 +6,7 @@ use crate::config::{
     ToolPolicyConfig,
 };
 use crate::db::ActivityItem;
-use crate::hooks::{build_windows_cmd_args, kill_process_tree};
+use crate::hooks::kill_process_tree;
 use crate::llm::{ChatMessage, LlmClient, OpenAIChatRequest, Role, StreamChunk, ToolCall, ToolDefinition};
 use anyhow::{bail, Context, Result};
 use tauri::{AppHandle, Emitter, Manager};
@@ -3982,7 +3982,10 @@ async fn run_scoped_command(
     #[cfg(target_os = "windows")]
     let mut cmd = {
         let mut c = Command::new("cmd.exe");
-        c.args(build_windows_cmd_args(cmd_str));
+        c.raw_arg("/D");
+        c.raw_arg("/S");
+        c.raw_arg("/C");
+        c.raw_arg(format!("\"chcp 65001 >nul && {}\"", cmd_str));
         c
     };
 
@@ -5571,8 +5574,20 @@ Messages count: {}
                 // Synchronize messages to in-memory context state before exiting
                 sync_context_state(&config.app_handle, &config.task_id, turn, &messages);
 
+                let display_summary = serde_json::from_str::<serde_json::Value>(&tc.function.arguments)
+                    .ok()
+                    .and_then(|val| {
+                        val.get("summary")
+                            .or_else(|| val.get("reason"))
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.trim().to_string())
+                    })
+                    .filter(|s| !s.is_empty());
+
+                let final_resp = display_summary.unwrap_or_else(|| result_str.clone());
+
                 event_sink(AgentEvent::Finished {
-                    final_response: result_str.clone(),
+                    final_response: final_resp,
                 });
                 return Ok(result_str);
             }

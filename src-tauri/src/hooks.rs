@@ -189,7 +189,10 @@ pub async fn execute_hook(
                 let mut c = Command::new("cmd.exe");
                 let quoted_script = quote_windows_path(script);
                 let call_cmd = format!("call {}", quoted_script);
-                c.args(build_windows_cmd_args(&call_cmd));
+                c.raw_arg("/D");
+                c.raw_arg("/S");
+                c.raw_arg("/C");
+                c.raw_arg(format!("\"chcp 65001 >nul && {}\"", call_cmd));
                 c
             }
             #[cfg(not(target_os = "windows"))]
@@ -302,7 +305,10 @@ pub async fn execute_sensor_command(
     #[cfg(target_os = "windows")]
     let mut cmd = {
         let mut c = Command::new("cmd.exe");
-        c.args(build_windows_cmd_args(command_str));
+        c.raw_arg("/D");
+        c.raw_arg("/S");
+        c.raw_arg("/C");
+        c.raw_arg(format!("\"chcp 65001 >nul && {}\"", command_str));
         c
     };
 
@@ -433,5 +439,14 @@ mod tests {
         {
             assert_eq!(exe, "pwsh");
         }
+    }
+
+    #[tokio::test]
+    async fn test_execute_sensor_command_windows_quotes() {
+        let res = execute_sensor_command(r#"python -c "print('sensor_ok')""#, ".", Some(Duration::from_secs(10)))
+            .await
+            .expect("sensor command execution");
+        assert!(res.success, "sensor command should succeed, stderr: {}", res.stderr);
+        assert!(res.stdout.contains("sensor_ok"), "got stdout: {}", res.stdout);
     }
 }
