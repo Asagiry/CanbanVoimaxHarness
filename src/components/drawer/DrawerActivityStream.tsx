@@ -1,11 +1,14 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { KanbanTask } from '../../types';
 import type { DrawerActivityItem } from '../../stores/drawerStore';
-import ToolExecutionCard, { getRoleBadgeClass } from './ToolExecutionCard';
+import ToolExecutionCard from './ToolExecutionCard';
 import ThinkingCard from './ThinkingCard';
 import QuestionPromptCard from './QuestionPromptCard';
 import CompactedContextCard from './CompactedContextCard';
 import { useDrawerStore } from '../../stores/drawerStore';
+import { useCortexStore } from '../../stores/cortexStore';
+import AgentIcon from '../common/AgentIcon';
+import { getRoleBadgeStyle } from '../../lib/agentPalette';
 import {
   ArrowDown,
   ChevronDown,
@@ -24,7 +27,7 @@ import {
   Circle,
   Clock,
 } from 'lucide-react';
-import { getRoleIcon, formatSubagentDisplayTitle } from './SubagentsSidebar';
+import { formatSubagentDisplayTitle } from './SubagentsSidebar';
 
 // Inline Markdown Parser Types & Helpers
 interface InlineTextNode {
@@ -708,6 +711,10 @@ export default function DrawerActivityStream({
     activeSubagentRole,
     activeSubagentPrompt,
   } = useDrawerStore();
+  const agentPersonas = useCortexStore((s) => s.agentPersonas);
+  const matchedPersona = agentPersonas.find(
+    (p) => p.role.toLowerCase() === (activeSubagentRole || '').toLowerCase()
+  );
 
   const [expandedOutputs, setExpandedOutputs] = useState<Set<string>>(() => new Set());
   const [showNewButton, setShowNewButton] = useState(false);
@@ -813,16 +820,16 @@ export default function DrawerActivityStream({
             <div className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-4 shadow-xs">
               <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#ebebeb] dark:border-[#21262d]">
                 <div className="flex items-center space-x-2 min-w-0">
-                  {(() => {
-                    const SubRoleIcon = getRoleIcon(activeSubagentRole);
-                    return <SubRoleIcon className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />;
-                  })()}
+                  <AgentIcon name={matchedPersona?.icon} className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
                   <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans truncate">
                     Атомарная задача субагента: {formatSubagentDisplayTitle(activeSubagentTitle)}
                   </span>
                 </div>
                 <div className="flex items-center space-x-2 shrink-0">
-                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border ${getRoleBadgeClass(activeSubagentRole)}`}>
+                  <span
+                    style={getRoleBadgeStyle(activeSubagentRole, matchedPersona?.color)}
+                    className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border"
+                  >
                     {(activeSubagentRole || 'general').toUpperCase()}
                   </span>
                 </div>

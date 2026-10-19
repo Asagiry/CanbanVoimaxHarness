@@ -4,7 +4,7 @@ import ContextGauge from './ContextGauge';
 import TaskTodoWidget from './TaskTodoWidget';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
-import { getRoleBadgeClass } from './ToolExecutionCard';
+import { getRoleBadgeStyle } from '../../lib/agentPalette';
 import {
   ArrowUp,
   Plus,
@@ -184,7 +184,10 @@ export default function DrawerSteerBar({
           {/* Subagent Steer Guidance Banner */}
           {activeSubagentId && (
             <div className="flex items-center space-x-2 pb-1.5 mb-2 border-b border-[#ebebeb] dark:border-[#21262d] select-none min-w-0">
-              <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider border uppercase shrink-0 ${getRoleBadgeClass(activeSubagentRole)}`}>
+              <span
+                style={getRoleBadgeStyle(activeSubagentRole)}
+                className="px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider border uppercase shrink-0"
+              >
                 СУБАГЕНТ: {(activeSubagentRole || 'general').toUpperCase()}
               </span>
               <span className="text-xs font-sans text-[#71717a] truncate">

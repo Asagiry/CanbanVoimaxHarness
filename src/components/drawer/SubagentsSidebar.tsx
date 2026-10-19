@@ -1,13 +1,16 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
+import { useCortexStore } from '../../stores/cortexStore';
 import { SubagentInfo } from '../../types';
-import { getRoleBadgeClass } from './ToolExecutionCard';
+import AgentIcon from '../common/AgentIcon';
+import {
+  getDeterministicAgentIcon,
+  getRoleBadgeStyle,
+  getRoleActiveCardStyle,
+} from '../../lib/agentPalette';
 import {
   Bot,
-  Compass,
-  Code2,
-  ShieldCheck,
   CheckCircle2,
   AlertCircle,
   Clock,
@@ -26,19 +29,6 @@ interface SubagentsSidebarProps {
   className?: string;
 }
 
-export function getRoleIcon(role?: string | null) {
-  const r = (role || 'general').toLowerCase();
-  if (r.includes('exp') || r.includes('arch') || r.includes('res') || r.includes('cortex')) {
-    return Compass;
-  }
-  if (r.includes('dev') || r.includes('code') || r.includes('eng')) {
-    return Code2;
-  }
-  if (r.includes('rev') || r.includes('audit') || r.includes('test') || r.includes('retro') || r.includes('verif')) {
-    return ShieldCheck;
-  }
-  return Bot;
-}
 
 export function formatSubagentDisplayTitle(title?: string | null): string {
   if (!title) return 'Субагент';
@@ -49,19 +39,6 @@ export function formatSubagentDisplayTitle(title?: string | null): string {
   return title;
 }
 
-export function getRoleActiveBorderClass(role?: string | null): string {
-  const r = (role || 'general').toUpperCase();
-  if (r.includes('DEV')) {
-    return 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-500/70 dark:border-emerald-500/60 ring-1 ring-emerald-500/25 shadow-xs';
-  }
-  if (r.includes('REV')) {
-    return 'bg-amber-50/40 dark:bg-amber-950/20 border-amber-500/70 dark:border-amber-500/60 ring-1 ring-amber-500/25 shadow-xs';
-  }
-  if (r.includes('EXP') || r.includes('ARCH')) {
-    return 'bg-purple-50/40 dark:bg-purple-950/20 border-purple-500/70 dark:border-purple-500/60 ring-1 ring-purple-500/25 shadow-xs';
-  }
-  return 'bg-sky-50/40 dark:bg-sky-950/20 border-sky-500/70 dark:border-sky-500/60 ring-1 ring-sky-500/25 shadow-xs';
-}
 
 function formatDuration(ms?: number, isRunning?: boolean): string {
   if (ms === undefined || ms === null || !Number.isFinite(ms) || ms < 0) {
@@ -102,6 +79,7 @@ export default function SubagentsSidebar({
   } = useDrawerStore();
 
   const boardTasks = useBoardStore((s) => s.tasks);
+  const agentPersonas = useCortexStore((s) => s.agentPersonas);
   const allSubagents = useMemo(() => {
     const map = new Map<string, SubagentInfo>();
 
@@ -290,8 +268,12 @@ export default function SubagentsSidebar({
               activeSubagentId === sub.id ||
               (sub.toolCallId && activeSubagentId === sub.toolCallId) ||
               (toolIdToSubagentId[activeSubagentId || ''] === sub.id);
-            const RoleIcon = getRoleIcon(sub.role);
-            const roleBadgeClass = getRoleBadgeClass(sub.role);
+            const matchedPersona = agentPersonas.find(
+              (p) => p.role.toLowerCase() === (sub.role || '').toLowerCase()
+            );
+            const personaIcon = matchedPersona?.icon || (matchedPersona ? 'Bot' : getDeterministicAgentIcon(sub.role));
+            const roleBadgeStyle = getRoleBadgeStyle(sub.role, matchedPersona?.color);
+            const activeCardStyle = getRoleActiveCardStyle(sub.role, matchedPersona?.color);
 
             return (
               <div
@@ -314,16 +296,18 @@ export default function SubagentsSidebar({
                 }}
                 className={`group relative rounded-lg border p-2.5 transition-all duration-150 cursor-pointer select-none text-left ${
                   isActive
-                    ? getRoleActiveBorderClass(sub.role)
+                    ? 'shadow-xs'
                     : 'bg-white dark:bg-[#0d1117] border-[#ebebeb] dark:border-[#21262d] hover:bg-[#fafafa] dark:hover:bg-[#161b22] hover:border-[#d4d4d8] dark:hover:border-[#30363d]'
                 }`}
+                style={isActive ? activeCardStyle : undefined}
               >
                 {/* Card Top Row: Role Icon + Role Badge + [BG] + Status */}
                 <div className="flex items-center justify-between gap-1.5 mb-1.5">
                   <div className="flex items-center space-x-1.5 min-w-0">
-                    <RoleIcon className="h-3.5 w-3.5 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
+                    <AgentIcon name={personaIcon} className="h-3.5 w-3.5 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
                     <span
-                      className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold tracking-wider uppercase border shrink-0 ${roleBadgeClass}`}
+                      style={roleBadgeStyle}
+                      className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold tracking-wider uppercase border shrink-0"
                     >
                       {sub.role}
                     </span>
