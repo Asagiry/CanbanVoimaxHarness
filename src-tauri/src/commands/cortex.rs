@@ -130,6 +130,9 @@ pub async fn list_cortex_agent_files(
     state: State<'_, AppState>,
 ) -> Result<Vec<CortexDiskFile>, String> {
     let root = state.get_root();
+    if role == "cvh-dev" && !root.join(".cvh").join("agents").join("cvh-dev").join("persona.md").is_file() {
+        let _ = crate::config::ensure_cvh_dev_scaffold(&root).await;
+    }
     let role_dir = crate::config::agent_dir(&root, &role);
     let mut files = Vec::new();
 
@@ -190,6 +193,10 @@ pub async fn read_cortex_file(path: String, state: State<'_, AppState>) -> Resul
     } else {
         root.join(&path)
     };
+
+    if !target.exists() && path.contains("cvh-dev") {
+        let _ = crate::config::ensure_cvh_dev_scaffold(&root).await;
+    }
 
     if !target.exists() && path.contains("cvh-dev") && (path.ends_with("agent.md") || path.ends_with("persona.md") || path.ends_with("cvh-dev.md")) {
         return Ok(crate::agent::BUILTIN_CVH_DEV_PROMPT.to_string());

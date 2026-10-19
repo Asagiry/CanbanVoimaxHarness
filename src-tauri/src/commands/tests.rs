@@ -265,6 +265,28 @@ use std::path::PathBuf;
     }
 
     #[tokio::test]
+    async fn test_list_agent_personas_auto_scaffolds_cvh_dev() {
+        let base = PathBuf::from("target").join(format!("cvh_persona_autoseed_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        let listed = list_agent_personas_in(&base).await;
+        let cvh_dev = listed.iter().find(|p| p.role == "cvh-dev").expect("cvh-dev must exist");
+        assert!(cvh_dev.is_builtin);
+        assert!(cvh_dev.has_prompt);
+        assert!(cvh_dev.rules.contains(&"boards.md".to_string()));
+        assert!(cvh_dev.rules.contains(&"agents.md".to_string()));
+        assert!(cvh_dev.rules.contains(&"hooks.md".to_string()));
+
+        // Check on disk files
+        let dev_dir = base.join(".cvh").join("agents").join("cvh-dev");
+        assert!(dev_dir.join("persona.md").is_file());
+        assert!(dev_dir.join("setting").is_file());
+        assert!(dev_dir.join("rules").join("boards.md").is_file());
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
     async fn test_list_personas_dir_only() {
         // Directory-only structure: subdirectories with persona.md/agent.md are listed.
         // Flat *.md files in agents/ are strictly ignored. cvh-dev is always included.

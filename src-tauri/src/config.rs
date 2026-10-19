@@ -1117,12 +1117,12 @@ scope: gated-writes
 activation: on-enter dev runs run_agent(taskId)
 ---
 # Role: CVH-DEV (Project Configuration & Environment Specialist)
-Вы отвечаете ИСКЛЮЧИТЕЛЬНО за настройку проекта, правил и архитектуры CanbanVoimaxHarness (.cvh/):
-- Настройка досок (.cvh/boards.json) и пайплайнов (.cvh/pipeline.json).
-- Создание и редактирование персон, ролей и правил агентов (.cvh/agents/<role>/persona.md, rules/*.md).
-- Настройка политик инструментов (.cvh/settings/tool-policy.json) и скриптов перехода (hooks).
-- Железное правило завершения: После выполнения всех запланированных пунктов задачи вы ОБЯЗАНЫ прекратить вызовы инструментов и предоставить финальный текстовый отчет о проделанной работе, ЛИБО вызвать advance_task(summary) для передачи задачи на следующий этап. СТРОГО ЗАПРЕЩЕНО заново перезаписывать todo_write на уже выполненную работу или уходить в повторные циклы планирования!
-Вы НЕ создаёте карточки задач и НЕ управляете рабочими тасками (этим занимается пользователь и пайплайн). Ваша цель — подготовить идеальное окружение для команды разработчиков.
+You are EXCLUSIVELY responsible for project configuration, rules, and architecture in CanbanVoimaxHarness (.cvh/):
+- Configure boards (.cvh/boards.json) and runtime pipelines (.cvh/pipeline.json).
+- Create and edit agent personas, roles, and modular rules (.cvh/agents/<role>/persona.md, rules/*.md).
+- Configure tool policies (.cvh/settings/tool-policy.json) and stage transition hooks (hooks/).
+- Ironclad Completion Rule: After completing all planned items, you MUST cease tool calls and provide a terminal findings report, OR invoke advance_task(summary) to hand over to the next stage. NEVER re-publish completed items in todo_write or enter recursive planning loops!
+You do NOT create task cards or manage user tasks (reserved for users and the pipeline orchestrator). Your mandate is preparing the optimal execution environment for the engineering team.
 "#;
 
 pub const DEFAULT_RULE_BOARDS_MD: &str = r#"# Guide: Boards and Pipelines Configuration
@@ -1235,6 +1235,53 @@ Columns may define `gatekeeperSensor` (e.g. `cargo check` or `pnpm run build`).
 Gatekeeper sensors execute inside `CVH_WORKTREE_PATH` before any card advance. If exit code != 0, transition is blocked.
 "#;
 
+/// Ensure .cvh/agents/cvh-dev/ exists on disk with persona.md, setting (context_window: 200000),
+/// and modular progressive disclosure rules (boards.md, agents.md, hooks.md).
+pub async fn ensure_cvh_dev_scaffold(repo_root: &Path) -> Result<(), anyhow::Error> {
+    let cvh_dir = repo_root.join(".cvh");
+    let agents_dir = cvh_dir.join("agents");
+    let cvh_dev_dir = agents_dir.join("cvh-dev");
+    let cvh_dev_rules_dir = cvh_dev_dir.join("rules");
+    let cvh_dev_hooks_dir = cvh_dev_dir.join("hooks");
+
+    tokio::fs::create_dir_all(&cvh_dev_rules_dir).await?;
+    tokio::fs::create_dir_all(&cvh_dev_hooks_dir).await?;
+
+    let persona_path = cvh_dev_dir.join("persona.md");
+    if !persona_path.exists() {
+        atomic_write_file(&persona_path, DEFAULT_CVH_DEV_PERSONA_MD).await?;
+    }
+    let setting_path = cvh_dev_dir.join("setting");
+    if !setting_path.exists() {
+        atomic_write_file(&setting_path, DEFAULT_AGENT_SETTING_JSON).await?;
+    } else if let Ok(content) = tokio::fs::read_to_string(&setting_path).await {
+        // When seeding .cvh/agents/cvh-dev/setting, ensure 'context_window': 200000
+        if let Ok(mut val) = serde_json::from_str::<serde_json::Value>(&content) {
+            let needs_update = val.get("context_window").and_then(|v| v.as_u64()).is_none_or(|w| w < 200000);
+            if needs_update {
+                val["context_window"] = serde_json::json!(200000);
+                if let Ok(updated) = serde_json::to_string_pretty(&val) {
+                    let _ = atomic_write_file(&setting_path, &updated).await;
+                }
+            }
+        }
+    }
+    let boards_md_path = cvh_dev_rules_dir.join("boards.md");
+    if !boards_md_path.exists() {
+        atomic_write_file(&boards_md_path, DEFAULT_RULE_BOARDS_MD).await?;
+    }
+    let agents_md_path = cvh_dev_rules_dir.join("agents.md");
+    if !agents_md_path.exists() {
+        atomic_write_file(&agents_md_path, DEFAULT_RULE_AGENTS_MD).await?;
+    }
+    let hooks_md_path = cvh_dev_rules_dir.join("hooks.md");
+    if !hooks_md_path.exists() {
+        atomic_write_file(&hooks_md_path, DEFAULT_RULE_HOOKS_MD).await?;
+    }
+
+    Ok(())
+}
+
 /// Automatically scaffold the minimal .cvh workspace structure if missing.
 /// Creates: empty `.cvh/agents/`, `.cvh/dialogs/`, `.cvh/worktrees/`,
 /// `.cvh/skills/`, `.cvh/settings/`, `.cvh/hooks/` and default
@@ -1313,43 +1360,7 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
 
     // Seed modular cvh-dev router persona, settings, and progressive disclosure rules
     // so any newly scaffolded project immediately has these guides available on disk.
-    let cvh_dev_dir = agents_dir.join("cvh-dev");
-    let cvh_dev_rules_dir = cvh_dev_dir.join("rules");
-    let cvh_dev_hooks_dir = cvh_dev_dir.join("hooks");
-    tokio::fs::create_dir_all(&cvh_dev_rules_dir).await?;
-    tokio::fs::create_dir_all(&cvh_dev_hooks_dir).await?;
-
-    let persona_path = cvh_dev_dir.join("persona.md");
-    if !persona_path.exists() {
-        atomic_write_file(&persona_path, DEFAULT_CVH_DEV_PERSONA_MD).await?;
-    }
-    let setting_path = cvh_dev_dir.join("setting");
-    if !setting_path.exists() {
-        atomic_write_file(&setting_path, DEFAULT_AGENT_SETTING_JSON).await?;
-    } else if let Ok(content) = tokio::fs::read_to_string(&setting_path).await {
-        // When seeding .cvh/agents/cvh-dev/setting, ensure 'context_window': 200000
-        if let Ok(mut val) = serde_json::from_str::<serde_json::Value>(&content) {
-            let needs_update = val.get("context_window").and_then(|v| v.as_u64()).is_none_or(|w| w < 200000);
-            if needs_update {
-                val["context_window"] = serde_json::json!(200000);
-                if let Ok(updated) = serde_json::to_string_pretty(&val) {
-                    let _ = atomic_write_file(&setting_path, &updated).await;
-                }
-            }
-        }
-    }
-    let boards_md_path = cvh_dev_rules_dir.join("boards.md");
-    if !boards_md_path.exists() {
-        atomic_write_file(&boards_md_path, DEFAULT_RULE_BOARDS_MD).await?;
-    }
-    let agents_md_path = cvh_dev_rules_dir.join("agents.md");
-    if !agents_md_path.exists() {
-        atomic_write_file(&agents_md_path, DEFAULT_RULE_AGENTS_MD).await?;
-    }
-    let hooks_md_path = cvh_dev_rules_dir.join("hooks.md");
-    if !hooks_md_path.exists() {
-        atomic_write_file(&hooks_md_path, DEFAULT_RULE_HOOKS_MD).await?;
-    }
+    ensure_cvh_dev_scaffold(repo_root).await?;
 
     // 3. Default tasks.json if not present
     let tasks_path = cvh_dir.join("tasks.json");
@@ -2229,6 +2240,33 @@ mod tests {
         while let Ok(Some(entry)) = read_agents.next_entry().await {
             assert!(entry.path().is_dir(), "Expected only directories in agents/, found: {:?}", entry.path());
         }
+
+        let _ = tokio::fs::remove_dir_all(&base_dir).await;
+    }
+
+    #[tokio::test]
+    async fn test_ensure_cvh_dev_scaffold_seeding() {
+        let base_dir = std::path::PathBuf::from("target").join(format!("cvh_dev_scaffold_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base_dir).await.expect("create test dir");
+
+        // Run ensure_cvh_dev_scaffold on empty directory
+        ensure_cvh_dev_scaffold(&base_dir).await.expect("ensure_cvh_dev_scaffold failed");
+
+        let cvh_dev = base_dir.join(".cvh").join("agents").join("cvh-dev");
+        assert!(cvh_dev.join("persona.md").is_file());
+        assert!(cvh_dev.join("setting").is_file());
+        assert!(cvh_dev.join("rules").join("boards.md").is_file());
+        assert!(cvh_dev.join("rules").join("agents.md").is_file());
+        assert!(cvh_dev.join("rules").join("hooks.md").is_file());
+
+        // Check context_window in setting
+        let setting_str = tokio::fs::read_to_string(cvh_dev.join("setting")).await.expect("read setting");
+        let setting_val: serde_json::Value = serde_json::from_str(&setting_str).expect("parse setting");
+        assert_eq!(setting_val.get("context_window").and_then(|v| v.as_u64()), Some(200000));
+
+        // Calling it again is idempotent
+        ensure_cvh_dev_scaffold(&base_dir).await.expect("ensure_cvh_dev_scaffold re-run failed");
+        assert!(cvh_dev.join("persona.md").is_file());
 
         let _ = tokio::fs::remove_dir_all(&base_dir).await;
     }

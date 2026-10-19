@@ -381,6 +381,11 @@ pub fn persona_placeholder_template(role: &str, icon: &str, color: &str) -> Stri
 /// Считывает правила из `<root>/.cvh/agents/<role>/rules/*.md` и хуки из `<root>/.cvh/agents/<role>/hooks/*`.
 /// Всегда включает встроенную персону `cvh-dev` (is_builtin = true).
 pub async fn list_agent_personas_in(root: &Path) -> Vec<AgentPersonaInfo> {
+    // If .cvh/agents/cvh-dev/persona.md does not exist on disk, seed the cvh-dev scaffold
+    if !root.join(".cvh").join("agents").join("cvh-dev").join("persona.md").is_file() {
+        let _ = crate::config::ensure_cvh_dev_scaffold(root).await;
+    }
+
     let agents_dir = root.join(".cvh").join("agents");
     let mut roles = HashSet::new();
     if let Ok(mut entries) = tokio::fs::read_dir(&agents_dir).await {
