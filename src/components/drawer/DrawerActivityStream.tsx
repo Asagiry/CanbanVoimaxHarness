@@ -707,8 +707,6 @@ export default function DrawerActivityStream({
   runError,
   onRunAgent,
   onClearRunError,
-  subtasks,
-  onOpenDrawer,
 }: DrawerActivityStreamProps) {
   const {
     activeSubagentId,
@@ -824,6 +822,21 @@ export default function DrawerActivityStream({
     }
   }, [unifiedActivities]);
 
+  // Auto-scroll down during thinking/token streaming (with user scroll-up protection)
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const contentEl = el.firstElementChild as HTMLElement;
+    if (!contentEl) return;
+    const ro = new ResizeObserver(() => {
+      if (nearBottomRef.current) {
+        el.scrollTop = el.scrollHeight;
+      }
+    });
+    ro.observe(contentEl);
+    return () => ro.disconnect();
+  }, []);
+
   return (
     <div className="relative flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] dark:bg-[#090a0f] overflow-hidden transition-colors">
       {/* Warning Banner on agent run error */}
@@ -922,39 +935,7 @@ export default function DrawerActivityStream({
             </div>
           )}
 
-          {/* Subagent Child Tasks Cards (if any) */}
-          {subtasks && subtasks.length > 0 && onOpenDrawer && (
-            <div className="rounded-lg border border-[#e4e4e7] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-3 shadow-xs">
-              <div className="flex items-center space-x-2 pb-2 mb-2 border-b border-[#ebebeb] dark:border-[#21262d] text-xs font-semibold text-[#171717] dark:text-[#f0f6fc]">
-                <Bot className="h-3.5 w-3.5 text-[#6366f1] dark:text-[#818cf8]" />
-                <span>Дочерние подагенты ({subtasks.length})</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {subtasks.map((st) => (
-                  <button
-                    key={st.id}
-                    type="button"
-                    onClick={() => onOpenDrawer(st.id)}
-                    className="flex items-center justify-between p-2 rounded-md border border-[#ebebeb] dark:border-[#30363d] hover:border-[#d4d4d8] dark:hover:border-[#484f58] bg-[#f9fafb] dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer text-left"
-                  >
-                    <div className="flex items-center space-x-2 min-w-0">
-                      <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f0f6fc]">{st.id}</span>
-                      <span className="text-xs text-[#52525b] dark:text-[#8b949e] truncate">{st.title}</span>
-                    </div>
-                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${
-                      st.status === 'running'
-                        ? 'bg-emerald-50 dark:bg-[#12281e] text-emerald-700 dark:text-[#7ee787] border border-emerald-200 dark:border-[#238636]'
-                        : st.status === 'done'
-                        ? 'bg-blue-50 dark:bg-[#172554] text-blue-700 dark:text-[#60a5fa] border border-blue-200 dark:border-[#1e40af]'
-                        : 'bg-zinc-100 dark:bg-[#21262d] text-zinc-600 dark:text-[#8b949e]'
-                    }`}>
-                      {st.status}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+
           </>
         )}
 
