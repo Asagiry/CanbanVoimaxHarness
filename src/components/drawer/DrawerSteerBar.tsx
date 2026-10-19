@@ -43,13 +43,11 @@ export default function DrawerSteerBar({
   const chatFileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const {
-    activeSubagentId,
-    activeSubagentRole,
-    subagents: storeSubagents,
-    toolExecutions,
-    toolIdToSubagentId,
-  } = useDrawerStore();
+  const activeSubagentId = useDrawerStore((s) => s.activeSubagentId);
+  const activeSubagentRole = useDrawerStore((s) => s.activeSubagentRole);
+  const storeSubagents = useDrawerStore((s) => s.subagents);
+  const toolExecutions = useDrawerStore((s) => s.toolExecutions);
+  const toolIdToSubagentId = useDrawerStore((s) => s.toolIdToSubagentId);
 
   const boardTasks = useBoardStore((s) => s.tasks);
   const subagentNumber = React.useMemo(() => {

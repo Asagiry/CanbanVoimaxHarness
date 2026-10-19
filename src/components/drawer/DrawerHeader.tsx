@@ -68,15 +68,13 @@ export default function DrawerHeader({
     void toggleMaximizeWindow();
   };
 
-  const {
-    activeSubagentId,
-    activeSubagentTitle,
-    activeSubagentRole,
-    closeSubagent,
-    subagents: storeSubagents,
-    toolExecutions,
-    toolIdToSubagentId,
-  } = useDrawerStore();
+  const activeSubagentId = useDrawerStore((s) => s.activeSubagentId);
+  const activeSubagentTitle = useDrawerStore((s) => s.activeSubagentTitle);
+  const activeSubagentRole = useDrawerStore((s) => s.activeSubagentRole);
+  const closeSubagent = useDrawerStore((s) => s.closeSubagent);
+  const storeSubagents = useDrawerStore((s) => s.subagents);
+  const toolExecutions = useDrawerStore((s) => s.toolExecutions);
+  const toolIdToSubagentId = useDrawerStore((s) => s.toolIdToSubagentId);
   const boardTasks = useBoardStore((s) => s.tasks);
   const agentPersonas = useCortexStore((s) => s.agentPersonas);
   const matchedPersona = agentPersonas.find(
