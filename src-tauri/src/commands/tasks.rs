@@ -2160,16 +2160,16 @@ pub fn is_matching_subagent_key(key: &str, target_sub_id: &str) -> bool {
     if k_core == t_core {
         return true;
     }
-    // Suffix match: e.g. "CVH-001.sub-call_xyz" matching ".sub-call_xyz" or "call_xyz"
+    // Suffix match with strict delimiter boundary
     if k_core.contains(".sub-") {
         let suffix = k_core.rsplit(".sub-").next().unwrap_or(k_core);
-        if suffix == t_core || t_core.ends_with(suffix) {
+        if suffix == t_core || t_core.ends_with(&format!(".sub-{}", suffix)) || t_core.ends_with(&format!(":sub:{}", suffix)) {
             return true;
         }
     }
     if t_core.contains(".sub-") {
         let suffix = t_core.rsplit(".sub-").next().unwrap_or(t_core);
-        if suffix == k_core || k_core.ends_with(suffix) {
+        if suffix == k_core || k_core.ends_with(&format!(".sub-{}", suffix)) || k_core.ends_with(&format!(":sub:{}", suffix)) {
             return true;
         }
     }
@@ -2503,7 +2503,19 @@ pub async fn abort_agent(
     app_handle: AppHandle,
 ) -> Result<(), String> {
     let root = state.get_root();
-    let is_sub = task_id.contains(".sub-") || task_id.contains(":sub:");
+    let p_trim = task_id.trim();
+    let is_sub = p_trim.contains(".sub-")
+        || p_trim.contains(":sub:")
+        || {
+            let sessions = crate::agent::SUBAGENT_SESSIONS.lock().await;
+            sessions.contains_key(p_trim) || sessions.values().any(|sess| {
+                if let Ok(info) = sess.retry_info.try_lock() {
+                    info.subagent_id == p_trim
+                } else {
+                    false
+                }
+            })
+        };
     let _ = internal_abort_agent(&root, &task_id, &state, Some(&app_handle)).await?;
     if !is_sub {
         let _ = app_handle.emit(
