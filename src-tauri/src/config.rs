@@ -1348,6 +1348,7 @@ pub const CVH_RUNTIME_GITIGNORE_ENTRIES: &[&str] = &[
     ".cvh/worktrees/",
     ".cvh/llm.json",
     ".cvh/tasks.json",
+    ".cvh/llm_debug.log",
 ];
 
 /// Ensures that `<repo_root>/.gitignore` exists and contains all required
@@ -2577,7 +2578,7 @@ mod tests {
 
     #[test]
     fn test_ensure_project_gitignore_creates_missing_file() {
-        let base_dir = std::env::temp_dir().join(format!("cvh_gi_create_{}", uuid::Uuid::new_v4()));
+        let base_dir = std::path::PathBuf::from("target").join(format!("cvh_gi_create_{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&base_dir).expect("create test dir");
 
         ensure_project_gitignore(&base_dir).expect("ensure gitignore failed");
@@ -2596,7 +2597,7 @@ mod tests {
 
     #[test]
     fn test_ensure_project_gitignore_appends_to_existing_file() {
-        let base_dir = std::env::temp_dir().join(format!("cvh_gi_append_{}", uuid::Uuid::new_v4()));
+        let base_dir = std::path::PathBuf::from("target").join(format!("cvh_gi_append_{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&base_dir).expect("create test dir");
 
         let gi_path = base_dir.join(".gitignore");
@@ -2616,7 +2617,7 @@ mod tests {
 
     #[test]
     fn test_ensure_project_gitignore_idempotent_no_duplicates() {
-        let base_dir = std::env::temp_dir().join(format!("cvh_gi_idempotent_{}", uuid::Uuid::new_v4()));
+        let base_dir = std::path::PathBuf::from("target").join(format!("cvh_gi_idempotent_{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&base_dir).expect("create test dir");
 
         ensure_project_gitignore(&base_dir).expect("first run");
@@ -2640,7 +2641,7 @@ mod tests {
 
     #[test]
     fn test_ensure_project_gitignore_wildcard_covered() {
-        let base_dir = std::env::temp_dir().join(format!("cvh_gi_wildcard_{}", uuid::Uuid::new_v4()));
+        let base_dir = std::path::PathBuf::from("target").join(format!("cvh_gi_wildcard_{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&base_dir).expect("create test dir");
 
         let gi_path = base_dir.join(".gitignore");
@@ -2657,7 +2658,7 @@ mod tests {
 
     #[test]
     fn test_ensure_project_gitignore_partial_preserves_header_and_entries() {
-        let base_dir = std::env::temp_dir().join(format!("cvh_gi_partial_{}", uuid::Uuid::new_v4()));
+        let base_dir = std::path::PathBuf::from("target").join(format!("cvh_gi_partial_{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&base_dir).expect("create test dir");
 
         let gi_path = base_dir.join(".gitignore");
