@@ -253,8 +253,6 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
   appendThought: (taskId, content) => {
     const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false });
     const now = Date.now();
-    const start = get().thinkingStartTime[taskId] || now;
-    const durationMs = now - start;
 
     set((state) => {
       const existing = state.streamEntries[taskId] || { thoughts: [], outputs: [] };
@@ -263,38 +261,61 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       const existingFeed = state.activityFeed[taskId] || [];
       const lastFeedItem = existingFeed[existingFeed.length - 1];
 
-      // Stream coalescing for thoughts (< 3s window)
-      if (last && last.durationMs !== undefined && now - (start + last.durationMs) < 3000) {
-        const updated = [...existing.thoughts];
-        updated[updated.length - 1] = {
-          ...last,
-          content: last.content + content,
-          durationMs,
-        };
+      // Detect if this is a fresh thought block:
+      // (1) No feed items yet, or
+      // (2) Last feed item is not a thought (e.g. output or tool intervened), or
+      // (3) Coalescing window has passed (> 3000ms idle silence since last thought chunk)
+      const lastChunkTime = (lastFeedItem?.createdAt || now) + (lastFeedItem?.durationMs ?? 0);
+      const isNewBlock =
+        !lastFeedItem ||
+        lastFeedItem.type !== 'thought' ||
+        (now - lastChunkTime > 3000);
 
-        const updatedFeed = [...existingFeed];
-        if (lastFeedItem && lastFeedItem.type === 'thought') {
-          updatedFeed[updatedFeed.length - 1] = {
-            ...lastFeedItem,
-            content: (lastFeedItem.content || '') + content,
+      const blockStart = isNewBlock
+        ? now
+        : (lastFeedItem.createdAt || state.thinkingStartTime[taskId] || now);
+
+      const durationMs = Math.max(0, now - blockStart);
+
+      // Stream coalescing for thoughts (< 3s window and last feed item is thought)
+      if (!isNewBlock && lastFeedItem && lastFeedItem.type === 'thought') {
+        const updatedThoughts = [...existing.thoughts];
+        if (last) {
+          updatedThoughts[updatedThoughts.length - 1] = {
+            ...last,
+            content: last.content + content,
             durationMs,
+            createdAt: last.createdAt || blockStart,
           };
         } else {
-          updatedFeed.push({
-            id: `th-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          updatedThoughts.push({
+            id: lastFeedItem.id,
+            timestamp: lastFeedItem.timestamp,
             type: 'thought',
-            timestamp: timeStr,
-            content,
+            content: (lastFeedItem.content || '') + content,
             durationMs,
+            createdAt: blockStart,
           });
         }
 
+        const updatedFeed = [...existingFeed];
+        updatedFeed[updatedFeed.length - 1] = {
+          ...lastFeedItem,
+          content: (lastFeedItem.content || '') + content,
+          durationMs,
+          createdAt: lastFeedItem.createdAt || blockStart,
+        };
+
         return {
+          thinkingStartTime: {
+            ...state.thinkingStartTime,
+            [taskId]: blockStart,
+          },
           streamEntries: {
             ...state.streamEntries,
             [taskId]: {
               ...existing,
-              thoughts: updated,
+              thoughts: updatedThoughts,
             },
           },
           activityFeed: {
@@ -304,12 +325,14 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         };
       }
 
+      // Fresh thought block
       const newEntry: LiveStreamEntry = {
         id: `th-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         timestamp: timeStr,
         type: 'thought',
         content,
         durationMs,
+        createdAt: blockStart,
       };
 
       const newFeedItem: DrawerActivityItem = {
@@ -318,9 +341,14 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         timestamp: timeStr,
         content,
         durationMs,
+        createdAt: blockStart,
       };
 
       return {
+        thinkingStartTime: {
+          ...state.thinkingStartTime,
+          [taskId]: blockStart,
+        },
         streamEntries: {
           ...state.streamEntries,
           [taskId]: {
@@ -1018,6 +1046,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
                     type: 'thought',
                     content: item.content || '',
                     durationMs: item.durationMs,
+                    createdAt: item.createdAt,
                   });
                 } else {
                   outputs.push({

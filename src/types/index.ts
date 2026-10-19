@@ -126,6 +126,7 @@ export interface LiveStreamEntry {
   content: string;
   durationMs?: number;
   images?: string[];
+  createdAt?: number;
 }
 
 export type ActivityType = 'thought' | 'output' | 'tool' | 'steer' | 'system' | 'error' | 'user' | 'prompt' | 'question' | 'compacted';
@@ -144,6 +145,7 @@ export interface ActivityItem {
   durationMs?: number;
   images?: string[];
   isFinal?: boolean;
+  createdAt?: number;
 }
 
 export interface ProjectInfo {
