@@ -1744,5 +1744,22 @@
             ".cvh/agents/cvh-dev/rules/boards.md"
         ],
         "timestamp": 1792349359218
+    },
+    "CVH-DRAWER-SUBAGENTS-UI-POLISH": {
+        "taskId": "CVH-DRAWER-SUBAGENTS-UI-POLISH",
+        "title": "Subagent UI polish, role iconography, display title sanitization, granular abort and anti-slop presentation",
+        "author": "react-tailwind-artisan",
+        "verdict": "APPROVED",
+        "commitHash": "09cf2ad",
+        "commitMessage": "fix(subagents): remove native title tooltip on stop button per § 2.20",
+        "summary": "Polished subagent UI/UX across drawer components: (1) replaced placeholder black square unicode glyphs (■) with typed Lucide role icons (Code2, ShieldCheck, Compass, Bot) via getRoleIcon; (2) sanitized technical internal sub-call IDs (sub-call_X) into humanized titles ('субагент') via formatSubagentDisplayTitle and removed redundant subagentId monospace pills; (3) eliminated raw JSON todos dumps in AgentExplanationCard via tryExtractTodos and proximity suppression with nearby todo_write tool calls, rendering clean tactile action checklists ('План действий') when standalone; (4) enabled granular subagent abort in AgentConsoleDrawer and SubagentsSidebar, allowing users to stop individual subagents without terminating the parent task or destroying uncommitted context; (5) purged unformatted ISO timestamps from tool execution card footers and removed native HTML title tooltip per § 2.20.",
+        "files": [
+            "src/components/drawer/AgentConsoleDrawer.tsx",
+            "src/components/drawer/DrawerActivityStream.tsx",
+            "src/components/drawer/DrawerHeader.tsx",
+            "src/components/drawer/SubagentsSidebar.tsx",
+            "src/components/drawer/ToolExecutionCard.tsx"
+        ],
+        "timestamp": 1792411148380
     }
 }

@@ -1,0 +1,53 @@
+{
+  "taskId": "CVH-DRAWER-SUBAGENTS-UI-POLISH",
+  "task": "drawer-subagents-ui-polish",
+  "title": "Subagent UI polish, role iconography, display title sanitization, granular abort and anti-slop presentation",
+  "branch": "feat/drawer-subagents-ui-polish",
+  "commitHash": "09cf2ad",
+  "commitMessage": "fix(subagents): remove native title tooltip on stop button per § 2.20",
+  "author": "react-tailwind-artisan",
+  "verdict": "APPROVED",
+  "date": "2026-10-19T11:59:08.380Z",
+  "timestamp": 1792411148380,
+  "sensors": {
+    "cargo_check": "pass (cargo check --manifest-path src-tauri/Cargo.toml, finished in 7.59s, 0 errors)",
+    "cargo_clippy": "pass (cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings, 0 errors)",
+    "pnpm_build": "pass (tsc && vite build, built in 6.20s, 0 errors)",
+    "l2_reviewer": "APPROVED (initial return for § 2.20 title attribute in 884f52f resolved in 09cf2ad)"
+  },
+  "files": [
+    "src/components/drawer/AgentConsoleDrawer.tsx",
+    "src/components/drawer/DrawerActivityStream.tsx",
+    "src/components/drawer/DrawerHeader.tsx",
+    "src/components/drawer/SubagentsSidebar.tsx",
+    "src/components/drawer/ToolExecutionCard.tsx"
+  ],
+  "summary": "Polished subagent UI/UX across drawer components: (1) replaced placeholder black square unicode glyphs (■) with typed Lucide role icons (Code2, ShieldCheck, Compass, Bot) via getRoleIcon; (2) sanitized technical internal sub-call IDs (sub-call_X) into humanized titles ('субагент') via formatSubagentDisplayTitle and removed redundant subagentId monospace pills; (3) eliminated raw JSON todos dumps in AgentExplanationCard via tryExtractTodos and proximity suppression with nearby todo_write tool calls, rendering clean tactile action checklists ('План действий') when standalone; (4) enabled granular subagent abort in AgentConsoleDrawer and SubagentsSidebar, allowing users to stop individual subagents without terminating the parent task or destroying uncommitted context; (5) purged unformatted ISO timestamps from tool execution card footers and removed native HTML title tooltip per § 2.20.",
+  "ftrAnalysis": {
+    "firstTimeRight": false,
+    "ftrScore": "90%",
+    "verdict": "APPROVED_WITH_CAVEATS -> APPROVED",
+    "rootCauses": [
+      {
+        "issue": "Native HTML title attribute on stop button in SubagentsSidebar",
+        "category": "L2 Review Rejection (§ 2.20 Violation)",
+        "explanation": "Initial commit 884f52f added title=\"Остановить выполнение субагента\" to the new subagent stop button. Caught by Level 2 Reviewer for violating § 2.20 (Native Browser Tooltip Ban on Labeled Controls). Fixed in commit 09cf2ad."
+      },
+      {
+        "issue": "Raw JSON todos and technical ID leakage",
+        "category": "Inadequate Payload Structure Classification & UI Plumbing Leak",
+        "explanation": "Intermediate commentary cards assumed all model output was markdown prose, blindly rendering JSON arrays. Engine plumbing (sub-call_X) was displayed raw due to missing title normalization."
+      },
+      {
+        "issue": "Crude Unicode Glyphs (■) in place of iconography",
+        "category": "Scaffolding Debt & Modular Disconnection",
+        "explanation": "Unicode black squares placed during rapid prototyping were not connected to getRoleIcon() across DrawerHeader, DrawerActivityStream, and ToolExecutionCard."
+      },
+      {
+        "issue": "Coarse-grained abort destroying parent orchestrator context",
+        "category": "Architectural Lifecycle Inadequacy",
+        "explanation": "The drawer only implemented root-level abort_agent(task.id), lacking granular targeting for active subagent sessions."
+      }
+    ]
+  }
+}
