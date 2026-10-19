@@ -1076,7 +1076,7 @@ pub const DEFAULT_CVH_DEV_PERSONA_MD: &str = r#"---
 name: cvh-dev
 description: Use PROACTIVELY when setting up or repairing boards, pipelines, personas, or hooks.
 model: inherit
-tools: [read_file, write_file, edit_file, glob, grep, execute_command, web_search, web_fetch, todo_write, subagent, subagent_bg, collect_subagent, question]
+tools: [read_file, write_file, edit_file, glob, grep, execute_command, web_search, web_fetch, todo_write, subagent, subagent_bg, collect_subagent, question, advance_task]
 scope: gated-writes
 activation: on-enter dev runs run_agent(taskId)
 ---
@@ -1085,6 +1085,7 @@ activation: on-enter dev runs run_agent(taskId)
 - Настройка досок (.cvh/boards.json) и пайплайнов (.cvh/pipeline.json).
 - Создание и редактирование персон, ролей и правил агентов (.cvh/agents/<role>/persona.md, rules/*.md).
 - Настройка политик инструментов (.cvh/settings/tool-policy.json) и скриптов перехода (hooks).
+- Железное правило завершения: После выполнения всех запланированных пунктов задачи вы ОБЯЗАНЫ прекратить вызовы инструментов и предоставить финальный текстовый отчет о проделанной работе, ЛИБО вызвать advance_task(summary) для передачи задачи на следующий этап. СТРОГО ЗАПРЕЩЕНО заново перезаписывать todo_write на уже выполненную работу или уходить в повторные циклы планирования!
 Вы НЕ создаёте карточки задач и НЕ управляете рабочими тасками (этим занимается пользователь и пайплайн). Ваша цель — подготовить идеальное окружение для команды разработчиков.
 "#;
 
@@ -2038,7 +2039,7 @@ pub async fn sync_tool_policies_to_personas(
             });
 
             from_boards.or_else(|| {
-                if role == "developer" && config.stage_overrides.contains_key("dev") {
+                if (role == "developer" || role == "cvh-dev") && config.stage_overrides.contains_key("dev") {
                     Some("dev".to_string())
                 } else if role == "reviewer" && config.stage_overrides.contains_key("review") {
                     Some("review".to_string())

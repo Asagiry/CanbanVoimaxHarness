@@ -155,6 +155,7 @@ pub const CVH_DEV_TOOLS: &[&str] = &[
     "subagent_bg",
     "collect_subagent",
     "question",
+    "advance_task",
 ];
 
 pub const BUILTIN_CVH_DEV_PROMPT: &str = r#"# Role: CVH-DEV (Project Configuration & Environment Specialist)
@@ -166,7 +167,7 @@ pub const BUILTIN_CVH_DEV_PROMPT: &str = r#"# Role: CVH-DEV (Project Configurati
 
 Identity:
 - Columns = Agents: board IS the control plane; column `persona: <role>` on-enter runs `run_agent(taskId)`; flow `backlog` -> ... -> `ready`.
-- Configuration-only: you may inspect and configure .cvh/ via read_file/write_file/edit_file/glob/grep/execute_command/web_search/web_fetch/todo_write/subagent. You do NOT create or complete task cards.
+- Configuration-only: you may inspect and configure .cvh/ via read_file/write_file/edit_file/glob/grep/execute_command/web_search/web_fetch/todo_write/subagent/advance_task. You do NOT create or complete task cards.
 - 1 ticket = 1 vertical slice = 1 commit; tiers T0-spec / T1-scaffold / T2-verify / T3-commit; redact secrets at ingest, never log keys.
 Overview: bootstrap or repair CVH harness (boards, pipeline, personas, policy, hooks) then stop. No monolith prompt, no docs dump.
 When NOT: not a coder for feature logic; not a reviewer (separate clean context); not a docs writer; not a task creator or task manager. If task needs code, delegate to `developer`, if audit to `reviewer`.
@@ -209,6 +210,7 @@ Initializer flow (empty project):
 3. Scaffold: write personas (frontmatter above) + `<role>/rules/*.md` + hooks + sensors.
 4. Verify before declare done.
 Process (Explore->Plan->Code->Verify->Commit): Explore (glob/grep), Plan: ALWAYS call todo_write on Turn 1 or Turn 2 to publish your complete step-by-step execution plan (e.g. 1. Explore stack, 2. Design boards & pipeline, 3. Create personas, 4. Configure tool policies & hooks, 5. Verify). Mark each todo as completed as you finish it. Code (edit in worktree), Verify (gate sensors: `cargo check`, `cargo clippy -- -D warnings`, `tsc`, `vite build`), Commit (1 slice = 1 commit).
+- Железное правило завершения: После выполнения всех запланированных пунктов задачи вы ОБЯЗАНЫ прекратить вызовы инструментов и предоставить финальный текстовый отчет о проделанной работе, ЛИБО вызвать advance_task(summary) для передачи задачи на следующий этап. СТРОГО ЗАПРЕЩЕНО заново перезаписывать todo_write на уже выполненную работу или уходить в повторные циклы планирования!
 Verdicts (reviewer is separate clean context; personas never invoke personas): `APPROVED` = auto-advance via routes.on_approved; `APPROVED_WITH_CAVEATS` = advance + log notes; `CHANGES_REQUESTED` = unlock dev, return `file:line -> fix` checklist, re-run sensors.
 Key patterns/recipes: scaffold-then-sense; sensor-first promotion (gatekeeperSensor must exit 0 or move rejected); spill large outputs (>100 lines/8KB) to `.cvh/spill/`, return head/tail 20.
 Pitfalls: monolith agent.md (>30 lines); copypaste instead of Load-link; writing outside worktree; re-enabling globally-disabled tool; stale board/pipeline drift.
@@ -672,10 +674,22 @@ pub async fn maybe_spill_output(
     tool_name: &str,
     output: String,
 ) -> Result<String> {
+    let canonical = canonical_tool_name(tool_name);
+    // Subagent reports must NEVER be truncated or spilled! Parent agent requires full synthesized report.
+    if canonical == "subagent" || canonical == "subagent_bg" || canonical == "collect_subagent" {
+        return Ok(output);
+    }
+
     let lines_count = output.lines().count();
     let bytes_len = output.len();
 
-    if lines_count > 100 || bytes_len > 8192 {
+    let (max_lines, max_bytes) = if canonical == "read_file" {
+        (2000, 128 * 1024)
+    } else {
+        (500, 64 * 1024)
+    };
+
+    if lines_count > max_lines || bytes_len > max_bytes {
         let spill_dir = repo_root.join(".cvh").join("spill");
         tokio::fs::create_dir_all(&spill_dir).await?;
         let timestamp = chrono::Utc::now().format("%Y%m%d-%H%M%S%.3f");
@@ -1359,12 +1373,28 @@ pub struct SubagentRetryInfo {
     pub status: String,
     pub last_error: Option<String>,
     pub report: Option<String>,
+    pub is_bg: bool,
 }
+
+pub type SubagentSessionInfo = SubagentRetryInfo;
 
 #[derive(Clone)]
 pub struct SubagentSession {
     pub sender: Arc<tokio::sync::Mutex<Option<oneshot::Sender<String>>>>,
     pub retry_info: Arc<tokio::sync::Mutex<SubagentRetryInfo>>,
+    pub abort_handle: Arc<AtomicBool>,
+    pub join_handle: Arc<tokio::sync::Mutex<Option<tokio::task::JoinHandle<()>>>>,
+}
+
+impl SubagentSession {
+    pub fn new(sender: Option<oneshot::Sender<String>>, retry_info: SubagentRetryInfo) -> Self {
+        Self {
+            sender: Arc::new(tokio::sync::Mutex::new(sender)),
+            retry_info: Arc::new(tokio::sync::Mutex::new(retry_info)),
+            abort_handle: Arc::new(AtomicBool::new(false)),
+            join_handle: Arc::new(tokio::sync::Mutex::new(None)),
+        }
+    }
 }
 
 pub static SUBAGENT_RECEIVERS: LazyLock<tokio::sync::Mutex<HashMap<String, SubagentReceiver>>> =
@@ -1492,6 +1522,42 @@ pub fn remove_subagent_receiver(
     None
 }
 
+#[derive(Clone, Debug)]
+pub struct ExecutedSubagentCall {
+    pub id: String,
+    pub tool_name: String,
+    pub role: String,
+    pub prompt: String,
+    pub result: String,
+}
+
+/// Robust subagent prompt similarity check for single-turn deduplication.
+pub fn are_subagent_prompts_duplicate(p1: &str, p2: &str) -> bool {
+    let t1 = p1.trim();
+    let t2 = p2.trim();
+    if t1 == t2 {
+        return true;
+    }
+    let ws1: String = t1.split_whitespace().collect::<Vec<_>>().join(" ");
+    let ws2: String = t2.split_whitespace().collect::<Vec<_>>().join(" ");
+    if ws1 == ws2 {
+        return true;
+    }
+    if ws1.len() >= 20 && ws2.len() >= 20 {
+        if ws1.starts_with(&ws2) || ws2.starts_with(&ws1) {
+            return true;
+        }
+        let set1: std::collections::HashSet<&str> = ws1.split(' ').collect();
+        let set2: std::collections::HashSet<&str> = ws2.split(' ').collect();
+        let intersection = set1.intersection(&set2).count();
+        let union = set1.union(&set2).count();
+        if union > 0 && (intersection as f64 / union as f64) >= 0.85 {
+            return true;
+        }
+    }
+    false
+}
+
 /// Canonical tool name normalization for aliases and SWE-bench compatibility.
 pub fn canonical_tool_name(tool_name: &str) -> &str {
     match tool_name {
@@ -1526,7 +1592,7 @@ pub async fn execute_tool(
     // SWE-bench signatures & aliasing
     let normalized_tool_name = canonical_tool_name(tool_name);
 
-    // Zero-Trust Iron Barrier: verify tool permission for current stage & role
+    // Zero-Trust Iron Barrier (§ 2.16): verify tool permission for current stage & role
     if !is_tool_allowed(tool_policy, stage_id, normalized_tool_name) {
         bail!(
             "PermissionDenied: Инструмент '{}' отключен политикой безопасности для колонки '{}'",
@@ -1535,7 +1601,7 @@ pub async fn execute_tool(
         );
     }
     if let Some(role) = ctx.role {
-        if !is_tool_allowed(tool_policy, Some(role), normalized_tool_name) {
+        if tool_policy.stage_overrides.contains_key(role) && !is_tool_allowed(tool_policy, Some(role), normalized_tool_name) {
             bail!(
                 "PermissionDenied: Инструмент '{}' отключен политикой безопасности для агента '{}'",
                 normalized_tool_name,
@@ -1544,18 +1610,28 @@ pub async fn execute_tool(
         }
     }
 
-    // Per-agent intersection: when the agent `setting` defines allowed_tools,
-    // a tool outside that list is denied even if the matrix allows it.
-    if !agent_allows_tool(agent_allowed_tools, normalized_tool_name) {
-        bail!(
-            "PermissionDenied: Инструмент '{}' запрещён настройками агента (setting.allowed_tools)",
-            normalized_tool_name
-        );
+    // Subagent boundary vs Parent Agent Policy (§ 2.8, § 2.16 & Invariant 2.32):
+    let is_subagent = task_id.map(|t| t.contains(".sub-") || t.contains(":sub:")).unwrap_or(false);
+    if is_subagent {
+        if !agent_allows_tool(agent_allowed_tools, normalized_tool_name) {
+            bail!(
+                "PermissionDenied: Инструмент '{}' запрещён для субагента (§ 2.8)",
+                normalized_tool_name
+            );
+        }
+    } else {
+        let has_stage_override = stage_id.map(|s| tool_policy.stage_overrides.contains_key(s)).unwrap_or(false);
+        if !has_stage_override && !agent_allows_tool(agent_allowed_tools, normalized_tool_name) {
+            bail!(
+                "PermissionDenied: Инструмент '{}' запрещён настройками агента (setting.allowed_tools)",
+                normalized_tool_name
+            );
+        }
     }
 
     // § 2.8 Invariant: task card manipulation tools ("create_task", "complete_task")
     // are reserved for UI/orchestrators (developers/reviewers/cvh-dev cannot create or complete tasks bypassing the board).
-    if normalized_tool_name == "create_task" {
+    if normalized_tool_name == "create_task" || normalized_tool_name == "create_tasks" {
         let role = ctx.role.unwrap_or("");
         let stage = ctx.stage_id.unwrap_or("");
         let is_orchestrator = role.to_lowercase().contains("orchestrat")
@@ -1573,12 +1649,20 @@ pub async fn execute_tool(
         }
     }
     if normalized_tool_name == "complete_task" {
-        if let Some(role) = ctx.role {
-            if role == "cvh-dev" {
-                bail!(
-                    "PermissionDenied: Агент 'cvh-dev' не может завершать задачи (§ 2.8). Завершение карточек зарезервировано для оркестратора и пользователя."
-                );
-            }
+        let role = ctx.role.unwrap_or("");
+        let stage = ctx.stage_id.unwrap_or("");
+        let is_orchestrator = role.to_lowercase().contains("orchestrat")
+            || role.to_lowercase().contains("оркестрат")
+            || stage.to_lowercase().contains("orchestrat")
+            || stage.to_lowercase().contains("оркестрат")
+            || stage == "backlog"
+            || role == "copilot";
+        if !is_orchestrator {
+            bail!(
+                "PermissionDenied: Агент '{}' не может использовать '{}': завершение карточек задач зарезервировано для оркестраторов (§ 2.8)",
+                role,
+                normalized_tool_name
+            );
         }
     }
 
@@ -1782,6 +1866,25 @@ pub async fn execute_tool(
             });
 
             let parent_id = ctx.task_id.unwrap_or("unknown");
+
+            // Deduplication check across sessions: if an identical subagent already completed with report, return it
+            {
+                let sessions = SUBAGENT_SESSIONS.lock().await;
+                for sess in sessions.values() {
+                    let info = sess.retry_info.lock().await;
+                    if info.parent_task_id == parent_id
+                        && info.status == "finished"
+                        && info.role.eq_ignore_ascii_case(role)
+                        && are_subagent_prompts_duplicate(&info.prompt, prompt)
+                    {
+                        if let Some(ref rep) = info.report {
+                            eprintln!("CVH [agent]: Reusing completed subagent report for identical request");
+                            return Ok(rep.clone());
+                        }
+                    }
+                }
+            }
+
             let subagent_suffix = match ctx.call_id {
                 Some(cid) if !cid.trim().is_empty() => cid.trim().to_string(),
                 _ => format!(
@@ -1792,6 +1895,9 @@ pub async fn execute_tool(
             };
             let subagent_id = format!("{}.sub-{}", parent_id, subagent_suffix);
             let tc_id_opt = ctx.call_id.map(|s| s.to_string());
+
+            let sub_abort_handle = Arc::new(AtomicBool::new(false));
+            let sub_join_slot = Arc::new(tokio::sync::Mutex::new(None));
 
             let (tx, rx) = oneshot::channel::<String>();
             let retry_info = SubagentRetryInfo {
@@ -1806,11 +1912,14 @@ pub async fn execute_tool(
                 status: "running".to_string(),
                 last_error: None,
                 report: None,
+                is_bg: false,
             };
 
             let session = SubagentSession {
                 sender: Arc::new(tokio::sync::Mutex::new(Some(tx))),
                 retry_info: Arc::new(tokio::sync::Mutex::new(retry_info)),
+                abort_handle: Arc::clone(&sub_abort_handle),
+                join_handle: Arc::clone(&sub_join_slot),
             };
 
             {
@@ -1818,13 +1927,14 @@ pub async fn execute_tool(
                 sessions.insert(subagent_id.clone(), session);
             }
 
-            let owned_ctx = ctx.to_owned();
+            let mut owned_ctx = ctx.to_owned();
+            owned_ctx.abort_handle = Arc::clone(&sub_abort_handle);
             let sub_id = subagent_id.clone();
             let title_s = title.to_string();
             let role_s = role.to_string();
             let prompt_s = prompt.to_string();
 
-            tokio::spawn(async move {
+            let join_h = tokio::spawn(async move {
                 let _ = run_inprocess_subagent(
                     owned_ctx,
                     title_s,
@@ -1834,6 +1944,22 @@ pub async fn execute_tool(
                     Some(sub_id),
                 ).await;
             });
+            *sub_join_slot.lock().await = Some(join_h);
+
+            // Register into state.active_agents so abort_agent can track/abort it
+            if let Some(ref app) = ctx.app_handle {
+                if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+                    if let Ok(mut map) = state_ref.active_agents.lock() {
+                        map.insert(
+                            subagent_id.clone(),
+                            crate::commands::ActiveAgentHandle {
+                                abort_flag: Arc::clone(&sub_abort_handle),
+                                join_handle: Arc::clone(&sub_join_slot),
+                            },
+                        );
+                    }
+                }
+            }
 
             // Parent agent blocks synchronously awaiting clean report from channel (Zero-Pollution Invariant!)
             let mut rx = rx;
@@ -1846,7 +1972,8 @@ pub async fn execute_tool(
                         }
                     }
                     _ = tokio::time::sleep(Duration::from_millis(200)) => {
-                        if abort_handle.load(Ordering::SeqCst) {
+                        if abort_handle.load(Ordering::SeqCst) || sub_abort_handle.load(Ordering::SeqCst) {
+                            sub_abort_handle.store(true, Ordering::SeqCst);
                             bail!("Agent execution aborted while waiting for subagent");
                         }
                     }
@@ -1873,6 +2000,26 @@ pub async fn execute_tool(
             });
 
             let parent_id = ctx.task_id.unwrap_or("unknown");
+
+            // Deduplication check across sessions: if an identical subagent is already actively running or finished, reuse it
+            {
+                let sessions = SUBAGENT_SESSIONS.lock().await;
+                for (sid, sess) in sessions.iter() {
+                    let info = sess.retry_info.lock().await;
+                    if info.parent_task_id == parent_id
+                        && (info.status == "running" || info.status == "finished")
+                        && info.role.eq_ignore_ascii_case(role)
+                        && are_subagent_prompts_duplicate(&info.prompt, prompt)
+                    {
+                        eprintln!("CVH [agent]: Reusing existing subagent {} for duplicate subagent_bg request", sid);
+                        return Ok(serde_json::to_string(&serde_json::json!({
+                            "subagent_id": sid,
+                            "status": &info.status
+                        }))?);
+                    }
+                }
+            }
+
             let subagent_suffix = match ctx.call_id {
                 Some(cid) if !cid.trim().is_empty() => cid.trim().to_string(),
                 _ => format!(
@@ -1883,6 +2030,9 @@ pub async fn execute_tool(
             };
             let subagent_id = format!("{}.sub-{}", parent_id, subagent_suffix);
             let tc_id_opt = ctx.call_id.map(|s| s.to_string());
+
+            let sub_abort_handle = Arc::new(AtomicBool::new(false));
+            let sub_join_slot = Arc::new(tokio::sync::Mutex::new(None));
 
             let (tx, rx) = oneshot::channel::<String>();
             let retry_info = SubagentRetryInfo {
@@ -1897,11 +2047,14 @@ pub async fn execute_tool(
                 status: "running".to_string(),
                 last_error: None,
                 report: None,
+                is_bg: true,
             };
 
             let session = SubagentSession {
                 sender: Arc::new(tokio::sync::Mutex::new(Some(tx))),
                 retry_info: Arc::new(tokio::sync::Mutex::new(retry_info)),
+                abort_handle: Arc::clone(&sub_abort_handle),
+                join_handle: Arc::clone(&sub_join_slot),
             };
 
             {
@@ -1911,13 +2064,14 @@ pub async fn execute_tool(
                 sessions.insert(subagent_id.clone(), session);
             }
 
-            let owned_ctx = ctx.to_owned();
+            let mut owned_ctx = ctx.to_owned();
+            owned_ctx.abort_handle = Arc::clone(&sub_abort_handle);
             let sub_id = subagent_id.clone();
             let title_s = title.to_string();
             let role_s = role.to_string();
             let prompt_s = prompt.to_string();
 
-            tokio::spawn(async move {
+            let join_h = tokio::spawn(async move {
                 let _ = run_inprocess_subagent(
                     owned_ctx,
                     title_s,
@@ -1927,6 +2081,22 @@ pub async fn execute_tool(
                     Some(sub_id),
                 ).await;
             });
+            *sub_join_slot.lock().await = Some(join_h);
+
+            // Register into state.active_agents so abort_agent can track/abort it
+            if let Some(ref app) = ctx.app_handle {
+                if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+                    if let Ok(mut map) = state_ref.active_agents.lock() {
+                        map.insert(
+                            subagent_id.clone(),
+                            crate::commands::ActiveAgentHandle {
+                                abort_flag: Arc::clone(&sub_abort_handle),
+                                join_handle: Arc::clone(&sub_join_slot),
+                            },
+                        );
+                    }
+                }
+            }
 
             serde_json::to_string(&serde_json::json!({
                 "subagent_id": subagent_id,
@@ -4541,12 +4711,14 @@ where
         }
     }
 
-    // Tool Policy Matrix + per-agent intersection: filter out disabled tools
-    // when building schema array (saving tokens!). Effective set =
-    // policy lookup ∩ agent setting.allowed_tools (absent → unrestricted).
+    // Tool Policy Matrix (§ 2.16 & § 2.21):
+    // tool-policy.json is the single authoritative source of truth for tool permissions.
     let tool_policy = load_tool_policies(&config.repo_root)
         .await
         .unwrap_or_default();
+
+    // Bi-directional synchronization of allowed tools into YAML frontmatter of persona.md (§ 2.21)
+    let _ = crate::config::sync_tool_policies_to_personas(&config.repo_root, &tool_policy).await;
 
     // Best-effort per-agent overrides (missing/broken → defaults).
     let agent_setting = load_agent_setting(&config.repo_root, &config.role).await;
@@ -4567,9 +4739,19 @@ where
             if (name == "create_task" || name == "create_tasks" || name == "complete_task") && !is_orch {
                 return false;
             }
-            is_tool_allowed(&tool_policy, Some(&config.stage_id), name)
-                && is_tool_allowed(&tool_policy, Some(&config.role), name)
-                && agent_allows_tool(agent_allowed.as_deref(), name)
+            if !is_tool_allowed(&tool_policy, Some(&config.stage_id), name) {
+                return false;
+            }
+            if tool_policy.stage_overrides.contains_key(&config.role)
+                && !is_tool_allowed(&tool_policy, Some(&config.role), name)
+            {
+                return false;
+            }
+            let has_stage_override = tool_policy.stage_overrides.contains_key(&config.stage_id);
+            if !has_stage_override && !agent_allows_tool(agent_allowed.as_deref(), name) {
+                return false;
+            }
+            true
         })
         .collect();
 
@@ -4978,6 +5160,8 @@ where
             call_id: None,
         };
 
+        let mut executed_subagents_in_turn: Vec<ExecutedSubagentCall> = Vec::new();
+
         // Execute each tool call and record response
         for tc in turn_tool_calls {
             if abort_flag.load(Ordering::SeqCst) {
@@ -4989,6 +5173,42 @@ where
 
             let parsed_args: serde_json::Value =
                 serde_json::from_str(&tc.function.arguments).unwrap_or_else(|_| serde_json::json!({}));
+
+            let norm_name = canonical_tool_name(&tc.function.name);
+            let is_sub = norm_name == "subagent" || norm_name == "subagent_bg";
+
+            // In-turn Subagent Deduplication (§ Directive 4):
+            // If the model in a single turn emits multiple subagent calls with identical/virtually identical
+            // prompt and role, return the result of the already started/completed agent instead of spawning duplicate work.
+            if is_sub {
+                let role = parsed_args
+                    .get("role")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("general")
+                    .trim();
+                let prompt = parsed_args
+                    .get("prompt")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .trim();
+
+                if let Some(prev) = executed_subagents_in_turn.iter().find(|p| {
+                    p.role.eq_ignore_ascii_case(role) && are_subagent_prompts_duplicate(&p.prompt, prompt)
+                }) {
+                    eprintln!(
+                        "CVH [agent]: Deduplicated subagent call '{}' in turn {} (matches earlier call '{}')",
+                        tc.id, turn, prev.id
+                    );
+                    event_sink(AgentEvent::ToolResult {
+                        id: tc.id.clone(),
+                        name: tc.function.name.clone(),
+                        result: prev.result.clone(),
+                        success: true,
+                    });
+                    messages.push(ChatMessage::tool_response(tc.id, prev.result.clone()));
+                    continue;
+                }
+            }
 
             let mut call_tool_ctx = tool_ctx.clone();
             call_tool_ctx.call_id = Some(&tc.id);
@@ -5050,6 +5270,28 @@ where
                 Ok(out) => (out, true),
                 Err(e) => (format!("Error executing {}: {}", tc.function.name, e), false),
             };
+
+            if is_sub && success {
+                let role = parsed_args
+                    .get("role")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("general")
+                    .trim()
+                    .to_string();
+                let prompt = parsed_args
+                    .get("prompt")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
+                executed_subagents_in_turn.push(ExecutedSubagentCall {
+                    id: tc.id.clone(),
+                    tool_name: tc.function.name.clone(),
+                    role,
+                    prompt,
+                    result: result_str.clone(),
+                });
+            }
 
             event_sink(AgentEvent::ToolResult {
                 id: tc.id.clone(),

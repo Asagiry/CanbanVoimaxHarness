@@ -155,6 +155,15 @@ pub struct SubagentSummary {
     pub duration_ms: Option<f64>,
     pub steps_count: usize,
     pub last_error: Option<String>,
+    #[serde(default)]
+    pub is_bg: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubagentDialogKeyInfo {
+    pub key: String,
+    pub is_bg: bool,
 }
 
 #[tauri::command]
@@ -188,6 +197,7 @@ pub async fn list_subagents(
                     duration_ms: None,
                     steps_count: 0,
                     last_error: info.last_error.clone(),
+                    is_bg: info.is_bg,
                 };
                 result_map.insert(sub_id.clone(), summary);
             }
@@ -202,6 +212,7 @@ pub async fn list_subagents(
         prompt: String,
         duration: Option<f64>,
         status: String,
+        is_bg: bool,
     }
 
     let mut parent_subagent_tools: Vec<ParentSubagentTool> = Vec::new();
@@ -219,6 +230,7 @@ pub async fn list_subagents(
                             let call_id = t.get("id").and_then(|v| v.as_str()).map(|s| s.to_string());
                             let duration = t.get("durationMs").and_then(|v| v.as_f64());
                             let status = t.get("status").and_then(|v| v.as_str()).unwrap_or("running").to_string();
+                            let is_bg = t_name == "subagent_bg";
                             parent_subagent_tools.push(ParentSubagentTool {
                                 call_id,
                                 title,
@@ -226,6 +238,7 @@ pub async fn list_subagents(
                                 prompt,
                                 duration,
                                 status,
+                                is_bg,
                             });
                         }
                     }
@@ -265,11 +278,13 @@ pub async fn list_subagents(
 
             let tool_call_id = raw_sub_id.rfind(".sub-").map(|pos| raw_sub_id[(pos + 5)..].to_string());
 
+            let mut is_bg = false;
             // Correlate with parent_subagent_tools if possible
             if let Some(pt) = parent_subagent_tools.iter().find(|p| {
                 (p.call_id.is_some() && tool_call_id.is_some() && p.call_id == tool_call_id)
                     || (!prompt.is_empty() && p.prompt == prompt)
             }) {
+                is_bg = pt.is_bg;
                 if !pt.title.is_empty() {
                     title = pt.title.clone();
                 }
@@ -289,6 +304,15 @@ pub async fn list_subagents(
                         status = "running".to_string();
                     } else if pt.status == "failed" {
                         status = "error".to_string();
+                    }
+                }
+            } else {
+                let sessions = crate::agent::SUBAGENT_SESSIONS.lock().await;
+                for (sid, s) in sessions.iter() {
+                    if sid == &raw_sub_id || sid.ends_with(&raw_sub_id) {
+                        let info = s.retry_info.lock().await;
+                        is_bg = info.is_bg;
+                        break;
                     }
                 }
             }
@@ -312,6 +336,9 @@ pub async fn list_subagents(
                 if duration_ms > 0.0 {
                     existing.duration_ms = Some(duration_ms);
                 }
+                if is_bg {
+                    existing.is_bg = true;
+                }
             } else {
                 let summary = SubagentSummary {
                     id: raw_sub_id.clone(),
@@ -325,6 +352,7 @@ pub async fn list_subagents(
                     duration_ms: if duration_ms > 0.0 { Some(duration_ms) } else { None },
                     steps_count,
                     last_error,
+                    is_bg,
                 };
                 result_map.insert(raw_sub_id, summary);
             }
@@ -334,6 +362,35 @@ pub async fn list_subagents(
     let mut list: Vec<SubagentSummary> = result_map.into_values().collect();
     list.sort_by(|a, b| a.id.cmp(&b.id));
     Ok(list)
+}
+
+#[tauri::command]
+pub async fn list_subagent_dialog_keys(
+    parent_task_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<SubagentDialogKeyInfo>, String> {
+    let root = state.get_root();
+    let p_trim = parent_task_id.trim();
+    if p_trim.is_empty() {
+        return Ok(Vec::new());
+    }
+    let keys = crate::db::list_subagent_dialog_keys(&root, p_trim)?;
+    let sessions = crate::agent::SUBAGENT_SESSIONS.lock().await;
+
+    let mut result = Vec::new();
+    for key in keys {
+        let raw_sub_id = key.strip_prefix(&format!("{}:sub:", p_trim)).unwrap_or(&key).to_string();
+        let mut is_bg = false;
+        for (sid, sess) in sessions.iter() {
+            if sid == &raw_sub_id || sid.ends_with(&raw_sub_id) {
+                let info = sess.retry_info.lock().await;
+                is_bg = info.is_bg;
+                break;
+            }
+        }
+        result.push(SubagentDialogKeyInfo { key, is_bg });
+    }
+    Ok(result)
 }
 
 #[tauri::command]

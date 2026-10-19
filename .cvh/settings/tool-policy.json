@@ -10,6 +10,7 @@
     "web_fetch": true,
     "subagent": true,
     "subagent_bg": true,
+    "collect_subagent": true,
     "todo_write": true,
     "advance_task": true,
     "reject_task": true,

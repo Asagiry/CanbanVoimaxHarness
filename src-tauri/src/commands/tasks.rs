@@ -1080,24 +1080,7 @@ pub async fn internal_move_task_stage(
     if is_backlog || !target_has_autorun || was_running {
         if let Some(app) = app_handle {
             if let Some(state_ref) = app.try_state::<AppState>() {
-                let entry = {
-                    let mut map = state_ref.active_agents.lock().ok();
-                    map.as_mut().and_then(|m| m.remove(task_id))
-                };
-                if let Some(agent_entry) = entry {
-                    agent_entry.abort_flag.store(true, Ordering::SeqCst);
-                    let maybe_handle = {
-                        let mut guard = agent_entry.join_handle.lock().await;
-                        guard.take()
-                    };
-                    if let Some(handle) = maybe_handle {
-                        handle.abort();
-                    }
-                    let _ = app.emit(
-                        "agent:status",
-                        serde_json::json!({ "taskId": task_id, "status": "idle" }),
-                    );
-                }
+                let _ = internal_abort_agent(root, task_id, state_ref.inner(), Some(app)).await;
             }
         }
     }
@@ -1302,6 +1285,24 @@ pub async fn move_task_stage(
     state: State<'_, AppState>,
 ) -> Result<Task, String> {
     let root = state.get_root();
+    let is_backlog = stage_id_matches(&target_stage_id, "backlog");
+    let is_running_or_active = {
+        if let Ok(map) = state.active_agents.lock() {
+            map.contains_key(&task_id)
+                || map.keys().any(|k| {
+                    k.starts_with(&format!("{}.", task_id))
+                        || k.starts_with(&format!("{}:sub:", task_id))
+                        || k.starts_with(&format!("{}.sub-", task_id))
+                })
+        } else {
+            false
+        }
+    };
+
+    if is_backlog || is_running_or_active {
+        let _ = internal_abort_agent(&root, &task_id, &state, Some(&app_handle)).await;
+    }
+
     internal_move_task_stage(&root, &task_id, &target_stage_id, verdict, None, handover_summary, Some(&app_handle)).await
 }
 
@@ -2147,22 +2148,54 @@ pub async fn run_agent(
     Ok(format!("Agent launched for task {}", task_id))
 }
 
-#[tauri::command]
-pub async fn abort_agent(
-    task_id: String,
-    state: State<'_, AppState>,
-    app_handle: AppHandle,
-) -> Result<(), String> {
-    let entry = {
+/// Unconditional Agent & Child Subagent Abort (§ Directive 2):
+/// 1. Iterates state.active_agents and aborts parent task AND all subagents matching task_id, task_id.sub-*, task_id:sub:*.
+/// 2. Iterates SUBAGENT_SESSIONS and aborts all child subagents under this task.
+/// 3. Cleans up in-flight receivers in SUBAGENT_RECEIVERS.
+/// 4. Synchronizes task status to 'idle' on disk and in memory.
+pub async fn internal_abort_agent(
+    root: &Path,
+    task_id: &str,
+    state: &AppState,
+    app_handle: Option<&AppHandle>,
+) -> Result<bool, String> {
+    let p_trim = task_id.trim();
+    if p_trim.is_empty() {
+        return Ok(false);
+    }
+
+    // 1. Collect all matching handles from state.active_agents (parent + any subagents)
+    let matching_handles: Vec<(String, ActiveAgentHandle)> = {
         let mut map = state
             .active_agents
             .lock()
             .map_err(|_| "Failed to lock active agents".to_string())?;
-        map.remove(&task_id)
+
+        let mut matched = Vec::new();
+        let mut keys_to_remove = Vec::new();
+
+        for k in map.keys() {
+            if k == p_trim
+                || k.starts_with(&format!("{}.", p_trim))
+                || k.starts_with(&format!("{}:sub:", p_trim))
+                || k.starts_with(&format!("{}.sub-", p_trim))
+            {
+                keys_to_remove.push(k.clone());
+            }
+        }
+
+        for k in keys_to_remove {
+            if let Some(entry) = map.remove(&k) {
+                matched.push((k, entry));
+            }
+        }
+        matched
     };
 
-    let had_entry = entry.is_some();
-    if let Some(agent_entry) = entry {
+    let had_entry = !matching_handles.is_empty();
+
+    // 2. Abort all active agent handles and wait with timeout
+    for (_k, agent_entry) in matching_handles {
         agent_entry.abort_flag.store(true, Ordering::SeqCst);
         let maybe_handle = {
             let mut guard = agent_entry.join_handle.lock().await;
@@ -2170,36 +2203,107 @@ pub async fn abort_agent(
         };
         if let Some(handle) = maybe_handle {
             handle.abort();
-            let _ = tokio::time::timeout(tokio::time::Duration::from_millis(2000), handle).await;
+            let _ = tokio::time::timeout(tokio::time::Duration::from_millis(500), handle).await;
         }
     }
 
-    let root = state.get_root();
-    let mut tasks = load_tasks_from_disk(&root).await;
+    // 3. Abort all child subagents in SUBAGENT_SESSIONS
+    {
+        let sessions = crate::agent::SUBAGENT_SESSIONS.lock().await;
+        for (sid, session) in sessions.iter() {
+            let matches_parent = {
+                let mut info = session.retry_info.lock().await;
+                if info.parent_task_id == p_trim
+                    || info.subagent_id.starts_with(&format!("{}.", p_trim))
+                    || info.subagent_id.starts_with(&format!("{}:sub:", p_trim))
+                    || sid.starts_with(&format!("{}.", p_trim))
+                    || sid.starts_with(&format!("{}:sub:", p_trim))
+                {
+                    info.status = "aborted".to_string();
+                    info.ctx.abort_handle.store(true, Ordering::SeqCst);
+                    true
+                } else {
+                    false
+                }
+            };
+            if matches_parent {
+                session.abort_handle.store(true, Ordering::SeqCst);
+                let mut guard = session.join_handle.lock().await;
+                if let Some(h) = guard.take() {
+                    h.abort();
+                }
+                // Take sender so awaiting receiver gets Err immediately
+                let _ = session.sender.lock().await.take();
+            }
+        }
+    }
+
+    // 4. Clean up any awaiting receivers in SUBAGENT_RECEIVERS
+    {
+        let mut receivers = crate::agent::SUBAGENT_RECEIVERS.lock().await;
+        let mut keys_to_remove = Vec::new();
+        for k in receivers.keys() {
+            if k == p_trim
+                || k.starts_with(&format!("{}.", p_trim))
+                || k.starts_with(&format!("{}:sub:", p_trim))
+                || k.starts_with(&format!("{}.sub-", p_trim))
+            {
+                keys_to_remove.push(k.clone());
+            }
+        }
+        for k in keys_to_remove {
+            receivers.remove(&k);
+        }
+    }
+
+    // 5. Update task status on disk & memory to "idle"
+    let mut tasks = load_tasks_from_disk(root).await;
     let mut task_updated = false;
-    if let Some(t) = tasks.iter_mut().find(|t| t.id == task_id) {
-        t.status = Some("idle".to_string());
-        t.updated_at = Utc::now().timestamp_millis();
-        task_updated = true;
+    if let Some(t) = tasks.iter_mut().find(|t| t.id == p_trim) {
+        if t.status.as_deref() != Some("idle") {
+            t.status = Some("idle".to_string());
+            t.updated_at = Utc::now().timestamp_millis();
+            task_updated = true;
+        }
     }
 
     if task_updated {
         if let Ok(mut guard) = state.tasks.lock() {
             *guard = tasks.clone();
         }
-        let _ = save_tasks_to_disk(&root, &tasks).await;
-        let _ = app_handle.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
-        let _ = app_handle.emit(
+        let _ = save_tasks_to_disk(root, &tasks).await;
+        if let Some(app) = app_handle {
+            let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+        }
+    }
+
+    if let Some(app) = app_handle {
+        let _ = app.emit(
             "agent:status",
-            serde_json::json!({ "taskId": &task_id, "status": "idle" }),
+            serde_json::json!({ "taskId": p_trim, "status": "idle" }),
+        );
+        let _ = app.emit(
+            "subagent:aborted",
+            serde_json::json!({ "parentTaskId": p_trim }),
         );
     }
 
-    if had_entry || task_updated {
-        Ok(())
-    } else {
-        Err(format!("No running agent found for task {}", task_id))
-    }
+    Ok(had_entry || task_updated)
+}
+
+#[tauri::command]
+pub async fn abort_agent(
+    task_id: String,
+    state: State<'_, AppState>,
+    app_handle: AppHandle,
+) -> Result<(), String> {
+    let root = state.get_root();
+    let _ = internal_abort_agent(&root, &task_id, &state, Some(&app_handle)).await?;
+    let _ = app_handle.emit(
+        "agent:status",
+        serde_json::json!({ "taskId": &task_id, "status": "idle" }),
+    );
+    Ok(())
 }
 
 #[tauri::command]

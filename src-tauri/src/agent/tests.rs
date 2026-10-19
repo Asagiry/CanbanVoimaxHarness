@@ -313,12 +313,11 @@ use super::*;
             ctx,
             status: "running".to_string(),
             last_error: None,
+            report: None,
+            is_bg: false,
         };
 
-        let session = SubagentSession {
-            sender: Arc::new(tokio::sync::Mutex::new(Some(tx1))),
-            retry_info: Arc::new(tokio::sync::Mutex::new(retry_info)),
-        };
+        let session = SubagentSession::new(Some(tx1), retry_info);
 
         {
             let mut sessions = SUBAGENT_SESSIONS.lock().await;
@@ -1360,9 +1359,9 @@ use super::*;
             call_id: Some("call_bg_1".to_string()),
         };
 
-        let session1 = SubagentSession {
-            sender: Arc::new(tokio::sync::Mutex::new(Some(tx1))),
-            retry_info: Arc::new(tokio::sync::Mutex::new(SubagentRetryInfo {
+        let session1 = SubagentSession::new(
+            Some(tx1),
+            SubagentRetryInfo {
                 parent_task_id: "CVH-080".to_string(),
                 subagent_id: sub_id1.clone(),
                 tool_call_id: Some("call_bg_1".to_string()),
@@ -1373,12 +1372,14 @@ use super::*;
                 ctx: ctx.clone(),
                 status: "running".to_string(),
                 last_error: None,
-            })),
-        };
+                report: None,
+                is_bg: true,
+            },
+        );
 
-        let session2 = SubagentSession {
-            sender: Arc::new(tokio::sync::Mutex::new(Some(tx2))),
-            retry_info: Arc::new(tokio::sync::Mutex::new(SubagentRetryInfo {
+        let session2 = SubagentSession::new(
+            Some(tx2),
+            SubagentRetryInfo {
                 parent_task_id: "CVH-080".to_string(),
                 subagent_id: sub_id2.clone(),
                 tool_call_id: Some("call_bg_2".to_string()),
@@ -1389,8 +1390,10 @@ use super::*;
                 ctx: ctx.clone(),
                 status: "running".to_string(),
                 last_error: None,
-            })),
-        };
+                report: None,
+                is_bg: true,
+            },
+        );
 
         // Register receivers and sessions
         {
@@ -2028,9 +2031,10 @@ line 2 again"
 
         assert!(timeout_err.to_string().contains("timed out"), "got: {}", timeout_err);
 
-        // 3. Output spilling: >100 lines must be spilled to .cvh/spill/
+        // 3. Output spilling (§ Directive 1):
+        // Generic commands: ceiling is 500 lines / 64KB
         let mut large_output = String::new();
-        for i in 1..=120 {
+        for i in 1..=520 {
             large_output.push_str(&format!("This is log line {}\n", i));
         }
 
@@ -2038,17 +2042,48 @@ line 2 again"
             .await
             .expect("spill output");
 
-        assert!(spilled.contains("[Output truncated: 120 lines"), "got: {}", spilled);
+        assert!(spilled.contains("[Output truncated: 520 lines"), "got: {}", spilled);
         assert!(spilled.contains("spilled to .cvh/spill/"), "got: {}", spilled);
         assert!(spilled.contains("--- HEAD (first 20 lines) ---"), "got: {}", spilled);
         assert!(spilled.contains("--- TAIL (last 20 lines) ---"), "got: {}", spilled);
+
+        // Verify subagent reports NEVER spill
+        let mut subagent_rep = String::new();
+        for i in 1..=600 {
+            subagent_rep.push_str(&format!("Subagent finding {}\n", i));
+        }
+        let unspilled_sub = maybe_spill_output(&base, "subagent", subagent_rep.clone())
+            .await
+            .expect("subagent unspilled");
+        assert_eq!(unspilled_sub, subagent_rep, "subagent reports must NEVER be truncated");
+
+        let unspilled_collect = maybe_spill_output(&base, "collect_subagent", subagent_rep.clone())
+            .await
+            .expect("collect_subagent unspilled");
+        assert_eq!(unspilled_collect, subagent_rep, "collect_subagent reports must NEVER be truncated");
+
+        // Verify read_file: 600 lines does NOT spill (safe limit is 2000 lines)
+        let unspilled_read = maybe_spill_output(&base, "read_file", subagent_rep)
+            .await
+            .expect("read_file unspilled at 600 lines");
+        assert!(!unspilled_read.contains("[Output truncated"), "read_file must not spill under 2000 lines");
+
+        // read_file with 2100 lines DOES spill
+        let mut massive_file = String::new();
+        for i in 1..=2100 {
+            massive_file.push_str(&format!("File line {}\n", i));
+        }
+        let spilled_read = maybe_spill_output(&base, "read_file", massive_file)
+            .await
+            .expect("read_file spilled at 2100 lines");
+        assert!(spilled_read.contains("[Output truncated: 2100 lines"), "got: {}", spilled_read);
 
         // Verify spilled log file actually exists on disk
         let spill_dir = base.join(".cvh").join("spill");
         assert!(spill_dir.is_dir(), "spill dir must exist");
         let mut entries = tokio::fs::read_dir(&spill_dir).await.expect("read spill dir");
         let first_file = entries.next_entry().await.expect("entry").expect("some entry");
-        assert!(first_file.file_name().to_string_lossy().contains("execute_command.log"));
+        assert!(first_file.file_name().to_string_lossy().contains(".log"));
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
@@ -2632,6 +2667,96 @@ data: [DONE]
         assert!(steer_text.contains("Примите это указание во внимание немедленно и скорректируйте дальнейшие действия."));
 
         let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[test]
+    fn test_subagent_prompt_deduplication() {
+        // 1. Exact match
+        assert!(are_subagent_prompts_duplicate(
+            "Fix the bug in agent.rs",
+            "Fix the bug in agent.rs"
+        ));
+
+        // 2. Whitespace-relaxed match
+        assert!(are_subagent_prompts_duplicate(
+            "Fix  the   bug \n in agent.rs\n",
+            "Fix the bug in agent.rs"
+        ));
+
+        // 3. High similarity / prefix match
+        assert!(are_subagent_prompts_duplicate(
+            "Investigate and fix the compiler error in src-tauri/src/agent.rs right away",
+            "Investigate and fix the compiler error in src-tauri/src/agent.rs"
+        ));
+
+        // 4. Distinct prompts must NOT match
+        assert!(!are_subagent_prompts_duplicate(
+            "Run cargo clippy on src-tauri",
+            "Design the frontend drawer component in React"
+        ));
+    }
+
+    #[test]
+    fn test_subagent_session_info_is_bg() {
+        let (tx, _rx) = oneshot::channel();
+        let ctx = OwnedToolContext {
+            repo_root: PathBuf::from("."),
+            worktree_dir: PathBuf::from("."),
+            stage_id: Some("dev".to_string()),
+            role: Some("developer".to_string()),
+            abort_handle: Arc::new(AtomicBool::new(false)),
+            tool_policy: ToolPolicyConfig::default(),
+            task_id: Some("CVH-101".to_string()),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        let info_bg = SubagentRetryInfo {
+            parent_task_id: "CVH-101".to_string(),
+            subagent_id: "CVH-101.sub-1".to_string(),
+            tool_call_id: Some("call-1".to_string()),
+            title: "Background worker".to_string(),
+            role: "developer".to_string(),
+            prompt: "Do work in background".to_string(),
+            requested_tools: None,
+            ctx,
+            status: "running".to_string(),
+            last_error: None,
+            report: None,
+            is_bg: true,
+        };
+
+        let session = SubagentSession::new(Some(tx), info_bg);
+        assert!(!session.abort_handle.load(Ordering::SeqCst));
+
+        // Test serialization of SubagentSummary with is_bg
+        let summary = crate::commands::dialogs::SubagentSummary {
+            id: "CVH-101.sub-1".to_string(),
+            parent_task_id: "CVH-101".to_string(),
+            tool_call_id: Some("call-1".to_string()),
+            title: "Background worker".to_string(),
+            role: "developer".to_string(),
+            prompt: "Do work in background".to_string(),
+            status: "running".to_string(),
+            created_at: 1000,
+            duration_ms: None,
+            steps_count: 2,
+            last_error: None,
+            is_bg: true,
+        };
+
+        let serialized = serde_json::to_string(&summary).expect("serialize summary");
+        assert!(serialized.contains(r#""isBg":true"#), "got: {}", serialized);
+
+        let deserialized: crate::commands::dialogs::SubagentSummary =
+            serde_json::from_str(&serialized).expect("deserialize summary");
+        assert!(deserialized.is_bg);
     }
 
 
