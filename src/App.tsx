@@ -375,7 +375,10 @@ export default function App() {
             st.markFinalResponse(taskId, response);
             // Immediately flush task activity feed to disk upon turn finish
             st.flushSaveDialog(taskId);
-            useBoardStore.getState().updateTaskStatus(taskId, 'idle');
+            const currentTask = useBoardStore.getState().tasks.find((t) => t.id === taskId);
+            if (currentTask && currentTask.status === 'running') {
+              useBoardStore.getState().updateTaskStatus(taskId, 'idle');
+            }
           }
           loadTasks();
         });
@@ -387,7 +390,10 @@ export default function App() {
             flushTask(taskId);
             useDrawerStore.getState().setActiveAgentTask(taskId, false);
             useDrawerStore.getState().flushSaveDialog(taskId);
-            useBoardStore.getState().updateTaskStatus(taskId, 'idle');
+            const currentTask = useBoardStore.getState().tasks.find((t) => t.id === taskId);
+            if (currentTask && currentTask.status === 'running') {
+              useBoardStore.getState().updateTaskStatus(taskId, 'idle');
+            }
             useDrawerStore.getState().setThinkingStartTime(taskId, null);
           } else {
             flushAll();
@@ -402,31 +408,42 @@ export default function App() {
             flushTask(taskId);
             useDrawerStore.getState().setActiveAgentTask(taskId, false);
             useDrawerStore.getState().flushSaveDialog(taskId);
-            useBoardStore.getState().updateTaskStatus(taskId, 'idle');
+            const currentTask = useBoardStore.getState().tasks.find((t) => t.id === taskId);
+            if (currentTask && currentTask.status === 'running') {
+              useBoardStore.getState().updateTaskStatus(taskId, 'idle');
+            }
             useDrawerStore.getState().setThinkingStartTime(taskId, null);
           }
           loadTasks();
         });
         unlisteners.push(u6);
 
-        const uTaskCreated = await listen<any>('task:created', () => {
+        const uTaskCreated = await listen<any>('task:created', (event) => {
+          if (event.payload?.task) {
+            useBoardStore.getState().upsertBackendTask(event.payload.task);
+          }
           loadTasks();
         });
         unlisteners.push(uTaskCreated);
 
-        const uTaskMoved = await listen<any>('task:moved', () => {
+        const uTaskMoved = await listen<any>('task:moved', (event) => {
+          if (event.payload?.task) {
+            useBoardStore.getState().upsertBackendTask(event.payload.task);
+          }
           loadTasks();
         });
         unlisteners.push(uTaskMoved);
 
-        const uTaskUpdated = await listen<{ taskId?: string; todos?: any[] }>('task:updated', (event) => {
-          const { taskId, todos } = event.payload || {};
+        const uTaskUpdated = await listen<any>('task:updated', (event) => {
+          const { taskId, todos, task } = event.payload || {};
           if (taskId) {
             flushTask(taskId);
           } else {
             flushAll();
           }
-          if (taskId && todos) {
+          if (task) {
+            useBoardStore.getState().upsertBackendTask(task);
+          } else if (taskId && todos) {
             useBoardStore.getState().updateTask(taskId, { todos });
           } else {
             loadTasks();
@@ -434,9 +451,13 @@ export default function App() {
         });
         unlisteners.push(uTaskUpdated);
 
-        const uTasksUpdated = await listen<any>('tasks:updated', () => {
+        const uTasksUpdated = await listen<any>('tasks:updated', (event) => {
           flushAll();
-          loadTasks();
+          if (Array.isArray(event.payload?.tasks) && event.payload.tasks.length > 0) {
+            useBoardStore.getState().setBackendTasks(event.payload.tasks);
+          } else {
+            loadTasks();
+          }
         });
         unlisteners.push(uTasksUpdated);
 

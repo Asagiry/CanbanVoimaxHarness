@@ -7,7 +7,7 @@ use crate::commands::git::{
 use crate::commands::state::{ActiveAgentHandle, AppState};
 use crate::config::{
     atomic_write_file, get_app_config_dir, load_boards_config, load_llm_settings,
-    load_pipeline_config, load_project_config, ProjectConfig,
+    load_pipeline_config, load_project_config, resolve_actual_repo_root, ProjectConfig,
 };
 use crate::hooks::{execute_hook, execute_sensor_command, HookContext};
 use chrono::Utc;
@@ -87,14 +87,15 @@ pub fn ensure_task_board_id(mut tasks: Vec<Task>, config: &crate::config::Boards
 }
 
 pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
-    let boards_cfg = load_boards_config(repo_root)
+    let actual_root = resolve_actual_repo_root(repo_root);
+    let boards_cfg = load_boards_config(&actual_root)
         .await
         .unwrap_or_else(|_| crate::config::default_boards_config());
 
     let mut tasks = Vec::new();
     let mut loaded = false;
 
-    let local_tasks_file = repo_root.join(".cvh").join("tasks.json");
+    let local_tasks_file = actual_root.join(".cvh").join("tasks.json");
     if local_tasks_file.exists() {
         if let Ok(content) = tokio::fs::read_to_string(&local_tasks_file).await {
             let trimmed = content.trim();
@@ -131,15 +132,15 @@ pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
 
     let modified = heal_tasks(&mut tasks, &boards_cfg);
     if modified {
-        let _ = save_tasks_to_disk(repo_root, &tasks).await;
+        let _ = save_tasks_to_disk(&actual_root, &tasks).await;
     }
 
     // Monotonic sequence initialization: ensure persistent sequence is at least max_task_num_on_disk
     let max_on_disk = max_task_num_on_disk(&tasks);
     if max_on_disk > 0 {
-        let current_seq = load_task_sequence(repo_root).await;
+        let current_seq = load_task_sequence(&actual_root).await;
         if max_on_disk > current_seq {
-            let _ = save_task_sequence(repo_root, max_on_disk).await;
+            let _ = save_task_sequence(&actual_root, max_on_disk).await;
         }
     }
 
@@ -147,11 +148,12 @@ pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
 }
 
 pub async fn save_tasks_to_disk(repo_root: &Path, tasks: &[Task]) -> Result<(), String> {
+    let actual_root = resolve_actual_repo_root(repo_root);
     let serialized = serde_json::to_string_pretty(tasks)
         .map_err(|e| format!("Failed to serialize tasks: {}", e))?;
 
-    // 1. Save to repo_root/.cvh/tasks.json
-    let local_tasks_file = repo_root.join(".cvh").join("tasks.json");
+    // 1. Save to actual_root/.cvh/tasks.json
+    let local_tasks_file = actual_root.join(".cvh").join("tasks.json");
     let local_res = atomic_write_file(&local_tasks_file, &serialized).await;
 
     // 2. ALSO save a copy to %LOCALAPPDATA%\com.voimax.cvh\tasks.json as a global fallback!
@@ -194,7 +196,7 @@ pub fn stage_id_matches(col_id: &str, target: &str) -> bool {
 
 #[tauri::command]
 pub async fn list_tasks(state: State<'_, AppState>) -> Result<Vec<Task>, String> {
-    let root = state.get_root();
+    let root = resolve_actual_repo_root(&state.get_root());
     let tasks = load_tasks_from_disk(&root).await;
     if let Ok(mut guard) = state.tasks.lock() {
         *guard = tasks.clone();
@@ -204,18 +206,54 @@ pub async fn list_tasks(state: State<'_, AppState>) -> Result<Vec<Task>, String>
 
 #[tauri::command]
 pub async fn save_tasks(tasks: Vec<Task>, state: State<'_, AppState>) -> Result<(), String> {
-    if let Ok(mut guard) = state.tasks.lock() {
-        *guard = tasks.clone();
+    let root = resolve_actual_repo_root(&state.get_root());
+    let disk_tasks = load_tasks_from_disk(&root).await;
+
+    // Defensive reconciliation: prevent stale frontend saves from destroying newly created
+    // subtasks or wiping out active parent 'waiting_subtask' invariants (§ 2.2 & § 2.22).
+    let mut merged_tasks = tasks;
+
+    // 1. Preserve existing subtasks or recent tasks from disk if missing from incoming tasks:
+    // (delete_task has its own dedicated IPC command and is the ONLY authorized deletion path).
+    for dt in &disk_tasks {
+        if !merged_tasks.iter().any(|t| t.id == dt.id) {
+            merged_tasks.push(dt.clone());
+        }
     }
-    let root = state.get_root();
-    let res = save_tasks_to_disk(&root, &tasks).await;
+
+    // 2. Preserve waiting_for_subtask_id and waiting_subtask status if the subtask is still active
+    let active_sub_ids: HashSet<String> = merged_tasks
+        .iter()
+        .filter(|sub| sub.status.as_deref() != Some("done"))
+        .map(|sub| sub.id.clone())
+        .collect();
+
+    for t in &mut merged_tasks {
+        if let Some(dt) = disk_tasks.iter().find(|d| d.id == t.id) {
+            if dt.status.as_deref() == Some("waiting_subtask") && t.status.as_deref() != Some("waiting_subtask") {
+                if let Some(ref sub_id) = dt.waiting_for_subtask_id {
+                    if active_sub_ids.contains(sub_id) {
+                        t.status = Some("waiting_subtask".to_string());
+                        t.waiting_for_subtask_id = Some(sub_id.clone());
+                    }
+                }
+            } else if dt.waiting_for_subtask_id.is_some() && t.waiting_for_subtask_id.is_none() {
+                t.waiting_for_subtask_id = dt.waiting_for_subtask_id.clone();
+            }
+        }
+    }
+
+    if let Ok(mut guard) = state.tasks.lock() {
+        *guard = merged_tasks.clone();
+    }
+    let res = save_tasks_to_disk(&root, &merged_tasks).await;
     match &res {
         Ok(_) => eprintln!(
             "CVH [save_tasks]: persisted {} tasks to {:?}",
-            tasks.len(),
+            merged_tasks.len(),
             root.join(".cvh").join("tasks.json")
         ),
-        Err(e) => eprintln!("CVH [save_tasks]: FAILED to persist {} tasks: {}", tasks.len(), e),
+        Err(e) => eprintln!("CVH [save_tasks]: FAILED to persist {} tasks: {}", merged_tasks.len(), e),
     }
     res
 }
@@ -520,6 +558,8 @@ pub async fn internal_create_subtask(
     handover_summary: Option<&str>,
     app_handle: Option<&AppHandle>,
 ) -> Result<Task, String> {
+    let root_resolved = resolve_actual_repo_root(root);
+    let root = &root_resolved;
     let mut tasks = load_tasks_from_disk(root).await;
 
     let parent_idx = tasks
@@ -951,6 +991,130 @@ STDERR: {}",
     }
 }
 
+#[derive(Debug, Default)]
+pub struct ParentAdvanceResult {
+    pub moved_events: Vec<serde_json::Value>,
+    pub autorun_task_ids: Vec<String>,
+}
+
+/// Propagates advancement of completed/terminal subtasks up the hierarchy to parent tasks,
+/// advancing them past the subtask column into the next pipeline stage (§ 2.2, § 2.7 & § 2.22).
+/// Supports multi-stage pipelines (e.g. 5 columns) and arbitrary subtask nesting.
+pub fn propagate_parent_subtask_advance(
+    tasks: &mut [Task],
+    completed_subtask_id: &str,
+    subtask_source_stage: &str,
+    verdict: Option<&str>,
+    boards_cfg: Option<&crate::config::BoardsConfig>,
+    pipeline: Option<&crate::config::PipelineConfig>,
+) -> ParentAdvanceResult {
+    let mut moved_events = Vec::new();
+    let mut autorun_task_ids = Vec::new();
+
+    let mut current_child_id = completed_subtask_id.to_string();
+    let mut current_source_stage = subtask_source_stage.to_string();
+
+    while let Some(parent_idx) = tasks.iter().position(|t| {
+        t.waiting_for_subtask_id.as_deref() == Some(&current_child_id)
+            || (t.status.as_deref() == Some("waiting_subtask")
+                && tasks
+                    .iter()
+                    .find(|sub| sub.id == current_child_id)
+                    .and_then(|sub| sub.parent_id.as_deref())
+                    == Some(&t.id))
+    }) {
+        let parent_id = tasks[parent_idx].id.clone();
+        let old_parent_stage = tasks[parent_idx].stage_id.clone();
+        let parent_board_id = tasks[parent_idx].board_id.clone();
+
+        // Resolve columns for parent task's board
+        let cols = {
+            let from_boards = boards_cfg.and_then(|bc| {
+                if let Some(ref bid) = parent_board_id {
+                    if let Some(b) = bc.boards.iter().find(|b| &b.id == bid) {
+                        return Some(b.columns.clone());
+                    }
+                }
+                if let Some(b) = bc.boards.iter().find(|b| b.id == bc.active_board_id) {
+                    return Some(b.columns.clone());
+                }
+                bc.boards.first().map(|b| b.columns.clone())
+            });
+            from_boards.or_else(|| pipeline.map(|p| p.columns.clone())).unwrap_or_default()
+        };
+
+        // Find the next stage for the parent task:
+        // Look up index of the subtask's source stage (e.g. "review"):
+        let sub_stage_idx = cols
+            .iter()
+            .position(|c| stage_id_matches(&c.id, &current_source_stage))
+            .or_else(|| cols.iter().position(|c| stage_id_matches(&c.id, &old_parent_stage)));
+
+        let next_col_opt = if let Some(idx) = sub_stage_idx {
+            if idx + 1 < cols.len() {
+                Some(cols[idx + 1].clone())
+            } else {
+                cols.last().cloned()
+            }
+        } else {
+            cols.iter()
+                .find(|c| c.terminal == Some(true) || stage_id_matches(&c.id, "ready") || stage_id_matches(&c.id, "done"))
+                .cloned()
+                .or_else(|| cols.last().cloned())
+        };
+
+        let next_col = match next_col_opt {
+            Some(c) => c,
+            None => break,
+        };
+
+        let is_terminal = next_col.terminal == Some(true)
+            || stage_id_matches(&next_col.id, "ready")
+            || stage_id_matches(&next_col.id, "done");
+
+        tasks[parent_idx].waiting_for_subtask_id = None;
+        tasks[parent_idx].stage_id = next_col.id.clone();
+        tasks[parent_idx].verdict = Some(verdict.unwrap_or("APPROVED").to_string());
+        tasks[parent_idx].updated_at = Utc::now().timestamp_millis();
+
+        if is_terminal {
+            tasks[parent_idx].status = Some("done".to_string());
+        } else {
+            let has_autorun = next_col.persona.is_some() || next_col.auto_run == Some(true);
+            tasks[parent_idx].status = Some(if has_autorun { "running".to_string() } else { "idle".to_string() });
+            if has_autorun {
+                autorun_task_ids.push(parent_id.clone());
+            }
+        }
+
+        let parent_clone = tasks[parent_idx].clone();
+        moved_events.push(serde_json::json!({
+            "taskId": parent_id,
+            "fromStage": old_parent_stage,
+            "toStage": &next_col.id,
+            "stageId": &next_col.id,
+            "status": parent_clone.status,
+            "verdict": parent_clone.verdict,
+            "task": &parent_clone
+        }));
+
+        // If parent task also advanced to a terminal column, check if grandparent was waiting on it!
+        if is_terminal {
+            current_child_id = parent_id;
+            current_source_stage = next_col.id;
+        } else {
+            // Parent advanced to a non-terminal intermediate stage (e.g. 'retro'):
+            // Grandparent remains waiting, stop recursion.
+            break;
+        }
+    }
+
+    ParentAdvanceResult {
+        moved_events,
+        autorun_task_ids,
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn internal_move_task_stage(
     root: &Path,
@@ -962,6 +1126,8 @@ pub async fn internal_move_task_stage(
     app_handle: Option<&AppHandle>,
     is_autonomous_advance: bool,
 ) -> Result<Task, String> {
+    let actual_root = resolve_actual_repo_root(root);
+    let root = &actual_root;
     let mut tasks = load_tasks_from_disk(root).await;
 
     let task_idx = tasks
@@ -1311,8 +1477,11 @@ pub async fn internal_move_task_stage(
     let parent_id_opt = updated.parent_id.clone();
 
     // Relational symmetry (§ 2.7 & § 2.22):
-    // When CHANGES_REQUESTED is emitted by a subtask, unlock the parent task in its development stage:
+    let mut parent_moved_events: Vec<serde_json::Value> = Vec::new();
+    let mut parent_autorun_ids: Vec<String> = Vec::new();
+
     if verdict.as_deref() == Some("CHANGES_REQUESTED") {
+        // 1. When CHANGES_REQUESTED is emitted by a subtask, unlock the parent task in its development stage:
         if let Some(ref pid) = parent_id_opt {
             if let Some(parent_idx) = tasks.iter().position(|t| &t.id == pid) {
                 if tasks[parent_idx].status.as_deref() == Some("waiting_subtask")
@@ -1322,10 +1491,37 @@ pub async fn internal_move_task_stage(
                     tasks[parent_idx].verdict = Some("CHANGES_REQUESTED".to_string());
                     tasks[parent_idx].waiting_for_subtask_id = None;
                     tasks[parent_idx].updated_at = Utc::now().timestamp_millis();
+                    let parent_clone = tasks[parent_idx].clone();
+                    parent_moved_events.push(serde_json::json!({
+                        "taskId": pid,
+                        "fromStage": &parent_clone.stage_id,
+                        "toStage": &parent_clone.stage_id,
+                        "stageId": &parent_clone.stage_id,
+                        "status": parent_clone.status,
+                        "verdict": parent_clone.verdict,
+                        "task": &parent_clone
+                    }));
                 }
             }
         }
+    } else if is_terminal_col {
+        // 2. POSITIVE APPROVAL / TERMINAL ADVANCE:
+        // When a child subtask advances to a terminal column (ready/done),
+        // propagate advancement to the parent task (and grandparents recursively)
+        // advancing them past the subtask column into the next pipeline stage (§ 2.2, § 2.7 & § 2.22).
+        let pipeline_opt = load_pipeline_config(root).await.ok();
+        let parent_res = propagate_parent_subtask_advance(
+            &mut tasks,
+            task_id,
+            &old_stage,
+            verdict.as_deref(),
+            boards_cfg.as_ref(),
+            pipeline_opt.as_ref(),
+        );
+        parent_moved_events = parent_res.moved_events;
+        parent_autorun_ids = parent_res.autorun_task_ids;
     }
+
     if let Some(app) = app_handle {
         if let Some(state_ref) = app.try_state::<AppState>() {
             if let Ok(mut guard) = state_ref.tasks.lock() {
@@ -1349,8 +1545,17 @@ pub async fn internal_move_task_stage(
                 "task": &updated
             }),
         );
+        for p_event in &parent_moved_events {
+            let _ = app.emit("task:moved", p_event);
+            if let Some(ptask) = p_event.get("task") {
+                let _ = app.emit("task:updated", serde_json::json!({ "task": ptask }));
+            }
+        }
         if target_has_autorun {
             let _ = app.emit("agent:autorun", serde_json::json!({ "taskId": task_id }));
+        }
+        for auto_pid in parent_autorun_ids {
+            let _ = app.emit("agent:autorun", serde_json::json!({ "taskId": auto_pid }));
         }
     }
 
@@ -1404,6 +1609,8 @@ pub async fn internal_advance_task_to_stage(
     summary: &str,
     app_handle: Option<&AppHandle>,
 ) -> Result<String, String> {
+    let root_resolved = resolve_actual_repo_root(root);
+    let root = &root_resolved;
     let tasks = load_tasks_from_disk(root).await;
     let current_task = tasks
         .iter()
@@ -1416,8 +1623,9 @@ pub async fn internal_advance_task_to_stage(
         .map(|b| b.active_board_id.clone())
         .unwrap_or_else(|| "development".to_string());
 
-    // Check if active board changed during task execution (only if target_stage_override is None)
+    // Check if active board changed during task execution (only if target_stage_override is None and task is top-level)
     let board_switched = target_stage_override.is_none()
+        && current_task.parent_id.is_none()
         && current_task
             .board_id
             .as_deref()
@@ -2196,14 +2404,22 @@ pub async fn run_agent(
 
                 let mut tasks = load_tasks_from_disk(&root_task).await;
                 if let Some(task_idx) = tasks.iter().position(|t| t.id == tid) {
+                    let is_waiting_subtask = tasks[task_idx].status.as_deref() == Some("waiting_subtask")
+                        || tasks[task_idx].waiting_for_subtask_id.is_some();
+                    let is_done = tasks[task_idx].status.as_deref() == Some("done");
+
                     let end_boards_cfg = load_boards_config(&root_task).await.ok();
                     let end_active_board_id = end_boards_cfg.as_ref().map(|b| b.active_board_id.clone());
-                    let board_changed = end_active_board_id.is_some() && (
-                        end_active_board_id != initial_active_board_id ||
-                        end_active_board_id.as_deref() != tasks[task_idx].board_id.as_deref()
+                    let board_switched = !is_waiting_subtask && !is_done && (
+                        initial_active_board_id.is_some()
+                            && end_active_board_id.is_some()
+                            && initial_active_board_id != end_active_board_id
                     );
 
-                    if let (true, Some(active_id)) = (board_changed, end_active_board_id) {
+                    let mut task_moved = false;
+                    let mut task_changed = false;
+
+                    if let (true, Some(active_id)) = (board_switched, end_active_board_id) {
                         let target_board = end_boards_cfg.as_ref().and_then(|bc| {
                             bc.boards.iter().find(|b| b.id == active_id).cloned()
                         });
@@ -2216,27 +2432,35 @@ pub async fn run_agent(
                         tasks[task_idx].stage_id = terminal_col_id;
                         tasks[task_idx].status = Some("done".to_string());
                         tasks[task_idx].updated_at = Utc::now().timestamp_millis();
+                        task_moved = true;
+                        task_changed = true;
                     } else if tasks[task_idx].status.as_deref() == Some("running") {
                         tasks[task_idx].status = Some("idle".to_string());
                         tasks[task_idx].updated_at = Utc::now().timestamp_millis();
+                        task_changed = true;
                     }
-                    let updated_task = tasks[task_idx].clone();
-                    let _ = save_tasks_to_disk(&root_task, &tasks).await;
-                    if let Some(state_ref) = app.try_state::<AppState>() {
-                        if let Ok(mut guard) = state_ref.tasks.lock() {
-                            *guard = tasks.clone();
+
+                    if task_changed {
+                        let updated_task = tasks[task_idx].clone();
+                        let _ = save_tasks_to_disk(&root_task, &tasks).await;
+                        if let Some(state_ref) = app.try_state::<AppState>() {
+                            if let Ok(mut guard) = state_ref.tasks.lock() {
+                                *guard = tasks.clone();
+                            }
+                        }
+                        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+                        if task_moved {
+                            let _ = app.emit(
+                                "task:moved",
+                                serde_json::json!({
+                                    "taskId": tid,
+                                    "stageId": updated_task.stage_id,
+                                    "status": updated_task.status,
+                                    "task": updated_task
+                                }),
+                            );
                         }
                     }
-                    let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
-                    let _ = app.emit(
-                        "task:moved",
-                        serde_json::json!({
-                            "taskId": tid,
-                            "stageId": updated_task.stage_id,
-                            "status": updated_task.status,
-                            "task": updated_task
-                        }),
-                    );
                 }
             }
             Err(err) => {

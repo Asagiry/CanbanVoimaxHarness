@@ -323,6 +323,37 @@ fn discover_project_root_raw() -> PathBuf {
     current
 }
 
+/// Resolves the actual project root containing `.cvh` when given either the workspace root
+/// or an isolated git worktree directory (§ 2.3 & § 2.23).
+pub fn resolve_actual_repo_root(path: &Path) -> PathBuf {
+    if path.join(".cvh").exists() {
+        return path.to_path_buf();
+    }
+    // 1. Traverse ancestors looking for .cvh
+    for ancestor in path.ancestors() {
+        if ancestor != path && ancestor.join(".cvh").exists() {
+            return ancestor.to_path_buf();
+        }
+    }
+    // 2. If .git is a worktree pointer file, follow gitdir to locate parent workspace
+    let git_file = path.join(".git");
+    if git_file.is_file() {
+        if let Ok(content) = std::fs::read_to_string(&git_file) {
+            for line in content.lines() {
+                if let Some(gitdir) = line.strip_prefix("gitdir:") {
+                    let gitdir_path = PathBuf::from(gitdir.trim());
+                    for ancestor in gitdir_path.ancestors() {
+                        if ancestor.join(".cvh").exists() {
+                            return ancestor.to_path_buf();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    path.to_path_buf()
+}
+
 pub async fn persist_active_project(path: &Path) {
     let dir = get_app_config_dir();
     let _ = tokio::fs::create_dir_all(&dir).await;

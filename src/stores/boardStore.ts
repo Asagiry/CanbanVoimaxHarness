@@ -84,6 +84,8 @@ interface BoardState {
   moveTask: (taskId: string, targetColumnId: string) => Promise<void>;
   updateTask: (taskId: string, partial: Partial<KanbanTask>) => void;
   updateTaskStatus: (taskId: string, status: TaskStatus) => void;
+  upsertBackendTask: (rawTask: any) => void;
+  setBackendTasks: (rawTasks: any[]) => void;
   addTask: (input: {
     title: string;
     description?: string;
@@ -402,7 +404,7 @@ async function triggerRunAgent(taskId: string, prompt?: string): Promise<void> {
   }
 }
 
-function mapBackendTaskToKanban(t: any): KanbanTask {
+export function mapBackendTaskToKanban(t: any): KanbanTask {
   // Fully generic: resolve everything through the current board columns.
   // (defined outside create(), so columns come from getState()).
   // normalizeKanbanTask fills defaults for legacy tasks created before
@@ -848,13 +850,69 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     set((state) => {
       const updatedTasks = state.tasks.map((t) => {
         if (t.id !== taskId) return t;
+        // Never overwrite waiting_subtask or done when requested status is idle!
+        if (status === 'idle' && (t.status === 'waiting_subtask' || t.status === 'done')) {
+          return t;
+        }
         const isTimerRunning = status === 'running' ? t.isTimerRunning : false;
         return { ...t, status, isTimerRunning };
       });
       persistTasksToLocalStorage(updatedTasks);
-      syncTasksBackend(updatedTasks);
+      // NOTE: NEVER call syncTasksBackend here! Backend owns agent status transitions.
       return { tasks: updatedTasks };
     });
+  },
+
+  upsertBackendTask: (rawTask: any) => {
+    if (!rawTask || typeof rawTask !== 'object') return;
+    const mapped = mapBackendTaskToKanban(rawTask);
+    set((state) => {
+      const exists = state.tasks.some((t) => t.id === mapped.id);
+      const updatedTasks = exists
+        ? state.tasks.map((t) => (t.id === mapped.id ? { ...t, ...mapped } : t))
+        : [...state.tasks, mapped];
+
+      // Relational symmetry: if this is a subtask, ensure parent task reflects waitingForSubtaskId
+      const finalTasks = mapped.parentId
+        ? updatedTasks.map((t) => {
+            if (t.id === mapped.parentId) {
+              const isSubDone = mapped.status === 'done' || mapped.columnId === 'ready';
+              return {
+                ...t,
+                waitingForSubtaskId: isSubDone ? undefined : mapped.id,
+                status: isSubDone
+                  ? (t.status === 'waiting_subtask' ? ('idle' as TaskStatus) : t.status)
+                  : ('waiting_subtask' as TaskStatus),
+              };
+            }
+            return t;
+          })
+        : updatedTasks;
+
+      persistTasksToLocalStorage(finalTasks);
+      return { tasks: finalTasks };
+    });
+  },
+
+  setBackendTasks: (rawTasks: any[]) => {
+    if (!Array.isArray(rawTasks)) return;
+    const prevTasks = get().tasks;
+    const mapped = rawTasks.map((raw) => {
+      const prev = prevTasks.find((p) => p.id === raw.id);
+      const rawCol = raw.stageId || raw.stage_id || raw.columnId;
+      if (prev && (!rawCol || prev.columnId === rawCol)) {
+        if (prev.stageEnteredAt && !raw.stageEnteredAt && !raw.stage_entered_at) {
+          raw.stageEnteredAt = prev.stageEnteredAt;
+        }
+        if (prev.stageDurations && !raw.stageDurations) {
+          raw.stageDurations = prev.stageDurations;
+        }
+      }
+      return mapBackendTaskToKanban(raw);
+    });
+    set({ tasks: mapped });
+    persistTasksToLocalStorage(mapped);
+    syncTaskSeqWithTasks(mapped);
   },
 
   addTask: async (input) => {

@@ -1787,5 +1787,406 @@ Write code.
         assert_eq!(moved_autonomous.stage_id, "ready");
         assert_eq!(moved_autonomous.status.as_deref(), Some("done"));
 
+        // Verify relational symmetry (§ 2.2, § 2.7 & § 2.22):
+        // Parent task CVH-100 must also be automatically advanced to 'ready' with status 'done' and verdict 'APPROVED'
+        let loaded_after = load_tasks_from_disk(&base).await;
+        let parent_after = loaded_after.iter().find(|t| t.id == "CVH-100").unwrap();
+        assert_eq!(parent_after.stage_id, "ready", "Parent must be advanced to 'ready' alongside approved child subtask");
+        assert_eq!(parent_after.status.as_deref(), Some("done"), "Parent status must be 'done'");
+        assert_eq!(parent_after.verdict.as_deref(), Some("APPROVED"), "Parent verdict must be 'APPROVED'");
+        assert_eq!(parent_after.waiting_for_subtask_id, None, "Parent waiting_for_subtask_id must be cleared");
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_subtask_advancement_5_columns_and_nesting() {
+        let base = PathBuf::from("target").join(format!("cvh_5col_nesting_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        let cols = vec![
+            crate::config::PipelineColumn {
+                id: "backlog".to_string(),
+                title: "Backlog".to_string(),
+                color: None,
+                icon: None,
+                persona: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            crate::config::PipelineColumn {
+                id: "dev".to_string(),
+                title: "Development".to_string(),
+                color: None,
+                icon: None,
+                persona: Some("developer".to_string()),
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: Some(true),
+                terminal: None,
+            },
+            crate::config::PipelineColumn {
+                id: "review".to_string(),
+                title: "Review".to_string(),
+                color: None,
+                icon: None,
+                persona: Some("reviewer".to_string()),
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: Some(true),
+                terminal: None,
+            },
+            crate::config::PipelineColumn {
+                id: "retro".to_string(),
+                title: "Retrospective".to_string(),
+                color: None,
+                icon: None,
+                persona: Some("retro-verifier".to_string()),
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: Some(true),
+                terminal: None,
+            },
+            crate::config::PipelineColumn {
+                id: "ready".to_string(),
+                title: "Ready".to_string(),
+                color: None,
+                icon: None,
+                persona: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: Some(true),
+            },
+        ];
+
+        let boards_cfg = crate::config::BoardsConfig {
+            active_board_id: "5col-board".to_string(),
+            boards: vec![crate::config::BoardDef {
+                id: "5col-board".to_string(),
+                name: "5-Column Board".to_string(),
+                columns: cols,
+            }],
+        };
+        crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
+
+        // Seed parent task in dev
+        let parent = Task {
+            id: "CVH-200".to_string(),
+            title: "Task in 5-stage pipeline".to_string(),
+            description: "Desc".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("5col-board".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("running".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: Some(true),
+            created_at: 0,
+            updated_at: 0,
+            handover_summary: None,
+            attachments: None,
+            cover_image: None,
+        };
+        save_tasks_to_disk(&base, &[parent]).await.expect("save parent");
+
+        // 1. Advance parent: creates review subtask CVH-200.1
+        let adv_res = internal_advance_task(&base, "CVH-200", "Handover to review", None)
+            .await
+            .expect("advance to review subtask");
+        assert!(adv_res.contains("УСПЕШНО: Создана подзадача ревью CVH-200.1 для задачи CVH-200"));
+
+        let loaded = load_tasks_from_disk(&base).await;
+        let p1 = loaded.iter().find(|t| t.id == "CVH-200").unwrap();
+        assert_eq!(p1.status.as_deref(), Some("waiting_subtask"));
+        assert_eq!(p1.waiting_for_subtask_id.as_deref(), Some("CVH-200.1"));
+
+        // 2. Advance subtask CVH-200.1 to ready (terminal column):
+        // In 5-column pipeline [backlog, dev, review, retro, ready]:
+        // When review subtask finishes, parent must advance past review into 'retro'!
+        let move_sub = internal_move_task_stage(
+            &base,
+            "CVH-200.1",
+            "ready",
+            Some("APPROVED".to_string()),
+            Some("done".to_string()),
+            Some("Review approved".to_string()),
+            None,
+            true,
+        )
+        .await
+        .expect("move subtask to ready");
+        assert_eq!(move_sub.stage_id, "ready");
+        assert_eq!(move_sub.status.as_deref(), Some("done"));
+
+        let loaded2 = load_tasks_from_disk(&base).await;
+        let p2 = loaded2.iter().find(|t| t.id == "CVH-200").unwrap();
+        assert_eq!(p2.stage_id, "retro", "Parent must advance to 'retro' stage after review approval in 5-stage pipeline");
+        assert_eq!(p2.status.as_deref(), Some("running"), "Retro has persona 'retro-verifier', status must be running");
+        assert_eq!(p2.waiting_for_subtask_id, None, "Parent must no longer wait for subtask");
+        assert_eq!(p2.verdict.as_deref(), Some("APPROVED"));
+
+        // 3. Now advance parent from retro to ready:
+        let move_parent_ready = internal_move_task_stage(
+            &base,
+            "CVH-200",
+            "ready",
+            Some("APPROVED".to_string()),
+            Some("done".to_string()),
+            Some("Retro completed".to_string()),
+            None,
+            true,
+        )
+        .await
+        .expect("move parent to ready");
+        assert_eq!(move_parent_ready.stage_id, "ready");
+        assert_eq!(move_parent_ready.status.as_deref(), Some("done"));
+
+        let loaded3 = load_tasks_from_disk(&base).await;
+        let p3 = loaded3.iter().find(|t| t.id == "CVH-200").unwrap();
+        let s3 = loaded3.iter().find(|t| t.id == "CVH-200.1").unwrap();
+        assert_eq!(p3.stage_id, "ready");
+        assert_eq!(p3.status.as_deref(), Some("done"));
+        assert_eq!(s3.stage_id, "ready");
+        assert_eq!(s3.status.as_deref(), Some("done"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_nested_subtasks_advancement() {
+        let base = PathBuf::from("target").join(format!("cvh_nested_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        let cols = vec![
+            crate::config::PipelineColumn {
+                id: "backlog".to_string(),
+                title: "Backlog".to_string(),
+                color: None,
+                icon: None,
+                persona: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            crate::config::PipelineColumn {
+                id: "dev".to_string(),
+                title: "Development".to_string(),
+                color: None,
+                icon: None,
+                persona: Some("developer".to_string()),
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: None,
+            },
+            crate::config::PipelineColumn {
+                id: "ready".to_string(),
+                title: "Ready".to_string(),
+                color: None,
+                icon: None,
+                persona: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                routes: None,
+                auto_run: None,
+                terminal: Some(true),
+            },
+        ];
+
+        let boards_cfg = crate::config::BoardsConfig {
+            active_board_id: "nest-board".to_string(),
+            boards: vec![crate::config::BoardDef {
+                id: "nest-board".to_string(),
+                name: "Nest Board".to_string(),
+                columns: cols,
+            }],
+        };
+        crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
+
+        // Grandparent CVH-300 waiting on Parent CVH-300.1
+        let gp = Task {
+            id: "CVH-300".to_string(),
+            title: "Grandparent Task".to_string(),
+            description: "".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("nest-board".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("waiting_subtask".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: Some("CVH-300.1".to_string()),
+            todos: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: Some(true),
+            created_at: 0,
+            updated_at: 0,
+            handover_summary: None,
+            attachments: None,
+            cover_image: None,
+        };
+
+        // Parent CVH-300.1 waiting on Child CVH-300.1.1
+        let parent = Task {
+            id: "CVH-300.1".to_string(),
+            title: "Child Subtask".to_string(),
+            description: "".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("nest-board".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("waiting_subtask".to_string()),
+            model: None,
+            parent_id: Some("CVH-300".to_string()),
+            subtask_index: Some(1),
+            waiting_for_subtask_id: Some("CVH-300.1.1".to_string()),
+            todos: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: Some(true),
+            created_at: 0,
+            updated_at: 0,
+            handover_summary: None,
+            attachments: None,
+            cover_image: None,
+        };
+
+        // Child CVH-300.1.1 running in dev
+        let child = Task {
+            id: "CVH-300.1.1".to_string(),
+            title: "Grandchild Subtask".to_string(),
+            description: "".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("nest-board".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("running".to_string()),
+            model: None,
+            parent_id: Some("CVH-300.1".to_string()),
+            subtask_index: Some(1),
+            waiting_for_subtask_id: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: Some(true),
+            created_at: 0,
+            updated_at: 0,
+            handover_summary: None,
+            attachments: None,
+            cover_image: None,
+        };
+
+        save_tasks_to_disk(&base, &[gp, parent, child]).await.expect("save tasks");
+
+        // Advance grandchild CVH-300.1.1 to ready:
+        // Must recursively advance CVH-300.1 to ready, AND CVH-300 to ready!
+        let _ = internal_move_task_stage(
+            &base,
+            "CVH-300.1.1",
+            "ready",
+            Some("APPROVED".to_string()),
+            Some("done".to_string()),
+            None,
+            None,
+            true,
+        )
+        .await
+        .expect("move grandchild to ready");
+
+        let loaded = load_tasks_from_disk(&base).await;
+        let gp_after = loaded.iter().find(|t| t.id == "CVH-300").unwrap();
+        let p_after = loaded.iter().find(|t| t.id == "CVH-300.1").unwrap();
+        let c_after = loaded.iter().find(|t| t.id == "CVH-300.1.1").unwrap();
+
+        assert_eq!(c_after.stage_id, "ready");
+        assert_eq!(c_after.status.as_deref(), Some("done"));
+
+        assert_eq!(p_after.stage_id, "ready", "Parent must be advanced to ready recursively");
+        assert_eq!(p_after.status.as_deref(), Some("done"));
+        assert_eq!(p_after.waiting_for_subtask_id, None);
+
+        assert_eq!(gp_after.stage_id, "ready", "Grandparent must be advanced to ready recursively");
+        assert_eq!(gp_after.status.as_deref(), Some("done"));
+        assert_eq!(gp_after.waiting_for_subtask_id, None);
+
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
