@@ -34,5 +34,8 @@ custom-protocol = ["tauri/custom-protocol"]
 [profile.dev.package.libsqlite3-sys]
 debug = false
 
+[profile.release]
+incremental = true
+
 [profile.release.package.libsqlite3-sys]
 debug = false

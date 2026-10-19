@@ -3,14 +3,16 @@ rem ==========================================================================
 rem CanbanVoimaxHarness - one-button local Release build (Windows, cmd.exe).
 rem Single entry point for agents: run from the repository root, no questions.
 rem
-rem   build-release.bat [--skip-install] [--skip-checks] [--bundles=LIST] [--target=TRIPLE] [--no-pause] [--pause] [--help]
+rem   build-release.bat [--skip-install] [--checks] [--skip-checks] [--bundles=LIST] [--target=TRIPLE] [--no-pause] [--pause] [--help]
 rem
 rem Pipeline: [1/5] preflight, [2/5] pnpm install, [3/5] frontend build,
-rem             [4/5] cargo check + clippy, [5/5] tauri build + collect.
+rem             [4/5] cargo check + clippy (skipped by default), [5/5] tauri build + collect.
 rem Layout:   Release\Windows\bin\        portable exe + WebView2Loader.dll
 rem           Release\Windows\installer\  NSIS setup.exe, MSI
 rem Flags:    --skip-install    reuse existing node_modules
-rem           --skip-checks     skip cargo check + clippy
+rem           --checks          run cargo check + clippy (skipped by default for speed)
+rem           --with-checks     alias for --checks
+rem           --skip-checks     skip cargo check + clippy (default)
 rem           --bundles=LIST    forward to "tauri build --bundles LIST" (e.g. nsis)
 rem           --target=TRIPLE   target triple (e.g. x86_64-pc-windows-gnu)
 rem           --no-pause        do not pause before exit (agents and automated scripts)
@@ -21,7 +23,7 @@ rem Window stays open on completion or error unless --no-pause is passed.
 rem ==========================================================================
 setlocal EnableExtensions EnableDelayedExpansion
 set "SKIP_INSTALL=0"
-set "SKIP_CHECKS=0"
+set "SKIP_CHECKS=1"
 set "BUNDLES="
 set "TARGET="
 set "NO_PAUSE=0"
@@ -54,7 +56,32 @@ if "%~1"=="--skip-install" (
   shift
   goto parse_args
 )
+if "%~1"=="--checks" (
+  set "SKIP_CHECKS=0"
+  shift
+  goto parse_args
+)
+if "%~1"=="-checks" (
+  set "SKIP_CHECKS=0"
+  shift
+  goto parse_args
+)
+if "%~1"=="--with-checks" (
+  set "SKIP_CHECKS=0"
+  shift
+  goto parse_args
+)
+if "%~1"=="-with-checks" (
+  set "SKIP_CHECKS=0"
+  shift
+  goto parse_args
+)
 if "%~1"=="--skip-checks" (
+  set "SKIP_CHECKS=1"
+  shift
+  goto parse_args
+)
+if "%~1"=="-skip-checks" (
   set "SKIP_CHECKS=1"
   shift
   goto parse_args
@@ -300,7 +327,7 @@ popd
 goto checks_done
 
 :skip_checks
-echo   skipped ^(--skip-checks^).
+echo   skipped ^(fast build mode; pass --checks to run cargo check + clippy^).
 
 :checks_done
 echo.
@@ -510,7 +537,9 @@ echo     Release\Windows\installer\  NSIS setup.exe, MSI
 echo.
 echo   Options:
 echo     --skip-install    reuse existing node_modules (default: skip if present)
-echo     --skip-checks     skip cargo check + cargo clippy
+echo     --checks          run cargo check + cargo clippy (skipped by default for speed)
+echo     --with-checks     alias for --checks
+echo     --skip-checks     skip cargo check + cargo clippy (default)
 echo     --bundles=LIST    forward to "tauri build --bundles LIST" (e.g. nsis)
 echo     --target=TRIPLE   target triple (e.g. x86_64-pc-windows-gnu)
 echo     --no-pause        do not pause before exit (agents and automated scripts)
