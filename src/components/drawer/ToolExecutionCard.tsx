@@ -830,9 +830,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             )}
 
             {/* Clean filename with muted path */}
-            <div
-              className="flex items-center min-w-0 font-mono text-xs overflow-hidden"
-            >
+            <div className="flex items-center min-w-0 font-mono text-xs overflow-hidden">
               {dirPath && (
                 <span className="text-[#8f8f8f] dark:text-[#8b949e] truncate max-w-[120px] sm:max-w-[180px] shrink-0">
                   {dirPath}/
@@ -899,9 +897,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             )}
 
             {/* Clean filename with muted path */}
-            <div
-              className="flex items-center min-w-0 font-mono text-xs overflow-hidden"
-            >
+            <div className="flex items-center min-w-0 font-mono text-xs overflow-hidden">
               {dirPath && (
                 <span className="text-[#8f8f8f] dark:text-[#8b949e] truncate max-w-[120px] sm:max-w-[180px] shrink-0">
                   {dirPath}/
@@ -956,9 +952,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
               />
             </button>
 
-            <span
-              className="flex items-center shrink-0 select-none text-[#8f8f8f] dark:text-[#8b949e]"
-            >
+            <span className="flex items-center shrink-0 select-none text-[#8f8f8f] dark:text-[#8b949e]">
               {tool.toolName === 'compact_context' ? (
                 <Minimize2 className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
               ) : (
@@ -971,9 +965,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             </span>
 
             {target && (
-              <span
-                className="font-mono text-[#52525b] dark:text-[#8b949e] truncate max-w-[260px] sm:max-w-[360px] md:max-w-[460px]"
-              >
+              <span className="font-mono text-[#52525b] dark:text-[#8b949e] truncate max-w-[260px] sm:max-w-[360px] md:max-w-[460px]">
                 {target}
               </span>
             )}
@@ -1111,7 +1103,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
           )}
 
           <div className="flex items-center justify-between pt-1 border-t border-[#f4f4f5] dark:border-[#21262d] text-[10px] text-[#8f8f8f] dark:text-[#8b949e]">
-            <span>Статус: {isFailed && tool.status === 'success' ? `failed (exit ${tool.exitCode ?? 1})` : tool.status} {tool.exitCode !== undefined && !isFailed ? `(код ${tool.exitCode})` : ''}</span>
+            <span>Статус: {isFailed ? `failed (код ${tool.exitCode ?? 1})` : tool.status}</span>
           </div>
         </div>
       )}
