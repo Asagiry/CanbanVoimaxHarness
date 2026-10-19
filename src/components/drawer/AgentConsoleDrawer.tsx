@@ -292,21 +292,43 @@ export default function AgentConsoleDrawer() {
   const handleAbortAgent = async () => {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('abort_agent', { taskId: task.id });
-      updateTask(task.id, { status: 'paused', isTimerRunning: false });
-      setActiveAgentTask(task.id, false);
+
       if (activeSubagentId) {
+        // Granular abort: stop ONLY active subagent without killing parent task
+        const resolvedSubagentId =
+          useDrawerStore.getState().toolIdToSubagentId[activeSubagentId] || activeSubagentId;
+        await invoke('abort_agent', { taskId: resolvedSubagentId });
         setActiveAgentTask(activeSubagentId, false);
-        const subTools = toolExecutions[activeSubagentId] || [];
+        setActiveAgentTask(resolvedSubagentId, false);
+
+        const boardSub = subtasks.find((s) => s.id === activeSubagentId || s.id === resolvedSubagentId);
+        if (boardSub) {
+          updateTask(boardSub.id, { status: 'paused', isTimerRunning: false });
+        }
+
+        const subTools = [
+          ...(toolExecutions[activeSubagentId] || []),
+          ...(toolExecutions[resolvedSubagentId] || []),
+        ];
         for (const t of subTools) {
           if (t.status === 'running') {
             useDrawerStore.getState().updateToolExecution(activeSubagentId, t.id, {
               status: 'failed',
               stderr: 'Прервано пользователем',
             });
+            useDrawerStore.getState().updateToolExecution(resolvedSubagentId, t.id, {
+              status: 'failed',
+              stderr: 'Прервано пользователем',
+            });
           }
         }
+        return;
       }
+
+      // Root task abort
+      await invoke('abort_agent', { taskId: task.id });
+      updateTask(task.id, { status: 'paused', isTimerRunning: false });
+      setActiveAgentTask(task.id, false);
       const currTools = toolExecutions[task.id] || [];
       for (const t of currTools) {
         if (t.status === 'running') {

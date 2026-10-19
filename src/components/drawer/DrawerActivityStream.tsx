@@ -8,7 +8,6 @@ import CompactedContextCard from './CompactedContextCard';
 import { useDrawerStore } from '../../stores/drawerStore';
 import {
   ArrowDown,
-  ArrowLeft,
   ChevronDown,
   ChevronRight,
   CornerDownRight,
@@ -20,7 +19,12 @@ import {
   Play,
   X,
   Bot,
+  ListTodo,
+  CheckCircle2,
+  Circle,
+  Clock,
 } from 'lucide-react';
+import { getRoleIcon, formatSubagentDisplayTitle } from './SubagentsSidebar';
 
 // Inline Markdown Parser Types & Helpers
 interface InlineTextNode {
@@ -508,18 +512,107 @@ function isFinalResponseItem(
   return false;
 }
 
+interface ParsedTodoItem {
+  id: string;
+  content: string;
+  status: 'pending' | 'in_progress' | 'completed';
+}
+
+function tryExtractTodos(text: string): { leadingText?: string; todos: ParsedTodoItem[] } | null {
+  if (!text) return null;
+  const trimmed = text.trim();
+
+  let candidate = trimmed;
+  const fenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+  if (fenceMatch) {
+    candidate = fenceMatch[1].trim();
+  }
+
+  const toTodos = (arr: unknown[]): ParsedTodoItem[] | null => {
+    if (!Array.isArray(arr) || arr.length === 0) return null;
+    const items: ParsedTodoItem[] = [];
+    for (let i = 0; i < arr.length; i++) {
+      const item = arr[i];
+      if (!item || typeof item !== 'object') return null;
+      const rec = item as Record<string, unknown>;
+      const content = rec.content ?? rec.title ?? rec.text ?? rec.task;
+      if (typeof content !== 'string') return null;
+      const statusRaw = String(rec.status || 'pending').toLowerCase();
+      const status: 'pending' | 'in_progress' | 'completed' =
+        statusRaw === 'completed' || statusRaw === 'done'
+          ? 'completed'
+          : statusRaw === 'in_progress' || statusRaw === 'active'
+          ? 'in_progress'
+          : 'pending';
+      items.push({
+        id: String(rec.id || `todo-${i + 1}`),
+        content,
+        status,
+      });
+    }
+    return items;
+  };
+
+  if (candidate.startsWith('[') || candidate.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (Array.isArray(parsed)) {
+        const todos = toTodos(parsed);
+        if (todos) return { todos };
+      } else if (parsed && typeof parsed === 'object') {
+        const todos = toTodos((parsed as any).todos || (parsed as any).tasks);
+        if (todos) return { todos };
+      }
+    } catch {
+      // not direct JSON
+    }
+  }
+
+  const arrayStart = trimmed.indexOf('[');
+  const arrayEnd = trimmed.lastIndexOf(']');
+  if (arrayStart !== -1 && arrayEnd > arrayStart) {
+    const jsonSub = trimmed.slice(arrayStart, arrayEnd + 1);
+    try {
+      const parsed = JSON.parse(jsonSub);
+      const todos = toTodos(parsed);
+      if (todos) {
+        const leading = trimmed.slice(0, arrayStart).trim();
+        return { leadingText: leading || undefined, todos };
+      }
+    } catch {
+      // not JSON array
+    }
+  }
+
+  return null;
+}
+
 interface AgentExplanationCardProps {
   activity: DrawerActivityItem;
   content?: string;
   timestamp?: string;
+  hasNearbyTodoWrite?: boolean;
 }
 
 function AgentExplanationCard({
   activity: _activity,
   content,
   timestamp,
+  hasNearbyTodoWrite,
 }: AgentExplanationCardProps) {
   const [isExpanded, setIsExpanded] = useState(true);
+
+  const todoData = useMemo(() => {
+    return content ? tryExtractTodos(content) : null;
+  }, [content]);
+
+  // If this explanation is purely raw JSON of todos and duplicates nearby todo_write tool, hide completely
+  if (todoData && hasNearbyTodoWrite && !todoData.leadingText) {
+    return null;
+  }
+
+  const effectiveLeadingText = todoData?.leadingText;
+  const effectiveTodos = (!hasNearbyTodoWrite && todoData?.todos) ? todoData.todos : null;
 
   return (
     <div className="rounded-lg border border-[#e4e4e7] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-xs overflow-hidden my-2.5 transition duration-150">
@@ -533,9 +626,13 @@ function AgentExplanationCard({
           ) : (
             <ChevronRight className="h-3.5 w-3.5 text-[#71717a] dark:text-[#8b949e] shrink-0" />
           )}
-          <Bot className="h-3.5 w-3.5 text-[#171717] dark:text-[#58a6ff] shrink-0" />
+          {effectiveTodos ? (
+            <ListTodo className="h-3.5 w-3.5 text-[#171717] dark:text-[#58a6ff] shrink-0" />
+          ) : (
+            <Bot className="h-3.5 w-3.5 text-[#171717] dark:text-[#58a6ff] shrink-0" />
+          )}
           <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">
-            Пояснение агента
+            {effectiveTodos ? 'План действий' : 'Пояснение агента'}
           </span>
         </div>
         <span className="text-[10px] font-mono text-[#71717a] dark:text-[#8b949e] tabular-nums">
@@ -543,14 +640,52 @@ function AgentExplanationCard({
         </span>
       </div>
       {isExpanded && (
-        <div className="px-3.5 py-3 border-t border-[#f4f4f5] dark:border-[#21262d] text-sm leading-relaxed text-[#27272a] dark:text-[#d4d4d8] select-text">
-          {content ? (
+        <div className="px-3.5 py-3 border-t border-[#f4f4f5] dark:border-[#21262d] text-sm leading-relaxed text-[#27272a] dark:text-[#d4d4d8] select-text space-y-2.5">
+          {effectiveLeadingText && (
+            <MarkdownContent content={effectiveLeadingText} />
+          )}
+          {effectiveTodos ? (
+            <div className="space-y-1.5 pt-1">
+              {effectiveTodos.map((item, i) => (
+                <div
+                  key={item.id || i}
+                  className="flex items-start space-x-2 text-xs font-sans p-2 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#f0f0f0] dark:border-[#21262d]"
+                >
+                  <span className="mt-0.5 shrink-0">
+                    {item.status === 'completed' ? (
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                    ) : item.status === 'in_progress' ? (
+                      <Clock className="h-3.5 w-3.5 text-amber-500 animate-pulse" />
+                    ) : (
+                      <Circle className="h-3.5 w-3.5 text-[#a1a1aa] dark:text-[#6e7681]" />
+                    )}
+                  </span>
+                  <span
+                    className={`flex-1 leading-normal ${
+                      item.status === 'completed'
+                        ? 'line-through text-[#71717a] dark:text-[#8b949e]'
+                        : 'text-[#171717] dark:text-[#f0f6fc]'
+                    }`}
+                  >
+                    {item.content}
+                  </span>
+                  <span className="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded border shrink-0 text-[#71717a] dark:text-[#8b949e] border-[#e4e4e7] dark:border-[#30363d]">
+                    {item.status === 'completed'
+                      ? 'Готово'
+                      : item.status === 'in_progress'
+                      ? 'В работе'
+                      : 'Ожидает'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : !effectiveLeadingText && content ? (
             <MarkdownContent content={content} />
-          ) : (
+          ) : !content && !effectiveLeadingText ? (
             <div className="text-xs text-[#8f8f8f] font-mono animate-pulse">
               Формирование шага...
             </div>
-          )}
+          ) : null}
         </div>
       )}
     </div>
@@ -572,7 +707,6 @@ export default function DrawerActivityStream({
     activeSubagentTitle,
     activeSubagentRole,
     activeSubagentPrompt,
-    closeSubagent,
   } = useDrawerStore();
 
   const [expandedOutputs, setExpandedOutputs] = useState<Set<string>>(() => new Set());
@@ -679,24 +813,18 @@ export default function DrawerActivityStream({
             <div className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-4 shadow-xs">
               <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#ebebeb] dark:border-[#21262d]">
                 <div className="flex items-center space-x-2 min-w-0">
-                  <span className="text-[#171717] dark:text-[#f0f6fc] text-xs font-mono shrink-0">■</span>
+                  {(() => {
+                    const SubRoleIcon = getRoleIcon(activeSubagentRole);
+                    return <SubRoleIcon className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />;
+                  })()}
                   <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans truncate">
-                    Атомарная задача субагента: {activeSubagentTitle || 'Субагент'}
+                    Атомарная задача субагента: {formatSubagentDisplayTitle(activeSubagentTitle)}
                   </span>
                 </div>
                 <div className="flex items-center space-x-2 shrink-0">
                   <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border ${getRoleBadgeClass(activeSubagentRole)}`}>
                     {(activeSubagentRole || 'general').toUpperCase()}
                   </span>
-                  <button
-                    type="button"
-                    onClick={closeSubagent}
-                    className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-sans font-medium text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] border border-transparent hover:border-[#ebebeb] dark:hover:border-[#30363d] transition cursor-pointer"
-                    title="Вернуться к родительской задаче"
-                  >
-                    <ArrowLeft className="h-3.5 w-3.5" />
-                    <span>← К родительской задаче</span>
-                  </button>
                 </div>
               </div>
               <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed whitespace-pre-wrap select-text font-sans bg-[#fafafa] dark:bg-[#161b22] p-3 rounded-md border border-[#ebebeb] dark:border-[#30363d]">
@@ -908,6 +1036,21 @@ export default function DrawerActivityStream({
             // c) Assistant Response: True Final Response vs Intermediate Step Commentary
             const isFinal = isFinalResponseItem(activity, idx, unifiedActivities ?? [], isRunning);
 
+            const hasNearbyTodoWrite = (() => {
+              const windowSize = 3;
+              const start = Math.max(0, idx - windowSize);
+              const end = Math.min((unifiedActivities?.length ?? 0) - 1, idx + windowSize);
+              for (let i = start; i <= end; i++) {
+                if (i === idx) continue;
+                const act = unifiedActivities[i];
+                if (act?.type === 'tool') {
+                  const tName = act.tool?.toolName || (act.tool as any)?.name || (act.tool as any)?.tool;
+                  if (tName === 'todo_write') return true;
+                }
+              }
+              return false;
+            })();
+
             if (!isFinal) {
               // Intermediate assistant commentary / step explanation rendered as collapsible chat card
               return (
@@ -916,6 +1059,7 @@ export default function DrawerActivityStream({
                   activity={activity}
                   content={activity?.content}
                   timestamp={activity?.timestamp}
+                  hasNearbyTodoWrite={hasNearbyTodoWrite}
                 />
               );
             }
