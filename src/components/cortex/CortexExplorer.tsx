@@ -807,7 +807,7 @@ function ColumnStageCard({
 
       {/* Children */}
       {stage.isExpanded && (
-        <div className="pl-4 pr-1 py-0.5 space-y-0.5 border-l border-[#ebebeb] dark:border-[#21262d] ml-3 my-0.5">
+        <div className="pl-2.5 pr-1 py-0.5 space-y-0.5 border-l border-[#ebebeb] dark:border-[#21262d] ml-2 my-0.5">
           {!isBacklogSystem && !isReady && !column?.terminal && column && (
             <AgentField
               columnId={column.id}
@@ -1011,8 +1011,8 @@ function AgentField({
   }, [current]);
 
   return (
-    <div className="px-2 py-1">
-      <div className="flex items-center gap-1.5">
+    <div className="px-0.5 py-0.5 min-w-0 w-full">
+      <div className="flex items-center gap-1.5 min-w-0 w-full">
         <span className="text-[10px] font-sans font-semibold uppercase tracking-wide text-[#8f8f8f] shrink-0">
           Агент
         </span>
@@ -1024,6 +1024,7 @@ function AgentField({
             allowEmpty={true}
             emptyLabel="без агента"
             personas={personas}
+            compact={true}
             className="flex-1 min-w-0"
           />
         ) : (

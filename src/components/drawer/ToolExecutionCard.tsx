@@ -14,6 +14,7 @@ import {
   FileCode2,
   FileText,
   Minimize2,
+  Layers,
 } from 'lucide-react';
 
 interface ToolExecutionCardProps {
@@ -101,7 +102,6 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   // Subagent interactive card (subagent and subagent_bg)
   if (toolName === 'subagent' || toolName === 'subagent_bg') {
     const rawRole = (params?.role as string) || 'general';
-    const roleUpper = rawRole.toUpperCase();
     const title = (params?.title as string) || (params?.prompt as string)?.slice(0, 60) || 'Делегированная задача субагента';
     const prompt = (params?.prompt as string) || '';
     const isBg = toolName === 'subagent_bg' || (params?.is_bg === true) || (params?.isBg === true);
@@ -143,24 +143,21 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       >
         <div className="flex items-center justify-between gap-2.5">
           <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
-            <AgentIcon name={personaIcon} className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
+            {isBg ? (
+              <div className="relative shrink-0 flex items-center justify-center">
+                <Layers className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-purple-500 ring-1 ring-white dark:ring-[#161b22]" />
+              </div>
+            ) : (
+              <AgentIcon name={personaIcon} className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
+            )}
 
             <span
               style={roleBadgeStyle}
               className="px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider border shrink-0 select-none uppercase"
             >
-              {roleUpper}
+              СУБАГЕНТ
             </span>
-
-            {isBg ? (
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold tracking-wider uppercase bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 shrink-0">
-                ФОН
-              </span>
-            ) : (
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold tracking-wider uppercase bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 shrink-0">
-                СИНХР
-              </span>
-            )}
 
             <span className="font-sans font-medium text-xs text-[#0d0d0d] dark:text-[#f0f6fc] group-hover:text-[#171717] dark:group-hover:text-white transition-colors truncate">
               {displayTitle}

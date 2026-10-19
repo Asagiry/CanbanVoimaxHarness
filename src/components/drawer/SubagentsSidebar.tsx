@@ -304,20 +304,20 @@ export default function SubagentsSidebar({
                 {/* Card Top Row: Role Icon + Role Badge + [BG] + Status */}
                 <div className="flex items-center justify-between gap-1.5 mb-1.5">
                   <div className="flex items-center space-x-1.5 min-w-0">
-                    <AgentIcon name={personaIcon} className="h-3.5 w-3.5 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
+                    {sub.isBg ? (
+                      <div className="relative shrink-0 flex items-center justify-center">
+                        <Layers className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+                        <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-purple-500 ring-1 ring-white dark:ring-[#0d1117]" />
+                      </div>
+                    ) : (
+                      <AgentIcon name={personaIcon} className="h-3.5 w-3.5 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
+                    )}
                     <span
                       style={roleBadgeStyle}
-                      className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold tracking-wider uppercase border shrink-0"
+                      className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold tracking-wider uppercase border shrink-0 select-none"
                     >
-                      {sub.role}
+                      СУБАГЕНТ
                     </span>
-                    {sub.isBg && (
-                      <span
-                        className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold tracking-wider uppercase bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 shrink-0"
-                      >
-                        ФОН
-                      </span>
-                    )}
                   </div>
 
                   {/* Status Indicator & Granular Stop Button */}
@@ -336,6 +336,7 @@ export default function SubagentsSidebar({
                               const { invoke } = await import('@tauri-apps/api/core');
                               await invoke('abort_agent', { taskId: sub.id });
                               useDrawerStore.getState().setActiveAgentTask(sub.id, false);
+                              useDrawerStore.getState().updateSubagentStatus(sub.id, 'stopped', 'Прервано пользователем');
                               const boardTask = useBoardStore.getState().tasks.find((t) => t.id === sub.id);
                               if (boardTask) {
                                 useBoardStore.getState().updateTask(sub.id, { status: 'paused', isTimerRunning: false });
@@ -359,10 +360,10 @@ export default function SubagentsSidebar({
                           <span>Остановить</span>
                         </button>
                       </>
-                    ) : sub.status === 'error' ? (
+                    ) : sub.status === 'error' || sub.status === 'stopped' ? (
                       <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#b91c1c] dark:text-[#ff7b72] bg-[#fef2f2] dark:bg-[#3b1219] border border-[#fecaca] dark:border-[#da3633]">
                         <AlertCircle className="h-3 w-3 shrink-0" />
-                        <span>Ошибка</span>
+                        <span>{sub.status === 'stopped' ? 'Остановлен' : 'Ошибка'}</span>
                       </span>
                     ) : (
                       <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#52525b] dark:text-[#8b949e] bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d]">

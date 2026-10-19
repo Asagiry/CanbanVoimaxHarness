@@ -188,7 +188,7 @@ export interface LlmSettings {
 }
 
 export type SubagentRole = 'explorer' | 'developer' | 'reviewer' | 'general' | string;
-export type SubagentStatus = 'running' | 'finished' | 'error';
+export type SubagentStatus = 'running' | 'finished' | 'error' | 'stopped';
 
 export interface SubagentInfo {
   id: string;

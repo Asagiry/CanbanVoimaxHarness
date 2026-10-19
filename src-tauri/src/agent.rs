@@ -1531,6 +1531,32 @@ pub struct ExecutedSubagentCall {
     pub result: String,
 }
 
+#[derive(Clone, Debug)]
+pub struct ExecutedToolCallInTurn {
+    pub id: String,
+    pub canonical_name: String,
+    pub parsed_args: serde_json::Value,
+    pub result: String,
+    pub success: bool,
+}
+
+/// Check if two tool argument strings are identical or represent equivalent JSON payloads.
+pub fn are_tool_arguments_equal(a: &str, b: &str) -> bool {
+    let a_trim = a.trim();
+    let b_trim = b.trim();
+    if a_trim == b_trim {
+        return true;
+    }
+    if let (Ok(val_a), Ok(val_b)) = (
+        serde_json::from_str::<serde_json::Value>(a_trim),
+        serde_json::from_str::<serde_json::Value>(b_trim),
+    ) {
+        val_a == val_b
+    } else {
+        false
+    }
+}
+
 /// Robust subagent prompt similarity check for single-turn deduplication.
 pub fn are_subagent_prompts_duplicate(p1: &str, p2: &str) -> bool {
     let t1 = p1.trim();
@@ -2196,7 +2222,7 @@ pub async fn execute_tool(
                     }
                 }
 
-                // 2. Check SUBAGENT_SESSIONS (synchronous or already completed subagents)
+                // 2. Check SUBAGENT_SESSIONS (synchronous, running or already completed subagents)
                 if let Some((resolved_id, session)) = find_subagent_session(task_id, subagent_id).await {
                     let info = session.retry_info.lock().await;
                     if let Some(ref rep) = info.report {
@@ -2209,7 +2235,33 @@ pub async fn execute_tool(
                     }
                     if info.status == "error" {
                         let err = info.last_error.as_deref().unwrap_or("Unknown error");
-                        bail!("Subagent [{}] failed with error: {}", resolved_id, err);
+                        collected_reports.push((resolved_id, format!("[Субагент завершился с ошибкой: {}]", err)));
+                        continue;
+                    }
+                    if info.status == "running" {
+                        drop(info);
+                        eprintln!("CVH [collect_subagent]: Subagent [{}] is still running, awaiting completion...", resolved_id);
+                        let mut poll_interval = tokio::time::interval(std::time::Duration::from_millis(150));
+                        let sub_report = loop {
+                            poll_interval.tick().await;
+                            if ctx.abort_handle.load(Ordering::SeqCst) || session.abort_handle.load(Ordering::SeqCst) {
+                                break "[Субагент прерван пользователем / Subagent aborted by user]".to_string();
+                            }
+                            let info = session.retry_info.lock().await;
+                            if let Some(ref rep) = info.report {
+                                break rep.clone();
+                            }
+                            if info.status == "finished" {
+                                break info.report.clone().unwrap_or_else(|| "[Субагент завершил работу без отчета / Completed without report]".to_string());
+                            } else if info.status == "aborted" {
+                                break "[Субагент прерван пользователем / Subagent aborted by user]".to_string();
+                            } else if info.status == "error" {
+                                let err = info.last_error.as_deref().unwrap_or("Unknown error");
+                                break format!("[Субагент завершился с ошибкой: {}]", err);
+                            }
+                        };
+                        collected_reports.push((resolved_id, sub_report));
+                        continue;
                     }
                 }
 
@@ -2219,7 +2271,12 @@ pub async fn execute_tool(
                     continue;
                 }
 
-                bail!("Subagent [{}] not found in background registry or session history", subagent_id);
+                // 4. Resilient fallback: return an informative notice instead of failing with bail!
+                let fallback_msg = format!(
+                    "[Субагент '{}' не найден в реестре активных фоновых агентов или истории сессий задачи. Если вы запускали субагент синхронно через tool 'subagent', его отчет уже был возвращен вам в предыдущем ответе.]",
+                    subagent_id
+                );
+                collected_reports.push((subagent_id.clone(), fallback_msg));
             }
 
             if collected_reports.len() == 1 {
@@ -3384,11 +3441,23 @@ pub fn run_inprocess_subagent(
                     }
                 }
                 StreamChunk::ToolCall { id, name, arguments } => {
-                    turn_tool_calls.push(ToolCall {
-                        id,
-                        call_type: "function".to_string(),
-                        function: crate::llm::FunctionCall { name, arguments },
+                    let norm_name = canonical_tool_name(&name);
+                    let is_dup = turn_tool_calls.iter().any(|existing| {
+                        canonical_tool_name(&existing.function.name) == norm_name
+                            && are_tool_arguments_equal(&existing.function.arguments, &arguments)
                     });
+                    if is_dup {
+                        eprintln!(
+                            "CVH [subagent]: Deduplicated parallel tool call '{}' with arguments '{}' in sub_turn {}",
+                            norm_name, arguments, sub_turn
+                        );
+                    } else {
+                        turn_tool_calls.push(ToolCall {
+                            id,
+                            call_type: "function".to_string(),
+                            function: crate::llm::FunctionCall { name, arguments },
+                        });
+                    }
                 }
                 StreamChunk::Done => break,
                 StreamChunk::Error(e) => {
@@ -3474,6 +3543,8 @@ pub fn run_inprocess_subagent(
             }
         }
 
+        let mut executed_tools_in_turn: Vec<ExecutedToolCallInTurn> = Vec::new();
+
         // Execute subagent tool calls
         for tc in turn_tool_calls {
             if ctx.abort_handle.load(Ordering::SeqCst) {
@@ -3481,6 +3552,18 @@ pub fn run_inprocess_subagent(
             }
             let parsed_args: serde_json::Value =
                 serde_json::from_str(&tc.function.arguments).unwrap_or_else(|_| serde_json::json!({}));
+            let norm_name = canonical_tool_name(&tc.function.name);
+
+            if let Some(prev) = executed_tools_in_turn.iter().find(|p| {
+                p.canonical_name == norm_name && p.parsed_args == parsed_args
+            }) {
+                eprintln!(
+                    "CVH [subagent]: Reusing executed result for duplicate tool call '{}' ('{}') in sub_turn {} (matches earlier call '{}')",
+                    tc.id, norm_name, sub_turn, prev.id
+                );
+                sub_messages.push(ChatMessage::tool_response(tc.id, prev.result.clone()));
+                continue;
+            }
 
             let tool_item_id = format!("sub-tool-{}", tc.id);
             let start_time = chrono::Utc::now().timestamp_millis();
@@ -3594,7 +3677,15 @@ pub fn run_inprocess_subagent(
                 }));
             }
 
-            sub_messages.push(ChatMessage::tool_response(tc.id, res_str));
+            sub_messages.push(ChatMessage::tool_response(tc.id.clone(), res_str.clone()));
+
+            executed_tools_in_turn.push(ExecutedToolCallInTurn {
+                id: tc.id.clone(),
+                canonical_name: norm_name.to_string(),
+                parsed_args: parsed_args.clone(),
+                result: res_str,
+                success: is_success,
+            });
         }
     }
 
@@ -5101,21 +5192,33 @@ where
                     event_sink(AgentEvent::Thought(thought));
                 }
                 StreamChunk::ToolCall { id, name, arguments } => {
-                    if first_token_instant.is_none() {
-                        first_token_instant = Some(std::time::Instant::now());
+                    let norm_name = canonical_tool_name(&name);
+                    let is_dup = turn_tool_calls.iter().any(|existing| {
+                        canonical_tool_name(&existing.function.name) == norm_name
+                            && are_tool_arguments_equal(&existing.function.arguments, &arguments)
+                    });
+                    if is_dup {
+                        eprintln!(
+                            "CVH [agent]: Deduplicated parallel tool call '{}' with arguments '{}' in turn {}",
+                            norm_name, arguments, turn
+                        );
+                    } else {
+                        if first_token_instant.is_none() {
+                            first_token_instant = Some(std::time::Instant::now());
+                        }
+                        last_token_instant = Some(std::time::Instant::now());
+                        turn_streamed_chars += name.len() + arguments.len();
+                        event_sink(AgentEvent::ToolCall {
+                            id: id.clone(),
+                            name: name.clone(),
+                            arguments: arguments.clone(),
+                        });
+                        turn_tool_calls.push(ToolCall {
+                            id,
+                            call_type: "function".to_string(),
+                            function: crate::llm::FunctionCall { name, arguments },
+                        });
                     }
-                    last_token_instant = Some(std::time::Instant::now());
-                    turn_streamed_chars += name.len() + arguments.len();
-                    event_sink(AgentEvent::ToolCall {
-                        id: id.clone(),
-                        name: name.clone(),
-                        arguments: arguments.clone(),
-                    });
-                    turn_tool_calls.push(ToolCall {
-                        id,
-                        call_type: "function".to_string(),
-                        function: crate::llm::FunctionCall { name, arguments },
-                    });
                 }
                 StreamChunk::Usage {
                     input_tokens,
@@ -5262,6 +5365,7 @@ where
             call_id: None,
         };
 
+        let mut executed_tools_in_turn: Vec<ExecutedToolCallInTurn> = Vec::new();
         let mut executed_subagents_in_turn: Vec<ExecutedSubagentCall> = Vec::new();
 
         // Execute each tool call and record response
@@ -5278,6 +5382,24 @@ where
 
             let norm_name = canonical_tool_name(&tc.function.name);
             let is_sub = norm_name == "subagent" || norm_name == "subagent_bg";
+
+            // If an identical tool call was already executed in this turn, reuse its result immediately!
+            if let Some(prev) = executed_tools_in_turn.iter().find(|p| {
+                p.canonical_name == norm_name && p.parsed_args == parsed_args
+            }) {
+                eprintln!(
+                    "CVH [agent]: Reusing executed result for duplicate tool call '{}' ('{}') in turn {} (matches earlier call '{}')",
+                    tc.id, norm_name, turn, prev.id
+                );
+                event_sink(AgentEvent::ToolResult {
+                    id: tc.id.clone(),
+                    name: tc.function.name.clone(),
+                    result: prev.result.clone(),
+                    success: prev.success,
+                });
+                messages.push(ChatMessage::tool_response(tc.id, prev.result.clone()));
+                continue;
+            }
 
             // In-turn Subagent Deduplication (§ Directive 4):
             // If the model in a single turn emits multiple subagent calls with identical/virtually identical
@@ -5411,7 +5533,15 @@ where
                 success,
             });
 
-            messages.push(ChatMessage::tool_response(tc.id, result_str.clone()));
+            messages.push(ChatMessage::tool_response(tc.id.clone(), result_str.clone()));
+
+            executed_tools_in_turn.push(ExecutedToolCallInTurn {
+                id: tc.id.clone(),
+                canonical_name: norm_name.to_string(),
+                parsed_args: parsed_args.clone(),
+                result: result_str.clone(),
+                success,
+            });
 
             // Stage transition termination:
             // When any executed tool call is "advance_task", "move_task", or "reject_task":
