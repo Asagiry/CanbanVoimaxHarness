@@ -2106,6 +2106,55 @@ line 2 again"
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
 
+    #[tokio::test]
+    async fn test_execute_command_windows_quoting_python() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_cmd_quote_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dirs");
+
+        let flag = Arc::new(AtomicBool::new(false));
+        let policy = ToolPolicyConfig::default();
+        let tool_ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("dev"),
+            role: Some("developer"),
+            abort_handle: flag,
+            tool_policy: &policy,
+            task_id: Some("CVH-QUOTE-TEST"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        // 1. Verify python -c "print(1)" succeeds with exit code 0 and stdout "1"
+        let res = execute_tool(&tool_ctx, "execute_command", &serde_json::json!({
+            "command": "python -c \"print(1)\""
+        }))
+        .await
+        .expect("execute_command with quotes");
+
+        assert!(res.contains("[Exit Code: 0]"), "got: {}", res);
+        assert!(res.contains("--- STDOUT ---
+1"), "stdout should contain 1, got: {}", res);
+
+        // 2. Verify complex nested quotes: python -c "import json; print(json.dumps({'status': 'ok'}))"
+        let res_complex = execute_tool(&tool_ctx, "execute_command", &serde_json::json!({
+            "command": "python -c \"import json; print(json.dumps({'status': 'ok'}))\""
+        }))
+        .await
+        .expect("execute_command with complex quotes");
+
+        assert!(res_complex.contains("[Exit Code: 0]"), "got: {}", res_complex);
+        assert!(res_complex.contains(r#"{"status": "ok"}"#), "stdout should contain json, got: {}", res_complex);
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
     // -------------------------------------------------------------------------
     // e) Orchestration & Invariants: monotonic ID with gaps, complete_task, cvh-dev gating
     // -------------------------------------------------------------------------
@@ -2369,7 +2418,8 @@ data: [DONE]
         let finished_event = captured.iter().find(|e| matches!(e, AgentEvent::Finished { .. }));
         assert!(finished_event.is_some(), "AgentEvent::Finished must be emitted");
         if let Some(AgentEvent::Finished { final_response }) = finished_event {
-            assert_eq!(final_response, &result);
+            // Emitted final_response preserves rich agent markdown summary
+            assert_eq!(final_response, "Feature implemented successfully");
         }
 
         // 4. Verify Review Subtask Hierarchy (§ 2.2):
@@ -2446,12 +2496,13 @@ data: [DONE]
         // 2. Only 1 request was sent to the LLM (zero extra turns)
         assert_eq!(request_counter.load(Ordering::SeqCst), 1, "Expected exactly 1 request to LLM, no extra turns");
 
-        // 3. Emitted events must contain Finished with final_response == result
+        // 3. Emitted events must contain Finished with final_response == summary
         let captured = events.lock().unwrap();
         let finished_event = captured.iter().find(|e| matches!(e, AgentEvent::Finished { .. }));
         assert!(finished_event.is_some(), "AgentEvent::Finished must be emitted");
         if let Some(AgentEvent::Finished { final_response }) = finished_event {
-            assert_eq!(final_response, &result);
+            // Emitted final_response preserves rich agent markdown summary
+            assert_eq!(final_response, "Fast-track to ready");
         }
 
         // 4. Verify task state on disk advanced to "ready"
@@ -2525,7 +2576,8 @@ data: [DONE]
         let finished_event = captured.iter().find(|e| matches!(e, AgentEvent::Finished { .. }));
         assert!(finished_event.is_some(), "AgentEvent::Finished must be emitted");
         if let Some(AgentEvent::Finished { final_response }) = finished_event {
-            assert_eq!(final_response, &result);
+            // Emitted final_response preserves rich rejection reason
+            assert_eq!(final_response, "Unit test failure");
         }
 
         // 4. Verify task state on disk returned to "dev" with status "idle"
