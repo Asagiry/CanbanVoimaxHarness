@@ -194,7 +194,7 @@ pub async fn list_subagents(
                     prompt: info.prompt.clone(),
                     status: info.status.clone(),
                     created_at: chrono::Utc::now().timestamp_millis(),
-                    duration_ms: None,
+                    duration_ms: info.duration_ms,
                     steps_count: 0,
                     last_error: info.last_error.clone(),
                     is_bg: info.is_bg,
