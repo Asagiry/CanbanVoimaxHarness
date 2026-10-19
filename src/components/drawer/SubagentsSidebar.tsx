@@ -154,7 +154,9 @@ export function getSubagentsForTask(
   // and one has stepsCount === 0 && (!durationMs || durationMs === 0) while another has
   // valid steps/duration or is finished/running, discard the 0-step phantom entry!
   const result = rawList.filter((sub, idx, all) => {
+    // A running subagent is actively executing and must NEVER be treated as a phantom!
     const isPhantomCandidate =
+      sub.status !== 'running' &&
       (!sub.stepsCount || sub.stepsCount === 0) &&
       (!sub.durationMs || sub.durationMs === 0);
 
@@ -181,15 +183,20 @@ export function getSubagentsForTask(
 
       if (!samePrompt && !sameTitle) return false;
 
+      // If the duplicate entry is actively running, it is always the authentic subagent
+      if (other.status === 'running') return true;
+
       const otherHasStepsOrDuration =
         (typeof other.stepsCount === 'number' && other.stepsCount > 0) ||
         (typeof other.durationMs === 'number' && other.durationMs > 0);
 
-      const otherIsValidStatus = other.status === 'running' || other.status === 'finished';
-
       if (otherHasStepsOrDuration) return true;
-      if (otherIsValidStatus && (other.stepsCount || 0) > (sub.stepsCount || 0)) return true;
-      if (otherIsValidStatus && (other.durationMs || 0) > (sub.durationMs || 0)) return true;
+
+      const otherIsFinished = other.status === 'finished';
+      if (otherIsFinished && (other.stepsCount || 0) > (sub.stepsCount || 0)) return true;
+      if (otherIsFinished && (other.durationMs || 0) > (sub.durationMs || 0)) return true;
+
+      // Both are non-running 0-step phantoms with identical prompt/title: keep first
       if (otherIdx < idx && samePrompt && sameTitle) return true;
 
       return false;
