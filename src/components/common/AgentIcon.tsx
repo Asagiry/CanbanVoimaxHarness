@@ -80,6 +80,6 @@ export interface AgentIconProps extends Omit<LucideProps, 'name'> {
 }
 
 export default function AgentIcon({ name, className = 'h-3.5 w-3.5 shrink-0', ...props }: AgentIconProps) {
-  const IconComponent = (name && AGENT_ICON_MAP[name]) || Layers;
+  const IconComponent = (name && AGENT_ICON_MAP[name]) || Bot;
   return <IconComponent className={className} {...props} />;
 }

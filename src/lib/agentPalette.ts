@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react';
+
 /**
  * Цветовая палитра для агентов (персон).
  * 
@@ -75,4 +77,51 @@ export function isAllowedAgentColor(color?: string | null): boolean {
   if (!color) return false;
   const normalized = color.trim().toLowerCase();
   return !FORBIDDEN_AGENT_COLORS.has(normalized);
+}
+
+/**
+ * Детерминированный выбор иконки для роли агента из AGENT_ICONS.
+ */
+export function getDeterministicAgentIcon(role?: string | null): string {
+  if (!role) return 'Bot';
+  const trimmed = role.trim();
+  if (!trimmed) return 'Bot';
+  if (trimmed === 'cvh-dev') return 'Cpu';
+  if (trimmed === 'developer' || trimmed === 'dev') return 'Code2';
+  if (trimmed === 'reviewer' || trimmed === 'review') return 'ShieldCheck';
+  if (trimmed === 'retro') return 'History';
+
+  let hash = 5381;
+  for (let i = 0; i < trimmed.length; i++) {
+    hash = (hash * 33 + trimmed.charCodeAt(i)) >>> 0;
+  }
+  return AGENT_ICONS[hash % AGENT_ICONS.length] || 'Bot';
+}
+
+/**
+ * Возвращает динамический inline-стиль для бейджа роли агента на основе его цвета.
+ */
+export function getRoleBadgeStyle(role?: string | null, customColor?: string | null): CSSProperties {
+  const color = (customColor && isAllowedAgentColor(customColor))
+    ? customColor
+    : getDeterministicAgentColor(role || 'general');
+  return {
+    color,
+    borderColor: `${color}50`,
+    backgroundColor: `${color}14`,
+  };
+}
+
+/**
+ * Возвращает динамический inline-стиль для активной карточки субагента в сайдбаре.
+ */
+export function getRoleActiveCardStyle(role?: string | null, customColor?: string | null): CSSProperties {
+  const color = (customColor && isAllowedAgentColor(customColor))
+    ? customColor
+    : getDeterministicAgentColor(role || 'general');
+  return {
+    borderColor: `${color}99`,
+    backgroundColor: `${color}12`,
+    boxShadow: `0 0 0 1px ${color}33`,
+  };
 }

@@ -245,8 +245,6 @@ export default function ToolPolicyModal() {
     // 3. Fallback, если реестр пуст
     if (map.size === 0) {
       map.set('cvh-dev', { role: 'cvh-dev', icon: 'Cpu', isBuiltin: true });
-      map.set('developer', { role: 'developer', icon: 'Code2', isBuiltin: false });
-      map.set('reviewer', { role: 'reviewer', icon: 'ShieldCheck', isBuiltin: false });
     }
 
     return Array.from(map.values()).sort((a, b) => {

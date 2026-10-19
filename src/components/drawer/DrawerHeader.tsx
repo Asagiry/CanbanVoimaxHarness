@@ -2,8 +2,10 @@ import React from 'react';
 import type { KanbanTask, PipelineColumn } from '../../types';
 import Logo from '../common/Logo';
 import { useDrawerStore } from '../../stores/drawerStore';
-import { getRoleBadgeClass } from './ToolExecutionCard';
-import { getRoleIcon, formatSubagentDisplayTitle } from './SubagentsSidebar';
+import { useCortexStore } from '../../stores/cortexStore';
+import AgentIcon from '../common/AgentIcon';
+import { getRoleBadgeStyle } from '../../lib/agentPalette';
+import { formatSubagentDisplayTitle } from './SubagentsSidebar';
 import WindowControls, { toggleMaximizeWindow } from '../layout/WindowControls';
 import {
   ArrowLeft,
@@ -71,6 +73,10 @@ export default function DrawerHeader({
     activeSubagentRole,
     closeSubagent,
   } = useDrawerStore();
+  const agentPersonas = useCortexStore((s) => s.agentPersonas);
+  const matchedPersona = agentPersonas.find(
+    (p) => p.role.toLowerCase() === (activeSubagentRole || '').toLowerCase()
+  );
   const { theme, toggleThemeWithAnimation } = useThemeStore();
 
   const workingColumns = columns.filter(
@@ -124,16 +130,14 @@ export default function DrawerHeader({
                   <span className="truncate">{task?.title || task?.id || 'Задача'}</span>
                 </button>
                 <span className="text-[#a1a1aa] dark:text-[#6e7681] shrink-0 font-sans">/</span>
-                {(() => {
-                  const SubagentRoleIcon = getRoleIcon(activeSubagentRole);
-                  return (
-                    <span className="flex items-center space-x-1.5 font-semibold text-[#171717] dark:text-[#f0f6fc] truncate max-w-[320px]">
-                      <SubagentRoleIcon className="h-3.5 w-3.5 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
-                      <span className="truncate">{formatSubagentDisplayTitle(activeSubagentTitle)}</span>
-                    </span>
-                  );
-                })()}
-                <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border shrink-0 ${getRoleBadgeClass(activeSubagentRole)}`}>
+                <span className="flex items-center space-x-1.5 font-semibold text-[#171717] dark:text-[#f0f6fc] truncate max-w-[320px]">
+                  <AgentIcon name={matchedPersona?.icon} className="h-3.5 w-3.5 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
+                  <span className="truncate">{formatSubagentDisplayTitle(activeSubagentTitle)}</span>
+                </span>
+                <span
+                  style={getRoleBadgeStyle(activeSubagentRole, matchedPersona?.color)}
+                  className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border shrink-0"
+                >
                   {(activeSubagentRole || 'general').toUpperCase()}
                 </span>
               </div>

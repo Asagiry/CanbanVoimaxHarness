@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { ToolExecution } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
-import { getRoleIcon, formatSubagentDisplayTitle } from './SubagentsSidebar';
+import { useCortexStore } from '../../stores/cortexStore';
+import AgentIcon from '../common/AgentIcon';
+import { getRoleBadgeStyle } from '../../lib/agentPalette';
+import { formatSubagentDisplayTitle } from './SubagentsSidebar';
 import {
   ChevronRight,
   Copy,
@@ -72,25 +75,12 @@ function getLanguageBadge(ext?: string): LangBadgeConfig | null {
   }
 }
 
-export function getRoleBadgeClass(role?: string | null): string {
-  const roleUpper = (role || 'general').toUpperCase();
-  if (roleUpper.includes('DEV')) {
-    return 'bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] border-[#bbf7d0] dark:border-[#238636]';
-  }
-  if (roleUpper.includes('REV')) {
-    return 'bg-[#fefce8] dark:bg-[#422006] text-[#854d0e] dark:text-[#facc15] border-[#fef08a] dark:border-[#713f12]';
-  }
-  if (roleUpper.includes('EXP') || roleUpper.includes('ARCH')) {
-    return 'bg-[#faf5ff] dark:bg-[#3b0764] text-[#7c3aed] dark:text-[#c084fc] border-[#e9d5ff] dark:border-[#6b21a8]';
-  }
-  return 'bg-[#f4f4f5] dark:bg-[#161b22] text-[#171717] dark:text-[#f0f6fc] border-[#ebebeb] dark:border-[#30363d]';
-}
-
 export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const openSubagent = useDrawerStore((s) => s.openSubagent);
+  const agentPersonas = useCortexStore((s) => s.agentPersonas);
 
   useEffect(() => {
     return () => {
@@ -136,10 +126,13 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       subagentId = tool.id;
     }
 
-    const roleBadgeClass = getRoleBadgeClass(rawRole);
+    const persona = agentPersonas.find(
+      (p) => p.role.toLowerCase() === rawRole.toLowerCase()
+    );
+    const personaIcon = persona?.icon || 'Bot';
+    const roleBadgeStyle = getRoleBadgeStyle(rawRole, persona?.color);
     const isRunning = tool.status === 'running';
     const isSuccess = tool.status === 'success';
-    const RoleIcon = getRoleIcon(rawRole);
     const displayTitle = formatSubagentDisplayTitle(title);
 
     return (
@@ -150,9 +143,12 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       >
         <div className="flex items-center justify-between gap-2.5">
           <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
-            <RoleIcon className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
+            <AgentIcon name={personaIcon} className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
 
-            <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider border shrink-0 select-none ${roleBadgeClass}`}>
+            <span
+              style={roleBadgeStyle}
+              className="px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider border shrink-0 select-none uppercase"
+            >
               {roleUpper}
             </span>
 
