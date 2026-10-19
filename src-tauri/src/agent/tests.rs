@@ -823,7 +823,12 @@ use super::*;
 
         let tasks_after_adv = crate::commands::tasks::load_tasks_from_disk(&base).await;
         let t = tasks_after_adv.iter().find(|t| t.id == "CVH-050").unwrap();
-        assert_eq!(t.stage_id, "review");
+        assert_eq!(t.stage_id, "dev");
+        assert_eq!(t.status.as_deref(), Some("waiting_subtask"));
+        assert_eq!(t.waiting_for_subtask_id.as_deref(), Some("CVH-050.1"));
+
+        let sub = tasks_after_adv.iter().find(|t| t.id == "CVH-050.1").unwrap();
+        assert_eq!(sub.stage_id, "review");
 
         // 2. move_task with target_stage: "ready" and explicit summary
         let move_res = execute_tool(&tool_ctx, "move_task", &serde_json::json!({
@@ -1012,29 +1017,34 @@ use super::*;
         let t1 = tasks1.iter().find(|t| t.id == "CVH-060").expect("find task");
         assert_eq!(t1.stage_id, "dev");
 
-        // 2. Advance from dev -> review
+        // 2. Advance from dev -> review creates review subtask CVH-060.1 (§ 2.2)
         let res2 = execute_tool(&tool_ctx, "advance_task", &serde_json::json!({ "summary": "Implemented feature" }))
             .await
             .expect("advance dev -> review");
         assert!(res2.contains("УСПЕШНО"), "got: {}", res2);
 
         let tasks2 = crate::commands::tasks::load_tasks_from_disk(&base).await;
-        let t2 = tasks2.iter().find(|t| t.id == "CVH-060").expect("find task");
-        assert_eq!(t2.stage_id, "review");
+        let t2 = tasks2.iter().find(|t| t.id == "CVH-060").expect("find parent task");
+        assert_eq!(t2.stage_id, "dev", "Parent must remain in dev");
+        assert_eq!(t2.status.as_deref(), Some("waiting_subtask"));
+        assert_eq!(t2.waiting_for_subtask_id.as_deref(), Some("CVH-060.1"));
 
-        // 3. Advance from review -> ready (terminal)
-        let res3 = execute_tool(&tool_ctx, "advance_task", &serde_json::json!({ "summary": "Review approved" }))
+        let sub2 = tasks2.iter().find(|t| t.id == "CVH-060.1").expect("find review subtask");
+        assert_eq!(sub2.stage_id, "review", "Subtask must be in review stage");
+
+        // 3. Advance subtask from review -> ready (terminal)
+        let res3 = execute_tool(&tool_ctx, "advance_task", &serde_json::json!({ "task_id": "CVH-060.1", "summary": "Review approved" }))
             .await
             .expect("advance review -> ready");
         assert!(res3.contains("УСПЕШНО"), "got: {}", res3);
 
         let tasks3 = crate::commands::tasks::load_tasks_from_disk(&base).await;
-        let t3 = tasks3.iter().find(|t| t.id == "CVH-060").expect("find task");
-        assert_eq!(t3.stage_id, "ready");
-        assert_eq!(t3.status.as_deref(), Some("done"));
+        let sub3 = tasks3.iter().find(|t| t.id == "CVH-060.1").expect("find subtask");
+        assert_eq!(sub3.stage_id, "ready");
+        assert_eq!(sub3.status.as_deref(), Some("done"));
 
         // 4. Boundary error: Advance when already in terminal ready stage must fail
-        let res_err = execute_tool(&tool_ctx, "advance_task", &serde_json::json!({}))
+        let res_err = execute_tool(&tool_ctx, "advance_task", &serde_json::json!({ "task_id": "CVH-060.1" }))
             .await
             .expect_err("advance from terminal column must fail");
         assert!(res_err.to_string().contains("уже находится на последнем этапе пайплайна"), "got: {}", res_err);
@@ -2349,7 +2359,7 @@ data: [DONE]
 
         // 1. Result should indicate success
         assert!(result.contains("УСПЕШНО"), "got: {}", result);
-        assert!(result.contains("review"), "got: {}", result);
+        assert!(result.contains("ревью") || result.contains("review"), "got: {}", result);
 
         // 2. Only 1 request was sent to the LLM (zero extra turns)
         assert_eq!(request_counter.load(Ordering::SeqCst), 1, "Expected exactly 1 request to LLM, no extra turns");
@@ -2362,10 +2372,17 @@ data: [DONE]
             assert_eq!(final_response, &result);
         }
 
-        // 4. Verify task state on disk advanced to "review"
+        // 4. Verify Review Subtask Hierarchy (§ 2.2):
+        // Parent remains pinned in 'dev' waiting for subtask, while child subtask CVH-081.1 is in 'review'
         let tasks = crate::commands::tasks::load_tasks_from_disk(&base).await;
         let t = tasks.iter().find(|t| t.id == "CVH-081").expect("task found");
-        assert_eq!(t.stage_id, "review");
+        assert_eq!(t.stage_id, "dev");
+        assert_eq!(t.status.as_deref(), Some("waiting_subtask"));
+        assert_eq!(t.waiting_for_subtask_id.as_deref(), Some("CVH-081.1"));
+
+        let sub = tasks.iter().find(|t| t.id == "CVH-081.1").expect("subtask found");
+        assert_eq!(sub.stage_id, "review");
+        assert_eq!(sub.status.as_deref(), Some("running"));
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
