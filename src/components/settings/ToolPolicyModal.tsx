@@ -46,9 +46,112 @@ function Toggle({
   );
 }
 
+function ToolParamRow({
+  toolId,
+  param,
+}: {
+  toolId: string;
+  param: {
+    key: string;
+    label: string;
+    defaultValue: number;
+    min: number;
+    max: number;
+    step: number;
+    unit: string;
+  };
+}) {
+  const { toolSettings, setToolSetting } = useToolPolicyStore();
+  const currentValue = toolSettings[toolId]?.[param.key] ?? param.defaultValue;
+  const [draft, setDraft] = useState(String(currentValue));
+
+  useEffect(() => {
+    setDraft(String(currentValue));
+  }, [currentValue]);
+
+  const commitValue = (val: number) => {
+    const clamped = Math.max(param.min, Math.min(param.max, val));
+    setDraft(String(clamped));
+    setToolSetting(toolId, param.key, clamped);
+  };
+
+  const handleStep = (delta: number) => {
+    commitValue(currentValue + delta);
+  };
+
+  const handleBlur = () => {
+    const parsed = parseInt(draft, 10);
+    if (isNaN(parsed)) {
+      setDraft(String(currentValue));
+    } else {
+      commitValue(parsed);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      (e.target as HTMLInputElement).blur();
+    }
+    if (e.key === 'Escape') {
+      setDraft(String(currentValue));
+      (e.target as HTMLInputElement).blur();
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between gap-3 text-xs">
+      <div className="min-w-0 flex-1">
+        <span className="text-[11px] font-mono text-[#171717] dark:text-[#f0f6fc] block">
+          {param.label}
+        </span>
+        <span className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] font-mono block">
+          диапазон: {param.min}–{param.max} (шаг {param.step})
+        </span>
+      </div>
+
+      <div className="flex items-center gap-1.5 shrink-0">
+        <button
+          type="button"
+          disabled={currentValue <= param.min}
+          onClick={() => handleStep(-param.step)}
+          className="w-6 h-6 flex items-center justify-center rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] text-xs font-mono font-bold transition select-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+          title={`Уменьшить на ${param.step}`}
+        >
+          -
+        </button>
+
+        <input
+          type="number"
+          min={param.min}
+          max={param.max}
+          step={param.step}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
+          className="w-16 h-6 rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] font-mono text-xs tabular-nums text-center px-1 focus:outline-hidden focus:border-[#171717] dark:focus:border-[#58a6ff]"
+        />
+
+        <button
+          type="button"
+          disabled={currentValue >= param.max}
+          onClick={() => handleStep(param.step)}
+          className="w-6 h-6 flex items-center justify-center rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] text-xs font-mono font-bold transition select-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+          title={`Увеличить на ${param.step}`}
+        >
+          +
+        </button>
+
+        <span className="text-[10px] text-[#666666] dark:text-[#8b949e] font-mono min-w-[42px] text-left">
+          {param.unit}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function ToolParamsEditor({ toolId }: { toolId: string }) {
   const paramDefs = TOOL_PARAM_DEFS[toolId];
-  const { toolSettings, setToolSetting } = useToolPolicyStore();
 
   if (!paramDefs || paramDefs.length === 0) return null;
 
@@ -63,74 +166,9 @@ function ToolParamsEditor({ toolId }: { toolId: string }) {
           сохраняются в политиках
         </span>
       </div>
-      {paramDefs.map((param) => {
-        const currentValue = toolSettings[toolId]?.[param.key] ?? param.defaultValue;
-
-        const updateValue = (nextVal: number) => {
-          const clamped = Math.max(param.min, Math.min(param.max, nextVal));
-          setToolSetting(toolId, param.key, clamped);
-        };
-
-        const handleStep = (delta: number) => {
-          updateValue(currentValue + delta);
-        };
-
-        const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-          const parsed = parseInt(e.target.value, 10);
-          if (!isNaN(parsed)) {
-            updateValue(parsed);
-          }
-        };
-
-        return (
-          <div key={param.key} className="flex items-center justify-between gap-3 text-xs">
-            <div className="min-w-0 flex-1">
-              <span className="text-[11px] font-mono text-[#171717] dark:text-[#f0f6fc] block">
-                {param.label}
-              </span>
-              <span className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] font-mono block">
-                диапазон: {param.min}–{param.max} (шаг {param.step})
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                type="button"
-                disabled={currentValue <= param.min}
-                onClick={() => handleStep(-param.step)}
-                className="w-6 h-6 flex items-center justify-center rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] text-xs font-mono font-bold transition select-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                title={`Уменьшить на ${param.step}`}
-              >
-                -
-              </button>
-
-              <input
-                type="number"
-                min={param.min}
-                max={param.max}
-                step={param.step}
-                value={currentValue}
-                onChange={handleInputChange}
-                className="w-16 h-6 rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] font-mono text-xs tabular-nums text-center px-1 focus:outline-hidden focus:border-[#171717] dark:focus:border-[#58a6ff]"
-              />
-
-              <button
-                type="button"
-                disabled={currentValue >= param.max}
-                onClick={() => handleStep(param.step)}
-                className="w-6 h-6 flex items-center justify-center rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] text-xs font-mono font-bold transition select-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                title={`Увеличить на ${param.step}`}
-              >
-                +
-              </button>
-
-              <span className="text-[10px] text-[#666666] dark:text-[#8b949e] font-mono min-w-[42px] text-left">
-                {param.unit}
-              </span>
-            </div>
-          </div>
-        );
-      })}
+      {paramDefs.map((param) => (
+        <ToolParamRow key={param.key} toolId={toolId} param={param} />
+      ))}
     </div>
   );
 }
