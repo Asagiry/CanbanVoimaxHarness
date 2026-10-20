@@ -6,6 +6,7 @@ import KanbanCard from '../card/KanbanCard';
 import ColumnContextMenu from './ColumnContextMenu';
 import { useCortexStore } from '../../stores/cortexStore';
 import AgentIcon from '../common/AgentIcon';
+import { getDeterministicAgentColor } from '../../lib/agentPalette';
 
 const PAGE_SIZE = 10;
 
@@ -76,17 +77,22 @@ function KanbanColumn({
     )
   );
 
+  const assignedAgentColor = column.persona
+    ? (assignedPersona?.color || getDeterministicAgentColor(column.persona))
+    : (column.color || getDeterministicAgentColor(column.id));
+
   return (
     <Draggable draggableId={column.id} index={index} isDragDisabled={isPinned}>
       {(colProvided, colSnapshot) => (
     <div
       ref={colProvided.innerRef}
       {...colProvided.draggableProps}
-      style={
-        isPinned
+      style={{
+        ...(isPinned
           ? { ...colProvided.draggableProps.style, transform: 'none' }
-          : colProvided.draggableProps.style
-      }
+          : colProvided.draggableProps.style),
+        borderColor: colSnapshot.isDragging ? undefined : isFocused ? undefined : `${assignedAgentColor}40`,
+      }}
       className={`flex flex-col w-72 shrink-0 h-full rounded-lg bg-[#f9f9f9] dark:bg-[#0d1117] border select-none overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
         colSnapshot.isDragging
           ? 'border-[#171717] dark:border-[#30363d] shadow-md opacity-90'
@@ -98,7 +104,7 @@ function KanbanColumn({
       {/* Top Hairline Accent Bar */}
       <div
         className="h-[2px] w-full shrink-0"
-        style={{ backgroundColor: column.color || '#171717' }}
+        style={{ backgroundColor: assignedAgentColor }}
       />
 
       {/* Column Header (drag handle для смены порядка колонок; ПКМ — действия с колонкой) */}

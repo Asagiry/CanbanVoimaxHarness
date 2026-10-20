@@ -33,8 +33,8 @@ export interface KanbanTask {
   columnId: string;
   boardId?: string;
   persona: string;
-  branch: string;
-  worktreePath: string;
+  branch?: string;
+  worktreePath?: string;
   status: TaskStatus;
   activeStageDuration: number; // in seconds
   stageDurations: Record<string, number>; // stageId -> seconds
@@ -126,6 +126,7 @@ export interface LiveStreamEntry {
   content: string;
   durationMs?: number;
   images?: string[];
+  createdAt?: number;
 }
 
 export type ActivityType = 'thought' | 'output' | 'tool' | 'steer' | 'system' | 'error' | 'user' | 'prompt' | 'question' | 'compacted';
@@ -144,6 +145,7 @@ export interface ActivityItem {
   durationMs?: number;
   images?: string[];
   isFinal?: boolean;
+  createdAt?: number;
 }
 
 export interface ProjectInfo {
@@ -205,4 +207,5 @@ export interface SubagentInfo {
   lastError?: string;
   isBg?: boolean;
   finishedAt?: number;
+  isBoardSubtask?: boolean;
 }

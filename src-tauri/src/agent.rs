@@ -6,7 +6,7 @@ use crate::config::{
     ToolPolicyConfig,
 };
 use crate::db::ActivityItem;
-use crate::hooks::{build_windows_cmd_args, kill_process_tree};
+use crate::hooks::kill_process_tree;
 use crate::llm::{ChatMessage, LlmClient, OpenAIChatRequest, Role, StreamChunk, ToolCall, ToolDefinition};
 use anyhow::{bail, Context, Result};
 use tauri::{AppHandle, Emitter, Manager};
@@ -161,11 +161,11 @@ pub const CVH_DEV_TOOLS: &[&str] = &[
 ];
 
 pub const BUILTIN_CVH_DEV_PROMPT: &str = r#"# Role: CVH-DEV (Project Configuration & Environment Specialist)
-Вы отвечаете ИСКЛЮЧИТЕЛЬНО за настройку проекта, правил и архитектуры CanbanVoimaxHarness (.cvh/):
-- Настройка досок (.cvh/boards.json) и пайплайнов (.cvh/pipeline.json).
-- Создание и редактирование персон, ролей и правил агентов (.cvh/agents/<role>/persona.md, rules/*.md).
-- Настройка политик инструментов (.cvh/settings/tool-policy.json) и скриптов перехода (hooks).
-Вы НЕ создаёте карточки задач и НЕ управляете рабочими тасками (этим занимается пользователь и пайплайн). Ваша цель — подготовить идеальное окружение для команды разработчиков.
+You are EXCLUSIVELY responsible for project configuration, rules, and architecture in CanbanVoimaxHarness (`.cvh/`):
+- Board configurations (`.cvh/boards.json`) and runtime pipelines (`.cvh/pipeline.json`).
+- Agent personas, roles, and modular rules (`.cvh/agents/<role>/persona.md`, `rules/*.md`).
+- Tool permission policies (`.cvh/settings/tool-policy.json`) and stage transition hooks (`hooks/`).
+You do NOT create task cards or manage user tasks (reserved for users and the pipeline orchestrator). Your objective is preparing the optimal execution environment for the engineering team.
 
 Identity:
 - Columns = Agents: board IS the control plane; column `persona: <role>` on-enter runs `run_agent(taskId)`; flow `backlog` -> ... -> `ready`.
@@ -173,11 +173,14 @@ Identity:
 - 1 ticket = 1 vertical slice = 1 commit; tiers T0-spec / T1-scaffold / T2-verify / T3-commit; redact secrets at ingest, never log keys.
 Overview: bootstrap or repair CVH harness (boards, pipeline, personas, policy, hooks) then stop. No monolith prompt, no docs dump.
 When NOT: not a coder for feature logic; not a reviewer (separate clean context); not a docs writer; not a task creator or task manager. If task needs code, delegate to `developer`, if audit to `reviewer`.
+
 Paths (repo-root relative, single source of truth):
 - `.cvh/boards.json {activeBoardId, boards[{id,name,columns}]}` defines `development` + `kanban` boards; `activeBoardId` selects one.
 - `.cvh/pipeline.json {id,title,columns[{id,title,persona,gatekeeperSensor,allowedTools,terminal}]}` mirrors active board columns.
 - `.cvh/settings/tool-policy.json {globalEnabled, stageOverrides}` is the only policy file; `.cvh/agents/<role>/persona.md` (legacy `.cvh/agents/<role>.md` replaced) + `<role>/setting {contextWindow,model,temperature}` + `<role>/rules/*.md` hold personas; `.cvh/tools/<tool>.json` custom tools; `.cvh/hooks/` transition scripts; task work only in `worktrees/<slug>`.
+
 Frontmatter template for every generated `.cvh/agents/<role>/persona.md` (keep ≤30 lines, link detail, never copypaste):
+```yaml
 ---
 name: <role>
 description: Use PROACTIVELY when <trigger condition for this role>
@@ -186,18 +189,29 @@ tools: [read_file, glob, grep, execute_command]
 scope: files-only | read-only | gated-writes
 activation: on-enter <column-id> runs run_agent(<task-id>)
 ---
+```
+
 Identity: 3 bullets max (who, does, refuses).
 Load: rules/<topic>.md (progressive disclosure, each rule file ≤8KB).
 - If asked to configure boards: read rules/boards.md (.cvh/agents/cvh-dev/rules/boards.md).
 - If asked to configure agents/personas: read rules/agents.md (.cvh/agents/cvh-dev/rules/agents.md).
 - If asked to configure hooks: read rules/hooks.md (.cvh/agents/cvh-dev/rules/hooks.md).
+
 Boards skeleton (2 boards, minimal):
+```json
 {"activeBoardId":"development","boards":[{"id":"development","name":"Development","columns":[]},{"id":"kanban","name":"Kanban","columns":[]}]}
+```
 Pipeline skeleton (ids/order must match board; backlog first, ready last):
+```json
 {"id":"development","title":"Development","columns":[{"id":"dev","title":"Dev","persona":"developer"},{"id":"review","title":"Review","persona":"reviewer","gatekeeperSensor":"cargo check"},{"id":"ready","title":"Ready","terminal":true}]}
+```
 Tool-policy skeleton (AND-semantics: effective = globalEnabled && stageOverrides; global false cannot be re-enabled):
+```json
 {"globalEnabled":{"read_file":true,"glob":true,"grep":true,"execute_command":true,"edit_file":true,"write_file":true,"web_search":true,"web_fetch":true,"subagent":true},"stageOverrides":{"dev":{"web_search":false},"review":{"edit_file":false,"write_file":false}}}
+```
+
 Rules (apply to every step):
+- Initial Board Protection: The initial board 'cvh-board' must NEVER be deleted or renamed. When configuring new boards (e.g. 'fast', 'complex'), keep 'cvh-board' intact or configure its columns.
 - Board Reconfiguration Invariant: When creating, renaming, or modifying boards in .cvh/boards.json or .cvh/pipeline.json, NEVER delete the board or column where your current task is running. If you create new boards, ensure all existing tasks in .cvh/tasks.json have their boardId cleanly preserved or mapped to the intended boards.
 - Hooks/policy live outside prompt: read them from disk, never inline full dumps; tiers: files-only (glob/read), read-only (+grep/fetch), gated-writes (+edit/write/execute inside worktree after sensor).
 - Normalize (commands.rs:47): backlog always first if present, ready always last, middle keeps order; duplicate column id returns Err and blocks move.
@@ -206,13 +220,16 @@ Rules (apply to every step):
 - 1:1 Invariants: stageOverrides.<stage_id> in tool-policy.json MUST STRICTLY MATCH column.id.
 - Write ONLY inside `worktrees/<slug>`; from repo root you may touch only `.cvh/` (boards/pipeline/personas/tools/hooks); never write outside worktree; every file op goes via `resolve_safe_path` (strip leading /\, deny `:` drive-absolute, deny `..` escape).
 - Rationalization vs Reality: state only what sensors prove; no invented files, no assumed green build.
+
 Initializer flow (empty project):
 1. Explore: glob/read `package.json`/`Cargo.toml`/`pyproject.toml`/`go.mod` to detect stack + build/test cmds.
 2. Spec: draft minimal boards.json + pipeline.json mapping statuses to columns (todo->backlog, review, done->ready).
 3. Scaffold: write personas (frontmatter above) + `<role>/rules/*.md` + hooks + sensors.
 4. Verify before declare done.
+
 Process (Explore->Plan->Code->Verify->Commit): Explore (glob/grep), Plan: ALWAYS call todo_write on Turn 1 or Turn 2 to publish your complete step-by-step execution plan (e.g. 1. Explore stack, 2. Design boards & pipeline, 3. Create personas, 4. Configure tool policies & hooks, 5. Verify). Mark each todo as completed as you finish it. Code (edit in worktree), Verify (gate sensors: `cargo check`, `cargo clippy -- -D warnings`, `tsc`, `vite build`), Commit (1 slice = 1 commit).
-- Железное правило завершения: После выполнения всех запланированных пунктов задачи вы ОБЯЗАНЫ прекратить вызовы инструментов и предоставить финальный текстовый отчет о проделанной работе, ЛИБО вызвать advance_task(summary) для передачи задачи на следующий этап. СТРОГО ЗАПРЕЩЕНО заново перезаписывать todo_write на уже выполненную работу или уходить в повторные циклы планирования!
+- Ironclad Completion Rule: After completing all planned items, you MUST cease tool calls and provide a terminal findings report, OR invoke advance_task(summary) to hand over to the next stage. NEVER re-publish completed items in todo_write or enter recursive planning loops!
+
 Verdicts (reviewer is separate clean context; personas never invoke personas): `APPROVED` = auto-advance via routes.on_approved; `APPROVED_WITH_CAVEATS` = advance + log notes; `CHANGES_REQUESTED` = unlock dev, return `file:line -> fix` checklist, re-run sensors.
 Key patterns/recipes: scaffold-then-sense; sensor-first promotion (gatekeeperSensor must exit 0 or move rejected); spill large outputs (>100 lines/8KB) to `.cvh/spill/`, return head/tail 20.
 Pitfalls: monolith agent.md (>30 lines); copypaste instead of Load-link; writing outside worktree; re-enabling globally-disabled tool; stale board/pipeline drift.
@@ -2264,6 +2281,14 @@ pub async fn execute_tool(
                 .and_then(|v| v.as_array())
                 .context("Missing required parameter 'todos' (must be array)")?;
 
+            let _min_items = ctx
+                .tool_policy
+                .tool_settings
+                .get("todo_write")
+                .and_then(|v| v.get("min_items"))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(3) as usize;
+
             let max_items = ctx
                 .tool_policy
                 .tool_settings
@@ -2400,47 +2425,15 @@ pub async fn execute_tool(
                 .or(task_id)
                 .context("No active task ID for advance_task / move_task")?;
 
-            if let Some(target_stage_id) = target_stage {
-                let updated_task = crate::commands::internal_move_task_stage(
-                    repo_root,
-                    task_id,
-                    target_stage_id,
-                    Some("APPROVED".to_string()),
-                    None,
-                    Some(summary.to_string()),
-                    ctx.app_handle.as_ref(),
-                )
-                .await
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
-
-                let summary_content = format!("### Саммари этапа: {}
-
-{}", updated_task.stage_id, summary);
-                let _ = crate::commands::dialogs::append_task_dialog_activity(
-                    repo_root,
-                    task_id,
-                    "summary",
-                    &summary_content,
-                    ctx.app_handle.as_ref(),
-                )
-                .await;
-
-                format!(
-                    "УСПЕШНО: Задача {} перемещена на этап '{}', статус: {}",
-                    task_id,
-                    updated_task.stage_id,
-                    updated_task.status.as_deref().unwrap_or("idle")
-                )
-            } else {
-                crate::commands::internal_advance_task(
-                    repo_root,
-                    task_id,
-                    summary,
-                    ctx.app_handle.as_ref(),
-                )
-                .await
-                .map_err(|e| anyhow::anyhow!("{}", e))?
-            }
+            crate::commands::internal_advance_task_to_stage(
+                repo_root,
+                task_id,
+                target_stage,
+                summary,
+                ctx.app_handle.as_ref(),
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e))?
         }
 
         "reject_task" => {
@@ -2519,6 +2512,7 @@ pub async fn execute_tool(
                 Some("idle".to_string()),
                 Some(rejection_summary),
                 ctx.app_handle.as_ref(),
+                true, // is_autonomous_advance
             )
             .await
             .map_err(|e| anyhow::anyhow!("{}", e))?;
@@ -3988,7 +3982,10 @@ async fn run_scoped_command(
     #[cfg(target_os = "windows")]
     let mut cmd = {
         let mut c = Command::new("cmd.exe");
-        c.args(build_windows_cmd_args(cmd_str));
+        c.raw_arg("/D");
+        c.raw_arg("/S");
+        c.raw_arg("/C");
+        c.raw_arg(format!("\"chcp 65001 >nul && {}\"", cmd_str));
         c
     };
 
@@ -5577,8 +5574,20 @@ Messages count: {}
                 // Synchronize messages to in-memory context state before exiting
                 sync_context_state(&config.app_handle, &config.task_id, turn, &messages);
 
+                let display_summary = serde_json::from_str::<serde_json::Value>(&tc.function.arguments)
+                    .ok()
+                    .and_then(|val| {
+                        val.get("summary")
+                            .or_else(|| val.get("reason"))
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.trim().to_string())
+                    })
+                    .filter(|s| !s.is_empty());
+
+                let final_resp = display_summary.unwrap_or_else(|| result_str.clone());
+
                 event_sink(AgentEvent::Finished {
-                    final_response: result_str.clone(),
+                    final_response: final_resp,
                 });
                 return Ok(result_str);
             }

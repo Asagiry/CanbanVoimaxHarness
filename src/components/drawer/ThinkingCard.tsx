@@ -37,6 +37,7 @@ export default function ThinkingCard({
   const [copied, setCopied] = useState(false);
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const thinkingStart = useDrawerStore((s) => s.thinkingStartTime[taskId] ?? null);
+  const blockStart = thought?.createdAt || thinkingStart;
 
   useEffect(() => {
     return () => {
@@ -71,12 +72,12 @@ export default function ThinkingCard({
   // Live timer tick ONLY during active streaming
   const [, setTimerTick] = useState(0);
   useEffect(() => {
-    if (isFinished || thinkingStart == null) return;
+    if (isFinished || blockStart == null) return;
     const interval = setInterval(() => {
       setTimerTick((t) => (t + 1) % 1000);
     }, 100);
     return () => clearInterval(interval);
-  }, [isFinished, thinkingStart]);
+  }, [isFinished, blockStart]);
 
   // Streaming typewriter animation loop (ONLY for active streaming thought)
   useEffect(() => {
@@ -126,11 +127,12 @@ export default function ThinkingCard({
     };
   }, [fullText.length, isFinished, displayedLength]);
 
-  // Timer calculation: live or final duration
+  // Timer calculation: live block duration or final frozen duration
   const effectiveDurationMs = durationMs ?? thought?.durationMs;
   let timerText = '';
-  if (!isFinished && thinkingStart != null) {
-    timerText = formatDurationCompact(Date.now() - thinkingStart) ?? '';
+  if (!isFinished) {
+    const startMs = thought?.createdAt || thinkingStart || Date.now();
+    timerText = formatDurationCompact(Date.now() - startMs) ?? '';
   } else if (effectiveDurationMs && effectiveDurationMs > 0) {
     timerText = formatDurationCompact(effectiveDurationMs) ?? '';
   }
@@ -185,8 +187,8 @@ export default function ThinkingCard({
           <button
             type="button"
             onClick={handleCopy}
+            aria-label="Скопировать размышления"
             className="p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-white dark:hover:bg-[#21262d] transition cursor-pointer"
-            title="Скопировать размышления"
           >
             {copied ? (
               <Check className="h-3 w-3 text-emerald-600" />
@@ -204,7 +206,6 @@ export default function ThinkingCard({
           {isTyping && (
             <span
               className="inline-block w-1.5 h-3.5 bg-[#171717] dark:bg-[#f0f6fc] animate-pulse ml-0.5 align-middle select-none"
-              title="Думает..."
             />
           )}
         </div>

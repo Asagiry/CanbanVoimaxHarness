@@ -2,10 +2,11 @@ import { useState, memo } from 'react';
 import { Draggable } from '@hello-pangea/dnd';
 import { KanbanTask, TaskStatus } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
-import { useBoardStore, syncTasksBackend } from '../../stores/boardStore';
+import { useBoardStore } from '../../stores/boardStore';
 import { useShallow } from 'zustand/react/shallow';
-import { Play, GitBranch, ChevronDown, MessageSquare, GitFork, CornerDownRight } from 'lucide-react';
+import { GitBranch, ChevronDown, MessageSquare, GitFork, CornerDownRight } from 'lucide-react';
 import TaskContextMenu from './TaskContextMenu';
+import { getDeterministicAgentColor } from '../../lib/agentPalette';
 
 function formatCardDate(ts?: number): string {
   if (!ts || !Number.isFinite(ts)) return '';
@@ -53,7 +54,6 @@ interface KanbanCardProps {
 
 function KanbanCard({ task, index }: KanbanCardProps) {
   const openDrawer = useDrawerStore((s) => s.openDrawer);
-  const runTaskAgent = useBoardStore((s) => s.runTaskAgent);
   const setHoveredTaskId = useBoardStore((s) => s.setHoveredTaskId);
   const columns = useBoardStore((s) => s.columns);
   const isHighlighted = useBoardStore((s) =>
@@ -66,7 +66,9 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const [isSubtasksOpen, setIsSubtasksOpen] = useState(false);
 
   const taskColumn = columns.find((c) => c.id === task.columnId);
-  const canRunAgent = Boolean(taskColumn?.persona);
+  const assignedAgentColor = taskColumn?.persona
+    ? getDeterministicAgentColor(taskColumn.persona)
+    : (taskColumn?.color || getDeterministicAgentColor(task.columnId));
   const isDone = Boolean(
     task.status === 'done' ||
     taskColumn?.terminal === true ||
@@ -92,14 +94,6 @@ function KanbanCard({ task, index }: KanbanCardProps) {
     : task.createdAt
     ? Math.max(0, Math.floor((Date.now() - task.createdAt) / 1000))
     : (task.totalElapsed ?? 0);
-
-
-
-  const handleRunAgent = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    await syncTasksBackend(useBoardStore.getState().tasks);
-    await runTaskAgent(task.id);
-  };
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -181,6 +175,14 @@ function KanbanCard({ task, index }: KanbanCardProps) {
             onContextMenu={handleContextMenu}
             onMouseEnter={() => setHoveredTaskId(task.id)}
             onMouseLeave={() => setHoveredTaskId(null)}
+            style={{
+              ...provided.draggableProps.style,
+              borderColor: snapshot.isDragging
+                ? undefined
+                : isHighlighted
+                ? undefined
+                : `${assignedAgentColor}50`,
+            }}
             className={`group relative mb-2 rounded-md border p-3 cursor-pointer select-none transition duration-150 active:scale-[0.99] ${
               snapshot.isDragging
                 ? 'border-[#171717] dark:border-[#30363d] shadow-md bg-white dark:bg-[#161b22] z-40'
@@ -189,7 +191,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                 : 'border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] hover:border-[#d4d4d8] dark:hover:border-[#30363d] shadow-xs'
             }`}
           >
-            {/* Header: ID, Play Button, Parent link & Concise Status */}
+            {/* Header: ID, Parent link & Concise Status */}
             <div className="flex items-center justify-between mb-2 gap-1.5 flex-wrap">
               <div className="flex items-center space-x-1.5">
                 <span className="font-mono text-[10px] font-semibold text-[#171717] dark:text-[#f0f6fc] bg-[#f4f4f5] dark:bg-[#0d1117] px-1.5 py-0.5 rounded border border-[#ebebeb] dark:border-[#30363d] tabular-nums">
@@ -209,17 +211,6 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                   >
                     <GitBranch className="h-2.5 w-2.5 text-[#6366f1] dark:text-[#a5b4fc]" />
                     <span>{task.parentId}</span>
-                  </button>
-                )}
-
-                {canRunAgent && (
-                  <button
-                    type="button"
-                    onClick={handleRunAgent}
-                    className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#171717] dark:text-[#f0f6fc] bg-[#f4f4f5] dark:bg-[#0d1117] hover:bg-[#171717] dark:hover:bg-[#21262d] hover:text-white border border-[#ebebeb] dark:border-[#30363d] transition cursor-pointer"
-                  >
-                    <Play className="h-2.5 w-2.5 fill-current" />
-                    <span>Пуск</span>
                   </button>
                 )}
               </div>
@@ -257,14 +248,13 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                   {task.model}
                 </div>
               )}
-              <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
-                <span
-                  className="truncate text-[#8f8f8f] dark:text-[#8b949e] min-w-0"
-                  title={task.branch ? `Ветка: ${task.branch}` : 'Ветка не задана'}
-                >
-                  {task.branch || 'без ветки'}
-                </span>
-              </div>
+              {task.branch ? (
+                <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
+                  <span className="truncate text-[#8f8f8f] dark:text-[#8b949e] min-w-0">
+                    {task.branch}
+                  </span>
+                </div>
+              ) : null}
               {(task.createdAt || currentTotalElapsed > 0) && (
                 <div className="mt-1 flex items-center gap-1 font-mono text-[10px] text-[#8f8f8f] dark:text-[#8b949e] tabular-nums whitespace-nowrap">
                   {task.createdAt ? (

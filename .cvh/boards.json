@@ -3,7 +3,7 @@
   "boards": [
     {
       "id": "development",
-      "name": "Engineering Pipeline",
+      "name": "cvh-board",
       "columns": [
         {
           "id": "backlog",
@@ -31,7 +31,7 @@
         {
           "id": "dev",
           "title": "CVH Development",
-          "color": "#f59e0b",
+          "color": "#6366f1",
           "icon": "Bot",
           "persona": "cvh-dev",
           "onEnterScript": null,

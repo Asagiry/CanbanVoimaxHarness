@@ -323,6 +323,42 @@ fn discover_project_root_raw() -> PathBuf {
     current
 }
 
+/// Resolves the actual project root containing `.cvh` when given either the workspace root
+/// or an isolated git worktree directory (§ 2.3 & § 2.23).
+pub fn resolve_actual_repo_root(path: &Path) -> PathBuf {
+    if path.join(".cvh").exists() {
+        return path.to_path_buf();
+    }
+    // 1. Traverse ancestors looking for .cvh
+    for ancestor in path.ancestors() {
+        if ancestor != path && ancestor.join(".cvh").exists() {
+            return ancestor.to_path_buf();
+        }
+    }
+    // 2. If .git is a worktree pointer file, follow gitdir to locate parent workspace
+    let git_file = path.join(".git");
+    if git_file.is_file() {
+        if let Ok(content) = std::fs::read_to_string(&git_file) {
+            for line in content.lines() {
+                if let Some(gitdir) = line.strip_prefix("gitdir:") {
+                    let raw_path = PathBuf::from(gitdir.trim());
+                    let gitdir_path = if raw_path.is_relative() {
+                        path.join(raw_path)
+                    } else {
+                        raw_path
+                    };
+                    for ancestor in gitdir_path.ancestors() {
+                        if ancestor.join(".cvh").exists() {
+                            return ancestor.to_path_buf();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    path.to_path_buf()
+}
+
 pub async fn persist_active_project(path: &Path) {
     let dir = get_app_config_dir();
     let _ = tokio::fs::create_dir_all(&dir).await;
@@ -343,7 +379,7 @@ pub async fn persist_active_project(path: &Path) {
 pub fn default_pipeline_config() -> PipelineConfig {
     PipelineConfig {
         id: "default-engineering".to_string(),
-        title: "Engineering Pipeline".to_string(),
+        title: "cvh-board".to_string(),
         tool_permissions: None,
         columns: vec![
             PipelineColumn {
@@ -373,7 +409,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
             PipelineColumn {
                 id: "dev".to_string(),
                 title: "CVH Development".to_string(),
-                color: Some("#f59e0b".to_string()),
+                color: Some("#6366f1".to_string()),
                 icon: Some("Bot".to_string()),
                 persona: Some("cvh-dev".to_string()),
                 on_enter_script: None,
@@ -427,7 +463,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
 pub fn default_board_def() -> BoardDef {
     BoardDef {
         id: "development".to_string(),
-        name: "Engineering Pipeline".to_string(),
+        name: "cvh-board".to_string(),
         columns: default_pipeline_config().columns,
     }
 }
@@ -468,7 +504,7 @@ pub fn get_canonical_board_columns() -> Vec<PipelineColumn> {
         PipelineColumn {
             id: "dev".to_string(),
             title: "CVH Development".to_string(),
-            color: Some("#f59e0b".to_string()),
+            color: Some("#6366f1".to_string()),
             icon: Some("Bot".to_string()),
             persona: Some("cvh-dev".to_string()),
             on_enter_script: None,
@@ -991,7 +1027,7 @@ pub fn resolve_hook_path(
 pub fn minimal_pipeline_config() -> PipelineConfig {
     PipelineConfig {
         id: "default-engineering".to_string(),
-        title: "Engineering Pipeline".to_string(),
+        title: "cvh-board".to_string(),
         tool_permissions: None,
         columns: vec![
             PipelineColumn {
@@ -1021,7 +1057,7 @@ pub fn minimal_pipeline_config() -> PipelineConfig {
             PipelineColumn {
                 id: "dev".to_string(),
                 title: "CVH Development".to_string(),
-                color: Some("#f59e0b".to_string()),
+                color: Some("#6366f1".to_string()),
                 icon: Some("Bot".to_string()),
                 persona: Some("cvh-dev".to_string()),
                 on_enter_script: None,
@@ -1081,12 +1117,12 @@ scope: gated-writes
 activation: on-enter dev runs run_agent(taskId)
 ---
 # Role: CVH-DEV (Project Configuration & Environment Specialist)
-Вы отвечаете ИСКЛЮЧИТЕЛЬНО за настройку проекта, правил и архитектуры CanbanVoimaxHarness (.cvh/):
-- Настройка досок (.cvh/boards.json) и пайплайнов (.cvh/pipeline.json).
-- Создание и редактирование персон, ролей и правил агентов (.cvh/agents/<role>/persona.md, rules/*.md).
-- Настройка политик инструментов (.cvh/settings/tool-policy.json) и скриптов перехода (hooks).
-- Железное правило завершения: После выполнения всех запланированных пунктов задачи вы ОБЯЗАНЫ прекратить вызовы инструментов и предоставить финальный текстовый отчет о проделанной работе, ЛИБО вызвать advance_task(summary) для передачи задачи на следующий этап. СТРОГО ЗАПРЕЩЕНО заново перезаписывать todo_write на уже выполненную работу или уходить в повторные циклы планирования!
-Вы НЕ создаёте карточки задач и НЕ управляете рабочими тасками (этим занимается пользователь и пайплайн). Ваша цель — подготовить идеальное окружение для команды разработчиков.
+You are EXCLUSIVELY responsible for project configuration, rules, and architecture in CanbanVoimaxHarness (.cvh/):
+- Configure boards (.cvh/boards.json) and runtime pipelines (.cvh/pipeline.json).
+- Create and edit agent personas, roles, and modular rules (.cvh/agents/<role>/persona.md, rules/*.md).
+- Configure tool policies (.cvh/settings/tool-policy.json) and stage transition hooks (hooks/).
+- Ironclad Completion Rule: After completing all planned items, you MUST cease tool calls and provide a terminal findings report, OR invoke advance_task(summary) to hand over to the next stage. NEVER re-publish completed items in todo_write or enter recursive planning loops!
+You do NOT create task cards or manage user tasks (reserved for users and the pipeline orchestrator). Your mandate is preparing the optimal execution environment for the engineering team.
 "#;
 
 pub const DEFAULT_RULE_BOARDS_MD: &str = r#"# Guide: Boards and Pipelines Configuration
@@ -1102,6 +1138,7 @@ Columns represent autonomous stages. Moving a card triggers stage automations an
 - **Ready**: id `"ready"` (with `terminal: true`) MUST ALWAYS exist at the final index.
 - **Middle stages**: Preserve relative pipeline order (e.g. `dev` -> `review` -> `qa`).
 - Deleting `backlog` or `ready` is strictly prohibited on all boards. If omitted in a payload, the harness automatically re-injects them.
+- **Initial Board Protection**: The initial board 'cvh-board' must NEVER be deleted or renamed. When configuring new boards (e.g. 'fast', 'complex'), keep 'cvh-board' intact or configure its columns.
 
 ## 3. Configuration Files
 - `.cvh/boards.json`:
@@ -1111,7 +1148,7 @@ Columns represent autonomous stages. Moving a card triggers stage automations an
     "boards": [
       {
         "id": "development",
-        "name": "Development",
+        "name": "cvh-board",
         "columns": [ ... ]
       }
     ]
@@ -1199,6 +1236,53 @@ Columns may define `gatekeeperSensor` (e.g. `cargo check` or `pnpm run build`).
 Gatekeeper sensors execute inside `CVH_WORKTREE_PATH` before any card advance. If exit code != 0, transition is blocked.
 "#;
 
+/// Ensure .cvh/agents/cvh-dev/ exists on disk with persona.md, setting (context_window: 200000),
+/// and modular progressive disclosure rules (boards.md, agents.md, hooks.md).
+pub async fn ensure_cvh_dev_scaffold(repo_root: &Path) -> Result<(), anyhow::Error> {
+    let cvh_dir = repo_root.join(".cvh");
+    let agents_dir = cvh_dir.join("agents");
+    let cvh_dev_dir = agents_dir.join("cvh-dev");
+    let cvh_dev_rules_dir = cvh_dev_dir.join("rules");
+    let cvh_dev_hooks_dir = cvh_dev_dir.join("hooks");
+
+    tokio::fs::create_dir_all(&cvh_dev_rules_dir).await?;
+    tokio::fs::create_dir_all(&cvh_dev_hooks_dir).await?;
+
+    let persona_path = cvh_dev_dir.join("persona.md");
+    if !persona_path.exists() {
+        atomic_write_file(&persona_path, DEFAULT_CVH_DEV_PERSONA_MD).await?;
+    }
+    let setting_path = cvh_dev_dir.join("setting");
+    if !setting_path.exists() {
+        atomic_write_file(&setting_path, DEFAULT_AGENT_SETTING_JSON).await?;
+    } else if let Ok(content) = tokio::fs::read_to_string(&setting_path).await {
+        // When seeding .cvh/agents/cvh-dev/setting, ensure 'context_window': 200000
+        if let Ok(mut val) = serde_json::from_str::<serde_json::Value>(&content) {
+            let needs_update = val.get("context_window").and_then(|v| v.as_u64()).is_none_or(|w| w < 200000);
+            if needs_update {
+                val["context_window"] = serde_json::json!(200000);
+                if let Ok(updated) = serde_json::to_string_pretty(&val) {
+                    let _ = atomic_write_file(&setting_path, &updated).await;
+                }
+            }
+        }
+    }
+    let boards_md_path = cvh_dev_rules_dir.join("boards.md");
+    if !boards_md_path.exists() {
+        atomic_write_file(&boards_md_path, DEFAULT_RULE_BOARDS_MD).await?;
+    }
+    let agents_md_path = cvh_dev_rules_dir.join("agents.md");
+    if !agents_md_path.exists() {
+        atomic_write_file(&agents_md_path, DEFAULT_RULE_AGENTS_MD).await?;
+    }
+    let hooks_md_path = cvh_dev_rules_dir.join("hooks.md");
+    if !hooks_md_path.exists() {
+        atomic_write_file(&hooks_md_path, DEFAULT_RULE_HOOKS_MD).await?;
+    }
+
+    Ok(())
+}
+
 /// Automatically scaffold the minimal .cvh workspace structure if missing.
 /// Creates: empty `.cvh/agents/`, `.cvh/dialogs/`, `.cvh/worktrees/`,
 /// `.cvh/skills/`, `.cvh/settings/`, `.cvh/hooks/` and default
@@ -1265,7 +1349,7 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
     if !boards_path.exists() {
         let default_board = BoardDef {
             id: "development".to_string(),
-            name: "Engineering Pipeline".to_string(),
+            name: "cvh-board".to_string(),
             columns: initial_columns,
         };
         let boards_cfg = BoardsConfig {
@@ -1277,43 +1361,7 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
 
     // Seed modular cvh-dev router persona, settings, and progressive disclosure rules
     // so any newly scaffolded project immediately has these guides available on disk.
-    let cvh_dev_dir = agents_dir.join("cvh-dev");
-    let cvh_dev_rules_dir = cvh_dev_dir.join("rules");
-    let cvh_dev_hooks_dir = cvh_dev_dir.join("hooks");
-    tokio::fs::create_dir_all(&cvh_dev_rules_dir).await?;
-    tokio::fs::create_dir_all(&cvh_dev_hooks_dir).await?;
-
-    let persona_path = cvh_dev_dir.join("persona.md");
-    if !persona_path.exists() {
-        atomic_write_file(&persona_path, DEFAULT_CVH_DEV_PERSONA_MD).await?;
-    }
-    let setting_path = cvh_dev_dir.join("setting");
-    if !setting_path.exists() {
-        atomic_write_file(&setting_path, DEFAULT_AGENT_SETTING_JSON).await?;
-    } else if let Ok(content) = tokio::fs::read_to_string(&setting_path).await {
-        // When seeding .cvh/agents/cvh-dev/setting, ensure 'context_window': 200000
-        if let Ok(mut val) = serde_json::from_str::<serde_json::Value>(&content) {
-            let needs_update = val.get("context_window").and_then(|v| v.as_u64()).is_none_or(|w| w < 200000);
-            if needs_update {
-                val["context_window"] = serde_json::json!(200000);
-                if let Ok(updated) = serde_json::to_string_pretty(&val) {
-                    let _ = atomic_write_file(&setting_path, &updated).await;
-                }
-            }
-        }
-    }
-    let boards_md_path = cvh_dev_rules_dir.join("boards.md");
-    if !boards_md_path.exists() {
-        atomic_write_file(&boards_md_path, DEFAULT_RULE_BOARDS_MD).await?;
-    }
-    let agents_md_path = cvh_dev_rules_dir.join("agents.md");
-    if !agents_md_path.exists() {
-        atomic_write_file(&agents_md_path, DEFAULT_RULE_AGENTS_MD).await?;
-    }
-    let hooks_md_path = cvh_dev_rules_dir.join("hooks.md");
-    if !hooks_md_path.exists() {
-        atomic_write_file(&hooks_md_path, DEFAULT_RULE_HOOKS_MD).await?;
-    }
+    ensure_cvh_dev_scaffold(repo_root).await?;
 
     // 3. Default tasks.json if not present
     let tasks_path = cvh_dir.join("tasks.json");
@@ -1341,26 +1389,29 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
 // Automatic .gitignore Synchronization for .cvh Local Runtime
 // ============================================================================
 
-pub const CVH_GITIGNORE_HEADER: &str = "# CanbanVoimaxHarness Local Runtime";
+pub const CVH_GITIGNORE_HEADER: &str = "# CanbanVoimaxHarness Local Workspace";
+pub const CVH_GITIGNORE_LEGACY_HEADER: &str = "# CanbanVoimaxHarness Local Runtime";
 pub const CVH_RUNTIME_GITIGNORE_ENTRIES: &[&str] = &[
-    ".cvh/harness.db*",
-    ".cvh/spill/",
+    ".cvh/",
     ".cvh/worktrees/",
     ".cvh/llm.json",
+    ".cvh/harness.db*",
+    ".cvh/spill/",
     ".cvh/tasks.json",
     ".cvh/llm_debug.log",
 ];
 
 /// Ensures that `<repo_root>/.gitignore` exists and contains all required
 /// local CVH runtime entries:
-/// - `.cvh/harness.db*`
-/// - `.cvh/spill/`
+/// - `.cvh/`
 /// - `.cvh/worktrees/`
 /// - `.cvh/llm.json`
+/// - `.cvh/harness.db*`
+/// - `.cvh/spill/`
 /// - `.cvh/tasks.json`
 ///
 /// If any of these entries are missing (and no wildcard `.cvh/` or `.cvh` covers them),
-/// appends the missing lines with the clean section header `# CanbanVoimaxHarness Local Runtime`.
+/// appends the missing lines with the clean section header `# CanbanVoimaxHarness Local Workspace`.
 /// Never duplicates existing lines or existing section headers.
 pub fn ensure_project_gitignore(repo_root: &Path) -> std::io::Result<()> {
     let gitignore_path = repo_root.join(".gitignore");
@@ -1450,7 +1501,10 @@ pub fn ensure_project_gitignore(repo_root: &Path) -> std::io::Result<()> {
     }
 
     // 3. Append missing lines with clean section header without duplicating
-    let has_header = lines.iter().any(|l| l.trim() == CVH_GITIGNORE_HEADER);
+    let has_header = lines.iter().any(|l| {
+        let t = l.trim();
+        t == CVH_GITIGNORE_HEADER || t == CVH_GITIGNORE_LEGACY_HEADER
+    });
 
     let mut output = existing_content;
     if !has_header {
@@ -1722,7 +1776,7 @@ pub fn default_tool_settings() -> HashMap<String, serde_json::Value> {
     map.insert("read_file".to_string(), serde_json::json!({ "max_lines": 2000 }));
     map.insert("subagent".to_string(), serde_json::json!({ "max_concurrent": 3 }));
     map.insert("subagent_bg".to_string(), serde_json::json!({ "max_concurrent": 3 }));
-    map.insert("todo_write".to_string(), serde_json::json!({ "max_items": 15 }));
+    map.insert("todo_write".to_string(), serde_json::json!({ "min_items": 3, "max_items": 15 }));
     map.insert("execute_command".to_string(), serde_json::json!({ "timeout_sec": 180 }));
     map
 }
@@ -2193,6 +2247,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_ensure_cvh_dev_scaffold_seeding() {
+        let base_dir = std::path::PathBuf::from("target").join(format!("cvh_dev_scaffold_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base_dir).await.expect("create test dir");
+
+        // Run ensure_cvh_dev_scaffold on empty directory
+        ensure_cvh_dev_scaffold(&base_dir).await.expect("ensure_cvh_dev_scaffold failed");
+
+        let cvh_dev = base_dir.join(".cvh").join("agents").join("cvh-dev");
+        assert!(cvh_dev.join("persona.md").is_file());
+        assert!(cvh_dev.join("setting").is_file());
+        assert!(cvh_dev.join("rules").join("boards.md").is_file());
+        assert!(cvh_dev.join("rules").join("agents.md").is_file());
+        assert!(cvh_dev.join("rules").join("hooks.md").is_file());
+
+        // Check context_window in setting
+        let setting_str = tokio::fs::read_to_string(cvh_dev.join("setting")).await.expect("read setting");
+        let setting_val: serde_json::Value = serde_json::from_str(&setting_str).expect("parse setting");
+        assert_eq!(setting_val.get("context_window").and_then(|v| v.as_u64()), Some(200000));
+
+        // Calling it again is idempotent
+        ensure_cvh_dev_scaffold(&base_dir).await.expect("ensure_cvh_dev_scaffold re-run failed");
+        assert!(cvh_dev.join("persona.md").is_file());
+
+        let _ = tokio::fs::remove_dir_all(&base_dir).await;
+    }
+
+    #[tokio::test]
     async fn test_scaffold_minimal_backlog_ready_only() {
         // Fresh scaffold: pipeline.json holds exactly 3 columns:
         // backlog (no persona, first), dev (cvh-dev persona), ready (terminal, last).
@@ -2466,7 +2547,7 @@ mod tests {
         assert_eq!(cfg.active_board_id, "development");
         assert_eq!(cfg.boards.len(), 1);
         assert_eq!(cfg.boards[0].id, "development");
-        assert_eq!(cfg.boards[0].name, "Engineering Pipeline");
+        assert_eq!(cfg.boards[0].name, "cvh-board");
         assert_eq!(cfg.boards[0].columns.len(), 3);
     }
 
@@ -2632,7 +2713,7 @@ mod tests {
         assert_eq!(header_count, 1, "Header must appear exactly once");
 
         for entry in CVH_RUNTIME_GITIGNORE_ENTRIES {
-            let entry_count = content_second.matches(entry).count();
+            let entry_count = content_second.lines().filter(|l| l.trim() == *entry).count();
             assert_eq!(entry_count, 1, "Entry {} must appear exactly once", entry);
         }
 
@@ -2697,6 +2778,7 @@ mod tests {
         assert!(content.contains(".cvh/llm.json"));
         assert!(content.contains(".cvh/tasks.json"));
 
+        assert!(content.contains(".cvh/"));
         let cvh = base_dir.join(".cvh");
         assert!(cvh.is_dir());
         assert!(cvh.join("agents").is_dir());

@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
@@ -11,11 +11,8 @@ import {
 } from '../../lib/agentPalette';
 import {
   Bot,
-  CheckCircle2,
-  AlertCircle,
   Clock,
   Layers,
-  ArrowLeft,
   PanelLeftClose,
   PanelLeftOpen,
   Square,
@@ -40,6 +37,21 @@ export function formatSubagentDisplayTitle(title?: string | null): string {
 }
 
 
+export function formatSubagentRoleDisplay(
+  role?: string | null,
+  subIndex?: number,
+  isBoardSubtask?: boolean
+): string {
+  if (isBoardSubtask) {
+    const r = (role || '').trim().toLowerCase();
+    if (r === 'reviewer' || r === 'review') return 'РЕВЬЮЕР';
+    if (r === 'developer' || r === 'dev') return 'РАЗРАБОТЧИК';
+    if (r === 'cvh-dev') return 'CVH-DEV';
+    if (role && r !== 'general') return role.toUpperCase();
+    return 'ПОДЗАДАЧА';
+  }
+  return subIndex != null ? `СУБАГЕНТ #${subIndex}` : 'СУБАГЕНТ';
+}
 function formatDuration(ms?: number, isRunning?: boolean): string {
   if (ms === undefined || ms === null || !Number.isFinite(ms) || ms < 0) {
     return isRunning ? '0s' : '—';
@@ -139,17 +151,75 @@ export function getSubagentsForTask(
         id: child.id,
         parentTaskId: taskId,
         title: child.title,
-        role: child.persona || 'developer',
+        role: child.persona || 'reviewer',
         prompt: child.description || '',
         status: child.status === 'running' ? 'running' : child.status === 'done' ? 'finished' : 'finished',
         createdAt: childCreated,
         durationMs: child.totalElapsed ? child.totalElapsed * 1000 : undefined,
         stepsCount: (child.todos || []).length,
+        isBoardSubtask: true,
       });
     }
   }
 
-  const result = Array.from(map.values());
+  const rawList = Array.from(map.values());
+
+  // Filter out duplicate ghost/phantom subagents:
+  // If multiple subagent entries share the exact same prompt (or title),
+  // and one has stepsCount === 0 && (!durationMs || durationMs === 0) while another has
+  // valid steps/duration or is finished/running, discard the 0-step phantom entry!
+  const result = rawList.filter((sub, idx, all) => {
+    // A running subagent is actively executing and must NEVER be treated as a phantom!
+    const isPhantomCandidate =
+      sub.status !== 'running' &&
+      (!sub.stepsCount || sub.stepsCount === 0) &&
+      (!sub.durationMs || sub.durationMs === 0);
+
+    if (!isPhantomCandidate) return true;
+
+    const subPrompt = sub.prompt?.trim();
+    const subTitle = sub.title?.trim();
+
+    const hasBetterDuplicate = all.some((other, otherIdx) => {
+      if (idx === otherIdx) return false;
+
+      const otherPrompt = other.prompt?.trim();
+      const otherTitle = other.title?.trim();
+
+      const samePrompt = Boolean(subPrompt && otherPrompt && subPrompt === otherPrompt);
+      const sameTitle = Boolean(
+        subTitle &&
+        otherTitle &&
+        subTitle === otherTitle &&
+        subTitle !== 'Делегированная задача' &&
+        subTitle !== 'Субагент' &&
+        (!subPrompt || !otherPrompt || subPrompt === otherPrompt)
+      );
+
+      if (!samePrompt && !sameTitle) return false;
+
+      // If the duplicate entry is actively running, it is always the authentic subagent
+      if (other.status === 'running') return true;
+
+      const otherHasStepsOrDuration =
+        (typeof other.stepsCount === 'number' && other.stepsCount > 0) ||
+        (typeof other.durationMs === 'number' && other.durationMs > 0);
+
+      if (otherHasStepsOrDuration) return true;
+
+      const otherIsFinished = other.status === 'finished';
+      if (otherIsFinished && (other.stepsCount || 0) > (sub.stepsCount || 0)) return true;
+      if (otherIsFinished && (other.durationMs || 0) > (sub.durationMs || 0)) return true;
+
+      // Both are non-running 0-step phantoms with identical prompt/title: keep first
+      if (otherIdx < idx && samePrompt && sameTitle) return true;
+
+      return false;
+    });
+
+    return !hasBetterDuplicate;
+  });
+
   // Sort stably by creation order: createdAt ascending
   result.sort((a, b) => {
     const aTime = a.createdAt || 0;
@@ -187,9 +257,13 @@ export function getSubagentOrderMap(
   return map;
 }
 
+const DEFAULT_SIDEBAR_WIDTH = 320;
+const MIN_SIDEBAR_WIDTH = 240;
+const MAX_SIDEBAR_WIDTH = 600;
+
 export default function SubagentsSidebar({
   taskId,
-  taskTitle,
+  taskTitle: _taskTitle = '',
   isCollapsed,
   onToggleCollapse,
   className = '',
@@ -206,6 +280,82 @@ export default function SubagentsSidebar({
 
   const boardTasks = useBoardStore((s) => s.tasks);
   const agentPersonas = useCortexStore((s) => s.agentPersonas);
+
+  // Width & Resizability (default 320px, stored in localStorage)
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('cvh_subagents_sidebar_width');
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && parsed >= MIN_SIDEBAR_WIDTH && parsed <= MAX_SIDEBAR_WIDTH) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return DEFAULT_SIDEBAR_WIDTH;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  const isDraggingRef = useRef(false);
+  const startXRef = useRef(0);
+  const startWidthRef = useRef(sidebarWidth);
+  const activeMouseMoveRef = useRef<((e: MouseEvent) => void) | null>(null);
+  const activeMouseUpRef = useRef<(() => void) | null>(null);
+
+  // Drag handle resize logic
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDraggingRef.current = true;
+    startXRef.current = e.clientX;
+    startWidthRef.current = sidebarWidth;
+    setIsResizing(true);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      const delta = moveEvent.clientX - startXRef.current;
+      const maxAllowed = Math.min(MAX_SIDEBAR_WIDTH, window.innerWidth * 0.5);
+      const newWidth = Math.min(Math.max(MIN_SIDEBAR_WIDTH, startWidthRef.current + delta), maxAllowed);
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        setIsResizing(false);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        setSidebarWidth((finalWidth) => {
+          try {
+            localStorage.setItem('cvh_subagents_sidebar_width', String(Math.round(finalWidth)));
+          } catch {}
+          return finalWidth;
+        });
+      }
+      activeMouseMoveRef.current = null;
+      activeMouseUpRef.current = null;
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    activeMouseMoveRef.current = handleMouseMove;
+    activeMouseUpRef.current = handleMouseUp;
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    return () => {
+      if (activeMouseMoveRef.current) {
+        window.removeEventListener('mousemove', activeMouseMoveRef.current);
+      }
+      if (activeMouseUpRef.current) {
+        window.removeEventListener('mouseup', activeMouseUpRef.current);
+      }
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, []);
 
   const orderMap = useMemo(() => {
     return getSubagentOrderMap(taskId, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks);
@@ -238,24 +388,49 @@ export default function SubagentsSidebar({
 
   if (isCollapsed) {
     return (
-      <div className="w-9 shrink-0 border-r border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#161b22] flex flex-col items-center py-2 transition-colors select-none">
+      <aside className={`w-11 shrink-0 border-r border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] flex flex-col items-center py-3 select-none transition-all duration-150 ${className || ''}`}>
         <button
           type="button"
           onClick={onToggleCollapse}
-          className="p-1.5 rounded-md text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] transition cursor-pointer"
-          title="Развернуть панель субагентов"
+          className="p-1.5 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
+          aria-label="Развернуть панель субагентов"
         >
           <PanelLeftOpen className="h-4 w-4" />
         </button>
-      </div>
+        <div
+          onClick={onToggleCollapse}
+          className="mt-6 flex-1 flex items-center justify-center cursor-pointer group"
+          aria-label="Развернуть панель субагентов"
+        >
+          <span className="text-[11px] font-mono text-[#8f8f8f] dark:text-[#8b949e] group-hover:text-[#171717] dark:group-hover:text-[#f0f6fc] transition tracking-wider [writing-mode:vertical-rl] rotate-180">
+            Субагенты
+          </span>
+        </div>
+      </aside>
     );
   }
 
   return (
     <aside
-      className={`w-72 sm:w-80 shrink-0 border-r border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] flex flex-col min-h-0 overflow-hidden select-none transition-colors ${className}`}
+      style={{ width: `${sidebarWidth}px` }}
+      className={`relative shrink-0 border-r border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] flex flex-col min-h-0 overflow-hidden select-none transition-colors ${className}`}
       aria-label="Панель субагентов"
     >
+      {/* Right Resize Drag Handle */}
+      <div
+        onMouseDown={handleMouseDown}
+        className="group/handle absolute top-0 bottom-0 right-0 w-2 -mr-1 cursor-col-resize z-30 flex items-center justify-center select-none"
+        aria-label="Изменить ширину панели субагентов"
+      >
+        <div
+          className={`w-[2px] h-full transition-colors ${
+            isResizing
+              ? 'bg-[#15803d] dark:bg-[#7ee787]'
+              : 'group-hover/handle:bg-[#15803d]/60 dark:group-hover/handle:bg-[#7ee787]/60'
+          }`}
+        />
+      </div>
+
       {/* Sidebar Header */}
       <div className="h-10 px-3.5 border-b border-[#ebebeb] dark:border-[#21262d] flex items-center justify-between shrink-0 bg-[#fafafa] dark:bg-[#161b22]">
         <div className="flex items-center space-x-2 min-w-0">
@@ -278,7 +453,7 @@ export default function SubagentsSidebar({
           type="button"
           onClick={onToggleCollapse}
           className="p-1 rounded-md text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] transition cursor-pointer"
-          title="Скрыть панель субагентов"
+          aria-label="Скрыть панель субагентов"
         >
           <PanelLeftClose className="h-3.5 w-3.5" />
         </button>
@@ -286,36 +461,8 @@ export default function SubagentsSidebar({
 
       {/* Subagents List */}
       <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
-        {/* Prominent 'Back to Main Task' Button when a subagent is currently active */}
-        {activeSubagentId && (
-          <button
-            type="button"
-            onClick={closeSubagent}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-md bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] border border-[#bbf7d0] dark:border-[#238636] hover:bg-[#dcfce7] dark:hover:bg-[#173a2b] transition-colors font-sans text-xs font-semibold cursor-pointer shadow-xs mb-3 group"
-          >
-            <div className="flex items-center space-x-2 truncate min-w-0">
-              <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">К задаче: {taskTitle || taskId}</span>
-            </div>
-            <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded-md bg-white dark:bg-[#161b22] text-[#15803d] dark:text-[#7ee787] border border-[#bbf7d0] dark:border-[#238636] font-bold shrink-0 ml-1">
-              Главная
-            </span>
-          </button>
-        )}
-
         {allSubagents.length === 0 ? (
-          /* Empty State */
-          <div className="py-10 px-4 text-center flex flex-col items-center justify-center text-[#71717a] dark:text-[#8b949e]">
-            <div className="h-9 w-9 rounded-md bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] flex items-center justify-center mb-3">
-              <Bot className="h-5 w-5 text-[#a1a1aa] dark:text-[#6e7681]" />
-            </div>
-            <div className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc] mb-1">
-              Субагенты не вызывались
-            </div>
-            <p className="text-[11px] leading-relaxed text-[#71717a] dark:text-[#8b949e] max-w-[220px]">
-              Список субагентов появится здесь автоматически при вызове инструментов subagent или subagent_bg.
-            </p>
-          </div>
+          <div className="flex-1" />
         ) : (
           allSubagents.map((sub, idx) => {
             const isActive =
@@ -329,6 +476,8 @@ export default function SubagentsSidebar({
             const roleBadgeStyle = getRoleBadgeStyle(sub.role, matchedPersona?.color);
             const activeCardStyle = getRoleActiveCardStyle(sub.role, matchedPersona?.color);
             const subIndex = orderMap.get(sub.id) ?? (sub.toolCallId ? orderMap.get(sub.toolCallId) : null) ?? (idx + 1);
+            const isBoardSubtask = Boolean(sub.isBoardSubtask || boardTasks.some((t) => t.id === sub.id));
+            const roleDisplay = formatSubagentRoleDisplay(sub.role, subIndex, isBoardSubtask);
 
             return (
               <div
@@ -371,17 +520,16 @@ export default function SubagentsSidebar({
                       style={roleBadgeStyle}
                       className="px-2 py-0.5 rounded text-[11px] font-mono font-bold tracking-wider uppercase border shrink-0 select-none"
                     >
-                      СУБАГЕНТ #{subIndex}
+                      {roleDisplay}
                     </span>
                   </div>
 
                   {/* Status Indicator & Granular Stop Button */}
-                  <div className="shrink-0 flex items-center space-x-1.5">
+                  <div className="shrink-0 flex items-center space-x-1">
                     {sub.status === 'running' ? (
                       <>
-                        <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#15803d] dark:text-[#7ee787] bg-[#f0fdf4] dark:bg-[#12281e] border border-[#bbf7d0] dark:border-[#238636]">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
-                          <span>Работает</span>
+                        <span className="flex items-center justify-center h-5 w-5" title="Выполняется">
+                          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0 ring-2 ring-emerald-500/20" />
                         </span>
                         <button
                           type="button"
@@ -409,21 +557,19 @@ export default function SubagentsSidebar({
                               console.warn('Failed to abort subagent', sub.id, err);
                             }
                           }}
-                          className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#dc2626] dark:text-[#ff7b72] hover:bg-[#fef2f2] dark:hover:bg-[#3b1219] border border-[#fecaca] dark:border-[#da3633] transition cursor-pointer"
+                          className="flex items-center justify-center h-5 w-5 rounded text-[#dc2626] dark:text-[#ff7b72] hover:bg-[#fef2f2] dark:hover:bg-[#3b1219] border border-[#fecaca] dark:border-[#da3633] transition cursor-pointer shrink-0"
+                          aria-label="Остановить субагента"
                         >
                           <Square className="h-2.5 w-2.5 fill-current shrink-0" />
-                          <span>Остановить</span>
                         </button>
                       </>
                     ) : sub.status === 'error' || sub.status === 'stopped' ? (
-                      <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#b91c1c] dark:text-[#ff7b72] bg-[#fef2f2] dark:bg-[#3b1219] border border-[#fecaca] dark:border-[#da3633]">
-                        <AlertCircle className="h-3 w-3 shrink-0" />
-                        <span>{sub.status === 'stopped' ? 'Остановлен' : 'Ошибка'}</span>
+                      <span className="flex items-center justify-center h-5 w-5" title={sub.status === 'stopped' ? 'Остановлен' : 'Ошибка'}>
+                        <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
                       </span>
                     ) : (
-                      <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#52525b] dark:text-[#8b949e] bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d]">
-                        <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                        <span>Готово</span>
+                      <span className="flex items-center justify-center h-5 w-5" title="Завершено">
+                        <span className="h-2 w-2 rounded-full bg-[#a1a1aa] dark:bg-[#52525b] shrink-0" />
                       </span>
                     )}
                   </div>

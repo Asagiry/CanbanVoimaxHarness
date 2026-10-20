@@ -103,7 +103,7 @@ Your mission is to implement robust features across the Rust/Tauri v2 desktop ba
   ```
   или в файле `setting` в поле `"icon": "Code2"`.
 - Канонические поддерживаемые иконки (из библиотеки Lucide Icons):
-  `Bot`, `Brain`, `Cpu`, `Code2`, `ShieldCheck`, `Sparkles`, `Terminal`, `Zap`, `Flame`, `Radar`, `Workflow`, `Boxes`, `Wrench`, `Rocket`, `Fingerprint`, `Compass`, `Crosshair`, `Layers`, `Inbox`, `ListTodo`, `CheckCircle2`, `User`.
+  `Bot`, `Brain`, `Cpu`, `Code2`, `ShieldCheck`, `Sparkles`, `Terminal`, `Zap`, `Flame`, `Radar`, `Workflow`, `Boxes`, `Wrench`, `Rocket`, `Compass`, `Crosshair`, `Layers`, `Inbox`, `ListTodo`, `CheckCircle2`, `User`.
 - Бэкенд автоматически извлекает и синхронизирует иконки через IPC-команды `list_agent_personas`, `read_persona_icon_from_dir` и сохраняет их в frontmatter при обновлении в UI.
 
 ---
