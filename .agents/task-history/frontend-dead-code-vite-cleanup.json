@@ -1,0 +1,22 @@
+{
+  "taskId": "CVH-FRONTEND-DEAD-CODE-VITE-CLEANUP",
+  "task": "frontend-dead-code-vite-cleanup",
+  "branch": "feat/frontend-dead-code-vite-cleanup",
+  "title": "Eliminate circular dynamic import in drawerStore and prune obsolete mock stages",
+  "verdict": "APPROVED",
+  "summary": "Resolved Vite circular/dynamic import warning where boardStore was dynamically imported inside drawerStore while statically imported elsewhere, refactoring drawerStore to use standard static store access. Pruned obsolete 5-stage mock data (review/retro/architect/developer/reviewer/retro/release) from mockData.ts, aligning INITIAL_CORTEX_STAGES with the canonical 3-stage agile architecture (backlog, dev with cvh-dev, ready). Confirmed clean isolation of copilotStore and copilot components.",
+  "files": [
+    "src/stores/drawerStore.ts",
+    "src/stores/mockData.ts"
+  ],
+  "sensors": {
+    "cargo_check": "pass (0 errors)",
+    "cargo_clippy": "pass (0 warnings)",
+    "pnpm_build": "pass (0 errors, 0 circular import warnings)"
+  },
+  "invariants": {
+    "zero_circular_imports": "intact",
+    "lean_3_column_cortex_stages": "intact",
+    "headless_copilot_isolation": "intact"
+  }
+}
