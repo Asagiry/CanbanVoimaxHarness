@@ -1,0 +1,18 @@
+{
+  "taskId": "CVH-FIX-FAILING-RUST-TESTS",
+  "task": "fix-failing-rust-tests",
+  "branch": "feat/fix-failing-rust-tests",
+  "title": "Fix failing unit tests in Rust backend across agent and hooks modules",
+  "verdict": "APPROVED",
+  "summary": "Resolved all failing Rust unit tests (135/135 tests passing): (1) gated Windows-specific quoting subprocess tests under #[cfg(windows)]; (2) synced agent tool policy intersection checks; (3) restored alphabetical per-agent rules loading in compile_primed_system_prompt; (4) clarified cvh-dev complete_task invariant; (5) cleaned up subagent session collection logic.",
+  "files": [
+    "src-tauri/src/agent.rs",
+    "src-tauri/src/agent/tests.rs",
+    "src-tauri/src/hooks.rs"
+  ],
+  "sensors": {
+    "cargo_test": "pass (135 passed, 0 failed)",
+    "cargo_check": "pass (0 errors)",
+    "cargo_clippy": "pass (0 warnings)"
+  }
+}
