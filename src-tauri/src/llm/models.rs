@@ -117,6 +117,9 @@ pub struct ToolDefinition {
     pub function: ToolFunction,
 }
 
+/// Official alias for OpenAI-compatible tool definition
+pub type OpenAITool = ToolDefinition;
+
 impl ToolDefinition {
     pub fn function(name: &str, description: &str, parameters: serde_json::Value) -> Self {
         Self {

@@ -199,8 +199,8 @@ export default function ContextGauge({
       }
     }
 
-    const baseSystem = 3200;
-    const baseTool = 2400;
+    const baseSystem = 6000;
+    const baseTool = 3500;
 
     let messageChars = textChars;
     for (const t of toolsArr) {
@@ -214,24 +214,28 @@ export default function ContextGauge({
       toolsArr.length > 0 ||
       ((feed?.length ?? 0) > 0) ||
       messageChars > 0;
-    const rawMsgTokens = Math.max(hasMessages ? 100 : 0, Math.round(messageChars / 4));
+    // Accurate multilingual BPE estimation for Cyrillic and mixed text (~2.2 chars per token)
+    const rawMsgTokens = Math.max(hasMessages ? 100 : 0, Math.round(messageChars / 2.2));
 
-    // Fix 100% gauge bug: if the task was compacted, preserve the compacted token count
-    // rather than recalculating an uncompressed sum of character lengths from raw historical tool items!
-    // Priority order:
+    // Honest totalInput accounting for caching proxies/Anthropic cache read tokens
+    const totalInput = Math.max(
+      telemetry?.inputTokens || 0,
+      (telemetry?.inputTokens || 0) + (telemetry?.cacheReadTokens || 0)
+    );
+
+    // Context resolution priority order:
     // 1. Explicit currentEstimatedTokens prop
-    // 2. In-memory token override (from compactor event)
-    // 3. Compacted tokens from persisted feed
-    // 4. Server telemetry inputTokens (true model context from last turn) + streamed turn output tokens
-    // 5. Fallback heuristic from uncompressed messages/tools
+    // 2. Verified server telemetry totalInput + streamed turn output tokens (true model prompt context from latest turn)
+    // 3. In-memory compaction override or compacted tokens from persisted feed
+    // 4. Fallback heuristic with realistic system prompt (~6000), tools (~3500), and multilingual messages (~2.2 chars/tok)
     let total: number;
     if (currentEstimatedTokens !== undefined) {
       total = currentEstimatedTokens;
+    } else if (totalInput > 0) {
+      const out = (telemetry?.outputTokens || 0) > 0 ? telemetry.outputTokens : streamedTurnTokens;
+      total = totalInput + out;
     } else if (resolvedCompactTokens !== undefined) {
       total = resolvedCompactTokens;
-    } else if (telemetry?.inputTokens && telemetry.inputTokens > 0) {
-      const out = (telemetry.outputTokens || 0) > 0 ? telemetry.outputTokens : streamedTurnTokens;
-      total = telemetry.inputTokens + out;
     } else {
       const dynamicMsgTokens = Math.max(300, rawMsgTokens);
       total = baseSystem + baseTool + dynamicMsgTokens;
@@ -286,7 +290,7 @@ export default function ContextGauge({
       messageTokens: msg,
     };
     // Лёгкие deps: слайсы текущей задачи и серверная телеметрия
-  }, [taskId, currentEstimatedTokens, resolvedCompactTokens, telemetry?.inputTokens, streamedTurnTokens, thoughts, outputs, tools, feed]);
+  }, [taskId, currentEstimatedTokens, resolvedCompactTokens, telemetry?.inputTokens, telemetry?.cacheReadTokens, telemetry?.outputTokens, streamedTurnTokens, thoughts, outputs, tools, feed]);
 
   const percent = Math.min(100, Math.max(0, Math.round((totalUsedTokens / effectiveLimit) * 100)));
 

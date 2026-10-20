@@ -5086,6 +5086,12 @@ where
             prefix_hash
         );
 
+        let tools: Option<Vec<crate::llm::ToolDefinition>> = if active_tools.is_empty() {
+            None
+        } else {
+            Some(active_tools.clone())
+        };
+
         let req = OpenAIChatRequest {
             model: config.model.clone(),
             messages: messages.clone(),
@@ -5095,11 +5101,7 @@ where
             // tools=None so the field is omitted from the OpenAI-compatible
             // payload (stream_openai only sorts Some) and the model answers
             // with plain text. Sending `"tools":[]` is rejected by some proxies.
-            tools: if active_tools.is_empty() {
-                None
-            } else {
-                Some(active_tools.clone())
-            },
+            tools: tools.clone(),
             reasoning_effort: config.reasoning_effort.clone(),
             stream_options: Some(crate::llm::StreamOptions { include_usage: true }),
         };
@@ -5274,7 +5276,7 @@ Messages count: {}
             let duration_ms = duration_secs * 1000.0;
             let output_tokens = (compactor::estimate_text_tokens(&turn_content) as u64)
                 .max((turn_streamed_chars as f64 / 3.8).ceil() as u64);
-            let input_tokens = compactor::estimate_tokens(&messages) as u64;
+            let input_tokens = compactor::estimate_request_tokens(&messages, tools.as_deref()) as u64;
             let tps = if duration_secs > 0.05 && output_tokens > 0 {
                 (output_tokens as f64 / duration_secs) as f32
             } else {
