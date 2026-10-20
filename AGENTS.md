@@ -4,11 +4,11 @@
 > **ABSOLUTE RULE: NEVER WRITE CODE, NEVER EDIT SOURCE FILES MANUALLY, NEVER RUN TESTS OR FIXES YOURSELF.**
 > **YOUR SOLE DUTY IS HIGH-LEVEL ORCHESTRATION, PLANNING, AND SUPERVISION.**
 >
-> 1. **DELEGATE ALL WORK**: Every task (Rust backend, Tauri v2 IPC, React UI, LLM streaming, hooks, git worktree manager) MUST be delegated to specialized Level 1 subagents (`agent-developer`, `tauri-rust-engineer`, `react-tailwind-artisan`) running on `gemini-3.8-flash-high`.
+> 1. **DELEGATE ALL WORK (§ 1.1)**: Every task (Rust backend, Tauri v2 IPC, React UI, LLM streaming, hooks, git worktree manager) MUST be delegated to specialized Level 1 subagents (`agent-developer`, `tauri-rust-engineer`, `react-tailwind-artisan`) running on `gemini-3.8-flash-high`.
 > 2. **ATOMIC TASK DECOMPOSITION & ZERO KITCHEN-SINK DELEGATIONS (§ 1.2)**: NEVER dump multiple orthogonal domains into a single agent prompt (e.g., Rust process management + React DND board + LLM SSE parser). Decompose requests into distinct, single-responsibility subagents running in parallel isolated worktrees.
 > 3. **AUTONOMOUS ISOLATED WORKTREES MANDATORY (§ 2.3 & § 2.23)**: Every subagent MUST work in its own isolated `git worktree` (`worktrees/<task-slug>`), execute all edits and test runs inside that directory, and upon receiving `APPROVED`: autonomously merge into `main`, verify `cargo check && npm run build`, delete the worktree (`git worktree remove worktrees/<task-slug> --force && git worktree prune`), delete the feature branch, and record the task into the ledger. Never let subagents write concurrently to the root working directory.
-> 4. **3-TIER GOVERNANCE**: Lead Subagent -> Level 2 Reviewer (`agent-developer-reviewer`) -> Level 3 Retro Verifier (`agent-retro-verifier`).
-> 5. **AUTONOMOUS MERGE UPON `APPROVED`**: Merges to `main` occur only after verified `APPROVED` verdicts and zero compiler/linter errors.
+> 4. **3-TIER GOVERNANCE (§ 1.1)**: Lead Subagent -> Level 2 Reviewer (`agent-developer-reviewer`) -> Level 3 Retro Verifier (`agent-retro-verifier`).
+> 5. **AUTONOMOUS MERGE UPON `APPROVED` (§ 1.1)**: Merges to `main` occur only after verified `APPROVED` verdicts and zero compiler/linter errors.
 > 6. **STRICT SINGLE-TASK CEILING & ZERO AUTONOMOUS SCOPE-CREEP (§ 1.3)**: Every subagent is assigned EXACTLY ONE atomic task and MUST STOP IMMEDIATELY upon completion. Subagents are STRICTLY FORBIDDEN from expanding scope or inventing unassigned work.
 > 7. **NASA GROUND TRUTH VERIFICATION MANDATE (§ 1.4)**: All verification MUST rely exclusively on Ground Truth Runtime Sensors:
 >    - Compiler & Clippy Sensor: `cargo check` and `cargo clippy -- -D warnings`.
@@ -29,6 +29,8 @@
 ---
 
 ## 1. Multi-Agent Hierarchy & Router Map
+
+### 1.1 3-Tier Multi-Agent Hierarchy & Router Map
 
 ```text
 [Root Orchestrator Agent] (Pure Coordinator, Level 0)
@@ -51,6 +53,24 @@
        │      │
        │      └── 6. Autonomously merges to main, cleans up worktree, and returns report
 ```
+
+### 1.2 Atomic Task Decomposition & Zero Kitchen-Sink Delegations
+- **Single-Domain Isolation**: NEVER combine orthogonal domains into one prompt (e.g., Rust process management + React DND board + LLM SSE parser).
+- **Parallel Subagents**: Decompose complex tasks into atomic, single-responsibility subagents running in parallel isolated worktrees.
+
+### 1.3 Strict Single-Task Ceiling & Zero Autonomous Scope-Creep
+- **Single Assignment**: Every subagent receives EXACTLY ONE atomic task and MUST STOP IMMEDIATELY upon completion.
+- **Zero Scope Expansion**: Subagents are strictly forbidden from expanding scope, adding unsolicited features, or inventing unassigned work.
+
+### 1.4 NASA Ground Truth Verification Mandate
+- **Runtime Sensors Invariant**: All verification MUST rely exclusively on Ground Truth Runtime Sensors:
+  - **Compiler & Clippy Sensor**: `cargo check` and `cargo clippy -- -D warnings`.
+  - **Frontend Bundle Sensor**: `pnpm run build` (`tsc && vite build`).
+  - **Live Process Sensor**: Real subprocess execution and live HTTP/SSE streaming tests against local AI proxies.
+- **Zero-TDD / Anti-Mock Policy**: Never substitute live runtime sensor verification with synthetic mocks or purely simulated tests.
+
+### 1.5 Zero-Context-Polling Rule (Ban on Monitoring Loops)
+- **Passive Wait Mandate**: When background subagents execute, the Root Orchestrator is strictly forbidden from executing monitoring or busy-polling loops (`list_agents`, `job_list`, `pwsh git status/log`). Await subagent push notices passively.
 
 ### 1.6 Full Peer Advisor, Merciless Colleague & Devil's Advocate Mandate
 - **Uncompromising Peer Partnership (Colleague, Not a Servant)**: Users are human—they make mistakes, suffer from cognitive fatigue, tunnel vision, or propose conflicting requirements and architectural anti-patterns. Subagents, lead developers, and orchestrators MUST NOT behave as passive order-takers, subservient assistants, or yes-men. You are an authoritative senior engineering colleague. When a user presents an erroneous premise, contradictory specification, architectural anti-pattern, or decision conflict, you are duty-bound to point it out mercilessly, crisply, and constructively.
@@ -144,7 +164,8 @@
   - Both levels must evaluate to `true` for a tool to be permitted.
 - **Zero-Trust Request Stripping**: Disabled tools are completely purged from the tool schema definitions sent to the LLM. This guarantees zero tool hallucinations and saves ~2,400+ tokens per inference step.
 - **Alias Normalization**: Tools aliases (`bash` → `execute_command`, `str_replace` → `edit_file`) are normalized before checking policy.
-- **Single Source of Truth**: The active tool policy resides strictly in `.cvh/settings/tool-policy.json`.
+- **Bi-Directional Persona Frontmatter Synchronization**: When tool policies are updated (`save_tool_policies`), the backend autonomously synchronizes the effective allowed tools into the YAML frontmatter (`tools: [...]`) of `.cvh/agents/<role>/persona.md`.
+- **Single Source of Truth**: The active tool policy resides strictly in `.cvh/settings/tool-policy.json`. Hardcoded role-based tool whitelists are prohibited across all agents (`cvh-dev`, `developer`, `reviewer`).
 
 ### 2.6 Column Transition Hooks & Gatekeeper Sensors
 - **Autonomous Lifecycle Hooks**: Columns declare transition scripts in `hooks` (e.g. `hooks.on_enter`). Supports `.bat`, `.cmd`, `.ps1`, `.sh`, and native binaries.
@@ -169,7 +190,7 @@
   - Upon reaching a column with `terminal: true` (or the final `ready` stage), the task is marked as `done`.
 
 ### 2.8 Authoritative Standard Tools Catalog & Dynamic Custom Tools
-- **Complete Standard Tools Catalog**: Defined in Rust engine (`src-tauri/src/agent.rs`) and governed by the two-level tool policy matrix:
+- **Complete Standard Tools Catalog**: Defined in Rust engine (`src-tauri/src/agent.rs`) and governed by the two-level tool policy matrix (§ 2.5):
   - **Pipeline Navigation**:
     - `advance_task` / `move_task`: Transitions task to next sequential stage or specific `stage_id` / `target_stage`. Accepts `summary` parameter injected via Relay Handoff. Emits `agent:autorun` on stage entry.
     - `reject_task`: Rejects task with `reason` parameter, returning card to prior pipeline stage and unlocking it.
@@ -191,12 +212,12 @@
     - `web_search`: DuckDuckGo web search for APIs, documentation, and error solutions (`query`, `limit`).
     - `web_fetch`: Fetches URL content converted to clean Markdown (`url`).
 - **Strict Role Boundary on Task Card Operations**:
-  - `create_task`, `create_tasks`, and `complete_task` are **strictly reserved for Root Orchestrators (Level 0), human users via UI, and Sidecar Copilot**.
-  - **Development Subagents and cvh-dev are STRICTLY FORBIDDEN from calling `create_task`, `create_tasks`, or `complete_task`**. Subagents work inside assigned tasks and advance stages via `advance_task` / `move_task`.
+  - `create_task`, `create_tasks`, and `complete_task` are **strictly reserved for Root Orchestrators (Level 0) and human users via UI**.
+  - **Development subagents, reviewer subagents, cvh-dev, and headless copilot are STRICTLY FORBIDDEN from calling `create_task`, `create_tasks`, or `complete_task`**. Subagents work inside assigned tasks and advance stages via `advance_task` / `move_task`.
 - **Dynamic Custom Tools (`.cvh/tools/`)**:
   - Extensible JSON descriptors in `.cvh/tools/<tool_name>.json` automatically expose custom CLI tools with argument interpolation (`{{args}}`).
 - **Tool Output Spilling Invariant**:
-  - Outputs exceeding 100 lines or 8 KB are automatically written to `.cvh/spill/<timestamp>-<tool>.log`, returning only head (20 lines) and tail (20 lines) to preserve model context.
+  - Outputs exceeding 500 lines or 64 KB for generic shell commands (`execute_command`), or 2,000 lines / 128 KB for `read_file`, are automatically written to `.cvh/spill/<timestamp>-<tool>.log`, returning only head (20 lines) and tail (20 lines) to preserve model context. Subagent reports are never spilled (§ 2.33).
 
 ### 2.9 Zero-Turn Memory Priming & Relay Handoff Invariant
 - Personas are defined in `.cvh/agents/<role>.md` (or `.cvh/agents/<role>/persona.md`).
@@ -245,19 +266,18 @@
   }
   ```
 
-### 2.16 CVH-DEV & Copilot Scope Invariant: Zero-Card-Management & Authoritative Tool Policy Matrix
-- **Zero-Card-Management Invariant**: The `cvh-dev` persona and CVH Copilot Sidecar Dock are strictly Project Configuration & Environment Specialists (`.cvh/` infrastructure, boards, pipelines, agent personas, rules, and hooks). They are strictly forbidden from creating, completing, or managing task cards (§ 2.8). Card lifecycle is strictly reserved for the human user and the pipeline orchestrator.
-- **Authoritative Tool Policy Matrix Decider**: Tool permissions for all agents (including `cvh-dev`, `developer`, `reviewer`) are governed authoritatively by the Two-Level Tool Policy Matrix (`tool-policy.json`) and per-agent setting (`setting.allowed_tools`). If a tool is enabled in `tool-policy.json`), the agent is permitted to use it. Hardcoded role-based tool whitelists are prohibited.
-- **Strict Role Boundary on Task Card Operations (§ 2.8)**: Task card manipulation tools (`create_task`, `create_tasks`, `complete_task`) are strictly reserved for Root Orchestrators (Level 0), human users via UI, and Sidecar Copilot. Development subagents, reviewer subagents, and `cvh-dev` are strictly forbidden from calling `create_task` or `complete_task`.
-- **UI Labeling Consistency**: UI surfaces for Copilot (`CopilotDock.tsx`, topbar badge, placeholders, empty states) MUST reflect "НАСТРОЙКА ПРОЕКТА" / "Project Configuration", never mislabeling configuration sidecars as general task creators.
+### 2.16 CVH-DEV & Headless Copilot Scope Invariant: Zero-Card-Management
+- **Zero-Card-Management Invariant**: The `cvh-dev` persona and Headless Copilot backend are strictly Project Configuration & Environment Specialists (`.cvh/` infrastructure, boards, pipelines, agent personas, rules, and hooks). They are strictly forbidden from creating, completing, or managing task cards (§ 2.8). Card lifecycle is strictly reserved for the human user and the pipeline orchestrator.
+- **Authoritative Tool Policy Governance**: Tool permissions for `cvh-dev` and all agents are governed authoritatively by the Two-Level Tool Policy Matrix (§ 2.5). Hardcoded role-based tool whitelists are prohibited.
+- **Strict Role Boundary on Task Card Operations**: Adheres strictly to § 2.8 (`create_task`, `create_tasks`, `complete_task` forbidden for `cvh-dev` and Copilot).
+- **UI & Layout Decoupling**: Copilot is unmounted from the default screen layout (CVH-REMOVE-COPILOT-DOCK). Any UI surfaces or settings referencing Copilot (`CopilotDock.tsx`, topbar badge, placeholders, empty states) MUST reflect "НАСТРОЙКА ПРОЕКТА" / "Project Configuration", never mislabeling configuration sidecars as general task creators.
 
-### 2.17 Sidecar Copilot Dock Architecture
-- **Persistent Companion Control Plane**: The Sidecar Copilot Dock (`CopilotDock.tsx`, `copilotStore.ts`) resides as a collapsible, resizable panel docked to the right edge of the screen, providing real-time architectural peer consultation, codebase exploration, and multi-board supervision alongside the Kanban board.
-- **White Paper / Vercel Tactical Aesthetic**: Features a high-contrast White Paper design system (`bg-white`, left border 1px `#ebebeb`, graphite ink typography `#171717`, zero dark slop) intentionally differentiating the meta-architectural companion from the obsidian dark Kanban console.
+### 2.17 Headless Copilot Architecture & Layout Invariant
+- **Headless Control Plane & Screen Layout Status**: Following CVH-REMOVE-COPILOT-DOCK per user directive ("Имею ввиду тока справа вот эту колонку а так его оставить да"), Copilot is unmounted from the default screen layout to restore a clean, full-width Kanban board. However, Copilot backend IPC commands (`src-tauri/src/commands/copilot.rs`), reactive state (`copilotStore.ts`), and component architecture (`CopilotDock.tsx`) remain 100% preserved and fully functional for headless execution, automated tasks, and optional companion views.
+- **White Paper / Vercel Tactical Aesthetic**: Features a high-contrast White Paper design system (`bg-white`, left border 1px `#ebebeb`, graphite ink typography `#171717`, zero dark slop) when mounted or displayed in secondary views, intentionally differentiating the meta-architectural companion from the obsidian dark Kanban console.
 - **SQLite Dialogue Persistence Invariant**: All Copilot messages, user prompts, thinking blocks, and tool executions persist in SQLite at `<repo_root>/.cvh/harness.db` under dedicated ID `task_id = "copilot:meta-chat"` using WAL mode, loaded with `load_copilot_history` and cleared with `clear_copilot_history`.
 - **Independent ReAct Loop & Event Streaming**: Operates its own autonomous ReAct loop (`src-tauri/src/commands/copilot.rs`) emitting `copilot:stream` events with token streaming, multi-block thinking cards, tool call visualization, and abort capability (`abort_copilot`).
-- **Dedicated Permitted Tool Suite**: Pre-compiled with `get_copilot_tool_suite()` containing permitted configuration tools:
-  - Configuration & inspection tools: `read_file`, `write_file`, `edit_file`, `glob`, `grep`, `execute_command`, `web_search`.
+- **Dedicated Permitted Tool Suite**: Pre-compiled with `get_copilot_tool_suite()` containing configuration and inspection tools (`read_file`, `write_file`, `edit_file`, `glob`, `grep`, `execute_command`, `web_search`), governed by § 2.5.
 
 ### 2.18 Board Self-Healing Runtime Subsystem
 - **Autonomous Task Healing Invariant**: The Rust desktop backend automatically heals tasks against board configurations (`heal_task_board_and_column` and `heal_tasks` in `src-tauri/src/commands/tasks.rs`).
@@ -285,7 +305,7 @@
   Subtasks inherit the parent task's explicit model override before falling back to target stage column overrides (`parent_model.or(target_col.model_override)`).
 - **Atomic Task Updates Across Lifecycles**: Updates to task model overrides via UI or agent operations MUST be committed immediately via dedicated `update_task` Tauri IPC and written directly to `.cvh/tasks.json` with event emission (`task:updated`, `tasks:updated`). In `run_agent`, tasks are loaded from disk first to ensure the latest model overrides and steer instructions are applied.
 - **100% Context Window Compaction Ceiling**: Automatic state-preserving context compaction MUST trigger strictly when current estimated tokens reach or exceed 100% of the active agent persona's `context_window` (`current_tokens >= compaction_threshold`). Premature, aggressive thresholds (such as 70% or arbitrary >20,000 token turn triggers) are strictly prohibited, ensuring models utilize their full available context buffer without premature token degradation.
-- **Bi-Directional Persona Frontmatter Tool Policy Synchronization**: Whenever tool policies are updated (`save_tool_policies`), the backend MUST autonomously synchronize the effective allowed tools into the YAML frontmatter (`tools: [...]`) of `.cvh/agents/<role>/persona.md`. This guarantees prompt instructions, runtime schema definitions, and system prompts remain 100% consistent, eliminating tool hallucinations and cognitive mismatch.
+- **Persona Frontmatter Tool Policy Synchronization**: Frontmatter `tools: [...]` stays synchronized with effective allowed tools on policy updates (§ 2.5).
 
 ### 2.22 Optimistic Kanban Card Lifecycle & Symmetric State Invariants
 - **Instant Optimistic Card Lifecycle (<1ms)**: `addTask`, `createSubtask`, and `deleteTask` in `boardStore.ts` MUST update Zustand state immediately (<1ms) so cards appear or vanish instantaneously on the Kanban board without blocking on backend IPC or disk I/O. Background IPC operations (`create_task`, `create_subtask`, `delete_task`), worktree initialization/cleanup, SQLite dialogue clearing, and disk persistence run asynchronously and silently reconcile state in-place without wholesale board reloads (`loadTasks`).
@@ -369,6 +389,7 @@
   The structurally immutable columns (`backlog` and `ready`) anchor intake and delivery, while `dev` serves as the single active autonomous execution stage for fresh projects.
 - **Unified cvh-dev Development Persona Invariant**: The default development column (`dev`) MUST bind to the `cvh-dev` persona (`persona: "cvh-dev"`), ensuring immediate alignment with project configuration, codebase modification, tactical planning (`todo_write`), subagent delegation, and environment inspection capabilities.
 - **200,000 Token Persona Context Window Invariant**: The default context window capacity for `cvh-dev` MUST be configured to 200,000 tokens (`context_window: 200000` in `.cvh/agents/cvh-dev/setting`). On project scaffold or initialization (`scaffold_cvh_project`), if `context_window` is absent or below 200,000 tokens (`val.get("context_window").and_then(|v| v.as_u64()).is_none_or(|w| w < 200000)`), the backend MUST automatically ensure and seed 200,000 tokens, providing ample context headroom for complex multi-turn development sessions.
+
 ### 2.31 Steer Context Preservation, SQLite Persistence & Tool Call Sanitization Invariants
 - **Multi-Turn In-Memory Context Continuity**: When steering an active or idle agent via `steer_agent` or `run_agent(task_id, Some(steer_prompt))`, the ReAct loop in `run_agent_loop` MUST NOT wipe existing conversation messages with a fresh 2-message array (`system + user`). The engine MUST first check `AppState::agent_contexts` for existing messages (>2); if absent (e.g. after desktop app restart), it MUST reconstruct the full transcript from SQLite `dialog_items` (`reconstruct_messages_from_dialog`).
 - **Idempotent In-Memory Context State Retention**: In `run_agent`, initializing `state.agent_contexts` MUST use `ctx_map.entry(task_id).or_insert_with(...)` rather than unconditional `insert(..., AgentContextState::default())`, guaranteeing that active or pre-existing conversation context is never wiped during steer re-entry.
@@ -385,10 +406,11 @@
 
 ### 2.33 Subagent Report Spilling Bypass, Unconditional Abort & Turn Deduplication Invariants
 - **Subagent Report Spilling Bypass Invariant**: Subagent output reports generated by `subagent`, `subagent_bg`, and `collect_subagent` MUST NEVER be truncated, clipped, or spilled to disk in `maybe_spill_output`. The parent agent requires 100% of the synthesized findings to make reasoned decisions in Turn N+1 without losing critical diagnostic data.
-- **Modernized Spilling Ceilings**: For generic shell commands and tools (`execute_command`, etc.), the spilling threshold is raised from 100 lines / 8 KB to 500 lines / 64 KB. For `read_file`, outputs do not truncate or spill unless exceeding 2,000 lines or 128 KB, preventing premature file truncation during routine codebase inspection.
+- **Tool Spilling Ceilings**: Spilling ceilings for shell commands and file reads are authoritatively defined in § 2.8 (500 lines / 64 KB for generic shell commands; 2,000 lines / 128 KB for `read_file`).
 - **Unconditional Abort & Child Subagent Sweep Invariant**: `abort_agent` and `internal_abort_agent` MUST stop both the parent task and all active child subagents registered under that task across `state.active_agents`, `SUBAGENT_SESSIONS`, and `SUBAGENT_RECEIVERS`. Moving a task card to `backlog` (or any stage without autorun/persona) MUST automatically trigger `internal_abort_agent` to terminate orphaned background Tokio loops immediately. `run_agent_loop` must check `abort_flag` before starting each turn and before executing every tool call, terminating immediately upon signal.
 - **Single-Turn Subagent Deduplication Invariant**: If an LLM emits multiple `subagent` or `subagent_bg` tool calls with identical or virtually identical prompt and role within a single turn, the ReAct loop MUST deduplicate them via `are_subagent_prompts_duplicate`, returning the result of the already started agent without spawning duplicate concurrent tasks or redundant child processes.
-- **Authoritative Tool Policy Matrix Invariant (§ 2.16 & § 2.21)**: The Tool Policy Matrix (`.cvh/settings/tool-policy.json`) is the single authoritative source of truth for tool permissions. Persona YAML frontmatter (`tools: [...]`) and `setting.allowed_tools` cannot silently drop tools enabled in the active matrix. Persona frontmatters are synchronized dynamically upon startup and whenever policies are saved. The `cvh-dev` persona MUST have `advance_task` enabled and follow an ironclad completion directive: after completing planned items, output a terminal report and cease tool calls or call `advance_task`.
+- **Tool Policy Authority & cvh-dev Completion Directive**: Tool permissions adhere strictly to § 2.5. The `cvh-dev` persona MUST have `advance_task` enabled and follow an ironclad completion directive: upon completing planned items, output a terminal report and cease tool calls or call `advance_task`.
+
 ### 2.34 Subagent UI Polish, Role Iconography, Granular Abort & Anti-Slop Presentation Invariants
 - **Dynamic Role Iconography vs Glyph Ban (Anti-Square Invariant)**: In all UI headers, drawer activity streams, breadcrumbs, sidebar items, and tool execution cards, literal unicode placeholder glyphs (`■`, `●`, `▲`, `[]`) are strictly prohibited. Subagent roles and agent personas MUST resolve to canonical Lucide SVG components via dynamic resolver `getRoleIcon(role)` (`Code2` for developer, `ShieldCheck` for reviewer/audit, `Compass` for explorer/research, `Bot` as fallback), maintaining deep visual consistency across light and dark themes.
 - **Technical Sub-Call ID Sanitization & Humanized Display Titles**: Internal IPC call markers, temporary execution identifiers, and machine sub-call slugs (`(?:[A-Za-z0-9_-]+\.)?sub-call_\d+`) MUST NEVER leak into user-facing headers, subagent sidebar lists, breadcrumbs, or tool execution cards. All subagent titles and tool parameters MUST pass through `formatSubagentDisplayTitle`, stripping raw call suffixes and humanizing them into clear contextual representations (e.g. `"субагент"`). Redundant raw technical ID badges (such as monospace `{subagentId}` pills alongside task titles) are strictly banned from tool execution cards.
