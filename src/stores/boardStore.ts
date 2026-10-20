@@ -732,9 +732,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
             }
             return mapBackendTaskToKanban(raw);
           });
-          set({ tasks: mapped, isTauriConnected: true, isLoadingTasks: false });
-          persistTasksToLocalStorage(mapped);
-          syncTaskSeqWithTasks(mapped);
+          // Preserve any in-flight optimistic or newly created tasks not yet returned by backend list_tasks (§ 2.22)
+          const pendingOptimistic = prevTasks.filter(
+            (p) => !rawTasks.some((raw) => raw.id === p.id) && (!p.worktreePath || (p.createdAt && Date.now() - p.createdAt < 15000))
+          );
+          const allTasks = [...mapped, ...pendingOptimistic];
+          set({ tasks: allTasks, isTauriConnected: true, isLoadingTasks: false });
+          persistTasksToLocalStorage(allTasks);
+          syncTaskSeqWithTasks(allTasks);
           return;
         } else {
           // Backend has empty tasks array on disk: check per-project localStorage backup
@@ -779,6 +784,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     }
 
     const targetColDef = columns.find((c) => c.id === targetStageId);
+    const originalColumnId = task.columnId;
+    const originalStatus = task.status;
     console.info(`[moveTask] Moving task "${taskId}" from "${task.columnId}" to "${targetStageId}" (board: ${activeBoardId})`);
 
     // Instant Optimistic Card Lifecycle (<1ms) per § 2.22:
@@ -869,11 +876,32 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     } catch (err: unknown) {
       console.error(`[moveTask] Backend move_task_stage failed for task "${taskId}" -> stage "${targetStageId}":`, err);
       const msg = typeof err === 'string' ? err : err instanceof Error ? err.message : JSON.stringify(err);
+      
+      // RACE CONDITION PREVENTION (§ 2.22):
+      // Do NOT blindly call loadTasks() in catch! Blind loadTasks() wipes optimistic and
+      // newly created in-flight cards that have not completed disk persistence.
+      // Instead, safely revert only the target card's position without dropping cards from the board.
+      const isOptimisticOrNew = !task.worktreePath || (task.createdAt && Date.now() - task.createdAt < 15000);
+      if (isOptimisticOrNew) {
+        console.warn(`[moveTask] Preserving optimistic/new task "${taskId}" in local store despite backend rejection`);
+      }
+
+      const currentTasks = get().tasks;
+      const reverted = currentTasks.map((t) =>
+        t.id === taskId
+          ? {
+              ...t,
+              columnId: originalColumnId,
+              status: (originalStatus || 'idle') as TaskStatus,
+              updatedAt: Date.now(),
+            }
+          : t
+      );
+      set({ tasks: reverted });
+      persistTasksToLocalStorage(reverted);
+
       alert(`Перемещение задачи отклонено:
 ${msg}`);
-      // Откатить состояние / синхронизировать карточки с бэкенда
-      const { loadTasks } = get();
-      await loadTasks();
       return;
     }
   },
@@ -1036,11 +1064,26 @@ ${msg}`);
       });
       if (backendTask && typeof backendTask.id === 'string') {
         const mapped = mapBackendTaskToKanban(backendTask);
+        const currentTasks = get().tasks;
+        // RACE CONDITION PREVENTION (§ 2.22):
+        // If the user already moved the task card while create_task was running in the background,
+        // do not reset columnId or status back to the creation stage (e.g. 'backlog').
+        const existingInStore = currentTasks.find((t) => t.id === optimisticId || t.id === backendTask.id);
+        const userMovedColumn = existingInStore && existingInStore.columnId !== targetColumnId;
+        const effectiveColumnId = userMovedColumn ? existingInStore.columnId : mapped.columnId;
+        const effectiveBoardId = existingInStore?.boardId || mapped.boardId || boardId;
+        const effectiveStatus = userMovedColumn ? existingInStore.status : mapped.status;
+        const effectivePersona = userMovedColumn ? existingInStore.persona : mapped.persona;
+
         const confirmed: KanbanTask = {
           ...mapped,
+          columnId: effectiveColumnId,
+          boardId: effectiveBoardId,
+          status: effectiveStatus,
+          persona: effectivePersona,
           model: mapped.model || input.model || undefined,
         };
-        const currentTasks = get().tasks;
+
         // Reconcile: replace optimistic task with confirmed backend task
         let reconciled: KanbanTask[];
         if (currentTasks.some((t) => t.id === optimisticId)) {
@@ -1053,6 +1096,20 @@ ${msg}`);
         set({ tasks: reconciled });
         persistTasksToLocalStorage(reconciled);
         syncTaskSeqWithTasks(reconciled);
+
+        // If the task was moved by the user during creation, ensure backend stage matches
+        if (userMovedColumn && backendTask.stage_id !== effectiveColumnId) {
+          try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            await invoke('move_task_stage', {
+              taskId: confirmed.id,
+              targetStageId: effectiveColumnId,
+              boardId: effectiveBoardId,
+            });
+          } catch (syncErr) {
+            console.warn('[addTask] Failed to sync moved stage to backend:', syncErr);
+          }
+        }
 
         const colDef = get().columns.find((c) => c.id === confirmed.columnId);
         if (colDef?.autoRun ?? !!colDef?.persona) {
