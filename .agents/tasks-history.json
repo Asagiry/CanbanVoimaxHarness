@@ -1792,8 +1792,9 @@
         "sensors": {
             "rust_compiler": "pass (cargo check, 0 errors)",
             "rust_clippy": "pass (cargo clippy -- -D warnings, 0 warnings)",
-            "rust_tests": "pass (cargo test --lib test_race_condition, 146 passed, 0 failed)",
+            "rust_tests": "pass (cargo test --lib, 146 passed, 0 failed)",
             "typescript_check": "pass (npx tsc --noEmit, 0 errors)",
+            "frontend_bundle": "pass (npm run build, 0 errors, built in 5.16s)",
             "l2_reviewer": "APPROVED",
             "l3_retro_verifier": "APPROVED"
         },
@@ -1803,6 +1804,7 @@
             "src/components/board/KanbanBoard.tsx",
             "src/stores/boardStore.ts"
         ],
-        "summary": "Eliminated task card disappearance race condition when quickly creating and dragging/moving tasks: (1) Early Persistence Invariant: atomically registers tasks into state.tasks and saves to disk immediately before starting slow worktree creation and stage hooks in create_task; (2) In-Memory Fallback Invariant: checks AppState.tasks in internal_move_task_stage if task is not yet on disk; (3) Safe Catch Reversion: replaced blind loadTasks() in boardStore.ts moveTask catch block with localized single-card revert, protecting in-flight optimistic cards from being wiped; (4) Concurrent Stage Preservation: reloads and preserves concurrently modified stage_id, status, and board_id upon worktree completion; (5) In-Flight Move Reconciliation: preserves user's columnId, status, and persona in boardStore.ts addTask reconciliation if user moved the card during background creation; (6) Zero In-Memory Task Loss Invariant: merges in-memory state.tasks with disk tasks in run_agent, preventing stale disk snapshots from wiping memory; (7) Zero Invisible Tasks Invariant: updated KanbanBoard.tsx to ensure cards belonging to active board or with matching columns on active board are always rendered."
+        "summary": "Eliminated task card disappearance race condition when quickly creating and dragging/moving tasks: (1) Early Persistence Invariant: atomically registers tasks into state.tasks and saves to disk immediately before starting slow worktree creation and stage hooks in create_task; (2) In-Memory Fallback Invariant: checks AppState.tasks in internal_move_task_stage if task is not yet on disk; (3) Safe Catch Reversion: replaced blind loadTasks() in boardStore.ts moveTask catch block with localized single-card revert, protecting in-flight optimistic cards from being wiped; (4) Concurrent Stage Preservation: reloads and preserves concurrently modified stage_id, status, and board_id upon worktree completion, explicitly syncing updated_tasks before disk save (cf9485a); (5) In-Flight Move Reconciliation: preserves user's columnId, status, and persona in boardStore.ts addTask reconciliation if user moved the card during background creation; (6) Zero In-Memory Task Loss Invariant: merges in-memory state.tasks with disk tasks in run_agent, preventing stale disk snapshots from wiping memory; (7) Zero Invisible Tasks & Multi-Board Isolation: updated KanbanBoard.tsx to enforce !boardHasCol && activeHasCol, preventing multi-board task leakage while guaranteeing zero invisible tasks (cf9485a).",
+        "remediationCommitHash": "cf9485a34cac53c6c7a34a5b37c40ff65db85405"
     }
 }

@@ -13,8 +13,9 @@
   "sensors": {
     "rust_compiler": "pass (cargo check, 0 errors)",
     "rust_clippy": "pass (cargo clippy -- -D warnings, 0 warnings)",
-    "rust_tests": "pass (cargo test --lib test_race_condition, 146 passed, 0 failed)",
+    "rust_tests": "pass (cargo test --lib, 146 passed, 0 failed)",
     "typescript_check": "pass (npx tsc --noEmit, 0 errors)",
+    "frontend_bundle": "pass (npm run build, 0 errors, built in 5.16s)",
     "l2_reviewer": "APPROVED",
     "l3_retro_verifier": "APPROVED"
   },
@@ -24,7 +25,7 @@
     "src/components/board/KanbanBoard.tsx",
     "src/stores/boardStore.ts"
   ],
-  "summary": "Eliminated task card disappearance race condition when quickly creating and dragging/moving tasks: (1) Early Persistence Invariant: atomically registers tasks into state.tasks and saves to disk immediately before starting slow worktree creation and stage hooks in create_task; (2) In-Memory Fallback Invariant: checks AppState.tasks in internal_move_task_stage if task is not yet on disk; (3) Safe Catch Reversion: replaced blind loadTasks() in boardStore.ts moveTask catch block with localized single-card revert, protecting in-flight optimistic cards from being wiped; (4) Concurrent Stage Preservation: reloads and preserves concurrently modified stage_id, status, and board_id upon worktree completion; (5) In-Flight Move Reconciliation: preserves user's columnId, status, and persona in boardStore.ts addTask reconciliation if user moved the card during background creation; (6) Zero In-Memory Task Loss Invariant: merges in-memory state.tasks with disk tasks in run_agent, preventing stale disk snapshots from wiping memory; (7) Zero Invisible Tasks Invariant: updated KanbanBoard.tsx to ensure cards belonging to active board or with matching columns on active board are always rendered.",
+  "summary": "Eliminated task card disappearance race condition when quickly creating and dragging/moving tasks: (1) Early Persistence Invariant: atomically registers tasks into state.tasks and saves to disk immediately before starting slow worktree creation and stage hooks in create_task; (2) In-Memory Fallback Invariant: checks AppState.tasks in internal_move_task_stage if task is not yet on disk; (3) Safe Catch Reversion: replaced blind loadTasks() in boardStore.ts moveTask catch block with localized single-card revert, protecting in-flight optimistic cards from being wiped; (4) Concurrent Stage Preservation: reloads and preserves concurrently modified stage_id, status, and board_id upon worktree completion, explicitly syncing updated_tasks before disk save (cf9485a); (5) In-Flight Move Reconciliation: preserves user's columnId, status, and persona in boardStore.ts addTask reconciliation if user moved the card during background creation; (6) Zero In-Memory Task Loss Invariant: merges in-memory state.tasks with disk tasks in run_agent, preventing stale disk snapshots from wiping memory; (7) Zero Invisible Tasks & Multi-Board Isolation: updated KanbanBoard.tsx to enforce !boardHasCol && activeHasCol, preventing multi-board task leakage while guaranteeing zero invisible tasks (cf9485a).",
   "ftrAnalysis": {
     "firstTimeRight": true,
     "ftrScore": "100%",
@@ -59,7 +60,19 @@
         "issue": "Incomplete board column matching in KanbanBoard task filter",
         "category": "UI Board Invariant (Zero Invisible Tasks)",
         "explanation": "KanbanBoard task filtering could drop tasks if boardId drifted or didn't match the active board. Resolved by verifying whether the task's column exists on the active board, guaranteeing visibility."
+      },
+      {
+        "issue": "Disk save in create_task omitted updated_tasks in-memory stage sync",
+        "category": "Backend State Synchronization Asymmetry",
+        "explanation": "While new_task was updated with in-memory stage changes, updated_tasks (loaded prior to the mutex lock) was not updated with the new stage/status for new_task.id before save_tasks_to_disk. Remediation in cf9485a explicitly synchronized updated_tasks with new_task.stage_id, status, and board_id before writing to disk."
+      },
+      {
+        "issue": "Naive activeHasCol check leaked tasks across distinct boards",
+        "category": "Multi-Board Isolation Regression (§ 2.3 Violation)",
+        "explanation": "The initial zero-invisible-tasks filter checked activeHasCol unconditionally, which caused tasks belonging to other boards sharing identical column names (e.g. 'backlog', 'ready') to leak onto the active board. Remediation in cf9485a refined this to !boardHasCol && activeHasCol, ensuring self-healing only applies when the task's declared board does not possess that column."
       }
     ]
-  }
+  },
+  "remediationCommitHash": "cf9485a34cac53c6c7a34a5b37c40ff65db85405",
+  "remediationCommitMessage": "fix(board): restore multi-board isolation and sync updated_tasks stage in create_task"
 }
