@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { LiveStreamEntry, ToolExecution, ActivityItem, ActivityType, CompactionReport, SubagentInfo, SubagentStatus } from '../types';
+import { useBoardStore } from './boardStore';
 
 export type DrawerTab = 'thoughts' | 'output' | 'tools';
 
@@ -996,7 +997,6 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         }
 
         try {
-          const { useBoardStore } = await import('./boardStore');
           const boardTask = useBoardStore.getState().tasks.find((t) => t.id === taskId);
           if (compactedTokens === undefined && typeof boardTask?.currentTokens === 'number') {
             compactedTokens = boardTask.currentTokens;
