@@ -779,6 +779,12 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         if (res?.evaporated_count) evaporatedCount = Math.max(evaporatedCount, res.evaporated_count);
         if (res?.tokens_after) {
           get().setTaskTokens(taskId, res.tokens_after);
+          get().updateTelemetry(taskId, {
+            inputTokens: res.tokens_after,
+            outputTokens: 0,
+            cacheReadTokens: 0,
+            cacheCreationTokens: 0,
+          });
         }
       } catch {
         const res = await invoke<{ estimated_saved_tokens?: number; evaporated_tools_count?: number }>(

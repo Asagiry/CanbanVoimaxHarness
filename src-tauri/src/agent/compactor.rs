@@ -1,4 +1,4 @@
-use crate::llm::{ChatMessage, Role};
+use crate::llm::{ChatMessage, OpenAITool, Role};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -506,12 +506,26 @@ pub struct AgentContextState {
     pub messages: Vec<ChatMessage>,
 }
 
-/// Estimates tokens for a given text (~4 chars per token).
+/// Estimates tokens for a given text using multilingual-aware BPE heuristics:
+/// - Non-ASCII / Cyrillic alphabetic characters: ~1.7 chars per token.
+/// - ASCII and other characters: ~3.8 chars per token.
 pub fn estimate_text_tokens(text: &str) -> usize {
     if text.is_empty() {
         return 0;
     }
-    text.chars().count().div_ceil(4)
+    let mut non_ascii_alpha = 0usize;
+    let mut other_chars = 0usize;
+
+    for c in text.chars() {
+        if c.is_alphabetic() && !c.is_ascii() {
+            non_ascii_alpha += 1;
+        } else {
+            other_chars += 1;
+        }
+    }
+
+    let estimated = (non_ascii_alpha as f64 / 1.7) + (other_chars as f64 / 3.8);
+    (estimated.ceil() as usize).max(1)
 }
 
 /// Estimates the total token count of a sequence of ChatMessages.
@@ -537,6 +551,33 @@ pub fn estimate_tokens(messages: &[ChatMessage]) -> usize {
             }
         }
     }
+    total
+}
+
+/// Estimates the total token count of an entire LLM request,
+/// accounting for conversation messages and the full JSON schemas of tools definitions.
+pub fn estimate_request_tokens(
+    messages: &[ChatMessage],
+    tools: Option<&[OpenAITool]>,
+) -> usize {
+    let mut total = estimate_tokens(messages);
+
+    if let Some(tool_list) = tools {
+        if !tool_list.is_empty() {
+            total += 12; // base tool definitions framing overhead
+            for tool in tool_list {
+                total += 12; // individual tool framing
+                total += estimate_text_tokens(&tool.tool_type);
+                total += estimate_text_tokens(&tool.function.name);
+                total += estimate_text_tokens(&tool.function.description);
+                let params_str = serde_json::to_string(&tool.function.parameters).unwrap_or_default();
+                if !params_str.is_empty() {
+                    total += estimate_text_tokens(&params_str);
+                }
+            }
+        }
+    }
+
     total
 }
 
@@ -1163,5 +1204,75 @@ test result: ok. 14 passed; 0 failed"),
 
         // Verify current focus
         assert!(report.contains("Fix gauge bug in ContextGauge.tsx"));
+    }
+
+    #[test]
+    fn test_multilingual_token_estimation() {
+        assert_eq!(estimate_text_tokens(""), 0);
+
+        // ASCII text: ~3.8 chars per token
+        let ascii_text = "Hello world! This is a simple test.";
+        let ascii_tokens = estimate_text_tokens(ascii_text);
+        assert!(ascii_tokens >= 8 && ascii_tokens <= 12, "ascii_tokens={}", ascii_tokens);
+
+        // Russian (Cyrillic) text: ~1.7 chars per token
+        let cyrillic_text = "Привет мир! Это проверка токенизации.";
+        let cyrillic_tokens = estimate_text_tokens(cyrillic_text);
+        // 37 chars, mostly Cyrillic alphabetic -> should be around 20-24 tokens (not 37/4=9!)
+        assert!(cyrillic_tokens >= 18 && cyrillic_tokens <= 25, "cyrillic_tokens={}", cyrillic_tokens);
+
+        // Verify Cyrillic yields substantially more tokens than plain ASCII of same length
+        let same_len_ascii = "a".repeat(cyrillic_text.chars().count());
+        let ascii_same_tokens = estimate_text_tokens(&same_len_ascii);
+        assert!(cyrillic_tokens > ascii_same_tokens * 3 / 2, "Cyrillic must produce ~1.5-2x more tokens than ASCII");
+    }
+
+    #[test]
+    fn test_estimate_request_tokens_includes_tools() {
+        let messages = vec![
+            ChatMessage::system("You are a helpful coding assistant."),
+            ChatMessage::user("Привет, помоги починить баг!"),
+        ];
+
+        let msg_tokens = estimate_tokens(&messages);
+        let request_tokens_no_tools = estimate_request_tokens(&messages, None);
+        assert_eq!(msg_tokens, request_tokens_no_tools);
+
+        // Create tool definitions
+        let tools = vec![
+            OpenAITool::function(
+                "read_file",
+                "Reads a UTF-8 text file from the workspace",
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "file_path": { "type": "string", "description": "Relative path to file" },
+                        "offset": { "type": "integer" },
+                        "limit": { "type": "integer" }
+                    },
+                    "required": ["file_path"]
+                }),
+            ),
+            OpenAITool::function(
+                "execute_command",
+                "Executes a terminal command and returns stdout/stderr",
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "command": { "type": "string", "description": "Shell command to run" },
+                        "timeout_seconds": { "type": "integer" }
+                    },
+                    "required": ["command"]
+                }),
+            ),
+        ];
+
+        let request_tokens_with_tools = estimate_request_tokens(&messages, Some(&tools));
+        assert!(
+            request_tokens_with_tools > msg_tokens + 100,
+            "Request tokens must include tool schema sizes! got: {}, msg_tokens: {}",
+            request_tokens_with_tools,
+            msg_tokens
+        );
     }
 }
