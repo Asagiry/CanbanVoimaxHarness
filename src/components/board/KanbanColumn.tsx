@@ -122,16 +122,16 @@ function KanbanColumn({
         }
         className={`flex items-center h-9 px-3 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] hover:bg-[#fafafa] dark:hover:bg-[#1c2128] transition-colors ${
           isPinned ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
-        } group overflow-hidden`}
+        } group overflow-visible`}
       >
-        <div className="flex items-center gap-2 min-w-0 w-full overflow-hidden">
+        <div className="flex items-center gap-2 min-w-0 w-full">
           <AgentIcon name={effectiveIcon} className="h-3.5 w-3.5 shrink-0 text-[#171717] dark:text-[#f0f6fc]" />
-          <h3 className="text-[13px] font-semibold text-[#171717] dark:text-[#f0f6fc] truncate leading-none">
+          <h3 className="text-[13px] font-semibold text-[#171717] dark:text-[#f0f6fc] truncate leading-[1.35]">
             {column.title}
           </h3>
           {/* Task Counter (same baseline as the title) */}
           <span
-            className={`text-[10px] font-mono tabular-nums whitespace-nowrap leading-none shrink-0 translate-y-[1px] ${
+            className={`text-[10px] font-mono tabular-nums whitespace-nowrap leading-[1.35] shrink-0 translate-y-[1px] ${
               isAtWipLimit ? 'text-red-600 dark:text-red-400' : 'text-[#8f8f8f] dark:text-[#8b949e]'
             }`}
           >
