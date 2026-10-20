@@ -448,7 +448,7 @@ export function MarkdownContent({ content }: { content?: string }) {
 }
 
 // Clean prompt helper: strips legacy appended [USER STEER] or [USER]: blocks for pure prompt display
-export function getCleanPrompt(description?: string, title?: string): string {
+function getCleanPrompt(description?: string, title?: string): string {
   const raw = (description || title || '').trim();
   const steerIdx = raw.search(/\n\s*\[USER(?:\s+STEER)?\]:/i);
   if (steerIdx !== -1) {

@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { CortexAgentFile, CortexAgentStage, PipelineColumn } from '../types';
-import { INITIAL_CORTEX_STAGES } from './mockData';
 import { useBoardStore } from './boardStore';
 import { getDefaultColumnIcon } from '../lib/columnIcons';
 import {
@@ -9,6 +8,78 @@ import {
   getDeterministicAgentColor,
   isAllowedAgentColor,
 } from '../lib/agentPalette';
+
+const DEFAULT_CORTEX_STAGES: CortexAgentStage[] = [
+  {
+    stageId: 'backlog',
+    stageTitle: 'Backlog',
+    color: '#64748b',
+    icon: 'Inbox',
+    personaName: 'система',
+    isExpanded: false,
+    files: [],
+  },
+  {
+    stageId: 'dev',
+    stageTitle: 'CVH Development',
+    color: '#6366f1',
+    icon: 'Bot',
+    personaName: 'cvh-dev',
+    isExpanded: true,
+    files: [
+      {
+        id: 'dev-persona',
+        name: 'persona.md',
+        stageId: 'dev',
+        type: 'persona',
+        path: '.cvh/agents/cvh-dev/persona.md',
+        content: '# Role: CVH-DEV (Project Configuration & Environment Specialist)\n\nНастройка проекта, правил и архитектуры CanbanVoimaxHarness (.cvh/).',
+      },
+      {
+        id: 'dev-settings',
+        name: 'setting',
+        stageId: 'dev',
+        type: 'settings',
+        path: '.cvh/agents/cvh-dev/setting',
+        content: '{\n  "model": "gemini-3.8-flash-high",\n  "context_window": 200000,\n  "temperature": 0.2,\n  "max_tokens": 8192\n}',
+      },
+      {
+        id: 'dev-rule-tools',
+        name: 'tools.md',
+        stageId: 'dev',
+        type: 'rule',
+        path: '.cvh/agents/cvh-dev/rules/tools.md',
+        content: '# Guide: Tool Policies\n\nДвухуровневая матрица политик инструментов (global + stageOverrides).',
+      },
+      {
+        id: 'dev-rule-boards',
+        name: 'boards.md',
+        stageId: 'dev',
+        type: 'rule',
+        path: '.cvh/agents/cvh-dev/rules/boards.md',
+        content: '# Guide: Boards & Pipelines\n\nИнварианты структуры досок и автономных агентов.',
+      },
+    ],
+  },
+  {
+    stageId: 'ready',
+    stageTitle: 'Ready',
+    color: '#10b981',
+    icon: 'CheckCircle2',
+    personaName: 'система',
+    isExpanded: false,
+    files: [
+      {
+        id: 'ready-hook-on_finish',
+        name: 'on_finish',
+        stageId: 'ready',
+        type: 'hook',
+        path: '.cvh/hooks/on_finish_done.bat',
+        content: '@echo off\necho Stage transition to ready completed.\n',
+      },
+    ],
+  },
+];
 
 interface CortexState {
   stages: CortexAgentStage[];
@@ -160,7 +231,7 @@ function buildSettingTemplate(role: string, stageTitle: string): string {
 }
 
 // Токенизация shell-команд с учётом кавычек
-export function tokenizeCommand(cmd: string): string[] {
+function tokenizeCommand(cmd: string): string[] {
   const tokens: string[] = [];
   const regex = /[^\s"']+|"([^"]*)"|'([^']*)'/g;
   let match: RegExpExecArray | null;
@@ -175,7 +246,7 @@ export function tokenizeCommand(cmd: string): string[] {
 const SCRIPT_EXTENSIONS = new Set(['bat', 'cmd', 'ps1', 'sh', 'bash', 'py', 'js', 'ts', 'mjs', 'cjs', 'rb', 'pl']);
 
 // Извлечение пути к файлу скрипта из команды хука (напр. "python .cvh/hooks/gatekeeper.py", ".bat", ".ps1")
-export function extractScriptPath(cmd: string): string | null {
+function extractScriptPath(cmd: string): string | null {
   if (!cmd || cmd.startsWith('builtin:')) return null;
   const trimmed = cmd.trim();
   const tokens = tokenizeCommand(trimmed);
@@ -203,7 +274,7 @@ export function extractScriptPath(cmd: string): string | null {
 }
 
 // Генерация подробного описания и псевдокода для встроенного хука
-export function buildBuiltinHookDescription(path: string, moment: string, stageTitle: string): string {
+function buildBuiltinHookDescription(path: string, moment: string, stageTitle: string): string {
   if (path === 'builtin:create_worktree' || path.startsWith('builtin:create_worktree')) {
     return `# Встроенный хук: create_worktree (${moment})
 
@@ -247,7 +318,7 @@ cp -r .cvh/ "\${WORKTREE_DIR}/.cvh/"
 }
 
 // Генерация описания для прямой команды (напр. "cargo check")
-export function buildCommandHookDescription(command: string, moment: string, stageTitle: string): string {
+function buildCommandHookDescription(command: string, moment: string, stageTitle: string): string {
   const tokens = tokenizeCommand(command.trim());
   const binary = tokens[0] || command;
   const args = tokens.slice(1);
@@ -276,7 +347,7 @@ ${command}
 }
 
 // Шаблон скрипта при отсутствии файла на диске
-export function buildScriptTemplate(scriptPath: string, moment: string, stageId: string): string {
+function buildScriptTemplate(scriptPath: string, moment: string, stageId: string): string {
   const ext = scriptPath.split('.').pop()?.toLowerCase() ?? '';
   if (ext === 'bat' || ext === 'cmd') {
     return `@echo off
@@ -322,7 +393,7 @@ exit 0
 
 // Имя файла хука по моменту и расширению. Базу из ввода очищаем от
 // вручную вписанного расширения, чтобы не получить `setup.bat.bat`.
-export function buildHookFileName(
+function buildHookFileName(
   rawName: string,
   moment: CortexHookMoment,
   ext: CortexHookExt,
@@ -368,7 +439,7 @@ function buildPersonaTemplate(personaName: string, stageTitle: string): string {
 }
 
 export const useCortexStore = create<CortexState>((set, get) => ({
-  stages: INITIAL_CORTEX_STAGES,
+  stages: DEFAULT_CORTEX_STAGES,
   agentStages: [],
   agentPersonas: [],
   activeFile: null,
@@ -608,7 +679,7 @@ export const useCortexStore = create<CortexState>((set, get) => ({
       if (columns.length === 0) {
         // Fallback для web-preview без бэкенда: мок-стадии.
         // Секцию агентов не трогаем: agentStages живут отдельно.
-        set({ stages: INITIAL_CORTEX_STAGES });
+        set({ stages: DEFAULT_CORTEX_STAGES });
         return;
       }
       // Свежий проект без агентов (только backlog+ready без persona):

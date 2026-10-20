@@ -1,10 +1,9 @@
 import { create } from 'zustand';
 import { KanbanTask, PipelineColumn, PipelineConfig, TaskStatus, TaskVerdict, TaskPriority, BoardDef } from '../types';
-import { INITIAL_COLUMNS } from './mockData';
 import { useProjectStore } from './projectStore';
 import { useDrawerStore } from './drawerStore';
 
-export const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
+const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
   {
     id: 'backlog',
     title: 'Backlog',
@@ -44,10 +43,10 @@ export const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
   },
 ];
 
-export const DEFAULT_BOARD: BoardDef = {
+const DEFAULT_BOARD: BoardDef = {
   id: 'development',
   name: 'cvh-board',
-  columns: INITIAL_COLUMNS,
+  columns: CANONICAL_BOARD_COLUMNS,
 };
 
 interface BoardState {
@@ -103,7 +102,7 @@ interface BoardState {
   runTaskAgent: (taskId: string) => Promise<void>;
 }
 
-export function getTasksStorageKey(): string {
+function getTasksStorageKey(): string {
   try {
     const activeProject = useProjectStore.getState().activeProject;
     const storageKey = `cvh_tasks_${activeProject?.id || 'default'}`;
@@ -113,7 +112,7 @@ export function getTasksStorageKey(): string {
   }
 }
 
-export function getTaskSeqStorageKey(): string {
+function getTaskSeqStorageKey(): string {
   try {
     const activeProject = useProjectStore.getState().activeProject;
     return `cvh_task_seq_${activeProject?.id || 'default'}`;
@@ -127,7 +126,7 @@ function getSubtaskSeqStorageKey(parentId: string): string {
 }
 
 /** Numeric suffix of a top-level id: CVH-012 -> 12. Subtask CVH-012.3 -> base 12. */
-export function parseTopLevelTaskNum(id: string): number {
+function parseTopLevelTaskNum(id: string): number {
   const m = /^CVH-(\d+)/i.exec(id.trim());
   if (!m) return 0;
   const n = parseInt(m[1], 10);
@@ -170,7 +169,7 @@ function maxTaskNum(tasks: KanbanTask[]): number {
  * Raise the persistent counter floor so it never falls below existing tasks.
  * Only ever raises — never resets, so deleted IDs are never re-issued.
  */
-export function syncTaskSeqWithTasks(tasks: KanbanTask[]): void {
+function syncTaskSeqWithTasks(tasks: KanbanTask[]): void {
   const key = getTaskSeqStorageKey();
   writeSeq(key, Math.max(readSeq(key), maxTaskNum(tasks), tasks.length));
 }
@@ -179,14 +178,14 @@ export function syncTaskSeqWithTasks(tasks: KanbanTask[]): void {
  * Allocate the next monotonic top-level task number and persist the
  * incremented counter. next = max(counter, max numeric suffix, tasks.length) + 1.
  */
-export function allocateNextTaskNum(tasks: KanbanTask[]): number {
+function allocateNextTaskNum(tasks: KanbanTask[]): number {
   const key = getTaskSeqStorageKey();
   const next = Math.max(readSeq(key), maxTaskNum(tasks), tasks.length) + 1;
   writeSeq(key, next);
   return next;
 }
 
-export function formatTaskId(num: number): string {
+function formatTaskId(num: number): string {
   return `CVH-${String(num).padStart(3, '0')}`;
 }
 
@@ -216,7 +215,7 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
   const targetBoard = boards.find((b) => b.id === boardId);
   const targetColumns = targetBoard?.columns && targetBoard.columns.length > 0
     ? targetBoard.columns
-    : (currentColumns && currentColumns.length > 0 ? currentColumns : INITIAL_COLUMNS);
+    : (currentColumns && currentColumns.length > 0 ? currentColumns : CANONICAL_BOARD_COLUMNS);
 
   const rawId: string | undefined = raw.stageId || raw.stage_id || raw.columnId;
   const knownCol = targetColumns.find((c) => c.id === rawId);
@@ -404,7 +403,7 @@ async function triggerRunAgent(taskId: string, prompt?: string): Promise<void> {
   }
 }
 
-export function mapBackendTaskToKanban(t: any): KanbanTask {
+function mapBackendTaskToKanban(t: any): KanbanTask {
   // Fully generic: resolve everything through the current board columns.
   // (defined outside create(), so columns come from getState()).
   // normalizeKanbanTask fills defaults for legacy tasks created before
@@ -449,7 +448,7 @@ export function mapBackendTaskToKanban(t: any): KanbanTask {
 }
 
 export const useBoardStore = create<BoardState>((set, get) => ({
-  columns: INITIAL_COLUMNS,
+  columns: CANONICAL_BOARD_COLUMNS,
   tasks: [], // Initialized with empty array - NO mock tasks!
   selectedTaskId: null,
   hoveredTaskId: null,
@@ -541,7 +540,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       set({
         boards: [DEFAULT_BOARD],
         activeBoardId: 'development',
-        columns: INITIAL_COLUMNS,
+        columns: CANONICAL_BOARD_COLUMNS,
         isLoadingBoards: false,
       });
     }
@@ -1203,7 +1202,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     } catch (err) {
       console.error('Critical failure during task deletion background sync:', err);
       // Restore previous state if background sync totally failed
-      set({ tasks: prevTasks, selectedTaskId: prevSelectedTaskId });
+      set({ tasks: prevTasks });
       persistTasksToLocalStorage(prevTasks);
       const msg = typeof err === 'string' ? err : err instanceof Error ? err.message : JSON.stringify(err);
       alert(`Не удалось удалить задачу на диске:\n${msg}`);

@@ -73,7 +73,7 @@ function formatSteps(count: number): string {
   return `${count} шагов`;
 }
 
-export function getSubagentsForTask(
+function getSubagentsForTask(
   taskId: string,
   storeSubagents: Record<string, SubagentInfo[]>,
   toolExecutions: Record<string, ToolExecution[]>,

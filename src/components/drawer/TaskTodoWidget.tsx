@@ -21,7 +21,7 @@ interface TaskTodoWidgetProps {
 // - Collapsible plan floats as an overlay popover (z-30 shadow-xl) above the steer bar without displacing chat feed
 // - Read-only plan strip: ONLY the agent fills it via todo_write tool
 // - When activeSubagentId is active, displays the subagent's own todos from its dialogue/session!
-export const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
+const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
   task,
   align = 'left',
   className = '',

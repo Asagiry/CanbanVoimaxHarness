@@ -131,11 +131,6 @@ export interface LiveStreamEntry {
 
 export type ActivityType = 'thought' | 'output' | 'tool' | 'steer' | 'system' | 'error' | 'user' | 'prompt' | 'question' | 'compacted';
 
-export interface QuestionOption {
-  label: string;
-  description?: string;
-}
-
 export interface ActivityItem {
   id: string;
   type: ActivityType;
@@ -180,14 +175,6 @@ export interface TaskGitDiff {
   total_additions?: number;
   total_deletions?: number;
   branch: string;
-}
-
-export interface LlmSettings {
-  provider: string;
-  apiKey: string;
-  baseUrl: string;
-  model: string;
-  temperature?: number;
 }
 
 export type SubagentRole = 'explorer' | 'developer' | 'reviewer' | 'general' | string;

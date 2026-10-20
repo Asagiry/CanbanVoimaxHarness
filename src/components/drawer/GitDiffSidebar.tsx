@@ -93,7 +93,7 @@ function parseCleanDiff(patch?: string | null): ParsedDiffLine[] {
   return result;
 }
 
-export const isCvhPath = (p: string): boolean => {
+const isCvhPath = (p: string): boolean => {
   if (!p) return false;
   const norm = p.replace(/\\/g, '/');
   return norm === '.cvh' || norm.startsWith('.cvh/') || norm.includes('/.cvh/') || norm.endsWith('/.cvh');

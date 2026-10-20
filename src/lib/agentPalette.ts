@@ -12,7 +12,7 @@ import type { CSSProperties } from 'react';
 export const BACKLOG_COLOR = '#64748b';
 export const READY_COLOR = '#10b981';
 
-export const FORBIDDEN_AGENT_COLORS = new Set([
+const FORBIDDEN_AGENT_COLORS = new Set([
   '#64748b',
   '#6b7280',
   '#10b981',

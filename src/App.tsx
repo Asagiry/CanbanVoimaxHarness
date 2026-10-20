@@ -12,6 +12,7 @@ import { useBoardStore, initBoardEventListeners } from './stores/boardStore';
 import { useProjectStore } from './stores/projectStore';
 import { useDrawerStore } from './stores/drawerStore';
 import { useCortexStore, initCortexEventListeners } from './stores/cortexStore';
+import { useToolPolicyStore } from './stores/toolPolicyStore';
 import { useUiZoom } from './hooks/useUiZoom';
 
 // Микробатчинг SSE-текста: один Zustand set() на пачку токенов вместо set() на токен.
@@ -90,6 +91,7 @@ export default function App() {
         await loadTasks();
         await useCortexStore.getState().loadAgentPersonas();
         useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
+        await useToolPolicyStore.getState().loadFromTauri();
       } catch (e) {
         console.warn('Initialization error:', e);
       } finally {

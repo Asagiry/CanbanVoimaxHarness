@@ -1,12 +1,12 @@
 import React from 'react';
 
-export interface LogoProps extends React.SVGProps<SVGSVGElement> {
+interface LogoProps extends React.SVGProps<SVGSVGElement> {
   size?: number | string;
   variant?: 'badge' | 'glyph';
   className?: string;
 }
 
-export function LogoGlyph({ className = '', ...props }: React.SVGProps<SVGSVGElement>) {
+function LogoGlyph({ className = '', ...props }: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
       viewBox="0 0 32 32"
@@ -58,27 +58,5 @@ export default function Logo({
       <rect x="13.75" y="17.5" width="4.5" height="8" rx="1.2" fill="#ffffff" />
       <rect x="20.5" y="17.5" width="4.5" height="8" rx="1.2" fill="#ffffff" fillOpacity="0.72" />
     </svg>
-  );
-}
-
-export function LogoWithWordmark({
-  size = 20,
-  className = '',
-}: {
-  size?: number | string;
-  className?: string;
-}) {
-  return (
-    <div className={`inline-flex items-center gap-2 select-none ${className}`}>
-      <Logo size={size} />
-      <div className="flex items-baseline gap-1.5">
-        <span className="font-semibold text-xs tracking-tight text-[#171717] dark:text-[#f0f6fc] font-sans">
-          CanbanVoimax
-        </span>
-        <span className="font-mono text-[9px] uppercase tracking-wider text-[#8f8f8f] dark:text-[#8b949e] px-1 py-0.2 rounded border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22]">
-          HARNESS
-        </span>
-      </div>
-    </div>
   );
 }

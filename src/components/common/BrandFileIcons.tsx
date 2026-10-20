@@ -5,7 +5,7 @@ import React from 'react';
  * Hand-tuned for razor-sharp rendering at 14x14px (h-3.5 w-3.5).
  */
 
-export function PythonIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
+function PythonIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path
@@ -20,7 +20,7 @@ export function PythonIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?:
   );
 }
 
-export function TypeScriptIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
+function TypeScriptIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="24" height="24" rx="4" fill="#3178C6" />
@@ -32,7 +32,7 @@ export function TypeScriptIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { classNa
   );
 }
 
-export function JavaScriptIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
+function JavaScriptIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="24" height="24" rx="4" fill="#F7DF1E" />
@@ -44,7 +44,7 @@ export function JavaScriptIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { classNa
   );
 }
 
-export function RustIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
+function RustIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path
@@ -55,7 +55,7 @@ export function RustIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: s
   );
 }
 
-export function ReactIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
+function ReactIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <ellipse cx="12" cy="12" rx="10" ry="4.2" stroke="#61DAFB" strokeWidth="1.5" />
@@ -66,7 +66,7 @@ export function ReactIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: 
   );
 }
 
-export function GoIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
+function GoIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="#00ADD8" xmlns="http://www.w3.org/2000/svg">
       <path d="M1.811 11.246c.187-.04.382-.061.577-.061 1.272 0 2.261.734 2.593 1.838.077.255.117.525.117.804 0 1.637-1.332 2.969-2.969 2.969-.533 0-1.031-.141-1.464-.388.08.318.232.61.448.861.439.512 1.077.838 1.791.838.749 0 1.408-.358 1.829-.912l1.042.668c-.637.838-1.637 1.378-2.766 1.378-1.144 0-2.155-.558-2.784-1.42-.43-.591-.687-1.319-.687-2.106 0-1.896 1.46-3.447 3.328-3.447zM8.508 11.246c1.908 0 3.454 1.547 3.454 3.454s-1.547 3.454-3.454 3.454c-1.908 0-3.454-1.547-3.454-3.454s1.547-3.454 3.454-3.454zm0 1.365c-1.154 0-2.09 1.053-2.09 2.089 0 1.036.936 2.089 2.09 2.089 1.154 0 2.09-1.053 2.09-2.089 0-1.036-.936-2.089-2.09-2.089zm9.215-1.246v1.365h-3.454v1.727h2.727v1.365h-2.727v2.364h-1.364v-6.821h4.818zm4.498 0v6.821h-1.364v-6.821h1.364z" />
@@ -74,7 +74,7 @@ export function GoIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: str
   );
 }
 
-export function CppIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
+function CppIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path
@@ -89,7 +89,7 @@ export function CppIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: st
   );
 }
 
-export function JsonIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
+function JsonIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
   return (
     <svg
       className={className}
@@ -107,7 +107,7 @@ export function JsonIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: s
   );
 }
 
-export function HtmlIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
+function HtmlIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M3 2L4.636 20.35L12 22.4L19.364 20.35L21 2H3Z" fill="#E34F26" />
@@ -117,7 +117,7 @@ export function HtmlIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: s
   );
 }
 
-export function CssIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
+function CssIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M3 2L4.636 20.35L12 22.4L19.364 20.35L21 2H3Z" fill="#1572B6" />
@@ -127,7 +127,7 @@ export function CssIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: st
   );
 }
 
-export function MarkdownIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
+function MarkdownIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect x="2" y="4" width="20" height="16" rx="3" fill="currentColor" fillOpacity="0.12" stroke="currentColor" strokeWidth="1.5" />
@@ -136,7 +136,7 @@ export function MarkdownIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className
   );
 }
 
-export function CSharpIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
+function CSharpIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M12 2L21 7.2V16.8L12 22L3 16.8V7.2L12 2Z" fill="#68217A" />
@@ -145,7 +145,7 @@ export function CSharpIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?:
   );
 }
 
-export function ShellIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
+function ShellIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg">
       <polyline points="4 17 10 11 4 5" />
@@ -154,7 +154,7 @@ export function ShellIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: 
   );
 }
 
-export function ConfigIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
+function ConfigIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg">
       <line x1="4" y1="21" x2="4" y2="14" />
@@ -170,7 +170,7 @@ export function ConfigIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?:
   );
 }
 
-export function SqlIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
+function SqlIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg">
       <ellipse cx="12" cy="5" rx="9" ry="3" />
@@ -180,7 +180,7 @@ export function SqlIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: st
   );
 }
 
-export interface LangBadgeConfig {
+interface LangBadgeConfig {
   label: string;
   bg: string;
   text: string;
@@ -335,7 +335,7 @@ export function getLanguageBadgeConfig(ext?: string): LangBadgeConfig | null {
   }
 }
 
-export interface FileExtensionBadgeProps {
+interface FileExtensionBadgeProps {
   ext?: string;
   className?: string;
 }

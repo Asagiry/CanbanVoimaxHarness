@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { LiveStreamEntry, ToolExecution, ActivityItem, ActivityType, CompactionReport, SubagentInfo, SubagentStatus } from '../types';
 import { useBoardStore } from './boardStore';
 
-export type DrawerTab = 'thoughts' | 'output' | 'tools';
+type DrawerTab = 'thoughts' | 'output' | 'tools';
 
 export type { ActivityType };
 export type DrawerActivityItem = ActivityItem;
@@ -20,7 +20,7 @@ function scheduleDialogSave(taskId: string, delayMs = 1000) {
   }, delayMs);
 }
 
-export interface TaskTelemetry {
+interface TaskTelemetry {
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
@@ -79,20 +79,17 @@ interface DrawerState {
   setThinkingStartTime: (taskId: string, time: number | null) => void;
   setGenerationStartTime: (taskId: string, time: number | null) => void;
   setGenerationEndTime: (taskId: string, time: number | null) => void;
-  setTaskStartTime: (taskId: string, time: number | null) => void;
   setTaskEndTime: (taskId: string, time: number | null) => void;
   recordStreamedChars: (taskId: string, chars: number) => void;
   resetTurnStreamMetrics: (taskId: string) => void;
   setFinalTps: (taskId: string, v: number | null) => void;
   recordTurnMetrics: (taskId: string, tokens: number, seconds: number) => void;
-  sendSteerMessage: (taskId: string, message: string) => Promise<void>;
   injectOptimisticCompactTool: (taskId: string, customId?: string) => string;
   compactTaskContext: (taskId: string) => Promise<{ savedTokens: number; evaporatedCount: number }>;
   clearTaskLogs: (taskId: string) => Promise<void> | void;
   setTaskTokens: (taskId: string, tokens: number) => void;
   evaporateClientToolLogs: (taskId: string) => { evaporatedCount: number; savedTokens: number };
   loadTaskDialog: (taskId: string) => Promise<void>;
-  saveTaskDialog: (taskId: string) => Promise<void>;
   flushSaveDialog: (taskId: string) => Promise<void>;
   registerSubagentMapping: (toolId: string, subagentId: string) => void;
   openSubagent: (subagentId: string, title: string, role: string, prompt: string) => void;
@@ -610,15 +607,6 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
     }));
   },
 
-  setTaskStartTime: (taskId, time) => {
-    set((state) => ({
-      taskStartTime: {
-        ...state.taskStartTime,
-        [taskId]: time,
-      },
-    }));
-  },
-
   setTaskEndTime: (taskId, time) => {
     set((state) => ({
       taskEndTime: {
@@ -701,25 +689,6 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         },
       };
     });
-  },
-
-  sendSteerMessage: async (taskId, message) => {
-    // 1. Append user steering message into output stream
-    get().appendOutput(taskId, message, 'steer');
-
-    // 2. Invoke native Tauri steer_agent command
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('steer_agent', { taskId, message });
-    } catch {
-      // In web or mock mode, generate agent thought response
-      setTimeout(() => {
-        get().appendThought(
-          taskId,
-          `Получена команда: "${message}". Корректировка плана.`
-        );
-      }, 500);
-    }
   },
 
   injectOptimisticCompactTool: (taskId, customId) => {
@@ -1113,10 +1082,6 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
     }
   },
 
-  saveTaskDialog: async (taskId) => {
-    await get().flushSaveDialog(taskId);
-  },
-
   openSubagent: (subagentId, title, role, prompt) => {
     const state = get();
     // Resolve subagentId using toolIdToSubagentId map if a tool ID was passed
@@ -1441,7 +1406,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
 
 let subagentListenersInitialized = false;
 
-export async function initSubagentListeners() {
+async function initSubagentListeners() {
   if (subagentListenersInitialized) return;
   subagentListenersInitialized = true;
   try {

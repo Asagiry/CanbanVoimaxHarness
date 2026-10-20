@@ -25,28 +25,7 @@ import {
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 
-export const CANONICAL_AGENT_ICONS = [
-  'Bot',
-  'Brain',
-  'Cpu',
-  'Code2',
-  'ShieldCheck',
-  'Sparkles',
-  'Terminal',
-  'Zap',
-  'Flame',
-  'Radar',
-  'Workflow',
-  'Boxes',
-  'Wrench',
-  'Rocket',
-  'Compass',
-  'Crosshair',
-  'Layers',
-  'History',
-] as const;
-
-export const AGENT_ICON_MAP: Record<string, ComponentType<LucideProps>> = {
+const AGENT_ICON_MAP: Record<string, ComponentType<LucideProps>> = {
   Bot,
   Brain,
   Cpu,

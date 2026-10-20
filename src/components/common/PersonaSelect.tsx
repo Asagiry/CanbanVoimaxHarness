@@ -4,7 +4,7 @@ import { getDeterministicAgentColor } from '../../lib/agentPalette';
 import { useCortexStore } from '../../stores/cortexStore';
 import { ChevronDown, Check, Plus, UserX } from 'lucide-react';
 
-export interface PersonaItem {
+interface PersonaItem {
   role: string;
   icon?: string;
   color?: string;
@@ -13,7 +13,7 @@ export interface PersonaItem {
   hasPrompt?: boolean;
 }
 
-export interface PersonaSelectProps {
+interface PersonaSelectProps {
   value: string;
   onChange: (value: string) => void;
   personas?: PersonaItem[];

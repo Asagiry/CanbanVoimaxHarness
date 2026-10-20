@@ -16,7 +16,28 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
-    minify: false,
+    minify: 'esbuild',
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'vendor-react';
+            }
+            if (id.includes('@hello-pangea/dnd')) {
+              return 'vendor-dnd';
+            }
+            if (id.includes('lucide-react')) {
+              return 'vendor-icons';
+            }
+            if (id.includes('@tauri-apps')) {
+              return 'vendor-tauri';
+            }
+            return 'vendor';
+          }
+        },
+      },
+    },
   },
   optimizeDeps: {
     entries: ['index.html'],
