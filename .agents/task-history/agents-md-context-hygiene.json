@@ -1,0 +1,26 @@
+{
+  "taskId": "CVH-AGENTS-MD-CONTEXT-HYGIENE",
+  "task": "agents-md-context-hygiene",
+  "title": "Context Hygiene in AGENTS.md applying OpenAI's Improving Agentic Context methodology",
+  "branch": "feat/agents-md-context-hygiene",
+  "commitHash": "42c73c5",
+  "commitMessage": "docs(agents): streamline AGENTS.md context hygiene and consolidate tool policy rules",
+  "author": "agent-developer",
+  "verdict": "APPROVED",
+  "date": "2026-10-20T10:00:00.000Z",
+  "timestamp": 1792490400000,
+  "sensors": {
+    "markdown_validation": "pass (valid GitHub-flavored markdown structure, clean headings and lists)",
+    "invariants_audit": "pass (NASA ground truth, isolated worktrees, 3-tier hierarchy, WAL SQLite, Ponytail minimalism intact)"
+  },
+  "files": [
+    "AGENTS.md"
+  ],
+  "summary": "Applied OpenAI's 'Improving Agentic Context' methodology to AGENTS.md: (1) Reconciled § 2.16 and § 2.17 reflecting CVH-REMOVE-COPILOT-DOCK where Copilot backend/headless IPC and ReAct loop are fully preserved while unmounted from the default screen layout; (2) Consolidated duplicated descriptions of the Two-Level Tool Policy Matrix (across § 2.5, § 2.16, § 2.21, § 2.33) into an authoritative definition in § 2.5 with concise cross-references; (3) Added missing § 1.1–1.5 subheadings matching Cardinal Directives; (4) Synchronized tool output spilling ceilings (§ 2.8 and § 2.33) to 500 lines / 64 KB for shell commands and 2,000 lines / 128 KB for read_file with subagent report bypass; (5) Streamlined redundant descriptions ensuring Ponytail Minimalism and reducing token footprint.",
+  "ftrAnalysis": {
+    "firstTimeRight": true,
+    "ftrScore": "100%",
+    "verdict": "APPROVED",
+    "rootCauses": []
+  }
+}
