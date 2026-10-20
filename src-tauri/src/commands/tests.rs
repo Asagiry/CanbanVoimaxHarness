@@ -1351,8 +1351,10 @@ use std::path::PathBuf;
         let base = PathBuf::from("target").join(format!("cvh_model_res_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&base).await.expect("test dir");
 
-        let mut llm_settings = crate::config::LlmSettings::default();
-        llm_settings.model = "global-default-model".to_string();
+        let llm_settings = crate::config::LlmSettings {
+            model: "global-default-model".to_string(),
+            ..Default::default()
+        };
 
         let mut task = Task {
             id: "CVH-001".to_string(),

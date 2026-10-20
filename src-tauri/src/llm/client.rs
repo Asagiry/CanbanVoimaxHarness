@@ -17,42 +17,6 @@ impl Default for LlmClient {
     }
 }
 
-/// Filter and sort tools deterministically based on allowed tools policy.
-/// Disabling unused tools saves prompt tokens and alphabetical sorting guarantees KV prefix cache hits.
-pub fn filter_active_tools(
-    tools: &[ToolDefinition],
-    allowed_tools: Option<&[String]>,
-) -> Vec<ToolDefinition> {
-    let mut filtered: Vec<ToolDefinition> = if let Some(allowed) = allowed_tools {
-        tools
-            .iter()
-            .filter(|tool| {
-                let name = &tool.function.name;
-                allowed.iter().any(|a| {
-                    let canon_allowed = match a.as_str() {
-                        "bash" => "execute_command",
-                        "str_replace" => "edit_file",
-                        other => other,
-                    };
-                    let canon_tool = match name.as_str() {
-                        "bash" => "execute_command",
-                        "str_replace" => "edit_file",
-                        other => other,
-                    };
-                    canon_allowed == canon_tool || a == name
-                })
-            })
-            .cloned()
-            .collect()
-    } else {
-        tools.to_vec()
-    };
-
-    // Deterministic Prefix Caching: Alphabetical sorting of tool definitions
-    filtered.sort_by(|a, b| a.function.name.cmp(&b.function.name));
-    filtered
-}
-
 /// Robust usage extractors: different OpenAI-compatible proxies report cache
 /// telemetry under different keys (OpenAI `prompt_tokens_details.cached_tokens`,
 /// Responses-API `input_tokens_details.cached_tokens`, top-level `cached_tokens`,
@@ -152,64 +116,11 @@ pub fn extract_openai_cache_creation(usage: &serde_json::Value) -> u64 {
         .unwrap_or(0)
 }
 
-/// Converts ToolDefinitions to Anthropic native tools with alphabetical sorting
-/// and optional ephemeral prompt caching on the final tool.
-pub fn prepare_anthropic_tools(
-    tools: &[ToolDefinition],
-    enable_cache: bool,
-) -> Vec<AnthropicTool> {
-    let mut anthropic_tools: Vec<AnthropicTool> = tools
-        .iter()
-        .map(|t| AnthropicTool {
-            name: t.function.name.clone(),
-            description: t.function.description.clone(),
-            input_schema: t.function.parameters.clone(),
-            cache_control: None,
-        })
-        .collect();
-
-    anthropic_tools.sort_by(|a, b| a.name.cmp(&b.name));
-
-    if enable_cache {
-        if let Some(last) = anthropic_tools.last_mut() {
-            last.cache_control = Some(serde_json::json!({ "type": "ephemeral" }));
-        }
-    }
-
-    anthropic_tools
-}
-
-/// Prepare Anthropic system prompt with ephemeral prompt cache control.
-pub fn prepare_anthropic_system(system_prompt: &str, enable_cache: bool) -> serde_json::Value {
-    if enable_cache {
-        serde_json::json!([
-            {
-                "type": "text",
-                "text": system_prompt,
-                "cache_control": { "type": "ephemeral" }
-            }
-        ])
-    } else {
-        serde_json::Value::String(system_prompt.to_string())
-    }
-}
-
 impl LlmClient {
     pub fn new() -> Self {
         Self {
             client: reqwest::Client::new(),
         }
-    }
-
-    /// Stream chat from OpenAI-compatible endpoint with automatic reconnect resilience (alias to stream_openai).
-    pub async fn stream_chat(
-        &self,
-        base_url: &str,
-        api_key: Option<&str>,
-        request: OpenAIChatRequest,
-        tx: Sender<StreamChunk>,
-    ) -> Result<()> {
-        self.stream_openai(base_url, api_key, request, tx).await
     }
 
     /// Stream an OpenAI-compatible endpoint (OpenAI, Local Antigravity proxy, DeepSeek, Ollama).

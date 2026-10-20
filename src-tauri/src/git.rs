@@ -387,31 +387,6 @@ pub async fn prune_worktrees(repo_root: impl AsRef<Path>) -> Result<()> {
     Ok(())
 }
 
-/// Merges a feature branch into the target branch.
-pub async fn merge_worktree_branch(
-    repo_root: impl AsRef<Path>,
-    branch: &str,
-    target_branch: &str,
-) -> Result<String> {
-    let repo_path = repo_root.as_ref();
-
-    // 1. Checkout target branch
-    run_git(repo_path, &["checkout", target_branch])
-        .await
-        .with_context(|| format!("Failed to checkout target branch '{}'", target_branch))?;
-
-    // 2. Perform merge
-    let commit_msg = format!("merge({}): merge {} into {}", branch, branch, target_branch);
-    let merge_output = run_git(
-        repo_path,
-        &["merge", "--no-ff", branch, "-m", &commit_msg],
-    )
-    .await
-    .with_context(|| format!("Failed to merge branch '{}' into '{}'", branch, target_branch))?;
-
-    Ok(merge_output)
-}
-
 /// Deletes a feature branch after it has been merged.
 pub async fn delete_branch(
     repo_root: impl AsRef<Path>,
@@ -472,16 +447,6 @@ pub async fn get_current_branch(dir: impl AsRef<Path>) -> Result<String> {
     run_git(dir.as_ref(), &["rev-parse", "--abbrev-ref", "HEAD"])
         .await
         .context("Failed to get current branch")
-}
-
-/// Gets the latest commit hash (short 7-char or full)
-pub async fn get_commit_hash(dir: impl AsRef<Path>, short: bool) -> Result<String> {
-    let args: &[&str] = if short {
-        &["rev-parse", "--short", "HEAD"]
-    } else {
-        &["rev-parse", "HEAD"]
-    };
-    run_git(dir.as_ref(), args).await.context("Failed to get commit hash")
 }
 
 #[cfg(test)]

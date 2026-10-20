@@ -812,16 +812,6 @@ pub fn condense_older_messages(
     (compacted_count, Some(summary_md))
 }
 
-/// Compresses intermediate turns by condensing older turns into a crisp summary block.
-#[allow(clippy::ptr_arg)]
-pub fn compress_intermediate_turns(
-    messages: &mut Vec<ChatMessage>,
-    current_turn: usize,
-) -> usize {
-    let (count, _) = condense_older_messages(messages, current_turn);
-    count
-}
-
 /// Full State-Preserving Context Compactor:
 /// 1. Enforces Immutable Anchors (Turn 0: System + User spec, and 2 most recent turns).
 /// 2. Executes Zero-Cost Log Evaporation on tool results & thoughts older than 2 turns.

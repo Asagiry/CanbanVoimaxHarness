@@ -2415,12 +2415,14 @@ data: [DONE]
         assert_eq!(request_counter.load(Ordering::SeqCst), 1, "Expected exactly 1 request to LLM, no extra turns");
 
         // 3. Emitted events must contain Finished with final_response == result
-        let captured = events.lock().unwrap();
-        let finished_event = captured.iter().find(|e| matches!(e, AgentEvent::Finished { .. }));
-        assert!(finished_event.is_some(), "AgentEvent::Finished must be emitted");
-        if let Some(AgentEvent::Finished { final_response }) = finished_event {
-            // Emitted final_response preserves rich agent markdown summary
-            assert_eq!(final_response, "Feature implemented successfully");
+        {
+            let captured = events.lock().unwrap();
+            let finished_event = captured.iter().find(|e| matches!(e, AgentEvent::Finished { .. }));
+            assert!(finished_event.is_some(), "AgentEvent::Finished must be emitted");
+            if let Some(AgentEvent::Finished { final_response }) = finished_event {
+                // Emitted final_response preserves rich agent markdown summary
+                assert_eq!(final_response, "Feature implemented successfully");
+            }
         }
 
         // 4. Verify Review Subtask Hierarchy (§ 2.2):
@@ -2498,12 +2500,14 @@ data: [DONE]
         assert_eq!(request_counter.load(Ordering::SeqCst), 1, "Expected exactly 1 request to LLM, no extra turns");
 
         // 3. Emitted events must contain Finished with final_response == summary
-        let captured = events.lock().unwrap();
-        let finished_event = captured.iter().find(|e| matches!(e, AgentEvent::Finished { .. }));
-        assert!(finished_event.is_some(), "AgentEvent::Finished must be emitted");
-        if let Some(AgentEvent::Finished { final_response }) = finished_event {
-            // Emitted final_response preserves rich agent markdown summary
-            assert_eq!(final_response, "Fast-track to ready");
+        {
+            let captured = events.lock().unwrap();
+            let finished_event = captured.iter().find(|e| matches!(e, AgentEvent::Finished { .. }));
+            assert!(finished_event.is_some(), "AgentEvent::Finished must be emitted");
+            if let Some(AgentEvent::Finished { final_response }) = finished_event {
+                // Emitted final_response preserves rich agent markdown summary
+                assert_eq!(final_response, "Fast-track to ready");
+            }
         }
 
         // 4. Verify task state on disk advanced to "ready"
@@ -2573,12 +2577,14 @@ data: [DONE]
         assert_eq!(request_counter.load(Ordering::SeqCst), 1, "Expected exactly 1 request to LLM, no extra turns");
 
         // 3. Emitted events must contain Finished with final_response == result
-        let captured = events.lock().unwrap();
-        let finished_event = captured.iter().find(|e| matches!(e, AgentEvent::Finished { .. }));
-        assert!(finished_event.is_some(), "AgentEvent::Finished must be emitted");
-        if let Some(AgentEvent::Finished { final_response }) = finished_event {
-            // Emitted final_response preserves rich rejection reason
-            assert_eq!(final_response, "Unit test failure");
+        {
+            let captured = events.lock().unwrap();
+            let finished_event = captured.iter().find(|e| matches!(e, AgentEvent::Finished { .. }));
+            assert!(finished_event.is_some(), "AgentEvent::Finished must be emitted");
+            if let Some(AgentEvent::Finished { final_response }) = finished_event {
+                // Emitted final_response preserves rich rejection reason
+                assert_eq!(final_response, "Unit test failure");
+            }
         }
 
         // 4. Verify task state on disk returned to "dev" with status "idle"
