@@ -2387,7 +2387,7 @@ mod tests {
 
     #[test]
     fn test_resolve_hook_path_primary_then_agent_fallback() {
-        let base = std::env::temp_dir().join(format!("cvh_hook_{}", uuid::Uuid::new_v4()));
+        let base = std::path::PathBuf::from("target").join(format!("cvh_hook_{}", uuid::Uuid::new_v4()));
         let hooks = base.join(".cvh").join("hooks");
         let agent_hooks = base.join(".cvh").join("agents").join("dev").join("hooks");
         std::fs::create_dir_all(&hooks).expect("hooks dir");
@@ -2585,7 +2585,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_boards_config_persistence_and_sync() {
-        let base_dir = std::env::temp_dir().join(format!("cvh_test_boards_{}", uuid::Uuid::new_v4()));
+        let base_dir = std::path::PathBuf::from("target").join(format!("cvh_test_boards_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&base_dir).await.expect("test dir");
 
         let mut cfg = default_boards_config();
@@ -2618,7 +2618,7 @@ mod tests {
     async fn test_boards_config_fallback_to_pipeline() {
         // boards.json missing → single-board config derived from pipeline.json
         // columns (kept fallback, not a migration: no files are moved).
-        let base_dir = std::env::temp_dir().join(format!("cvh_test_boards_fb_{}", uuid::Uuid::new_v4()));
+        let base_dir = std::path::PathBuf::from("target").join(format!("cvh_test_boards_fb_{}", uuid::Uuid::new_v4()));
         let cvh = base_dir.join(".cvh");
         tokio::fs::create_dir_all(&cvh).await.expect("test dir");
 
@@ -2764,7 +2764,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_init_project_harness_integration() {
-        let base_dir = std::env::temp_dir().join(format!("cvh_init_test_{}", uuid::Uuid::new_v4()));
+        let base_dir = std::path::PathBuf::from("target").join(format!("cvh_init_test_{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&base_dir).expect("create test dir");
 
         init_project_harness(&base_dir).await.expect("init project harness failed");
@@ -2785,7 +2785,7 @@ mod tests {
         assert!(cvh.join("config.json").is_file());
         assert!(cvh.join("pipeline.json").is_file());
 
-        let _ = std::fs::remove_dir_all(&base_dir);
+        let _ = tokio::fs::remove_dir_all(&base_dir).await;
     }
 }
 

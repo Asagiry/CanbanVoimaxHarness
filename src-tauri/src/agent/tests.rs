@@ -247,7 +247,7 @@ use super::*;
 
         // Zero-trust gate: agent-denied tool errors even when policy allows.
         let flag = Arc::new(AtomicBool::new(false));
-        let workdir = std::env::temp_dir();
+        let workdir = std::path::PathBuf::from("target").join(format!("cvh_test_agent_{}", uuid::Uuid::new_v4()));
         let target_root = std::path::PathBuf::from("target");
         let tool_ctx = ToolContext {
             repo_root: &target_root,
@@ -279,7 +279,7 @@ use super::*;
     async fn test_subagent_session_and_receiver_lookup() {
         let (tx1, rx1) = oneshot::channel::<String>();
         let flag = Arc::new(AtomicBool::new(false));
-        let workdir = std::env::temp_dir();
+        let workdir = std::path::PathBuf::from("target").join(format!("cvh_test_subagent_lookup_{}", uuid::Uuid::new_v4()));
         let target_root = std::path::PathBuf::from("target");
         let policy = ToolPolicyConfig::default();
 
@@ -1355,7 +1355,7 @@ use super::*;
         let flag = Arc::new(AtomicBool::new(false));
         let policy = ToolPolicyConfig::default();
         let target_root = std::path::PathBuf::from("target");
-        let workdir = std::env::temp_dir();
+        let workdir = std::path::PathBuf::from("target").join(format!("cvh_test_subagent_bg_{}", uuid::Uuid::new_v4()));
 
         let ctx = OwnedToolContext {
             repo_root: target_root.clone(),

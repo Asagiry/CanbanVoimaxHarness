@@ -710,7 +710,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_compile_copilot_system_prompt_structure() {
-        let temp_dir = std::env::temp_dir().join(format!("cvh_copilot_prompt_test_{}", uuid::Uuid::new_v4()));
+        let temp_dir = std::path::PathBuf::from("target").join(format!("cvh_copilot_prompt_test_{}", uuid::Uuid::new_v4()));
         let cvh_dir = temp_dir.join(".cvh");
         let agents_dir = cvh_dir.join("agents").join("cvh-dev");
         tokio::fs::create_dir_all(&agents_dir).await.expect("create agents dir");
@@ -732,7 +732,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_copilot_dialog_roundtrip_and_clear() {
-        let temp_dir = std::env::temp_dir().join(format!("cvh_copilot_db_test_{}", uuid::Uuid::new_v4()));
+        let temp_dir = std::path::PathBuf::from("target").join(format!("cvh_copilot_db_test_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&temp_dir).await.expect("create temp dir");
 
         let user_item = ActivityItem {
