@@ -1,0 +1,65 @@
+{
+  "taskId": "CVH-FIX-TASK-RACE",
+  "task": "fix-task-race",
+  "title": "Fix race condition between create_task, move_task_stage and boardStore causing task card disappearance",
+  "branch": "feat/fix-task-race",
+  "commitHash": "bfb2deecff05536ef3e0d31f03f2ec714bf0d8dd",
+  "mergeCommitHash": "60e736a8c781e099eed63849d1b4c863e25640de",
+  "commitMessage": "fix(tasks): eliminate race conditions between create_task, move_task_stage and boardStore",
+  "author": "agent-developer (tauri-rust-engineer & react-tailwind-artisan)",
+  "verdict": "APPROVED",
+  "date": "2026-10-20T19:37:05.000Z",
+  "timestamp": 1792514225000,
+  "sensors": {
+    "rust_compiler": "pass (cargo check, 0 errors)",
+    "rust_clippy": "pass (cargo clippy -- -D warnings, 0 warnings)",
+    "rust_tests": "pass (cargo test --lib test_race_condition, 146 passed, 0 failed)",
+    "typescript_check": "pass (npx tsc --noEmit, 0 errors)",
+    "l2_reviewer": "APPROVED",
+    "l3_retro_verifier": "APPROVED"
+  },
+  "files": [
+    "src-tauri/src/commands/tasks.rs",
+    "src-tauri/src/commands/tests.rs",
+    "src/components/board/KanbanBoard.tsx",
+    "src/stores/boardStore.ts"
+  ],
+  "summary": "Eliminated task card disappearance race condition when quickly creating and dragging/moving tasks: (1) Early Persistence Invariant: atomically registers tasks into state.tasks and saves to disk immediately before starting slow worktree creation and stage hooks in create_task; (2) In-Memory Fallback Invariant: checks AppState.tasks in internal_move_task_stage if task is not yet on disk; (3) Safe Catch Reversion: replaced blind loadTasks() in boardStore.ts moveTask catch block with localized single-card revert, protecting in-flight optimistic cards from being wiped; (4) Concurrent Stage Preservation: reloads and preserves concurrently modified stage_id, status, and board_id upon worktree completion; (5) In-Flight Move Reconciliation: preserves user's columnId, status, and persona in boardStore.ts addTask reconciliation if user moved the card during background creation; (6) Zero In-Memory Task Loss Invariant: merges in-memory state.tasks with disk tasks in run_agent, preventing stale disk snapshots from wiping memory; (7) Zero Invisible Tasks Invariant: updated KanbanBoard.tsx to ensure cards belonging to active board or with matching columns on active board are always rendered.",
+  "ftrAnalysis": {
+    "firstTimeRight": true,
+    "ftrScore": "100%",
+    "verdict": "APPROVED",
+    "rootCauses": [
+      {
+        "issue": "Slow worktree creation and transition hooks executed before task persistence",
+        "category": "Backend Lifecycle Ordering Asymmetry",
+        "explanation": "In create_task, the new task was persisted to disk only after git worktree creation and enter hooks completed. Because worktree initialization takes 200ms-1500ms, any rapid user move or autorun dispatched during this window resulted in 'Task not found' errors. Resolved by atomically registering the task into in-memory state.tasks and saving to disk immediately prior to worktree creation."
+      },
+      {
+        "issue": "Blind loadTasks() catch block evicted in-flight optimistic cards",
+        "category": "Frontend Store State Destruction (§ 2.22 Violation)",
+        "explanation": "When moveTask caught a backend error (e.g. temporary rejection), it unconditionally invoked loadTasks(). This replaced Zustand state with the disk snapshot, which did not yet include newly created tasks whose disk write was still pending, causing cards to vanish from the board. Resolved by safely reverting only the affected task's position and preserving optimistic/in-flight cards."
+      },
+      {
+        "issue": "Worktree completion post-update clobbered concurrent stage movements",
+        "category": "State Overwrite on Completion",
+        "explanation": "When worktree creation finished, create_task unconditionally appended the original new_task (with stage 'backlog') back to disk, reverting any stage changes made by the user while the worktree was being set up. Resolved by reloading tasks from disk/memory and preserving the latest stage_id, status, and board_id."
+      },
+      {
+        "issue": "Stale disk snapshot erased in-memory tasks in run_agent",
+        "category": "Memory Synchronization Defect",
+        "explanation": "run_agent reloaded tasks from disk and assigned *guard = disk_tasks, erasing any tasks registered in state.tasks that had not yet flushed to disk. Resolved by merging in-memory state.tasks with disk tasks before updating the guard."
+      },
+      {
+        "issue": "Optimistic card reconciliation reset user-moved column in addTask",
+        "category": "Client-Side Reconciliation Desynchronization",
+        "explanation": "When create_task completed and returned the confirmed task, addTask reconciliation unconditionally reset columnId to mapped.columnId ('backlog'). If the user had already dragged the card to 'dev', this snapped the card back to 'backlog'. Resolved by checking existing store state and preserving user-selected columnId, status, and persona, syncing to the backend via move_task_stage if necessary."
+      },
+      {
+        "issue": "Incomplete board column matching in KanbanBoard task filter",
+        "category": "UI Board Invariant (Zero Invisible Tasks)",
+        "explanation": "KanbanBoard task filtering could drop tasks if boardId drifted or didn't match the active board. Resolved by verifying whether the task's column exists on the active board, guaranteeing visibility."
+      }
+    ]
+  }
+}
