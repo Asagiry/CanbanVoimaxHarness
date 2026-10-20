@@ -6,6 +6,7 @@ pub mod error;
 pub mod git;
 pub mod hooks;
 pub mod llm;
+pub mod udf;
 
 pub use error::AppError;
 
@@ -14,6 +15,15 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Ensure WebView2 UDF is verified available and sanitized before webviews are initialized
+    #[cfg(target_os = "windows")]
+    {
+        if std::env::var("WEBVIEW2_USER_DATA_FOLDER").is_err() {
+            let udf = udf::resolve_and_prepare_webview2_udf();
+            std::env::set_var("WEBVIEW2_USER_DATA_FOLDER", udf.to_string_lossy().as_ref());
+        }
+    }
+
     let project_root = config::discover_project_root();
     let state = AppState::new(project_root);
 
@@ -30,41 +40,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(state)
         .setup(|_app| {
-            // Setup only runs in the verified single primary instance.
-            // Safely recover from unheld stale locks left behind by abrupt crashes
-            // without interfering with any active running instance.
-            #[cfg(target_os = "windows")]
-            {
-                if let Ok(localappdata) = std::env::var("LOCALAPPDATA") {
-                    let base = std::path::PathBuf::from(&localappdata).join("com.voimax.cvh");
-                    let _ = std::fs::create_dir_all(&base);
-                    let udf = base.join("webview_data");
-                    let _ = std::fs::create_dir_all(&udf);
-
-                    fn remove_stale_locks_recursive(dir: &std::path::Path) {
-                        if let Ok(entries) = std::fs::read_dir(dir) {
-                            for entry in entries.flatten() {
-                                let path = entry.path();
-                                if path.is_dir() {
-                                    remove_stale_locks_recursive(&path);
-                                } else if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                                    if name == "LOCK" || name.ends_with(".lock") {
-                                        let _ = std::fs::remove_file(&path);
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    let eb_dir = base.join("EBWebView");
-                    if eb_dir.exists() {
-                        remove_stale_locks_recursive(&eb_dir);
-                    }
-                    if udf.exists() {
-                        remove_stale_locks_recursive(&udf);
-                    }
-                }
-            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
