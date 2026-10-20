@@ -143,23 +143,6 @@ pub enum AgentEvent {
 /// Lean router System Persona for `cvh-dev` (≤150 lines, ≤8KB).
 /// Progressive disclosure: identity + triggers + paths + skeletons here;
 /// full detail lives lazy in `.cvh/agents/<role>/rules/*.md` by slug.
-pub const CVH_DEV_TOOLS: &[&str] = &[
-    "read_file",
-    "write_file",
-    "edit_file",
-    "glob",
-    "grep",
-    "execute_command",
-    "web_search",
-    "web_fetch",
-    "todo_write",
-    "subagent",
-    "subagent_bg",
-    "collect_subagent",
-    "question",
-    "advance_task",
-];
-
 pub const BUILTIN_CVH_DEV_PROMPT: &str = r#"# Role: CVH-DEV (Project Configuration & Environment Specialist)
 You are EXCLUSIVELY responsible for project configuration, rules, and architecture in CanbanVoimaxHarness (`.cvh/`):
 - Board configurations (`.cvh/boards.json`) and runtime pipelines (`.cvh/pipeline.json`).
@@ -801,11 +784,6 @@ pub fn line_similarity(a: &str, b: &str) -> f32 {
     }
     let lcs = dp[n][m];
     (2.0 * lcs as f32) / ((n + m) as f32)
-}
-
-/// Backwards-compatible string similarity helper.
-pub fn string_similarity(a: &str, b: &str) -> f32 {
-    line_similarity(a, b)
 }
 
 /// Generates a human-readable explanation of token differences between expected and actual lines.

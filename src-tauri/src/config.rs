@@ -170,36 +170,6 @@ pub struct PipelineConfig {
     pub active_board_id: Option<String>,
 }
 
-pub fn resolve_allowed_tools(
-    pipeline: Option<&PipelineConfig>,
-    project: Option<&ProjectConfig>,
-    stage_id: &str,
-) -> Option<Vec<String>> {
-    // 1. Column-specific allowedTools
-    if let Some(pipe) = pipeline {
-        if let Some(col) = pipe.columns.iter().find(|c| c.id == stage_id) {
-            if let Some(ref tools) = col.allowed_tools {
-                return Some(tools.clone());
-            }
-        }
-        // 2. Pipeline-level stageAllowedTools / globalAllowedTools
-        if let Some(ref tp) = pipe.tool_permissions {
-            if let Some(tools) = tp.get_allowed_tools_for_stage(stage_id) {
-                return Some(tools);
-            }
-        }
-    }
-    // 3. Project-level stageAllowedTools / globalAllowedTools
-    if let Some(proj) = project {
-        if let Some(ref tp) = proj.tool_permissions {
-            if let Some(tools) = tp.get_allowed_tools_for_stage(stage_id) {
-                return Some(tools);
-            }
-        }
-    }
-    None
-}
-
 // ============================================================================
 // LLM Connection & Model Settings
 // ============================================================================
@@ -1612,13 +1582,6 @@ pub async fn load_project_config(root_path: impl AsRef<Path>) -> Result<ProjectC
         .with_context(|| format!("Failed to parse project config JSON at {:?}", config_path))?;
 
     Ok(config)
-}
-
-pub async fn save_project_config(root_path: impl AsRef<Path>, config: &ProjectConfig) -> Result<()> {
-    let config_path = root_path.as_ref().join(".cvh").join("config.json");
-    let serialized = serde_json::to_string_pretty(config)
-        .context("Failed to serialize ProjectConfig to JSON")?;
-    atomic_write_file(&config_path, &serialized).await
 }
 
 pub async fn load_pipeline_config(root_path: impl AsRef<Path>) -> Result<PipelineConfig> {
