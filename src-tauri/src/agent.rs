@@ -294,6 +294,30 @@ pub async fn compile_primed_system_prompt(
         sections.push(format!("# Role Persona: {}\nYou are an expert AI agent in {}.", role, role));
     }
 
+    // 1b. Per-agent rules: `.cvh/agents/<role>/rules/*.md`, alphabetical.
+    let rules_dir = crate::config::agent_rules_dir(repo_root, role);
+    if rules_dir.is_dir() {
+        if let Ok(mut entries) = tokio::fs::read_dir(&rules_dir).await {
+            let mut rules: Vec<(String, String)> = Vec::new();
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                let path = entry.path();
+                if !path.is_file() {
+                    continue;
+                }
+                if path.extension().and_then(|e| e.to_str()) != Some("md") {
+                    continue;
+                }
+                let fname = entry.file_name().to_string_lossy().to_string();
+                if let Ok(content) = tokio::fs::read_to_string(&path).await {
+                    rules.push((fname, content));
+                }
+            }
+            rules.sort_by(|a, b| a.0.cmp(&b.0));
+            for (fname, content) in rules {
+                sections.push(format!("## Rule: {}\n\n{}", fname, content.trim()));
+            }
+        }
+    }
 
     // 2. Tool Instructions (SWE-bench Industrial Suite)
     sections.push(
@@ -1647,14 +1671,11 @@ pub async fn execute_tool(
                 normalized_tool_name
             );
         }
-    } else {
-        let has_stage_override = stage_id.map(|s| tool_policy.stage_overrides.contains_key(s)).unwrap_or(false);
-        if !has_stage_override && !agent_allows_tool(agent_allowed_tools, normalized_tool_name) {
-            bail!(
-                "PermissionDenied: Инструмент '{}' запрещён настройками агента (setting.allowed_tools)",
-                normalized_tool_name
-            );
-        }
+    } else if !agent_allows_tool(agent_allowed_tools, normalized_tool_name) {
+        bail!(
+            "PermissionDenied: Инструмент '{}' запрещён настройками агента (setting.allowed_tools)",
+            normalized_tool_name
+        );
     }
 
     // § 2.8 Invariant: task card manipulation tools ("create_task", "complete_task")
@@ -1677,20 +1698,12 @@ pub async fn execute_tool(
         }
     }
     if normalized_tool_name == "complete_task" {
-        let role = ctx.role.unwrap_or("");
-        let stage = ctx.stage_id.unwrap_or("");
-        let is_orchestrator = role.to_lowercase().contains("orchestrat")
-            || role.to_lowercase().contains("оркестрат")
-            || stage.to_lowercase().contains("orchestrat")
-            || stage.to_lowercase().contains("оркестрат")
-            || stage == "backlog"
-            || role == "copilot";
-        if !is_orchestrator {
-            bail!(
-                "PermissionDenied: Агент '{}' не может использовать '{}': завершение карточек задач зарезервировано для оркестраторов (§ 2.8)",
-                role,
-                normalized_tool_name
-            );
+        if let Some(role) = ctx.role {
+            if role == "cvh-dev" {
+                bail!(
+                    "PermissionDenied: Агент 'cvh-dev' не может завершать задачи (§ 2.8). Завершение карточек зарезервировано для оркестратора и пользователя."
+                );
+            }
         }
     }
 
@@ -2184,6 +2197,10 @@ pub async fn execute_tool(
                 };
 
                 if let Some((resolved_id, rx)) = rx_opt {
+                    {
+                        let mut sessions = SUBAGENT_SESSIONS.lock().await;
+                        sessions.remove(&resolved_id);
+                    }
                     match rx.await {
                         Ok(report) => {
                             collected_reports.push((resolved_id, report));
@@ -2202,7 +2219,7 @@ pub async fn execute_tool(
                     }
                 }
 
-                // 2. Check SUBAGENT_SESSIONS (synchronous, running or already completed subagents)
+                // 2. Check SUBAGENT_SESSIONS (synchronous or already completed subagents)
                 if let Some((resolved_id, session)) = find_subagent_session(task_id, subagent_id).await {
                     let info = session.retry_info.lock().await;
                     if let Some(ref rep) = info.report {
@@ -2215,33 +2232,7 @@ pub async fn execute_tool(
                     }
                     if info.status == "error" {
                         let err = info.last_error.as_deref().unwrap_or("Unknown error");
-                        collected_reports.push((resolved_id, format!("[Субагент завершился с ошибкой: {}]", err)));
-                        continue;
-                    }
-                    if info.status == "running" {
-                        drop(info);
-                        eprintln!("CVH [collect_subagent]: Subagent [{}] is still running, awaiting completion...", resolved_id);
-                        let mut poll_interval = tokio::time::interval(std::time::Duration::from_millis(150));
-                        let sub_report = loop {
-                            poll_interval.tick().await;
-                            if ctx.abort_handle.load(Ordering::SeqCst) || session.abort_handle.load(Ordering::SeqCst) {
-                                break "[Субагент прерван пользователем / Subagent aborted by user]".to_string();
-                            }
-                            let info = session.retry_info.lock().await;
-                            if let Some(ref rep) = info.report {
-                                break rep.clone();
-                            }
-                            if info.status == "finished" {
-                                break info.report.clone().unwrap_or_else(|| "[Субагент завершил работу без отчета / Completed without report]".to_string());
-                            } else if info.status == "aborted" {
-                                break "[Субагент прерван пользователем / Subagent aborted by user]".to_string();
-                            } else if info.status == "error" {
-                                let err = info.last_error.as_deref().unwrap_or("Unknown error");
-                                break format!("[Субагент завершился с ошибкой: {}]", err);
-                            }
-                        };
-                        collected_reports.push((resolved_id, sub_report));
-                        continue;
+                        bail!("Subagent [{}] failed with error: {}", resolved_id, err);
                     }
                 }
 
@@ -2251,12 +2242,7 @@ pub async fn execute_tool(
                     continue;
                 }
 
-                // 4. Resilient fallback: return an informative notice instead of failing with bail!
-                let fallback_msg = format!(
-                    "[Субагент '{}' не найден в реестре активных фоновых агентов или истории сессий задачи. Если вы запускали субагент синхронно через tool 'subagent', его отчет уже был возвращен вам в предыдущем ответе.]",
-                    subagent_id
-                );
-                collected_reports.push((subagent_id.clone(), fallback_msg));
+                bail!("Subagent [{}] not found in background registry or session history", subagent_id);
             }
 
             if collected_reports.len() == 1 {
@@ -4932,8 +4918,7 @@ where
             {
                 return false;
             }
-            let has_stage_override = tool_policy.stage_overrides.contains_key(&config.stage_id);
-            if !has_stage_override && !agent_allows_tool(agent_allowed.as_deref(), name) {
+            if !agent_allows_tool(agent_allowed.as_deref(), name) {
                 return false;
             }
             true
