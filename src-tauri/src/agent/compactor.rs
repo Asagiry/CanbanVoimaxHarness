@@ -1203,13 +1203,13 @@ test result: ok. 14 passed; 0 failed"),
         // ASCII text: ~3.8 chars per token
         let ascii_text = "Hello world! This is a simple test.";
         let ascii_tokens = estimate_text_tokens(ascii_text);
-        assert!(ascii_tokens >= 8 && ascii_tokens <= 12, "ascii_tokens={}", ascii_tokens);
+        assert!((8..=12).contains(&ascii_tokens), "ascii_tokens={}", ascii_tokens);
 
         // Russian (Cyrillic) text: ~1.7 chars per token
         let cyrillic_text = "Привет мир! Это проверка токенизации.";
         let cyrillic_tokens = estimate_text_tokens(cyrillic_text);
         // 37 chars, mostly Cyrillic alphabetic -> should be around 20-24 tokens (not 37/4=9!)
-        assert!(cyrillic_tokens >= 18 && cyrillic_tokens <= 25, "cyrillic_tokens={}", cyrillic_tokens);
+        assert!((18..=25).contains(&cyrillic_tokens), "cyrillic_tokens={}", cyrillic_tokens);
 
         // Verify Cyrillic yields substantially more tokens than plain ASCII of same length
         let same_len_ascii = "a".repeat(cyrillic_text.chars().count());
