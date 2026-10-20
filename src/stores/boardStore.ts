@@ -734,7 +734,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           });
           // Preserve any in-flight optimistic or newly created tasks not yet returned by backend list_tasks (§ 2.22)
           const pendingOptimistic = prevTasks.filter(
-            (p) => !rawTasks.some((raw) => raw.id === p.id) && (!p.worktreePath || (p.createdAt && Date.now() - p.createdAt < 15000))
+            (p) => !rawTasks.some((raw) => raw.id === p.id) && (p.createdAt && Date.now() - p.createdAt < 60000)
           );
           const allTasks = [...mapped, ...pendingOptimistic];
           set({ tasks: allTasks, isTauriConnected: true, isLoadingTasks: false });
@@ -743,11 +743,16 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           return;
         } else {
           // Backend has empty tasks array on disk: check per-project localStorage backup
+          const prevTasks = get().tasks;
+          const pendingOptimistic = prevTasks.filter(
+            (p) => p.createdAt && Date.now() - p.createdAt < 60000
+          );
           const backupTasks = loadTasksFromLocalStorage();
-          if (backupTasks.length > 0) {
-            set({ tasks: backupTasks, isTauriConnected: true, isLoadingTasks: false });
-            syncTaskSeqWithTasks(backupTasks);
-            await syncTasksBackend(backupTasks);
+          const merged = [...pendingOptimistic, ...backupTasks.filter((b) => !pendingOptimistic.some((o) => o.id === b.id))];
+          if (merged.length > 0) {
+            set({ tasks: merged, isTauriConnected: true, isLoadingTasks: false });
+            syncTaskSeqWithTasks(merged);
+            await syncTasksBackend(merged);
             return;
           }
           set({ tasks: [], isTauriConnected: true, isLoadingTasks: false });
@@ -870,6 +875,12 @@ export const useBoardStore = create<BoardState>((set, get) => ({
             await get().setActiveBoard(merged.boardId);
           }
         }
+
+        // Reliable agent autorun upon entering a stage with a persona (§ 2.2 & § 2.32)
+        const colDef = targetColDef ?? columns.find((c) => c.id === merged.columnId);
+        if (colDef?.autoRun ?? !!colDef?.persona) {
+          await triggerRunAgent(taskId);
+        }
         return;
       }
       throw new Error(`move_task_stage returned empty or invalid task for id "${taskId}"`);
@@ -881,7 +892,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       // Do NOT blindly call loadTasks() in catch! Blind loadTasks() wipes optimistic and
       // newly created in-flight cards that have not completed disk persistence.
       // Instead, safely revert only the target card's position without dropping cards from the board.
-      const isOptimisticOrNew = !task.worktreePath || (task.createdAt && Date.now() - task.createdAt < 15000);
+      const isOptimisticOrNew = Boolean(task.createdAt && Date.now() - task.createdAt < 60000);
       if (isOptimisticOrNew) {
         console.warn(`[moveTask] Preserving optimistic/new task "${taskId}" in local store despite backend rejection`);
       }
@@ -994,9 +1005,14 @@ ${msg}`);
       }
       return mapBackendTaskToKanban(raw);
     });
-    set({ tasks: mapped });
-    persistTasksToLocalStorage(mapped);
-    syncTaskSeqWithTasks(mapped);
+    // Protect recent optimistic tasks (< 60s) not yet present in rawTasks (§ 2.22)
+    const pendingOptimistic = prevTasks.filter(
+      (p) => !rawTasks.some((raw) => raw.id === p.id) && (p.createdAt && Date.now() - p.createdAt < 60000)
+    );
+    const allTasks = [...mapped, ...pendingOptimistic];
+    set({ tasks: allTasks });
+    persistTasksToLocalStorage(allTasks);
+    syncTaskSeqWithTasks(allTasks);
   },
 
   addTask: async (input) => {
@@ -1055,6 +1071,7 @@ ${msg}`);
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const backendTask = await invoke<any>('create_task', {
+        taskId: optimisticId,
         title,
         description,
         stageId: targetColumnId,

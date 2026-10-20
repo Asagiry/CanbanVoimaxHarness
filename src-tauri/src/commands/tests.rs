@@ -2542,3 +2542,137 @@ Write code.
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
+
+    #[tokio::test]
+    async fn test_create_task_with_explicit_task_id_and_sequence_sync() {
+        let tmp = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("tmp")
+            .join(format!("cvh_test_explicit_id_{}", uuid::Uuid::new_v4()));
+        let _ = tokio::fs::create_dir_all(&tmp).await;
+
+        // Scaffold minimal .cvh settings with sequence = 1
+        save_task_sequence(&tmp, 1).await.expect("save initial sequence");
+        assert_eq!(load_task_sequence(&tmp).await, 1);
+
+        // Step 1: Create task with explicit task_id "CVH-005" (as frontend optimisticId)
+        let created = internal_create_task(
+            &tmp,
+            "Optimistic Task".to_string(),
+            "Created with frontend optimistic ID".to_string(),
+            "backlog".to_string(),
+            Some("development".to_string()),
+            Some(true), // skip_worktree for unit test speed
+            None,
+            Some("CVH-005".to_string()),
+            None,
+            None,
+        )
+        .await
+        .expect("internal_create_task must succeed with explicit task_id");
+
+        // Verify task used the exact explicit ID
+        assert_eq!(created.id, "CVH-005");
+
+        // Verify sequence on disk was synchronized to 5
+        let seq_after_explicit = load_task_sequence(&tmp).await;
+        assert_eq!(
+            seq_after_explicit, 5,
+            "Sequence on disk must be synchronized to the explicit task number (5)!"
+        );
+
+        // Step 2: Create next task without task_id (task_id: None)
+        let created_next = internal_create_task(
+            &tmp,
+            "Subsequent Task".to_string(),
+            "Created without explicit ID".to_string(),
+            "backlog".to_string(),
+            Some("development".to_string()),
+            Some(true),
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("internal_create_task without task_id must allocate next monotonic ID");
+
+        // Must allocate monotonically after 5 -> CVH-006!
+        assert_eq!(created_next.id, "CVH-006");
+        let seq_after_next = load_task_sequence(&tmp).await;
+        assert_eq!(seq_after_next, 6);
+
+        let _ = tokio::fs::remove_dir_all(&tmp).await;
+    }
+
+    #[tokio::test]
+    async fn test_move_task_to_dev_autorun_and_running_status() {
+        let tmp = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("tmp")
+            .join(format!("cvh_test_dev_autorun_{}", uuid::Uuid::new_v4()));
+        let _ = tokio::fs::create_dir_all(&tmp).await;
+
+        // Scaffold minimal boards.json with development board containing backlog and dev (persona cvh-dev)
+        let boards_cfg = serde_json::json!({
+            "active_board_id": "development",
+            "boards": [
+                {
+                    "id": "development",
+                    "name": "Разработка",
+                    "columns": [
+                        { "id": "backlog", "title": "Бэклог", "auto_run": false },
+                        { "id": "dev", "title": "В работе", "persona": "cvh-dev", "auto_run": true }
+                    ]
+                }
+            ]
+        });
+        let boards_path = tmp.join(".cvh").join("boards.json");
+        let _ = tokio::fs::create_dir_all(tmp.join(".cvh")).await;
+        tokio::fs::write(&boards_path, serde_json::to_string_pretty(&boards_cfg).unwrap())
+            .await
+            .expect("write boards.json");
+
+        // Create task in backlog
+        let task = internal_create_task(
+            &tmp,
+            "Dev Task".to_string(),
+            "Move to dev test".to_string(),
+            "backlog".to_string(),
+            Some("development".to_string()),
+            Some(true),
+            None,
+            Some("CVH-005".to_string()),
+            None,
+            None,
+        )
+        .await
+        .expect("create task");
+
+        assert_eq!(task.stage_id, "backlog");
+        assert_ne!(task.status.as_deref(), Some("running"));
+
+        // Move task to 'dev' column
+        let moved = internal_move_task_stage(
+            &tmp,
+            "CVH-005",
+            "dev",
+            None,
+            None,
+            None,
+            None,
+            false,
+            Some("development".to_string()),
+        )
+        .await
+        .expect("move task to dev must succeed");
+
+        assert_eq!(moved.stage_id, "dev");
+        assert_eq!(
+            moved.status.as_deref(),
+            Some("running"),
+            "Task moving to stage with persona 'cvh-dev' must automatically enter 'running' status!"
+        );
+
+        let _ = tokio::fs::remove_dir_all(&tmp).await;
+    }
