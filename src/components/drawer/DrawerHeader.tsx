@@ -185,7 +185,7 @@ export default function DrawerHeader({
           ) : task && workingColumns.length > 0 ? (
             <div
               data-no-drag
-              className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg bg-[#f9fafb] dark:bg-[#161b22] shrink-0 select-none pointer-events-auto shadow-2xs overflow-x-auto no-scrollbar max-w-[500px]"
+              className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg bg-[#f9fafb] dark:bg-[#161b22] shrink-0 select-none pointer-events-auto shadow-2xs overflow-x-auto no-scrollbar max-w-2xl"
             >
               {workingColumns.map((col, idx) => {
                 const matchingSubtask = subtasks.find(
@@ -224,7 +224,7 @@ export default function DrawerHeader({
                           onOpenDrawer(targetTaskId);
                         }
                       }}
-                      title={
+                      aria-label={
                         isCurrent
                           ? `Текущий этап: ${col.title}`
                           : targetTaskId
@@ -245,7 +245,7 @@ export default function DrawerHeader({
                       {isRunningStage && (
                         <span className="h-2 w-2 rounded-full bg-[#22c55e] shrink-0" />
                       )}
-                      <span className="truncate max-w-[85px]">{col.title}</span>
+                      <span className="truncate max-w-[180px] sm:max-w-[240px]">{col.title}</span>
                     </button>
                   </div>
                 );

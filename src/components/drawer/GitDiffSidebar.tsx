@@ -562,17 +562,26 @@ export default function GitDiffSidebar({
     setExpandedFiles(new Set());
   };
 
-  // Collapsed Rail View
-  if (isCollapsed) {
-    return (
-      <aside
-        className={`w-11 shrink-0 border-l border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] flex flex-col items-center py-3 select-none transition-all duration-150 ${className}`}
+  // Single unified aside: smooth CSS width transitions without unmounting
+  return (
+    <aside
+      style={{ width: `${isCollapsed ? 44 : sidebarWidth}px` }}
+      className={`relative shrink-0 border-l border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#090a0f] flex flex-col h-full text-[#171717] dark:text-[#f0f6fc] overflow-hidden select-none transition-colors ${
+        isResizing ? 'select-none' : 'transition-[width] duration-200 ease-out'
+      } ${className || ''}`}
+      aria-label="Панель Git Diff"
+    >
+      {/* Collapsed Rail View (44px wide, smoothly fades in when collapsed) */}
+      <div
+        className={`absolute inset-0 w-11 bg-white dark:bg-[#0d1117] flex flex-col items-center py-3 select-none transition-opacity duration-200 ${
+          isCollapsed ? 'opacity-100 pointer-events-auto z-10' : 'opacity-0 pointer-events-none -z-10'
+        }`}
       >
         <button
           type="button"
           onClick={onToggleCollapse}
           className="p-1.5 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
-          title="Развернуть Git Diff"
+          aria-label="Развернуть Git Diff"
         >
           <PanelRightOpen className="h-4 w-4" />
         </button>
@@ -611,37 +620,38 @@ export default function GitDiffSidebar({
         <div
           onClick={onToggleCollapse}
           className="mt-6 flex-1 flex items-center justify-center cursor-pointer group"
-          title="Нажмите, чтобы развернуть Git Diff"
+          aria-label="Развернуть Git Diff"
         >
           <span className="text-[11px] font-mono text-[#8f8f8f] dark:text-[#8b949e] group-hover:text-[#171717] dark:group-hover:text-[#f0f6fc] transition tracking-wider [writing-mode:vertical-rl] rotate-180">
             Git Diff
           </span>
         </div>
-      </aside>
-    );
-  }
-
-  // Expanded Sidebar View (Default 480px, Resizable) with File Accordion List
-  return (
-    <aside
-      style={{ width: `${sidebarWidth}px` }}
-      className={`relative shrink-0 border-l border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#090a0f] flex flex-col h-full text-[#171717] dark:text-[#f0f6fc] overflow-hidden select-none transition-colors ${isResizing ? 'select-none' : ''} ${className}`}
-    >
-      {/* Left Resize Drag Handle */}
-      <div
-        onMouseDown={handleMouseDown}
-        className="group/handle absolute top-0 bottom-0 left-0 w-2 -ml-1 cursor-col-resize z-30 flex items-center justify-center select-none"
-        title="Потяните для изменения ширины панели Git Diff"
-      >
-        <div
-          className={`w-0.5 h-8 rounded-full transition-colors ${
-            isResizing ? 'bg-emerald-500' : 'bg-transparent group-hover/handle:bg-[#00000025]'
-          }`}
-        />
       </div>
 
-      {/* 1. Header: Title, Badges, Expand/Collapse All, Refresh, Panel Collapse */}
-      <header className="px-3 py-2 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] flex flex-wrap items-center justify-between gap-1.5 shrink-0 shadow-xs min-w-0 transition-colors">
+      {/* Expanded Content View (Fixed layout width = sidebarWidth, stays mounted, fades out when collapsed) */}
+      <div
+        style={{ width: `${sidebarWidth}px` }}
+        className={`h-full flex flex-col min-h-0 overflow-hidden transition-opacity duration-200 ${
+          isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'
+        }`}
+      >
+        {/* Left Resize Drag Handle (Only active when expanded) */}
+        {!isCollapsed && (
+          <div
+            onMouseDown={handleMouseDown}
+            className="group/handle absolute top-0 bottom-0 left-0 w-2 -ml-1 cursor-col-resize z-30 flex items-center justify-center select-none"
+            aria-label="Изменить ширину панели Git Diff"
+          >
+            <div
+              className={`w-0.5 h-8 rounded-full transition-colors ${
+                isResizing ? 'bg-emerald-500' : 'bg-transparent group-hover/handle:bg-[#00000025]'
+              }`}
+            />
+          </div>
+        )}
+
+        {/* 1. Header: Title, Badges, Expand/Collapse All, Refresh, Panel Collapse */}
+        <header className="px-3 py-2 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] flex flex-wrap items-center justify-between gap-1.5 shrink-0 shadow-xs min-w-0 transition-colors">
         {/* Left Section: Title, File count, Diff stats */}
         <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
           <div className="flex items-center gap-1.5 shrink-0">
@@ -808,6 +818,7 @@ export default function GitDiffSidebar({
           })}
         </div>
       )}
+      </div>
     </aside>
   );
 }

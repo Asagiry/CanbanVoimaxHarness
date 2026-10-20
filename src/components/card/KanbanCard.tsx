@@ -4,7 +4,7 @@ import { KanbanTask, TaskStatus } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useShallow } from 'zustand/react/shallow';
-import { GitBranch, ChevronDown, MessageSquare, GitFork, CornerDownRight } from 'lucide-react';
+import { GitBranch, ChevronDown, MessageSquare, GitFork } from 'lucide-react';
 import TaskContextMenu from './TaskContextMenu';
 import { getDeterministicAgentColor } from '../../lib/agentPalette';
 
@@ -224,19 +224,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
 
 
 
-            {/* Relay Handoff / Handover Summary Preview (if present) */}
-            {task.handoverSummary && (
-              <div
-                className="mb-2 flex items-start gap-1.5 p-1.5 rounded-md bg-[#f9fafb] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[10px] text-[#4d4d4d] dark:text-[#c9d1d9] font-mono select-none"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <CornerDownRight className="h-3 w-3 text-[#666666] dark:text-[#8b949e] shrink-0 mt-0.5" />
-                <div className="truncate min-w-0">
-                  <span className="font-semibold text-[#171717] dark:text-[#f0f6fc]">Эстафета: </span>
-                  <span className="text-[#4d4d4d] dark:text-[#8b949e]">{task.handoverSummary}</span>
-                </div>
-              </div>
-            )}
+
 
             {/* Footer: модель (строка 1, если задана), ветка + время в колонке (строка 2) */}
             <div className="pt-2 border-t border-[#ebebeb] dark:border-[#21262d]">

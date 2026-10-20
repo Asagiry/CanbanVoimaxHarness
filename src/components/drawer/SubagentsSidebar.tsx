@@ -386,9 +386,20 @@ export default function SubagentsSidebar({
 
   const runningCount = allSubagents.filter((s) => s.status === 'running').length;
 
-  if (isCollapsed) {
-    return (
-      <aside className={`w-11 shrink-0 border-r border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] flex flex-col items-center py-3 select-none transition-all duration-150 ${className || ''}`}>
+  return (
+    <aside
+      style={{ width: `${isCollapsed ? 44 : sidebarWidth}px` }}
+      className={`relative shrink-0 border-r border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] flex flex-col min-h-0 h-full overflow-hidden select-none transition-colors ${
+        isResizing ? 'select-none' : 'transition-[width] duration-200 ease-out'
+      } ${className || ''}`}
+      aria-label="Панель субагентов"
+    >
+      {/* Collapsed Rail View (44px wide, smoothly fades in when collapsed) */}
+      <div
+        className={`absolute inset-0 w-11 bg-white dark:bg-[#0d1117] flex flex-col items-center py-3 select-none transition-opacity duration-200 ${
+          isCollapsed ? 'opacity-100 pointer-events-auto z-10' : 'opacity-0 pointer-events-none -z-10'
+        }`}
+      >
         <button
           type="button"
           onClick={onToggleCollapse}
@@ -406,61 +417,62 @@ export default function SubagentsSidebar({
             Субагенты
           </span>
         </div>
-      </aside>
-    );
-  }
-
-  return (
-    <aside
-      style={{ width: `${sidebarWidth}px` }}
-      className={`relative shrink-0 border-r border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] flex flex-col min-h-0 overflow-hidden select-none transition-colors ${className}`}
-      aria-label="Панель субагентов"
-    >
-      {/* Right Resize Drag Handle */}
-      <div
-        onMouseDown={handleMouseDown}
-        className="group/handle absolute top-0 bottom-0 right-0 w-2 -mr-1 cursor-col-resize z-30 flex items-center justify-center select-none"
-        aria-label="Изменить ширину панели субагентов"
-      >
-        <div
-          className={`w-[2px] h-full transition-colors ${
-            isResizing
-              ? 'bg-[#15803d] dark:bg-[#7ee787]'
-              : 'group-hover/handle:bg-[#15803d]/60 dark:group-hover/handle:bg-[#7ee787]/60'
-          }`}
-        />
       </div>
 
-      {/* Sidebar Header */}
-      <div className="h-10 px-3.5 border-b border-[#ebebeb] dark:border-[#21262d] flex items-center justify-between shrink-0 bg-[#fafafa] dark:bg-[#161b22]">
-        <div className="flex items-center space-x-2 min-w-0">
-          <Bot className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
-          <span className="font-sans font-semibold text-xs text-[#171717] dark:text-[#f0f6fc] tracking-tight">
-            Субагенты
-          </span>
-          <span className="font-mono text-[11px] tabular-nums px-1.5 py-0.2 rounded-full bg-[#e4e4e7] dark:bg-[#21262d] text-[#52525b] dark:text-[#8b949e] font-medium">
-            {allSubagents.length}
-          </span>
-          {runningCount > 0 && (
-            <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded-md bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] text-[10px] font-mono border border-[#bbf7d0] dark:border-[#238636]">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              <span>{runningCount} в работе</span>
+      {/* Expanded Content View (Fixed layout width = sidebarWidth, stays mounted, fades out when collapsed) */}
+      <div
+        style={{ width: `${sidebarWidth}px` }}
+        className={`h-full flex flex-col min-h-0 overflow-hidden transition-opacity duration-200 ${
+          isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'
+        }`}
+      >
+        {/* Right Resize Drag Handle (Only active when expanded) */}
+        {!isCollapsed && (
+          <div
+            onMouseDown={handleMouseDown}
+            className="group/handle absolute top-0 bottom-0 right-0 w-2 -mr-1 cursor-col-resize z-30 flex items-center justify-center select-none"
+            aria-label="Изменить ширину панели субагентов"
+          >
+            <div
+              className={`w-[2px] h-full transition-colors ${
+                isResizing
+                  ? 'bg-[#15803d] dark:bg-[#7ee787]'
+                  : 'group-hover/handle:bg-[#15803d]/60 dark:group-hover/handle:bg-[#7ee787]/60'
+              }`}
+            />
+          </div>
+        )}
+
+        {/* Sidebar Header */}
+        <div className="h-10 px-3.5 border-b border-[#ebebeb] dark:border-[#21262d] flex items-center justify-between shrink-0 bg-[#fafafa] dark:bg-[#161b22]">
+          <div className="flex items-center space-x-2 min-w-0">
+            <Bot className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
+            <span className="font-sans font-semibold text-xs text-[#171717] dark:text-[#f0f6fc] tracking-tight">
+              Субагенты
             </span>
-          )}
+            <span className="font-mono text-[11px] tabular-nums px-1.5 py-0.2 rounded-full bg-[#e4e4e7] dark:bg-[#21262d] text-[#52525b] dark:text-[#8b949e] font-medium">
+              {allSubagents.length}
+            </span>
+            {runningCount > 0 && (
+              <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded-md bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] text-[10px] font-mono border border-[#bbf7d0] dark:border-[#238636]">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                <span>{runningCount} в работе</span>
+              </span>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="p-1 rounded-md text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] transition cursor-pointer"
+            aria-label="Скрыть панель субагентов"
+          >
+            <PanelLeftClose className="h-3.5 w-3.5" />
+          </button>
         </div>
 
-        <button
-          type="button"
-          onClick={onToggleCollapse}
-          className="p-1 rounded-md text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] transition cursor-pointer"
-          aria-label="Скрыть панель субагентов"
-        >
-          <PanelLeftClose className="h-3.5 w-3.5" />
-        </button>
-      </div>
-
-      {/* Subagents List */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
+        {/* Subagents List */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
         {allSubagents.length === 0 ? (
           <div className="flex-1" />
         ) : (
@@ -630,6 +642,7 @@ export default function SubagentsSidebar({
             );
           })
         )}
+      </div>
       </div>
     </aside>
   );
