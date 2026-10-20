@@ -236,14 +236,21 @@ echo   ok: cargo, node, pnpm found.
 
 rem Target and bundle defaults
 if "%TARGET%"=="" (
-  where link.exe >nul 2>nul
-  if errorlevel 1 (
-    where gcc.exe >nul 2>nul
-    if not errorlevel 1 (
-      rustup target list --installed 2>nul | findstr /i "x86_64-pc-windows-gnu" >nul
+  set "IS_MSVC_DEFAULT=0"
+  rustup default 2>nul | findstr /i "msvc" >nul
+  if not errorlevel 1 set "IS_MSVC_DEFAULT=1"
+  if "!IS_MSVC_DEFAULT!"=="1" (
+    echo   notice: rustup default toolchain is MSVC; keeping host default
+  ) else (
+    where link.exe >nul 2>nul
+    if errorlevel 1 (
+      where gcc.exe >nul 2>nul
       if not errorlevel 1 (
-        set "TARGET=x86_64-pc-windows-gnu"
-        echo   notice: MSVC link.exe not found and GNU target installed; defaulting target to x86_64-pc-windows-gnu
+        rustup target list --installed 2>nul | findstr /i "x86_64-pc-windows-gnu" >nul
+        if not errorlevel 1 (
+          set "TARGET=x86_64-pc-windows-gnu"
+          echo   notice: MSVC not default and link.exe not found; defaulting target to x86_64-pc-windows-gnu
+        )
       )
     )
   )
@@ -334,15 +341,39 @@ echo.
 
 echo [5/5] Building Tauri release bundles...
 rem Ensure WebView2Loader.dll is present in target release directory for NSIS bundling
-if not exist "src-tauri\target\release\WebView2Loader.dll" (
+set "REF_DLL=Release\Windows\bin\WebView2Loader.dll"
+if not exist "%REF_DLL%" (
+  if exist "..\..\Release\Windows\bin\WebView2Loader.dll" set "REF_DLL=..\..\Release\Windows\bin\WebView2Loader.dll"
+)
+if not exist "src-tauri\target\release" mkdir "src-tauri\target\release"
+if exist "%REF_DLL%" (
+  copy /Y "%REF_DLL%" "src-tauri\target\release\WebView2Loader.dll" >nul
+  echo   ok: pre-copied reference WebView2Loader.dll to src-tauri\target\release\
+) else if not exist "src-tauri\target\release\WebView2Loader.dll" (
   for /r "src-tauri\target\release\build" %%D in (WebView2Loader.dll) do (
     if exist "%%D" copy /Y "%%D" "src-tauri\target\release\" >nul 2>nul
   )
 )
 if not "%TARGET%"=="" (
-  if not exist "src-tauri\target\%TARGET%\release\WebView2Loader.dll" (
+  if not exist "src-tauri\target\%TARGET%\release" mkdir "src-tauri\target\%TARGET%\release"
+  if exist "%REF_DLL%" (
+    copy /Y "%REF_DLL%" "src-tauri\target\%TARGET%\release\WebView2Loader.dll" >nul
+    echo   ok: pre-copied reference WebView2Loader.dll to src-tauri\target\%TARGET%\release\
+  ) else if not exist "src-tauri\target\%TARGET%\release\WebView2Loader.dll" (
     for /r "src-tauri\target\%TARGET%\release\build" %%D in (WebView2Loader.dll) do (
       if exist "%%D" copy /Y "%%D" "src-tauri\target\%TARGET%\release\" >nul 2>nul
+    )
+  )
+)
+if not "%CARGO_TARGET_DIR%"=="" (
+  if not exist "%CARGO_TARGET_DIR%\release" mkdir "%CARGO_TARGET_DIR%\release" 2>nul
+  if exist "%REF_DLL%" (
+    copy /Y "%REF_DLL%" "%CARGO_TARGET_DIR%\release\WebView2Loader.dll" >nul 2>nul
+  )
+  if not "%TARGET%"=="" (
+    if not exist "%CARGO_TARGET_DIR%\%TARGET%\release" mkdir "%CARGO_TARGET_DIR%\%TARGET%\release" 2>nul
+    if exist "%REF_DLL%" (
+      copy /Y "%REF_DLL%" "%CARGO_TARGET_DIR%\%TARGET%\release\WebView2Loader.dll" >nul 2>nul
     )
   )
 )
@@ -499,6 +530,18 @@ if "%FOUND_INSTALLER%"=="0" (
 
 if "%FOUND_INSTALLER%"=="0" (
   echo   NOTE: no NSIS/MSI installers found; portable exe only.
+)
+echo.
+
+rem Sign and unblock release artifacts with PowerShell
+echo Signing and unblocking artifacts...
+if exist "%COPIED_BIN%" (
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "$cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -match 'CN=CanbanVoimaxHarness' } | Select-Object -First 1; if ($cert) { Set-AuthenticodeSignature -FilePath '%COPIED_BIN%' -Certificate $cert | Out-Null; Write-Host '  ok: signed %COPIED_BIN% with certificate CN=CanbanVoimaxHarness' } else { Write-Host '  notice: code signing certificate CN=CanbanVoimaxHarness not found in Cert:\CurrentUser\My' }; Unblock-File -Path '%COPIED_BIN%' -ErrorAction SilentlyContinue"
+)
+for %%F in ("%INST_DIR%\*.exe") do (
+  if exist "%%F" (
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -match 'CN=CanbanVoimaxHarness' } | Select-Object -First 1; if ($cert) { Set-AuthenticodeSignature -FilePath '%%F' -Certificate $cert | Out-Null; Write-Host '  ok: signed installer %%F with certificate CN=CanbanVoimaxHarness' }; Unblock-File -Path '%%F' -ErrorAction SilentlyContinue"
+  )
 )
 echo.
 
