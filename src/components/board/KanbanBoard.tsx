@@ -654,15 +654,24 @@ export default function KanbanBoard() {
   // ZERO INVISIBLE TASKS (§ 2.18): Every task must be visible on the board it belongs to,
   // or on the active board if orphaned or if its column exists on the active board.
   const currentBoardTasks = tasks.filter((task) => {
-    const matchingBoard = boards.find((b) => b.id === task.boardId);
-    const boardHasCol = matchingBoard?.columns.some((c) => c.id === task.columnId);
-    const activeHasCol = columns.some((c) => c.id === task.columnId);
-    let effectiveBoardId = matchingBoard ? task.boardId : activeBoardId;
-    // Self-heal: If declared board does not have task's column, but active board does, show on active board
-    if (matchingBoard && !boardHasCol && activeHasCol) {
-      effectiveBoardId = activeBoardId;
+    // 1. Direct match: task belongs to activeBoardId or has no boardId assigned
+    if (!task.boardId || task.boardId === activeBoardId) {
+      return true;
     }
-    return effectiveBoardId === activeBoardId;
+    // 2. Active board column invariant: if the column exists on the active board,
+    // guarantee visibility on the active board (prevents vanishing tasks when boardId drifted).
+    const activeHasCol = columns.some(
+      (c) => c.id === task.columnId || c.id.toLowerCase() === task.columnId?.toLowerCase()
+    );
+    if (activeHasCol) {
+      return true;
+    }
+    // 3. Fallback: if declared board no longer exists, show on active board
+    const matchingBoard = boards.find((b) => b.id === task.boardId);
+    if (!matchingBoard) {
+      return true;
+    }
+    return false;
   });
 
   const filteredTasks = currentBoardTasks.filter((task) => {

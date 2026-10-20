@@ -461,6 +461,21 @@ pub async fn create_task(
         updated_at: now,
     };
 
+    // RACE CONDITION PREVENTION (AGENTS.md):
+    // Atomically register the new task in in-memory state.tasks and save to disk IMMEDIATELY
+    // before launching slow operations (worktree creation, hooks).
+    // This guarantees that any concurrent move_task_stage or run_agent calls will find the task.
+    if let Ok(mut guard) = state.tasks.lock() {
+        if !guard.iter().any(|t| t.id == new_task.id) {
+            guard.push(new_task.clone());
+        }
+        tasks = guard.clone();
+    } else if !tasks.iter().any(|t| t.id == new_task.id) {
+        tasks.push(new_task.clone());
+    }
+    save_tasks_to_disk(&root, &tasks).await?;
+    let _ = app_handle.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+
     // Check pipeline config for stage hooks (board-aware: first check columns
     // of effective_board_id, then fallback to pipeline.json).
     let skip = new_task.skip_worktree.unwrap_or(false);
@@ -532,12 +547,37 @@ pub async fn create_task(
         }
     }
 
-    tasks.push(new_task.clone());
-    if let Ok(mut guard) = state.tasks.lock() {
-        *guard = tasks.clone();
+    // After worktree creation and hooks, update worktree_path and branch fields.
+    // If the task was moved or modified concurrently, preserve its latest stage_id and status.
+    let mut updated_tasks = load_tasks_from_disk(&root).await;
+    if let Some(t) = updated_tasks.iter_mut().find(|t| t.id == new_task.id) {
+        t.worktree_path = new_task.worktree_path.clone();
+        t.branch = new_task.branch.clone();
+        t.updated_at = Utc::now().timestamp_millis();
+        new_task = t.clone();
+    } else {
+        updated_tasks.push(new_task.clone());
     }
-    save_tasks_to_disk(&root, &tasks).await?;
-    let _ = app_handle.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+
+    if let Ok(mut guard) = state.tasks.lock() {
+        if let Some(t) = guard.iter_mut().find(|t| t.id == new_task.id) {
+            t.worktree_path = new_task.worktree_path.clone();
+            t.branch = new_task.branch.clone();
+            t.updated_at = new_task.updated_at;
+            new_task.stage_id = t.stage_id.clone();
+            new_task.status = t.status.clone();
+            new_task.board_id = t.board_id.clone();
+        } else {
+            guard.push(new_task.clone());
+        }
+        for mem_t in guard.iter() {
+            if !updated_tasks.iter().any(|t| t.id == mem_t.id) {
+                updated_tasks.push(mem_t.clone());
+            }
+        }
+    }
+    save_tasks_to_disk(&root, &updated_tasks).await?;
+    let _ = app_handle.emit("tasks:updated", serde_json::json!({ "tasks": &updated_tasks }));
 
     Ok(new_task)
 }
@@ -1131,6 +1171,22 @@ pub async fn internal_move_task_stage(
     let root = &actual_root;
     let mut tasks = load_tasks_from_disk(root).await;
 
+    // In-memory fallback: if task was just created and not yet on disk,
+    // or if memory has tasks not yet on disk, retrieve from AppState (§ 2.22).
+    if !tasks.iter().any(|t| t.id == task_id) {
+        if let Some(app) = app_handle {
+            if let Some(state) = app.try_state::<AppState>() {
+                if let Ok(guard) = state.tasks.lock() {
+                    for mem_t in guard.iter() {
+                        if !tasks.iter().any(|t| t.id == mem_t.id) {
+                            tasks.push(mem_t.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     let task_idx = tasks
         .iter()
         .position(|t| t.id == task_id)
@@ -1529,6 +1585,11 @@ pub async fn internal_move_task_stage(
     if let Some(app) = app_handle {
         if let Some(state_ref) = app.try_state::<AppState>() {
             if let Ok(mut guard) = state_ref.tasks.lock() {
+                for mem_t in guard.iter() {
+                    if !tasks.iter().any(|t| t.id == mem_t.id) {
+                        tasks.push(mem_t.clone());
+                    }
+                }
                 *guard = tasks.clone();
             }
         }
@@ -1976,16 +2037,26 @@ pub async fn run_agent(
 
     let root = app_handle.state::<AppState>().get_root();
 
-    // Check disk first to ensure task model override and steer updates are fresh
-    let disk_tasks = load_tasks_from_disk(&root).await;
-    let task_opt = disk_tasks.iter().find(|t| t.id == task_id).cloned().or_else(|| {
-        app_handle.state::<AppState>().tasks.lock().ok()?.iter().find(|t| t.id == task_id).cloned()
-    });
+    // Check disk and in-memory state: merge them so in-memory tasks are never lost (§ 2.22).
+    let mut tasks_to_use = load_tasks_from_disk(&root).await;
+    let initial_disk_count = tasks_to_use.len();
+    if let Ok(guard) = app_handle.state::<AppState>().tasks.lock() {
+        for mem_task in guard.iter() {
+            if !tasks_to_use.iter().any(|t| t.id == mem_task.id) {
+                tasks_to_use.push(mem_task.clone());
+            }
+        }
+    }
+
+    let task_opt = tasks_to_use.iter().find(|t| t.id == task_id).cloned();
 
     let mut task = match task_opt {
         Some(t) => {
             if let Ok(mut guard) = app_handle.state::<AppState>().tasks.lock() {
-                *guard = disk_tasks;
+                *guard = tasks_to_use.clone();
+            }
+            if tasks_to_use.len() > initial_disk_count {
+                let _ = save_tasks_to_disk(&root, &tasks_to_use).await;
             }
             t
         }
@@ -1996,7 +2067,7 @@ pub async fn run_agent(
                 task_id,
                 mem_count,
                 root.join(".cvh").join("tasks.json"),
-                disk_tasks.len(),
+                tasks_to_use.len(),
                 root
             );
             return Err(format!("Task {} not found", task_id));
