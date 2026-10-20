@@ -398,6 +398,36 @@ pub fn get_next_subtask_index(tasks: &[Task], parent_id: &str) -> u32 {
     max_idx + 1
 }
 
+/// Resolves the task ID: uses explicit task_id from frontend (synchronizing sequence.json)
+/// or allocates the next monotonic ID if not provided.
+pub async fn resolve_or_allocate_task_id(
+    repo_root: &Path,
+    tasks: &[Task],
+    task_id: Option<&str>,
+) -> String {
+    match task_id.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(explicit_id) => {
+            let base = explicit_id.split('.').next().unwrap_or(explicit_id);
+            let digits: String = base.chars().filter(|c| c.is_ascii_digit()).collect();
+            if let Ok(task_num) = digits.parse::<u32>() {
+                let stored_seq = load_task_sequence(repo_root).await;
+                let seq_to_save = stored_seq.max(task_num);
+                if let Err(e) = save_task_sequence(repo_root, seq_to_save).await {
+                    eprintln!(
+                        "CVH [resolve_or_allocate_task_id]: Warning - failed to persist sequence {}: {}",
+                        seq_to_save, e
+                    );
+                }
+            }
+            explicit_id.to_string()
+        }
+        None => {
+            let task_num = allocate_next_task_num(repo_root, tasks).await;
+            format!("CVH-{:03}", task_num)
+        }
+    }
+}
+
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub async fn create_task(
@@ -407,16 +437,47 @@ pub async fn create_task(
     board_id: Option<String>,
     skip_worktree: Option<bool>,
     model: Option<String>,
+    task_id: Option<String>,
     app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Task, String> {
     let root = state.get_root();
-    let mut tasks = load_tasks_from_disk(&root).await;
+    internal_create_task(
+        &root,
+        title,
+        description,
+        stage_id,
+        board_id,
+        skip_worktree,
+        model,
+        task_id,
+        Some(&app_handle),
+        Some(state.inner()),
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn internal_create_task(
+    root: &Path,
+    title: String,
+    description: String,
+    stage_id: String,
+    board_id: Option<String>,
+    skip_worktree: Option<bool>,
+    model: Option<String>,
+    task_id: Option<String>,
+    app_handle: Option<&AppHandle>,
+    state: Option<&AppState>,
+) -> Result<Task, String> {
+    let actual_root = resolve_actual_repo_root(root);
+    let root = &actual_root;
+    let mut tasks = load_tasks_from_disk(root).await;
 
     let effective_board_id = match board_id.as_deref() {
         Some(b) if !b.trim().is_empty() => b.trim().to_string(),
         _ => {
-            load_boards_config(&root)
+            load_boards_config(root)
                 .await
                 .map(|bc| bc.active_board_id)
                 .unwrap_or_else(|_| "development".to_string())
@@ -429,9 +490,8 @@ pub async fn create_task(
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string());
 
-    // Generate task ID — monotonic max(stored_seq, max_on_disk) + 1, persistent across deletions
-    let task_num = allocate_next_task_num(&root, &tasks).await;
-    let task_id = format!("CVH-{:03}", task_num);
+    // Generate task ID — use explicit task_id (syncing sequence) or allocate monotonic ID
+    let task_id = resolve_or_allocate_task_id(root, &tasks, task_id.as_deref()).await;
     let now = Utc::now().timestamp_millis();
 
     let mut new_task = Task {
@@ -465,22 +525,28 @@ pub async fn create_task(
     // Atomically register the new task in in-memory state.tasks and save to disk IMMEDIATELY
     // before launching slow operations (worktree creation, hooks).
     // This guarantees that any concurrent move_task_stage or run_agent calls will find the task.
-    if let Ok(mut guard) = state.tasks.lock() {
-        if !guard.iter().any(|t| t.id == new_task.id) {
-            guard.push(new_task.clone());
+    if let Some(state_ref) = state {
+        if let Ok(mut guard) = state_ref.tasks.lock() {
+            if !guard.iter().any(|t| t.id == new_task.id) {
+                guard.push(new_task.clone());
+            }
+            tasks = guard.clone();
+        } else if !tasks.iter().any(|t| t.id == new_task.id) {
+            tasks.push(new_task.clone());
         }
-        tasks = guard.clone();
     } else if !tasks.iter().any(|t| t.id == new_task.id) {
         tasks.push(new_task.clone());
     }
-    save_tasks_to_disk(&root, &tasks).await?;
-    let _ = app_handle.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+    save_tasks_to_disk(root, &tasks).await?;
+    if let Some(app) = app_handle {
+        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+    }
 
     // Check pipeline config for stage hooks (board-aware: first check columns
     // of effective_board_id, then fallback to pipeline.json).
     let skip = new_task.skip_worktree.unwrap_or(false);
     {
-        let boards_cfg = load_boards_config(&root).await.ok();
+        let boards_cfg = load_boards_config(root).await.ok();
         let col_from_board = boards_cfg.as_ref().and_then(|bc| {
             let b = bc.boards.iter().find(|b| b.id == effective_board_id)
                 .or_else(|| bc.boards.iter().find(|b| b.id == bc.active_board_id));
@@ -488,13 +554,13 @@ pub async fn create_task(
         });
         let col_opt: Option<crate::config::PipelineColumn> = match col_from_board {
             Some(c) => Some(c),
-            None => load_pipeline_config(&root)
+            None => load_pipeline_config(root)
                 .await
                 .ok()
                 .and_then(|p| p.columns.into_iter().find(|c| c.id == stage_id)),
         };
         if let Some(col) = col_opt {
-            trigger_column_on_enter_script(&col, &new_task, &stage_id, None, &root).await;
+            trigger_column_on_enter_script(&col, &new_task, &stage_id, None, root).await;
             let hook_rel_opt = col.hooks.get("on_enter").cloned();
             match hook_rel_opt {
                 Some(hook_rel) if hook_rel == BUILTIN_CREATE_WORKTREE_MARKER => {
@@ -502,7 +568,7 @@ pub async fn create_task(
                 }
                 Some(hook_rel) => {
                     let hook_path = crate::config::resolve_hook_path(
-                        &root,
+                        root,
                         col.persona.as_deref(),
                         &hook_rel,
                     );
@@ -517,7 +583,7 @@ pub async fn create_task(
                             board_id: Some(effective_board_id.clone()),
                             extra_env: HashMap::new(),
                         };
-                        match execute_hook(&hook_path, &root, &ctx, None).await {
+                        match execute_hook(&hook_path, root, &ctx, None).await {
                             Ok(res) => {
                                 if !res.success {
                                     eprintln!(
@@ -539,17 +605,17 @@ pub async fn create_task(
                 None => {}
             }
             if needs_builtin_worktree(&col, &new_task, skip) {
-                ensure_builtin_worktree(&root, &mut new_task).await;
+                ensure_builtin_worktree(root, &mut new_task).await;
             }
         } else if stage_id == "backlog" && !skip {
             // Column not explicitly configured, but stage is backlog: fallback default
-            ensure_builtin_worktree(&root, &mut new_task).await;
+            ensure_builtin_worktree(root, &mut new_task).await;
         }
     }
 
     // After worktree creation and hooks, update worktree_path and branch fields.
     // If the task was moved or modified concurrently, preserve its latest stage_id and status.
-    let mut updated_tasks = load_tasks_from_disk(&root).await;
+    let mut updated_tasks = load_tasks_from_disk(root).await;
     if let Some(t) = updated_tasks.iter_mut().find(|t| t.id == new_task.id) {
         t.worktree_path = new_task.worktree_path.clone();
         t.branch = new_task.branch.clone();
@@ -559,20 +625,22 @@ pub async fn create_task(
         updated_tasks.push(new_task.clone());
     }
 
-    if let Ok(mut guard) = state.tasks.lock() {
-        if let Some(t) = guard.iter_mut().find(|t| t.id == new_task.id) {
-            t.worktree_path = new_task.worktree_path.clone();
-            t.branch = new_task.branch.clone();
-            t.updated_at = new_task.updated_at;
-            new_task.stage_id = t.stage_id.clone();
-            new_task.status = t.status.clone();
-            new_task.board_id = t.board_id.clone();
-        } else {
-            guard.push(new_task.clone());
-        }
-        for mem_t in guard.iter() {
-            if !updated_tasks.iter().any(|t| t.id == mem_t.id) {
-                updated_tasks.push(mem_t.clone());
+    if let Some(state_ref) = state {
+        if let Ok(mut guard) = state_ref.tasks.lock() {
+            if let Some(t) = guard.iter_mut().find(|t| t.id == new_task.id) {
+                t.worktree_path = new_task.worktree_path.clone();
+                t.branch = new_task.branch.clone();
+                t.updated_at = new_task.updated_at;
+                new_task.stage_id = t.stage_id.clone();
+                new_task.status = t.status.clone();
+                new_task.board_id = t.board_id.clone();
+            } else {
+                guard.push(new_task.clone());
+            }
+            for mem_t in guard.iter() {
+                if !updated_tasks.iter().any(|t| t.id == mem_t.id) {
+                    updated_tasks.push(mem_t.clone());
+                }
             }
         }
     }
@@ -581,8 +649,10 @@ pub async fn create_task(
         t.status = new_task.status.clone();
         t.board_id = new_task.board_id.clone();
     }
-    save_tasks_to_disk(&root, &updated_tasks).await?;
-    let _ = app_handle.emit("tasks:updated", serde_json::json!({ "tasks": &updated_tasks }));
+    save_tasks_to_disk(root, &updated_tasks).await?;
+    if let Some(app) = app_handle {
+        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &updated_tasks }));
+    }
 
     Ok(new_task)
 }
@@ -2948,6 +3018,19 @@ pub async fn internal_abort_agent(
 
     // 6. Update task status on disk & memory to "idle"
     let mut tasks = load_tasks_from_disk(root).await;
+    // MERGE IN-MEMORY TASKS (AGENTS.md):
+    // Merge in-memory tasks from state.tasks before updating status to avoid wiping unsaved disk tasks (§ 2.22)
+    if let Ok(guard) = state.tasks.lock() {
+        for mem_t in guard.iter() {
+            if let Some(disk_t) = tasks.iter_mut().find(|t| t.id == mem_t.id) {
+                if mem_t.updated_at > disk_t.updated_at {
+                    *disk_t = mem_t.clone();
+                }
+            } else {
+                tasks.push(mem_t.clone());
+            }
+        }
+    }
     let mut task_updated = false;
     if let Some(t) = tasks.iter_mut().find(|t| t.id == p_trim) {
         if t.status.as_deref() != Some("idle") {

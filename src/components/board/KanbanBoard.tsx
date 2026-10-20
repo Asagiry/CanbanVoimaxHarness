@@ -355,26 +355,31 @@ export default function KanbanBoard() {
       const taskPos = nextTasks.findIndex((t) => t.id === draggableId);
       if (taskPos === -1) return;
       const [movedTask] = nextTasks.splice(taskPos, 1);
+      const effectiveBoardId = activeBoardId || 'development';
+      const updatedMovedTask: KanbanTask = {
+        ...movedTask,
+        boardId: effectiveBoardId,
+      };
 
       if (destIndex < otherTasks.length) {
         const refTask = otherTasks[destIndex];
         const refPos = nextTasks.findIndex((t) => t.id === refTask.id);
         if (refPos !== -1) {
-          nextTasks.splice(refPos, 0, movedTask);
+          nextTasks.splice(refPos, 0, updatedMovedTask);
         } else {
-          nextTasks.push(movedTask);
+          nextTasks.push(updatedMovedTask);
         }
       } else {
         if (otherTasks.length > 0) {
           const lastTask = otherTasks[otherTasks.length - 1];
           const lastPos = nextTasks.findIndex((t) => t.id === lastTask.id);
           if (lastPos !== -1) {
-            nextTasks.splice(lastPos + 1, 0, movedTask);
+            nextTasks.splice(lastPos + 1, 0, updatedMovedTask);
           } else {
-            nextTasks.push(movedTask);
+            nextTasks.push(updatedMovedTask);
           }
         } else {
-          nextTasks.push(movedTask);
+          nextTasks.push(updatedMovedTask);
         }
       }
 
@@ -392,10 +397,11 @@ export default function KanbanBoard() {
     const [movedTask] = nextTasks.splice(taskPos, 1);
 
     const destColDef = columns.find((c) => c.id === destColId);
+    const effectiveBoardId = activeBoardId || 'development';
     const updatedMovedTask: KanbanTask = {
       ...movedTask,
       columnId: destColId,
-      boardId: activeBoardId || movedTask.boardId,
+      boardId: effectiveBoardId,
       persona: destColDef?.persona || movedTask.persona,
       status: (destColDef?.terminal ? 'done' : destColDef?.persona ? 'running' : 'idle') as TaskStatus,
       updatedAt: Date.now(),
