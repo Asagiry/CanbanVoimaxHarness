@@ -218,10 +218,37 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
     : (currentColumns && currentColumns.length > 0 ? currentColumns : CANONICAL_BOARD_COLUMNS);
 
   const rawId: string | undefined = raw.stageId || raw.stage_id || raw.columnId;
-  const knownCol = targetColumns.find((c) => c.id === rawId);
-  // If columnId doesn't match any column in the target board, fallback to the first column (backlog)
-  const columnId = knownCol?.id ?? targetColumns[0]?.id ?? 'backlog';
-  const col = targetColumns.find((c) => c.id === columnId);
+
+  // ZERO INVISIBLE TASKS (§ 2.18): Ensure columnId and boardId are mutually consistent.
+  // If rawId does not exist in targetBoard, but exists in active board columns, heal boardId to activeBoardId.
+  let effectiveBoardId = boardId;
+  let effectiveColumns = targetColumns;
+  let knownCol = effectiveColumns.find((c) => c.id === rawId || c.id.toLowerCase() === rawId?.toLowerCase());
+
+  if (!knownCol && activeBoardId && activeBoardId !== boardId) {
+    const activeBoardDef = boards.find((b) => b.id === activeBoardId);
+    const activeCols = activeBoardDef?.columns && activeBoardDef.columns.length > 0 ? activeBoardDef.columns : currentColumns;
+    const colInActive = activeCols.find((c) => c.id === rawId || c.id.toLowerCase() === rawId?.toLowerCase());
+    if (colInActive) {
+      effectiveBoardId = activeBoardId;
+      effectiveColumns = activeCols;
+      knownCol = colInActive;
+    }
+  }
+
+  // Alias matching fallback (dev <-> development, backlog <-> waiting, ready <-> done)
+  const matchedCol = knownCol ?? effectiveColumns.find((c) => {
+    if (!rawId) return false;
+    const cid = c.id.toLowerCase();
+    const rid = rawId.toLowerCase();
+    if ((rid === 'dev' || rid === 'development') && (cid === 'dev' || cid === 'development')) return true;
+    if ((rid === 'backlog' || rid === 'waiting' || rid === 'ожидание') && (cid === 'backlog' || cid === 'waiting' || cid === 'ожидание')) return true;
+    if ((rid === 'ready' || rid === 'done' || rid === 'готово') && (cid === 'ready' || cid === 'done' || cid === 'готово')) return true;
+    return false;
+  });
+
+  const columnId = matchedCol?.id ?? (rawId && effectiveColumns.some((c) => c.id === rawId) ? rawId : (effectiveColumns[0]?.id ?? 'backlog'));
+  const col = effectiveColumns.find((c) => c.id === columnId);
   const rawStatus = (raw.status as TaskStatus) || undefined;
   const status: TaskStatus = rawStatus ?? (col?.terminal
     ? 'done'
@@ -286,7 +313,7 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
     stageEnteredAt,
     priority: (raw.priority as TaskPriority) || 'high',
     columnId,
-    boardId,
+    boardId: effectiveBoardId,
     persona: col?.persona ?? (typeof raw.persona === 'string' ? raw.persona : 'developer'),
     branch,
     worktreePath,
@@ -739,7 +766,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   },
 
   moveTask: async (taskId, targetColumnId) => {
-    const { tasks, columns } = get();
+    const { tasks, columns, activeBoardId } = get();
     const task = tasks.find((t) => t.id === taskId);
     const targetStageId = (targetColumnId || '').trim();
     if (!task) {
@@ -750,10 +777,30 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       console.warn(`[moveTask] Invalid empty targetColumnId for task "${taskId}"`);
       return;
     }
-    if (task.columnId === targetStageId) return;
 
     const targetColDef = columns.find((c) => c.id === targetStageId);
-    console.info(`[moveTask] Moving task "${taskId}" from "${task.columnId}" to "${targetStageId}"`);
+    console.info(`[moveTask] Moving task "${taskId}" from "${task.columnId}" to "${targetStageId}" (board: ${activeBoardId})`);
+
+    // Instant Optimistic Card Lifecycle (<1ms) per § 2.22:
+    // If not already placed optimistically by drag-and-drop, update local Zustand state immediately.
+    if (task.columnId !== targetStageId) {
+      const prevTasks = get().tasks;
+      const optimisticTasks = prevTasks.map((t) =>
+        t.id === taskId
+          ? {
+              ...t,
+              columnId: targetStageId,
+              boardId: activeBoardId || t.boardId,
+              persona: targetColDef?.persona || t.persona,
+              status: (targetColDef?.terminal ? 'done' : targetColDef?.persona ? 'running' : 'idle') as TaskStatus,
+              updatedAt: Date.now(),
+              stageEnteredAt: Date.now(),
+            }
+          : t
+      );
+      set({ tasks: optimisticTasks });
+      persistTasksToLocalStorage(optimisticTasks);
+    }
 
     // Preferred path: backend owns the move (gatekeeper sensor, target on_enter
     // hooks, source on_finish hooks + worktree allocation). Local state is
@@ -764,6 +811,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       const backendTask = await invoke<any>('move_task_stage', {
         taskId,
         targetStageId,
+        boardId: activeBoardId,
       });
       if (backendTask && typeof backendTask.id === 'string') {
         const mapped = mapBackendTaskToKanban(backendTask);
@@ -783,6 +831,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
             : {};
         const merged: KanbanTask = {
           ...mapped,
+          columnId: targetStageId,
+          boardId: mapped.boardId || prev.boardId || activeBoardId,
           persona: targetColDef?.persona || prev.persona,
           verdict: backendTask.verdict ? mapped.verdict : prev.verdict,
           verdictNote: prev.verdictNote,
@@ -790,7 +840,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           fastTrack: prev.fastTrack,
           attachments: mapped.attachments ?? prev.attachments,
           handoverSummary: mapped.handoverSummary ?? prev.handoverSummary,
-          stageEnteredAt: Date.now(),
+          stageEnteredAt: prev.stageEnteredAt || Date.now(),
           updatedAt: Date.now(),
           activeStageDuration: 0,
           stageDurations: {
@@ -804,16 +854,23 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         const updatedTasks = get().tasks.map((t) => (t.id === taskId ? merged : t));
         set({ tasks: updatedTasks });
         persistTasksToLocalStorage(updatedTasks);
-        // NOTE: no syncTasksBackend here — backend already persisted the move;
-        // pushing local state via save_tasks would clobber hook-assigned worktree.
-        // NOTE: Backend move_task_stage already emits agent:autorun, handled by App.tsx.
+
+        // ZERO INVISIBLE TASKS (§ 2.18): If the task moved to a stage on another board,
+        // seamlessly switch to that board so the task remains visible to the operator.
+        if (merged.boardId && merged.boardId !== get().activeBoardId) {
+          const boardExists = get().boards.some((b) => b.id === merged.boardId);
+          if (boardExists) {
+            await get().setActiveBoard(merged.boardId);
+          }
+        }
         return;
       }
       throw new Error(`move_task_stage returned empty or invalid task for id "${taskId}"`);
     } catch (err: unknown) {
       console.error(`[moveTask] Backend move_task_stage failed for task "${taskId}" -> stage "${targetStageId}":`, err);
       const msg = typeof err === 'string' ? err : err instanceof Error ? err.message : JSON.stringify(err);
-      alert(`Перемещение задачи отклонено:\n${msg}`);
+      alert(`Перемещение задачи отклонено:
+${msg}`);
       // Откатить состояние / синхронизировать карточки с бэкенда
       const { loadTasks } = get();
       await loadTasks();

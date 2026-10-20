@@ -1332,6 +1332,7 @@ use std::path::PathBuf;
             None,
             None,
             false,
+            None,
         )
         .await
         .expect("move to backlog");
@@ -1576,6 +1577,7 @@ Write code.
             None,
             None,
             false,
+            None,
         )
         .await
         .expect("move task stage");
@@ -1804,6 +1806,7 @@ Write code.
             Some("Review approved".to_string()),
             None,
             true, // is_autonomous_advance = true!
+            None,
         )
         .await
         .expect("autonomous move to ready must succeed");
@@ -1983,6 +1986,7 @@ Write code.
             Some("Review approved".to_string()),
             None,
             true,
+            None,
         )
         .await
         .expect("move subtask to ready");
@@ -2006,6 +2010,7 @@ Write code.
             Some("Retro completed".to_string()),
             None,
             true,
+            None,
         )
         .await
         .expect("move parent to ready");
@@ -2192,6 +2197,7 @@ Write code.
             None,
             None,
             true,
+            None,
         )
         .await
         .expect("move grandchild to ready");
@@ -2211,6 +2217,139 @@ Write code.
         assert_eq!(gp_after.stage_id, "ready", "Grandparent must be advanced to ready recursively");
         assert_eq!(gp_after.status.as_deref(), Some("done"));
         assert_eq!(gp_after.waiting_for_subtask_id, None);
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_multi_board_move_task_board_preservation() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_test_multiboard_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("create .cvh");
+
+        // Boards: 'development' (3 cols) and 'complex' (4 cols)
+        let boards_json = serde_json::json!({
+            "activeBoardId": "development",
+            "boards": [
+                {
+                    "id": "development",
+                    "name": "Development",
+                    "columns": [
+                        { "id": "backlog", "title": "Backlog", "color": "#71717a", "icon": "Inbox", "persona": null, "hooks": {} },
+                        { "id": "dev", "title": "Dev", "color": "#3b82f6", "icon": "Code2", "persona": "cvh-dev", "hooks": {} },
+                        { "id": "ready", "title": "Ready", "color": "#22c55e", "icon": "CheckCircle2", "persona": null, "terminal": true, "hooks": {} }
+                    ]
+                },
+                {
+                    "id": "complex",
+                    "name": "Complex",
+                    "columns": [
+                        { "id": "backlog", "title": "Backlog", "color": "#71717a", "icon": "Inbox", "persona": null, "hooks": {} },
+                        { "id": "dev", "title": "Dev", "color": "#3b82f6", "icon": "Code2", "persona": "cvh-dev", "hooks": {} },
+                        { "id": "review", "title": "Review", "color": "#f59e0b", "icon": "ShieldCheck", "persona": "reviewer", "hooks": {} },
+                        { "id": "ready", "title": "Ready", "color": "#22c55e", "icon": "CheckCircle2", "persona": null, "terminal": true, "hooks": {} }
+                    ]
+                }
+            ]
+        });
+        tokio::fs::write(base.join(".cvh").join("boards.json"), serde_json::to_string(&boards_json).unwrap())
+            .await
+            .expect("write boards.json");
+
+        let task = Task {
+            id: "TASK-MB-1".to_string(),
+            title: "Multi-board task".to_string(),
+            description: "Test board preservation".to_string(),
+            stage_id: "backlog".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("idle".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            handover_summary: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: Some(true),
+            created_at: 0,
+            updated_at: 0,
+            todos: None,
+            attachments: None,
+            cover_image: None,
+        };
+        save_tasks_to_disk(&base, &[task]).await.expect("save task");
+
+        // 1. Move within 'development' board to 'dev' with explicit board_id_override:
+        let m1 = internal_move_task_stage(
+            &base,
+            "TASK-MB-1",
+            "dev",
+            None,
+            None,
+            None,
+            None,
+            false,
+            Some("development".to_string()),
+        )
+        .await
+        .expect("move to dev");
+        assert_eq!(m1.stage_id, "dev");
+        assert_eq!(m1.board_id.as_deref(), Some("development"), "Must strictly preserve active board_id");
+
+        // 2. Move to 'ready' without override (task's current_board is development, which has ready):
+        let m2 = internal_move_task_stage(
+            &base,
+            "TASK-MB-1",
+            "ready",
+            None,
+            None,
+            None,
+            None,
+            false,
+            None,
+        )
+        .await
+        .expect("move to ready");
+        assert_eq!(m2.stage_id, "ready");
+        assert_eq!(m2.board_id.as_deref(), Some("development"), "Must stay on development board");
+
+        // 3. Move to 'review' which ONLY exists on 'complex' board:
+        let m3 = internal_move_task_stage(
+            &base,
+            "TASK-MB-1",
+            "review",
+            None,
+            None,
+            None,
+            None,
+            false,
+            None,
+        )
+        .await
+        .expect("move to review");
+        assert_eq!(m3.stage_id, "review");
+        assert_eq!(m3.board_id.as_deref(), Some("complex"), "Must cleanly transition to board containing stage");
+
+        // 4. Move from 'review' back to 'dev' without override (current_board is now complex, which has dev):
+        let m4 = internal_move_task_stage(
+            &base,
+            "TASK-MB-1",
+            "dev",
+            None,
+            None,
+            None,
+            None,
+            false,
+            None,
+        )
+        .await
+        .expect("move to dev on complex");
+        assert_eq!(m4.stage_id, "dev");
+        assert_eq!(m4.board_id.as_deref(), Some("complex"), "Must stay on complex board");
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }

@@ -1125,6 +1125,7 @@ pub async fn internal_move_task_stage(
     handover_summary: Option<String>,
     app_handle: Option<&AppHandle>,
     is_autonomous_advance: bool,
+    board_id_override: Option<String>,
 ) -> Result<Task, String> {
     let actual_root = resolve_actual_repo_root(root);
     let root = &actual_root;
@@ -1138,60 +1139,63 @@ pub async fn internal_move_task_stage(
     let current_task = &mut tasks[task_idx];
 
     // --- Board resolution & fallback (support alias and fallback when board_id missing/stale) ---
+    // ZERO INVISIBLE TASKS (§ 2.18):
+    // 1. If explicit board_id_override is provided and contains target stage, stay on it.
+    // 2. Otherwise if current_task.board_id contains target stage, preserve it (NO accidental board hopping!).
+    // 3. Otherwise if active_board contains target stage, use active_board.
+    // 4. Only if no priority board contains the stage, search any other board with matching target stage.
     let boards_cfg = load_boards_config(root).await.ok();
     let mut effective_board: Option<crate::config::BoardDef> = None;
 
     if let Some(ref bc) = boards_cfg {
         let active_board = bc.boards.iter().find(|b| b.id == bc.active_board_id).cloned();
+        let override_board = board_id_override.as_deref().and_then(|bid| {
+            bc.boards.iter().find(|b| b.id == bid).cloned()
+        });
         let current_board = current_task.board_id.as_deref().and_then(|bid| {
             bc.boards.iter().find(|b| b.id == bid).cloned()
         });
 
-        let current_has_exact = current_board
-            .as_ref()
-            .map(|b| b.columns.iter().any(|c| c.id == target_stage_id))
-            .unwrap_or(false);
+        let board_has_target = |b: &crate::config::BoardDef| -> bool {
+            b.columns.iter().any(|c| c.id == target_stage_id || stage_id_matches(&c.id, target_stage_id))
+        };
 
-        let active_has_exact = active_board
-            .as_ref()
-            .map(|b| b.columns.iter().any(|c| c.id == target_stage_id))
-            .unwrap_or(false);
-
-        if current_has_exact {
-            effective_board = current_board;
-        } else if active_has_exact {
-            effective_board = active_board;
-            if let Some(ref b) = effective_board {
-                current_task.board_id = Some(b.id.clone());
+        // 1. Explicit override board requested by caller (e.g. active board during user move)
+        if let Some(ref ob) = override_board {
+            if board_has_target(ob) {
+                effective_board = Some(ob.clone());
+                current_task.board_id = Some(ob.id.clone());
             }
-        } else {
-            let current_board_has_target = current_board
-                .as_ref()
-                .map(|b| b.columns.iter().any(|c| stage_id_matches(&c.id, target_stage_id)))
-                .unwrap_or(false);
+        }
 
-            if current_board_has_target {
-                effective_board = current_board;
-            } else {
-                let active_has_target = active_board
-                    .as_ref()
-                    .map(|b| b.columns.iter().any(|c| stage_id_matches(&c.id, target_stage_id)))
-                    .unwrap_or(false);
-
-                if active_has_target {
-                    effective_board = active_board;
-                } else {
-                    let any_with_target = bc.boards.iter().find(|b| {
-                        b.columns.iter().any(|c| stage_id_matches(&c.id, target_stage_id))
-                    }).cloned();
-
-                    if any_with_target.is_some() {
-                        effective_board = any_with_target;
-                    } else {
-                        effective_board = active_board.or_else(|| bc.boards.first().cloned());
-                    }
+        // 2. Task's current board if it contains the target stage (preserves task on its board)
+        if effective_board.is_none() {
+            if let Some(ref cb) = current_board {
+                if board_has_target(cb) {
+                    effective_board = Some(cb.clone());
+                    // Keep current_task.board_id intact!
                 }
+            }
+        }
 
+        // 3. Active board if it contains the target stage
+        if effective_board.is_none() {
+            if let Some(ref ab) = active_board {
+                if board_has_target(ab) {
+                    effective_board = Some(ab.clone());
+                    current_task.board_id = Some(ab.id.clone());
+                }
+            }
+        }
+
+        // 4. Any board that defines the target stage (cross-board pipeline advance)
+        if effective_board.is_none() {
+            let any_with_target = bc.boards.iter().find(|b| board_has_target(b)).cloned();
+            if let Some(ref b) = any_with_target {
+                effective_board = Some(b.clone());
+                current_task.board_id = Some(b.id.clone());
+            } else {
+                effective_board = active_board.or_else(|| bc.boards.first().cloned());
                 if let Some(ref b) = effective_board {
                     current_task.board_id = Some(b.id.clone());
                 } else {
@@ -1568,6 +1572,7 @@ pub async fn move_task_stage(
     target_stage_id: String,
     verdict: Option<String>,
     handover_summary: Option<String>,
+    board_id: Option<String>,
     app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Task, String> {
@@ -1590,7 +1595,18 @@ pub async fn move_task_stage(
         let _ = internal_abort_agent(&root, &task_id, &state, Some(&app_handle)).await;
     }
 
-    internal_move_task_stage(&root, &task_id, &target_stage_id, verdict, None, handover_summary, Some(&app_handle), false).await
+    internal_move_task_stage(
+        &root,
+        &task_id,
+        &target_stage_id,
+        verdict,
+        None,
+        handover_summary,
+        Some(&app_handle),
+        false,
+        board_id,
+    )
+    .await
 }
 
 pub async fn internal_advance_task(
@@ -1666,6 +1682,7 @@ pub async fn internal_advance_task_to_stage(
             Some(summary.to_string()),
             app_handle,
             true, // is_autonomous_advance
+            Some(active_board_id.clone()),
         )
         .await?;
 
@@ -1839,6 +1856,7 @@ pub async fn internal_advance_task_to_stage(
         Some(summary.to_string()),
         app_handle,
         true, // is_autonomous_advance
+        None,
     )
     .await?;
 

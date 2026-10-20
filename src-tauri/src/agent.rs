@@ -2477,6 +2477,7 @@ pub async fn execute_tool(
                 Some(rejection_summary),
                 ctx.app_handle.as_ref(),
                 true, // is_autonomous_advance
+                None,
             )
             .await
             .map_err(|e| anyhow::anyhow!("{}", e))?;

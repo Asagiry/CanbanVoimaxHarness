@@ -5,7 +5,7 @@ import { useDrawerStore } from '../../stores/drawerStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import KanbanColumn from './KanbanColumn';
-import { PipelineColumn, BoardDef } from '../../types';
+import { PipelineColumn, BoardDef, KanbanTask, TaskStatus } from '../../types';
 import { Plus, X, Layout, Pencil, Trash2, Search } from 'lucide-react';
 import CreateBoardModal from './CreateBoardModal';
 import PersonaSelect from '../common/PersonaSelect';
@@ -382,32 +382,45 @@ export default function KanbanBoard() {
       return;
     }
 
-    // Moving between columns with target placement
+    // Moving between columns with target placement:
+    // ZERO INVISIBLE TASKS (§ 2.18 & § 2.22): Immediately update movedTask.columnId
+    // and active boardId so the card renders instantaneously in the target column.
     const destDisplayTasks = getColumnDisplayTasks(destColId);
     const nextTasks = [...tasks];
     const taskPos = nextTasks.findIndex((t) => t.id === draggableId);
     if (taskPos === -1) return;
     const [movedTask] = nextTasks.splice(taskPos, 1);
 
+    const destColDef = columns.find((c) => c.id === destColId);
+    const updatedMovedTask: KanbanTask = {
+      ...movedTask,
+      columnId: destColId,
+      boardId: activeBoardId || movedTask.boardId,
+      persona: destColDef?.persona || movedTask.persona,
+      status: (destColDef?.terminal ? 'done' : destColDef?.persona ? 'running' : 'idle') as TaskStatus,
+      updatedAt: Date.now(),
+      stageEnteredAt: Date.now(),
+    };
+
     if (destIndex < destDisplayTasks.length) {
       const refTask = destDisplayTasks[destIndex];
       const refPos = nextTasks.findIndex((t) => t.id === refTask.id);
       if (refPos !== -1) {
-        nextTasks.splice(refPos, 0, movedTask);
+        nextTasks.splice(refPos, 0, updatedMovedTask);
       } else {
-        nextTasks.push(movedTask);
+        nextTasks.push(updatedMovedTask);
       }
     } else {
       if (destDisplayTasks.length > 0) {
         const lastTask = destDisplayTasks[destDisplayTasks.length - 1];
         const lastPos = nextTasks.findIndex((t) => t.id === lastTask.id);
         if (lastPos !== -1) {
-          nextTasks.splice(lastPos + 1, 0, movedTask);
+          nextTasks.splice(lastPos + 1, 0, updatedMovedTask);
         } else {
-          nextTasks.push(movedTask);
+          nextTasks.push(updatedMovedTask);
         }
       } else {
-        nextTasks.push(movedTask);
+        nextTasks.push(updatedMovedTask);
       }
     }
 
@@ -638,11 +651,17 @@ export default function KanbanBoard() {
   }, [savePipelineConfig]);
 
   // Filter tasks based on activeBoardId and searchQuery:
-  // If a task's boardId is missing or doesn't match any board, fallback to activeBoardId.
-  // ZERO INVISIBLE TASKS: Every task must be visible on the board it belongs to, or on the active board if orphaned.
+  // ZERO INVISIBLE TASKS (§ 2.18): Every task must be visible on the board it belongs to,
+  // or on the active board if orphaned or if its column exists on the active board.
   const currentBoardTasks = tasks.filter((task) => {
-    const hasMatchingBoard = boards.some((b) => b.id === task.boardId);
-    const effectiveBoardId = hasMatchingBoard ? task.boardId : activeBoardId;
+    const matchingBoard = boards.find((b) => b.id === task.boardId);
+    const boardHasCol = matchingBoard?.columns.some((c) => c.id === task.columnId);
+    const activeHasCol = columns.some((c) => c.id === task.columnId);
+    let effectiveBoardId = matchingBoard ? task.boardId : activeBoardId;
+    // Self-heal: If declared board does not have task's column, but active board does, show on active board
+    if (matchingBoard && !boardHasCol && activeHasCol) {
+      effectiveBoardId = activeBoardId;
+    }
     return effectiveBoardId === activeBoardId;
   });
 
