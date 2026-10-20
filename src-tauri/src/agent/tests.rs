@@ -2107,6 +2107,7 @@ line 2 again"
     }
 
     #[tokio::test]
+    #[cfg(windows)]
     async fn test_execute_command_windows_quoting_python() {
         let base = std::path::PathBuf::from("target").join(format!("cvh_cmd_quote_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&base).await.expect("test dirs");

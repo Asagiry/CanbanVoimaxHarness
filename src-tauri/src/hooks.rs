@@ -442,6 +442,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(windows)]
     async fn test_execute_sensor_command_windows_quotes() {
         let res = execute_sensor_command(r#"python -c "print('sensor_ok')""#, ".", Some(Duration::from_secs(10)))
             .await
