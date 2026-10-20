@@ -576,6 +576,11 @@ pub async fn create_task(
             }
         }
     }
+    if let Some(t) = updated_tasks.iter_mut().find(|t| t.id == new_task.id) {
+        t.stage_id = new_task.stage_id.clone();
+        t.status = new_task.status.clone();
+        t.board_id = new_task.board_id.clone();
+    }
     save_tasks_to_disk(&root, &updated_tasks).await?;
     let _ = app_handle.emit("tasks:updated", serde_json::json!({ "tasks": &updated_tasks }));
 
