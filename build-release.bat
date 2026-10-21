@@ -182,32 +182,35 @@ echo CanbanVoimaxHarness local Release build
 echo   root: %CD%
 
 rem Interactive mode selection when no flag is provided
-if "%NO_BUNDLE%"=="" if "%BUNDLES%"=="" (
-  if not "%NO_PAUSE%"=="1" (
-    echo.
-    echo ==============================================================================
-    echo   CanbanVoimaxHarness Release Build Mode
-    echo ==============================================================================
-    echo   [1] БЫСТРАЯ СБОРКА: Только portable .exe (без долгого сжатия NSIS) -^> ~1-2 мин
-    echo   [2] ПОЛНАЯ СБОРКА:  .exe + NSIS setup-инсталлер                    -^> ~5-8 мин
-    echo ==============================================================================
-    set "BUILD_MODE=1"
-    set /p "BUILD_MODE=Выберите режим [1/2] (нажмите Enter для 1): "
-    if "!BUILD_MODE!"=="2" (
-      set "NO_BUNDLE=0"
-      set "BUNDLES=nsis"
-      echo   -^> Выбран режим [2]: Полная сборка с инсталлером NSIS.
-    ) else (
-      set "NO_BUNDLE=1"
-      set "BUNDLES="
-      echo   -^> Выбран режим [1]: Быстрая сборка portable .exe.
-    )
-    echo.
-  ) else (
-    set "NO_BUNDLE=1"
-    set "BUNDLES="
-  )
+if not "%NO_BUNDLE%"=="" goto select_mode_done
+if not "%BUNDLES%"=="" goto select_mode_done
+if "%NO_PAUSE%"=="1" (
+  set "NO_BUNDLE=1"
+  set "BUNDLES="
+  goto select_mode_done
 )
+
+echo.
+echo ==============================================================================
+echo   CanbanVoimaxHarness Release Build Mode
+echo ==============================================================================
+echo   [1] БЫСТРАЯ СБОРКА: Только portable .exe (без долгого сжатия NSIS) : ~1-2 мин
+echo   [2] ПОЛНАЯ СБОРКА:  .exe + NSIS setup-инсталлер                    : ~5-8 мин
+echo ==============================================================================
+set "BUILD_MODE=1"
+set /p "BUILD_MODE=Выберите режим [1/2] (нажмите Enter для 1): "
+if "%BUILD_MODE%"=="2" (
+  set "NO_BUNDLE=0"
+  set "BUNDLES=nsis"
+  echo   Выбран режим [2]: Полная сборка с инсталлером NSIS.
+) else (
+  set "NO_BUNDLE=1"
+  set "BUNDLES="
+  echo   Выбран режим [1]: Быстрая сборка portable .exe.
+)
+echo.
+
+:select_mode_done
 if "%NO_BUNDLE%"=="" (
   if "%BUNDLES%"=="" (
     set "NO_BUNDLE=1"
