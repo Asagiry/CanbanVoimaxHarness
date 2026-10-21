@@ -132,8 +132,23 @@ pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
 
     let modified = heal_tasks(&mut tasks, &boards_cfg);
     if modified {
+        crate::logger::cvh_log(
+            Some(&actual_root),
+            "INFO",
+            "LOAD_TASKS",
+            &format!("Healed tasks against boards config, persisting {} tasks", tasks.len()),
+        );
         let _ = save_tasks_to_disk(&actual_root, &tasks).await;
     }
+
+    let ids: Vec<&str> = tasks.iter().map(|t| t.id.as_str()).collect();
+    crate::logger::cvh_log_with_details(
+        Some(&actual_root),
+        "DEBUG",
+        "LOAD_TASKS",
+        &format!("load_tasks_from_disk: loaded {} tasks from {:?}", tasks.len(), local_tasks_file),
+        Some(&format!("Task IDs: [{}]", ids.join(", "))),
+    );
 
     // Monotonic sequence initialization: ensure persistent sequence is at least max_task_num_on_disk
     let max_on_disk = max_task_num_on_disk(&tasks);
@@ -169,19 +184,41 @@ pub async fn save_tasks_to_disk(repo_root: &Path, tasks: &[Task]) -> Result<(), 
     let backup_file = get_project_tasks_backup_file(&actual_root);
     let backup_res = atomic_write_file(&backup_file, &serialized).await;
 
+    let ids: Vec<&str> = tasks.iter().map(|t| t.id.as_str()).collect();
     match (local_res, backup_res) {
-        (Ok(_), _) => Ok(()),
-        (Err(e), Ok(_)) => {
-            eprintln!(
-                "CVH: Warning - Failed to save tasks to local repo {:?}: {}, but persisted to project backup {:?}",
-                local_tasks_file, e, backup_file
+        (Ok(_), _) => {
+            crate::logger::cvh_log_with_details(
+                Some(&actual_root),
+                "INFO",
+                "SAVE_TASKS",
+                &format!("save_tasks_to_disk: successfully saved {} tasks to {:?}", tasks.len(), local_tasks_file),
+                Some(&format!("Saved IDs: [{}]", ids.join(", "))),
             );
             Ok(())
         }
-        (Err(e1), Err(e2)) => Err(format!(
-            "Failed to save tasks to both local ({}) and backup ({})",
-            e1, e2
-        )),
+        (Err(e), Ok(_)) => {
+            crate::logger::cvh_log_with_details(
+                Some(&actual_root),
+                "WARN",
+                "SAVE_TASKS",
+                &format!(
+                    "save_tasks_to_disk: failed local repo {:?}: {}, but persisted to project backup {:?}",
+                    local_tasks_file, e, backup_file
+                ),
+                Some(&format!("Saved IDs: [{}]", ids.join(", "))),
+            );
+            Ok(())
+        }
+        (Err(e1), Err(e2)) => {
+            let err_msg = format!("Failed to save tasks to both local ({}) and backup ({})", e1, e2);
+            crate::logger::cvh_log(
+                Some(&actual_root),
+                "ERROR",
+                "SAVE_TASKS",
+                &err_msg,
+            );
+            Err(err_msg)
+        }
     }
 }
 
@@ -211,6 +248,14 @@ pub fn stage_id_matches(col_id: &str, target: &str) -> bool {
 pub async fn list_tasks(state: State<'_, AppState>) -> Result<Vec<Task>, String> {
     let root = resolve_actual_repo_root(&state.get_root());
     let tasks = load_tasks_from_disk(&root).await;
+    let ids: Vec<&str> = tasks.iter().map(|t| t.id.as_str()).collect();
+    crate::logger::cvh_log_with_details(
+        Some(&root),
+        "INFO",
+        "LIST_TASKS",
+        &format!("list_tasks command: returning {} tasks for root '{}'", tasks.len(), root.display()),
+        Some(&format!("Task IDs: [{}]", ids.join(", "))),
+    );
     if let Ok(mut guard) = state.tasks.lock() {
         *guard = tasks.clone();
     }
@@ -220,6 +265,14 @@ pub async fn list_tasks(state: State<'_, AppState>) -> Result<Vec<Task>, String>
 #[tauri::command]
 pub async fn save_tasks(tasks: Vec<Task>, state: State<'_, AppState>) -> Result<(), String> {
     let root = resolve_actual_repo_root(&state.get_root());
+    let incoming_ids: Vec<&str> = tasks.iter().map(|t| t.id.as_str()).collect();
+    crate::logger::cvh_log_with_details(
+        Some(&root),
+        "INFO",
+        "SAVE_TASKS",
+        &format!("save_tasks command: received {} tasks from client for root '{}'", tasks.len(), root.display()),
+        Some(&format!("Incoming IDs: [{}]", incoming_ids.join(", "))),
+    );
     let disk_tasks = load_tasks_from_disk(&root).await;
 
     // Defensive reconciliation: prevent stale frontend saves from destroying newly created
@@ -261,12 +314,24 @@ pub async fn save_tasks(tasks: Vec<Task>, state: State<'_, AppState>) -> Result<
     }
     let res = save_tasks_to_disk(&root, &merged_tasks).await;
     match &res {
-        Ok(_) => eprintln!(
-            "CVH [save_tasks]: persisted {} tasks to {:?}",
-            merged_tasks.len(),
-            root.join(".cvh").join("tasks.json")
-        ),
-        Err(e) => eprintln!("CVH [save_tasks]: FAILED to persist {} tasks: {}", merged_tasks.len(), e),
+        Ok(_) => {
+            let merged_ids: Vec<&str> = merged_tasks.iter().map(|t| t.id.as_str()).collect();
+            crate::logger::cvh_log_with_details(
+                Some(&root),
+                "INFO",
+                "SAVE_TASKS",
+                &format!("save_tasks command: successfully persisted {} merged tasks to disk", merged_tasks.len()),
+                Some(&format!("Merged IDs: [{}]", merged_ids.join(", "))),
+            );
+        }
+        Err(e) => {
+            crate::logger::cvh_log(
+                Some(&root),
+                "ERROR",
+                "SAVE_TASKS",
+                &format!("save_tasks command: FAILED to persist {} tasks: {}", merged_tasks.len(), e),
+            );
+        }
     }
     res
 }
@@ -455,6 +520,16 @@ pub async fn create_task(
     state: State<'_, AppState>,
 ) -> Result<Task, String> {
     let root = state.get_root();
+    crate::logger::cvh_log_with_details(
+        Some(&root),
+        "INFO",
+        "CREATE_TASK",
+        &format!(
+            "create_task IPC called: title='{}', stage_id='{}', board_id={:?}, task_id_param={:?}, skip_wt={:?}, model={:?}",
+            title, stage_id, board_id, task_id, skip_worktree, model
+        ),
+        Some(&format!("root='{}'", root.display())),
+    );
     internal_create_task(
         &root,
         title,
@@ -485,6 +560,16 @@ pub async fn internal_create_task(
 ) -> Result<Task, String> {
     let actual_root = resolve_actual_repo_root(root);
     let root = &actual_root;
+    crate::logger::cvh_log_with_details(
+        Some(root),
+        "INFO",
+        "CREATE_TASK",
+        &format!(
+            "internal_create_task starting: title='{}', stage_id='{}', board_id={:?}, task_id_param={:?}",
+            title, stage_id, board_id, task_id
+        ),
+        Some(&format!("actual_root='{}'", root.display())),
+    );
     let mut tasks = load_tasks_from_disk(root).await;
 
     let effective_board_id = match board_id.as_deref() {
@@ -505,6 +590,12 @@ pub async fn internal_create_task(
 
     // Generate task ID — use explicit task_id (syncing sequence) or allocate monotonic ID
     let task_id = resolve_or_allocate_task_id(root, &tasks, task_id.as_deref()).await;
+    crate::logger::cvh_log(
+        Some(root),
+        "INFO",
+        "CREATE_TASK",
+        &format!("Resolved task_id='{}' for task title='{}'", task_id, title),
+    );
     let now = Utc::now().timestamp_millis();
 
     let mut new_task = Task {
@@ -550,7 +641,21 @@ pub async fn internal_create_task(
     } else if !tasks.iter().any(|t| t.id == new_task.id) {
         tasks.push(new_task.clone());
     }
-    save_tasks_to_disk(root, &tasks).await?;
+    if let Err(e) = save_tasks_to_disk(root, &tasks).await {
+        crate::logger::cvh_log(
+            Some(root),
+            "ERROR",
+            "CREATE_TASK",
+            &format!("Failed initial save_tasks_to_disk for task '{}': {}", new_task.id, e),
+        );
+        return Err(e);
+    }
+    crate::logger::cvh_log(
+        Some(root),
+        "INFO",
+        "CREATE_TASK",
+        &format!("Initial task '{}' successfully registered in state and saved to disk (total: {})", new_task.id, tasks.len()),
+    );
     if let Some(app) = app_handle {
         let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
     }
@@ -662,7 +767,25 @@ pub async fn internal_create_task(
         t.status = new_task.status.clone();
         t.board_id = new_task.board_id.clone();
     }
-    save_tasks_to_disk(root, &updated_tasks).await?;
+    if let Err(e) = save_tasks_to_disk(root, &updated_tasks).await {
+        crate::logger::cvh_log(
+            Some(root),
+            "ERROR",
+            "CREATE_TASK",
+            &format!("Failed final save_tasks_to_disk for task '{}': {}", new_task.id, e),
+        );
+        return Err(e);
+    }
+    crate::logger::cvh_log_with_details(
+        Some(root),
+        "INFO",
+        "CREATE_TASK",
+        &format!("Successfully created and persisted task '{}'", new_task.id),
+        Some(&format!(
+            "title='{}', stage='{}', board={:?}, worktree={:?}, branch={:?}",
+            new_task.title, new_task.stage_id, new_task.board_id, new_task.worktree_path, new_task.branch
+        )),
+    );
     if let Some(app) = app_handle {
         let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &updated_tasks }));
     }
@@ -1262,11 +1385,27 @@ pub async fn internal_move_task_stage(
 ) -> Result<Task, String> {
     let actual_root = resolve_actual_repo_root(root);
     let root = &actual_root;
+    crate::logger::cvh_log_with_details(
+        Some(root),
+        "INFO",
+        "MOVE_STAGE",
+        &format!(
+            "internal_move_task_stage: task_id='{}', target_stage='{}', board_override={:?}, verdict={:?}, auto_adv={}",
+            task_id, target_stage_id, board_id_override, verdict, is_autonomous_advance
+        ),
+        Some(&format!("actual_root='{}'", root.display())),
+    );
     let mut tasks = load_tasks_from_disk(root).await;
 
     // In-memory fallback: if task was just created and not yet on disk,
     // or if memory has tasks not yet on disk, retrieve from AppState (§ 2.22).
     if !tasks.iter().any(|t| task_id_matches(&t.id, task_id)) {
+        crate::logger::cvh_log(
+            Some(root),
+            "WARN",
+            "MOVE_STAGE",
+            &format!("Task '{}' not found in {} disk tasks. Checking in-memory AppState tasks...", task_id, tasks.len()),
+        );
         if let Some(app) = app_handle {
             if let Some(state) = app.try_state::<AppState>() {
                 if let Ok(guard) = state.tasks.lock() {
@@ -1280,10 +1419,21 @@ pub async fn internal_move_task_stage(
         }
     }
 
-    let task_idx = tasks
-        .iter()
-        .position(|t| task_id_matches(&t.id, task_id))
-        .ok_or_else(|| format!("Task {} not found", task_id))?;
+    let task_idx = match tasks.iter().position(|t| task_id_matches(&t.id, task_id)) {
+        Some(idx) => idx,
+        None => {
+            let disk_ids: Vec<String> = tasks.iter().map(|t| t.id.clone()).collect();
+            let err_msg = format!("Task {} not found", task_id);
+            crate::logger::cvh_log_with_details(
+                Some(root),
+                "ERROR",
+                "MOVE_STAGE",
+                &format!("REJECTED move_task_stage: {}", err_msg),
+                Some(&format!("Available tasks on disk/memory (count: {}): [{}]", disk_ids.len(), disk_ids.join(", "))),
+            );
+            return Err(err_msg);
+        }
+    };
 
     let current_task = &mut tasks[task_idx];
 
@@ -1513,9 +1663,14 @@ pub async fn internal_move_task_stage(
         };
 
         if is_initial_move || wt_empty_or_new {
-            println!(
-                "CVH [gatekeeper]: skipping gatekeeper sensor '{}' for initial transition of task {} from '{}' to '{}' (initial move / empty worktree)",
-                sensor_cmd, current_task.id, source_stage_id, canonical_target_stage_id
+            crate::logger::cvh_log(
+                Some(root),
+                "INFO",
+                "GATEKEEPER",
+                &format!(
+                    "Skipping gatekeeper sensor '{}' for initial transition of task {} from '{}' to '{}' (initial move / empty worktree)",
+                    sensor_cmd, current_task.id, source_stage_id, canonical_target_stage_id
+                ),
             );
         } else {
             let wt_path = current_task
@@ -1524,6 +1679,12 @@ pub async fn internal_move_task_stage(
                 .map(PathBuf::from)
                 .unwrap_or_else(|| root.to_path_buf());
 
+            crate::logger::cvh_log(
+                Some(root),
+                "INFO",
+                "GATEKEEPER",
+                &format!("Executing gatekeeper sensor '{}' for task '{}' in {:?}", sensor_cmd, current_task.id, wt_path),
+            );
             let sensor_res = execute_sensor_command(sensor_cmd, &wt_path, None)
                 .await
                 .map_err(|e| format!("Sensor execution failed: {}", e))?;
@@ -1541,11 +1702,24 @@ pub async fn internal_move_task_stage(
                 if details.is_empty() {
                     details = "\n(No stdout/stderr produced by sensor command)".to_string();
                 }
+                crate::logger::cvh_log_with_details(
+                    Some(root),
+                    "WARN",
+                    "GATEKEEPER",
+                    &format!("Gatekeeper sensor '{}' REJECTED transition for task '{}' (exit code: {:?})", sensor_cmd, current_task.id, sensor_res.exit_code),
+                    Some(&details),
+                );
                 return Err(format!(
                     "Gatekeeper Sensor '{}' rejected transition (Exit code: {:?}):{}",
                     sensor_cmd, sensor_res.exit_code, details
                 ));
             }
+            crate::logger::cvh_log(
+                Some(root),
+                "INFO",
+                "GATEKEEPER",
+                &format!("Gatekeeper sensor '{}' PASSED for task '{}'", sensor_cmd, current_task.id),
+            );
         }
     }
 
@@ -1687,7 +1861,25 @@ pub async fn internal_move_task_stage(
             }
         }
     }
-    save_tasks_to_disk(root, &tasks).await?;
+    if let Err(e) = save_tasks_to_disk(root, &tasks).await {
+        crate::logger::cvh_log(
+            Some(root),
+            "ERROR",
+            "MOVE_STAGE",
+            &format!("Failed to save tasks to disk after moving task '{}': {}", task_id, e),
+        );
+        return Err(e);
+    }
+    crate::logger::cvh_log_with_details(
+        Some(root),
+        "INFO",
+        "MOVE_STAGE",
+        &format!(
+            "Task '{}' stage successfully updated from '{}' to '{}' (status: {:?}, board: {:?})",
+            task_id, old_stage, canonical_target_stage_id, updated.status, updated.board_id
+        ),
+        Some(&format!("worktree={:?}, branch={:?}", updated.worktree_path, updated.branch)),
+    );
 
     if let Some(app) = app_handle {
         let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
@@ -1731,6 +1923,16 @@ pub async fn move_task_stage(
     state: State<'_, AppState>,
 ) -> Result<Task, String> {
     let root = state.get_root();
+    crate::logger::cvh_log_with_details(
+        Some(&root),
+        "INFO",
+        "MOVE_STAGE",
+        &format!(
+            "move_task_stage IPC called: task_id='{}', target_stage='{}', board_id={:?}, verdict={:?}",
+            task_id, target_stage_id, board_id, verdict
+        ),
+        Some(&format!("root='{}'", root.display())),
+    );
     let is_backlog = stage_id_matches(&target_stage_id, "backlog");
     let is_running_or_active = {
         if let Ok(map) = state.active_agents.lock() {
@@ -2118,6 +2320,14 @@ pub async fn run_agent(
     prompt: Option<String>,
     app_handle: AppHandle,
 ) -> Result<String, String> {
+    let root = app_handle.state::<AppState>().get_root();
+    crate::logger::cvh_log_with_details(
+        Some(&root),
+        "INFO",
+        "RUN_AGENT",
+        &format!("run_agent IPC called for task_id='{}', prompt_len={}", task_id, prompt.as_ref().map(|p| p.len()).unwrap_or(0)),
+        Some(&format!("root='{}'", root.display())),
+    );
     {
         let is_running = {
             let state = app_handle.state::<AppState>();
@@ -2145,12 +2355,15 @@ pub async fn run_agent(
             is_active
         };
         if is_running {
-            eprintln!("CVH [run_agent]: Task {} already has an active agent loop, rejecting duplicate run", task_id);
+            crate::logger::cvh_log(
+                Some(&root),
+                "WARN",
+                "RUN_AGENT",
+                &format!("run_agent: Task '{}' already has an active agent loop, rejecting duplicate run", task_id),
+            );
             return Ok(format!("Agent already running for task {}", task_id));
         }
     }
-
-    let root = app_handle.state::<AppState>().get_root();
 
     // Check disk and in-memory state: merge them so in-memory tasks are never lost (§ 2.22).
     let mut tasks_to_use = load_tasks_from_disk(&root).await;
@@ -2177,15 +2390,16 @@ pub async fn run_agent(
         }
         None => {
             let mem_count = app_handle.state::<AppState>().tasks.lock().map(|g| g.len()).unwrap_or(0);
-            eprintln!(
-                "CVH [run_agent]: Task {} not found (in-memory tasks: {}, disk tasks in {:?}: {}, root: {:?})",
-                task_id,
-                mem_count,
-                root.join(".cvh").join("tasks.json"),
-                tasks_to_use.len(),
-                root
+            let available_ids: Vec<String> = tasks_to_use.iter().map(|t| t.id.clone()).collect();
+            let err_msg = format!("Task {} not found", task_id);
+            crate::logger::cvh_log_with_details(
+                Some(&root),
+                "ERROR",
+                "RUN_AGENT",
+                &format!("run_agent REJECTED: Task '{}' not found (in-memory: {}, disk: {})", task_id, mem_count, tasks_to_use.len()),
+                Some(&format!("Available tasks in {:?}: [{}]", root.join(".cvh").join("tasks.json"), available_ids.join(", "))),
             );
-            return Err(format!("Task {} not found", task_id));
+            return Err(err_msg);
         }
     };
 
@@ -2391,7 +2605,7 @@ pub async fn run_agent(
     // Persist status "running" to tasks.json and update state.tasks
     {
         let mut all_tasks = load_tasks_from_disk(&root).await;
-        if let Some(t) = all_tasks.iter_mut().find(|t| t.id == task_id) {
+        if let Some(t) = all_tasks.iter_mut().find(|t| task_id_matches(&t.id, &task_id)) {
             t.status = Some("running".to_string());
             t.updated_at = Utc::now().timestamp_millis();
             let _ = save_tasks_to_disk(&root, &all_tasks).await;
@@ -2400,6 +2614,17 @@ pub async fn run_agent(
             *guard = all_tasks;
         }
     }
+
+    crate::logger::cvh_log_with_details(
+        Some(&root),
+        "INFO",
+        "RUN_AGENT",
+        &format!("run_agent: launching ReAct loop for task '{}'", task.id),
+        Some(&format!(
+            "persona='{}', model='{}', base_url='{}', worktree='{}', steer_prompt={:?}",
+            persona_role, model, base_url, worktree_dir.display(), steer_prompt
+        )),
+    );
 
     // Emit live status: running
     let _ = app_handle.emit(
@@ -2599,8 +2824,15 @@ pub async fn run_agent(
 
         let result = run_agent_loop(agent_cfg, abort_flag, event_sink).await;
 
-        match result {
-            Ok(_final_response) => {
+        match &result {
+            Ok(final_response) => {
+                crate::logger::cvh_log_with_details(
+                    Some(&root_task),
+                    "INFO",
+                    "RUN_AGENT",
+                    &format!("run_agent: agent loop finished successfully for task '{}'", tid),
+                    Some(&format!("Final response length: {} chars", final_response.len())),
+                );
                 let _ = app.emit(
                     "agent:status",
                     serde_json::json!({ "taskId": tid, "status": "finished" }),
@@ -2671,6 +2903,12 @@ pub async fn run_agent(
                 let is_aborted = abort_flag_task.load(Ordering::SeqCst);
                 let err_str = err.to_string();
                 if is_aborted {
+                    crate::logger::cvh_log(
+                        Some(&root_task),
+                        "INFO",
+                        "RUN_AGENT",
+                        &format!("run_agent: agent loop ABORTED by user for task '{}'", tid),
+                    );
                     eprintln!("CVH [run_agent]: Agent execution aborted by user for task {}", tid);
                     let _ = app.emit(
                         "agent:status",
@@ -2729,6 +2967,12 @@ pub async fn run_agent(
                 if let Some(entry) = map.get(&tid) {
                     if Arc::ptr_eq(&entry.abort_flag, &abort_flag_task) {
                         map.remove(&tid);
+                        crate::logger::cvh_log(
+                            Some(&root_task),
+                            "INFO",
+                            "RUN_AGENT",
+                            &format!("run_agent: active agent handle removed for task '{}'", tid),
+                        );
                     }
                 }
             }

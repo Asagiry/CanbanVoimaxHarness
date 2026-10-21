@@ -6,6 +6,7 @@ pub mod error;
 pub mod git;
 pub mod hooks;
 pub mod llm;
+pub mod logger;
 pub mod udf;
 
 pub use error::AppError;
@@ -74,6 +75,7 @@ pub fn run() {
             retry_subagent,
             clear_task_dialog,
             log_ui_error,
+            log_event,
             create_task,
             create_subtask,
             update_task,

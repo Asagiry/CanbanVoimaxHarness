@@ -229,6 +229,12 @@ pub async fn get_task_git_diff(
     state: State<'_, AppState>,
 ) -> Result<TaskGitDiff, String> {
     let root = state.get_root();
+    crate::logger::cvh_log(
+        Some(&root),
+        "DEBUG",
+        "GIT_DIFF",
+        &format!("get_task_git_diff called for task_id='{}', root='{}'", task_id, root.display()),
+    );
 
     let task_opt = {
         if let Ok(guard) = state.tasks.lock() {
@@ -242,10 +248,18 @@ pub async fn get_task_git_diff(
         Some(t) => t,
         None => {
             let disk_tasks = load_tasks_from_disk(&root).await;
-            disk_tasks
-                .into_iter()
-                .find(|t| crate::commands::task_id_matches(&t.id, &task_id))
-                .ok_or_else(|| format!("Task {} not found", task_id))?
+            match disk_tasks.into_iter().find(|t| crate::commands::task_id_matches(&t.id, &task_id)) {
+                Some(t) => t,
+                None => {
+                    crate::logger::cvh_log(
+                        Some(&root),
+                        "WARN",
+                        "GIT_DIFF",
+                        &format!("get_task_git_diff: task '{}' not found in memory or disk", task_id),
+                    );
+                    return Err(format!("Task {} not found", task_id));
+                }
+            }
         }
     };
 
@@ -426,6 +440,13 @@ pub async fn get_task_git_diff(
     }
 
     files.sort_by(|a, b| a.path.cmp(&b.path));
+
+    crate::logger::cvh_log(
+        Some(&root),
+        "DEBUG",
+        "GIT_DIFF",
+        &format!("get_task_git_diff: successfully generated diff for task '{}' ({} files, branch: '{}')", task_id, files.len(), branch),
+    );
 
     Ok(TaskGitDiff {
         files,

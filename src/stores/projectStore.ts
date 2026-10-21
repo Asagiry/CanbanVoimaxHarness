@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { ProjectInfo } from '../types';
 import { useBoardStore } from './boardStore';
 import { useCortexStore } from './cortexStore';
+import { logEvent } from '../lib/logger';
 
 interface ProjectState {
   activeProject: ProjectInfo;
@@ -67,6 +68,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     );
     if (!found) return;
 
+    logEvent('INFO', 'PROJECT_STORE', `switchProject: switching to project "${projectId}"`, found.rootPath);
     set({ activeProject: found });
 
     if (found.rootPath) {
@@ -186,6 +188,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const cleanPath = path.trim();
     if (!cleanPath) return;
 
+    logEvent('INFO', 'PROJECT_STORE', `setActiveProjectByPath: requested path "${cleanPath}"`);
+
     const name = cleanPath.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'Project';
     const id = name.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
 
@@ -218,6 +222,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       availableProjects: updatedProjects,
     });
     persistStoredProjects(updatedProjects);
+    logEvent('INFO', 'PROJECT_STORE', `setActiveProjectByPath: project active "${proj.name}" (${proj.rootPath})`);
 
     // When setting active project by path, reload board, tasks, and cortex agents
     const board = useBoardStore.getState();
