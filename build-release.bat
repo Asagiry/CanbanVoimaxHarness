@@ -181,6 +181,41 @@ set "INST_DIR=Release\Windows\installer"
 echo CanbanVoimaxHarness local Release build
 echo   root: %CD%
 
+rem Interactive mode selection when no flag is provided
+if "%NO_BUNDLE%"=="" if "%BUNDLES%"=="" (
+  if not "%NO_PAUSE%"=="1" (
+    echo.
+    echo ==============================================================================
+    echo   CanbanVoimaxHarness Release Build Mode
+    echo ==============================================================================
+    echo   [1] БЫСТРАЯ СБОРКА: Только portable .exe (без долгого сжатия NSIS) -^> ~1-2 мин
+    echo   [2] ПОЛНАЯ СБОРКА:  .exe + NSIS setup-инсталлер                    -^> ~5-8 мин
+    echo ==============================================================================
+    set "BUILD_MODE=1"
+    set /p "BUILD_MODE=Выберите режим [1/2] (нажмите Enter для 1): "
+    if "!BUILD_MODE!"=="2" (
+      set "NO_BUNDLE=0"
+      set "BUNDLES=nsis"
+      echo   -^> Выбран режим [2]: Полная сборка с инсталлером NSIS.
+    ) else (
+      set "NO_BUNDLE=1"
+      set "BUNDLES="
+      echo   -^> Выбран режим [1]: Быстрая сборка portable .exe.
+    )
+    echo.
+  ) else (
+    set "NO_BUNDLE=1"
+    set "BUNDLES="
+  )
+)
+if "%NO_BUNDLE%"=="" (
+  if "%BUNDLES%"=="" (
+    set "NO_BUNDLE=1"
+  ) else (
+    set "NO_BUNDLE=0"
+  )
+)
+
 rem Set local short temporary directory to avoid path length and permission issues
 if not exist "src-tauri\target\tmp" mkdir "src-tauri\target\tmp"
 set "TMP=%CD%\src-tauri\target\tmp"
@@ -292,28 +327,17 @@ if "%TARGET%"=="" (
     )
   )
 )
-rem Fast build by default (portable exe only, skips slow NSIS compression)
-if "%BUNDLES%"=="" (
-  if not "%NO_BUNDLE%"=="0" (
-    set "NO_BUNDLE=1"
-    set "BUNDLES=none"
-  ) else (
-    set "BUNDLES=nsis"
-  )
-) else if "%BUNDLES%"=="none" (
-  set "NO_BUNDLE=1"
-) else (
-  set "NO_BUNDLE=0"
-)
-
 if "%TARGET%"=="" (
   echo   target: host default
 ) else (
   echo   target: %TARGET%
 )
-echo   bundles: %BUNDLES%
+if "!NO_BUNDLE!"=="1" (
+  echo   mode: FAST build (portable exe only, --no-bundle)
+) else (
+  echo   mode: FULL build with installer (bundles: %BUNDLES%)
+)
 echo.
-
 echo [2/5] Installing frontend dependencies...
 if "%SKIP_INSTALL%"=="1" goto skip_install_flag
 if exist "node_modules" goto skip_install_exists
@@ -430,8 +454,11 @@ set "TEMP_TAURI_CONFIG=%TEMP%\tauri-skip-build-%RANDOM%.json"
 echo {"build":{"beforeBuildCommand":""}} > "!TEMP_TAURI_CONFIG!"
 set "BUILD_CMD=pnpm tauri build --config "!TEMP_TAURI_CONFIG!""
 if not "%TARGET%"=="" set "BUILD_CMD=!BUILD_CMD! --target %TARGET%"
-if not "%BUNDLES%"=="" set "BUILD_CMD=!BUILD_CMD! --bundles %BUNDLES%"
-
+if "!NO_BUNDLE!"=="1" (
+  set "BUILD_CMD=!BUILD_CMD! --no-bundle"
+) else if not "%BUNDLES%"=="" (
+  set "BUILD_CMD=!BUILD_CMD! --bundles %BUNDLES%"
+)
 call !BUILD_CMD!
 set "BUILD_ERR=!errorlevel!"
 if exist "!TEMP_TAURI_CONFIG!" del /q "!TEMP_TAURI_CONFIG!" >nul 2>nul
