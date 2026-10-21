@@ -235,8 +235,8 @@ pub fn get_app_config_dir() -> PathBuf {
     }
 }
 
-/// Checks if a directory is a build, compiler, distribution, or runtime dependency folder
-/// (`bin`, `release`, `debug`, `target`, `dist`, `node_modules`).
+/// Checks if a directory is a build, compiler, distribution, installer, or runtime dependency folder
+/// (`bin`, `release`, `debug`, `target`, `dist`, `node_modules`, `installer`).
 /// Such directories must NEVER be treated as project roots.
 pub fn is_binary_or_target_dir(path: &Path) -> bool {
     let path_str = path.to_string_lossy();
@@ -247,16 +247,19 @@ pub fn is_binary_or_target_dir(path: &Path) -> bool {
         let lower = file_name.to_lowercase();
         if matches!(
             lower.as_str(),
-            "bin" | "release" | "debug" | "target" | "dist" | "node_modules"
+            "bin" | "release" | "debug" | "target" | "dist" | "node_modules" | "installer"
         ) {
             return true;
         }
     }
-    // Also inspect path components to catch paths like .../target/debug or .../node_modules/xyz
+    // Also inspect path components to catch paths inside Release, bin, dist, installer, or debug
     for comp in path.components() {
         if let std::path::Component::Normal(c) = comp {
             let s = c.to_string_lossy().to_lowercase();
-            if s == "target" || s == "node_modules" {
+            if matches!(
+                s.as_str(),
+                "release" | "bin" | "debug" | "dist" | "installer"
+            ) {
                 return true;
             }
         }
@@ -272,32 +275,41 @@ pub fn is_app_own_directory(path: &Path) -> bool {
     if path_str.trim().is_empty() {
         return false;
     }
-    for p in path.ancestors() {
-        if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
-            if name.eq_ignore_ascii_case("CanbanVoimaxHarness") {
+    // Check if the current running executable is inside or identical to this path
+    if let Ok(current_exe) = std::env::current_exe() {
+        if let Some(exe_dir) = current_exe.parent() {
+            if path == exe_dir || path.starts_with(exe_dir) {
                 return true;
             }
         }
-        let tauri_conf = p.join("src-tauri").join("tauri.conf.json");
-        if tauri_conf.exists() {
-            if let Ok(content) = std::fs::read_to_string(&tauri_conf) {
-                if content.contains("\"com.voimax.cvh\"") || content.contains("\"CanbanVoimaxHarness\"") {
-                    return true;
-                }
-            }
+    }
+    // Check if path is named CanbanVoimaxHarness or contains the app artifacts directly
+    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+        if name.eq_ignore_ascii_case("CanbanVoimaxHarness") {
+            return true;
         }
-        let pkg_json = p.join("package.json");
-        if pkg_json.exists() {
-            if let Ok(content) = std::fs::read_to_string(&pkg_json) {
-                if content.contains("\"canban-voimax-harness\"") || content.contains("\"CanbanVoimaxHarness\"") {
-                    return true;
-                }
+    }
+    let tauri_conf = path.join("src-tauri").join("tauri.conf.json");
+    if tauri_conf.exists() {
+        if let Ok(content) = std::fs::read_to_string(&tauri_conf) {
+            if content.contains("\"com.voimax.cvh\"") || content.contains("\"CanbanVoimaxHarness\"") {
+                return true;
             }
         }
     }
+    let pkg_json = path.join("package.json");
+    if pkg_json.exists() {
+        if let Ok(content) = std::fs::read_to_string(&pkg_json) {
+            if content.contains("\"canban-voimax-harness\"") || content.contains("\"CanbanVoimaxHarness\"") {
+                return true;
+            }
+        }
+    }
+    if path.join("canban-voimax-harness.exe").exists() {
+        return true;
+    }
     false
 }
-
 pub fn discover_project_root() -> PathBuf {
     let root = discover_project_root_raw();
     if !root.as_os_str().is_empty() && root.exists() && !is_binary_or_target_dir(&root) && !is_app_own_directory(&root) {
@@ -411,15 +423,19 @@ fn discover_project_root_raw() -> PathBuf {
 /// Resolves the actual project root containing `.cvh` when given either the workspace root
 /// or an isolated git worktree directory (§ 2.3 & § 2.23).
 pub fn resolve_actual_repo_root(path: &Path) -> PathBuf {
-    if path.as_os_str().is_empty() {
+    if path.as_os_str().is_empty() || is_binary_or_target_dir(path) || is_app_own_directory(path) {
         return PathBuf::new();
     }
-    if !is_binary_or_target_dir(path) && path.join(".cvh").exists() {
+    if path.join(".cvh").exists() {
         return path.to_path_buf();
     }
-    // 1. Traverse ancestors looking for .cvh (skipping binary/target dirs)
+    // 1. Traverse ancestors looking for .cvh (skipping binary/target dirs and app own codebase)
     for ancestor in path.ancestors() {
-        if ancestor != path && !is_binary_or_target_dir(ancestor) && ancestor.join(".cvh").exists() {
+        if ancestor != path
+            && !is_binary_or_target_dir(ancestor)
+            && !is_app_own_directory(ancestor)
+            && ancestor.join(".cvh").exists()
+        {
             return ancestor.to_path_buf();
         }
     }
@@ -436,7 +452,10 @@ pub fn resolve_actual_repo_root(path: &Path) -> PathBuf {
                         raw_path
                     };
                     for ancestor in gitdir_path.ancestors() {
-                        if !is_binary_or_target_dir(ancestor) && ancestor.join(".cvh").exists() {
+                        if !is_binary_or_target_dir(ancestor)
+                            && !is_app_own_directory(ancestor)
+                            && ancestor.join(".cvh").exists()
+                        {
                             return ancestor.to_path_buf();
                         }
                     }
@@ -444,7 +463,7 @@ pub fn resolve_actual_repo_root(path: &Path) -> PathBuf {
             }
         }
     }
-    if is_binary_or_target_dir(path) {
+    if is_binary_or_target_dir(path) || is_app_own_directory(path) {
         PathBuf::new()
     } else {
         path.to_path_buf()
@@ -1386,6 +1405,15 @@ pub async fn ensure_cvh_dev_scaffold(repo_root: &Path) -> Result<(), anyhow::Err
 /// `pipeline.json` holds only `backlog` (no persona, first) + `ready`
 /// (terminal, last); the first agent is created by the user via UI.
 pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
+    if repo_root.as_os_str().is_empty() {
+        return Err(anyhow::anyhow!("Cannot scaffold .cvh in an empty project root path"));
+    }
+    if !cfg!(test) && (is_binary_or_target_dir(repo_root) || is_app_own_directory(repo_root)) {
+        return Err(anyhow::anyhow!(
+            "Refusing to scaffold .cvh in forbidden or binary/target/app directory: {:?}",
+            repo_root
+        ));
+    }
     let cvh_dir = repo_root.join(".cvh");
     let agents_dir = cvh_dir.join("agents");
     let dialogs_dir = cvh_dir.join("dialogs");
@@ -2894,6 +2922,49 @@ mod tests {
         assert!(cvh.join("pipeline.json").is_file());
 
         let _ = tokio::fs::remove_dir_all(&base_dir).await;
+    }
+
+    #[test]
+    fn test_is_binary_or_target_dir_protection() {
+        // Must reject Release, Release/Windows, Release/Windows/bin, Release/Windows/installer
+        assert!(is_binary_or_target_dir(Path::new("Release")));
+        assert!(is_binary_or_target_dir(Path::new("release")));
+        assert!(is_binary_or_target_dir(Path::new("Release/Windows")));
+        assert!(is_binary_or_target_dir(Path::new("Release/Windows/bin")));
+        assert!(is_binary_or_target_dir(Path::new("Release/Windows/installer")));
+        assert!(is_binary_or_target_dir(Path::new(r"Release\Windows\bin")));
+        assert!(is_binary_or_target_dir(Path::new(r"Release\Windows\installer")));
+        assert!(is_binary_or_target_dir(Path::new(r"C:\Users\VibeCode\CanbanVoimaxHarness\Release\Windows\bin")));
+        assert!(is_binary_or_target_dir(Path::new(r"C:\Users\VibeCode\CanbanVoimaxHarness\Release\Windows\installer")));
+
+        // Standard build and distribution dirs
+        assert!(is_binary_or_target_dir(Path::new("target")));
+        assert!(is_binary_or_target_dir(Path::new("target/debug")));
+        assert!(is_binary_or_target_dir(Path::new("dist")));
+        assert!(is_binary_or_target_dir(Path::new("node_modules")));
+
+        // Valid user project paths must NOT be rejected
+        assert!(!is_binary_or_target_dir(Path::new(r"C:\projects\my-cool-app")));
+        assert!(!is_binary_or_target_dir(Path::new("src")));
+    }
+
+    #[test]
+    fn test_is_app_own_directory_protection() {
+        assert!(is_app_own_directory(Path::new(r"C:\Users\VibeCode\CanbanVoimaxHarness")));
+        assert!(is_app_own_directory(Path::new(r"C:\Users\VibeCode\CanbanVoimaxHarness\Release\Windows\bin")));
+        assert!(is_app_own_directory(Path::new("CanbanVoimaxHarness")));
+
+        // Normal user project must not be app own directory
+        assert!(!is_app_own_directory(Path::new(r"C:\projects\web-dashboard")));
+    }
+
+    #[test]
+    fn test_resolve_actual_repo_root_rejects_forbidden_dirs() {
+        assert_eq!(resolve_actual_repo_root(Path::new("")), PathBuf::new());
+        assert_eq!(resolve_actual_repo_root(Path::new("Release/Windows/bin")), PathBuf::new());
+        assert_eq!(resolve_actual_repo_root(Path::new("Release/Windows/installer")), PathBuf::new());
+        assert_eq!(resolve_actual_repo_root(Path::new(r"C:\Users\VibeCode\CanbanVoimaxHarness")), PathBuf::new());
+        assert_eq!(resolve_actual_repo_root(Path::new(r"C:\Users\VibeCode\CanbanVoimaxHarness\Release\Windows\bin")), PathBuf::new());
     }
 }
 

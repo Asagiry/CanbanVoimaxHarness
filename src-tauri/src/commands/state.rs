@@ -49,6 +49,12 @@ impl AppState {
     }
 
     pub fn set_root(&self, new_root: PathBuf) -> Result<(), String> {
+        if crate::config::is_binary_or_target_dir(&new_root) {
+            return Err(format!("Cannot set binary or build directory as project root: {:?}", new_root));
+        }
+        if crate::config::is_app_own_directory(&new_root) {
+            return Err(format!("Cannot set application codebase directory as project root: {:?}", new_root));
+        }
         let mut guard = self
             .repo_root
             .write()

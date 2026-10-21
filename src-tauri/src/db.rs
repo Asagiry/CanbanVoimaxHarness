@@ -72,6 +72,12 @@ fn default_entry_id() -> String {
 
 /// Initializes SQLite database at <root>/.cvh/harness.db and creates tables and indexes.
 pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
+    if root.as_os_str().is_empty() {
+        return Err(rusqlite::Error::InvalidPath(root.to_path_buf()));
+    }
+    if !cfg!(test) && (crate::config::is_binary_or_target_dir(root) || crate::config::is_app_own_directory(root)) {
+        return Err(rusqlite::Error::InvalidPath(root.to_path_buf()));
+    }
     let db_dir = root.join(".cvh");
     if !db_dir.exists() {
         let _ = std::fs::create_dir_all(&db_dir);

@@ -13,8 +13,20 @@ const MAX_LOG_SIZE_BYTES: u64 = 10 * 1024 * 1024; // 10 MB per file
 
 /// Determines the primary log directory and file path for the given repo root.
 fn get_primary_log_path(repo_root: &Path) -> PathBuf {
+    if repo_root.as_os_str().is_empty() {
+        return get_fallback_log_path();
+    }
     let actual_root = resolve_actual_repo_root(repo_root);
-    actual_root.join(".cvh").join("logs").join("cvh.log")
+    let target = if !actual_root.as_os_str().is_empty() {
+        actual_root
+    } else {
+        repo_root.to_path_buf()
+    };
+    if target.as_os_str().is_empty() || crate::config::is_binary_or_target_dir(&target) || crate::config::is_app_own_directory(&target) {
+        get_fallback_log_path()
+    } else {
+        target.join(".cvh").join("logs").join("cvh.log")
+    }
 }
 
 /// Fallback log path in %LOCALAPPDATA%/com.voimax.cvh/logs/cvh.log

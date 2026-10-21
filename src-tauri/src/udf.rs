@@ -11,14 +11,26 @@ static PROBE_COUNTER: AtomicU64 = AtomicU64::new(1);
 /// or hung msedgewebview2.exe) or unwritable, it is rejected and an alternative fallback folder
 /// is selected.
 ///
-/// Returns the path to the verified healthy and usable UDF directory.
+/// Under NO circumstances may the UDF be created at a relative path or inside a '.cvh'
+/// project folder or application release/binary directory.
+///
+/// Returns the path to the verified healthy, absolute, and usable UDF directory.
 pub fn resolve_and_prepare_webview2_udf() -> PathBuf {
     #[cfg(target_os = "windows")]
     {
-        // 1. If an explicit environment variable was already provided and is usable, honor it.
+        // Opportunistically clean up any legacy rogue .cvh/webview_data in current dir or exe dir if unheld
+        cleanup_rogue_cvh_dir(Path::new(".cvh"));
+        if let Ok(current_exe) = std::env::current_exe() {
+            if let Some(exe_dir) = current_exe.parent() {
+                cleanup_rogue_cvh_dir(&exe_dir.join(".cvh"));
+            }
+        }
+
+        // 1. If an explicit environment variable was already provided and is usable, honor it
+        // provided it is absolute and strictly outside any .cvh or binary directory.
         if let Ok(explicit) = std::env::var("WEBVIEW2_USER_DATA_FOLDER") {
             let p = PathBuf::from(explicit);
-            if is_udf_usable(&p) {
+            if p.is_absolute() && is_udf_usable(&p) {
                 clean_unheld_stale_locks(&p);
                 return p;
             }
@@ -42,12 +54,16 @@ pub fn resolve_and_prepare_webview2_udf() -> PathBuf {
         if let Ok(temp) = std::env::var("TEMP") {
             let temp_base = PathBuf::from(&temp).join("com.voimax.cvh");
             candidates.push(temp_base.join("webview_data"));
+            candidates.push(temp_base.join("webview_data_user"));
+            candidates.push(temp_base.join("webview_data_alt"));
             candidates.push(temp_base.join(format!("webview_data_p{}", std::process::id())));
         }
 
         // 4. Fallback in std::env::temp_dir()
         let t_base = std::env::temp_dir().join("com.voimax.cvh");
         candidates.push(t_base.join("webview_data"));
+        candidates.push(t_base.join("webview_data_user"));
+        candidates.push(t_base.join("webview_data_alt"));
         candidates.push(t_base.join(format!("webview_data_p{}", std::process::id())));
 
         // 5. Test candidates in order
@@ -62,24 +78,47 @@ pub fn resolve_and_prepare_webview2_udf() -> PathBuf {
             }
         }
 
-        // 6. Ultimate fallback: local project folder if all else fails
-        let local_fallback = PathBuf::from(".cvh").join("webview_data");
-        if is_udf_usable(&local_fallback) {
-            clean_unheld_stale_locks(&local_fallback);
-            return local_fallback;
+        // 6. Ultimate safe fallback: strictly absolute path in std::env::temp_dir()
+        // NEVER relative, NEVER in .cvh!
+        let ultimate = std::env::temp_dir().join("com.voimax.cvh").join("webview_data");
+        if std::fs::create_dir_all(&ultimate).is_ok() {
+            clean_unheld_stale_locks(&ultimate);
+            return ultimate;
         }
 
-        PathBuf::from("webview_data")
+        let direct_temp = std::env::temp_dir().join(format!("com.voimax.cvh.p{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&direct_temp);
+        clean_unheld_stale_locks(&direct_temp);
+        direct_temp
     }
 
     #[cfg(not(target_os = "windows"))]
     {
-        PathBuf::from("webview_data")
+        let non_win = std::env::temp_dir().join("com.voimax.cvh").join("webview_data");
+        let _ = std::fs::create_dir_all(&non_win);
+        non_win
     }
 }
 
-/// Checks whether a candidate UDF directory is writable and not locked by another process.
+/// Checks whether a candidate UDF directory is valid, writable, and not locked by another process.
+/// Enforces ironclad invariants:
+/// - Candidate MUST be an absolute path.
+/// - Candidate MUST NEVER contain '.cvh' as a path component.
 pub fn is_udf_usable(candidate: &Path) -> bool {
+    // Invariant 1: Reject relative paths
+    if !candidate.is_absolute() {
+        return false;
+    }
+
+    // Invariant 2: Prohibit '.cvh' in path components
+    for comp in candidate.components() {
+        if let std::path::Component::Normal(c) = comp {
+            if c.to_string_lossy().eq_ignore_ascii_case(".cvh") {
+                return false;
+            }
+        }
+    }
+
     // 1. Check directory writability
     if std::fs::create_dir_all(candidate).is_err() {
         return false;
@@ -194,6 +233,26 @@ pub fn cleanup_stale_fallback_dirs(parent: &Path) {
     }
 }
 
+/// Opportunistically removes a rogue .cvh directory if its webview_data is unheld.
+pub fn cleanup_rogue_cvh_dir(dir: &Path) {
+    if !dir.exists() {
+        return;
+    }
+    let webview_data = dir.join("webview_data");
+    if webview_data.exists() {
+        let lockfile = webview_data.join("EBWebView").join("lockfile");
+        if !lockfile.exists() || !is_file_locked_by_other_process(&lockfile) {
+            let _ = std::fs::remove_dir_all(&webview_data);
+        }
+    }
+    // If the directory is now completely empty, remove it
+    if let Ok(mut entries) = std::fs::read_dir(dir) {
+        if entries.next().is_none() {
+            let _ = std::fs::remove_dir(dir);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -270,6 +329,37 @@ mod tests {
         assert!(!lockfile.exists(), "Stale lockfile should be cleaned");
 
         let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_is_udf_usable_rejects_relative_path() {
+        assert!(!is_udf_usable(Path::new(".cvh/webview_data")));
+        assert!(!is_udf_usable(Path::new("webview_data")));
+        assert!(!is_udf_usable(Path::new(".cvh")));
+    }
+
+    #[test]
+    fn test_is_udf_usable_rejects_cvh_in_path() {
+        let temp_dir = get_test_dir();
+        let cvh_sub = temp_dir.join(".cvh").join("webview_data");
+        assert!(!is_udf_usable(&cvh_sub), "Paths containing .cvh must be rejected");
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_resolve_and_prepare_webview2_udf_always_absolute_and_never_cvh() {
+        std::env::remove_var("WEBVIEW2_USER_DATA_FOLDER");
+        let resolved = resolve_and_prepare_webview2_udf();
+        assert!(resolved.is_absolute(), "Resolved UDF must be absolute, got {:?}", resolved);
+        for comp in resolved.components() {
+            if let std::path::Component::Normal(c) = comp {
+                assert!(
+                    !c.to_string_lossy().eq_ignore_ascii_case(".cvh"),
+                    "Resolved UDF must not contain .cvh, got {:?}",
+                    resolved
+                );
+            }
+        }
     }
 
     #[test]
