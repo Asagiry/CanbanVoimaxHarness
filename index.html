@@ -1,10 +1,22 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" class="dark bg-[#07090e] text-[#f0f6fc]" style="background-color: #07090e; color: #f0f6fc;">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CanbanVoimaxHarness</title>
+    <style>
+      :root {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      }
+      code, kbd, samp, pre, .font-mono {
+        font-family: 'JetBrains Mono', monospace;
+      }
+      html, body {
+        background-color: #07090e !important;
+        color: #f0f6fc !important;
+      }
+    </style>
     <script>
       (function() {
         try {
@@ -19,9 +31,12 @@
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+    </noscript>
   </head>
-  <body class="antialiased overflow-hidden select-none">
+  <body class="antialiased overflow-hidden select-none bg-[#07090e] text-[#f0f6fc]" style="background-color: #07090e; color: #f0f6fc;">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -25,6 +25,7 @@ impl AppState {
     pub fn new(root: PathBuf) -> Self {
         let actual_root = if !root.as_os_str().is_empty()
             && !crate::config::is_binary_or_target_dir(&root)
+            && !crate::config::is_app_own_directory(&root)
             && (root.join(".cvh").exists() || root.join(".git").exists())
         {
             root

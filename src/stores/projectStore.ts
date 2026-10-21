@@ -16,6 +16,10 @@ export function isInvalidProjectPath(path?: string | null): boolean {
     normalized.endsWith('/target') ||
     normalized.endsWith('/dist') ||
     normalized.endsWith('/node_modules') ||
+    normalized.endsWith('/src-tauri') ||
+    normalized.endsWith('/canbanvoimaxharness') ||
+    normalized === 'canbanvoimaxharness' ||
+    normalized.includes('/canbanvoimaxharness/') ||
     normalized === 'bin' ||
     normalized === 'release' ||
     normalized === 'debug'
@@ -71,8 +75,8 @@ function persistStoredProjects(projects: ProjectInfo[]): void {
 }
 
 const initialProjects = loadStoredProjects();
-const initialHasActiveProject = !isInvalidProjectPath(initialProjects[0]?.rootPath);
-const DEFAULT_PROJECT: ProjectInfo = (initialHasActiveProject && initialProjects[0]) || {
+const initialCandidate = initialProjects.find((p) => p && !isInvalidProjectPath(p.rootPath));
+const DEFAULT_PROJECT: ProjectInfo = {
   id: 'default',
   name: 'CanbanVoimaxHarness',
   rootPath: '',
@@ -81,10 +85,10 @@ const DEFAULT_PROJECT: ProjectInfo = (initialHasActiveProject && initialProjects
 };
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
-  activeProject: initialHasActiveProject ? initialProjects[0] : DEFAULT_PROJECT,
+  activeProject: initialCandidate || DEFAULT_PROJECT,
   availableProjects: initialProjects,
   isTauriEnvironment: true,
-  hasActiveProject: initialHasActiveProject,
+  hasActiveProject: false,
 
   switchProject: async (projectId: string) => {
     const state = get();
@@ -193,13 +197,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
 
     const availableProjects = Array.from(mergedMap.values());
-    const hasActive = Boolean(backendActive && !isInvalidProjectPath(backendActive.rootPath));
-    const activeProject = hasActive ? backendActive! : DEFAULT_PROJECT;
+    const hasValidBackend = Boolean(backendActive && !isInvalidProjectPath(backendActive.rootPath));
+    const activeProject = hasValidBackend ? backendActive! : (availableProjects[0] || DEFAULT_PROJECT);
 
     set({
       availableProjects,
       activeProject,
-      hasActiveProject: hasActive,
+      hasActiveProject: get().hasActiveProject && hasValidBackend,
     });
     persistStoredProjects(availableProjects);
   },

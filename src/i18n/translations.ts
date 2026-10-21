@@ -35,7 +35,8 @@ export const translations = {
     // SplashScreen & Welcome Screen
     'splash.welcome': 'Welcome to CanbanVoimaxHarness',
     'splash.selectProject': 'Select a project directory to get started',
-    'splash.openFolder': 'Open Project Folder',
+    'splash.openFolder': 'Select Project Folder',
+    'splash.continueIn': 'Continue in',
     'splash.recentProjects': 'Recent Projects',
     'splash.noRecentProjects': 'No recent projects found',
 
@@ -309,7 +310,8 @@ export const translations = {
     // SplashScreen & Welcome Screen
     'splash.welcome': 'Добро пожаловать в CanbanVoimaxHarness',
     'splash.selectProject': 'Выберите рабочую папку с проектом для начала работы',
-    'splash.openFolder': 'Открыть папку проекта',
+    'splash.openFolder': 'Выбрать папку проекта',
+    'splash.continueIn': 'Продолжить в',
     'splash.recentProjects': 'Недавние проекты',
     'splash.noRecentProjects': 'Нет недавних проектов',
 
