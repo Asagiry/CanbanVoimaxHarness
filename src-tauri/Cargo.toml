@@ -39,6 +39,8 @@ codegen-units = 16
 incremental = false
 lto = false
 opt-level = 2
+panic = "abort"
+strip = true
 
 [profile.release.package.libsqlite3-sys]
 debug = false

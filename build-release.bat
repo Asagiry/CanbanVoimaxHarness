@@ -25,6 +25,7 @@ setlocal EnableExtensions EnableDelayedExpansion
 set "SKIP_INSTALL=0"
 set "SKIP_CHECKS=1"
 set "BUNDLES="
+set "NO_BUNDLE="
 set "TARGET="
 set "NO_PAUSE=0"
 set "EXIT_CODE=0"
@@ -48,6 +49,42 @@ if "%~1"=="--pause" (
 )
 if "%~1"=="-pause" (
   set "NO_PAUSE=0"
+  shift
+  goto parse_args
+)
+if "%~1"=="--fast" (
+  set "NO_BUNDLE=1"
+  set "BUNDLES=none"
+  shift
+  goto parse_args
+)
+if "%~1"=="-fast" (
+  set "NO_BUNDLE=1"
+  set "BUNDLES=none"
+  shift
+  goto parse_args
+)
+if "%~1"=="--no-bundle" (
+  set "NO_BUNDLE=1"
+  set "BUNDLES=none"
+  shift
+  goto parse_args
+)
+if "%~1"=="-no-bundle" (
+  set "NO_BUNDLE=1"
+  set "BUNDLES=none"
+  shift
+  goto parse_args
+)
+if "%~1"=="--installer" (
+  set "NO_BUNDLE=0"
+  set "BUNDLES=nsis"
+  shift
+  goto parse_args
+)
+if "%~1"=="-installer" (
+  set "NO_BUNDLE=0"
+  set "BUNDLES=nsis"
   shift
   goto parse_args
 )
@@ -255,7 +292,40 @@ if "%TARGET%"=="" (
     )
   )
 )
-if "%BUNDLES%"=="" set "BUNDLES=nsis"
+rem Interactive or default build mode selection
+if "%NO_BUNDLE%"=="" if "%BUNDLES%"=="" (
+  if "%NO_PAUSE%"=="1" (
+    set "NO_BUNDLE=1"
+    set "BUNDLES=none"
+  ) else (
+    echo.
+    echo ==============================================================================
+    echo   CanbanVoimaxHarness Release Build Mode
+    echo ==============================================================================
+    echo   [1] БЫСТРАЯ СБОРКА: Только .exe (без долгого сжатия NSIS) -^> ~1-2 мин [РЕКОМЕНДУЕТСЯ]
+    echo   [2] ПОЛНАЯ СБОРКА: .exe + NSIS setup-инсталлер            -^> ~5-8 мин
+    echo ==============================================================================
+    choice /c 12 /n /m "Выберите режим [1/2] (по умолчанию 1 через 5 сек): " /t 5 /d 1
+    if errorlevel 2 (
+      set "BUNDLES=nsis"
+      set "NO_BUNDLE=0"
+      echo   - Выбран режим: Полная сборка с инсталлером NSIS.
+    ) else (
+      set "BUNDLES=none"
+      set "NO_BUNDLE=1"
+      echo   - Выбран режим: Быстрая сборка portable .exe.
+    )
+    echo.
+  )
+)
+if "%BUNDLES%"=="none" set "NO_BUNDLE=1"
+if "%BUNDLES%"=="" (
+  if "!NO_BUNDLE!"=="1" (
+    set "BUNDLES=none"
+  ) else (
+    set "BUNDLES=nsis"
+  )
+)
 
 if "%TARGET%"=="" (
   echo   target: host default
@@ -579,7 +649,9 @@ echo     Release\Windows\bin\        portable exe + WebView2Loader.dll
 echo     Release\Windows\installer\  NSIS setup.exe, MSI
 echo.
 echo   Options:
-echo     --skip-install    reuse existing node_modules (default: skip if present)
+echo     --fast, --no-bundle fast build: portable exe only, skips slow NSIS compression (default in interactive)
+    --installer       full build with NSIS setup installer
+    --skip-install    reuse existing node_modules (default: skip if present)
 echo     --checks          run cargo check + cargo clippy (skipped by default for speed)
 echo     --with-checks     alias for --checks
 echo     --skip-checks     skip cargo check + cargo clippy (default)
