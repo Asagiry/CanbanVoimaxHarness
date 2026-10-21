@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru" class="dark bg-[#07090e] text-[#f0f6fc]" style="background-color: #07090e; color: #f0f6fc;">
+<html lang="ru">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -12,16 +12,21 @@
       code, kbd, samp, pre, .font-mono {
         font-family: 'JetBrains Mono', monospace;
       }
-      html, body {
-        background-color: #07090e !important;
-        color: #f0f6fc !important;
+      html.dark, html.dark body {
+        background-color: #07090e;
+        color: #f0f6fc;
+      }
+      html:not(.dark), html:not(.dark) body {
+        background-color: #fafafa;
+        color: #171717;
       }
     </style>
     <script>
       (function() {
         try {
           var t = localStorage.getItem("cvh:theme");
-          if (t === "dark") {
+          var isDark = t === "dark" || (!t && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (isDark) {
             document.documentElement.classList.add("dark");
           } else {
             document.documentElement.classList.remove("dark");
@@ -36,7 +41,7 @@
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
     </noscript>
   </head>
-  <body class="antialiased overflow-hidden select-none bg-[#07090e] text-[#f0f6fc]" style="background-color: #07090e; color: #f0f6fc;">
+  <body class="antialiased overflow-hidden select-none bg-[#fafafa] dark:bg-[#07090e] text-[#171717] dark:text-[#f0f6fc]">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

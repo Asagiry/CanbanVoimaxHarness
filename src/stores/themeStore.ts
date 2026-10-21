@@ -10,6 +10,9 @@ function getInitialTheme(): Theme {
     if (saved === 'dark' || saved === 'light') {
       return saved;
     }
+    if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
   } catch {
     // localStorage not accessible
   }
