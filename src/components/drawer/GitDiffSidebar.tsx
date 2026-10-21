@@ -15,6 +15,7 @@ import {
   ChevronsUpDown,
 } from 'lucide-react';
 import { DiffFile, TaskGitDiff } from '../../types';
+import { useTranslation, Language } from '../../stores/languageStore';
 
 interface GitDiffSidebarProps {
   taskId: string;
@@ -99,7 +100,10 @@ const isCvhPath = (p: string): boolean => {
   return norm === '.cvh' || norm.startsWith('.cvh/') || norm.includes('/.cvh/') || norm.endsWith('/.cvh');
 };
 
-function formatFilesCount(count: number): string {
+function formatFilesCount(count: number, lang: Language = 'en'): string {
+  if (lang === 'en') {
+    return count === 1 ? '1 file' : `${count} files`;
+  }
   const mod10 = count % 10;
   const mod100 = count % 100;
   if (mod100 >= 11 && mod100 <= 19) return `${count} файлов`;
@@ -116,6 +120,7 @@ interface AccordionFileItemProps {
 
 function AccordionFileItem({ file, isExpanded, onToggle }: AccordionFileItemProps) {
   const [copied, setCopied] = useState(false);
+  const { t } = useTranslation();
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -197,7 +202,7 @@ function AccordionFileItem({ file, isExpanded, onToggle }: AccordionFileItemProp
             type="button"
             onClick={handleCopyPatch}
             className="p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb] dark:hover:bg-[#21262d] transition cursor-pointer"
-            title="Скопировать patch этого файла"
+            title={copied ? t('gitDiff.patchCopied') : t('gitDiff.copyPatch')}
           >
             {copied ? (
               <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
@@ -213,7 +218,7 @@ function AccordionFileItem({ file, isExpanded, onToggle }: AccordionFileItemProp
         <div className="border-t border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] font-mono text-[11px] leading-relaxed select-text overflow-x-auto max-h-[460px] overflow-y-auto">
           {parsedLines.length === 0 ? (
             <div className="p-3 text-center text-[#8f8f8f] dark:text-[#8b949e] text-xs">
-              Нет текстовых изменений (бинарный файл или пустой diff)
+              {t('gitDiff.noTextChanges')}
             </div>
           ) : (
             parsedLines.map((line, idx) => {
@@ -329,6 +334,7 @@ export default function GitDiffSidebar({
     return DEFAULT_SIDEBAR_WIDTH;
   });
   const [isResizing, setIsResizing] = useState(false);
+  const { language, t } = useTranslation();
   const isDraggingRef = useRef(false);
   const startXRef = useRef(0);
   const startWidthRef = useRef(sidebarWidth);
@@ -569,7 +575,7 @@ export default function GitDiffSidebar({
       className={`relative shrink-0 border-l border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#090a0f] flex flex-col h-full text-[#171717] dark:text-[#f0f6fc] overflow-hidden select-none transition-colors ${
         isResizing ? 'select-none' : 'transition-[width] duration-200 ease-out'
       } ${className || ''}`}
-      aria-label="Панель Git Diff"
+      aria-label={t('gitDiff.panelAria')}
     >
       {/* Collapsed Rail View (44px wide, smoothly fades in when collapsed) */}
       <div
@@ -581,7 +587,7 @@ export default function GitDiffSidebar({
           type="button"
           onClick={onToggleCollapse}
           className="p-1.5 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
-          aria-label="Развернуть Git Diff"
+          aria-label={t('gitDiff.expandPanel')}
         >
           <PanelRightOpen className="h-4 w-4" />
         </button>
@@ -620,7 +626,7 @@ export default function GitDiffSidebar({
         <div
           onClick={onToggleCollapse}
           className="mt-6 flex-1 flex items-center justify-center cursor-pointer group"
-          aria-label="Развернуть Git Diff"
+          aria-label={t('gitDiff.expandPanel')}
         >
           <span className="text-[11px] font-mono text-[#8f8f8f] dark:text-[#8b949e] group-hover:text-[#171717] dark:group-hover:text-[#f0f6fc] transition tracking-wider [writing-mode:vertical-rl] rotate-180">
             Git Diff
@@ -664,21 +670,21 @@ export default function GitDiffSidebar({
           {/* Changed files count badge */}
           <span
             className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-[#f4f4f5] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] border border-[#ebebeb] dark:border-[#30363d] shrink-0 whitespace-nowrap"
-            title={`${filesCount} измененных файлов`}
+            title={t('gitDiff.changedFiles', { count: filesCount })}
           >
-            {formatFilesCount(filesCount)}
+            {formatFilesCount(filesCount, language)}
           </span>
 
           {/* Additions / deletions badges */}
           {(totalAdditions > 0 || totalDeletions > 0) && (
             <div className="flex items-center gap-1 text-[10px] font-mono tabular-nums font-semibold shrink-0">
               {totalAdditions > 0 && (
-                <span className="text-[#15803d] dark:text-[#4ade80]" title={`+${totalAdditions} добавленных строк`}>
+                <span className="text-[#15803d] dark:text-[#4ade80]" title={t('gitDiff.linesAdded', { count: totalAdditions })}>
                   +{totalAdditions}
                 </span>
               )}
               {totalDeletions > 0 && (
-                <span className="text-[#b91c1c] dark:text-[#f87171]" title={`-${totalDeletions} удаленных строк`}>
+                <span className="text-[#b91c1c] dark:text-[#f87171]" title={t('gitDiff.linesDeleted', { count: totalDeletions })}>
                   -{totalDeletions}
                 </span>
               )}
@@ -692,7 +698,7 @@ export default function GitDiffSidebar({
           {diff?.branch && (
             <div
               className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[10px] font-mono text-[#666666] dark:text-[#8b949e] max-w-[130px] min-w-0 cursor-default"
-              title={`Текущая ветка: ${diff.branch}`}
+              title={t('gitDiff.currentBranch', { branch: diff.branch })}
             >
               <GitBranch className="h-3 w-3 text-[#8f8f8f] dark:text-[#8b949e] shrink-0" />
               <span className="truncate">{diff.branch}</span>
@@ -706,7 +712,7 @@ export default function GitDiffSidebar({
                 type="button"
                 onClick={handleExpandAll}
                 className="p-1 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer"
-                title="Развернуть все файлы"
+                title={t('gitDiff.expandAllTitle')}
               >
                 <ChevronsUpDown className="h-3 w-3" />
               </button>
@@ -715,7 +721,7 @@ export default function GitDiffSidebar({
                 type="button"
                 onClick={handleCollapseAll}
                 className="p-1 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer"
-                title="Свернуть все файлы"
+                title={t('gitDiff.collapseAllTitle')}
               >
                 <ChevronsDownUp className="h-3 w-3" />
               </button>
@@ -728,7 +734,7 @@ export default function GitDiffSidebar({
             onClick={fetchDiff}
             disabled={isLoading}
             className="p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] disabled:opacity-50 transition cursor-pointer"
-            title="Обновить дифф"
+            title={t('gitDiff.refresh')}
           >
             <RefreshCw
               className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin text-emerald-600' : ''}`}
@@ -740,7 +746,7 @@ export default function GitDiffSidebar({
             type="button"
             onClick={onToggleCollapse}
             className="p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition-colors cursor-pointer"
-            aria-label="Свернуть панель Git Diff"
+            aria-label={t('gitDiff.collapsePanel')}
           >
             <PanelRightClose className="h-3.5 w-3.5" />
           </button>
@@ -767,7 +773,7 @@ export default function GitDiffSidebar({
         <div className="flex-1 overflow-y-auto p-3 space-y-2.5 min-h-0 bg-[#fafafa] dark:bg-[#090a0f]">
           <div className="flex items-center justify-center py-4 space-x-2 text-xs text-[#8f8f8f] dark:text-[#8b949e]">
             <RefreshCw className="h-3.5 w-3.5 animate-spin text-emerald-600 dark:text-emerald-400" />
-            <span>Загрузка изменений Git...</span>
+            <span>{t('gitDiff.loadingChanges')}</span>
           </div>
           {[1, 2, 3].map((i) => (
             <div
@@ -791,14 +797,14 @@ export default function GitDiffSidebar({
           <div className="h-12 w-12 rounded-full bg-[#f0fdf4] dark:bg-[#052e16]/50 border border-[#bbf7d0] dark:border-[#166534] flex items-center justify-center mb-3">
             <CheckCircle2 className="h-6 w-6 text-[#15803d] dark:text-[#4ade80]" />
           </div>
-          <h3 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">Ворктри чистое</h3>
+          <h3 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">{t('gitDiff.cleanWorktree')}</h3>
           <p className="text-xs text-[#666666] dark:text-[#8b949e] mt-1 max-w-[260px] leading-relaxed">
-            Нет изменений / рабочее дерево чистое
+            {t('gitDiff.noChanges')}
           </p>
           {diff?.branch && (
             <div className="mt-4 px-2.5 py-1 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[11px] font-mono text-[#666666] dark:text-[#8b949e] flex items-center space-x-1.5">
               <GitBranch className="h-3 w-3 text-[#8f8f8f] dark:text-[#8b949e]" />
-              <span>Ветка: {diff.branch}</span>
+              <span>{t('gitDiff.branch', { branch: diff.branch })}</span>
             </div>
           )}
         </div>

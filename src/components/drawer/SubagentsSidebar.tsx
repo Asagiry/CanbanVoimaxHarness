@@ -17,6 +17,7 @@ import {
   PanelLeftOpen,
   Square,
 } from 'lucide-react';
+import { useTranslation, Language } from '../../stores/languageStore';
 
 interface SubagentsSidebarProps {
   taskId: string;
@@ -27,31 +28,38 @@ interface SubagentsSidebarProps {
 }
 
 
-export function formatSubagentDisplayTitle(title?: string | null): string {
-  if (!title) return 'Субагент';
+export function formatSubagentDisplayTitle(title?: string | null, lang?: Language): string {
+  const fallback = lang === 'ru' ? 'Субагент' : 'Subagent';
+  if (!title) return fallback;
   if (title.includes('sub-call_')) {
-    const cleaned = title.replace(/(?:[A-Za-z0-9_-]+\.)?sub-call_\d+/g, 'субагент').trim();
-    return cleaned || 'Субагент';
+    const subWord = lang === 'ru' ? 'субагент' : 'subagent';
+    const cleaned = title.replace(/(?:[A-Za-z0-9_-]+\.)?sub-call_\d+/g, subWord).trim();
+    return cleaned || fallback;
   }
   return title;
 }
 
-
 export function formatSubagentRoleDisplay(
   role?: string | null,
   subIndex?: number,
-  isBoardSubtask?: boolean
+  isBoardSubtask?: boolean,
+  lang?: Language
 ): string {
+  const isRu = lang === 'ru';
   if (isBoardSubtask) {
     const r = (role || '').trim().toLowerCase();
-    if (r === 'reviewer' || r === 'review') return 'РЕВЬЮЕР';
-    if (r === 'developer' || r === 'dev') return 'РАЗРАБОТЧИК';
+    if (r === 'reviewer' || r === 'review') return isRu ? 'РЕВЬЮЕР' : 'REVIEWER';
+    if (r === 'developer' || r === 'dev') return isRu ? 'РАЗРАБОТЧИК' : 'DEVELOPER';
     if (r === 'cvh-dev') return 'CVH-DEV';
     if (role && r !== 'general') return role.toUpperCase();
-    return 'ПОДЗАДАЧА';
+    return isRu ? 'ПОДЗАДАЧА' : 'SUBTASK';
   }
-  return subIndex != null ? `СУБАГЕНТ #${subIndex}` : 'СУБАГЕНТ';
+  if (subIndex != null) {
+    return isRu ? `СУБАГЕНТ #${subIndex}` : `SUBAGENT #${subIndex}`;
+  }
+  return isRu ? 'СУБАГЕНТ' : 'SUBAGENT';
 }
+
 function formatDuration(ms?: number, isRunning?: boolean): string {
   if (ms === undefined || ms === null || !Number.isFinite(ms) || ms < 0) {
     return isRunning ? '0s' : '—';
@@ -64,7 +72,10 @@ function formatDuration(ms?: number, isRunning?: boolean): string {
   return `${mins}m ${secs}s`;
 }
 
-function formatSteps(count: number): string {
+function formatSteps(count: number, lang: Language = 'en'): string {
+  if (lang === 'en') {
+    return count === 1 ? '1 step' : `${count} steps`;
+  }
   const mod10 = count % 10;
   const mod100 = count % 100;
   if (mod100 >= 11 && mod100 <= 19) return `${count} шагов`;
@@ -374,6 +385,7 @@ export default function SubagentsSidebar({
 
   const hasRunningSubagents = allSubagents.some((s) => s.status === 'running');
   const [now, setNow] = useState(() => Date.now());
+  const { language, t } = useTranslation();
 
   // Dynamic 1-second live ticker only when subagents are actively running
   useEffect(() => {
@@ -392,7 +404,7 @@ export default function SubagentsSidebar({
       className={`relative shrink-0 border-r border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] flex flex-col min-h-0 h-full overflow-hidden select-none transition-colors ${
         isResizing ? 'select-none' : 'transition-[width] duration-200 ease-out'
       } ${className || ''}`}
-      aria-label="Панель субагентов"
+      aria-label={t('subagents.panelAria')}
     >
       {/* Collapsed Rail View (44px wide, smoothly fades in when collapsed) */}
       <div
@@ -404,17 +416,17 @@ export default function SubagentsSidebar({
           type="button"
           onClick={onToggleCollapse}
           className="p-1.5 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
-          aria-label="Развернуть панель субагентов"
+          aria-label={t('subagents.expandPanel')}
         >
           <PanelLeftOpen className="h-4 w-4" />
         </button>
         <div
           onClick={onToggleCollapse}
           className="mt-6 flex-1 flex items-center justify-center cursor-pointer group"
-          aria-label="Развернуть панель субагентов"
+          aria-label={t('subagents.expandPanel')}
         >
           <span className="text-[11px] font-mono text-[#8f8f8f] dark:text-[#8b949e] group-hover:text-[#171717] dark:group-hover:text-[#f0f6fc] transition tracking-wider [writing-mode:vertical-rl] rotate-180">
-            Субагенты
+            {t('subagents.title')}
           </span>
         </div>
       </div>
@@ -431,7 +443,7 @@ export default function SubagentsSidebar({
           <div
             onMouseDown={handleMouseDown}
             className="group/handle absolute top-0 bottom-0 right-0 w-2 -mr-1 cursor-col-resize z-30 flex items-center justify-center select-none"
-            aria-label="Изменить ширину панели субагентов"
+            aria-label={t('subagents.panelAria')}
           >
             <div
               className={`w-[2px] h-full transition-colors ${
@@ -448,7 +460,7 @@ export default function SubagentsSidebar({
           <div className="flex items-center space-x-2 min-w-0">
             <Bot className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
             <span className="font-sans font-semibold text-xs text-[#171717] dark:text-[#f0f6fc] tracking-tight">
-              Субагенты
+              {t('subagents.title')}
             </span>
             <span className="font-mono text-[11px] tabular-nums px-1.5 py-0.2 rounded-full bg-[#e4e4e7] dark:bg-[#21262d] text-[#52525b] dark:text-[#8b949e] font-medium">
               {allSubagents.length}
@@ -456,7 +468,7 @@ export default function SubagentsSidebar({
             {runningCount > 0 && (
               <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded-md bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] text-[10px] font-mono border border-[#bbf7d0] dark:border-[#238636]">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                <span>{runningCount} в работе</span>
+                <span>{t('subagents.runningCount', { count: runningCount })}</span>
               </span>
             )}
           </div>
@@ -465,7 +477,7 @@ export default function SubagentsSidebar({
             type="button"
             onClick={onToggleCollapse}
             className="p-1 rounded-md text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] transition cursor-pointer"
-            aria-label="Скрыть панель субагентов"
+            aria-label={t('subagents.collapsePanel')}
           >
             <PanelLeftClose className="h-3.5 w-3.5" />
           </button>
@@ -489,7 +501,7 @@ export default function SubagentsSidebar({
             const activeCardStyle = getRoleActiveCardStyle(sub.role, matchedPersona?.color);
             const subIndex = orderMap.get(sub.id) ?? (sub.toolCallId ? orderMap.get(sub.toolCallId) : null) ?? (idx + 1);
             const isBoardSubtask = Boolean(sub.isBoardSubtask || boardTasks.some((t) => t.id === sub.id));
-            const roleDisplay = formatSubagentRoleDisplay(sub.role, subIndex, isBoardSubtask);
+            const roleDisplay = formatSubagentRoleDisplay(sub.role, subIndex, isBoardSubtask, language);
 
             return (
               <div
@@ -589,7 +601,7 @@ export default function SubagentsSidebar({
 
                 {/* Subagent Title */}
                 <div className="font-sans font-medium text-xs text-[#171717] dark:text-[#f0f6fc] group-hover:text-black dark:group-hover:text-white transition-colors line-clamp-2 leading-snug mb-2">
-                  {formatSubagentDisplayTitle(sub.title)}
+                  {formatSubagentDisplayTitle(sub.title, language)}
                 </div>
 
                 {/* Card Footer: Metrics (Duration + Steps) */}
@@ -635,7 +647,7 @@ export default function SubagentsSidebar({
                   </div>
                   <div className="flex items-center space-x-1">
                     <Layers className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
-                    <span className="tabular-nums">{formatSteps(sub.stepsCount || 0)}</span>
+                    <span className="tabular-nums">{formatSteps(sub.stepsCount || 0, language)}</span>
                   </div>
                 </div>
               </div>

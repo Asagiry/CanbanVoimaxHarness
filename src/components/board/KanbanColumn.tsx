@@ -7,6 +7,7 @@ import ColumnContextMenu from './ColumnContextMenu';
 import { useCortexStore } from '../../stores/cortexStore';
 import AgentIcon from '../common/AgentIcon';
 import { getDeterministicAgentColor } from '../../lib/agentPalette';
+import { useTranslation } from '../../stores/languageStore';
 
 const PAGE_SIZE = 10;
 
@@ -28,6 +29,7 @@ function KanbanColumn({
 }: KanbanColumnProps) {
   // Клик по шапке больше не подсвечивает колонку и не трогает проводник
   // (фокус из проводника в доску оставлен, обратного нет).
+  const { t } = useTranslation();
   const isFocused = useCortexStore((s) => s.focusedStageId === column.id);
   const assignedPersona = useCortexStore((s) =>
     column.persona ? s.agentPersonas.find((p) => p.role === column.persona) : undefined
@@ -117,8 +119,8 @@ function KanbanColumn({
         }}
         title={
           isPinned
-            ? 'Колонка закреплена. Правая кнопка — действия с колонкой'
-            : 'Перетащите для смены порядка колонок. Правая кнопка — действия с колонкой'
+            ? t('board.columnPinnedTitle')
+            : t('board.columnDragTitle')
         }
         className={`flex items-center h-9 px-3 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] hover:bg-[#fafafa] dark:hover:bg-[#1c2128] transition-colors ${
           isPinned ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
@@ -135,7 +137,7 @@ function KanbanColumn({
               isAtWipLimit ? 'text-red-600 dark:text-red-400' : 'text-[#8f8f8f] dark:text-[#8b949e]'
             }`}
           >
-            Всего задач: {displayTasks.length}
+            {t('board.totalTasks', { count: displayTasks.length })}
           </span>
         </div>
       </div>
@@ -163,7 +165,7 @@ function KanbanColumn({
                 className="w-full mt-1 mb-2 py-2 px-3 flex items-center justify-center gap-1.5 rounded-[6px] border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:bg-[#f9f9f9] dark:hover:bg-[#21262d] text-[#0d0d0d] dark:text-[#f0f6fc] font-mono text-xs font-medium transition-colors duration-150 cursor-pointer shadow-xs active:bg-[#f4f4f5] dark:active:bg-[#1c2128] select-none"
               >
                 <ChevronDown className="h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e] transition-transform duration-150" />
-                <span>Загрузить еще ({nextCount} из {remaining})</span>
+                <span>{t('board.loadMore', { nextCount, remaining })}</span>
               </button>
             )}
           </div>

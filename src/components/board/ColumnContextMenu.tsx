@@ -7,6 +7,7 @@ import { slugifyTitle } from '../../lib/slug';
 import { getDefaultColumnIcon } from '../../lib/columnIcons';
 import { getDeterministicAgentColor, isAllowedAgentColor } from '../../lib/agentPalette';
 import PersonaSelect from '../common/PersonaSelect';
+import { useTranslation } from '../../stores/languageStore';
 
 interface ColumnContextMenuProps {
   column: PipelineColumn;
@@ -37,6 +38,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
   const [mode, setMode] = useState<'main' | 'rename' | 'persona' | 'script'>('main');
+  const { t } = useTranslation();
 
   const { columns, setColumns, updateColumn } = useBoardStore();
   const isProtected = PROTECTED_COLUMN_IDS.has(column.id);
@@ -313,7 +315,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
             }}
             className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer"
           >
-            Переименовать
+            {t('columnMenu.rename')}
           </button>
           <button
             type="button"
@@ -321,7 +323,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
             onClick={() => setMode('persona')}
             className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer"
           >
-            Сменить агента
+            {t('columnMenu.changeAgent')}
           </button>
           <button
             type="button"
@@ -333,14 +335,14 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
             }}
             className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer"
           >
-            Скрипт перехода (.bat, .ps1, .py, .sh)
+            {t('columnMenu.transitionScript')}
           </button>
           <div className="my-1 border-t border-[#ebebeb] dark:border-[#21262d]" />
           <button
             type="button"
             role="menuitem"
             disabled={isProtected}
-            title={isProtected ? 'Особые колонки удалить нельзя' : undefined}
+            title={isProtected ? t('columnMenu.protectedNotice') : undefined}
             onClick={handleDelete}
             className={`w-full px-3 py-1.5 text-left ${
               isProtected
@@ -348,7 +350,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
                 : 'text-[#b91c1c] dark:text-[#f87171] hover:bg-[#fef2f2] dark:hover:bg-[#450a0a]/40 cursor-pointer'
             }`}
           >
-            Удалить
+            {t('columnMenu.delete')}
           </button>
         </>
       )}

@@ -4,6 +4,7 @@ import ContextGauge from './ContextGauge';
 import TaskTodoWidget from './TaskTodoWidget';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
+import { useTranslation } from '../../stores/languageStore';
 import { getRoleBadgeStyle } from '../../lib/agentPalette';
 import { getSubagentOrderMap, formatSubagentRoleDisplay } from './SubagentsSidebar';
 import { compressImageFile } from '../../lib/imageCompression';
@@ -41,6 +42,7 @@ export default function DrawerSteerBar({
   const [attachedImages, setAttachedImages] = useState<Array<{ id: string; name: string; dataUrl: string }>>([]);
   const [isDragOverChat, setIsDragOverChat] = useState(false);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
+  const { t } = useTranslation();
   const chatFileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -224,7 +226,7 @@ export default function DrawerSteerBar({
                     type="button"
                     onClick={() => setAttachedImages((prev) => prev.filter((i) => i.id !== img.id))}
                     className="absolute top-1 right-1 w-4 h-4 rounded-full bg-white/90 dark:bg-[#161b22]/90 hover:bg-white dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] border border-[#ebebeb] dark:border-[#30363d] flex items-center justify-center text-xs leading-none transition cursor-pointer"
-                    aria-label="Удалить прикрепленное изображение"
+                    aria-label={t('drawer.removeImage')}
                   >
                     ×
                   </button>
@@ -246,8 +248,8 @@ export default function DrawerSteerBar({
             onPaste={handleChatPaste}
             placeholder={
               activeSubagentId
-                ? 'Уточнить задачу для субагента...'
-                : 'Напишите сообщение, задачу или прикрепите изображение...'
+                ? t('drawer.steerSubagentPlaceholder')
+                : t('drawer.steerTaskPlaceholder')
             }
             className="w-full bg-transparent text-sm text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-none resize-none leading-relaxed min-h-[44px] max-h-44 overflow-y-auto font-sans"
           />
@@ -261,7 +263,7 @@ export default function DrawerSteerBar({
                 type="button"
                 onClick={() => chatFileInputRef.current?.click()}
                 className="w-7 h-7 rounded-full bg-[#f4f4f5] dark:bg-[#161b22] hover:bg-[#171717] dark:hover:bg-[#f0f6fc] text-[#171717] dark:text-[#f0f6fc] hover:text-white dark:hover:text-[#090a0f] flex items-center justify-center transition cursor-pointer"
-                aria-label="Прикрепить изображение или файл"
+                aria-label={t('drawer.attachImage')}
               >
                 <Plus className="h-4 w-4" />
               </button>
@@ -300,14 +302,14 @@ export default function DrawerSteerBar({
                   type="button"
                   onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
                   className="px-2.5 py-1 rounded-full bg-[#f4f4f5] dark:bg-[#161b22] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] font-mono text-xs border border-[#ebebeb] dark:border-[#30363d] transition cursor-pointer flex items-center gap-1.5 max-w-[200px]"
-                  aria-label={`Модель задачи: ${effectiveModel}`}
+                  aria-label={t('drawer.taskModel', { model: effectiveModel })}
                 >
                   <span className="truncate">{effectiveModel}</span>
                   <ChevronDown className="h-3 w-3 text-[#8f8f8f] dark:text-[#8b949e] shrink-0" />
                 </button>
                 {isModelMenuOpen && (
                   <div className="absolute bottom-full right-0 mb-2 w-56 rounded-lg bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] shadow-md p-1 z-30 font-mono text-xs max-h-60 overflow-y-auto">
-                    <div className="px-2 py-1 text-[#8f8f8f] dark:text-[#8b949e] text-[10px] uppercase">Выбор модели</div>
+                    <div className="px-2 py-1 text-[#8f8f8f] dark:text-[#8b949e] text-[10px] uppercase">{t('drawer.selectModel')}</div>
                     {selectableModels.map((m) => (
                       <button
                         key={m}
@@ -334,7 +336,7 @@ export default function DrawerSteerBar({
                   type="button"
                   onClick={onAbortAgent}
                   className="w-8 h-8 rounded-full bg-[#fef2f2] dark:bg-[#3b1219] hover:bg-[#fee2e2] dark:hover:bg-[#4d1922] text-[#b91c1c] dark:text-[#ff7b72] border border-[#fecaca] dark:border-[#da3633] flex items-center justify-center shadow-xs transition-colors cursor-pointer"
-                  aria-label="Остановить выполнение"
+                  aria-label={t('drawer.stopExecution')}
                 >
                   <Square className="h-3.5 w-3.5 fill-current" />
                 </button>
@@ -344,7 +346,7 @@ export default function DrawerSteerBar({
                   onClick={() => handleSubmit()}
                   disabled={!interactiveInput.trim() && attachedImages.length === 0}
                   className="w-8 h-8 rounded-full bg-[#171717] dark:bg-[#f0f6fc] hover:bg-black dark:hover:bg-white disabled:opacity-40 disabled:hover:bg-[#171717] dark:disabled:hover:bg-[#f0f6fc] disabled:cursor-not-allowed text-white dark:text-[#090a0f] flex items-center justify-center shadow-xs transition-colors cursor-pointer"
-                  aria-label="Отправить сообщение агенту"
+                  aria-label={t('drawer.sendMessage')}
                 >
                   <ArrowUp className="h-4 w-4 stroke-[2.5]" />
                 </button>

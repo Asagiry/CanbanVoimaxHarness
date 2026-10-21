@@ -20,6 +20,7 @@ import {
   Moon,
 } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
+import { useTranslation } from '../../stores/languageStore';
 
 export interface DrawerHeaderProps {
   task: KanbanTask;
@@ -81,6 +82,7 @@ export default function DrawerHeader({
     (p) => p.role.toLowerCase() === (activeSubagentRole || '').toLowerCase()
   );
   const { theme, toggleThemeWithAnimation } = useThemeStore();
+  const { language, toggleLanguage, t } = useTranslation();
 
   const subagentNumber = React.useMemo(() => {
     if (!activeSubagentId || !task?.id) return null;
@@ -114,10 +116,10 @@ export default function DrawerHeader({
             onMouseDown={(e) => e.stopPropagation()}
             onClick={activeSubagentId ? closeSubagent : onClose}
             className="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] border border-[#ebebeb] dark:border-[#30363d] transition font-sans text-xs font-medium cursor-pointer shadow-xs select-none pointer-events-auto"
-            aria-label={activeSubagentId ? "Назад к родительской задаче" : "Назад к доске"}
+            aria-label={activeSubagentId ? t('drawer.backToTask') : t('drawer.backToBoard')}
           >
             <ArrowLeft className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
-            <span>{activeSubagentId ? "К задаче" : "Назад"}</span>
+            <span>{activeSubagentId ? t('drawer.backToTask') : t('drawer.backToBoard')}</span>
           </button>
 
           {/* Breadcrumbs / Task badge (only when NOT in subagent mode) */}
@@ -128,7 +130,7 @@ export default function DrawerHeader({
                   type="button"
                   onClick={() => onOpenDrawer(rootTask.id)}
                   className="font-mono text-xs text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] px-1.5 py-0.5 rounded hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
-                  title={`К родительской задаче ${rootTask.id}`}
+                  title={t('drawer.backToParentTitle', { id: rootTask.id })}
                 >
                   {rootTask.id}
                 </button>
@@ -226,10 +228,10 @@ export default function DrawerHeader({
                       }}
                       aria-label={
                         isCurrent
-                          ? `Текущий этап: ${col.title}`
+                          ? t('drawer.stageCurrent', { title: col.title })
                           : targetTaskId
-                          ? `Перейти к этапу: ${col.title}`
-                          : 'Этап еще не начат'
+                          ? t('drawer.stageSwitch', { title: col.title })
+                          : t('drawer.stageNotStarted')
                       }
                       className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono transition-all duration-150 tabular-nums ${
                         isCurrent
@@ -263,7 +265,7 @@ export default function DrawerHeader({
               onMouseDown={(e) => e.stopPropagation()}
               onClick={onOpenToolPolicy}
               className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#666666] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer select-none pointer-events-auto"
-              title="Матрица инструментов — доступ тулов по агентам"
+              title={t('topbar.toolPolicyTitle')}
             >
               <Wrench className="h-3.5 w-3.5" />
             </button>
@@ -273,9 +275,28 @@ export default function DrawerHeader({
               onMouseDown={(e) => e.stopPropagation()}
               onClick={onOpenSettings}
               className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#666666] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer select-none pointer-events-auto"
-              title="Настройки LLM"
+              title={t('topbar.llmSettings')}
             >
               <Settings className="h-3.5 w-3.5" />
+            </button>
+
+            {/* Language Switcher Button (EN / RU) */}
+            <button
+              data-no-drag
+              type="button"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={toggleLanguage}
+              className="px-2 py-1 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#666666] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer font-mono font-semibold text-[11px] select-none flex items-center space-x-1"
+              title={t('topbar.switchLanguage')}
+              aria-label={t('topbar.switchLanguage')}
+            >
+              <span className={language === 'en' ? 'text-[#171717] dark:text-[#f0f6fc] font-bold' : 'text-[#8f8f8f] dark:text-[#6e7681]'}>
+                EN
+              </span>
+              <span className="text-[#d4d4d8] dark:text-[#30363d]">/</span>
+              <span className={language === 'ru' ? 'text-[#171717] dark:text-[#f0f6fc] font-bold' : 'text-[#8f8f8f] dark:text-[#6e7681]'}>
+                RU
+              </span>
             </button>
 
             {/* Theme Toggle Button with Circular Wave Animation */}
@@ -285,8 +306,8 @@ export default function DrawerHeader({
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => toggleThemeWithAnimation(e)}
               className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#666666] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer relative overflow-hidden group select-none pointer-events-auto"
-              title={theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'}
-              aria-label="Сменить тему оформления"
+              title={theme === 'dark' ? t('topbar.lightTheme') : t('topbar.darkTheme')}
+              aria-label={t('topbar.switchTheme')}
             >
               <div className="relative h-3.5 w-3.5 flex items-center justify-center">
                 <Sun

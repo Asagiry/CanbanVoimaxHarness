@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { KanbanTask } from '../../types';
 import { useBoardStore } from '../../stores/boardStore';
 import { useDrawerStore } from '../../stores/drawerStore';
+import { useTranslation } from '../../stores/languageStore';
 
 interface TaskContextMenuProps {
   task: KanbanTask;
@@ -20,6 +21,7 @@ export default function TaskContextMenu({ task, x, y, onClose }: TaskContextMenu
 
   const { columns, moveTask, deleteTask, runTaskAgent, createSubtask } = useBoardStore();
   const { openDrawer } = useDrawerStore();
+  const { t } = useTranslation();
 
   // Поджать координаты, чтобы меню не вылезало за край viewport.
   useLayoutEffect(() => {
@@ -102,7 +104,7 @@ export default function TaskContextMenu({ task, x, y, onClose }: TaskContextMenu
   };
 
   const handleDelete = async () => {
-    const confirmed = window.confirm(`Удалить задачу "${task.title}"?`);
+    const confirmed = window.confirm(t('taskMenu.confirmDelete', { title: task.title }));
     onClose();
     if (!confirmed) return;
     await deleteTask(task.id);
@@ -123,7 +125,7 @@ export default function TaskContextMenu({ task, x, y, onClose }: TaskContextMenu
         onClick={handleOpen}
         className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer"
       >
-        Открыть
+        {t('taskMenu.open')}
       </button>
       <button
         type="button"
@@ -131,7 +133,7 @@ export default function TaskContextMenu({ task, x, y, onClose }: TaskContextMenu
         onClick={handleRunAgent}
         className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer"
       >
-        Запустить агента
+        {t('taskMenu.runAgent')}
       </button>
       <button
         type="button"
@@ -139,12 +141,12 @@ export default function TaskContextMenu({ task, x, y, onClose }: TaskContextMenu
         onClick={handleCreateSubtask}
         className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer text-[#171717] dark:text-[#f0f6fc]"
       >
-        + Создать подзадачу
+        {t('taskMenu.createSubtask')}
       </button>
 
       <div className="my-1 border-t border-[#ebebeb] dark:border-[#21262d]" />
 
-      <div className="px-3 py-1 text-[#8f8f8f] dark:text-[#8b949e] select-none">Переместить в:</div>
+      <div className="px-3 py-1 text-[#8f8f8f] dark:text-[#8b949e] select-none">{t('taskMenu.moveTo')}</div>
       {columns.map((col) => {
         const isCurrent = col.id === task.columnId;
         return (
@@ -160,7 +162,7 @@ export default function TaskContextMenu({ task, x, y, onClose }: TaskContextMenu
                 : 'hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer'
             }`}
           >
-            {isCurrent ? `${col.title} (текущая)` : col.title}
+            {isCurrent ? t('taskMenu.current', { title: col.title }) : col.title}
           </button>
         );
       })}
@@ -173,7 +175,7 @@ export default function TaskContextMenu({ task, x, y, onClose }: TaskContextMenu
         onClick={() => void handleDelete()}
         className="w-full px-3 py-1.5 text-left text-[#b91c1c] dark:text-[#f87171] hover:bg-[#fef2f2] dark:hover:bg-[#450a0a]/40 cursor-pointer"
       >
-        Удалить задачу
+        {t('taskMenu.deleteTask')}
       </button>
     </div>
   );

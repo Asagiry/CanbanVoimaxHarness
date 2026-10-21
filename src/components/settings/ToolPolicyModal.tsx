@@ -4,6 +4,7 @@ import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import AgentIcon from '../common/AgentIcon';
 import { X, ChevronDown, Trash2 } from 'lucide-react';
+import { useTranslation } from '../../stores/languageStore';
 
 interface CustomTool {
   name: string;
@@ -62,6 +63,7 @@ function ToolParamRow({
   };
 }) {
   const { toolSettings, setToolSetting } = useToolPolicyStore();
+  const { t } = useTranslation();
   const currentValue = toolSettings[toolId]?.[param.key] ?? param.defaultValue;
   const [draft, setDraft] = useState(String(currentValue));
 
@@ -105,7 +107,7 @@ function ToolParamRow({
           {param.label}
         </span>
         <span className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] font-mono block">
-          диапазон: {param.min}–{param.max} (шаг {param.step})
+          {t('toolPolicy.rangeStep', { min: param.min, max: param.max, step: param.step })}
         </span>
       </div>
 
@@ -115,7 +117,7 @@ function ToolParamRow({
           disabled={currentValue <= param.min}
           onClick={() => handleStep(-param.step)}
           className="w-6 h-6 flex items-center justify-center rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] text-xs font-mono font-bold transition select-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-          title={`Уменьшить на ${param.step}`}
+          title={t('toolPolicy.decreaseBy', { step: param.step })}
         >
           -
         </button>
@@ -137,7 +139,7 @@ function ToolParamRow({
           disabled={currentValue >= param.max}
           onClick={() => handleStep(param.step)}
           className="w-6 h-6 flex items-center justify-center rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] text-xs font-mono font-bold transition select-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-          title={`Увеличить на ${param.step}`}
+          title={t('toolPolicy.increaseBy', { step: param.step })}
         >
           +
         </button>
@@ -152,6 +154,7 @@ function ToolParamRow({
 
 function ToolParamsEditor({ toolId }: { toolId: string }) {
   const paramDefs = TOOL_PARAM_DEFS[toolId];
+  const { t } = useTranslation();
 
   if (!paramDefs || paramDefs.length === 0) return null;
 
@@ -161,9 +164,9 @@ function ToolParamsEditor({ toolId }: { toolId: string }) {
       className="mt-2.5 p-2.5 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9fb] dark:bg-[#07090e] space-y-2 select-none"
     >
       <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-[#666666] dark:text-[#8b949e] font-semibold border-b border-[#ebebeb] dark:border-[#21262d] pb-1.5">
-        <span>Параметры инструмента</span>
+        <span>{t('toolPolicy.toolParams')}</span>
         <span className="text-[9px] text-[#8f8f8f] dark:text-[#6e7681] lowercase font-normal">
-          сохраняются в политиках
+          {t('toolPolicy.savedInPolicies')}
         </span>
       </div>
       {paramDefs.map((param) => (
@@ -195,6 +198,20 @@ const CATEGORY_LABELS: Record<string, string> = {
   agent: 'Подагенты и планирование',
 };
 
+const CATEGORY_LABELS_EN: Record<string, string> = {
+  orchestration: 'Orchestration & Task Management',
+  interactive: 'Interactivity',
+  workflow: 'Task Routing',
+  system: 'Commands & Terminal',
+  fs: 'File System',
+  web: 'Network & Documentation',
+  agent: 'Subagents & Planning',
+};
+
+const getCategoryLabel = (catKey: string, lang: string) => {
+  return lang === 'ru' ? (CATEGORY_LABELS[catKey] || catKey) : (CATEGORY_LABELS_EN[catKey] || catKey);
+};
+
 export default function ToolPolicyModal() {
   const {
     isModalOpen,
@@ -204,6 +221,7 @@ export default function ToolPolicyModal() {
     setStageTool,
     isToolAllowed,
   } = useToolPolicyStore();
+  const { language, t } = useTranslation();
 
   const { agentPersonas, loadAgentPersonas } = useCortexStore();
   const { columns } = useBoardStore();
@@ -347,7 +365,7 @@ export default function ToolPolicyModal() {
   };
 
   const handleDeleteCustomTool = async (name: string) => {
-    const confirmed = window.confirm(`Удалить инструмент «${name}»?`);
+    const confirmed = window.confirm(t('toolPolicy.deleteToolConfirm', { name }));
     if (!confirmed) return;
     setCustomFormError(null);
     try {
@@ -368,16 +386,16 @@ export default function ToolPolicyModal() {
         <div className="flex items-center justify-between border-b border-[#ebebeb] dark:border-[#21262d] px-4 py-3 bg-white dark:bg-[#0d1117]">
           <div>
             <h2 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc]">
-              Настройки матрицы инструментов
+              {t('toolPolicy.modalTitle')}
             </h2>
             <p className="text-[11px] text-[#666666] dark:text-[#8b949e] font-mono mt-0.5">
-              Разграничение прав доступа и тонкая настройка параметров инструментов
+              {t('toolPolicy.modalSubtitle')}
             </p>
           </div>
           <button
             onClick={closeModal}
             className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
-            title="Закрыть"
+            title={t('common.close')}
           >
             <X className="h-4 w-4" />
           </button>
@@ -393,7 +411,7 @@ export default function ToolPolicyModal() {
                 : 'border-transparent text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
             }`}
           >
-            Матрица агентов
+            {t('toolPolicy.tabMatrix')}
           </button>
           <button
             onClick={() => setActiveTab('global')}
@@ -403,7 +421,7 @@ export default function ToolPolicyModal() {
                 : 'border-transparent text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
             }`}
           >
-            Глобальный реестр
+            {t('toolPolicy.tabGlobal')}
           </button>
         </div>
 
@@ -414,8 +432,8 @@ export default function ToolPolicyModal() {
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] text-[10px] uppercase">
-                    <th className="py-2.5 px-3 font-medium">Инструмент</th>
-                    <th className="py-2.5 px-2 text-right font-medium">Вес</th>
+                    <th className="py-2.5 px-3 font-medium">{t('toolPolicy.toolHeader')}</th>
+                    <th className="py-2.5 px-2 text-right font-medium">{t('toolPolicy.weightHeader')}</th>
                     {agents.map((agent) => (
                       <th key={agent.role} className="py-2.5 px-2 text-center font-medium border-l border-[#ebebeb] dark:border-[#21262d] min-w-[95px]">
                         <div className="flex flex-col items-center gap-1">
@@ -430,7 +448,7 @@ export default function ToolPolicyModal() {
                           </div>
                           {agent.isBuiltin && (
                             <span className="px-1 py-0.2 rounded text-[9px] font-sans font-medium bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                              встроенный
+                              {t('toolPolicy.builtin')}
                             </span>
                           )}
                         </div>
@@ -450,7 +468,7 @@ export default function ToolPolicyModal() {
                             colSpan={2 + agents.length}
                             className="py-1.5 px-3 text-[10px] font-semibold text-[#52525b] dark:text-[#8b949e] uppercase tracking-wider"
                           >
-                            {CATEGORY_LABELS[catKey] || catKey}
+                            {getCategoryLabel(catKey, language)}
                           </td>
                         </tr>
                         {toolsInCat.map((tool) => {
@@ -518,7 +536,7 @@ export default function ToolPolicyModal() {
                                   <td key={agent.role} className="py-2.5 px-2 text-center border-l border-[#ebebeb] dark:border-[#21262d] align-top">
                                     {!isGloballyActive ? (
                                       <span className="text-[10px] text-[#8f8f8f] select-none block pt-0.5">
-                                        Выкл
+                                        {t('toolPolicy.off')}
                                       </span>
                                     ) : isDisabled ? (
                                       <span className="inline-flex justify-center opacity-40 pt-0.5">
@@ -636,7 +654,7 @@ export default function ToolPolicyModal() {
                 return (
                   <div key={`global-cat-${catKey}`} className="space-y-2">
                     <h3 className="text-[11px] font-semibold text-[#52525b] dark:text-[#8b949e] uppercase tracking-wider px-1">
-                      {CATEGORY_LABELS[catKey] || catKey}
+                      {getCategoryLabel(catKey, language)}
                     </h3>
                     <div className="space-y-2">
                       {toolsInCat.map((tool) => {
@@ -714,11 +732,11 @@ export default function ToolPolicyModal() {
               {/* Свои инструменты */}
               <div className="pt-2">
                 <h3 className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">
-                  Свои инструменты
+                  {t('toolPolicy.customTools')}
                 </h3>
 
                 {customLoading && (
-                  <p className="text-[11px] text-[#666666] dark:text-[#8b949e] font-sans mt-2">Загрузка...</p>
+                  <p className="text-[11px] text-[#666666] dark:text-[#8b949e] font-sans mt-2">{t('common.loading')}</p>
                 )}
                 {customListError && (
                   <p className="text-[11px] font-sans mt-2 text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-md px-3 py-1.5">
@@ -728,7 +746,7 @@ export default function ToolPolicyModal() {
 
                 {!customLoading && !customListError && customTools.length === 0 && (
                   <p className="text-[11px] text-[#8f8f8f] dark:text-[#8b949e] font-sans mt-2">
-                    Пока нет своих инструментов.
+                    {t('toolPolicy.noCustomTools')}
                   </p>
                 )}
 
@@ -756,7 +774,7 @@ export default function ToolPolicyModal() {
                                 {tool.name}
                               </span>
                               <span className="ml-1.5 inline-block rounded border border-[#ebebeb] dark:border-[#30363d] bg-[#f4f4f5] dark:bg-[#161b22] px-1 py-px text-[10px] leading-none text-[#666666] dark:text-[#8b949e] align-middle">
-                                свой
+                                {t('toolPolicy.customBadge')}
                               </span>
                             </div>
                           </button>
@@ -764,7 +782,7 @@ export default function ToolPolicyModal() {
                             <button
                               type="button"
                               onClick={() => void handleDeleteCustomTool(tool.name)}
-                              title={`Удалить ${tool.name}`}
+                              title={`${t('common.delete')} ${tool.name}`}
                               className="p-1.5 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 border border-transparent hover:border-red-200 dark:hover:border-red-900/50 transition cursor-pointer"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -777,7 +795,7 @@ export default function ToolPolicyModal() {
                         {isExpanded && (
                           <div className="mt-2 space-y-1 text-[11px] font-sans">
                             <p className="text-[#666666] dark:text-[#8b949e]">
-                              <span className="font-medium text-[#171717] dark:text-[#f0f6fc]">Команда: </span>
+                              <span className="font-medium text-[#171717] dark:text-[#f0f6fc]">{t('toolPolicy.commandPrefix')} </span>
                               <code className="font-mono bg-[#f4f4f5] dark:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] rounded px-1 py-0.5 break-all">
                                 {tool.command}
                               </code>
@@ -792,12 +810,12 @@ export default function ToolPolicyModal() {
                 {/* Форма добавления */}
                 <form onSubmit={(e) => void handleAddCustomTool(e)} className="mt-3 p-3 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#161b22] space-y-2.5">
                   <p className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc] font-sans">
-                    Добавить инструмент
+                    {t('toolPolicy.addTool')}
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <div>
                       <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1 text-[11px]">
-                        Имя [a-z0-9_]
+                        {t('toolPolicy.nameLabel')}
                       </label>
                       <input
                         type="text"
@@ -809,7 +827,7 @@ export default function ToolPolicyModal() {
                     </div>
                     <div>
                       <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1 text-[11px]">
-                        Команда (шаблон shell с {'{args}'})
+                        {t('toolPolicy.commandLabel')}
                       </label>
                       <input
                         type="text"
@@ -822,19 +840,19 @@ export default function ToolPolicyModal() {
                   </div>
                   <div>
                     <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1 text-[11px]">
-                      Описание
+                      {t('toolPolicy.descLabel')}
                     </label>
                     <input
                       type="text"
                       value={customDescription}
                       onChange={(e) => setCustomDescription(e.target.value)}
-                      placeholder="Что делает инструмент"
+                      placeholder={t('toolPolicy.descPlaceholder')}
                       className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] font-sans text-xs transition"
                     />
                   </div>
                   <div>
                     <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1 text-[11px]">
-                      Параметры (JSON-схема)
+                      {t('toolPolicy.paramsLabel')}
                     </label>
                     <textarea
                       rows={3}
@@ -856,7 +874,7 @@ export default function ToolPolicyModal() {
                       disabled={customSaving}
                       className="px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#238636] hover:bg-[#262626] dark:hover:bg-[#2ea043] disabled:opacity-50 text-white font-medium transition cursor-pointer font-sans text-xs shadow-xs"
                     >
-                      {customSaving ? 'Сохранение...' : 'Добавить'}
+                      {customSaving ? t('common.saving') : t('toolPolicy.add')}
                     </button>
                   </div>
                 </form>
@@ -871,7 +889,7 @@ export default function ToolPolicyModal() {
             onClick={closeModal}
             className="px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white font-medium transition cursor-pointer shadow-xs"
           >
-            Закрыть
+            {t('common.close')}
           </button>
         </div>
       </div>

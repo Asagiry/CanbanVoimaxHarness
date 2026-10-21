@@ -7,6 +7,7 @@ import QuestionPromptCard from './QuestionPromptCard';
 import CompactedContextCard from './CompactedContextCard';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useCortexStore } from '../../stores/cortexStore';
+import { useTranslation } from '../../stores/languageStore';
 import AgentIcon from '../common/AgentIcon';
 import { getRoleBadgeStyle } from '../../lib/agentPalette';
 import {
@@ -604,6 +605,7 @@ function AgentExplanationCard({
   hasNearbyTodoWrite,
 }: AgentExplanationCardProps) {
   const [isExpanded, setIsExpanded] = useState(true);
+  const { t } = useTranslation();
 
   const todoData = useMemo(() => {
     return content ? tryExtractTodos(content) : null;
@@ -637,7 +639,7 @@ function AgentExplanationCard({
             <Bot className="h-3.5 w-3.5 text-[#171717] dark:text-[#58a6ff] shrink-0" />
           )}
           <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">
-            {effectiveTodos ? 'План действий' : 'Пояснение агента'}
+            {effectiveTodos ? t('drawer.actionPlan') : t('drawer.agentExplanation')}
           </span>
         </div>
         {durationText && (
@@ -679,10 +681,10 @@ function AgentExplanationCard({
                   </span>
                   <span className="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded border shrink-0 text-[#71717a] dark:text-[#8b949e] border-[#e4e4e7] dark:border-[#30363d]">
                     {item.status === 'completed'
-                      ? 'Готово'
+                      ? t('status.done')
                       : item.status === 'in_progress'
-                      ? 'В работе'
-                      : 'Ожидает'}
+                      ? t('status.running')
+                      : t('status.idle')}
                   </span>
                 </div>
               ))}
@@ -691,7 +693,7 @@ function AgentExplanationCard({
             <MarkdownContent content={content} />
           ) : !content && !effectiveLeadingText ? (
             <div className="text-xs text-[#8f8f8f] font-mono animate-pulse">
-              Формирование шага...
+              {t('drawer.formingStep')}
             </div>
           ) : null}
         </div>
@@ -718,6 +720,7 @@ export default function DrawerActivityStream({
   const matchedPersona = agentPersonas.find(
     (p) => p.role.toLowerCase() === (activeSubagentRole || '').toLowerCase()
   );
+  const { t } = useTranslation();
 
   const [collapsedOutputs, setCollapsedOutputs] = useState<Set<string>>(() => new Set());
   const [showNewButton, setShowNewButton] = useState(false);
@@ -845,7 +848,7 @@ export default function DrawerActivityStream({
           <div className="flex items-center space-x-2.5 min-w-0 mr-3">
             <AlertTriangle className="h-4 w-4 text-[#dc2626] dark:text-[#ff7b72] shrink-0" />
             <div className="text-xs font-medium font-sans truncate">
-              <span className="font-semibold">Ошибка выполнения:</span> {runError}
+              <span className="font-semibold">{t('drawer.executionError')}</span> {runError}
             </div>
           </div>
           <div className="flex items-center space-x-2 shrink-0">
@@ -855,13 +858,13 @@ export default function DrawerActivityStream({
               className="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-[#dc2626] dark:bg-[#da3633] hover:bg-[#b91c1c] text-white text-xs font-medium transition cursor-pointer shadow-xs active:scale-[0.98]"
             >
               <Play className="h-3 w-3 fill-current" />
-              <span>Повторить запуск</span>
+              <span>{t('drawer.retryRun')}</span>
             </button>
             <button
               type="button"
               onClick={onClearRunError}
               className="p-1 text-[#dc2626] dark:text-[#ff7b72] hover:text-[#991b1b] dark:hover:text-[#ffa198] rounded transition cursor-pointer"
-              title="Закрыть уведомление"
+              title={t('drawer.closeNotification')}
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -879,7 +882,7 @@ export default function DrawerActivityStream({
                 <div className="flex items-center space-x-2 min-w-0">
                   <AgentIcon name={matchedPersona?.icon} className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
                   <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans truncate">
-                    Атомарная задача субагента: {formatSubagentDisplayTitle(activeSubagentTitle)}
+                    {t('drawer.subagentObjective', { title: formatSubagentDisplayTitle(activeSubagentTitle) })}
                   </span>
                 </div>
                 <div className="flex items-center space-x-2 shrink-0">
@@ -892,7 +895,7 @@ export default function DrawerActivityStream({
                 </div>
               </div>
               <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed whitespace-pre-wrap select-text font-sans bg-[#fafafa] dark:bg-[#161b22] p-3 rounded-md border border-[#ebebeb] dark:border-[#30363d]">
-                {activeSubagentPrompt || 'Инструкция для субагента'}
+                {activeSubagentPrompt || t('drawer.subagentInstruction')}
               </div>
             </div>
           ) : (
@@ -903,11 +906,11 @@ export default function DrawerActivityStream({
                   <div className="flex items-center space-x-2">
                     <Target className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
                     <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">
-                      Постановка задачи
+                      {t('drawer.taskObjective')}
                     </span>
                   </div>
                   <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e]">
-                    Постановка задачи
+                    {t('drawer.taskObjective')}
                   </span>
                 </div>
                 <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed whitespace-pre-wrap select-text font-sans">
@@ -922,11 +925,11 @@ export default function DrawerActivityStream({
                 <div className="flex items-center space-x-2">
                   <CornerDownRight className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
                   <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">
-                    Контекст предыдущего этапа
+                    {t('drawer.relayContext')}
                   </span>
                 </div>
                 <span className="text-[10px] font-mono text-[#71717a] dark:text-[#8b949e] bg-[#f4f4f5] dark:bg-[#161b22] px-2 py-0.5 rounded border border-[#ebebeb] dark:border-[#30363d]">
-                  Передано предыдущим этапом
+                  {t('drawer.relayHandoff')}
                 </span>
               </div>
               <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed whitespace-pre-wrap select-text font-sans">
@@ -1008,7 +1011,7 @@ export default function DrawerActivityStream({
                   <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-[#ebebeb] dark:border-[#21262d] text-[10px] font-mono text-[#666666] dark:text-[#8b949e]">
                     <div className="flex items-center space-x-1.5 text-[#171717] dark:text-[#f0f6fc] font-medium">
                       <User className="h-3 w-3" />
-                      <span>Корректировка пользователя</span>
+                      <span>{t('drawer.userSteer')}</span>
                     </div>
                   </div>
                   {images.length > 0 && (
@@ -1113,7 +1116,7 @@ export default function DrawerActivityStream({
                       <ChevronRight className="h-4 w-4 text-[#71717a] dark:text-[#8b949e] shrink-0" />
                     )}
                     <CheckCheck className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
-                    <span className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">Ответ агента</span>
+                    <span className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">{t('drawer.agentResponse')}</span>
                   </div>
                   {outputDurationText && (
                     <span className="flex items-center space-x-1 text-xs font-mono text-[#71717a] dark:text-[#8b949e] tabular-nums">
@@ -1127,7 +1130,7 @@ export default function DrawerActivityStream({
                     {activity?.content ? (
                       <MarkdownContent content={activity.content} />
                     ) : (
-                      <div className="text-xs text-[#8f8f8f] font-mono">Генерация ответа...</div>
+                      <div className="text-xs text-[#8f8f8f] font-mono">{t('drawer.generatingResponse')}</div>
                     )}
                   </div>
                 )}
@@ -1143,10 +1146,10 @@ export default function DrawerActivityStream({
           type="button"
           onClick={scrollToBottom}
           className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-[#171717] hover:bg-[#262626] text-white text-xs font-medium font-sans shadow-md transition cursor-pointer active:scale-[0.98]"
-          title="Перейти к новым сообщениям"
+          title={t('drawer.scrollToNewTitle')}
         >
           <ArrowDown className="h-3.5 w-3.5" />
-          <span>К новому</span>
+          <span>{t('drawer.scrollToNew')}</span>
         </button>
       )}
     </div>
