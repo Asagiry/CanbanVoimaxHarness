@@ -72,7 +72,7 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
     e.preventDefault();
     const trimmed = boardName.trim();
     if (!trimmed) {
-      setError('Укажите название доски');
+      setError(t('createBoard.nameRequired'));
       return;
     }
 
@@ -94,7 +94,7 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
         setBoardName('');
         onClose();
       } else {
-        setError('Не удалось создать доску');
+        setError(t('createBoard.failed'));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

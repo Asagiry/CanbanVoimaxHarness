@@ -356,7 +356,7 @@ export function MarkdownContent({ content }: { content?: string }) {
           <div key={`img-${index}`} className="my-2 rounded-lg overflow-hidden border border-[#ebebeb] dark:border-[#21262d] max-w-lg bg-[#f4f4f5] dark:bg-[#161b22] shadow-xs">
             <img
               src={imgMatch[2]}
-              alt={imgMatch[1] || 'Изображение'}
+              alt={imgMatch[1] || 'Image'}
               className="w-full max-h-80 object-contain cursor-pointer"
               onClick={() => window.open(imgMatch[2], '_blank')}
             />
@@ -1023,7 +1023,7 @@ export default function DrawerActivityStream({
                         >
                           <img
                             src={imgUrl}
-                            alt={`Прикреплённое изображение ${i + 1}`}
+                            alt={`${t('drawer.attachImage')} ${i + 1}`}
                             className="w-full h-full max-h-40 object-cover hover:opacity-90 transition-opacity cursor-pointer"
                             onClick={() => window.open(imgUrl, '_blank')}
                           />
