@@ -203,7 +203,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set({
       availableProjects,
       activeProject,
-      hasActiveProject: get().hasActiveProject && hasValidBackend,
+      hasActiveProject: hasValidBackend,
     });
     persistStoredProjects(availableProjects);
   },

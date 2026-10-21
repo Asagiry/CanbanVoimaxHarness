@@ -5,6 +5,19 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CanbanVoimaxHarness</title>
+    <script>
+      (function() {
+        try {
+          var t = localStorage.getItem("cvh:theme");
+          var isDark = t === "dark" || (!t && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (isDark) {
+            document.documentElement.classList.add("dark");
+          } else {
+            document.documentElement.classList.remove("dark");
+          }
+        } catch(e) {}
+      })();
+    </script>
     <style>
       :root {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -20,20 +33,97 @@
         background-color: #fafafa;
         color: #171717;
       }
+
+      /* Frame 0 Instant Native Splash Screen */
+      .cvh-init-splash {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        user-select: none;
+      }
+      html.dark .cvh-init-splash {
+        background-color: #07090e;
+        color: #f0f6fc;
+      }
+      html:not(.dark) .cvh-init-splash {
+        background-color: #fafafa;
+        color: #171717;
+      }
+
+      .cvh-init-splash-box {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 32px 40px;
+      }
+
+      .cvh-init-logo {
+        width: 64px;
+        height: 64px;
+        flex-shrink: 0;
+        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.05));
+        user-select: none;
+      }
+
+      .cvh-init-progress-track {
+        margin-top: 20px;
+        height: 2px;
+        width: 176px;
+        border-radius: 9999px;
+        overflow: hidden;
+      }
+      html.dark .cvh-init-progress-track {
+        background-color: #21262d;
+      }
+      html:not(.dark) .cvh-init-progress-track {
+        background-color: #e1e4e8;
+      }
+
+      .cvh-init-progress-bar {
+        height: 100%;
+        border-radius: 9999px;
+        animation: cvh-init-progress-anim 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+      html.dark .cvh-init-progress-bar {
+        background-color: #f0f6fc;
+      }
+      html:not(.dark) .cvh-init-progress-bar {
+        background-color: #171717;
+      }
+
+      .cvh-init-progress-text {
+        margin-top: 10px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+      html.dark .cvh-init-progress-text {
+        color: #8b949e;
+      }
+      html:not(.dark) .cvh-init-progress-text {
+        color: #57606a;
+      }
+
+      @keyframes cvh-init-progress-anim {
+        0% {
+          width: 10%;
+        }
+        35% {
+          width: 25%;
+        }
+        70% {
+          width: 48%;
+        }
+        100% {
+          width: 72%;
+        }
+      }
     </style>
-    <script>
-      (function() {
-        try {
-          var t = localStorage.getItem("cvh:theme");
-          var isDark = t === "dark" || (!t && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
-          if (isDark) {
-            document.documentElement.classList.add("dark");
-          } else {
-            document.documentElement.classList.remove("dark");
-          }
-        } catch(e) {}
-      })();
-    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
@@ -42,7 +132,31 @@
     </noscript>
   </head>
   <body class="antialiased overflow-hidden select-none bg-[#fafafa] dark:bg-[#07090e] text-[#171717] dark:text-[#f0f6fc]">
-    <div id="root"></div>
+    <div id="root">
+      <div class="cvh-init-splash" data-tauri-drag-region>
+        <div class="cvh-init-splash-box">
+          <svg
+            width="64"
+            height="64"
+            viewBox="0 0 32 32"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            class="cvh-init-logo"
+          >
+            <rect width="32" height="32" rx="6" fill="#171717" />
+            <rect x="0.5" y="0.5" width="31" height="31" rx="5.5" stroke="#27272a" stroke-width="1" />
+            <polygon points="16,6.5 21.5,14.5 10.5,14.5" fill="#ffffff" />
+            <rect x="7" y="17.5" width="4.5" height="8" rx="1.2" fill="#ffffff" fill-opacity="0.38" />
+            <rect x="13.75" y="17.5" width="4.5" height="8" rx="1.2" fill="#ffffff" />
+            <rect x="20.5" y="17.5" width="4.5" height="8" rx="1.2" fill="#ffffff" fill-opacity="0.72" />
+          </svg>
+          <div class="cvh-init-progress-track">
+            <div class="cvh-init-progress-bar"></div>
+          </div>
+          <span class="cvh-init-progress-text">10%</span>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

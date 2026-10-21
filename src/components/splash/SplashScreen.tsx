@@ -14,38 +14,39 @@ export default function SplashScreen({
   onFinish,
 }: SplashScreenProps) {
   const [stepIndex, setStepIndex] = useState<number>(0);
-  const [progress, setProgress] = useState<number>(10);
+  const [progress, setProgress] = useState<number>(15);
   const [isFading, setIsFading] = useState<boolean>(false);
   const [isOpeningFolder, setIsOpeningFolder] = useState<boolean>(false);
   const fadeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const hasActiveProject = useProjectStore((s) => s.hasActiveProject);
   const activeProject = useProjectStore((s) => s.activeProject);
   const availableProjects = useProjectStore((s) => s.availableProjects);
   const selectProjectFolder = useProjectStore((s) => s.selectProjectFolder);
   const setActiveProjectByPath = useProjectStore((s) => s.setActiveProjectByPath);
   const { t } = useTranslation();
 
-  // Fast bootloader sequence for initialization metrics (<300ms)
+  // Smooth bootloader sequence (~550ms) for solid, tactile startup feel
   useEffect(() => {
     const timer1 = setTimeout(() => {
       setStepIndex(1);
       setProgress(35);
-    }, 60);
+    }, 120);
 
     const timer2 = setTimeout(() => {
       setStepIndex(2);
       setProgress(65);
-    }, 140);
+    }, 260);
 
     const timer3 = setTimeout(() => {
       setStepIndex(3);
-      setProgress(90);
-    }, 220);
+      setProgress(88);
+    }, 420);
 
     const timer4 = setTimeout(() => {
       setStepIndex(4);
       setProgress(100);
-    }, 300);
+    }, 560);
 
     return () => {
       clearTimeout(timer1);
@@ -54,6 +55,17 @@ export default function SplashScreen({
       clearTimeout(timer4);
     };
   }, []);
+
+  // Auto-finish transition if project is opened automatically and data is ready
+  useEffect(() => {
+    if (stepIndex < 4 || !isReady || !hasActiveProject || isFading) return;
+
+    const autoFinishTimer = setTimeout(() => {
+      finishTransition();
+    }, 120); // 120ms aesthetic pause at 100% progress before smooth fade out
+
+    return () => clearTimeout(autoFinishTimer);
+  }, [stepIndex, isReady, hasActiveProject, isFading]);
 
   // Clean up any pending fade timeout on unmount
   useEffect(() => {
@@ -126,9 +138,11 @@ export default function SplashScreen({
     }
   };
 
+  const showPicker = stepIndex >= 4 && isReady && !hasActiveProject;
+
   // Keyboard shortcut: Press Enter to 1-click continue into candidate project
   useEffect(() => {
-    if (stepIndex < 4 || !candidateProject || isOpeningFolder || isFading) return;
+    if (!showPicker || !candidateProject || isOpeningFolder || isFading) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -137,9 +151,7 @@ export default function SplashScreen({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [stepIndex, candidateProject, isOpeningFolder, isFading]);
-
-  const showPicker = stepIndex >= 4 && isReady;
+  }, [showPicker, candidateProject, isOpeningFolder, isFading]);
 
   return (
     <div
