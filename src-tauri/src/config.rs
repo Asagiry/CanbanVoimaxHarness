@@ -235,73 +235,143 @@ pub fn get_app_config_dir() -> PathBuf {
     }
 }
 
+/// Checks if a directory is a build, compiler, distribution, or runtime dependency folder
+/// (`bin`, `release`, `debug`, `target`, `dist`, `node_modules`).
+/// Such directories must NEVER be treated as project roots.
+pub fn is_binary_or_target_dir(path: &Path) -> bool {
+    let path_str = path.to_string_lossy();
+    if path_str.trim().is_empty() {
+        return false;
+    }
+    if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+        let lower = file_name.to_lowercase();
+        if matches!(
+            lower.as_str(),
+            "bin" | "release" | "debug" | "target" | "dist" | "node_modules"
+        ) {
+            return true;
+        }
+    }
+    // Also inspect path components to catch paths like .../target/debug or .../node_modules/xyz
+    for comp in path.components() {
+        if let std::path::Component::Normal(c) = comp {
+            let s = c.to_string_lossy().to_lowercase();
+            if s == "target" || s == "node_modules" {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 pub fn discover_project_root() -> PathBuf {
     let root = discover_project_root_raw();
-    let _ = ensure_project_gitignore(&root);
+    if !root.as_os_str().is_empty() && root.exists() && !is_binary_or_target_dir(&root) {
+        let _ = ensure_project_gitignore(&root);
+    }
     root
 }
 
 fn discover_project_root_raw() -> PathBuf {
-    let current = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-
-    // 1. Check std::env::current_dir(). If it has .cvh or .git, return resolved root (AGENTS.md § 2.12).
-    if current.join(".cvh").exists() || current.join(".git").exists() {
-        let resolved = resolve_actual_repo_root(&current);
-        eprintln!(
-            "CVH [discover_project_root]: Found .cvh or .git in current_dir: {:?} (resolved: {:?})",
-            current, resolved
-        );
-        return resolved;
-    }
-
-    // 2. Traverse parent directories (current_dir.ancestors()) looking for .cvh or .git (AGENTS.md § 2.12).
-    for ancestor in current.ancestors() {
-        if ancestor.join(".cvh").exists() || ancestor.join(".git").exists() {
-            let resolved = resolve_actual_repo_root(ancestor);
-            eprintln!(
-                "CVH [discover_project_root]: Found project root in ancestor: {:?} (resolved: {:?})",
-                ancestor, resolved
-            );
-            return resolved;
-        }
-    }
-
-    // 3. Check %LOCALAPPDATA%\com.voimax.cvh\active_project.txt when current dir has no .cvh/.git (AGENTS.md § 2.12).
+    // 1. Check %LOCALAPPDATA%\com.voimax.cvh\active_project.txt FIRST.
+    // If it points to an existing directory that is NOT a binary/target folder
+    // and has .git or .cvh (or exists as a valid directory), return it!
     let active_project_file = get_app_config_dir().join("active_project.txt");
     if active_project_file.exists() {
         if let Ok(content) = std::fs::read_to_string(&active_project_file) {
             let trimmed = content.trim();
             if !trimmed.is_empty() {
                 let p = PathBuf::from(trimmed);
-                if p.exists() && p.is_dir() {
+                if p.exists() && p.is_dir() && !is_binary_or_target_dir(&p) {
                     let resolved = resolve_actual_repo_root(&p);
+                    let target = if !resolved.as_os_str().is_empty() && !is_binary_or_target_dir(&resolved) {
+                        resolved
+                    } else {
+                        p
+                    };
                     eprintln!(
-                        "CVH [discover_project_root]: Using active project from {:?}: {:?} (resolved: {:?})",
-                        active_project_file, p, resolved
+                        "CVH [discover_project_root]: Using active project from {:?}: {:?} (target: {:?})",
+                        active_project_file, trimmed, target
                     );
-                    return resolved;
+                    return target;
                 }
             }
         }
     }
 
-    // 4. Otherwise fallback to current_dir.
+    let current = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let current_is_bin = is_binary_or_target_dir(&current);
+
+    // 2. If current_dir is a binary/target folder — NEVER consider it a project!
+    // Only check current_dir if it is NOT a binary/target directory.
+    if !current_is_bin && (current.join(".cvh").exists() || current.join(".git").exists()) {
+        let resolved = resolve_actual_repo_root(&current);
+        if !resolved.as_os_str().is_empty() && !is_binary_or_target_dir(&resolved) {
+            eprintln!(
+                "CVH [discover_project_root]: Found .cvh or .git in current_dir: {:?} (resolved: {:?})",
+                current, resolved
+            );
+            return resolved;
+        }
+    }
+
+    // 3. Traverse ancestors of current_dir looking for a real repository with .git or .cvh
+    // (e.g. going up from Release\Windows\bin to CanbanVoimaxHarness).
+    for ancestor in current.ancestors() {
+        if ancestor == current || is_binary_or_target_dir(ancestor) {
+            continue;
+        }
+        if ancestor.join(".git").exists() {
+            let resolved = resolve_actual_repo_root(ancestor);
+            if !resolved.as_os_str().is_empty() && !is_binary_or_target_dir(&resolved) {
+                eprintln!(
+                    "CVH [discover_project_root]: Found git repository in ancestor: {:?} (resolved: {:?})",
+                    ancestor, resolved
+                );
+                return resolved;
+            }
+            return ancestor.to_path_buf();
+        } else if ancestor.join(".cvh").exists() {
+            let resolved = resolve_actual_repo_root(ancestor);
+            if !resolved.as_os_str().is_empty() && !is_binary_or_target_dir(&resolved) {
+                eprintln!(
+                    "CVH [discover_project_root]: Found .cvh in ancestor: {:?} (resolved: {:?})",
+                    ancestor, resolved
+                );
+                return resolved;
+            }
+        }
+    }
+
+    // 4. If current_dir itself is not binary, not in target, and is a valid directory (not empty):
+    if !current_is_bin && current.exists() && current.is_dir() && current != Path::new(".") {
+        eprintln!(
+            "CVH [discover_project_root]: Using current_dir as non-git project root: {:?}",
+            current
+        );
+        return current;
+    }
+
+    // 5. Otherwise, no valid project found: return empty PathBuf::new() so frontend can prompt welcome picker.
     eprintln!(
-        "CVH [discover_project_root]: Fallback to current_dir: {:?}",
+        "CVH [discover_project_root]: No valid project root discovered (current_dir is binary or invalid: {:?}). Returning empty path.",
         current
     );
-    current
+    PathBuf::new()
 }
 
 /// Resolves the actual project root containing `.cvh` when given either the workspace root
 /// or an isolated git worktree directory (§ 2.3 & § 2.23).
 pub fn resolve_actual_repo_root(path: &Path) -> PathBuf {
-    if path.join(".cvh").exists() {
+    if path.as_os_str().is_empty() {
+        return PathBuf::new();
+    }
+    if !is_binary_or_target_dir(path) && path.join(".cvh").exists() {
         return path.to_path_buf();
     }
-    // 1. Traverse ancestors looking for .cvh
+    // 1. Traverse ancestors looking for .cvh (skipping binary/target dirs)
     for ancestor in path.ancestors() {
-        if ancestor != path && ancestor.join(".cvh").exists() {
+        if ancestor != path && !is_binary_or_target_dir(ancestor) && ancestor.join(".cvh").exists() {
             return ancestor.to_path_buf();
         }
     }
@@ -318,7 +388,7 @@ pub fn resolve_actual_repo_root(path: &Path) -> PathBuf {
                         raw_path
                     };
                     for ancestor in gitdir_path.ancestors() {
-                        if ancestor.join(".cvh").exists() {
+                        if !is_binary_or_target_dir(ancestor) && ancestor.join(".cvh").exists() {
                             return ancestor.to_path_buf();
                         }
                     }
@@ -326,7 +396,11 @@ pub fn resolve_actual_repo_root(path: &Path) -> PathBuf {
             }
         }
     }
-    path.to_path_buf()
+    if is_binary_or_target_dir(path) {
+        PathBuf::new()
+    } else {
+        path.to_path_buf()
+    }
 }
 
 pub async fn persist_active_project(path: &Path) {
@@ -1522,25 +1596,43 @@ pub struct ProjectEntry {
     pub active_branch: Option<String>,
     #[serde(rename = "worktreesCount", default)]
     pub worktrees_count: Option<usize>,
+    #[serde(rename = "hasProject", default)]
+    pub has_project: Option<bool>,
 }
 
 impl ProjectEntry {
     pub fn from_path(path: &Path) -> Self {
-        let path_str = path.to_string_lossy().to_string();
-        let name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("Unnamed Project")
-            .to_string();
-        let id = name.to_lowercase().replace(' ', "-");
+        let is_valid = !path.as_os_str().is_empty()
+            && path.exists()
+            && !is_binary_or_target_dir(path);
+        let path_str = if is_valid {
+            path.to_string_lossy().to_string()
+        } else {
+            String::new()
+        };
+        let name = if is_valid {
+            path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("Unnamed Project")
+                .to_string()
+        } else {
+            String::new()
+        };
+        let id = if is_valid {
+            name.to_lowercase().replace(' ', "-")
+        } else {
+            String::new()
+        };
         Self {
             id,
             name,
             path: path_str.clone(),
-            root_path: Some(path_str),
+            root_path: if path_str.is_empty() { None } else { Some(path_str) },
             last_opened: Utc::now(),
-            active_branch: Some("main".to_string()),
+            active_branch: if is_valid { Some("main".to_string()) } else { None },
             worktrees_count: Some(0),
+            has_project: Some(is_valid),
         }
     }
 }

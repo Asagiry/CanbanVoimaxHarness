@@ -23,7 +23,10 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(root: PathBuf) -> Self {
-        let actual_root = if root.join(".cvh").exists() || root.join(".git").exists() {
+        let actual_root = if !root.as_os_str().is_empty()
+            && !crate::config::is_binary_or_target_dir(&root)
+            && (root.join(".cvh").exists() || root.join(".git").exists())
+        {
             root
         } else {
             discover_project_root()

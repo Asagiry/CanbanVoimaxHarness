@@ -88,6 +88,9 @@ pub fn ensure_task_board_id(mut tasks: Vec<Task>, config: &crate::config::Boards
 
 pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
     let actual_root = resolve_actual_repo_root(repo_root);
+    if actual_root.as_os_str().is_empty() {
+        return Vec::new();
+    }
     let boards_cfg = load_boards_config(&actual_root)
         .await
         .unwrap_or_else(|_| crate::config::default_boards_config());
@@ -173,6 +176,9 @@ fn get_project_tasks_backup_file(project_root: &Path) -> PathBuf {
 
 pub async fn save_tasks_to_disk(repo_root: &Path, tasks: &[Task]) -> Result<(), String> {
     let actual_root = resolve_actual_repo_root(repo_root);
+    if actual_root.as_os_str().is_empty() {
+        return Ok(());
+    }
     let serialized = serde_json::to_string_pretty(tasks)
         .map_err(|e| format!("Failed to serialize tasks: {}", e))?;
 
@@ -644,11 +650,10 @@ pub async fn internal_create_task(
     if let Err(e) = save_tasks_to_disk(root, &tasks).await {
         crate::logger::cvh_log(
             Some(root),
-            "ERROR",
+            "WARN",
             "CREATE_TASK",
-            &format!("Failed initial save_tasks_to_disk for task '{}': {}", new_task.id, e),
+            &format!("Initial save_tasks_to_disk warning for task '{}': {}. Task registered in state.", new_task.id, e),
         );
-        return Err(e);
     }
     crate::logger::cvh_log(
         Some(root),
@@ -770,11 +775,10 @@ pub async fn internal_create_task(
     if let Err(e) = save_tasks_to_disk(root, &updated_tasks).await {
         crate::logger::cvh_log(
             Some(root),
-            "ERROR",
+            "WARN",
             "CREATE_TASK",
-            &format!("Failed final save_tasks_to_disk for task '{}': {}", new_task.id, e),
+            &format!("Warning: save_tasks_to_disk failed for task '{}': {}. In-memory state preserved.", new_task.id, e),
         );
-        return Err(e);
     }
     crate::logger::cvh_log_with_details(
         Some(root),

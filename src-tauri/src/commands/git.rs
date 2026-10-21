@@ -81,6 +81,28 @@ pub fn needs_builtin_worktree(
 /// Best-effort builtin: `create_worktree(root, lowercase(task.id), "HEAD")`
 /// + branch `feat/<slug>` если пуст. Ошибки только варнят в лог.
 pub async fn ensure_builtin_worktree(root: &Path, task: &mut Task) {
+    if root.as_os_str().is_empty() || !root.exists() {
+        return;
+    }
+    // Check if root is actually a git repository before attempting worktree allocation
+    let is_git_repo = root.join(".git").exists() || {
+        let mut cmd = Command::new("git");
+        cmd.current_dir(root).args(["rev-parse", "--is-inside-work-tree"]);
+        #[cfg(windows)]
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        match cmd.output().await {
+            Ok(o) => o.status.success(),
+            Err(_) => false,
+        }
+    };
+    if !is_git_repo {
+        eprintln!(
+            "CVH [builtin_worktree]: Root {:?} is not a git repository; skipping worktree provisioning for task '{}'",
+            root, task.id
+        );
+        return;
+    }
+
     if let Some(ref p) = task.worktree_path {
         let pb = Path::new(p.trim());
         let abs = if pb.is_absolute() {

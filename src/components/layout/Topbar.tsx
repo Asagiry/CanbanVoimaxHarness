@@ -15,7 +15,7 @@ import {
 import { useThemeStore } from '../../stores/themeStore';
 
 export default function Topbar() {
-  const { activeProject, openFolder } = useProjectStore();
+  const { activeProject, openFolder, hasActiveProject } = useProjectStore();
   const currentFolderName = (activeProject.rootPath || '').split(/[\\/]/).filter(Boolean).pop() || activeProject.name || '';
   const { loadTasks } = useBoardStore();
   const { openSettings } = useSettingsStore();
@@ -100,7 +100,7 @@ export default function Topbar() {
         </button>
 
         {/* Current folder indicator: read-only caption, full path in tooltip */}
-        {currentFolderName && (
+        {hasActiveProject && currentFolderName && (
           <span
             className="font-mono text-[11px] text-[#8f8f8f] dark:text-[#8b949e] truncate max-w-[220px] cursor-default"
             title={activeProject.rootPath || activeProject.name}
