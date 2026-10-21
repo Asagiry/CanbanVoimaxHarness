@@ -456,7 +456,7 @@ export default function App() {
 
         const uTasksUpdated = await listen<any>('tasks:updated', (event) => {
           flushAll();
-          if (Array.isArray(event.payload?.tasks) && event.payload.tasks.length > 0) {
+          if (Array.isArray(event.payload?.tasks)) {
             useBoardStore.getState().setBackendTasks(event.payload.tasks);
           } else {
             loadTasks();

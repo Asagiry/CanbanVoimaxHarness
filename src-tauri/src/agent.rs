@@ -2337,6 +2337,16 @@ pub async fn execute_tool(
                         }));
                     }
                 } else {
+                    // Atomically save todos to SQLite table task_todos
+                    let _ = crate::db::db_save_todos(repo_root, tid, &parsed_todos);
+
+                    // Update in SQLite tasks table if task exists
+                    if let Ok(Some(mut db_task)) = crate::db::db_get_task(repo_root, tid) {
+                        db_task.todos = Some(parsed_todos.clone());
+                        db_task.updated_at = chrono::Utc::now().timestamp_millis();
+                        let _ = crate::db::db_upsert_task(repo_root, &db_task);
+                    }
+
                     let tasks_path = repo_root.join(".cvh").join("tasks.json");
                     if tasks_path.exists() {
                         if let Ok(content) = tokio::fs::read_to_string(&tasks_path).await {

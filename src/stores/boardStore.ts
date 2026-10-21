@@ -4,6 +4,14 @@ import { useProjectStore } from './projectStore';
 import { useDrawerStore } from './drawerStore';
 import { logEvent } from '../lib/logger';
 
+// Track recently deleted task IDs to prevent ghost tasks and race-condition resurrects
+const recentlyDeletedIds = new Set<string>();
+
+function markDeleted(id: string) {
+  recentlyDeletedIds.add(id);
+  setTimeout(() => recentlyDeletedIds.delete(id), 60000);
+}
+
 const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
   {
     id: 'backlog',
@@ -773,9 +781,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
             }
             return mapBackendTaskToKanban(raw);
           });
-          // Preserve any in-flight optimistic or newly created tasks not yet returned by backend list_tasks (§ 2.22)
+          // Preserve only genuine in-flight optimistic creations (< 30s) not yet returned by backend list_tasks (§ 2.22)
+          // NEVER revive tasks that are in recentlyDeletedIds
           const pendingOptimistic = prevTasks.filter(
-            (p) => !rawTasks.some((raw) => raw.id === p.id)
+            (p) => !recentlyDeletedIds.has(p.id) && !rawTasks.some((raw) => raw.id === p.id) && Boolean(p.createdAt && Date.now() - p.createdAt < 30000)
           );
           const allTasks = [...mapped, ...pendingOptimistic];
           set({ tasks: allTasks, isTauriConnected: true, isLoadingTasks: false });
@@ -786,9 +795,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           }
           return;
         } else {
-          // Backend has empty tasks array on disk: check per-project localStorage backup
-          const prevTasks = get().tasks;
-          const backupTasks = loadTasksFromLocalStorage();
+          // Backend has empty tasks array in SQLite: check per-project localStorage backup for non-deleted tasks
+          const prevTasks = get().tasks.filter((p) => !recentlyDeletedIds.has(p.id));
+          const backupTasks = loadTasksFromLocalStorage().filter((b) => !recentlyDeletedIds.has(b.id));
           const merged = [...prevTasks, ...backupTasks.filter((b) => !prevTasks.some((o) => o.id === b.id))];
           if (merged.length > 0) {
             set({ tasks: merged, isTauriConnected: true, isLoadingTasks: false });
@@ -797,6 +806,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
             return;
           }
           set({ tasks: [], isTauriConnected: true, isLoadingTasks: false });
+          persistTasksToLocalStorage([]);
           return;
         }
       }
@@ -1069,9 +1079,10 @@ ${msg}`);
       }
       return mapBackendTaskToKanban(raw);
     });
-    // Protect recent optimistic tasks (< 60s) not yet present in rawTasks (§ 2.22)
+    // Protect recent optimistic tasks (< 30s) not yet present in rawTasks (§ 2.22)
+    // Filter out any IDs in recentlyDeletedIds to eliminate ghost tasks
     const pendingOptimistic = prevTasks.filter(
-      (p) => !rawTasks.some((raw) => raw.id === p.id) && (p.createdAt && Date.now() - p.createdAt < 60000)
+      (p) => !recentlyDeletedIds.has(p.id) && !rawTasks.some((raw) => raw.id === p.id) && Boolean(p.createdAt && Date.now() - p.createdAt < 30000)
     );
     const allTasks = [...mapped, ...pendingOptimistic];
     set({ tasks: allTasks });
@@ -1403,6 +1414,9 @@ ${msg}`);
       useDrawerStore.getState().closeDrawer();
     }
 
+    // Prevent ghost tasks: mark all deleted IDs in recentlyDeletedIds immediately
+    ids.forEach((id) => markDeleted(id));
+
     // ALWAYS clear logs and SQLite dialogue for every deleted ID in drawer store
     for (const id of ids) {
       try {
@@ -1428,11 +1442,8 @@ ${msg}`);
       }
     } catch (err) {
       console.error('Critical failure during task deletion background sync:', err);
-      // Restore previous state if background sync totally failed
-      set({ tasks: prevTasks });
-      persistTasksToLocalStorage(prevTasks);
       const msg = typeof err === 'string' ? err : err instanceof Error ? err.message : JSON.stringify(err);
-      alert(`Не удалось удалить задачу на диске:\n${msg}`);
+      console.warn(`Task deletion background sync warning: ${msg}`);
     }
   },
 
