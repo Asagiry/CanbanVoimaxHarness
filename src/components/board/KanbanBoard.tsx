@@ -5,7 +5,7 @@ import { useDrawerStore } from '../../stores/drawerStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import KanbanColumn from './KanbanColumn';
-import { PipelineColumn, BoardDef, KanbanTask, TaskStatus } from '../../types';
+import { PipelineColumn, BoardDef, KanbanTask } from '../../types';
 import { Plus, X, Layout, Pencil, Trash2, Search } from 'lucide-react';
 import CreateBoardModal from './CreateBoardModal';
 import PersonaSelect from '../common/PersonaSelect';
@@ -278,7 +278,7 @@ export default function KanbanBoard() {
     return () => clearInterval(timer);
   }, [tickTimers]);
 
-  const handleDragEnd = (result: DropResult) => {
+  const handleDragEnd = async (result: DropResult) => {
     const { source, destination, draggableId, type } = result;
     if (!destination) return;
     if (source.droppableId === destination.droppableId && source.index === destination.index) {
@@ -389,51 +389,9 @@ export default function KanbanBoard() {
       return;
     }
 
-    // Moving between columns with target placement:
-    // ZERO INVISIBLE TASKS (§ 2.18 & § 2.22): Immediately update movedTask.columnId
-    // and active boardId so the card renders instantaneously in the target column.
-    const destDisplayTasks = getColumnDisplayTasks(destColId);
-    const nextTasks = [...tasks];
-    const taskPos = nextTasks.findIndex((t) => t.id === draggableId);
-    if (taskPos === -1) return;
-    const [movedTask] = nextTasks.splice(taskPos, 1);
-
-    const destColDef = columns.find((c) => c.id === destColId);
-    const effectiveBoardId = activeBoardId || 'development';
-    const updatedMovedTask: KanbanTask = {
-      ...movedTask,
-      columnId: destColId,
-      boardId: effectiveBoardId,
-      persona: destColDef?.persona || movedTask.persona,
-      status: (destColDef?.terminal ? 'done' : destColDef?.persona ? 'running' : 'idle') as TaskStatus,
-      updatedAt: Date.now(),
-      stageEnteredAt: Date.now(),
-    };
-
-    if (destIndex < destDisplayTasks.length) {
-      const refTask = destDisplayTasks[destIndex];
-      const refPos = nextTasks.findIndex((t) => t.id === refTask.id);
-      if (refPos !== -1) {
-        nextTasks.splice(refPos, 0, updatedMovedTask);
-      } else {
-        nextTasks.push(updatedMovedTask);
-      }
-    } else {
-      if (destDisplayTasks.length > 0) {
-        const lastTask = destDisplayTasks[destDisplayTasks.length - 1];
-        const lastPos = nextTasks.findIndex((t) => t.id === lastTask.id);
-        if (lastPos !== -1) {
-          nextTasks.splice(lastPos + 1, 0, updatedMovedTask);
-        } else {
-          nextTasks.push(updatedMovedTask);
-        }
-      } else {
-        nextTasks.push(updatedMovedTask);
-      }
-    }
-
-    setTasks(nextTasks);
-    void moveTask(draggableId, destColId);
+    // Moving between columns:
+    // Backend is authoritative. Card moves to target column only when backend confirms the transition.
+    await moveTask(draggableId, destColId);
   };
 
   const savePipelineConfig = useCallback(async (next: PipelineColumn[]): Promise<boolean> => {
@@ -500,13 +458,13 @@ export default function KanbanBoard() {
     setIsNewTaskModalOpen(true);
   };
 
-  const handleCreateTask = (e: React.FormEvent) => {
+  const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
     const targetColumnId = columns.some((c) => c.id === 'backlog') ? 'backlog' : (columns[0]?.id ?? 'backlog');
 
-    void addTask({
+    const created = await addTask({
       title: newTitle.trim(),
       description: newDescription.trim() || undefined,
       stageId: targetColumnId,
@@ -514,6 +472,7 @@ export default function KanbanBoard() {
       skipWorktree: !createWorktree,
       model: selectedModel,
     });
+    if (!created) return;
     setIsNewTaskModalOpen(false);
   };
 
