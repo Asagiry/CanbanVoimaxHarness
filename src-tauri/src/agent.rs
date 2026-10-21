@@ -2944,7 +2944,7 @@ pub async fn execute_tool(
             // Check if current task has spawned child tasks (parent_id linkage or created_subtasks), OR if the column is an orchestrator column.
             let has_child_tasks = tasks
                 .iter()
-                .any(|t| t.parent_id.as_deref() == Some(current_task_id));
+                .any(|t| t.parent_id.as_deref().is_some_and(|pid| crate::commands::task_id_matches(pid, current_task_id)));
 
             let current_task = &tasks[current_task_idx];
             let stage_name = ctx.stage_id.unwrap_or(&current_task.stage_id).to_lowercase();
