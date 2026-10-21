@@ -242,9 +242,31 @@ pub fn discover_project_root() -> PathBuf {
 }
 
 fn discover_project_root_raw() -> PathBuf {
-    // a) FIRST: Check %LOCALAPPDATA%\com.voimax.cvh\active_project.txt.
-    // If this file exists, is not empty, and points to an existing directory,
-    // return that path as the active project!
+    let current = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+    // 1. Check std::env::current_dir(). If it has .cvh or .git, return resolved root (AGENTS.md § 2.12).
+    if current.join(".cvh").exists() || current.join(".git").exists() {
+        let resolved = resolve_actual_repo_root(&current);
+        eprintln!(
+            "CVH [discover_project_root]: Found .cvh or .git in current_dir: {:?} (resolved: {:?})",
+            current, resolved
+        );
+        return resolved;
+    }
+
+    // 2. Traverse parent directories (current_dir.ancestors()) looking for .cvh or .git (AGENTS.md § 2.12).
+    for ancestor in current.ancestors() {
+        if ancestor.join(".cvh").exists() || ancestor.join(".git").exists() {
+            let resolved = resolve_actual_repo_root(ancestor);
+            eprintln!(
+                "CVH [discover_project_root]: Found project root in ancestor: {:?} (resolved: {:?})",
+                ancestor, resolved
+            );
+            return resolved;
+        }
+    }
+
+    // 3. Check %LOCALAPPDATA%\com.voimax.cvh\active_project.txt when current dir has no .cvh/.git (AGENTS.md § 2.12).
     let active_project_file = get_app_config_dir().join("active_project.txt");
     if active_project_file.exists() {
         if let Ok(content) = std::fs::read_to_string(&active_project_file) {
@@ -252,40 +274,18 @@ fn discover_project_root_raw() -> PathBuf {
             if !trimmed.is_empty() {
                 let p = PathBuf::from(trimmed);
                 if p.exists() && p.is_dir() {
+                    let resolved = resolve_actual_repo_root(&p);
                     eprintln!(
-                        "CVH [discover_project_root]: Using active project from {:?}: {:?}",
-                        active_project_file, p
+                        "CVH [discover_project_root]: Using active project from {:?}: {:?} (resolved: {:?})",
+                        active_project_file, p, resolved
                     );
-                    return p;
+                    return resolved;
                 }
             }
         }
     }
 
-    let current = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-
-    // b) Check std::env::current_dir(). If it has .cvh or .git, return it.
-    if current.join(".cvh").exists() || current.join(".git").exists() {
-        eprintln!(
-            "CVH [discover_project_root]: Found .cvh or .git in current_dir: {:?}",
-            current
-        );
-        return current;
-    }
-
-    // c) Traverse parent directories (current_dir.ancestors()) looking for .cvh or .git.
-    // If found (e.g. going up from src-tauri/target/release to CanbanVoimaxHarness), return that ancestor directory!
-    for ancestor in current.ancestors() {
-        if ancestor.join(".cvh").exists() || ancestor.join(".git").exists() {
-            eprintln!(
-                "CVH [discover_project_root]: Found project root in ancestor: {:?}",
-                ancestor
-            );
-            return ancestor.to_path_buf();
-        }
-    }
-
-    // d) Otherwise fallback to std::env::current_dir().
+    // 4. Otherwise fallback to current_dir.
     eprintln!(
         "CVH [discover_project_root]: Fallback to current_dir: {:?}",
         current

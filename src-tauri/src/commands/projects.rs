@@ -20,6 +20,22 @@ pub async fn get_project_config_cmd(state: State<'_, AppState>) -> Result<Projec
 }
 
 #[tauri::command]
+pub async fn get_active_project(state: State<'_, AppState>) -> Result<ProjectEntry, String> {
+    let root = state.get_root();
+    let root_str = root.to_string_lossy().to_string();
+    let registry = load_project_registry(None).await.unwrap_or_default();
+    if let Some(entry) = registry
+        .projects
+        .into_iter()
+        .find(|p| p.path == root_str || p.root_path.as_deref() == Some(&root_str))
+    {
+        Ok(entry)
+    } else {
+        Ok(ProjectEntry::from_path(&root))
+    }
+}
+
+#[tauri::command]
 pub async fn get_registry(registry_path: Option<String>) -> Result<ProjectRegistry, String> {
     let p = registry_path.map(PathBuf::from);
     load_project_registry(p)

@@ -777,28 +777,31 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   moveTask: async (taskId, targetColumnId) => {
     const { tasks, columns, activeBoardId } = get();
-    const task = tasks.find((t) => t.id === taskId);
+    const task = tasks.find(
+      (t) => t.id === taskId || t.id.trim().toLowerCase() === taskId.trim().toLowerCase()
+    );
     const targetStageId = (targetColumnId || '').trim();
     if (!task) {
       console.warn(`[moveTask] Task "${taskId}" not found in local store`);
       return;
     }
+    const resolvedTaskId = task.id;
     if (!targetStageId) {
-      console.warn(`[moveTask] Invalid empty targetColumnId for task "${taskId}"`);
+      console.warn(`[moveTask] Invalid empty targetColumnId for task "${resolvedTaskId}"`);
       return;
     }
 
     const targetColDef = columns.find((c) => c.id === targetStageId);
     const originalColumnId = task.columnId;
     const originalStatus = task.status;
-    console.info(`[moveTask] Moving task "${taskId}" from "${task.columnId}" to "${targetStageId}" (board: ${activeBoardId})`);
+    console.info(`[moveTask] Moving task "${resolvedTaskId}" from "${task.columnId}" to "${targetStageId}" (board: ${activeBoardId})`);
 
     // Instant Optimistic Card Lifecycle (<1ms) per § 2.22:
     // If not already placed optimistically by drag-and-drop, update local Zustand state immediately.
     if (task.columnId !== targetStageId) {
       const prevTasks = get().tasks;
       const optimisticTasks = prevTasks.map((t) =>
-        t.id === taskId
+        t.id === resolvedTaskId || t.id.trim().toLowerCase() === resolvedTaskId.trim().toLowerCase()
           ? {
               ...t,
               columnId: targetStageId,
@@ -821,13 +824,13 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const backendTask = await invoke<any>('move_task_stage', {
-        taskId,
+        taskId: resolvedTaskId,
         targetStageId,
         boardId: activeBoardId,
       });
       if (backendTask && typeof backendTask.id === 'string') {
         const mapped = mapBackendTaskToKanban(backendTask);
-        const prev = get().tasks.find((t) => t.id === taskId) ?? task;
+        const prev = get().tasks.find((t) => t.id === resolvedTaskId || t.id.trim().toLowerCase() === resolvedTaskId.trim().toLowerCase()) ?? task;
         // Local-only timer/UX bookkeeping (backend has no timer fields).
         const sourceColIndex = columns.findIndex((c) => c.id === prev.columnId);
         const targetColIndex = columns.findIndex((c) => c.id === targetStageId);
@@ -863,7 +866,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           isTimerRunning: mapped.status === 'running',
           returnsCount: isRework ? prev.returnsCount + 1 : prev.returnsCount,
         };
-        const updatedTasks = get().tasks.map((t) => (t.id === taskId ? merged : t));
+        const updatedTasks = get().tasks.map((t) =>
+          t.id === resolvedTaskId || t.id.trim().toLowerCase() === resolvedTaskId.trim().toLowerCase() ? merged : t
+        );
         set({ tasks: updatedTasks });
         persistTasksToLocalStorage(updatedTasks);
 
@@ -879,13 +884,13 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         // Reliable agent autorun upon entering a stage with a persona (§ 2.2 & § 2.32)
         const colDef = targetColDef ?? columns.find((c) => c.id === merged.columnId);
         if (colDef?.autoRun ?? !!colDef?.persona) {
-          await triggerRunAgent(taskId);
+          await triggerRunAgent(resolvedTaskId);
         }
         return;
       }
-      throw new Error(`move_task_stage returned empty or invalid task for id "${taskId}"`);
+      throw new Error(`move_task_stage returned empty or invalid task for id "${resolvedTaskId}"`);
     } catch (err: unknown) {
-      console.error(`[moveTask] Backend move_task_stage failed for task "${taskId}" -> stage "${targetStageId}":`, err);
+      console.error(`[moveTask] Backend move_task_stage failed for task "${resolvedTaskId}" -> stage "${targetStageId}":`, err);
       const msg = typeof err === 'string' ? err : err instanceof Error ? err.message : JSON.stringify(err);
       
       // RACE CONDITION PREVENTION (§ 2.22):
@@ -894,12 +899,12 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       // Instead, safely revert only the target card's position without dropping cards from the board.
       const isOptimisticOrNew = Boolean(task.createdAt && Date.now() - task.createdAt < 60000);
       if (isOptimisticOrNew) {
-        console.warn(`[moveTask] Preserving optimistic/new task "${taskId}" in local store despite backend rejection`);
+        console.warn(`[moveTask] Preserving optimistic/new task "${resolvedTaskId}" in local store despite backend rejection`);
       }
 
       const currentTasks = get().tasks;
       const reverted = currentTasks.map((t) =>
-        t.id === taskId
+        t.id === resolvedTaskId || t.id.trim().toLowerCase() === resolvedTaskId.trim().toLowerCase()
           ? {
               ...t,
               columnId: originalColumnId,
@@ -1262,11 +1267,14 @@ ${msg}`);
   deleteTask: async (taskId) => {
     const prevTasks = get().tasks;
     const prevSelectedTaskId = get().selectedTaskId;
-    const target = prevTasks.find((t) => t.id === taskId);
-    const isSubtask = !!target?.parentId || taskId.includes('.');
+    const target = prevTasks.find(
+      (t) => t.id === taskId || t.id.trim().toLowerCase() === taskId.trim().toLowerCase()
+    );
+    const resolvedId = target ? target.id : taskId;
+    const isSubtask = !!target?.parentId || resolvedId.includes('.');
 
     // Cascade: the task plus all its descendants (via parentId or id prefix).
-    const toDelete = new Set<string>([taskId]);
+    const toDelete = new Set<string>([resolvedId, taskId]);
     let grew = true;
     while (grew) {
       grew = false;
@@ -1342,20 +1350,26 @@ ${msg}`);
 
   runTaskAgent: async (taskId) => {
     const { tasks, columns, moveTask, updateTask } = get();
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task) return;
+    const task = tasks.find(
+      (t) => t.id === taskId || t.id.trim().toLowerCase() === taskId.trim().toLowerCase()
+    );
+    if (!task) {
+      console.warn(`[runTaskAgent] Task "${taskId}" not found in local store`);
+      return;
+    }
+    const resolvedTaskId = task.id;
 
     const taskCol = columns.find((c) => c.id === task.columnId);
-    if (taskCol?.persona) {
-      updateTask(taskId, { status: 'running', isTimerRunning: true });
+    if (taskCol?.persona || taskCol?.autoRun) {
+      updateTask(resolvedTaskId, { status: 'running', isTimerRunning: true });
       await syncTasksBackend(get().tasks);
-      await triggerRunAgent(taskId);
+      await triggerRunAgent(resolvedTaskId);
     } else {
-      // Task sits in a non-agent column: move to the FIRST column with a persona
+      // Task sits in a non-agent column: move to the FIRST column with a persona or autoRun
       // (moveTask auto-runs the agent on entry).
-      const firstAgentCol = columns.find((c) => c.persona);
+      const firstAgentCol = columns.find((c) => c.persona || c.autoRun);
       if (firstAgentCol) {
-        await moveTask(taskId, firstAgentCol.id);
+        await moveTask(resolvedTaskId, firstAgentCol.id);
       }
     }
   },

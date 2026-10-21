@@ -2419,7 +2419,7 @@ pub async fn execute_tool(
             let tasks = crate::commands::load_tasks_from_disk(repo_root).await;
             let current_task = tasks
                 .iter()
-                .find(|t| t.id == task_id)
+                .find(|t| crate::commands::task_id_matches(&t.id, task_id))
                 .ok_or_else(|| anyhow::anyhow!("Task {} not found", task_id))?;
 
             let boards_cfg = crate::config::load_boards_config(repo_root).await.ok();
@@ -2937,7 +2937,7 @@ pub async fn execute_tool(
             let mut tasks = crate::commands::load_tasks_from_disk(repo_root).await;
             let current_task_idx = tasks
                 .iter()
-                .position(|t| t.id == current_task_id)
+                .position(|t| crate::commands::task_id_matches(&t.id, current_task_id))
                 .ok_or_else(|| anyhow::anyhow!("Task {} not found", current_task_id))?;
 
             // Anti-Bypass Security Check:
