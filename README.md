@@ -14,18 +14,105 @@
 
 ---
 
+## 🧭 The Manifesto: Why Chat-Based AI is Obsolete
+
+Modern AI coding assistants have hit an architectural wall.
+
+Whether working with **Claude Code**, **OpenAI Codex**, **Cursor**, **Antigravity**, or **DeepSeek Harness (DSH)**, developers are universally shoehorned into a legacy 1960s terminal interaction model: **the linear conversational chat**. We have traded writing code for an exhausting loop of prompt babysitting, tab sprawl, git status anxiety, and silent file overwrites.
+
+**CanbanVoimaxHarness (CVH)** is engineered from direct operational experience with these bleeding-edge tools to establish a new fundamental truth:
+
+> **Software engineering is a multi-dimensional, stateful, multi-agent pipeline. It cannot survive inside a 1D conversational chat thread.**
+
+---
+
+### 💥 1. The Collapse of the Linear Chat Paradigm
+
+Traditional chat-driven assistants suffer from fatal structural flaws that compound as project complexity scales:
+
+| Failure Mode | Conventional Chat Assistants (Claude, Codex, Cursor, DSH) | Real-World Engineering Reality |
+| :--- | :--- | :--- |
+| **The Linear Chat Trap** | Forcing all interactions into a single sequential timeline | Developers drown in dozens of disconnected chat tabs and ephemeral threads, losing track of what was tested or changed. |
+| **Context Degradation & Hallucination Drift** | Unbounded token sprawl; blunt truncation or lossy auto-summarization | As dialogue history expands, critical architectural invariants are squeezed out. Models hallucinate outdated APIs and forget core constraints. |
+| **Working Tree Anarchy** | Uncontrolled, in-place file modifications directly on your active working directory | AI edits clobber unstaged work, introduce breaking changes mid-stride, and pollute Git history with dirty unstaged diffs. |
+| **The "Tired Chat Operator" Syndrome** | Human engineer forced to manually copy errors, logs, and files between tools | You spend your day as an exhausted relay clerk: copying compiler errors back into chat, begging the model not to touch unrelated files, and cherry-picking broken patches. |
+| **Resource & Electron Bloat** | Bulky Chromium/Electron runtimes consuming 1.5 GB to 3.5 GB of RAM | Desktop performance grinds to a halt while running heavy IDE wrappers alongside local LLM proxies and native language servers. |
+
+#### 🥀 The "Tired Chat Operator" Anti-Pattern
+In conventional tools, the human engineer is forced to act as the fragile glue between disjointed systems:
+1. You describe a feature in a chat window.
+2. The agent outputs code that partially touches multiple files, clobbering your current uncommitted changes.
+3. The build breaks. You copy the terminal error and paste it back into the chat.
+4. The model "apologizes" and writes a half-baked fix that breaks 3 other unit tests.
+5. Context limits approach: the model begins hallucinating nonexistent APIs, forgetting earlier constraints.
+6. In desperation, you open a new chat tab, re-explain the entire repository architecture from scratch, and repeat the cycle.
+
+This is not autonomy. **This is glorified copy-paste with cognitive burnout.**
+
+---
+
+### ⚡ 2. The Solution: The Kanban Board IS the Autonomous Control Plane
+
+**CanbanVoimaxHarness** replaces the fragile conversational thread with an immutable, deterministic engineering state machine. 
+
+In CVH, you dispatch work once onto a tactile Kanban board. **The board orchestrates the agents; the agents execute across isolated worktrees; the machine enforces ground truth.**
+
+```text
+               +-----------------------------------------------------------------------+
+               |                  THE KANBAN AUTONOMOUS CONTROL PLANE                  |
+               +-----------------------------------------------------------------------+
+                                                  │
+                 ┌────────────────────────────────┴────────────────────────────────┐
+                 ▼                                                                 ▼
+   +---------------------------+                                     +---------------------------+
+   |   COLUMNS = AGENT ROLES   |                                     |    NATIVE GIT WORKTREES   |
+   | Each column is a bound    |                                     | Every task executes in its|
+   | autonomous agent persona  |                                     | own isolated directory    |
+   | with strict tool policies |                                     | and dedicated branch      |
+   +-------------┬-------------+                                     +-------------┬-------------+
+                 │                                                                 │
+                 └────────────────────────────────┬────────────────────────────────┘
+                                                  ▼
+                               +-------------------------------------+
+                               |     LIFECYCLE HOOKS & SENSORS       |
+                               | Transitions execute .bat/.ps1/.sh   |
+                               | Gatekeeper sensors (cargo / npm)    |
+                               | enforce zero-regression invariants  |
+                               +------------------┬------------------+
+                                                  │
+                 ┌────────────────────────────────┴────────────────────────────────┐
+                 ▼                                                                 ▼
+   +---------------------------+                                     +---------------------------+
+   |  STRICT 2-TIER TOOL MATRIX|                                     | ULTRA-LEAN RUST CORE      |
+   | Strict AND-semantics with |                                     | Rust 2021 + Tauri v2      |
+   | dynamic schema stripping  |                                     | ~40MB RAM footprint       |
+   | (-2,400+ prompt tokens)   |                                     | Zero Electron bloat       |
+   +---------------------------+                                     +---------------------------+
+```
+
+#### 🏛️ Core Philosophical Invariants of CVH:
+
+1. **Dispatched Once, Governed Autonomously**: You define a task once on a board card. CVH provisions the environment, delegates implementation to specialized agent personas, runs compiler checks, requests adversarial code reviews, and executes merges upon verification—all without babysitting.
+2. **Columns ARE Specialized Agent Personas (Columns = Agents)**: Columns are not passive status labels or static buckets. In CVH, each column represents a specialized, autonomous persona (`cvh-dev`, `architect`, `reviewer`, `verifier`). Moving a card into a stage primes that persona, mounts its unique rules, and activates its ReAct loop automatically.
+3. **Deterministic Native Git Worktree Isolation**: Every single task card provisions an isolated native Git worktree at `worktrees/<task-slug>` on a dedicated feature branch (`feat/<task-slug>`). Multiple agents can code, compile, and run tests concurrently with zero risk of dirty working trees, broken uncommitted code, or merge conflicts.
+4. **Lifecycle Hooks & Strict Gatekeeper Sensors**: Moving cards between columns triggers customizable lifecycle scripts (`.bat`, `.cmd`, `.ps1`, `.sh`) injected with full runtime context (`CVH_TASK_ID`, `CVH_WORKTREE_PATH`, `CVH_BRANCH`, `CVH_STAGE_ID`). Ground Truth Gatekeeper Sensors (`cargo check`, `cargo clippy`, `pnpm run build`, `npm test`) validate physical correctness before a transition is permitted. If compilation fails, the transition is blocked deterministically.
+5. **Two-Tier Zero-Trust Tool Policy Matrix & Dynamic Schema Stripping**: Tool security is governed by strict `AND`-semantics: `effective = global_enabled && stage_override`. Disabled tools are completely purged from the JSON schema payload sent to the LLM—guaranteeing zero tool hallucinations and saving **2,400+ prompt tokens per inference step**.
+6. **Zero-Overhead Custom CLI Tools via Declarative JSON**: Extend agent capabilities on the fly. Drop a JSON descriptor into `.cvh/tools/<tool_name>.json` with parameterized `{{args}}` interpolation, and the harness immediately exposes custom internal binaries, scripts, or linters to the agent loop.
+7. **Ultra-Lightweight Native Core (Rust 2021 + Tauri v2)**: Built for developers who demand instant responsiveness. CVH runs on a native asynchronous Tokio engine in Rust paired with a Tauri v2 shell, consuming a razor-thin **~40MB RAM** instead of the 2GB+ memory footprint typical of Electron-based apps.
+
+---
+
 ## 🎯 Executive Overview & Value Proposition
 
-**CanbanVoimaxHarness (CVH)** is a next-generation desktop agentic IDE designed from first principles for autonomous, multi-stage software engineering. While conventional AI coding assistants force developers into a single chaotic chat panel with unbounded context degradation and uncontrolled file writes, CVH establishes an immutable architectural paradigm:
+**CanbanVoimaxHarness (CVH)** bridges the gap between chaotic single-prompt chat windows and enterprise-grade multi-agent software engineering. 
 
-**The Kanban Board IS the Application Control Plane.**
-
-- 🏎️ **Ultra-Lightweight Footprint (~40MB RAM)**: Built with a native **Rust 2021 / Tauri v2** asynchronous core and a hyper-responsive **React 19** frontend. CVH delivers instantaneous desktop performance, consuming a tiny fraction of the memory overhead typical of legacy Electron-based IDEs (~1.5GB+).
+- 🏎️ **Ultra-Lightweight Footprint (~40MB RAM)**: Native **Rust 2021 / Tauri v2** asynchronous core and a hyper-responsive **React 19** frontend. Instantaneous startup (<200ms) with zero Electron ballast.
 - 🌲 **Deterministic Worktree Isolation**: Every task executes strictly inside its own isolated Git worktree (`worktrees/<task-slug>`) on a dedicated feature branch. Concurrent agents never touch or pollute your active working tree or main branch.
 - 🗄️ **High-Performance SQLite Persistence in WAL Mode**: Every token, thought block, tool invocation, and duration metric streams directly into an ACID-compliant SQLite engine (`.cvh/harness.db`), guaranteeing atomic persistence with zero lock contention.
 - 🛡️ **Two-Tier Zero-Trust Tool Policy Matrix**: Ironclad `AND`-semantics ensure tools disabled globally can never be enabled by stages, while disabled tool schemas are completely purged from LLM requests—eliminating hallucinations and saving **2,400+ prompt tokens per step**.
 - 🗜️ **State-Preserving Context Compactor & Prefix Caching**: Automated log evaporation reclaims up to **80% of token context** without calling external LLM APIs, while deterministic alphabetical tool serialization preserves provider KV cache hit rates **above 90%**.
 - 🏃 **Relay Handoff Memory Priming**: As tasks advance across pipeline stages, structured handoff summaries are injected into top-level prompt banners (`[RELAY HANDOFF]`), achieving seamless context continuity with zero memory loss.
+- ⚡ **Autonomous Transition Hooks & Gatekeeper Sensors**: Customizable lifecycle automation runs scripts on stage entry/exit, while ground-truth compilers gate card progression.
 - 🎨 **Obsidian Dark Aesthetic & Tactile Pop-Art Minimalism**: High-contrast obsidian dark palette (`#07090e`, `#0d1117`, `#161b22`), monospace tabular timers (`tabular-nums`), signature circular wave theme transitions, and zero AI-slop pastel gradients.
 
 ---
@@ -76,8 +163,8 @@ CanbanVoimaxHarness decouples desktop OS interactions, asynchronous LLM streamin
 |                                                                 v                      |
 |  +---------------------------+  +----------------------------+  +-------------------+  |
 |  |  SQLite WAL (.cvh/harness)|  |  Git Worktree Subsystem    |  |  Tool Output Spill|  |
-|  |  * ACID dialogue logs     |  |  * Isolated task branches  |  |  * >100 lines /   |  |
-|  |  * Sub-ms upsert metrics  |  |  * Autonomous merge gates  |  |    >8KB to disk   |  |
+|  |  * ACID dialogue logs     |  |  * Isolated task branches  |  |  * >500 lines /   |  |
+|  |  * Sub-ms upsert metrics  |  |  * Autonomous merge gates  |  |    >64KB to disk  |  |
 |  +---------------------------+  +----------------------------+  +-------------------+  |
 +----------------------------------------------------------------------------------------+
 ```
@@ -150,8 +237,8 @@ In CanbanVoimaxHarness, **Columns Represent Autonomous Agent Personas**. When a 
 
 ## ⚡ Technical Highlights & Subsystems
 
-### 1. 🦀 Tauri v2 + Rust 2021 Tokio Async Engine
-The desktop runtime is engineered in Rust 2021 using the **Tokio** asynchronous runtime, eliminating GUI thread freezes. Tauri v2 provides zero-overhead native system integration (native menus, file dialogs, process spawns, window vibrancy, and single-instance locks) with rock-solid security boundaries and standard memory isolation.
+### 1. 🦀 Tauri v2 + Rust 2021 Tokio Async Engine (~40MB RAM Footprint)
+The desktop runtime is engineered in Rust 2021 using the **Tokio** asynchronous runtime, completely eliminating GUI thread freezes. Tauri v2 provides zero-overhead native OS integration (native menus, file dialogs, process management, window vibrancy, and single-instance locks) with rock-solid security boundaries and standard memory isolation—sipping ~40MB of RAM instead of multi-gigabyte Electron bloat.
 
 ### 2. ⚛️ React 19 + Tailwind CSS v4 + Framer Motion
 - **React 19 Reactivity**: Utilizes fine-grained Zustand store subscriptions with `useShallow` selectors and custom `React.memo` shallow comparators to eliminate unnecessary board repaints on timer ticks or card drags.
@@ -166,23 +253,34 @@ Task messages, streaming chunks, tool invocations, and thinking steps are persis
 ### 4. 🌲 Deterministic Git Worktree Isolation Per Task
 Never suffer from AI tools overwriting your unstaged changes or breaking your active build:
 - Every task card automatically provisions an isolated worktree at `worktrees/<task-slug>` on branch `feat/<task-slug>`.
-- All file reads, edits, bash commands, and tests execute inside that dedicated directory.
+- All file reads, edits, shell commands, and tests execute inside that dedicated directory.
 - Upon passing all review gates and receiving an `APPROVED` verdict, the branch merges cleanly into `main`, the worktree is safely unmounted and pruned, and temporary branches are reclaimed.
 
-### 5. 🗜️ State-Preserving Dynamic Context Compactor
+### 5. 🗜️ State-Preserving Dynamic Context Compactor & Prefix Caching
 Long-running agent workflows inevitably encounter context window degradation and token exhaustion:
 - **Zero-LLM Fast Evaporation**: Terminal outputs and file dumps older than the last 2 active turns exceeding 500 characters are automatically evaporated into lightweight metadata summaries without spending a single API token.
 - **Deterministic Prefix Caching**: System messages and tool schemas are serialized in strict alphabetical order with zero dynamic timestamps or randomized session IDs in the prompt prefix, yielding **>90% provider cache hit rates**.
 - **100% Context Window Compaction Ceiling**: Compaction triggers precisely when context reaches the configured stage context window limit, ensuring full buffer utilization without premature token loss.
 
-### 6. 🛡️ 2-Tier Zero-Trust Tool Policy Matrix (Strict AND-Semantics)
+### 6. 🛡️ 2-Tier Zero-Trust Tool Policy Matrix (Strict AND-Semantics & Schema Stripping)
 Security is enforced as an ironclad barrier at both the configuration and runtime kernel levels:
 - **Level A (Global Switches)**: Enforced globally across all pipelines (`.cvh/settings/tool-policy.json`).
 - **Level B (Stage Overrides)**: Enforced per pipeline stage (e.g., Code Review stage disables `write_file` and `edit_file`).
 - **Strict AND-Semantics**: `effective(tool, stage) = global_enabled[tool] && stage_override[stage][tool]`. A stage can never re-enable a globally disabled tool.
 - **Zero-Trust Request Stripping**: Disabled tools are entirely pruned from the schema sent to the LLM, saving **~2,400+ prompt tokens per turn** and eliminating tool hallucination vectors.
 
-### 7. 🏃 Relay Handoff Memory Priming
+### 7. ⚡ Autonomous Transition Hooks & Gatekeeper Sensors (`.cvh/hooks/`)
+Stages execute custom transition scripts (`.bat`, `.cmd`, `.ps1`, `.sh`, binaries) upon entry and exit.
+- **Injected Context Variables**: Scripts receive rich metadata via `CVH_TASK_ID`, `CVH_TASK_TITLE`, `CVH_WORKTREE_PATH`, `CVH_BRANCH`, and `CVH_STAGE_ID`.
+- **Compiler Sensor Gates**: Stages enforce hard gatekeeper sensors (e.g. `cargo check`, `cargo clippy`, `pnpm run build`). If a sensor exits non-zero, stage transition is rejected, and the card remains pinned with full diagnostic logs.
+
+### 8. 🔧 Dynamic Custom CLI Tools via Declarative JSON (`.cvh/tools/`)
+Extend the agent's capabilities with zero Rust recompilation:
+- Drop a descriptive manifest into `.cvh/tools/<tool_name>.json`.
+- The engine dynamically registers the tool with parameter validation and automatic shell argument interpolation (`{{args}}`).
+- Custom tools are immediately subject to the 2-Tier Tool Policy Matrix and permission governance.
+
+### 9. 🏃 Relay Handoff Memory Priming
 Context fragmentation across multi-stage engineering pipelines is eliminated:
 - When a task transitions (`advance_task` or `reject_task`), the handover summary is recorded in `task.handover_summary`.
 - The subsequent agent receives this context pre-compiled into a top-level prompt banner:
@@ -192,13 +290,13 @@ Context fragmentation across multi-stage engineering pipelines is eliminated:
   ```
 - The receiving agent starts Turn 1 with 100% memory primed—no wasted turns reading rule or log files.
 
-### 8. 🧬 Native Subagent Delegation Hierarchy (Sync & Async)
+### 10. 🧬 Native Subagent Delegation Hierarchy (Sync & Async)
 CVH implements a first-class subagent delegation tree:
 - **Sync Oneshot (`subagent`)**: Spawns an in-process child agent synchronously for focused subtasks, blocking until completion and returning a concise markdown report without moving cards or creating duplicate worktrees.
 - **Async Background (`subagent_bg`)**: Dispatches long-running background tasks returning an immediate `subagent_id`.
 - **Zero-Polling Collection (`collect_subagent`)**: Awaits background subagent completion via async notification channels without CPU-wasting polling loops.
 
-### 9. 🌑 Obsidian Dark Theme & Tactile Pop-Art Minimalism
+### 11. 🌑 Obsidian Dark Theme & Tactile Pop-Art Minimalism
 Designed for professional engineers who spend hours inside their IDE:
 - Deep obsidian dark palette (`#07090e`, `#0d1117`, `#161b22`, `#21262d`, `#f0f6fc`).
 - Monospace numerals with `tabular-nums` preventing layout shifts on live timers.
@@ -231,7 +329,7 @@ CVH equips agents with an industrial-grade tool suite matching the SWE-bench sta
 | | `web_fetch` | Fetches webpage content converted into clean, readable Markdown. |
 | **Custom Tools** | `.cvh/tools/*.json` | Dynamic CLI tool integration with automatic `{{args}}` parameter interpolation. |
 
-*Note: Outputs exceeding 100 lines or 8 KB automatically spill to disk at `.cvh/spill/<timestamp>-<tool>.log`, returning only the head (20 lines) and tail (20 lines) to preserve LLM context.*
+*Note: Large outputs exceeding 500 lines or 64 KB for shell commands (`execute_command`), or 2,000 lines / 128 KB for `read_file`, automatically spill to disk at `.cvh/spill/<timestamp>-<tool>.log`, returning only the head (20 lines) and tail (20 lines) to preserve LLM context.*
 
 ---
 
@@ -298,7 +396,7 @@ CanbanVoimaxHarness/
 │   ├── settings/              # Tool Policy Matrix (tool-policy.json)
 │   ├── tools/                 # Dynamic custom CLI tools (<tool>.json)
 │   ├── hooks/                 # Transition scripts (.bat, .ps1, .sh)
-│   └── spill/                 # Spilled tool output logs (>100 lines / >8KB)
+│   └── spill/                 # Spilled tool output logs (>500 lines / >64KB)
 │
 ├── .agents/                   # Agent Skills Catalog & Task History
 │   ├── skills/                # Modular skills catalog
