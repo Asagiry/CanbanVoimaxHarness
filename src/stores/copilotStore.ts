@@ -31,7 +31,6 @@ interface CopilotStoreState {
   isStreaming: boolean;
   input: string;
   selectedModel: string;
-  availableModels: string[];
   statusText: string | null;
 
   // Actions
@@ -104,13 +103,6 @@ export const useCopilotStore = create<CopilotStoreState>((set, get) => ({
   isStreaming: false,
   input: '',
   selectedModel: getInitialModel(),
-  availableModels: [
-    'gemini-3.8-flash-high',
-    'claude-3-7-sonnet-20250219',
-    'gpt-4o',
-    'qwen2.5-coder:32b',
-    'deepseek-r1',
-  ],
   statusText: null,
 
   toggleOpen: () => {

@@ -36,6 +36,8 @@ export default function ThinkingCard({
   const [isExpanded, setIsExpanded] = useState(true);
   const [copied, setCopied] = useState(false);
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const userScrolledUpRef = useRef(false);
   const thinkingStart = useDrawerStore((s) => s.thinkingStartTime[taskId] ?? null);
   const blockStart = thought?.createdAt || thinkingStart;
 
@@ -154,6 +156,27 @@ export default function ThinkingCard({
   const visibleText = (isFinished ? fullText : fullText.slice(0, displayedLength)).trimEnd();
   const isTyping = !isFinished && displayedLength < fullText.length;
 
+  // Auto-scroll to bottom during live streaming unless user intentionally scrolled up
+  useEffect(() => {
+    if (!isFinished && !userScrolledUpRef.current && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [visibleText, isFinished]);
+
+  // When live streaming starts, reset user scroll state
+  useEffect(() => {
+    if (!isFinished) {
+      userScrolledUpRef.current = false;
+    }
+  }, [isFinished]);
+
+  const handleBodyScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 35;
+    userScrolledUpRef.current = !isAtBottom;
+  };
+
   return (
     <div className="rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fcfcfc] dark:bg-[#0d1117] overflow-hidden shadow-xs transition duration-150 animate-in fade-in duration-300 slide-in-from-top-1">
       {/* Header bar */}
@@ -201,7 +224,11 @@ export default function ThinkingCard({
 
       {/* Expanded body */}
       {isExpanded && (
-        <div className="px-3 pt-2.5 pb-2 border-t border-[#ebebeb] dark:border-[#21262d] bg-[#ffffff] dark:bg-[#090a0f] font-mono text-[13px] leading-relaxed text-[#333333] dark:text-[#c9d1d9] whitespace-pre-wrap select-text max-h-96 overflow-y-auto">
+        <div
+          ref={scrollRef}
+          onScroll={handleBodyScroll}
+          className="px-3 pt-2.5 pb-2 border-t border-[#ebebeb] dark:border-[#21262d] bg-[#ffffff] dark:bg-[#090a0f] font-mono text-[13px] leading-relaxed text-[#333333] dark:text-[#c9d1d9] whitespace-pre-wrap select-text max-h-96 overflow-y-auto"
+        >
           {visibleText}
           {isTyping && (
             <span

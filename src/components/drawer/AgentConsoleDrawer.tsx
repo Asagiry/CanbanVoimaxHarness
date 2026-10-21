@@ -335,17 +335,11 @@ export default function AgentConsoleDrawer() {
 
   const effectiveModel = task?.model || settings.model || 'gemini-3.8-flash-high';
   const selectableModels = useMemo(() => {
-    return Array.from(
-      new Set([
-        effectiveModel,
-        ...(availableModels || []),
-        'gemini-3.8-flash-high',
-        'gemini-2.5-pro',
-        'claude-3-7-sonnet-20250219',
-        'gpt-4o',
-      ])
-    );
-  }, [effectiveModel, availableModels]);
+    const userModels = (availableModels && availableModels.length > 0)
+      ? availableModels
+      : [settings.model || 'gemini-3.8-flash-high'];
+    return Array.from(new Set([effectiveModel, ...userModels]));
+  }, [effectiveModel, availableModels, settings.model]);
 
   const turns = useMemo(() => {
     if (!task) return 0;

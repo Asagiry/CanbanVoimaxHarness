@@ -318,6 +318,7 @@ export default function GitDiffSidebar({
   const [diff, setDiff] = useState<TaskGitDiff | null>(null);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(() => new Set());
   const [isLoading, setIsLoading] = useState(false);
+  const [hasInitialLoaded, setHasInitialLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Width & Resizability (default 480px, stored in localStorage)
@@ -349,6 +350,7 @@ export default function GitDiffSidebar({
   // Reset initial tracking on task switch
   useEffect(() => {
     hasInitialLoadedRef.current = false;
+    setHasInitialLoaded(false);
     userCollapsedFilesRef.current.clear();
     setExpandedFiles(new Set());
   }, [taskId]);
@@ -368,7 +370,6 @@ export default function GitDiffSidebar({
         );
         if (!hasInitialLoadedRef.current) {
           // Initial load for this task: all files collapsed by default
-          hasInitialLoadedRef.current = true;
           setExpandedFiles(new Set());
         } else {
           // Background sync (subsequent fetch on live tool events, etc.):
@@ -395,6 +396,8 @@ export default function GitDiffSidebar({
       const msg = err?.message || (typeof err === 'string' ? err : 'Ошибка загрузки Git Diff');
       setError(msg);
     } finally {
+      hasInitialLoadedRef.current = true;
+      setHasInitialLoaded(true);
       setIsLoading(false);
     }
   }, [taskId]);
@@ -414,11 +417,16 @@ export default function GitDiffSidebar({
     fetchDiff();
   }, [fetchDiff]);
 
+  // Modifying tools that actually change workspace filesystem state
+  const MODIFYING_TOOLS = useMemo(
+    () => new Set(['write_file', 'edit_file', 'str_replace', 'execute_command', 'bash']),
+    []
+  );
+
   // Listen to live agent tool execution & finish events with anti-race disposal
   useEffect(() => {
     if (!taskId) return;
     let isDisposed = false;
-    let unlistenToolCall: (() => void) | undefined;
     let unlistenToolResult: (() => void) | undefined;
     let unlistenFinish: (() => void) | undefined;
 
@@ -427,19 +435,17 @@ export default function GitDiffSidebar({
         const { listen } = await import('@tauri-apps/api/event');
         if (isDisposed) return;
 
-        const uCall = await listen<{ taskId?: string }>('agent:tool_call', (event) => {
-          if (event.payload?.taskId === taskId) {
-            scheduleFetch();
-          }
-        });
-        if (isDisposed) {
-          uCall();
-        } else {
-          unlistenToolCall = uCall;
-        }
+        // ONLY trigger diff update on tool_result for filesystem-modifying tools
+        const uResult = await listen<{ taskId?: string; name?: string }>('agent:tool_result', (event) => {
+          const p = event.payload;
+          const eventTaskId = p?.taskId;
+          const isMatchingTask =
+            eventTaskId === taskId ||
+            (eventTaskId && (eventTaskId.startsWith(`${taskId}.`) || eventTaskId.startsWith(`${taskId}:`)));
+          if (!isMatchingTask) return;
 
-        const uResult = await listen<{ taskId?: string }>('agent:tool_result', (event) => {
-          if (event.payload?.taskId === taskId) {
+          const toolName = (p?.name || '').toLowerCase().trim();
+          if (MODIFYING_TOOLS.has(toolName)) {
             scheduleFetch();
           }
         });
@@ -449,8 +455,14 @@ export default function GitDiffSidebar({
           unlistenToolResult = uResult;
         }
 
+        // Trigger diff update on agent finished
         const uFinish = await listen<{ taskId?: string }>('agent:finished', (event) => {
-          if (event.payload?.taskId === taskId) {
+          const p = event.payload;
+          const eventTaskId = p?.taskId;
+          const isMatchingTask =
+            eventTaskId === taskId ||
+            (eventTaskId && (eventTaskId.startsWith(`${taskId}.`) || eventTaskId.startsWith(`${taskId}:`)));
+          if (isMatchingTask) {
             scheduleFetch();
           }
         });
@@ -468,14 +480,13 @@ export default function GitDiffSidebar({
 
     return () => {
       isDisposed = true;
-      if (unlistenToolCall) unlistenToolCall();
       if (unlistenToolResult) unlistenToolResult();
       if (unlistenFinish) unlistenFinish();
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [taskId, scheduleFetch]);
+  }, [taskId, scheduleFetch, MODIFYING_TOOLS]);
 
   // Drag handle resize logic
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -600,7 +611,7 @@ export default function GitDiffSidebar({
                 : 'text-[#8f8f8f] dark:text-[#8b949e]'
             }`}
           />
-          {isLoading && filesCount === 0 ? (
+          {!hasInitialLoaded ? (
             <span className="w-3.5 h-3.5 rounded-full border-2 border-emerald-500/20 border-t-emerald-500 animate-spin" />
           ) : (
             <>
@@ -769,7 +780,7 @@ export default function GitDiffSidebar({
       )}
 
       {/* 2. Main Content Area: Accordion File List or Loading Skeleton */}
-      {isLoading && (!diff || filesCount === 0) ? (
+      {!hasInitialLoaded ? (
         <div className="flex-1 overflow-y-auto p-3 space-y-2.5 min-h-0 bg-[#fafafa] dark:bg-[#090a0f]">
           <div className="flex items-center justify-center py-4 space-x-2 text-xs text-[#8f8f8f] dark:text-[#8b949e]">
             <RefreshCw className="h-3.5 w-3.5 animate-spin text-emerald-600 dark:text-emerald-400" />

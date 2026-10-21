@@ -10,6 +10,7 @@ export function ThinkingCard({ thought, isLive }: ThinkingCardProps) {
   const [isExpanded, setIsExpanded] = useState(isLive ?? false);
   const [copied, setCopied] = useState(false);
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     return () => {
@@ -20,6 +21,13 @@ export function ThinkingCard({ thought, isLive }: ThinkingCardProps) {
   }, []);
 
   const cleanThought = thought.trim();
+
+  useEffect(() => {
+    if (isLive && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [cleanThought, isLive]);
+
   if (!cleanThought) return null;
 
   const handleCopy = (e: React.MouseEvent) => {
@@ -72,7 +80,10 @@ export function ThinkingCard({ thought, isLive }: ThinkingCardProps) {
 
       {/* Expanded body */}
       {isExpanded && (
-        <div className="p-3 text-[11px] leading-relaxed text-[#52525b] dark:text-[#c9d1d9] font-mono whitespace-pre-wrap select-text bg-[#fafafa]/80 dark:bg-[#0d1117] max-h-56 overflow-y-auto">
+        <div
+          ref={scrollRef}
+          className="p-3 text-[11px] leading-relaxed text-[#52525b] dark:text-[#c9d1d9] font-mono whitespace-pre-wrap select-text bg-[#fafafa]/80 dark:bg-[#0d1117] max-h-56 overflow-y-auto"
+        >
           {cleanThought}
         </div>
       )}

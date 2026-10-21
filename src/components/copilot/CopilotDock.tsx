@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   Bot,
   PanelRightClose,
@@ -11,6 +11,7 @@ import {
   Cpu,
 } from 'lucide-react';
 import { useCopilotStore, CopilotMessage } from '../../stores/copilotStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import MarkdownContent from './MarkdownContent';
 import ThinkingCard from './ThinkingCard';
 import ToolExecutionCard from './ToolExecutionCard';
@@ -28,7 +29,6 @@ export default function CopilotDock() {
     isStreaming,
     input,
     selectedModel,
-    availableModels,
     statusText,
     setIsOpen,
     setWidth,
@@ -39,6 +39,15 @@ export default function CopilotDock() {
     loadHistory,
     clearHistory,
   } = useCopilotStore();
+
+  const { availableModels, settings } = useSettingsStore();
+
+  const selectableModels = useMemo(() => {
+    const userModels = (availableModels && availableModels.length > 0)
+      ? availableModels
+      : [settings.model || 'gemini-3.8-flash-high'];
+    return Array.from(new Set([selectedModel, ...userModels]));
+  }, [selectedModel, availableModels, settings.model]);
 
   const [confirmClear, setConfirmClear] = useState(false);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
@@ -236,7 +245,7 @@ export default function CopilotDock() {
               type="button"
               onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
               className="px-2 py-0.5 rounded-full bg-[#f4f4f5] dark:bg-[#21262d] hover:bg-[#ebebeb] dark:hover:bg-[#30363d] border border-[#e4e4e7] dark:border-[#30363d] text-[11px] font-mono text-[#52525b] dark:text-[#f0f6fc] flex items-center space-x-1 cursor-pointer transition"
-              title="Выбор активной модели Архитектора"
+              aria-label="Выбор активной модели Архитектора"
             >
               <Cpu className="w-3 h-3 text-[#71717a] dark:text-[#8b949e]" />
               <span className="truncate max-w-[110px]">
@@ -250,7 +259,7 @@ export default function CopilotDock() {
                 <div className="px-3 py-1 font-mono text-[10px] uppercase text-[#a1a1aa] dark:text-[#8b949e] border-b border-[#f4f4f5] dark:border-[#21262d]">
                   Модель Архитектора
                 </div>
-                {availableModels.map((m) => {
+                {selectableModels.map((m) => {
                   const isCurrent = m === selectedModel;
                   return (
                     <button

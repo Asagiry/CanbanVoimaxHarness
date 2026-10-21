@@ -1219,7 +1219,7 @@ export default function KanbanBoard() {
                   onChange={(e) => setSelectedModel(e.target.value)}
                   className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-mono text-xs cursor-pointer transition"
                 >
-                  {(availableModels.length > 0 ? availableModels : [settings.model || 'gemini-3.8-flash-high']).map((m) => (
+                  {Array.from(new Set([selectedModel, ...(availableModels.length > 0 ? availableModels : [settings.model || 'gemini-3.8-flash-high'])])).map((m) => (
                     <option key={m} value={m} className="dark:bg-[#161b22] dark:text-[#f0f6fc]">
                       {m}
                     </option>
