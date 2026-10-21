@@ -430,11 +430,42 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
 }
 
 async function triggerRunAgent(taskId: string, prompt?: string): Promise<void> {
+  // Ensure the task is guaranteed to be saved and known to the backend before running agent (§ Requirement 4)
+  const currentTasks = useBoardStore.getState().tasks;
+  const taskToRun = currentTasks.find(
+    (t) => t.id === taskId || t.id.trim().toLowerCase() === taskId.trim().toLowerCase()
+  );
+  if (taskToRun) {
+    await syncTasksBackend(currentTasks);
+  }
+
   try {
     const { invoke } = await import('@tauri-apps/api/core');
     await invoke('run_agent', { taskId, prompt: prompt || null });
   } catch (err) {
-    console.info('run_agent invoke failed or in web mode:', err);
+    const errMsg = String(err);
+    logEvent('ERROR', 'BOARD_STORE', `triggerRunAgent: run_agent failed for task "${taskId}"`, errMsg);
+    console.error(`[triggerRunAgent] run_agent failed for task "${taskId}":`, err);
+
+    // Safely update the task in boardStore: revert status from 'running' to 'idle' (or 'error'), set isTimerRunning: false
+    const tasksAfterErr = useBoardStore.getState().tasks;
+    const reverted = tasksAfterErr.map((t) =>
+      t.id === taskId || t.id.trim().toLowerCase() === taskId.trim().toLowerCase()
+        ? {
+            ...t,
+            status: 'idle' as TaskStatus,
+            isTimerRunning: false,
+            updatedAt: Date.now(),
+          }
+        : t
+    );
+    useBoardStore.setState({ tasks: reverted });
+    persistTasksToLocalStorage(reverted);
+    useDrawerStore.getState().setActiveAgentTask(taskId, false);
+    void syncTasksBackend(reverted);
+
+    // Display user notification / alert so the user understands why the agent did not start
+    alert(`Не удалось запустить агента для задачи "${taskId}":\n${errMsg}`);
   }
 }
 
@@ -744,21 +775,21 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           });
           // Preserve any in-flight optimistic or newly created tasks not yet returned by backend list_tasks (§ 2.22)
           const pendingOptimistic = prevTasks.filter(
-            (p) => !rawTasks.some((raw) => raw.id === p.id) && (p.createdAt && Date.now() - p.createdAt < 60000)
+            (p) => !rawTasks.some((raw) => raw.id === p.id)
           );
           const allTasks = [...mapped, ...pendingOptimistic];
           set({ tasks: allTasks, isTauriConnected: true, isLoadingTasks: false });
           persistTasksToLocalStorage(allTasks);
           syncTaskSeqWithTasks(allTasks);
+          if (pendingOptimistic.length > 0) {
+            void syncTasksBackend(allTasks);
+          }
           return;
         } else {
           // Backend has empty tasks array on disk: check per-project localStorage backup
           const prevTasks = get().tasks;
-          const pendingOptimistic = prevTasks.filter(
-            (p) => p.createdAt && Date.now() - p.createdAt < 60000
-          );
           const backupTasks = loadTasksFromLocalStorage();
-          const merged = [...pendingOptimistic, ...backupTasks.filter((b) => !pendingOptimistic.some((o) => o.id === b.id))];
+          const merged = [...prevTasks, ...backupTasks.filter((b) => !prevTasks.some((o) => o.id === b.id))];
           if (merged.length > 0) {
             set({ tasks: merged, isTauriConnected: true, isLoadingTasks: false });
             syncTaskSeqWithTasks(merged);
@@ -1180,6 +1211,10 @@ ${msg}`);
           }
         }
 
+        // Task persistence safety before run (§ Requirement 4):
+        // Ensure confirmed task is guaranteed to be saved and known to backend before triggerRunAgent
+        await syncTasksBackend(reconciled);
+
         const colDef = get().columns.find((c) => c.id === confirmed.columnId);
         if (colDef?.autoRun ?? !!colDef?.persona) {
           await triggerRunAgent(confirmed.id);
@@ -1402,7 +1437,7 @@ ${msg}`);
   },
 
   runTaskAgent: async (taskId) => {
-    const { tasks, columns, moveTask, updateTask } = get();
+    const { tasks, columns, moveTask } = get();
     const task = tasks.find(
       (t) => t.id === taskId || t.id.trim().toLowerCase() === taskId.trim().toLowerCase()
     );
@@ -1419,11 +1454,20 @@ ${msg}`);
       JSON.stringify({ columnId: task.columnId, boardId: task.boardId, status: task.status })
     );
 
+    // Ensure the task is guaranteed to be saved and known to the backend before running agent (§ Requirement 4)
+    await syncTasksBackend(get().tasks);
+
     const taskCol = columns.find((c) => c.id === task.columnId);
     if (taskCol?.persona || taskCol?.autoRun) {
       logEvent('INFO', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" is in agent column "${taskCol.id}", starting agent`);
-      updateTask(resolvedTaskId, { status: 'running', isTimerRunning: true });
-      await syncTasksBackend(get().tasks);
+      const updatedTasks = get().tasks.map((t) =>
+        t.id === resolvedTaskId || t.id.trim().toLowerCase() === resolvedTaskId.trim().toLowerCase()
+          ? { ...t, status: 'running' as TaskStatus, isTimerRunning: true, updatedAt: Date.now() }
+          : t
+      );
+      set({ tasks: updatedTasks });
+      persistTasksToLocalStorage(updatedTasks);
+      await syncTasksBackend(updatedTasks);
       await triggerRunAgent(resolvedTaskId);
     } else {
       // Task sits in a non-agent column: move to the FIRST column with a persona or autoRun

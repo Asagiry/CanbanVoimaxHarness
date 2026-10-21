@@ -273,9 +273,26 @@ pub fn discover_project_root() -> PathBuf {
 }
 
 fn discover_project_root_raw() -> PathBuf {
-    // 1. Check %LOCALAPPDATA%\com.voimax.cvh\active_project.txt FIRST.
-    // If it points to an existing directory that is NOT a binary/target folder
-    // and has .git or .cvh (or exists as a valid directory), return it!
+    let current = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let current_is_bin = is_binary_or_target_dir(&current);
+
+    // 1. Check current_dir first: if current_dir is NOT a binary/target directory
+    // AND contains .cvh or .git, resolve it with resolve_actual_repo_root(&current).
+    // If valid, use it! Also, update active_project.txt with this resolved directory so future launches remember it.
+    if !current_is_bin && (current.join(".cvh").exists() || current.join(".git").exists()) {
+        let resolved = resolve_actual_repo_root(&current);
+        if !resolved.as_os_str().is_empty() && !is_binary_or_target_dir(&resolved) {
+            eprintln!(
+                "CVH [discover_project_root]: Found .cvh or .git in current_dir: {:?} (resolved: {:?})",
+                current, resolved
+            );
+            persist_active_project_sync(&resolved);
+            return resolved;
+        }
+    }
+
+    // 2. Only fall back to %LOCALAPPDATA%\com.voimax.cvh\active_project.txt
+    // if current_dir is a binary/target folder or has neither .cvh nor .git.
     let active_project_file = get_app_config_dir().join("active_project.txt");
     if active_project_file.exists() {
         if let Ok(content) = std::fs::read_to_string(&active_project_file) {
@@ -296,22 +313,6 @@ fn discover_project_root_raw() -> PathBuf {
                     return target;
                 }
             }
-        }
-    }
-
-    let current = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let current_is_bin = is_binary_or_target_dir(&current);
-
-    // 2. If current_dir is a binary/target folder — NEVER consider it a project!
-    // Only check current_dir if it is NOT a binary/target directory.
-    if !current_is_bin && (current.join(".cvh").exists() || current.join(".git").exists()) {
-        let resolved = resolve_actual_repo_root(&current);
-        if !resolved.as_os_str().is_empty() && !is_binary_or_target_dir(&resolved) {
-            eprintln!(
-                "CVH [discover_project_root]: Found .cvh or .git in current_dir: {:?} (resolved: {:?})",
-                current, resolved
-            );
-            return resolved;
         }
     }
 
@@ -403,21 +404,25 @@ pub fn resolve_actual_repo_root(path: &Path) -> PathBuf {
     }
 }
 
-pub async fn persist_active_project(path: &Path) {
+pub fn persist_active_project_sync(path: &Path) {
     let dir = get_app_config_dir();
-    let _ = tokio::fs::create_dir_all(&dir).await;
+    let _ = std::fs::create_dir_all(&dir);
     let target = dir.join("active_project.txt");
-    if let Err(e) = tokio::fs::write(&target, path.to_string_lossy().as_bytes()).await {
+    if let Err(e) = std::fs::write(&target, path.to_string_lossy().as_bytes()) {
         eprintln!(
-            "CVH [persist_active_project]: Failed to write active_project.txt: {}",
+            "CVH [persist_active_project_sync]: Failed to write active_project.txt: {}",
             e
         );
     } else {
         eprintln!(
-            "CVH [persist_active_project]: Saved active project to {:?}",
+            "CVH [persist_active_project_sync]: Saved active project to {:?}",
             target
         );
     }
+}
+
+pub async fn persist_active_project(path: &Path) {
+    persist_active_project_sync(path);
 }
 
 pub fn default_pipeline_config() -> PipelineConfig {
