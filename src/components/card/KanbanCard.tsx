@@ -3,6 +3,7 @@ import { Draggable } from '@hello-pangea/dnd';
 import { KanbanTask, TaskStatus } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
+import { useTranslation, Language } from '../../stores/languageStore';
 import { useShallow } from 'zustand/react/shallow';
 import { GitBranch, ChevronDown, MessageSquare, GitFork } from 'lucide-react';
 import TaskContextMenu from './TaskContextMenu';
@@ -18,22 +19,26 @@ function formatCardDate(ts?: number): string {
   return `${dd}.${mm} ${hh}:${min}`;
 }
 
-function formatStageDuration(totalSeconds: number): string {
+function formatStageDuration(totalSeconds: number, lang: Language = 'en'): string {
   const s = Math.max(0, Math.floor(totalSeconds));
-  if (s < 60) return `${s}с`;
+  const sUnit = lang === 'ru' ? 'с' : 's';
+  const mUnit = lang === 'ru' ? 'м' : 'm';
+  const hUnit = lang === 'ru' ? 'ч' : 'h';
+  const dUnit = lang === 'ru' ? 'д' : 'd';
+  if (s < 60) return `${s}${sUnit}`;
   const minutesTotal = Math.floor(s / 60);
   const sec = s % 60;
   if (minutesTotal < 60) {
-    return sec > 0 ? `${minutesTotal}м ${sec}с` : `${minutesTotal}м`;
+    return sec > 0 ? `${minutesTotal}${mUnit} ${sec}${sUnit}` : `${minutesTotal}${mUnit}`;
   }
   const hoursTotal = Math.floor(minutesTotal / 60);
   const min = minutesTotal % 60;
   if (hoursTotal < 24) {
-    return min > 0 ? `${hoursTotal}ч ${min}м` : `${hoursTotal}ч`;
+    return min > 0 ? `${hoursTotal}${hUnit} ${min}${mUnit}` : `${hoursTotal}${hUnit}`;
   }
   const days = Math.floor(hoursTotal / 24);
   const h = hoursTotal % 24;
-  return h > 0 ? `${days}д ${h}ч` : `${days}д`;
+  return h > 0 ? `${days}${dUnit} ${h}${hUnit}` : `${days}${dUnit}`;
 }
 
 function formatTimerMMSS(totalSeconds: number): string {
@@ -56,6 +61,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const setHoveredTaskId = useBoardStore((s) => s.setHoveredTaskId);
   const columns = useBoardStore((s) => s.columns);
+  const { language, t } = useTranslation();
   const isHighlighted = useBoardStore((s) =>
     s.hoveredTaskId === task.id ||
     (Boolean(task.waitingForSubtaskId) && s.hoveredTaskId === task.waitingForSubtaskId) ||
@@ -113,7 +119,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
           className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#d97706] dark:text-[#f59e0b] bg-[#fefce8] dark:bg-[#161b22] border border-[#fef08a] dark:border-[#30363d] hover:border-[#f59e0b] transition cursor-pointer"
         >
           <span className="h-1.5 w-1.5 rounded-full bg-[#f59e0b]" />
-          <span>Ждем подзадачу {task.waitingForSubtaskId || ''}</span>
+          <span>{t('status.waitingSubtask', { id: task.waitingForSubtaskId || '' })}</span>
         </button>
       );
     }
@@ -123,39 +129,39 @@ function KanbanCard({ task, index }: KanbanCardProps) {
         return (
           <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#161b22] border border-[#bbf7d0] dark:border-[#30363d]">
             <span className="h-1.5 w-1.5 rounded-full bg-[#15803d] dark:bg-[#4ade80]" />
-            <span>В работе {formatTimerMMSS(currentStageDuration)}</span>
+            <span>{t('status.running')} {formatTimerMMSS(currentStageDuration)}</span>
           </span>
         );
       case 'paused':
         return (
           <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#b45309] dark:text-[#fbbf24] bg-[#fefce8] dark:bg-[#161b22] border border-[#fef08a] dark:border-[#30363d]">
             <span className="h-1.5 w-1.5 rounded-full bg-[#b45309] dark:bg-[#fbbf24]" />
-            <span>Пауза</span>
+            <span>{t('status.paused')}</span>
           </span>
         );
       case 'waiting_review':
         return (
           <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#7e22ce] dark:text-[#c084fc] bg-[#faf5ff] dark:bg-[#161b22] border border-[#e9d5ff] dark:border-[#30363d]">
-            <span>Ревью</span>
+            <span>{t('status.waitingReview')}</span>
           </span>
         );
       case 'done':
         return (
           <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#161b22] border border-[#bbf7d0] dark:border-[#30363d]">
-            <span>Готово</span>
+            <span>{t('status.done')}</span>
           </span>
         );
       case 'blocked':
         return (
           <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#b91c1c] dark:text-[#f87171] bg-[#fef2f2] dark:bg-[#161b22] border border-[#fecaca] dark:border-[#30363d]">
-            <span>Блок</span>
+            <span>{t('status.blocked')}</span>
           </span>
         );
       case 'idle':
       default:
         return (
           <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#666666] dark:text-[#8b949e] bg-[#f4f4f5] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#21262d]">
-            <span>Ожидает</span>
+            <span>{t('status.idle')}</span>
           </span>
         );
     }
@@ -207,7 +213,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                       openDrawer(task.parentId!);
                     }}
                     className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#6366f1] dark:text-[#a5b4fc] bg-[#eef2ff] dark:bg-[#312e81]/40 border border-[#c7d2fe] dark:border-[#4338ca] hover:bg-[#e0e7ff] dark:hover:bg-[#3730a3]/50 transition cursor-pointer"
-                    title={`Родительская задача: ${task.parentId}`}
+                    title={t('card.parentTask', { id: task.parentId })}
                   >
                     <GitBranch className="h-2.5 w-2.5 text-[#6366f1] dark:text-[#a5b4fc]" />
                     <span>{task.parentId}</span>
@@ -222,16 +228,12 @@ function KanbanCard({ task, index }: KanbanCardProps) {
               {task.title}
             </h4>
 
-
-
-
-
-            {/* Footer: модель (строка 1, если задана), ветка + время в колонке (строка 2) */}
+            {/* Footer: model, branch, created & elapsed time */}
             <div className="pt-2 border-t border-[#ebebeb] dark:border-[#21262d]">
               {task.model && task.model.trim().length > 0 && (
                 <div
                   className="truncate font-mono text-[10px] text-[#666666] dark:text-[#8b949e] mb-1"
-                  title={`Модель: ${task.model}`}
+                  title={t('card.model', { model: task.model })}
                 >
                   {task.model}
                 </div>
@@ -246,12 +248,12 @@ function KanbanCard({ task, index }: KanbanCardProps) {
               {(task.createdAt || currentTotalElapsed > 0) && (
                 <div className="mt-1 flex items-center gap-1 font-mono text-[10px] text-[#8f8f8f] dark:text-[#8b949e] tabular-nums whitespace-nowrap">
                   {task.createdAt ? (
-                    <span title="Дата создания задачи">созд. {formatCardDate(task.createdAt)}</span>
+                    <span>{t('card.created', { date: formatCardDate(task.createdAt) })}</span>
                   ) : null}
                   {task.createdAt && currentTotalElapsed > 0 ? <span>·</span> : null}
                   {currentTotalElapsed > 0 ? (
-                    <span title="Общее время выполнения задачи">
-                      идёт {formatStageDuration(currentTotalElapsed)}
+                    <span>
+                      {t('card.elapsed', { time: formatStageDuration(currentTotalElapsed, language) })}
                     </span>
                   ) : null}
                 </div>
@@ -268,11 +270,11 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                     setIsSubtasksOpen(!isSubtasksOpen);
                   }}
                   className="flex items-center justify-between w-full text-[10px] font-mono font-medium text-[#4d4d4d] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] transition cursor-pointer py-1 px-1 rounded hover:bg-[#f4f4f5] dark:hover:bg-[#21262d]"
-                  title="Раскрыть список завершенных этапов и подзадач"
+                  title={t('card.expandSubtasks')}
                 >
                   <span className="flex items-center gap-1.5">
                     <GitFork className="h-3 w-3 text-[#8b5cf6]" />
-                    <span>Завершенные подзадачи ({subtasks.length})</span>
+                    <span>{t('card.completedSubtasks', { count: subtasks.length })}</span>
                   </span>
                   <ChevronDown
                     className={`h-3 w-3 transition-transform duration-150 ${
@@ -302,7 +304,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                               if (subId) openDrawer(subId);
                             }}
                           className="flex items-center justify-between p-1.5 rounded bg-[#f8f9fa] dark:bg-[#0d1117] hover:bg-[#f1f3f5] dark:hover:bg-[#21262d] border border-[#e9ecef] dark:border-[#30363d] cursor-pointer transition text-[10px] font-mono group"
-                          title={`Открыть диалог и мысли подзадачи ${sub.id}`}
+                          title={t('card.openSubtaskDialog', { id: sub.id })}
                         >
                           <div className="flex items-center gap-1.5 truncate min-w-0">
                             <span className="font-semibold text-[#8b5cf6] shrink-0">

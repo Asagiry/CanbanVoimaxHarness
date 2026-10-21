@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useProjectStore } from '../../stores/projectStore';
 import { FolderOpen, ArrowRight, FolderGit2, Loader2 } from 'lucide-react';
 import Logo from '../common/Logo';
+import { useTranslation } from '../../stores/languageStore';
 
 export interface SplashScreenProps {
   isReady?: boolean;
@@ -25,6 +26,7 @@ export default function SplashScreen({
   const availableProjects = useProjectStore((s) => s.availableProjects);
   const selectProjectFolder = useProjectStore((s) => s.selectProjectFolder);
   const setActiveProjectByPath = useProjectStore((s) => s.setActiveProjectByPath);
+  const { t } = useTranslation();
 
   // Fast boot sequence without artificial sluggishness
   useEffect(() => {
@@ -137,10 +139,10 @@ export default function SplashScreen({
 
           {/* Heading & Subtitle */}
           <h1 className="text-xl font-semibold tracking-tight text-[#171717] dark:text-[#f0f6fc]">
-            Добро пожаловать в CanbanVoimaxHarness
+            {t('splash.welcome')}
           </h1>
           <p className="mt-2 text-xs text-[#57606a] dark:text-[#8b949e] max-w-sm leading-relaxed">
-            Выберите рабочую папку с проектом для начала работы
+            {t('splash.selectProject')}
           </p>
 
           {/* Large Folder Selection Button */}
@@ -156,7 +158,7 @@ export default function SplashScreen({
               ) : (
                 <FolderOpen className="w-5 h-5 text-[#58a6ff]" />
               )}
-              <span>📂 Выбрать папку проекта</span>
+              <span>{t('splash.openFolder')}</span>
             </button>
           </div>
 
@@ -166,7 +168,7 @@ export default function SplashScreen({
               <div className="flex items-center gap-2 mb-1">
                 <div className="h-[1px] flex-1 bg-[#e1e4e8] dark:bg-[#21262d]" />
                 <span className="text-[11px] font-mono uppercase tracking-wider text-[#57606a] dark:text-[#8b949e]">
-                  Недавние проекты
+                  {t('splash.recentProjects')}
                 </span>
                 <div className="h-[1px] flex-1 bg-[#e1e4e8] dark:bg-[#21262d]" />
               </div>

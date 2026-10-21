@@ -11,6 +11,7 @@ import CreateBoardModal from './CreateBoardModal';
 import PersonaSelect from '../common/PersonaSelect';
 import { slugifyTitle, uniqueColumnId } from '../../lib/slug';
 import { AGENT_PALETTE, getDeterministicAgentColor, isAllowedAgentColor } from '../../lib/agentPalette';
+import { useTranslation } from '../../stores/languageStore';
 
 const COLUMN_PALETTE = AGENT_PALETTE;
 
@@ -68,6 +69,7 @@ export default function KanbanBoard() {
   } = useBoardStore();
   const { openDrawer } = useDrawerStore();
   const { availableModels, settings } = useSettingsStore();
+  const { t } = useTranslation();
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [threads, setThreads] = useState<ThreadLine[]>([]);
@@ -708,7 +710,7 @@ export default function KanbanBoard() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Поиск..."
+              placeholder={t('board.searchPlaceholder')}
               className="w-full pl-8 pr-2.5 py-1 rounded-md bg-[#f9f9f9] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-xs text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-sans transition"
             />
           </div>
@@ -776,7 +778,7 @@ export default function KanbanBoard() {
                         ? 'bg-[#171717] dark:bg-[#21262d] text-white shadow-xs'
                         : 'bg-[#f4f4f5] dark:bg-[#161b22] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] text-[#52525b] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
                     }`}
-                    title={`Доска: ${b.name} (ПКМ — контекстное меню, Двойной клик — переименовать)`}
+                    title={t('board.boardTabTitle', { name: b.name })}
                   >
                     <Layout className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate max-w-[140px]">{b.name}</span>
@@ -798,17 +800,17 @@ export default function KanbanBoard() {
           <button
             onClick={() => setIsCreateBoardModalOpen(true)}
             className="flex items-center space-x-1 px-2.5 py-1.5 rounded-md border border-dashed border-[#d4d4d8] dark:border-[#30363d] hover:border-[#171717] dark:hover:border-[#f0f6fc] text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] text-xs font-medium transition cursor-pointer select-none"
-            title="Создать новую доску"
+            title={t('board.newBoardTitle')}
           >
             <Plus className="h-3 w-3" />
-            <span>Новая доска</span>
+            <span>{t('board.newBoard')}</span>
           </button>
         </div>
 
         {/* Right: Board Stats & Action Buttons */}
         <div className="flex items-center space-x-3">
           <div className="hidden sm:flex items-center space-x-1.5 text-[#666666] dark:text-[#8b949e] text-xs">
-            <span>Задач на доске:</span>
+            <span>{t('board.tasksOnBoard')}</span>
             <span className="text-[#171717] dark:text-[#f0f6fc] font-semibold tabular-nums font-mono">
               {currentBoardTasks.filter((t) => !t.parentId).length}
             </span>
@@ -818,18 +820,18 @@ export default function KanbanBoard() {
             <button
               onClick={handleOpenAddColumn}
               className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] font-sans text-xs font-medium transition cursor-pointer active:scale-[0.99]"
-              title="Добавить колонку"
+              title={t('board.addColumnTitle')}
             >
               <Plus className="h-3.5 w-3.5" />
-              <span>Колонка</span>
+              <span>{t('board.addColumn')}</span>
             </button>
             <button
               onClick={handleOpenAddTask}
               className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white font-sans text-xs font-medium transition cursor-pointer shadow-xs active:scale-[0.99] border border-transparent dark:border-[#30363d]"
-              title="Создать новую задачу"
+              title={t('board.newTaskTitle')}
             >
               <Plus className="h-3.5 w-3.5 text-white" />
-              <span>Создать задачу</span>
+              <span>{t('board.newTask')}</span>
             </button>
           </div>
         </div>
@@ -841,7 +843,7 @@ export default function KanbanBoard() {
           <form onSubmit={handleCreateColumn} className="flex flex-wrap items-end gap-x-3 gap-y-2 text-xs">
             <div>
               <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">
-                Название колонки
+                {t('board.columnTitleLabel')}
               </label>
               <input
                 type="text"
@@ -849,14 +851,14 @@ export default function KanbanBoard() {
                 autoFocus
                 value={newColumnTitle}
                 onChange={(e) => setNewColumnTitle(e.target.value)}
-                placeholder="Например: Тестирование"
+                placeholder={t('board.columnTitlePlaceholder')}
                 className="w-56 px-3 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-sans transition"
               />
             </div>
 
             <div>
               <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">
-                Агент
+                {t('board.agentLabel')}
               </label>
               {usePersonaSelect ? (
                 <PersonaSelect
@@ -880,7 +882,7 @@ export default function KanbanBoard() {
                   type="text"
                   value={newColumnPersona}
                   onChange={(e) => setNewColumnPersona(e.target.value)}
-                  placeholder={personasLoading ? 'Загрузка агентов...' : 'developer'}
+                  placeholder={personasLoading ? t('board.loadingAgents') : 'developer'}
                   className="w-44 px-3 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-mono transition"
                 />
               )}
@@ -889,7 +891,7 @@ export default function KanbanBoard() {
             {usePersonaSelect && isNewAgentSelected && (
               <div>
                 <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">
-                  Имя нового агента
+                  {t('board.newAgentNameLabel')}
                 </label>
                 <input
                   type="text"
@@ -897,12 +899,12 @@ export default function KanbanBoard() {
                   autoFocus
                   value={newAgentName}
                   onChange={(e) => setNewAgentName(e.target.value)}
-                  placeholder="Например: tester"
+                  placeholder={t('board.newAgentNamePlaceholder')}
                   className="w-44 px-3 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-sans transition"
                 />
                 {newAgentName.trim() !== '' && (
                   <div className="mt-1 text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e]">
-                    Роль: {slugifyTitle(newAgentName) === 'column' ? '— нужны буквы или цифры —' : slugifyTitle(newAgentName)}
+                    {t('board.newAgentRoleHint', { role: slugifyTitle(newAgentName) === 'column' ? '—' : slugifyTitle(newAgentName) })}
                   </div>
                 )}
               </div>
@@ -910,13 +912,13 @@ export default function KanbanBoard() {
 
             <div
               className="flex items-center space-x-1.5 pb-2 text-[#8f8f8f] dark:text-[#8b949e]"
-              title="Цвет колонки подберется автоматически"
+              title={t('board.autoColorTitle')}
             >
               <span
                 className="h-4 w-4 rounded-full border border-[#ebebeb] dark:border-[#30363d]"
                 style={{ backgroundColor: COLUMN_PALETTE[columns.length % COLUMN_PALETTE.length] }}
               />
-              <span>Цвет авто</span>
+              <span>{t('board.autoColor')}</span>
             </div>
 
             <div className="flex items-center space-x-2 pb-0.5">
@@ -924,14 +926,14 @@ export default function KanbanBoard() {
                 type="submit"
                 className="px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white font-medium transition cursor-pointer font-sans shadow-xs border border-transparent dark:border-[#30363d]"
               >
-                Создать
+                {t('common.create')}
               </button>
               <button
                 type="button"
                 onClick={() => setIsAddColumnOpen(false)}
                 className="px-3 py-1.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer font-sans"
               >
-                Отмена
+                {t('common.cancel')}
               </button>
             </div>
 
@@ -1144,12 +1146,12 @@ export default function KanbanBoard() {
           <div className="relative flex flex-col w-[480px] max-w-full rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-md p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors">
             <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#21262d]">
               <h3 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc]">
-                Новая задача
+                {t('newTask.modalTitle')}
               </h3>
               <button
                 onClick={() => setIsNewTaskModalOpen(false)}
                 className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
-                title="Закрыть"
+                title={t('common.close')}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -1158,34 +1160,34 @@ export default function KanbanBoard() {
             <form onSubmit={handleCreateTask} className="mt-4 space-y-3.5 text-xs">
               <div>
                 <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">
-                  Название
+                  {t('newTask.titleLabel')}
                 </label>
                 <input
                   type="text"
                   required
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="Краткое описание задачи..."
+                  placeholder={t('newTask.titlePlaceholder')}
                   className="w-full px-3 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-sans transition"
                 />
               </div>
 
               <div>
                 <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">
-                  Описание
+                  {t('newTask.descLabel')}
                 </label>
                 <textarea
                   rows={2}
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
-                  placeholder="Детали и требования к задаче..."
+                  placeholder={t('newTask.descPlaceholder')}
                   className="w-full px-3 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-sans resize-none transition"
                 />
               </div>
 
               <div>
                 <label className="block font-mono text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">
-                  Модель агента
+                  {t('newTask.modelLabel')}
                 </label>
                 <select
                   value={selectedModel}
@@ -1208,7 +1210,7 @@ export default function KanbanBoard() {
                   className="h-3.5 w-3.5 accent-[#171717] dark:accent-[#8b949e] cursor-pointer"
                 />
                 <span className="font-sans text-[#4d4d4d] dark:text-[#c9d1d9]">
-                  Создать worktree при старте
+                  {t('newTask.createWorktree')}
                 </span>
               </label>
 
@@ -1218,13 +1220,13 @@ export default function KanbanBoard() {
                   onClick={() => setIsNewTaskModalOpen(false)}
                   className="px-3 py-1.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer font-sans"
                 >
-                  Отмена
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   className="px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white font-medium transition cursor-pointer font-sans shadow-xs border border-transparent dark:border-[#30363d]"
                 >
-                  Создать
+                  {t('common.create')}
                 </button>
               </div>
             </form>
@@ -1247,7 +1249,7 @@ export default function KanbanBoard() {
             onContextMenu={(e) => e.preventDefault()}
           >
             <div className="px-3 py-1 text-[10px] font-semibold text-[#a1a1aa] dark:text-[#8b949e] uppercase tracking-wider border-b border-[#f4f4f5] dark:border-[#21262d] mb-1 truncate">
-              Доска: {targetBoard.name}
+              {t('board.boardContextMenu', { name: targetBoard.name })}
             </div>
             <button
               onClick={() => {
@@ -1258,7 +1260,7 @@ export default function KanbanBoard() {
               className="w-full flex items-center space-x-2 px-3 py-1.5 text-left text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer"
             >
               <Pencil className="h-3.5 w-3.5 text-[#71717a] dark:text-[#8b949e]" />
-              <span>Переименовать доску</span>
+              <span>{t('board.renameBoard')}</span>
             </button>
             <button
               onClick={() => {
@@ -1266,7 +1268,7 @@ export default function KanbanBoard() {
                 if (boards.length <= 1) return;
                 if (
                   window.confirm(
-                    `Удалить доску «${targetBoard.name}»? Все задачи этой доски будут перенесены на активную доску.`
+                    t('board.confirmDeleteBoard', { name: targetBoard.name })
                   )
                 ) {
                   void deleteBoard(targetBoard.id);
@@ -1278,10 +1280,9 @@ export default function KanbanBoard() {
                   ? 'text-[#a1a1aa] cursor-not-allowed opacity-50'
                   : 'text-red-600 hover:bg-red-50 hover:text-red-700 cursor-pointer'
               }`}
-              title={boards.length <= 1 ? 'Нельзя удалить единственную доску' : undefined}
             >
               <Trash2 className="h-3.5 w-3.5" />
-              <span>Удалить доску</span>
+              <span>{t('board.deleteBoard')}</span>
             </button>
           </div>
         );

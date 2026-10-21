@@ -1,5 +1,6 @@
 import { useState, useId, useMemo, useRef, useEffect } from 'react';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useTranslation } from '../../stores/languageStore';
 import {
   X,
   Check,
@@ -35,6 +36,7 @@ export default function SettingsModal() {
   const [selectedCandidateModels, setSelectedCandidateModels] = useState<Set<string>>(new Set());
   const [searchFilter, setSearchFilter] = useState('');
   const [isCustomModelInput, setIsCustomModelInput] = useState(false);
+  const { t } = useTranslation();
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -130,12 +132,12 @@ export default function SettingsModal() {
           {/* Header */}
           <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#21262d]">
             <div className="flex items-center space-x-2">
-              <h2 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] tracking-tight">Настройки LLM</h2>
+              <h2 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] tracking-tight">{t('settings.title')}</h2>
             </div>
             <button
               onClick={closeSettings}
               className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
-              title="Закрыть"
+              title={t('common.close')}
             >
               <X className="h-4 w-4" />
             </button>
@@ -146,7 +148,7 @@ export default function SettingsModal() {
             {/* Provider */}
             <div className="space-y-1">
               <label htmlFor={providerId} className="block text-[#4d4d4d] dark:text-[#8b949e] font-sans text-xs font-medium">
-                Провайдер
+                {t('settings.provider')}
               </label>
               <div className="relative">
                 <select
@@ -170,7 +172,7 @@ export default function SettingsModal() {
             {/* API Gateway URL */}
             <div className="space-y-1">
               <label htmlFor={gatewayId} className="block text-[#4d4d4d] dark:text-[#8b949e] font-sans text-xs font-medium">
-                API Gateway URL
+                {t('settings.gatewayUrl')}
               </label>
               <div className="relative flex items-center">
                 <Globe className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] pointer-events-none" />
@@ -189,7 +191,7 @@ export default function SettingsModal() {
             {/* API Key (Masked) */}
             <div className="space-y-1">
               <label htmlFor={apiKeyId} className="block text-[#4d4d4d] dark:text-[#8b949e] font-sans text-xs font-medium">
-                API Key
+                {t('settings.apiKey')}
               </label>
               <div className="relative flex items-center">
                 <KeyRound className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] pointer-events-none" />
@@ -200,7 +202,7 @@ export default function SettingsModal() {
                   onChange={(e) => setSettings({ apiKey: e.target.value })}
                   placeholder={
                     settings.provider === 'Antigravity Proxy' || settings.provider === 'Ollama'
-                      ? 'Не обязателен для локального прокси'
+                      ? t('settings.apiKeyPlaceholderProxy')
                       : 'sk-...'
                   }
                   className="w-full rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] pl-8 pr-8 py-1.5 text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#6e7681] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-mono transition"
@@ -209,7 +211,7 @@ export default function SettingsModal() {
                   type="button"
                   onClick={() => setShowApiKey(!showApiKey)}
                   className="absolute right-2 p-1 text-[#666666] hover:text-[#171717] cursor-pointer"
-                  title={showApiKey ? 'Скрыть ключ' : 'Показать ключ'}
+                  title={showApiKey ? t('settings.hideKey') : t('settings.showKey')}
                 >
                   {showApiKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                 </button>
@@ -220,17 +222,17 @@ export default function SettingsModal() {
             <div className="space-y-1 pt-1">
               <div className="flex items-center justify-between">
                 <label htmlFor={modelId} className="block text-[#4d4d4d] dark:text-[#8b949e] font-sans text-xs font-medium">
-                  Модель
+                  {t('settings.model')}
                 </label>
                 <button
                   type="button"
                   onClick={handleFetchModels}
                   disabled={isFetchingModels}
                   className="flex items-center space-x-1.5 text-[11px] font-sans font-medium text-[#171717] dark:text-[#f0f6fc] hover:text-[#4d4d4d] dark:hover:text-[#8b949e] disabled:opacity-50 transition cursor-pointer px-1.5 py-0.5 rounded-md hover:bg-[#f4f4f5] dark:hover:bg-[#161b22]"
-                  title="Получить доступные модели с сервера"
+                  title={t('settings.fetchModels')}
                 >
                   <RefreshCw className={`h-3 w-3 ${isFetchingModels ? 'animate-spin' : ''}`} />
-                  <span>{isFetchingModels ? 'Получение...' : 'Получить доступные модели'}</span>
+                  <span>{isFetchingModels ? t('settings.fetching') : t('settings.fetchModels')}</span>
                 </button>
               </div>
 
@@ -242,7 +244,7 @@ export default function SettingsModal() {
                     type="text"
                     value={settings.model}
                     onChange={(e) => setSettings({ model: e.target.value })}
-                    placeholder="Название модели..."
+                    placeholder={t('settings.customModelPlaceholder')}
                     className="w-full rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#6e7681] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-mono transition"
                     required
                   />
@@ -270,14 +272,14 @@ export default function SettingsModal() {
 
               <div className="flex items-center justify-between text-[10px] text-[#666666] pt-0.5 font-sans">
                 <span>
-                  {availableModels.length} {availableModels.length === 1 ? 'модель' : 'моделей'} в списке
+                  {t('settings.modelsCount', { count: availableModels.length })}
                 </span>
                 <button
                   type="button"
                   onClick={() => setIsCustomModelInput(!isCustomModelInput)}
                   className="text-[#666666] hover:text-[#171717] underline cursor-pointer"
                 >
-                  {isCustomModelInput ? 'Выбрать из списка' : 'Ввести вручную'}
+                  {isCustomModelInput ? t('settings.selectFromList') : t('settings.enterManually')}
                 </button>
               </div>
             </div>
@@ -285,7 +287,7 @@ export default function SettingsModal() {
             {/* Compactor Model Section */}
             <div className="space-y-1 pt-1 border-t border-[#f4f4f5] dark:border-[#21262d]">
               <label htmlFor={compactorModelId} className="block text-[#4d4d4d] dark:text-[#8b949e] font-sans text-xs font-medium">
-                Модель компактора контекста
+                {t('settings.compactorModel')}
               </label>
               <div className="relative flex items-center">
                 <Cpu className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] pointer-events-none" />
@@ -295,7 +297,7 @@ export default function SettingsModal() {
                   onChange={(e) => setSettings({ compactorModel: e.target.value })}
                   className="w-full rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f0f6fc] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-mono text-xs transition cursor-pointer"
                 >
-                  <option value="inherit">Наследовать модель задачи</option>
+                  <option value="inherit">{t('settings.inheritModel')}</option>
                   {availableModels.map((m) => (
                     <option key={m} value={m}>
                       {m}
@@ -307,7 +309,7 @@ export default function SettingsModal() {
                 </select>
               </div>
               <p className="text-[10px] text-[#666666] font-sans">
-                Модель для сжатия истории диалога и формирования структурированного отчета контекста.
+                {t('settings.compactorDesc')}
               </p>
             </div>
 
@@ -318,7 +320,7 @@ export default function SettingsModal() {
                 onClick={closeSettings}
                 className="px-3 py-1.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] font-sans text-xs transition cursor-pointer"
               >
-                Отмена
+                {t('common.cancel')}
               </button>
               <button
                 type="submit"
@@ -328,10 +330,10 @@ export default function SettingsModal() {
                 {saveStatus === 'saved' ? (
                   <>
                     <Check className="h-3.5 w-3.5" />
-                    <span>Сохранено</span>
+                    <span>{t('common.saved')}</span>
                   </>
                 ) : (
-                  <span>Сохранить</span>
+                  <span>{t('common.save')}</span>
                 )}
               </button>
             </div>
@@ -347,12 +349,12 @@ export default function SettingsModal() {
             <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#21262d]">
               <div className="flex items-center space-x-2">
                 <Cpu className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
-                <h3 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] tracking-tight">Выбор моделей</h3>
+                <h3 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] tracking-tight">{t('settings.chooseModelsTitle')}</h3>
               </div>
               <button
                 onClick={() => setIsChooseModelsModalOpen(false)}
                 className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
-                title="Закрыть"
+                title={t('common.close')}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -366,7 +368,7 @@ export default function SettingsModal() {
                   type="text"
                   value={searchFilter}
                   onChange={(e) => setSearchFilter(e.target.value)}
-                  placeholder="Поиск моделей..."
+                  placeholder={t('settings.searchModels')}
                   className="w-full rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f0f6fc] text-xs placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-sans transition"
                   autoFocus
                 />
@@ -381,11 +383,11 @@ export default function SettingsModal() {
                 className="text-[#171717] dark:text-[#f0f6fc] hover:underline font-medium cursor-pointer transition"
               >
                 {selectedCandidateModels.size === filteredCandidates.length && filteredCandidates.length > 0
-                  ? 'Снять выбор'
-                  : 'Выбрать все'}
+                  ? t('settings.deselectAll')
+                  : t('settings.selectAll')}
               </button>
               <span className="text-[11px] text-[#8f8f8f] dark:text-[#8b949e] tabular-nums">
-                Выбрано: {selectedCandidateModels.size} из {filteredCandidates.length}
+                {t('settings.selectedCount', { selected: selectedCandidateModels.size, total: filteredCandidates.length })}
               </span>
             </div>
 
@@ -413,7 +415,7 @@ export default function SettingsModal() {
                       </span>
                       {isAlreadyAdded && (
                         <span className="text-[10px] text-[#666666] dark:text-[#8b949e] bg-[#f4f4f5] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] px-1.5 py-0.5 rounded-md font-sans">
-                          добавлена
+                          {t('settings.alreadyAdded')}
                         </span>
                       )}
                     </div>
@@ -421,7 +423,7 @@ export default function SettingsModal() {
                 })
               ) : (
                 <div className="p-6 text-center text-xs text-[#8f8f8f] dark:text-[#8b949e] font-sans">
-                  Модели не найдены
+                  {t('settings.noModelsFound')}
                 </div>
               )}
             </div>
@@ -433,7 +435,7 @@ export default function SettingsModal() {
                 onClick={() => setIsChooseModelsModalOpen(false)}
                 className="px-3 py-1.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] font-sans text-xs transition cursor-pointer"
               >
-                Отмена
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
@@ -441,7 +443,7 @@ export default function SettingsModal() {
                 disabled={selectedCandidateModels.size === 0}
                 className="px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#238636] hover:bg-[#262626] dark:hover:bg-[#2ea043] text-white font-sans font-medium text-xs transition cursor-pointer disabled:opacity-50 shadow-xs"
               >
-                Добавить выбранные ({selectedCandidateModels.size})
+                {t('settings.addSelected', { count: selectedCandidateModels.size })}
               </button>
             </div>
           </div>
