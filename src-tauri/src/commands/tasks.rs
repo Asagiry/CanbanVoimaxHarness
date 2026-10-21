@@ -95,41 +95,58 @@ pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
         .await
         .unwrap_or_else(|_| crate::config::default_boards_config());
 
-    let mut tasks = Vec::new();
-    let mut loaded = false;
-
-    let local_tasks_file = actual_root.join(".cvh").join("tasks.json");
-    if local_tasks_file.exists() {
-        if let Ok(content) = tokio::fs::read_to_string(&local_tasks_file).await {
-            let trimmed = content.trim();
-            if !trimmed.is_empty() {
-                if let Ok(parsed) = serde_json::from_str::<Vec<Task>>(trimmed) {
-                    tasks = parsed;
-                    loaded = true;
-                }
-            }
+    // 1. Primary Source of Truth: SQLite Database (.cvh/harness.db)
+    let mut tasks = match crate::db::db_get_all_tasks(&actual_root) {
+        Ok(t) => t,
+        Err(e) => {
+            crate::logger::cvh_log(
+                Some(&actual_root),
+                "WARN",
+                "LOAD_TASKS",
+                &format!("db_get_all_tasks warning: {}. Checking JSON fallbacks...", e),
+            );
+            Vec::new()
         }
-    }
+    };
 
-    if !loaded {
-        // Project-isolated backup fallback (keyed by project root hash), NOT unkeyed global tasks.json!
-        let backup_file = get_project_tasks_backup_file(&actual_root);
-        if backup_file.exists() {
-            if let Ok(content) = tokio::fs::read_to_string(&backup_file).await {
+    // 2. Fallback to .cvh/tasks.json or project backup if SQLite returned empty
+    if tasks.is_empty() {
+        let local_tasks_file = actual_root.join(".cvh").join("tasks.json");
+        if local_tasks_file.exists() {
+            if let Ok(content) = tokio::fs::read_to_string(&local_tasks_file).await {
                 let trimmed = content.trim();
                 if !trimmed.is_empty() {
                     if let Ok(parsed) = serde_json::from_str::<Vec<Task>>(trimmed) {
-                        if !parsed.is_empty() {
-                            eprintln!(
-                                "CVH [load_tasks_from_disk]: Restored {} tasks from project backup {:?}",
-                                parsed.len(),
-                                backup_file
-                            );
-                            tasks = parsed;
+                        tasks = parsed;
+                    }
+                }
+            }
+        }
+
+        if tasks.is_empty() {
+            let backup_file = get_project_tasks_backup_file(&actual_root);
+            if backup_file.exists() {
+                if let Ok(content) = tokio::fs::read_to_string(&backup_file).await {
+                    let trimmed = content.trim();
+                    if !trimmed.is_empty() {
+                        if let Ok(parsed) = serde_json::from_str::<Vec<Task>>(trimmed) {
+                            if !parsed.is_empty() {
+                                eprintln!(
+                                    "CVH [load_tasks_from_disk]: Restored {} tasks from project backup {:?}",
+                                    parsed.len(),
+                                    backup_file
+                                );
+                                tasks = parsed;
+                            }
                         }
                     }
                 }
             }
+        }
+
+        // Seed SQLite immediately if loaded from fallback JSON
+        if !tasks.is_empty() {
+            let _ = crate::db::db_upsert_all_tasks(&actual_root, &tasks);
         }
     }
 
@@ -149,7 +166,7 @@ pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
         Some(&actual_root),
         "DEBUG",
         "LOAD_TASKS",
-        &format!("load_tasks_from_disk: loaded {} tasks from {:?}", tasks.len(), local_tasks_file),
+        &format!("load_tasks_from_disk: loaded {} tasks for {:?}", tasks.len(), actual_root),
         Some(&format!("Task IDs: [{}]", ids.join(", "))),
     );
 
@@ -165,7 +182,7 @@ pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
     tasks
 }
 
-fn get_project_tasks_backup_file(project_root: &Path) -> PathBuf {
+pub fn get_project_tasks_backup_file(project_root: &Path) -> PathBuf {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
     let mut hasher = DefaultHasher::new();
@@ -179,14 +196,25 @@ pub async fn save_tasks_to_disk(repo_root: &Path, tasks: &[Task]) -> Result<(), 
     if actual_root.as_os_str().is_empty() {
         return Ok(());
     }
+
+    // 1. Primary Source of Truth: High-speed SQLite database (.cvh/harness.db)
+    let db_res = crate::db::db_upsert_all_tasks(&actual_root, tasks);
+    if let Err(ref e) = db_res {
+        crate::logger::cvh_log(
+            Some(&actual_root),
+            "WARN",
+            "SAVE_TASKS",
+            &format!("save_tasks_to_disk: SQLite persistence warning: {}", e),
+        );
+    }
+
+    // 2. Snapshot to .cvh/tasks.json and project backup
     let serialized = serde_json::to_string_pretty(tasks)
         .map_err(|e| format!("Failed to serialize tasks: {}", e))?;
 
-    // 1. Save to actual_root/.cvh/tasks.json
     let local_tasks_file = actual_root.join(".cvh").join("tasks.json");
     let local_res = atomic_write_file(&local_tasks_file, &serialized).await;
 
-    // 2. ALSO save a copy to project-isolated backup file (keyed by project root hash)
     let backup_file = get_project_tasks_backup_file(&actual_root);
     let backup_res = atomic_write_file(&backup_file, &serialized).await;
 
@@ -197,7 +225,7 @@ pub async fn save_tasks_to_disk(repo_root: &Path, tasks: &[Task]) -> Result<(), 
                 Some(&actual_root),
                 "INFO",
                 "SAVE_TASKS",
-                &format!("save_tasks_to_disk: successfully saved {} tasks to {:?}", tasks.len(), local_tasks_file),
+                &format!("save_tasks_to_disk: successfully saved {} tasks to SQLite & {:?}", tasks.len(), local_tasks_file),
                 Some(&format!("Saved IDs: [{}]", ids.join(", "))),
             );
             Ok(())
@@ -435,22 +463,31 @@ pub fn next_task_num(tasks: &[Task]) -> u32 {
 /// Increments monotonically: next_num = max(stored_seq, max_on_disk) + 1.
 /// Persists the incremented counter to disk immediately, preventing deleted ID reuse.
 pub async fn allocate_next_task_num(repo_root: &Path, tasks: &[Task]) -> u32 {
-    let stored_seq = load_task_sequence(repo_root).await;
-    let max_on_disk = max_task_num_on_disk(tasks);
-    let mut next_num = stored_seq.max(max_on_disk).saturating_add(1).max(1);
+    match crate::db::db_allocate_next_task_num(repo_root) {
+        Ok(num) => num,
+        Err(e) => {
+            eprintln!(
+                "CVH [allocate_next_task_num]: db_allocate_next_task_num warning: {}. Falling back to disk seq.",
+                e
+            );
+            let stored_seq = load_task_sequence(repo_root).await;
+            let max_on_disk = max_task_num_on_disk(tasks);
+            let mut next_num = stored_seq.max(max_on_disk).saturating_add(1).max(1);
 
-    while tasks.iter().any(|t| t.id == format!("CVH-{:03}", next_num)) {
-        next_num = next_num.saturating_add(1);
+            while tasks.iter().any(|t| t.id == format!("CVH-{:03}", next_num)) {
+                next_num = next_num.saturating_add(1);
+            }
+
+            if let Err(e) = save_task_sequence(repo_root, next_num).await {
+                eprintln!(
+                    "CVH [allocate_next_task_num]: Warning - failed to persist sequence {}: {}",
+                    next_num, e
+                );
+            }
+
+            next_num
+        }
     }
-
-    if let Err(e) = save_task_sequence(repo_root, next_num).await {
-        eprintln!(
-            "CVH [allocate_next_task_num]: Warning - failed to persist sequence {}: {}",
-            next_num, e
-        );
-    }
-
-    next_num
 }
 
 pub fn get_next_subtask_index(tasks: &[Task], parent_id: &str) -> u32 {
@@ -647,6 +684,7 @@ pub async fn internal_create_task(
     } else if !tasks.iter().any(|t| t.id == new_task.id) {
         tasks.push(new_task.clone());
     }
+    let _ = crate::db::db_upsert_task(root, &new_task);
     if let Err(e) = save_tasks_to_disk(root, &tasks).await {
         crate::logger::cvh_log(
             Some(root),
@@ -1036,6 +1074,7 @@ pub async fn update_task(
     task.updated_at = now;
 
     let updated = task.clone();
+    let _ = crate::db::db_upsert_task(&root, &updated);
     save_tasks_to_disk(&root, &tasks).await?;
 
     if let Ok(mut guard) = state.tasks.lock() {
@@ -1127,6 +1166,11 @@ pub async fn delete_task(
         }
     }
 
+    // Delete from SQLite database tasks and todos
+    for id in &to_delete {
+        let _ = crate::db::db_delete_task(&root, id);
+    }
+
     tasks.retain(|t| !to_delete.contains(&t.id));
 
     // Auto-unlock any parent that was waiting on a deleted subtask
@@ -1167,8 +1211,15 @@ pub async fn delete_task(
         let _ = crate::db::clear_dialog_items(&root, id);
     }
 
-    // Broadcast tasks:updated event across application
-    let _ = app_handle.emit("tasks:updated", ());
+    // Broadcast tasks:updated and task:deleted events across application
+    let _ = app_handle.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+    let _ = app_handle.emit(
+        "task:deleted",
+        serde_json::json!({
+            "taskId": &task_id,
+            "deletedIds": &to_delete.iter().cloned().collect::<Vec<_>>()
+        }),
+    );
 
     Ok(())
 }
@@ -1805,6 +1856,7 @@ pub async fn internal_move_task_stage(
     current_task.updated_at = Utc::now().timestamp_millis();
 
     let updated = current_task.clone();
+    let _ = crate::db::db_upsert_task(root, &updated);
     let parent_id_opt = updated.parent_id.clone();
 
     // Relational symmetry (§ 2.7 & § 2.22):
@@ -2681,6 +2733,8 @@ pub async fn run_agent(
     let handle = tokio::spawn(async move {
         let app_inner = app.clone();
         let tid_inner = tid.clone();
+        let root_inner = root_task.clone();
+        let model_inner = agent_cfg.model.clone();
 
         let event_sink = move |event: AgentEvent| {
             match event {
@@ -2749,6 +2803,20 @@ pub async fn run_agent(
                             "tps": tps,
                         }),
                     );
+
+                    let telem_record = crate::db::TelemetryRecord {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        task_id: tid_inner.clone(),
+                        model: Some(model_inner.clone()),
+                        input_tokens: input_tokens as i64,
+                        output_tokens: output_tokens as i64,
+                        cached_tokens: cache_read_tokens as i64,
+                        tps: tps as f64,
+                        ttft_ms: 0.0,
+                        duration_ms,
+                        created_at: chrono::Utc::now().timestamp_millis(),
+                    };
+                    let _ = crate::db::db_record_telemetry(&root_inner, &telem_record);
                 }
                 AgentEvent::Compacted {
                     saved_chars,
