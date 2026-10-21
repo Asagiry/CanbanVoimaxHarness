@@ -63,6 +63,7 @@ export default function App() {
   const updateToolExecution = useDrawerStore((s) => s.updateToolExecution);
   const updateTelemetry = useDrawerStore((s) => s.updateTelemetry);
   const setThinkingStartTime = useDrawerStore((s) => s.setThinkingStartTime);
+  const hasActiveProject = useProjectStore((s) => s.hasActiveProject);
 
   const [isDataReady, setIsDataReady] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
@@ -571,10 +572,10 @@ export default function App() {
         <AgentConsoleDrawer />
       </ErrorBoundary>
 
-      {/* Terminal Bootloader Splash Screen */}
-      {showSplash && (
+      {/* Terminal Bootloader Splash Screen / Welcome Project Picker */}
+      {(showSplash || !hasActiveProject) && (
         <SplashScreen
-          isReady={isDataReady}
+          isReady={isDataReady && hasActiveProject}
           onFinish={() => setShowSplash(false)}
         />
       )}

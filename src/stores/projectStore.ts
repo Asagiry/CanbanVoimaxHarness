@@ -4,10 +4,32 @@ import { useBoardStore } from './boardStore';
 import { useCortexStore } from './cortexStore';
 import { logEvent } from '../lib/logger';
 
+export function isInvalidProjectPath(path?: string | null): boolean {
+  if (!path) return true;
+  const trimmed = path.trim();
+  if (!trimmed || trimmed === 'default') return true;
+  const normalized = trimmed.replace(/\\/g, '/').toLowerCase();
+  if (
+    normalized.endsWith('/bin') ||
+    normalized.endsWith('/release') ||
+    normalized.endsWith('/debug') ||
+    normalized.endsWith('/target') ||
+    normalized.endsWith('/dist') ||
+    normalized.endsWith('/node_modules') ||
+    normalized === 'bin' ||
+    normalized === 'release' ||
+    normalized === 'debug'
+  ) {
+    return true;
+  }
+  return false;
+}
+
 interface ProjectState {
   activeProject: ProjectInfo;
   availableProjects: ProjectInfo[];
   isTauriEnvironment: boolean;
+  hasActiveProject: boolean;
 
   // Actions
   switchProject: (projectId: string) => Promise<void>;
@@ -27,7 +49,7 @@ function loadStoredProjects(): ProjectInfo[] {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
-          return parsed;
+          return parsed.filter((p) => p && !isInvalidProjectPath(p.rootPath));
         }
       }
     }
@@ -40,7 +62,8 @@ function loadStoredProjects(): ProjectInfo[] {
 function persistStoredProjects(projects: ProjectInfo[]): void {
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.setItem(OPENED_PROJECTS_KEY, JSON.stringify(projects));
+      const valid = projects.filter((p) => p && !isInvalidProjectPath(p.rootPath));
+      window.localStorage.setItem(OPENED_PROJECTS_KEY, JSON.stringify(valid));
     }
   } catch (err) {
     console.warn('Failed to persist stored projects to localStorage:', err);
@@ -48,7 +71,8 @@ function persistStoredProjects(projects: ProjectInfo[]): void {
 }
 
 const initialProjects = loadStoredProjects();
-const DEFAULT_PROJECT: ProjectInfo = initialProjects[0] || {
+const initialHasActiveProject = !isInvalidProjectPath(initialProjects[0]?.rootPath);
+const DEFAULT_PROJECT: ProjectInfo = (initialHasActiveProject && initialProjects[0]) || {
   id: 'default',
   name: 'CanbanVoimaxHarness',
   rootPath: '',
@@ -57,19 +81,20 @@ const DEFAULT_PROJECT: ProjectInfo = initialProjects[0] || {
 };
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
-  activeProject: DEFAULT_PROJECT,
+  activeProject: initialHasActiveProject ? initialProjects[0] : DEFAULT_PROJECT,
   availableProjects: initialProjects,
   isTauriEnvironment: true,
+  hasActiveProject: initialHasActiveProject,
 
   switchProject: async (projectId: string) => {
     const state = get();
     const found = state.availableProjects.find(
-      (p) => p.id === projectId || p.rootPath.toLowerCase() === projectId.toLowerCase()
+      (p) => (p.id === projectId || p.rootPath.toLowerCase() === projectId.toLowerCase()) && !isInvalidProjectPath(p.rootPath)
     );
     if (!found) return;
 
     logEvent('INFO', 'PROJECT_STORE', `switchProject: switching to project "${projectId}"`, found.rootPath);
-    set({ activeProject: found });
+    set({ activeProject: found, hasActiveProject: true });
 
     if (found.rootPath) {
       try {
@@ -90,9 +115,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   updateActiveProject: (partial: Partial<ProjectInfo>) => {
-    set((state) => ({
-      activeProject: { ...state.activeProject, ...partial },
-    }));
+    set((state) => {
+      const updated = { ...state.activeProject, ...partial };
+      return {
+        activeProject: updated,
+        hasActiveProject: !isInvalidProjectPath(updated.rootPath),
+      };
+    });
   },
 
   loadProjects: async () => {
@@ -102,18 +131,25 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const activeRaw = await invoke<any>('get_active_project').catch(() => null);
-      if (activeRaw && (activeRaw.rootPath || activeRaw.path)) {
+      if (
+        activeRaw &&
+        activeRaw.hasProject !== false &&
+        (activeRaw.rootPath || activeRaw.path)
+      ) {
         const rootPath = String(activeRaw.rootPath || activeRaw.path || '').trim();
-        backendActive = {
-          id: activeRaw.id || rootPath.replace(/\\/g, '/').split('/').filter(Boolean).pop()?.toLowerCase() || 'default',
-          name: activeRaw.name || rootPath.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'Project',
-          rootPath,
-          activeBranch: activeRaw.activeBranch || activeRaw.active_branch || 'main',
-          worktreesCount:
-            typeof activeRaw.worktreesCount === 'number'
-              ? activeRaw.worktreesCount
-              : activeRaw.worktrees_count || 0,
-        };
+        if (!isInvalidProjectPath(rootPath)) {
+          backendActive = {
+            id: activeRaw.id || rootPath.replace(/\\/g, '/').split('/').filter(Boolean).pop()?.toLowerCase() || 'default',
+            name: activeRaw.name || rootPath.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'Project',
+            rootPath,
+            activeBranch: activeRaw.activeBranch || activeRaw.active_branch || 'main',
+            worktreesCount:
+              typeof activeRaw.worktreesCount === 'number'
+                ? activeRaw.worktreesCount
+                : activeRaw.worktrees_count || 0,
+            hasProject: true,
+          };
+        }
       }
 
       const listRaw = await invoke<any[]>('list_projects').catch(() => []);
@@ -132,16 +168,17 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
                   ? p.worktreesCount
                   : p.worktrees_count || 0,
             };
-          });
+          })
+          .filter((p) => !isInvalidProjectPath(p.rootPath));
       }
     } catch (err) {
       console.warn('Backend project query not available or in web mode:', err);
     }
 
-    const stored = loadStoredProjects();
+    const stored = loadStoredProjects().filter((p) => !isInvalidProjectPath(p.rootPath));
     const mergedMap = new Map<string, ProjectInfo>();
 
-    if (backendActive) {
+    if (backendActive && !isInvalidProjectPath(backendActive.rootPath)) {
       mergedMap.set(backendActive.rootPath.toLowerCase(), backendActive);
     }
     for (const p of backendProjects) {
@@ -156,11 +193,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
 
     const availableProjects = Array.from(mergedMap.values());
-    const activeProject = backendActive || availableProjects[0] || DEFAULT_PROJECT;
+    const hasActive = Boolean(backendActive && !isInvalidProjectPath(backendActive.rootPath));
+    const activeProject = hasActive ? backendActive! : DEFAULT_PROJECT;
 
     set({
       availableProjects,
       activeProject,
+      hasActiveProject: hasActive,
     });
     persistStoredProjects(availableProjects);
   },
@@ -169,10 +208,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const chosen = await invoke<string | null>('choose_project_folder');
-      if (chosen) {
+      if (chosen && !isInvalidProjectPath(chosen)) {
         await get().setActiveProjectByPath(chosen);
+        return chosen;
       }
-      return chosen;
+      return null;
     } catch (err) {
       console.error('Failed to select project folder:', err);
       return null;
@@ -186,7 +226,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   setActiveProjectByPath: async (path: string) => {
     const state = get();
     const cleanPath = path.trim();
-    if (!cleanPath) return;
+    if (!cleanPath || isInvalidProjectPath(cleanPath)) return;
 
     logEvent('INFO', 'PROJECT_STORE', `setActiveProjectByPath: requested path "${cleanPath}"`);
 
@@ -210,16 +250,18 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       rootPath: cleanPath,
       activeBranch: 'main',
       worktreesCount: 0,
+      hasProject: true,
     };
 
     const existing = state.availableProjects.filter(
-      (p) => p.id !== id && p.rootPath.toLowerCase() !== cleanPath.toLowerCase()
+      (p) => p.id !== id && p.rootPath.toLowerCase() !== cleanPath.toLowerCase() && !isInvalidProjectPath(p.rootPath)
     );
     const updatedProjects = [proj, ...existing];
 
     set({
       activeProject: proj,
       availableProjects: updatedProjects,
+      hasActiveProject: true,
     });
     persistStoredProjects(updatedProjects);
     logEvent('INFO', 'PROJECT_STORE', `setActiveProjectByPath: project active "${proj.name}" (${proj.rootPath})`);

@@ -22,22 +22,41 @@ pub async fn get_project_config_cmd(state: State<'_, AppState>) -> Result<Projec
 #[tauri::command]
 pub async fn get_active_project(state: State<'_, AppState>) -> Result<ProjectEntry, String> {
     let root = state.get_root();
+    let is_valid = !root.as_os_str().is_empty()
+        && root.exists()
+        && !crate::config::is_binary_or_target_dir(&root);
+
     let root_str = root.to_string_lossy().to_string();
     let registry = load_project_registry(None).await.unwrap_or_default();
-    let entry = if let Some(entry) = registry
-        .projects
-        .into_iter()
-        .find(|p| p.path == root_str || p.root_path.as_deref() == Some(&root_str))
-    {
-        entry
+    let mut entry = if is_valid {
+        if let Some(mut entry) = registry
+            .projects
+            .into_iter()
+            .find(|p| p.path == root_str || p.root_path.as_deref() == Some(&root_str))
+        {
+            entry.has_project = Some(true);
+            entry
+        } else {
+            ProjectEntry::from_path(&root)
+        }
     } else {
-        ProjectEntry::from_path(&root)
+        let mut e = ProjectEntry::from_path(&root);
+        e.has_project = Some(false);
+        e
     };
+
+    if !is_valid {
+        entry.has_project = Some(false);
+    }
+
     crate::logger::cvh_log(
         Some(&root),
         "DEBUG",
         "PROJECT",
-        &format!("get_active_project: root='{}', name='{}'", entry.path, entry.name),
+        &format!(
+            "get_active_project: root='{}', name='{}', has_project={:?}",
+            entry.path, entry.name, entry.has_project
+        ),
     );
     Ok(entry)
 }
@@ -59,7 +78,7 @@ pub async fn select_project_folder(
     if let Some(p) = path {
         if !p.trim().is_empty() {
             let path_buf = PathBuf::from(p.trim());
-            if path_buf.exists() && path_buf.is_dir() {
+            if path_buf.exists() && path_buf.is_dir() && !crate::config::is_binary_or_target_dir(&path_buf) {
                 let _ = ensure_project_gitignore(&path_buf);
                 let _ = scaffold_cvh_project(&path_buf).await;
                 persist_active_project(&path_buf).await;
@@ -88,6 +107,9 @@ pub async fn select_project_folder(
     .and_then(|folder| folder.simplified().into_path().ok());
 
     if let Some(ref folder) = selected {
+        if crate::config::is_binary_or_target_dir(folder) {
+            return Err(format!("Selected folder {:?} is a binary or build directory and cannot be used as a project", folder));
+        }
         let _ = ensure_project_gitignore(folder);
         let _ = scaffold_cvh_project(folder).await;
         persist_active_project(folder).await;
@@ -116,6 +138,11 @@ pub async fn set_active_project(
     );
 
     let new_path = PathBuf::from(path.trim());
+    if crate::config::is_binary_or_target_dir(&new_path) {
+        let err = format!("Cannot set binary or build directory as project root: {:?}", new_path);
+        crate::logger::cvh_log(Some(&old_root), "ERROR", "PROJECT", &err);
+        return Err(err);
+    }
     if !new_path.exists() {
         let err = format!("Specified project directory does not exist: {:?}", new_path);
         crate::logger::cvh_log(Some(&old_root), "ERROR", "PROJECT", &err);

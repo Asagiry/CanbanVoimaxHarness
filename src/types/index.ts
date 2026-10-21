@@ -149,6 +149,7 @@ export interface ProjectInfo {
   rootPath: string;
   activeBranch: string;
   worktreesCount: number;
+  hasProject?: boolean;
 }
 
 export interface CompactionReport {
