@@ -397,6 +397,51 @@ foreach ($f in ($installerCandidates | Sort-Object LastWriteTime -Descending)) {
 if ($seenByLeaf.Count -eq 0) { Write-Host "  NOTE: no installers found; portable binary only." }
 Write-Host ""
 
+# Sign and unblock release artifacts with Authenticode
+if ($OnWindows) {
+  Write-Host "Signing and unblocking artifacts..."
+  $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -match 'CN=Voimax' } | Select-Object -First 1
+  if (-not $cert) {
+    try {
+      $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Voimax, O=Voimax, C=RU' -CertStoreLocation 'Cert:\CurrentUser\My' -NotAfter (Get-Date).AddYears(5) -KeyUsage DigitalSignature -FriendlyName 'Voimax Code Signing Certificate'
+      $rootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('Root', 'CurrentUser')
+      $rootStore.Open('ReadWrite')
+      $rootStore.Add($cert)
+      $rootStore.Close()
+      $pubStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('TrustedPublisher', 'CurrentUser')
+      $pubStore.Open('ReadWrite')
+      $pubStore.Add($cert)
+      $pubStore.Close()
+    } catch {}
+  }
+  if (-not $cert) {
+    $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -match 'CN=CanbanVoimaxHarness' } | Select-Object -First 1
+  }
+
+  if (Test-Path -LiteralPath $copiedBin) {
+    if ($cert) {
+      Set-AuthenticodeSignature -FilePath $copiedBin -Certificate $cert | Out-Null
+      Write-Host "  ok: signed $copiedBin with certificate $($cert.Subject)"
+    } else {
+      Write-Host "  notice: code signing certificate not found in Cert:\CurrentUser\My"
+    }
+    Unblock-File -Path $copiedBin -ErrorAction SilentlyContinue
+  }
+
+  if (Test-Path -LiteralPath $InstDir) {
+    foreach ($instExe in (Get-ChildItem -LiteralPath $InstDir -Filter "*.exe" -File)) {
+      if ($cert) {
+        Set-AuthenticodeSignature -FilePath $instExe.FullName -Certificate $cert | Out-Null
+        Write-Host "  ok: signed installer $($instExe.FullName) with certificate $($cert.Subject)"
+      } else {
+        Write-Host "  notice: code signing certificate not found in Cert:\CurrentUser\My"
+      }
+      Unblock-File -Path $instExe.FullName -ErrorAction SilentlyContinue
+    }
+  }
+  Write-Host ""
+}
+
 Write-Host "Release artifacts:"
 $binItem = Get-Item -LiteralPath $copiedBin
 Write-Host ("  {0}  [{1} bytes]" -f $copiedBin, $binItem.Length)

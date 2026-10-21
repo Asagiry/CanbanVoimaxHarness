@@ -31,6 +31,8 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "publisher": "Voimax",
+    "copyright": "Copyright © 2026 Voimax",
     "category": "DeveloperTool",
     "shortDescription": "Kanban-board-driven desktop agentic IDE and orchestrator",
     "icon": [
