@@ -5536,17 +5536,21 @@ Messages count: {}
 
             messages.push(ChatMessage::tool_response(tc.id, result_str.clone()));
 
-            // Stage transition termination:
-            // When any executed tool call is "advance_task", "move_task", or "reject_task":
+            // Stage transition termination (§ 2.27 & § 1):
+            // When any executed tool call is "advance_task", "move_task", or "reject_task" (or aliases):
             // The agent has handed over or finalized the task.
-            // Emit AgentEvent::Finished, break the ReAct loop, and return Ok(result_str) cleanly.
-            // Under NO circumstances send the result back to the LLM for an extra turn.
+            // Unconditionally trip abort_flag, emit AgentEvent::Finished, break the ReAct loop, and return Ok(result_str).
+            // Under NO circumstances send the result back to the LLM for an extra turn or allow duplicate advance_task calls.
+            let norm_name = tc.function.name.trim().to_lowercase();
             let is_stage_transition = matches!(
-                tc.function.name.as_str(),
-                "advance_task" | "move_task" | "reject_task"
-            ) || canonical_tool_name(&tc.function.name) == "advance_task";
+                norm_name.as_str(),
+                "advance_task" | "move_task" | "reject_task" | "move_task_stage" | "advance_stage" | "next_stage"
+            ) || canonical_tool_name(&norm_name) == "advance_task";
 
             if is_stage_transition {
+                // Immediately trip abort_flag to prevent any subsequent ticks or parallel operations
+                abort_flag.store(true, Ordering::SeqCst);
+
                 // Synchronize messages to in-memory context state before exiting
                 sync_context_state(&config.app_handle, &config.task_id, turn, &messages);
 

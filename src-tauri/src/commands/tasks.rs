@@ -1390,6 +1390,12 @@ pub fn propagate_parent_subtask_advance(
 
         if is_terminal {
             tasks[parent_idx].status = Some("done".to_string());
+            // Also mark any child subtasks of this parent as done so they collapse into parent (§ 3)
+            for sub in tasks.iter_mut() {
+                if sub.parent_id.as_deref() == Some(&parent_id) {
+                    sub.status = Some("done".to_string());
+                }
+            }
         } else {
             let has_autorun = next_col.persona.is_some() || next_col.auto_run == Some(true);
             tasks[parent_idx].status = Some(if has_autorun { "running".to_string() } else { "idle".to_string() });
@@ -1859,6 +1865,17 @@ pub async fn internal_move_task_stage(
     let _ = crate::db::db_upsert_task(root, &updated);
     let parent_id_opt = updated.parent_id.clone();
 
+    // If a top-level parent task moves to terminal, ensure all child subtasks are also marked done (§ 3)
+    if is_terminal_col && parent_id_opt.is_none() {
+        let cur_id = updated.id.clone();
+        for t in tasks.iter_mut() {
+            if t.parent_id.as_deref() == Some(&cur_id) {
+                t.status = Some("done".to_string());
+                t.updated_at = Utc::now().timestamp_millis();
+            }
+        }
+    }
+
     // Relational symmetry (§ 2.7 & § 2.22):
     let mut parent_moved_events: Vec<serde_json::Value> = Vec::new();
     let mut parent_autorun_ids: Vec<String> = Vec::new();
@@ -2205,6 +2222,46 @@ pub async fn internal_advance_task_to_stage(
     let is_review = is_review_column(&target_col);
 
     if is_review {
+        // Strict guard against duplicate subtasks (§ 1):
+        if let Some(ref existing_sub_id) = current_task.waiting_for_subtask_id {
+            if let Some(existing_sub) = tasks.iter().find(|t| task_id_matches(&t.id, existing_sub_id)) {
+                if existing_sub.status.as_deref() != Some("done") {
+                    crate::logger::cvh_log(
+                        Some(root),
+                        "WARN",
+                        "ADVANCE_TASK",
+                        &format!(
+                            "advance_task: Task '{}' already has active waiting_for_subtask_id '{}' (status: {:?})",
+                            task_id, existing_sub_id, existing_sub.status
+                        ),
+                    );
+                    return Ok(format!(
+                        "Подзадача ревью {} уже активна для задачи {}",
+                        existing_sub_id, task_id
+                    ));
+                }
+            }
+        }
+        if let Some(existing_sub) = tasks.iter().find(|t| {
+            t.parent_id.as_deref().is_some_and(|p| task_id_matches(p, task_id))
+                && stage_id_matches(&t.stage_id, &target_col.id)
+                && t.status.as_deref() != Some("done")
+        }) {
+            crate::logger::cvh_log(
+                Some(root),
+                "WARN",
+                "ADVANCE_TASK",
+                &format!(
+                    "advance_task: Task '{}' already has active subtask '{}' in column '{}' (status: {:?})",
+                    task_id, existing_sub.id, target_col.title, existing_sub.status
+                ),
+            );
+            return Ok(format!(
+                "Подзадача ревью {} уже выполняется в колонке {}",
+                existing_sub.id, target_col.title
+            ));
+        }
+
         let subtask = internal_create_subtask(
             root,
             task_id,
@@ -2500,6 +2557,20 @@ pub async fn run_agent(
     } else {
         None
     };
+
+    // Strict guard against duplicate runs while waiting for subtask (§ 1):
+    if task.status.as_deref() == Some("waiting_subtask") && steer_prompt.is_none() {
+        crate::logger::cvh_log(
+            Some(&root),
+            "WARN",
+            "RUN_AGENT",
+            &format!(
+                "run_agent: Task '{}' is waiting for subtask to finish (waiting_for_subtask_id={:?}), rejecting autorun",
+                task_id, task.waiting_for_subtask_id
+            ),
+        );
+        return Ok(format!("Task {} is waiting for subtask to finish", task_id));
+    }
 
     let pipeline = load_pipeline_config(&root)
         .await

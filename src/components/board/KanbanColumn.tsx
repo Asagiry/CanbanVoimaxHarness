@@ -18,6 +18,7 @@ interface KanbanColumnProps {
   totalColumns?: number;
   isPinned?: boolean;
   onDeleteColumn?: (columnId: string) => void;
+  doneParentIds?: Set<string>;
 }
 
 function KanbanColumn({
@@ -26,6 +27,7 @@ function KanbanColumn({
   index,
   isPinned: isPinnedProp,
   onDeleteColumn,
+  doneParentIds,
 }: KanbanColumnProps) {
   // Клик по шапке больше не подсвечивает колонку и не трогает проводник
   // (фокус из проводника в доску оставлен, обратного нет).
@@ -41,8 +43,16 @@ function KanbanColumn({
     column.title.toLowerCase().includes('готов') ||
     column.title.toLowerCase().includes('done')
   );
-  // В колонке "Done" отображается ТОЛЬКО корневая основная задача (CVH-012)
-  const displayTasks = isDoneColumn ? tasks.filter((t) => !t.parentId) : tasks;
+  // Схлопывание подзадач: в Done отображаются только корневые задачи;
+  // в остальных колонках завершенные подзадачи (status === done или родитель в done) схлопываются в родителя (§ 3).
+  const displayTasks = isDoneColumn
+    ? tasks.filter((t) => !t.parentId)
+    : tasks.filter((t) => {
+        if (!t.parentId) return true;
+        if (t.status === 'done') return false;
+        if (doneParentIds && doneParentIds.has(t.parentId)) return false;
+        return true;
+      });
   const isAtWipLimit = column.wipLimit ? displayTasks.length >= column.wipLimit : false;
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
 
@@ -191,6 +201,13 @@ function areColumnPropsEqual(prev: KanbanColumnProps, next: KanbanColumnProps): 
   if (prev.isPinned !== next.isPinned) return false;
   if (prev.totalColumns !== next.totalColumns) return false;
   if (prev.onDeleteColumn !== next.onDeleteColumn) return false;
+  if (prev.doneParentIds !== next.doneParentIds) {
+    if (!prev.doneParentIds || !next.doneParentIds) return false;
+    if (prev.doneParentIds.size !== next.doneParentIds.size) return false;
+    for (const id of prev.doneParentIds) {
+      if (!next.doneParentIds.has(id)) return false;
+    }
+  }
 
   // Compare column definition properties
   const cA = prev.column;

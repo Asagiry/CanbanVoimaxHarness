@@ -80,7 +80,7 @@ interface BoardState {
 
   loadColumns: () => Promise<void>;
   loadTasks: () => Promise<void>;
-  moveTask: (taskId: string, targetColumnId: string) => Promise<void>;
+  moveTask: (taskId: string, targetColumnId: string, options?: { force?: boolean; sourceColumnId?: string }) => Promise<void>;
   updateTask: (taskId: string, partial: Partial<KanbanTask>) => void;
   updateTaskStatus: (taskId: string, status: TaskStatus) => void;
   upsertBackendTask: (rawTask: any) => void;
@@ -228,6 +228,19 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
         : (typeof raw.worktree_path === 'string' && raw.worktree_path.trim() !== '' ? raw.worktree_path : undefined))
     : (raw.worktreePath || raw.worktree_path || `worktrees/${raw.id.toLowerCase()}`);
 
+  const rawParentId = raw.parentId ?? raw.parent_id ?? undefined;
+  const rawTitle = typeof raw.title === 'string' ? raw.title : '';
+  const isReviewSubtask = Boolean(
+    rawParentId ||
+    rawTitle.toLowerCase().includes('ревью') ||
+    rawTitle.toLowerCase().includes('review')
+  );
+  const fallbackPersona = isReviewSubtask ? 'reviewer' : 'developer';
+  const rawPersona = typeof raw.persona === 'string' && raw.persona.trim() !== '' ? raw.persona : undefined;
+  const effectivePersona = (col?.persona && !isReviewSubtask)
+    ? col.persona
+    : (rawPersona ?? (col?.persona || fallbackPersona));
+
   return {
     id: raw.id,
     title: typeof raw.title === 'string' && raw.title.trim() !== '' ? raw.title : raw.id,
@@ -239,7 +252,7 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
     priority: (raw.priority as TaskPriority) || 'high',
     columnId,
     boardId: effectiveBoardId,
-    persona: col?.persona ?? (typeof raw.persona === 'string' ? raw.persona : 'developer'),
+    persona: effectivePersona,
     branch,
     worktreePath,
     status,
@@ -714,7 +727,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     set({ tasks: [], isLoadingTasks: false });
   },
 
-  moveTask: async (taskId, targetColumnId) => {
+  moveTask: async (taskId, targetColumnId, options) => {
     const { tasks, columns, activeBoardId } = get();
     const task = tasks.find(
       (t) => t.id === taskId || t.id.trim().toLowerCase() === taskId.trim().toLowerCase()
@@ -730,7 +743,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       return;
     }
 
-    if (task.columnId === targetStageId) {
+    if (!options?.force && task.columnId === targetStageId) {
       return;
     }
 
@@ -740,7 +753,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       'INFO',
       'BOARD_STORE',
       `moveTask: starting move for "${resolvedTaskId}" from "${task.columnId}" to "${targetStageId}"`,
-      JSON.stringify({ activeBoardId, originalStatus: task.status })
+      JSON.stringify({ activeBoardId, originalStatus: task.status, force: options?.force })
     );
 
     // ZERO INVISIBLE TASKS (§ 2.18 & § 2.22):
@@ -756,7 +769,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         const mapped = mapBackendTaskToKanban(backendTask);
         const prev = get().tasks.find((t) => t.id === resolvedTaskId || t.id.trim().toLowerCase() === resolvedTaskId.trim().toLowerCase()) ?? task;
         // Local-only timer/UX bookkeeping (backend has no timer fields).
-        const sourceColIndex = columns.findIndex((c) => c.id === prev.columnId);
+        const sourceColId = options?.sourceColumnId ?? prev.columnId;
+        const sourceColIndex = columns.findIndex((c) => c.id === sourceColId);
         const targetColIndex = columns.findIndex((c) => c.id === targetStageId);
         const isRework =
           sourceColIndex >= 0 && targetColIndex >= 0 && targetColIndex < sourceColIndex;
@@ -813,7 +827,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
         // Reliable agent autorun upon entering a stage with a persona (§ 2.2 & § 2.32)
         const colDef = targetColDef ?? columns.find((c) => c.id === merged.columnId);
-        if (colDef?.autoRun ?? !!colDef?.persona) {
+        if (colDef?.autoRun === true || (colDef?.autoRun !== false && Boolean(colDef?.persona))) {
           await triggerRunAgent(resolvedTaskId);
         }
         return;

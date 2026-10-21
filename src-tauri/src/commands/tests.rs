@@ -1795,6 +1795,21 @@ Write code.
         let subtask_dialog = crate::db::load_dialog_items(&base, "CVH-100.1").expect("load subtask dialog");
         assert!(subtask_dialog.iter().any(|d| d.content.as_deref().unwrap_or("").contains("Handover: implemented feature and tests")));
 
+        // 1b. Verify subtask deduplication protection (§ 1):
+        // Calling advance_task a second time must NOT create CVH-100.2!
+        let dup_attempt = internal_advance_task_to_stage(
+            &base,
+            "CVH-100",
+            None,
+            "Second handover attempt",
+            None,
+        )
+        .await
+        .expect("dedup check should succeed with guard message");
+        assert!(dup_attempt.contains("уже активна"), "Must indicate subtask is already active: {}", dup_attempt);
+        let loaded_dedup = load_tasks_from_disk(&base).await;
+        assert_eq!(loaded_dedup.len(), 2, "Must NOT create duplicate subtask (still 2 tasks)");
+
         // 2. Verify zero self-abort invariant:
         // Advancing when is_autonomous_advance is true must never abort running tasks
         let moved_autonomous = internal_move_task_stage(
