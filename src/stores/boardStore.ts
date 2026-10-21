@@ -16,6 +16,7 @@ const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
     modelOverride: null,
     wipLimit: 10,
     hooks: {},
+    gatekeeperSensor: null,
   },
   {
     id: 'dev',
@@ -26,10 +27,8 @@ const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
     modelOverride: 'gemini-3.8-flash-high',
     temperature: 0.2,
     wipLimit: 3,
-    hooks: {
-      on_enter: '.cvh/hooks/on_enter_dev.bat',
-    },
-    gatekeeperSensor: 'cargo check',
+    hooks: {},
+    gatekeeperSensor: null,
   },
   {
     id: 'ready',
@@ -39,10 +38,8 @@ const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
     persona: null,
     terminal: true,
     modelOverride: null,
-    hooks: {
-      on_enter: '.cvh/hooks/on_finish_done.bat',
-    },
-    gatekeeperSensor: 'cargo check & npm run build',
+    hooks: {},
+    gatekeeperSensor: null,
   },
 ];
 
@@ -746,9 +743,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       JSON.stringify({ activeBoardId, originalStatus: task.status })
     );
 
-    // BACKEND-AUTHORITATIVE MOVE:
-    // Backend owns the move (gatekeeper sensor, hooks, worktree allocation).
-    // State is updated ONLY upon backend confirmation.
+    // ZERO INVISIBLE TASKS (§ 2.18 & § 2.22):
+    // Move task with target active board id.
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const backendTask = await invoke<any>('move_task_stage', {
@@ -775,7 +771,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         const merged: KanbanTask = {
           ...mapped,
           columnId: targetStageId,
-          boardId: mapped.boardId || prev.boardId || activeBoardId,
+          boardId: activeBoardId || mapped.boardId || prev.boardId || 'development',
           persona: targetColDef?.persona || prev.persona,
           verdict: backendTask.verdict ? mapped.verdict : prev.verdict,
           verdictNote: prev.verdictNote,
@@ -832,10 +828,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         `moveTask: backend move_task_stage REJECTED for "${resolvedTaskId}" -> "${targetStageId}"`,
         msg
       );
-      // No optimistic mutation was performed: card remains in place without reverting.
-      alert(`Перемещение задачи отклонено:
-${msg}`);
-      return;
+      // Re-throw so caller (handleDragEnd) can cleanly revert local UI state!
+      throw (err instanceof Error ? err : new Error(msg));
     }
   },
 

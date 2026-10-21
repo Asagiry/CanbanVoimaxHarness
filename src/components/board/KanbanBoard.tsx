@@ -389,9 +389,75 @@ export default function KanbanBoard() {
       return;
     }
 
-    // Moving between columns:
-    // Backend is authoritative. Card moves to target column only when backend confirms the transition.
-    await moveTask(draggableId, destColId);
+    // Moving between columns with target placement:
+    // @hello-pangea/dnd invariant: onDragEnd must synchronously place the card into the destination
+    // column state to prevent drop animation glitches and disappearing DOM elements.
+    const destDisplayTasks = getColumnDisplayTasks(destColId);
+    const originalTasks = [...tasks];
+    const taskPos = originalTasks.findIndex((t) => t.id === draggableId);
+    if (taskPos === -1) return;
+
+    const [movedTask] = originalTasks.splice(taskPos, 1);
+    const destColDef = columns.find((c) => c.id === destColId);
+    const effectiveBoardId = activeBoardId || 'development';
+    const isDone = Boolean(
+      destColDef?.terminal ||
+      destColId === 'ready' ||
+      destColDef?.title.toLowerCase().includes('готов') ||
+      destColDef?.title.toLowerCase().includes('done')
+    );
+    const targetStatus = isDone
+      ? 'done'
+      : destColDef?.persona
+      ? 'running'
+      : 'idle';
+
+    const updatedMovedTask: KanbanTask = {
+      ...movedTask,
+      columnId: destColId,
+      boardId: effectiveBoardId,
+      persona: destColDef?.persona || movedTask.persona,
+      status: targetStatus,
+      updatedAt: Date.now(),
+      stageEnteredAt: Date.now(),
+    };
+
+    const nextTasks = [...originalTasks];
+    if (destIndex < destDisplayTasks.length) {
+      const refTask = destDisplayTasks[destIndex];
+      const refPos = nextTasks.findIndex((t) => t.id === refTask.id);
+      if (refPos !== -1) {
+        nextTasks.splice(refPos, 0, updatedMovedTask);
+      } else {
+        nextTasks.push(updatedMovedTask);
+      }
+    } else {
+      if (destDisplayTasks.length > 0) {
+        const lastTask = destDisplayTasks[destDisplayTasks.length - 1];
+        const lastPos = nextTasks.findIndex((t) => t.id === lastTask.id);
+        if (lastPos !== -1) {
+          nextTasks.splice(lastPos + 1, 0, updatedMovedTask);
+        } else {
+          nextTasks.push(updatedMovedTask);
+        }
+      } else {
+        nextTasks.push(updatedMovedTask);
+      }
+    }
+
+    // Synchronous state update guarantees smooth DnD transition
+    setTasks(nextTasks);
+
+    // Backend-authoritative confirmation: if backend rejects (e.g. sensor or network error),
+    // safely revert local tasks state and notify the user.
+    try {
+      await moveTask(draggableId, destColId);
+    } catch (err: unknown) {
+      console.warn(`[handleDragEnd] moveTask rejected for ${draggableId}, reverting state:`, err);
+      setTasks(tasks);
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`Не удалось переместить задачу:\n${msg}`);
+    }
   };
 
   const savePipelineConfig = useCallback(async (next: PipelineColumn[]): Promise<boolean> => {
@@ -619,7 +685,7 @@ export default function KanbanBoard() {
 
   // Filter tasks based on activeBoardId and searchQuery:
   // ZERO INVISIBLE TASKS (§ 2.18 & § 2.3): Every task must be visible on the board it belongs to,
-  // or on the active board if orphaned or if its column does not exist on its declared board.
+  // or on the active board if orphaned, if its declared board is absent, or if its column belongs to the active board.
   const currentBoardTasks = tasks.filter((task) => {
     // 1. Direct match: task belongs to activeBoardId or has no boardId assigned
     if (!task.boardId || task.boardId === activeBoardId) {

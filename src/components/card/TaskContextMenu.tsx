@@ -100,7 +100,12 @@ export default function TaskContextMenu({ task, x, y, onClose }: TaskContextMenu
   const handleMove = async (targetColumnId: string) => {
     onClose();
     if (targetColumnId === task.columnId) return;
-    await moveTask(task.id, targetColumnId);
+    try {
+      await moveTask(task.id, targetColumnId);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`Не удалось переместить задачу:\n${msg}`);
+    }
   };
 
   const handleDelete = async () => {
