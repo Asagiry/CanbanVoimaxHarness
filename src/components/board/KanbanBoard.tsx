@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
 import { useBoardStore } from '../../stores/boardStore';
 import { useDrawerStore } from '../../stores/drawerStore';
@@ -451,7 +451,7 @@ export default function KanbanBoard() {
     // Backend-authoritative confirmation: if backend rejects (e.g. sensor or network error),
     // safely revert local tasks state and notify the user.
     try {
-      await moveTask(draggableId, destColId);
+      await moveTask(draggableId, destColId, { force: true, sourceColumnId: sourceColId });
     } catch (err: unknown) {
       console.warn(`[handleDragEnd] moveTask rejected for ${draggableId}, reverting state:`, err);
       setTasks(tasks);
@@ -720,6 +720,16 @@ export default function KanbanBoard() {
       (task.description && task.description.toLowerCase().includes(q))
     );
   });
+
+  const doneParentIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of tasks) {
+      if (t.status === 'done' || t.columnId === 'ready') {
+        set.add(t.id);
+      }
+    }
+    return set;
+  }, [tasks]);
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#fafafa] dark:bg-[#090a0f] transition-colors">
@@ -1154,6 +1164,7 @@ export default function KanbanBoard() {
                   index={index}
                   totalColumns={columns.length}
                   isPinned={isPinned}
+                  doneParentIds={doneParentIds}
                   onDeleteColumn={columns.length > 1 && !isPinned ? handleDeleteColumn : undefined}
                 />
               );

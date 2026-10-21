@@ -1084,7 +1084,70 @@ export default function DrawerActivityStream({
               return false;
             })();
 
+            // Suppress duplicate Agent Explanation cards when advance_task tool is nearby or duplicates summary (§ 2)
+            const shouldSuppressExplanation = (() => {
+              const explanationText = (activity?.content || '').trim();
+              if (!explanationText) return true;
+              const expLower = explanationText.toLowerCase();
+
+              const windowSize = 2;
+              const start = Math.max(0, idx - windowSize);
+              const end = Math.min((unifiedActivities?.length ?? 0) - 1, idx + windowSize);
+
+              for (let i = start; i <= end; i++) {
+                if (i === idx) continue;
+                const act = unifiedActivities[i];
+                if (act?.type === 'tool') {
+                  const tName = act.tool?.toolName || (act.tool as any)?.name || (act.tool as any)?.tool;
+                  if (tName === 'advance_task' || tName === 'move_task' || tName === 'reject_task') {
+                    const params = (act.tool as any)?.params || (act.tool as any)?.arguments || {};
+                    const parsedParams = typeof params === 'string'
+                      ? (() => { try { return JSON.parse(params); } catch { return {}; } })()
+                      : params;
+                    const summary = (parsedParams?.summary || parsedParams?.reason || '').trim().toLowerCase();
+
+                    if (summary) {
+                      if (
+                        expLower === summary ||
+                        expLower.includes(summary) ||
+                        summary.includes(expLower)
+                      ) {
+                        return true;
+                      }
+                      const cleanExp = expLower.replace(/[\s\r\n\t.,;:!?-]+/g, ' ').trim();
+                      const cleanSum = summary.replace(/[\s\r\n\t.,;:!?-]+/g, ' ').trim();
+                      if (cleanExp === cleanSum || cleanExp.includes(cleanSum) || cleanSum.includes(cleanExp)) {
+                        return true;
+                      }
+                    }
+                    return true;
+                  }
+                }
+              }
+
+              for (const act of unifiedActivities) {
+                if (act?.type === 'tool') {
+                  const tName = act.tool?.toolName || (act.tool as any)?.name || (act.tool as any)?.tool;
+                  if (tName === 'advance_task' || tName === 'move_task' || tName === 'reject_task') {
+                    const params = (act.tool as any)?.params || (act.tool as any)?.arguments || {};
+                    const parsedParams = typeof params === 'string'
+                      ? (() => { try { return JSON.parse(params); } catch { return {}; } })()
+                      : params;
+                    const summary = (parsedParams?.summary || parsedParams?.reason || '').trim().toLowerCase();
+                    if (summary && (expLower === summary || (summary.length > 20 && expLower.includes(summary)))) {
+                      return true;
+                    }
+                  }
+                }
+              }
+
+              return false;
+            })();
+
             if (!isFinal) {
+              if (shouldSuppressExplanation) {
+                return null;
+              }
               // Intermediate assistant commentary / step explanation rendered as collapsible chat card
               return (
                 <AgentExplanationCard

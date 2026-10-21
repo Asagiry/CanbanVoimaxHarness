@@ -158,11 +158,13 @@ function getSubagentsForTask(
   for (const child of childTasks) {
     if (!map.has(child.id)) {
       const childCreated = (child as any).createdAt ? Number((child as any).createdAt) : undefined;
+      const isReviewSubtask = child.title.toLowerCase().includes('ревью') || child.title.toLowerCase().includes('review');
+      const resolvedRole = isReviewSubtask ? 'reviewer' : (child.persona || 'reviewer');
       map.set(child.id, {
         id: child.id,
         parentTaskId: taskId,
         title: child.title,
-        role: child.persona || 'reviewer',
+        role: resolvedRole,
         prompt: child.description || '',
         status: child.status === 'running' ? 'running' : child.status === 'done' ? 'finished' : 'finished',
         createdAt: childCreated,
