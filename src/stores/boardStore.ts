@@ -4,13 +4,7 @@ import { useProjectStore } from './projectStore';
 import { useDrawerStore } from './drawerStore';
 import { logEvent } from '../lib/logger';
 
-// Track recently deleted task IDs to prevent ghost tasks and race-condition resurrects
-const recentlyDeletedIds = new Set<string>();
 
-function markDeleted(id: string) {
-  recentlyDeletedIds.add(id);
-  setTimeout(() => recentlyDeletedIds.delete(id), 60000);
-}
 
 const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
   {
@@ -121,63 +115,7 @@ function getTasksStorageKey(): string {
   }
 }
 
-function getTaskSeqStorageKey(): string {
-  try {
-    const activeProject = useProjectStore.getState().activeProject;
-    return `cvh_task_seq_${activeProject?.id || 'default'}`;
-  } catch {
-    return 'cvh_task_seq_default';
-  }
-}
 
-/** Numeric suffix of a top-level id: CVH-012 -> 12. Subtask CVH-012.3 -> base 12. */
-function parseTopLevelTaskNum(id: string): number {
-  const m = /^CVH-(\d+)/i.exec(id.trim());
-  if (!m) return 0;
-  const n = parseInt(m[1], 10);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function readSeq(key: string): number {
-  try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      const raw = window.localStorage.getItem(key);
-      const n = raw == null ? 0 : parseInt(raw, 10);
-      return Number.isFinite(n) && n > 0 ? n : 0;
-    }
-  } catch {
-    // ignore — treat as empty counter
-  }
-  return 0;
-}
-
-function writeSeq(key: string, value: number): void {
-  try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.setItem(key, String(value));
-    }
-  } catch (err) {
-    console.warn('Failed to write task seq to localStorage:', err);
-  }
-}
-
-function maxTaskNum(tasks: KanbanTask[]): number {
-  let max = 0;
-  for (const t of tasks) {
-    const n = parseTopLevelTaskNum(t.id);
-    if (n > max) max = n;
-  }
-  return max;
-}
-
-/**
- * Raise the persistent counter floor so it never falls below existing tasks.
- * Only ever raises — never resets, so deleted IDs are never re-issued.
- */
-function syncTaskSeqWithTasks(tasks: KanbanTask[]): void {
-  const key = getTaskSeqStorageKey();
-  writeSeq(key, Math.max(readSeq(key), maxTaskNum(tasks), tasks.length));
-}
 
 function persistTasksToLocalStorage(tasks: KanbanTask[]): void {
   try {
@@ -763,7 +701,6 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         });
         set({ tasks: mapped, isTauriConnected: true, isLoadingTasks: false });
         persistTasksToLocalStorage(mapped);
-        syncTaskSeqWithTasks(mapped);
         return;
       }
     } catch (err) {
@@ -774,7 +711,6 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const backupTasks = loadTasksFromLocalStorage();
     if (backupTasks.length > 0) {
       set({ tasks: backupTasks, isLoadingTasks: false });
-      syncTaskSeqWithTasks(backupTasks);
       return;
     }
 
@@ -993,7 +929,6 @@ ${msg}`);
     });
     set({ tasks: mapped });
     persistTasksToLocalStorage(mapped);
-    syncTaskSeqWithTasks(mapped);
   },
 
   addTask: async (input) => {
@@ -1034,7 +969,6 @@ ${msg}`);
 
         set({ tasks: nextTasks });
         persistTasksToLocalStorage(nextTasks);
-        syncTaskSeqWithTasks(nextTasks);
 
         logEvent(
           'INFO',
@@ -1106,7 +1040,6 @@ ${msg}`);
         const finalTasks = [...updatedTasks.filter((t) => t.id !== mapped.id), mapped];
         set({ tasks: finalTasks });
         persistTasksToLocalStorage(finalTasks);
-        syncTaskSeqWithTasks(finalTasks);
 
         logEvent(
           'INFO',
@@ -1194,9 +1127,6 @@ ${msg}`);
     if (drawerActiveTaskId && toDelete.has(drawerActiveTaskId)) {
       useDrawerStore.getState().closeDrawer();
     }
-
-    // Prevent ghost tasks: mark all deleted IDs in recentlyDeletedIds immediately
-    ids.forEach((id) => markDeleted(id));
 
     // ALWAYS clear logs and SQLite dialogue for every deleted ID in drawer store
     for (const id of ids) {

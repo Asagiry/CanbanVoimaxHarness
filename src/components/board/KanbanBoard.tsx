@@ -464,7 +464,7 @@ export default function KanbanBoard() {
 
     const targetColumnId = columns.some((c) => c.id === 'backlog') ? 'backlog' : (columns[0]?.id ?? 'backlog');
 
-    await addTask({
+    const created = await addTask({
       title: newTitle.trim(),
       description: newDescription.trim() || undefined,
       stageId: targetColumnId,
@@ -472,6 +472,7 @@ export default function KanbanBoard() {
       skipWorktree: !createWorktree,
       model: selectedModel,
     });
+    if (!created) return;
     setIsNewTaskModalOpen(false);
   };
 
