@@ -264,44 +264,76 @@ pub fn is_binary_or_target_dir(path: &Path) -> bool {
     false
 }
 
+/// Checks if a directory is the CanbanVoimaxHarness application codebase itself
+/// (or its binary/release distribution). The application's own directory must NEVER
+/// be automatically treated as a user project root.
+pub fn is_app_own_directory(path: &Path) -> bool {
+    let path_str = path.to_string_lossy();
+    if path_str.trim().is_empty() {
+        return false;
+    }
+    for p in path.ancestors() {
+        if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
+            if name.eq_ignore_ascii_case("CanbanVoimaxHarness") {
+                return true;
+            }
+        }
+        if p.join("src-tauri").join("tauri.conf.json").exists() {
+            return true;
+        }
+        let pkg_json = p.join("package.json");
+        if pkg_json.exists() {
+            if let Ok(content) = std::fs::read_to_string(&pkg_json) {
+                if content.contains("\"canban-voimax-harness\"") || content.contains("\"CanbanVoimaxHarness\"") {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 pub fn discover_project_root() -> PathBuf {
     let root = discover_project_root_raw();
-    if !root.as_os_str().is_empty() && root.exists() && !is_binary_or_target_dir(&root) {
+    if !root.as_os_str().is_empty() && root.exists() && !is_binary_or_target_dir(&root) && !is_app_own_directory(&root) {
         let _ = ensure_project_gitignore(&root);
     }
     root
 }
 
 fn discover_project_root_raw() -> PathBuf {
-    let current = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let current_is_bin = is_binary_or_target_dir(&current);
-
-    // 1. Check current_dir first: if current_dir is NOT a binary/target directory
-    // AND contains .cvh or .git, resolve it with resolve_actual_repo_root(&current).
-    // If valid, use it! Also, update active_project.txt with this resolved directory so future launches remember it.
-    if !current_is_bin && (current.join(".cvh").exists() || current.join(".git").exists()) {
-        let resolved = resolve_actual_repo_root(&current);
-        if !resolved.as_os_str().is_empty() && !is_binary_or_target_dir(&resolved) {
+    // 0. Check CLI arguments for an explicitly passed project directory (e.g. `cvh D:\projects\my-app`)
+    for arg in std::env::args().skip(1) {
+        if arg.starts_with('-') {
+            continue;
+        }
+        let p = PathBuf::from(arg.trim());
+        if p.exists() && p.is_dir() && !is_binary_or_target_dir(&p) && !is_app_own_directory(&p) {
+            let resolved = resolve_actual_repo_root(&p);
+            let target = if !resolved.as_os_str().is_empty() && !is_binary_or_target_dir(&resolved) && !is_app_own_directory(&resolved) {
+                resolved
+            } else {
+                p
+            };
             eprintln!(
-                "CVH [discover_project_root]: Found .cvh or .git in current_dir: {:?} (resolved: {:?})",
-                current, resolved
+                "CVH [discover_project_root]: Using explicit project from CLI arg: {:?}",
+                target
             );
-            persist_active_project_sync(&resolved);
-            return resolved;
+            persist_active_project_sync(&target);
+            return target;
         }
     }
 
-    // 2. Only fall back to %LOCALAPPDATA%\com.voimax.cvh\active_project.txt
-    // if current_dir is a binary/target folder or has neither .cvh nor .git.
+    // 1. Check %LOCALAPPDATA%\com.voimax.cvh\active_project.txt for explicitly saved user project:
     let active_project_file = get_app_config_dir().join("active_project.txt");
     if active_project_file.exists() {
         if let Ok(content) = std::fs::read_to_string(&active_project_file) {
             let trimmed = content.trim();
             if !trimmed.is_empty() {
                 let p = PathBuf::from(trimmed);
-                if p.exists() && p.is_dir() && !is_binary_or_target_dir(&p) {
+                if p.exists() && p.is_dir() && !is_binary_or_target_dir(&p) && !is_app_own_directory(&p) {
                     let resolved = resolve_actual_repo_root(&p);
-                    let target = if !resolved.as_os_str().is_empty() && !is_binary_or_target_dir(&resolved) {
+                    let target = if !resolved.as_os_str().is_empty() && !is_binary_or_target_dir(&resolved) && !is_app_own_directory(&resolved) {
                         resolved
                     } else {
                         p
@@ -316,36 +348,45 @@ fn discover_project_root_raw() -> PathBuf {
         }
     }
 
-    // 3. Traverse ancestors of current_dir looking for a real repository with .git or .cvh
-    // (e.g. going up from Release\Windows\bin to CanbanVoimaxHarness).
-    for ancestor in current.ancestors() {
-        if ancestor == current || is_binary_or_target_dir(ancestor) {
-            continue;
+    let current = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let current_is_bin = is_binary_or_target_dir(&current);
+    let current_is_app = is_app_own_directory(&current);
+
+    // 2. If current_dir is a user project (NOT app codebase and NOT binary/target dir)
+    // with .cvh or .git:
+    if !current_is_bin && !current_is_app && (current.join(".cvh").exists() || current.join(".git").exists()) {
+        let resolved = resolve_actual_repo_root(&current);
+        if !resolved.as_os_str().is_empty() && !is_binary_or_target_dir(&resolved) && !is_app_own_directory(&resolved) {
+            eprintln!(
+                "CVH [discover_project_root]: Found .cvh or .git in external current_dir: {:?} (resolved: {:?})",
+                current, resolved
+            );
+            persist_active_project_sync(&resolved);
+            return resolved;
         }
-        if ancestor.join(".git").exists() {
-            let resolved = resolve_actual_repo_root(ancestor);
-            if !resolved.as_os_str().is_empty() && !is_binary_or_target_dir(&resolved) {
-                eprintln!(
-                    "CVH [discover_project_root]: Found git repository in ancestor: {:?} (resolved: {:?})",
-                    ancestor, resolved
-                );
-                return resolved;
+    }
+
+    // 3. Traverse ancestors of current_dir only if current is NOT inside the app's own codebase/bin
+    if !current_is_bin && !current_is_app {
+        for ancestor in current.ancestors() {
+            if ancestor == current || is_binary_or_target_dir(ancestor) || is_app_own_directory(ancestor) {
+                continue;
             }
-            return ancestor.to_path_buf();
-        } else if ancestor.join(".cvh").exists() {
-            let resolved = resolve_actual_repo_root(ancestor);
-            if !resolved.as_os_str().is_empty() && !is_binary_or_target_dir(&resolved) {
-                eprintln!(
-                    "CVH [discover_project_root]: Found .cvh in ancestor: {:?} (resolved: {:?})",
-                    ancestor, resolved
-                );
-                return resolved;
+            if ancestor.join(".git").exists() || ancestor.join(".cvh").exists() {
+                let resolved = resolve_actual_repo_root(ancestor);
+                if !resolved.as_os_str().is_empty() && !is_binary_or_target_dir(&resolved) && !is_app_own_directory(&resolved) {
+                    eprintln!(
+                        "CVH [discover_project_root]: Found repository in ancestor: {:?} (resolved: {:?})",
+                        ancestor, resolved
+                    );
+                    return resolved;
+                }
             }
         }
     }
 
-    // 4. If current_dir itself is not binary, not in target, and is a valid directory (not empty):
-    if !current_is_bin && current.exists() && current.is_dir() && current != Path::new(".") {
+    // 4. If current_dir itself is external non-git project:
+    if !current_is_bin && !current_is_app && current.exists() && current.is_dir() && current != Path::new(".") {
         eprintln!(
             "CVH [discover_project_root]: Using current_dir as non-git project root: {:?}",
             current
@@ -353,9 +394,10 @@ fn discover_project_root_raw() -> PathBuf {
         return current;
     }
 
-    // 5. Otherwise, no valid project found: return empty PathBuf::new() so frontend can prompt welcome picker.
+    // 5. Otherwise, no valid external project found: return empty PathBuf::new()
+    // so frontend presents the project selection screen on startup.
     eprintln!(
-        "CVH [discover_project_root]: No valid project root discovered (current_dir is binary or invalid: {:?}). Returning empty path.",
+        "CVH [discover_project_root]: No valid project root discovered (current_dir is app codebase, binary, or unselected: {:?}). Returning empty path.",
         current
     );
     PathBuf::new()
@@ -1609,7 +1651,8 @@ impl ProjectEntry {
     pub fn from_path(path: &Path) -> Self {
         let is_valid = !path.as_os_str().is_empty()
             && path.exists()
-            && !is_binary_or_target_dir(path);
+            && !is_binary_or_target_dir(path)
+            && !is_app_own_directory(path);
         let path_str = if is_valid {
             path.to_string_lossy().to_string()
         } else {

@@ -24,7 +24,8 @@ pub async fn get_active_project(state: State<'_, AppState>) -> Result<ProjectEnt
     let root = state.get_root();
     let is_valid = !root.as_os_str().is_empty()
         && root.exists()
-        && !crate::config::is_binary_or_target_dir(&root);
+        && !crate::config::is_binary_or_target_dir(&root)
+        && !crate::config::is_app_own_directory(&root);
 
     let root_str = root.to_string_lossy().to_string();
     let registry = load_project_registry(None).await.unwrap_or_default();
@@ -110,6 +111,9 @@ pub async fn select_project_folder(
         if crate::config::is_binary_or_target_dir(folder) {
             return Err(format!("Selected folder {:?} is a binary or build directory and cannot be used as a project", folder));
         }
+        if crate::config::is_app_own_directory(folder) {
+            return Err(format!("Selected folder {:?} is the CanbanVoimaxHarness application directory and cannot be used as a project", folder));
+        }
         let _ = ensure_project_gitignore(folder);
         let _ = scaffold_cvh_project(folder).await;
         persist_active_project(folder).await;
@@ -140,6 +144,11 @@ pub async fn set_active_project(
     let new_path = PathBuf::from(path.trim());
     if crate::config::is_binary_or_target_dir(&new_path) {
         let err = format!("Cannot set binary or build directory as project root: {:?}", new_path);
+        crate::logger::cvh_log(Some(&old_root), "ERROR", "PROJECT", &err);
+        return Err(err);
+    }
+    if crate::config::is_app_own_directory(&new_path) {
+        let err = format!("Cannot set CanbanVoimaxHarness application directory as project root: {:?}", new_path);
         crate::logger::cvh_log(Some(&old_root), "ERROR", "PROJECT", &err);
         return Err(err);
     }

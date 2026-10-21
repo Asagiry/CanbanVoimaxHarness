@@ -575,7 +575,7 @@ export default function App() {
       {/* Terminal Bootloader Splash Screen / Welcome Project Picker */}
       {(showSplash || !hasActiveProject) && (
         <SplashScreen
-          isReady={isDataReady && hasActiveProject}
+          isReady={isDataReady}
           onFinish={() => setShowSplash(false)}
         />
       )}
