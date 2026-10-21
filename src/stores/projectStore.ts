@@ -6,7 +6,7 @@ import { logEvent } from '../lib/logger';
 
 export function isInvalidProjectPath(path?: string | null): boolean {
   if (!path) return true;
-  const trimmed = path.trim();
+  const trimmed = path.trim().replace(/[\\/]+$/, '');
   if (!trimmed || trimmed === 'default') return true;
   const normalized = trimmed.replace(/\\/g, '/').toLowerCase();
   if (
