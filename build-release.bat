@@ -292,39 +292,18 @@ if "%TARGET%"=="" (
     )
   )
 )
-rem Interactive or default build mode selection
-if "%NO_BUNDLE%"=="" if "%BUNDLES%"=="" (
-  if "%NO_PAUSE%"=="1" (
-    set "NO_BUNDLE=1"
-    set "BUNDLES=none"
-  ) else (
-    echo.
-    echo ==============================================================================
-    echo   CanbanVoimaxHarness Release Build Mode
-    echo ==============================================================================
-    echo   [1] БЫСТРАЯ СБОРКА: Только .exe (без долгого сжатия NSIS) -^> ~1-2 мин [РЕКОМЕНДУЕТСЯ]
-    echo   [2] ПОЛНАЯ СБОРКА: .exe + NSIS setup-инсталлер            -^> ~5-8 мин
-    echo ==============================================================================
-    choice /c 12 /n /m "Выберите режим [1/2] (по умолчанию 1 через 5 сек): " /t 5 /d 1
-    if errorlevel 2 (
-      set "BUNDLES=nsis"
-      set "NO_BUNDLE=0"
-      echo   - Выбран режим: Полная сборка с инсталлером NSIS.
-    ) else (
-      set "BUNDLES=none"
-      set "NO_BUNDLE=1"
-      echo   - Выбран режим: Быстрая сборка portable .exe.
-    )
-    echo.
-  )
-)
-if "%BUNDLES%"=="none" set "NO_BUNDLE=1"
+rem Fast build by default (portable exe only, skips slow NSIS compression)
 if "%BUNDLES%"=="" (
-  if "!NO_BUNDLE!"=="1" (
+  if not "%NO_BUNDLE%"=="0" (
+    set "NO_BUNDLE=1"
     set "BUNDLES=none"
   ) else (
     set "BUNDLES=nsis"
   )
+) else if "%BUNDLES%"=="none" (
+  set "NO_BUNDLE=1"
+) else (
+  set "NO_BUNDLE=0"
 )
 
 if "%TARGET%"=="" (
