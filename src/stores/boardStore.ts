@@ -130,10 +130,6 @@ function getTaskSeqStorageKey(): string {
   }
 }
 
-function getSubtaskSeqStorageKey(parentId: string): string {
-  return `${getTaskSeqStorageKey()}_sub_${parentId}`;
-}
-
 /** Numeric suffix of a top-level id: CVH-012 -> 12. Subtask CVH-012.3 -> base 12. */
 function parseTopLevelTaskNum(id: string): number {
   const m = /^CVH-(\d+)/i.exec(id.trim());
@@ -181,21 +177,6 @@ function maxTaskNum(tasks: KanbanTask[]): number {
 function syncTaskSeqWithTasks(tasks: KanbanTask[]): void {
   const key = getTaskSeqStorageKey();
   writeSeq(key, Math.max(readSeq(key), maxTaskNum(tasks), tasks.length));
-}
-
-/**
- * Allocate the next monotonic top-level task number and persist the
- * incremented counter. next = max(counter, max numeric suffix, tasks.length) + 1.
- */
-function allocateNextTaskNum(tasks: KanbanTask[]): number {
-  const key = getTaskSeqStorageKey();
-  const next = Math.max(readSeq(key), maxTaskNum(tasks), tasks.length) + 1;
-  writeSeq(key, next);
-  return next;
-}
-
-function formatTaskId(num: number): string {
-  return `CVH-${String(num).padStart(3, '0')}`;
 }
 
 function persistTasksToLocalStorage(tasks: KanbanTask[]): void {
@@ -766,49 +747,24 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       const rawTasks = await invoke<any[]>('list_tasks');
       logEvent('INFO', 'BOARD_STORE', `loadTasks: received ${Array.isArray(rawTasks) ? rawTasks.length : 0} tasks from backend`);
       if (Array.isArray(rawTasks)) {
-        if (rawTasks.length > 0) {
-          const prevTasks = get().tasks;
-          const mapped = rawTasks.map((raw) => {
-            const prev = prevTasks.find((p) => p.id === raw.id);
-            const rawCol = raw.stageId || raw.stage_id || raw.columnId;
-            if (prev && (!rawCol || prev.columnId === rawCol)) {
-              if (prev.stageEnteredAt && !raw.stageEnteredAt && !raw.stage_entered_at) {
-                raw.stageEnteredAt = prev.stageEnteredAt;
-              }
-              if (prev.stageDurations && !raw.stageDurations) {
-                raw.stageDurations = prev.stageDurations;
-              }
+        const prevTasks = get().tasks;
+        const mapped = rawTasks.map((raw) => {
+          const prev = prevTasks.find((p) => p.id === raw.id);
+          const rawCol = raw.stageId || raw.stage_id || raw.columnId;
+          if (prev && (!rawCol || prev.columnId === rawCol)) {
+            if (prev.stageEnteredAt && !raw.stageEnteredAt && !raw.stage_entered_at) {
+              raw.stageEnteredAt = prev.stageEnteredAt;
             }
-            return mapBackendTaskToKanban(raw);
-          });
-          // Preserve only genuine in-flight optimistic creations (< 30s) not yet returned by backend list_tasks (§ 2.22)
-          // NEVER revive tasks that are in recentlyDeletedIds
-          const pendingOptimistic = prevTasks.filter(
-            (p) => !recentlyDeletedIds.has(p.id) && !rawTasks.some((raw) => raw.id === p.id) && Boolean(p.createdAt && Date.now() - p.createdAt < 30000)
-          );
-          const allTasks = [...mapped, ...pendingOptimistic];
-          set({ tasks: allTasks, isTauriConnected: true, isLoadingTasks: false });
-          persistTasksToLocalStorage(allTasks);
-          syncTaskSeqWithTasks(allTasks);
-          if (pendingOptimistic.length > 0) {
-            void syncTasksBackend(allTasks);
+            if (prev.stageDurations && !raw.stageDurations) {
+              raw.stageDurations = prev.stageDurations;
+            }
           }
-          return;
-        } else {
-          // Backend has empty tasks array in SQLite: check per-project localStorage backup for non-deleted tasks
-          const prevTasks = get().tasks.filter((p) => !recentlyDeletedIds.has(p.id));
-          const backupTasks = loadTasksFromLocalStorage().filter((b) => !recentlyDeletedIds.has(b.id));
-          const merged = [...prevTasks, ...backupTasks.filter((b) => !prevTasks.some((o) => o.id === b.id))];
-          if (merged.length > 0) {
-            set({ tasks: merged, isTauriConnected: true, isLoadingTasks: false });
-            syncTaskSeqWithTasks(merged);
-            await syncTasksBackend(merged);
-            return;
-          }
-          set({ tasks: [], isTauriConnected: true, isLoadingTasks: false });
-          persistTasksToLocalStorage([]);
-          return;
-        }
+          return mapBackendTaskToKanban(raw);
+        });
+        set({ tasks: mapped, isTauriConnected: true, isLoadingTasks: false });
+        persistTasksToLocalStorage(mapped);
+        syncTaskSeqWithTasks(mapped);
+        return;
       }
     } catch (err) {
       console.info('Tauri list_tasks not available or returned empty:', err);
@@ -819,7 +775,6 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     if (backupTasks.length > 0) {
       set({ tasks: backupTasks, isLoadingTasks: false });
       syncTaskSeqWithTasks(backupTasks);
-      await syncTasksBackend(backupTasks);
       return;
     }
 
@@ -842,42 +797,22 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       return;
     }
 
+    if (task.columnId === targetStageId) {
+      return;
+    }
+
     const targetColDef = columns.find((c) => c.id === targetStageId);
-    const originalColumnId = task.columnId;
-    const originalStatus = task.status;
     console.info(`[moveTask] Moving task "${resolvedTaskId}" from "${task.columnId}" to "${targetStageId}" (board: ${activeBoardId})`);
     logEvent(
       'INFO',
       'BOARD_STORE',
       `moveTask: starting move for "${resolvedTaskId}" from "${task.columnId}" to "${targetStageId}"`,
-      JSON.stringify({ activeBoardId, originalStatus })
+      JSON.stringify({ activeBoardId, originalStatus: task.status })
     );
 
-    // Instant Optimistic Card Lifecycle (<1ms) per § 2.22:
-    // If not already placed optimistically by drag-and-drop, update local Zustand state immediately.
-    if (task.columnId !== targetStageId) {
-      const prevTasks = get().tasks;
-      const optimisticTasks = prevTasks.map((t) =>
-        t.id === resolvedTaskId || t.id.trim().toLowerCase() === resolvedTaskId.trim().toLowerCase()
-          ? {
-              ...t,
-              columnId: targetStageId,
-              boardId: activeBoardId || t.boardId,
-              persona: targetColDef?.persona || t.persona,
-              status: (targetColDef?.terminal ? 'done' : targetColDef?.persona ? 'running' : 'idle') as TaskStatus,
-              updatedAt: Date.now(),
-              stageEnteredAt: Date.now(),
-            }
-          : t
-      );
-      set({ tasks: optimisticTasks });
-      persistTasksToLocalStorage(optimisticTasks);
-    }
-
-    // Preferred path: backend owns the move (gatekeeper sensor, target on_enter
-    // hooks, source on_finish hooks + worktree allocation). Local state is
-    // updated from the returned Task so hook-assigned worktreePath/branch
-    // survive. `verdict` is optional in move_task_stage and omitted here.
+    // BACKEND-AUTHORITATIVE MOVE:
+    // Backend owns the move (gatekeeper sensor, hooks, worktree allocation).
+    // State is updated ONLY upon backend confirmation.
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const backendTask = await invoke<any>('move_task_stage', {
@@ -912,7 +847,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           fastTrack: prev.fastTrack,
           attachments: mapped.attachments ?? prev.attachments,
           handoverSummary: mapped.handoverSummary ?? prev.handoverSummary,
-          stageEnteredAt: prev.stageEnteredAt || Date.now(),
+          stageEnteredAt: Date.now(),
           updatedAt: Date.now(),
           activeStageDuration: 0,
           stageDurations: {
@@ -961,30 +896,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         `moveTask: backend move_task_stage REJECTED for "${resolvedTaskId}" -> "${targetStageId}"`,
         msg
       );
-      
-      // RACE CONDITION PREVENTION (§ 2.22):
-      // Do NOT blindly call loadTasks() in catch! Blind loadTasks() wipes optimistic and
-      // newly created in-flight cards that have not completed disk persistence.
-      // Instead, safely revert only the target card's position without dropping cards from the board.
-      const isOptimisticOrNew = Boolean(task.createdAt && Date.now() - task.createdAt < 60000);
-      if (isOptimisticOrNew) {
-        console.warn(`[moveTask] Preserving optimistic/new task "${resolvedTaskId}" in local store despite backend rejection`);
-      }
-
-      const currentTasks = get().tasks;
-      const reverted = currentTasks.map((t) =>
-        t.id === resolvedTaskId || t.id.trim().toLowerCase() === resolvedTaskId.trim().toLowerCase()
-          ? {
-              ...t,
-              columnId: originalColumnId,
-              status: (originalStatus || 'idle') as TaskStatus,
-              updatedAt: Date.now(),
-            }
-          : t
-      );
-      set({ tasks: reverted });
-      persistTasksToLocalStorage(reverted);
-
+      // No optimistic mutation was performed: card remains in place without reverting.
       alert(`Перемещение задачи отклонено:
 ${msg}`);
       return;
@@ -1079,15 +991,9 @@ ${msg}`);
       }
       return mapBackendTaskToKanban(raw);
     });
-    // Protect recent optimistic tasks (< 30s) not yet present in rawTasks (§ 2.22)
-    // Filter out any IDs in recentlyDeletedIds to eliminate ghost tasks
-    const pendingOptimistic = prevTasks.filter(
-      (p) => !recentlyDeletedIds.has(p.id) && !rawTasks.some((raw) => raw.id === p.id) && Boolean(p.createdAt && Date.now() - p.createdAt < 30000)
-    );
-    const allTasks = [...mapped, ...pendingOptimistic];
-    set({ tasks: allTasks });
-    persistTasksToLocalStorage(allTasks);
-    syncTaskSeqWithTasks(allTasks);
+    set({ tasks: mapped });
+    persistTasksToLocalStorage(mapped);
+    syncTaskSeqWithTasks(mapped);
   },
 
   addTask: async (input) => {
@@ -1108,58 +1014,11 @@ ${msg}`);
       JSON.stringify({ targetColumnId, boardId, skipWorktree, model: input.model })
     );
 
-    // OPTIMISTIC TASK CREATION:
-    // Generate optimistic monotonic task ID and append immediately so card appears on board in <1ms!
-    const optimisticNum = allocateNextTaskNum(state.tasks);
-    const optimisticId = formatTaskId(optimisticNum);
-    const targetColDef = state.columns.find((c) => c.id === targetColumnId);
-    const status: TaskStatus = targetColDef?.terminal
-      ? 'done'
-      : targetColDef?.persona
-        ? 'running'
-        : 'idle';
-
-    const optimisticTask: KanbanTask = {
-      id: optimisticId,
-      title,
-      description: description || undefined,
-      priority: 'high',
-      columnId: targetColumnId,
-      boardId,
-      persona: targetColDef?.persona ?? 'developer',
-      branch: skipWorktree ? undefined : `feat/${optimisticId.toLowerCase()}`,
-      worktreePath: skipWorktree ? undefined : `.cvh/worktrees/${optimisticId.toLowerCase()}`,
-      skipWorktree,
-      status,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      stageEnteredAt: Date.now(),
-      activeStageDuration: 0,
-      stageDurations: {},
-      totalElapsed: 0,
-      isTimerRunning: status === 'running',
-      returnsCount: 0,
-      verdict: 'NONE',
-      model: input.model,
-    };
-
-    // Immediately update UI state!
-    const initialTasks = [optimisticTask, ...get().tasks];
-    set({ tasks: initialTasks });
-    persistTasksToLocalStorage(initialTasks);
-    syncTaskSeqWithTasks(initialTasks);
-    logEvent(
-      'INFO',
-      'BOARD_STORE',
-      `addTask: created optimistic card "${optimisticId}" in stage "${targetColumnId}"`,
-      JSON.stringify({ status, persona: optimisticTask.persona })
-    );
-
-    // Backend creation runs asynchronously and reconciles confirmed task ID / worktree details
+    // BACKEND-AUTHORITATIVE TASK CREATION:
+    // No client ID generation and no optimistic insertion into tasks before backend response.
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const backendTask = await invoke<any>('create_task', {
-        taskId: optimisticId,
         title,
         description,
         stageId: targetColumnId,
@@ -1167,40 +1026,16 @@ ${msg}`);
         skipWorktree,
         model: input.model || undefined,
       });
+
       if (backendTask && typeof backendTask.id === 'string') {
-        const mapped = mapBackendTaskToKanban(backendTask);
+        const confirmed = mapBackendTaskToKanban(backendTask);
         const currentTasks = get().tasks;
-        // RACE CONDITION PREVENTION (§ 2.22):
-        // If the user already moved the task card while create_task was running in the background,
-        // do not reset columnId or status back to the creation stage (e.g. 'backlog').
-        const existingInStore = currentTasks.find((t) => t.id === optimisticId || t.id === backendTask.id);
-        const userMovedColumn = existingInStore && existingInStore.columnId !== targetColumnId;
-        const effectiveColumnId = userMovedColumn ? existingInStore.columnId : mapped.columnId;
-        const effectiveBoardId = existingInStore?.boardId || mapped.boardId || boardId;
-        const effectiveStatus = userMovedColumn ? existingInStore.status : mapped.status;
-        const effectivePersona = userMovedColumn ? existingInStore.persona : mapped.persona;
+        const nextTasks = [confirmed, ...currentTasks.filter((t) => t.id !== confirmed.id)];
 
-        const confirmed: KanbanTask = {
-          ...mapped,
-          columnId: effectiveColumnId,
-          boardId: effectiveBoardId,
-          status: effectiveStatus,
-          persona: effectivePersona,
-          model: mapped.model || input.model || undefined,
-        };
+        set({ tasks: nextTasks });
+        persistTasksToLocalStorage(nextTasks);
+        syncTaskSeqWithTasks(nextTasks);
 
-        // Reconcile: replace optimistic task with confirmed backend task
-        let reconciled: KanbanTask[];
-        if (currentTasks.some((t) => t.id === optimisticId)) {
-          reconciled = currentTasks.map((t) => (t.id === optimisticId ? confirmed : t));
-        } else if (!currentTasks.some((t) => t.id === confirmed.id)) {
-          reconciled = [confirmed, ...currentTasks];
-        } else {
-          reconciled = currentTasks.map((t) => (t.id === confirmed.id ? confirmed : t));
-        }
-        set({ tasks: reconciled });
-        persistTasksToLocalStorage(reconciled);
-        syncTaskSeqWithTasks(reconciled);
         logEvent(
           'INFO',
           'BOARD_STORE',
@@ -1208,48 +1043,20 @@ ${msg}`);
           JSON.stringify({ columnId: confirmed.columnId, boardId: confirmed.boardId, worktree: confirmed.worktreePath })
         );
 
-        // If the task was moved by the user during creation, ensure backend stage matches
-        if (userMovedColumn && backendTask.stage_id !== effectiveColumnId) {
-          try {
-            const { invoke } = await import('@tauri-apps/api/core');
-            await invoke('move_task_stage', {
-              taskId: confirmed.id,
-              targetStageId: effectiveColumnId,
-              boardId: effectiveBoardId,
-            });
-          } catch (syncErr) {
-            console.warn('[addTask] Failed to sync moved stage to backend:', syncErr);
-          }
-        }
-
-        // Task persistence safety before run (§ Requirement 4):
-        // Ensure confirmed task is guaranteed to be saved and known to backend before triggerRunAgent
-        await syncTasksBackend(reconciled);
-
         const colDef = get().columns.find((c) => c.id === confirmed.columnId);
         if (colDef?.autoRun ?? !!colDef?.persona) {
           await triggerRunAgent(confirmed.id);
         }
         return confirmed;
       }
+      return null;
     } catch (err) {
-      console.info('Backend create_task failed or in web mode, syncing local state:', err);
-      logEvent(
-        'ERROR',
-        'BOARD_STORE',
-        `addTask: backend create_task failed for "${optimisticId}", syncing local state`,
-        String(err)
-      );
-      // Fallback: sync optimistic task with disk
-      await syncTasksBackend(get().tasks);
-      const colDef = get().columns.find((c) => c.id === optimisticTask.columnId);
-      if (colDef?.autoRun ?? !!colDef?.persona) {
-        await triggerRunAgent(optimisticTask.id);
-      }
-      return optimisticTask;
+      const errMsg = typeof err === 'string' ? err : err instanceof Error ? err.message : JSON.stringify(err);
+      console.error('[addTask] Backend create_task failed:', err);
+      logEvent('ERROR', 'BOARD_STORE', 'addTask: backend create_task failed', errMsg);
+      alert(`Не удалось создать задачу:\n${errMsg}`);
+      return null;
     }
-
-    return optimisticTask;
   },
 
   createSubtask: async (parentId: string, targetColumnId?: string) => {
@@ -1266,67 +1073,14 @@ ${msg}`);
 
     if (!targetCol) return null;
 
-    const existingSubtasks = tasks.filter(
-      (t) => t.parentId === parentId || t.id.startsWith(`${parentId}.`)
+    logEvent(
+      'INFO',
+      'BOARD_STORE',
+      `createSubtask: initiated for parentId="${parentId}" targetStageId="${targetCol.id}"`
     );
-    const siblingMax = existingSubtasks.reduce((max, t) => {
-      const parsed = t.subtaskIndex ?? parseInt(t.id.split('.').pop() || '0', 10);
-      return Math.max(max, isNaN(parsed) ? 0 : parsed);
-    }, 0);
-    const subSeqKey = getSubtaskSeqStorageKey(parentId);
-    const nextIndex = Math.max(siblingMax + 1, readSeq(subSeqKey) + 1);
-    const subtaskId = `${parentId}.${nextIndex}`;
 
-    const subtaskStatus: TaskStatus = targetCol.terminal
-      ? 'done'
-      : targetCol.persona
-      ? 'running'
-      : 'idle';
-
-    const optimisticSubtask: KanbanTask = {
-      id: subtaskId,
-      title: `[${targetCol.title}] ${parent.title}`,
-      description: `### Подзадача этапа: ${targetCol.title}\nРодительская задача: ${parentId}\n\n${parent.description || ''}`,
-      priority: parent.priority,
-      columnId: targetCol.id,
-      persona: targetCol.persona || 'reviewer',
-      branch: parent.branch,
-      worktreePath: parent.worktreePath,
-      skipWorktree: parent.skipWorktree,
-      status: subtaskStatus,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      stageEnteredAt: Date.now(),
-      activeStageDuration: 0,
-      stageDurations: {},
-      totalElapsed: 0,
-      isTimerRunning: subtaskStatus === 'running',
-      returnsCount: 0,
-      verdict: 'NONE',
-      model: targetCol.modelOverride || parent.model,
-      parentId,
-      subtaskIndex: nextIndex,
-      handoverSummary: undefined,
-    };
-
-    // OPTIMISTIC SUBTASK CREATION:
-    // Immediately update UI with new subtask and parent status:
-    const initialTasks = tasks.map((t) => {
-      if (t.id === parentId) {
-        return {
-          ...t,
-          status: 'waiting_subtask' as TaskStatus,
-          waitingForSubtaskId: subtaskId,
-        };
-      }
-      return t;
-    });
-    const withOptimisticSubtask = [...initialTasks, optimisticSubtask];
-    set({ tasks: withOptimisticSubtask });
-    persistTasksToLocalStorage(withOptimisticSubtask);
-    writeSeq(subSeqKey, nextIndex);
-
-    // Call backend IPC asynchronously and reconcile without disk reload
+    // BACKEND-AUTHORITATIVE SUBTASK CREATION:
+    // Call backend create_subtask without optimistic local insertions.
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const backendSubtask = await invoke<any>('create_subtask', {
@@ -1334,45 +1088,56 @@ ${msg}`);
         targetStageId: targetCol.id,
         title: null,
       });
+
       if (backendSubtask && typeof backendSubtask.id === 'string') {
         const mapped = mapBackendTaskToKanban(backendSubtask);
-        const usedIdx = parseInt(backendSubtask.id.split('.').pop() || '0', 10);
-        writeSeq(subSeqKey, Number.isFinite(usedIdx) && usedIdx > 0 ? Math.max(usedIdx, nextIndex) : nextIndex);
-        // Silently reconcile optimistic subtask with backend result, updating parent link if ID drifted
         const currentTasks = get().tasks;
-        const reconciled = currentTasks.map((t) => {
-          if (t.id === subtaskId) return mapped;
-          if (t.id === parentId && t.waitingForSubtaskId === subtaskId) {
-            return { ...t, waitingForSubtaskId: mapped.id };
+        const updatedTasks = currentTasks.map((t) => {
+          if (t.id === parentId) {
+            return {
+              ...t,
+              status: 'waiting_subtask' as TaskStatus,
+              waitingForSubtaskId: mapped.id,
+              updatedAt: Date.now(),
+            };
           }
           return t;
         });
-        set({ tasks: reconciled });
-        persistTasksToLocalStorage(reconciled);
+        const finalTasks = [...updatedTasks.filter((t) => t.id !== mapped.id), mapped];
+        set({ tasks: finalTasks });
+        persistTasksToLocalStorage(finalTasks);
+        syncTaskSeqWithTasks(finalTasks);
+
+        logEvent(
+          'INFO',
+          'BOARD_STORE',
+          `createSubtask: backend create_subtask confirmed for "${mapped.id}" (parent: "${parentId}")`,
+          JSON.stringify({ columnId: mapped.columnId, status: mapped.status })
+        );
+
+        if (targetCol.autoRun ?? !!targetCol.persona) {
+          await triggerRunAgent(mapped.id);
+        }
         return mapped;
       }
+      return null;
     } catch (err) {
-      console.info('Backend create_subtask failed or in web mode, saving local state:', err);
-      await syncTasksBackend(get().tasks);
+      const errMsg = typeof err === 'string' ? err : err instanceof Error ? err.message : JSON.stringify(err);
+      console.error(`[createSubtask] Backend create_subtask failed for parent "${parentId}":`, err);
+      logEvent('ERROR', 'BOARD_STORE', `createSubtask: backend create_subtask failed for parent "${parentId}"`, errMsg);
+      alert(`Не удалось создать подзадачу:\n${errMsg}`);
+      return null;
     }
-
-    if (targetCol.autoRun ?? !!targetCol.persona) {
-      await triggerRunAgent(subtaskId);
-    }
-
-    return optimisticSubtask;
   },
 
   deleteTask: async (taskId) => {
     const prevTasks = get().tasks;
-    const prevSelectedTaskId = get().selectedTaskId;
     const target = prevTasks.find(
       (t) => t.id === taskId || t.id.trim().toLowerCase() === taskId.trim().toLowerCase()
     );
     const resolvedId = target ? target.id : taskId;
-    const isSubtask = !!target?.parentId || resolvedId.includes('.');
 
-    // Cascade: the task plus all its descendants (via parentId or id prefix).
+    // Cascade calculation: target task plus all descendants
     const toDelete = new Set<string>([resolvedId, taskId]);
     let grew = true;
     while (grew) {
@@ -1387,10 +1152,24 @@ ${msg}`);
     }
     const ids = [...toDelete];
 
-    // OPTIMISTIC TASK DELETION:
-    // Immediately filter out the deleted task ID from state.tasks in Zustand (<1ms),
-    // and if any remaining parent was waiting on a deleted subtask, auto-unlock it!
-    const updatedTasks = prevTasks
+    logEvent('INFO', 'BOARD_STORE', `deleteTask: requesting backend delete for "${resolvedId}"`, JSON.stringify(ids));
+
+    // BACKEND-AUTHORITATIVE TASK DELETION:
+    // Call backend delete_task first. Update store ONLY after backend confirmation.
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('delete_task', { taskId: resolvedId });
+    } catch (err) {
+      const errMsg = typeof err === 'string' ? err : err instanceof Error ? err.message : JSON.stringify(err);
+      console.error(`[deleteTask] Backend delete_task failed for "${resolvedId}":`, err);
+      logEvent('ERROR', 'BOARD_STORE', `deleteTask: backend delete_task failed for "${resolvedId}"`, errMsg);
+      alert(`Не удалось удалить задачу:\n${errMsg}`);
+      return;
+    }
+
+    // Backend confirmed deletion. Now update store state.
+    const currentTasks = get().tasks;
+    const updatedTasks = currentTasks
       .filter((t) => !toDelete.has(t.id))
       .map((t) => {
         if (t.waitingForSubtaskId && toDelete.has(t.waitingForSubtaskId)) {
@@ -1402,6 +1181,8 @@ ${msg}`);
         }
         return t;
       });
+
+    const prevSelectedTaskId = get().selectedTaskId;
     set({
       tasks: updatedTasks,
       selectedTaskId: toDelete.has(prevSelectedTaskId ?? '') ? null : prevSelectedTaskId,
@@ -1424,26 +1205,6 @@ ${msg}`);
       } catch (logErr) {
         console.warn('Failed to clear task logs for deleted task:', id, logErr);
       }
-    }
-
-    // Background cleanup (worktree, tasks.json)
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      // Preferred path: unified delete_task command in Rust backend
-      try {
-        await invoke('delete_task', { taskId });
-      } catch (backendErr) {
-        // Fallback: cleanup worktree and sync tasks to disk
-        console.info('Backend delete_task command failed or fallback:', backendErr);
-        if (!isSubtask) {
-          await invoke('cleanup_task_worktree', { taskId }).catch(() => {});
-        }
-        await syncTasksBackend(updatedTasks);
-      }
-    } catch (err) {
-      console.error('Critical failure during task deletion background sync:', err);
-      const msg = typeof err === 'string' ? err : err instanceof Error ? err.message : JSON.stringify(err);
-      console.warn(`Task deletion background sync warning: ${msg}`);
     }
   },
 
