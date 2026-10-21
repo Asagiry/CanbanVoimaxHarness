@@ -119,6 +119,11 @@ pub fn is_udf_usable(candidate: &Path) -> bool {
         }
     }
 
+    // Invariant 3: Prohibit binary or installer directories
+    if crate::config::is_binary_or_target_dir(candidate) {
+        return false;
+    }
+
     // 1. Check directory writability
     if std::fs::create_dir_all(candidate).is_err() {
         return false;

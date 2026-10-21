@@ -252,14 +252,17 @@ pub fn is_binary_or_target_dir(path: &Path) -> bool {
             return true;
         }
     }
-    // Also inspect path components to catch paths inside Release, bin, dist, installer, or debug
+    // Also inspect path components to catch paths inside Release, bin, dist, installer, debug, or node_modules
     for comp in path.components() {
         if let std::path::Component::Normal(c) = comp {
             let s = c.to_string_lossy().to_lowercase();
             if matches!(
                 s.as_str(),
-                "release" | "bin" | "debug" | "dist" | "installer"
+                "release" | "bin" | "debug" | "dist" | "installer" | "node_modules"
             ) {
+                return true;
+            }
+            if !cfg!(test) && s == "target" {
                 return true;
             }
         }
