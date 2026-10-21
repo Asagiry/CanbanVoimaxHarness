@@ -278,8 +278,13 @@ pub fn is_app_own_directory(path: &Path) -> bool {
                 return true;
             }
         }
-        if p.join("src-tauri").join("tauri.conf.json").exists() {
-            return true;
+        let tauri_conf = p.join("src-tauri").join("tauri.conf.json");
+        if tauri_conf.exists() {
+            if let Ok(content) = std::fs::read_to_string(&tauri_conf) {
+                if content.contains("\"com.voimax.cvh\"") || content.contains("\"CanbanVoimaxHarness\"") {
+                    return true;
+                }
+            }
         }
         let pkg_json = p.join("package.json");
         if pkg_json.exists() {
