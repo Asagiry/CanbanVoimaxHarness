@@ -22,3 +22,4 @@ pub use llm::*;
 pub use projects::*;
 pub use tasks::*;
 pub use copilot::*;
+pub use crate::logger::log_event;

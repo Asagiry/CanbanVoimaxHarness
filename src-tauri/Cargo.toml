@@ -39,3 +39,12 @@ incremental = true
 
 [profile.release.package.libsqlite3-sys]
 debug = false
+
+[profile.test]
+debug = 0
+
+[profile.test.package.windows]
+debug = 0
+
+[profile.test.package.tauri]
+debug = 0

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { KanbanTask, PipelineColumn, PipelineConfig, TaskStatus, TaskVerdict, TaskPriority, BoardDef } from '../types';
 import { useProjectStore } from './projectStore';
 import { useDrawerStore } from './drawerStore';
+import { logEvent } from '../lib/logger';
 
 const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
   {
@@ -379,6 +380,12 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
     const { invoke } = await import('@tauri-apps/api/core');
     const { activeBoardId, boards } = useBoardStore.getState();
     const fallbackBoardId = activeBoardId || boards[0]?.id || 'development';
+    logEvent(
+      'DEBUG',
+      'BOARD_STORE',
+      `syncTasksBackend: syncing ${tasks.length} tasks to save_tasks`,
+      JSON.stringify(tasks.map((t) => t.id))
+    );
     // NOTE: send ONLY canonical camelCase keys. Sending both stageId+columnId
     // makes Rust serde fail with "duplicate field `stageId`" and save_tasks
     // silently never persists (this broke run_agent with "Task not found").
@@ -418,6 +425,7 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
     await invoke('save_tasks', { tasks: backendPayload });
   } catch (err) {
     console.info('Backend save_tasks not available or in web mode:', err);
+    logEvent('WARN', 'BOARD_STORE', 'syncTasksBackend: save_tasks failed or in web mode', String(err));
   }
 }
 
@@ -713,9 +721,11 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   loadTasks: async () => {
     set({ isLoadingTasks: true });
+    logEvent('DEBUG', 'BOARD_STORE', 'loadTasks: invoking list_tasks from backend');
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const rawTasks = await invoke<any[]>('list_tasks');
+      logEvent('INFO', 'BOARD_STORE', `loadTasks: received ${Array.isArray(rawTasks) ? rawTasks.length : 0} tasks from backend`);
       if (Array.isArray(rawTasks)) {
         if (rawTasks.length > 0) {
           const prevTasks = get().tasks;
@@ -795,6 +805,12 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const originalColumnId = task.columnId;
     const originalStatus = task.status;
     console.info(`[moveTask] Moving task "${resolvedTaskId}" from "${task.columnId}" to "${targetStageId}" (board: ${activeBoardId})`);
+    logEvent(
+      'INFO',
+      'BOARD_STORE',
+      `moveTask: starting move for "${resolvedTaskId}" from "${task.columnId}" to "${targetStageId}"`,
+      JSON.stringify({ activeBoardId, originalStatus })
+    );
 
     // Instant Optimistic Card Lifecycle (<1ms) per § 2.22:
     // If not already placed optimistically by drag-and-drop, update local Zustand state immediately.
@@ -871,6 +887,12 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         );
         set({ tasks: updatedTasks });
         persistTasksToLocalStorage(updatedTasks);
+        logEvent(
+          'INFO',
+          'BOARD_STORE',
+          `moveTask: backend move_task_stage succeeded for "${resolvedTaskId}"`,
+          JSON.stringify({ newStage: merged.columnId, newStatus: merged.status, boardId: merged.boardId })
+        );
 
         // ZERO INVISIBLE TASKS (§ 2.18): If the task moved to a stage on another board,
         // seamlessly switch to that board so the task remains visible to the operator.
@@ -892,6 +914,12 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     } catch (err: unknown) {
       console.error(`[moveTask] Backend move_task_stage failed for task "${resolvedTaskId}" -> stage "${targetStageId}":`, err);
       const msg = typeof err === 'string' ? err : err instanceof Error ? err.message : JSON.stringify(err);
+      logEvent(
+        'ERROR',
+        'BOARD_STORE',
+        `moveTask: backend move_task_stage REJECTED for "${resolvedTaskId}" -> "${targetStageId}"`,
+        msg
+      );
       
       // RACE CONDITION PREVENTION (§ 2.22):
       // Do NOT blindly call loadTasks() in catch! Blind loadTasks() wipes optimistic and
@@ -1031,6 +1059,13 @@ ${msg}`);
     if (!title) return null;
     const description = input.description?.trim() || '';
 
+    logEvent(
+      'INFO',
+      'BOARD_STORE',
+      `addTask: initiated for title="${title}"`,
+      JSON.stringify({ targetColumnId, boardId, skipWorktree, model: input.model })
+    );
+
     // OPTIMISTIC TASK CREATION:
     // Generate optimistic monotonic task ID and append immediately so card appears on board in <1ms!
     const optimisticNum = allocateNextTaskNum(state.tasks);
@@ -1071,6 +1106,12 @@ ${msg}`);
     set({ tasks: initialTasks });
     persistTasksToLocalStorage(initialTasks);
     syncTaskSeqWithTasks(initialTasks);
+    logEvent(
+      'INFO',
+      'BOARD_STORE',
+      `addTask: created optimistic card "${optimisticId}" in stage "${targetColumnId}"`,
+      JSON.stringify({ status, persona: optimisticTask.persona })
+    );
 
     // Backend creation runs asynchronously and reconciles confirmed task ID / worktree details
     try {
@@ -1118,6 +1159,12 @@ ${msg}`);
         set({ tasks: reconciled });
         persistTasksToLocalStorage(reconciled);
         syncTaskSeqWithTasks(reconciled);
+        logEvent(
+          'INFO',
+          'BOARD_STORE',
+          `addTask: backend create_task confirmed for "${confirmed.id}"`,
+          JSON.stringify({ columnId: confirmed.columnId, boardId: confirmed.boardId, worktree: confirmed.worktreePath })
+        );
 
         // If the task was moved by the user during creation, ensure backend stage matches
         if (userMovedColumn && backendTask.stage_id !== effectiveColumnId) {
@@ -1141,6 +1188,12 @@ ${msg}`);
       }
     } catch (err) {
       console.info('Backend create_task failed or in web mode, syncing local state:', err);
+      logEvent(
+        'ERROR',
+        'BOARD_STORE',
+        `addTask: backend create_task failed for "${optimisticId}", syncing local state`,
+        String(err)
+      );
       // Fallback: sync optimistic task with disk
       await syncTasksBackend(get().tasks);
       const colDef = get().columns.find((c) => c.id === optimisticTask.columnId);
@@ -1355,12 +1408,20 @@ ${msg}`);
     );
     if (!task) {
       console.warn(`[runTaskAgent] Task "${taskId}" not found in local store`);
+      logEvent('WARN', 'BOARD_STORE', `runTaskAgent: Task "${taskId}" not found in local store`);
       return;
     }
     const resolvedTaskId = task.id;
+    logEvent(
+      'INFO',
+      'BOARD_STORE',
+      `runTaskAgent: requested for "${resolvedTaskId}"`,
+      JSON.stringify({ columnId: task.columnId, boardId: task.boardId, status: task.status })
+    );
 
     const taskCol = columns.find((c) => c.id === task.columnId);
     if (taskCol?.persona || taskCol?.autoRun) {
+      logEvent('INFO', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" is in agent column "${taskCol.id}", starting agent`);
       updateTask(resolvedTaskId, { status: 'running', isTimerRunning: true });
       await syncTasksBackend(get().tasks);
       await triggerRunAgent(resolvedTaskId);
@@ -1369,7 +1430,10 @@ ${msg}`);
       // (moveTask auto-runs the agent on entry).
       const firstAgentCol = columns.find((c) => c.persona || c.autoRun);
       if (firstAgentCol) {
+        logEvent('INFO', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" in non-agent column "${task.columnId}", moving to "${firstAgentCol.id}"`);
         await moveTask(resolvedTaskId, firstAgentCol.id);
+      } else {
+        logEvent('WARN', 'BOARD_STORE', `runTaskAgent: no agent column found for task "${resolvedTaskId}"`);
       }
     }
   },

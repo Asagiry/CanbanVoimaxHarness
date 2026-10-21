@@ -24,15 +24,22 @@ pub async fn get_active_project(state: State<'_, AppState>) -> Result<ProjectEnt
     let root = state.get_root();
     let root_str = root.to_string_lossy().to_string();
     let registry = load_project_registry(None).await.unwrap_or_default();
-    if let Some(entry) = registry
+    let entry = if let Some(entry) = registry
         .projects
         .into_iter()
         .find(|p| p.path == root_str || p.root_path.as_deref() == Some(&root_str))
     {
-        Ok(entry)
+        entry
     } else {
-        Ok(ProjectEntry::from_path(&root))
-    }
+        ProjectEntry::from_path(&root)
+    };
+    crate::logger::cvh_log(
+        Some(&root),
+        "DEBUG",
+        "PROJECT",
+        &format!("get_active_project: root='{}', name='{}'", entry.path, entry.name),
+    );
+    Ok(entry)
 }
 
 #[tauri::command]
@@ -100,12 +107,24 @@ pub async fn set_active_project(
     state: State<'_, AppState>,
     app_handle: AppHandle,
 ) -> Result<ProjectConfig, String> {
+    let old_root = state.get_root();
+    crate::logger::cvh_log(
+        Some(&old_root),
+        "INFO",
+        "PROJECT",
+        &format!("set_active_project requested: path='{}', current_root='{}'", path, old_root.display()),
+    );
+
     let new_path = PathBuf::from(path.trim());
     if !new_path.exists() {
-        return Err(format!("Specified project directory does not exist: {:?}", new_path));
+        let err = format!("Specified project directory does not exist: {:?}", new_path);
+        crate::logger::cvh_log(Some(&old_root), "ERROR", "PROJECT", &err);
+        return Err(err);
     }
     if !new_path.is_dir() {
-        return Err(format!("Specified path is not a directory: {:?}", new_path));
+        let err = format!("Specified path is not a directory: {:?}", new_path);
+        crate::logger::cvh_log(Some(&old_root), "ERROR", "PROJECT", &err);
+        return Err(err);
     }
 
     // Persist to %LOCALAPPDATA%\com.voimax.cvh\active_project.txt
@@ -124,12 +143,21 @@ pub async fn set_active_project(
 
     // Reload state.tasks for the new project root
     let new_tasks = load_tasks_from_disk(&new_path).await;
+    let new_task_ids: Vec<&str> = new_tasks.iter().map(|t| t.id.as_str()).collect();
     if let Ok(mut guard) = state.tasks.lock() {
-        *guard = new_tasks;
+        *guard = new_tasks.clone();
     }
 
     // Register or update project in global registry
     let _ = register_or_update_project(None, &new_path).await;
+
+    crate::logger::cvh_log_with_details(
+        Some(&new_path),
+        "INFO",
+        "PROJECT",
+        &format!("set_active_project SUCCESS: root switched from '{}' to '{}'", old_root.display(), new_path.display()),
+        Some(&format!("Loaded {} tasks into state: [{}]", new_tasks.len(), new_task_ids.join(", "))),
+    );
 
     // Reload or default project configuration
     let proj_cfg = match load_project_config(&new_path).await {
