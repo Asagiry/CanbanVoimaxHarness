@@ -12,3 +12,6 @@ description: Authoritative software engineering skill for CanbanVoimaxHarness. E
    - Rust: `cargo check` & `cargo clippy -- -D warnings`.
    - Frontend: `npm run build` (`tsc && vite build`).
 4. **Pre-Commit Verification**: Run compiler and bundle sensors before spawning the reviewer subagent.
+
+5. **Strict Ban on Premature Cargo Checks**: NEVER run `cargo check`, `cargo test`, `cargo clippy`, or `npm run build` during research, file reading, or mid-edit. Heavy compilation commands MUST be run strictly ONCE at the very end when all implementation code is written and ready for review.
+6. **Zero-Retro Mandate**: Level 3 Retro Verifier is abolished. Do NOT spawn or wait for retro agents.
