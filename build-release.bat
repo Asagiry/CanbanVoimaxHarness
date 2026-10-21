@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 rem ==========================================================================
 rem CanbanVoimaxHarness - one-button local Release build (Windows, cmd.exe).
 rem Single entry point for agents: run from the repository root, no questions.
@@ -336,9 +337,9 @@ if "%TARGET%"=="" (
   echo   target: %TARGET%
 )
 if "!NO_BUNDLE!"=="1" (
-  echo   mode: FAST build (portable exe only, --no-bundle)
+  echo   mode: FAST build [portable exe only, --no-bundle]
 ) else (
-  echo   mode: FULL build with installer (bundles: %BUNDLES%)
+  echo   mode: FULL build with installer [bundles: %BUNDLES%]
 )
 echo.
 echo [2/5] Installing frontend dependencies...
