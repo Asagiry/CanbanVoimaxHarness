@@ -2419,7 +2419,7 @@ pub async fn execute_tool(
             let tasks = crate::commands::load_tasks_from_disk(repo_root).await;
             let current_task = tasks
                 .iter()
-                .find(|t| t.id == task_id)
+                .find(|t| crate::commands::task_id_matches(&t.id, task_id))
                 .ok_or_else(|| anyhow::anyhow!("Task {} not found", task_id))?;
 
             let boards_cfg = crate::config::load_boards_config(repo_root).await.ok();
@@ -2937,14 +2937,14 @@ pub async fn execute_tool(
             let mut tasks = crate::commands::load_tasks_from_disk(repo_root).await;
             let current_task_idx = tasks
                 .iter()
-                .position(|t| t.id == current_task_id)
+                .position(|t| crate::commands::task_id_matches(&t.id, current_task_id))
                 .ok_or_else(|| anyhow::anyhow!("Task {} not found", current_task_id))?;
 
             // Anti-Bypass Security Check:
             // Check if current task has spawned child tasks (parent_id linkage or created_subtasks), OR if the column is an orchestrator column.
             let has_child_tasks = tasks
                 .iter()
-                .any(|t| t.parent_id.as_deref() == Some(current_task_id));
+                .any(|t| t.parent_id.as_deref().is_some_and(|pid| crate::commands::task_id_matches(pid, current_task_id)));
 
             let current_task = &tasks[current_task_idx];
             let stage_name = ctx.stage_id.unwrap_or(&current_task.stage_id).to_lowercase();

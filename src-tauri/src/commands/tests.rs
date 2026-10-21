@@ -2676,3 +2676,84 @@ Write code.
 
         let _ = tokio::fs::remove_dir_all(&tmp).await;
     }
+
+    #[test]
+    fn test_task_id_matches_case_and_whitespace() {
+        assert!(task_id_matches("CVH-001", "cvh-001"));
+        assert!(task_id_matches("cvh-001", "CVH-001"));
+        assert!(task_id_matches("  CVH-001  ", "cvh-001"));
+        assert!(task_id_matches("CVH-001", "  cvh-001  "));
+        assert!(task_id_matches("CVH-042.1", "cvh-042.1"));
+        assert!(!task_id_matches("CVH-001", "CVH-002"));
+    }
+
+    #[tokio::test]
+    async fn test_move_task_stage_case_insensitive_and_trimmed() {
+        let tmp = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("tmp")
+            .join(format!("cvh_case_insensitive_test_{}", uuid::Uuid::new_v4()));
+        let _ = tokio::fs::create_dir_all(&tmp).await;
+
+        let dev_board = crate::config::BoardsConfig {
+            active_board_id: "development".to_string(),
+            boards: vec![crate::config::BoardDef {
+                id: "development".to_string(),
+                name: "Development".to_string(),
+                columns: vec![
+                    test_col("backlog"),
+                    test_col("dev"),
+                    test_col("ready"),
+                ],
+            }],
+        };
+        crate::config::save_boards_config(&tmp, &dev_board).await.expect("save boards");
+
+        let task = Task {
+            id: "CVH-001".to_string(),
+            title: "Case Insensitive Task".to_string(),
+            description: "Test".to_string(),
+            stage_id: "backlog".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("idle".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            handover_summary: None,
+            cover_image: None,
+            attachments: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: Some(true),
+            created_at: chrono::Utc::now().timestamp_millis(),
+            updated_at: chrono::Utc::now().timestamp_millis(),
+        };
+        save_tasks_to_disk(&tmp, &[task]).await.expect("save task");
+
+        // Move using lowercase with spaces "  cvh-001  "
+        let moved = internal_move_task_stage(
+            &tmp,
+            "  cvh-001  ",
+            "dev",
+            None,
+            None,
+            None,
+            None,
+            false,
+            Some("development".to_string()),
+        )
+        .await
+        .expect("move task with lowercase and whitespace must succeed!");
+
+        assert_eq!(moved.id, "CVH-001");
+        assert_eq!(moved.stage_id, "dev");
+
+        let _ = tokio::fs::remove_dir_all(&tmp).await;
+    }

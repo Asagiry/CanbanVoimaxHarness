@@ -109,18 +109,18 @@ pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
     }
 
     if !loaded {
-        // Try global fallback: %LOCALAPPDATA%\com.voimax.cvh\tasks.json
-        let global_tasks_file = get_app_config_dir().join("tasks.json");
-        if global_tasks_file.exists() {
-            if let Ok(content) = tokio::fs::read_to_string(&global_tasks_file).await {
+        // Project-isolated backup fallback (keyed by project root hash), NOT unkeyed global tasks.json!
+        let backup_file = get_project_tasks_backup_file(&actual_root);
+        if backup_file.exists() {
+            if let Ok(content) = tokio::fs::read_to_string(&backup_file).await {
                 let trimmed = content.trim();
                 if !trimmed.is_empty() {
                     if let Ok(parsed) = serde_json::from_str::<Vec<Task>>(trimmed) {
                         if !parsed.is_empty() {
                             eprintln!(
-                                "CVH [load_tasks_from_disk]: Restored {} tasks from global fallback {:?}",
+                                "CVH [load_tasks_from_disk]: Restored {} tasks from project backup {:?}",
                                 parsed.len(),
-                                global_tasks_file
+                                backup_file
                             );
                             tasks = parsed;
                         }
@@ -147,6 +147,15 @@ pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
     tasks
 }
 
+fn get_project_tasks_backup_file(project_root: &Path) -> PathBuf {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    project_root.to_string_lossy().to_lowercase().hash(&mut hasher);
+    let hash = hasher.finish();
+    get_app_config_dir().join("projects").join(format!("{:016x}", hash)).join("tasks.json")
+}
+
 pub async fn save_tasks_to_disk(repo_root: &Path, tasks: &[Task]) -> Result<(), String> {
     let actual_root = resolve_actual_repo_root(repo_root);
     let serialized = serde_json::to_string_pretty(tasks)
@@ -156,24 +165,28 @@ pub async fn save_tasks_to_disk(repo_root: &Path, tasks: &[Task]) -> Result<(), 
     let local_tasks_file = actual_root.join(".cvh").join("tasks.json");
     let local_res = atomic_write_file(&local_tasks_file, &serialized).await;
 
-    // 2. ALSO save a copy to %LOCALAPPDATA%\com.voimax.cvh\tasks.json as a global fallback!
-    let global_tasks_file = get_app_config_dir().join("tasks.json");
-    let global_res = atomic_write_file(&global_tasks_file, &serialized).await;
+    // 2. ALSO save a copy to project-isolated backup file (keyed by project root hash)
+    let backup_file = get_project_tasks_backup_file(&actual_root);
+    let backup_res = atomic_write_file(&backup_file, &serialized).await;
 
-    match (local_res, global_res) {
+    match (local_res, backup_res) {
         (Ok(_), _) => Ok(()),
         (Err(e), Ok(_)) => {
             eprintln!(
-                "CVH: Warning - Failed to save tasks to local repo {:?}: {}, but persisted to global fallback {:?}",
-                local_tasks_file, e, global_tasks_file
+                "CVH: Warning - Failed to save tasks to local repo {:?}: {}, but persisted to project backup {:?}",
+                local_tasks_file, e, backup_file
             );
             Ok(())
         }
         (Err(e1), Err(e2)) => Err(format!(
-            "Failed to save tasks to both local ({}) and global ({})",
+            "Failed to save tasks to both local ({}) and backup ({})",
             e1, e2
         )),
     }
+}
+
+pub fn task_id_matches(id1: &str, id2: &str) -> bool {
+    id1.trim().eq_ignore_ascii_case(id2.trim())
 }
 
 pub fn stage_id_matches(col_id: &str, target: &str) -> bool {
@@ -679,7 +692,7 @@ pub async fn internal_create_subtask(
 
     let parent_idx = tasks
         .iter()
-        .position(|t| t.id == parent_id)
+        .position(|t| task_id_matches(&t.id, parent_id))
         .ok_or_else(|| format!("Parent task {} not found", parent_id))?;
 
     let boards_cfg = load_boards_config(root).await.ok();
@@ -871,7 +884,7 @@ pub async fn update_task(
     let mut tasks = load_tasks_from_disk(&root).await;
     let task_idx = tasks
         .iter()
-        .position(|t| t.id == task_id)
+        .position(|t| task_id_matches(&t.id, &task_id))
         .ok_or_else(|| format!("Task {} not found", task_id))?;
 
     let now = Utc::now().timestamp_millis();
@@ -920,21 +933,26 @@ pub async fn delete_task(
     // Collect target and any cascaded subtasks
     let mut to_delete = HashSet::new();
     to_delete.insert(task_id.clone());
+    for t in &tasks {
+        if task_id_matches(&t.id, &task_id) {
+            to_delete.insert(t.id.clone());
+        }
+    }
     let mut grew = true;
     while grew {
         grew = false;
         for t in &tasks {
-            if to_delete.contains(&t.id) {
+            if to_delete.iter().any(|id| task_id_matches(&t.id, id)) {
                 continue;
             }
             if let Some(ref p) = t.parent_id {
-                if to_delete.contains(p) {
+                if to_delete.iter().any(|id| task_id_matches(p, id)) {
                     to_delete.insert(t.id.clone());
                     grew = true;
                     continue;
                 }
             }
-            if to_delete.iter().any(|id| t.id.starts_with(&format!("{}.", id))) {
+            if to_delete.iter().any(|id| t.id.to_ascii_lowercase().starts_with(&format!("{}.", id.trim().to_ascii_lowercase()))) {
                 to_delete.insert(t.id.clone());
                 grew = true;
             }
@@ -1248,12 +1266,12 @@ pub async fn internal_move_task_stage(
 
     // In-memory fallback: if task was just created and not yet on disk,
     // or if memory has tasks not yet on disk, retrieve from AppState (§ 2.22).
-    if !tasks.iter().any(|t| t.id == task_id) {
+    if !tasks.iter().any(|t| task_id_matches(&t.id, task_id)) {
         if let Some(app) = app_handle {
             if let Some(state) = app.try_state::<AppState>() {
                 if let Ok(guard) = state.tasks.lock() {
                     for mem_t in guard.iter() {
-                        if !tasks.iter().any(|t| t.id == mem_t.id) {
+                        if !tasks.iter().any(|t| task_id_matches(&t.id, &mem_t.id)) {
                             tasks.push(mem_t.clone());
                         }
                     }
@@ -1264,7 +1282,7 @@ pub async fn internal_move_task_stage(
 
     let task_idx = tasks
         .iter()
-        .position(|t| t.id == task_id)
+        .position(|t| task_id_matches(&t.id, task_id))
         .ok_or_else(|| format!("Task {} not found", task_id))?;
 
     let current_task = &mut tasks[task_idx];
@@ -1661,7 +1679,7 @@ pub async fn internal_move_task_stage(
         if let Some(state_ref) = app.try_state::<AppState>() {
             if let Ok(mut guard) = state_ref.tasks.lock() {
                 for mem_t in guard.iter() {
-                    if !tasks.iter().any(|t| t.id == mem_t.id) {
+                    if !tasks.iter().any(|t| task_id_matches(&t.id, &mem_t.id)) {
                         tasks.push(mem_t.clone());
                     }
                 }
@@ -1716,12 +1734,13 @@ pub async fn move_task_stage(
     let is_backlog = stage_id_matches(&target_stage_id, "backlog");
     let is_running_or_active = {
         if let Ok(map) = state.active_agents.lock() {
-            map.contains_key(&task_id)
-                || map.keys().any(|k| {
-                    k.starts_with(&format!("{}.", task_id))
-                        || k.starts_with(&format!("{}:sub:", task_id))
-                        || k.starts_with(&format!("{}.sub-", task_id))
-                })
+            let tid_trimmed = task_id.trim();
+            map.keys().any(|k| {
+                task_id_matches(k, tid_trimmed)
+                    || k.to_ascii_lowercase().starts_with(&format!("{}.", tid_trimmed.to_ascii_lowercase()))
+                    || k.to_ascii_lowercase().starts_with(&format!("{}:sub:", tid_trimmed.to_ascii_lowercase()))
+                    || k.to_ascii_lowercase().starts_with(&format!("{}.sub-", tid_trimmed.to_ascii_lowercase()))
+            })
         } else {
             false
         }
@@ -1766,7 +1785,7 @@ pub async fn internal_advance_task_to_stage(
     let tasks = load_tasks_from_disk(root).await;
     let current_task = tasks
         .iter()
-        .find(|t| t.id == task_id)
+        .find(|t| task_id_matches(&t.id, task_id))
         .ok_or_else(|| format!("Task {} not found", task_id))?;
 
     let boards_cfg = load_boards_config(root).await.ok();
@@ -2102,7 +2121,28 @@ pub async fn run_agent(
     {
         let is_running = {
             let state = app_handle.state::<AppState>();
-            state.active_agents.lock().map(|map| map.contains_key(&task_id)).unwrap_or(false)
+            let mut is_active = false;
+            if let Ok(mut map) = state.active_agents.lock() {
+                // Sweep completed or aborted handles first
+                let mut stale_keys = Vec::new();
+                for (k, entry) in map.iter() {
+                    let aborted = entry.abort_flag.load(Ordering::SeqCst);
+                    let finished = if let Ok(guard) = entry.join_handle.try_lock() {
+                        guard.as_ref().map(|h| h.is_finished()).unwrap_or(true)
+                    } else {
+                        false
+                    };
+                    if aborted || finished {
+                        stale_keys.push(k.clone());
+                    }
+                }
+                for k in stale_keys {
+                    map.remove(&k);
+                }
+
+                is_active = map.keys().any(|k| task_id_matches(k, &task_id));
+            }
+            is_active
         };
         if is_running {
             eprintln!("CVH [run_agent]: Task {} already has an active agent loop, rejecting duplicate run", task_id);
@@ -2117,13 +2157,13 @@ pub async fn run_agent(
     let initial_disk_count = tasks_to_use.len();
     if let Ok(guard) = app_handle.state::<AppState>().tasks.lock() {
         for mem_task in guard.iter() {
-            if !tasks_to_use.iter().any(|t| t.id == mem_task.id) {
+            if !tasks_to_use.iter().any(|t| task_id_matches(&t.id, &mem_task.id)) {
                 tasks_to_use.push(mem_task.clone());
             }
         }
     }
 
-    let task_opt = tasks_to_use.iter().find(|t| t.id == task_id).cloned();
+    let task_opt = tasks_to_use.iter().find(|t| task_id_matches(&t.id, &task_id)).cloned();
 
     let mut task = match task_opt {
         Some(t) => {
@@ -2166,13 +2206,13 @@ pub async fn run_agent(
 
                 // Persist description update immediately
                 let mut all_tasks = load_tasks_from_disk(&root).await;
-                if let Some(t) = all_tasks.iter_mut().find(|t| t.id == task_id) {
+                if let Some(t) = all_tasks.iter_mut().find(|t| task_id_matches(&t.id, &task_id)) {
                     t.description = task.description.clone();
                     t.updated_at = task.updated_at;
                     let _ = save_tasks_to_disk(&root, &all_tasks).await;
                 }
                 if let Ok(mut guard) = app_handle.state::<AppState>().tasks.lock() {
-                    if let Some(t) = guard.iter_mut().find(|t| t.id == task_id) {
+                    if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &task_id)) {
                         t.description = task.description.clone();
                         t.updated_at = task.updated_at;
                     }
@@ -2916,10 +2956,11 @@ pub async fn internal_abort_agent(
         let mut keys_to_remove = Vec::new();
 
         for k in map.keys() {
-            if k == p_trim
-                || k.starts_with(&format!("{}.", p_trim))
-                || k.starts_with(&format!("{}:sub:", p_trim))
-                || k.starts_with(&format!("{}.sub-", p_trim))
+            let k_trim = k.trim();
+            if task_id_matches(k_trim, p_trim)
+                || k_trim.to_ascii_lowercase().starts_with(&format!("{}.", p_trim.to_ascii_lowercase()))
+                || k_trim.to_ascii_lowercase().starts_with(&format!("{}:sub:", p_trim.to_ascii_lowercase()))
+                || k_trim.to_ascii_lowercase().starts_with(&format!("{}.sub-", p_trim.to_ascii_lowercase()))
             {
                 keys_to_remove.push(k.clone());
             }
@@ -2985,10 +3026,11 @@ pub async fn internal_abort_agent(
         let mut receivers = crate::agent::SUBAGENT_RECEIVERS.lock().await;
         let mut keys_to_remove = Vec::new();
         for k in receivers.keys() {
-            if k == p_trim
-                || k.starts_with(&format!("{}.", p_trim))
-                || k.starts_with(&format!("{}:sub:", p_trim))
-                || k.starts_with(&format!("{}.sub-", p_trim))
+            let k_trim = k.trim();
+            if task_id_matches(k_trim, p_trim)
+                || k_trim.to_ascii_lowercase().starts_with(&format!("{}.", p_trim.to_ascii_lowercase()))
+                || k_trim.to_ascii_lowercase().starts_with(&format!("{}:sub:", p_trim.to_ascii_lowercase()))
+                || k_trim.to_ascii_lowercase().starts_with(&format!("{}.sub-", p_trim.to_ascii_lowercase()))
             {
                 keys_to_remove.push(k.clone());
             }
@@ -3022,7 +3064,7 @@ pub async fn internal_abort_agent(
     // Merge in-memory tasks from state.tasks before updating status to avoid wiping unsaved disk tasks (§ 2.22)
     if let Ok(guard) = state.tasks.lock() {
         for mem_t in guard.iter() {
-            if let Some(disk_t) = tasks.iter_mut().find(|t| t.id == mem_t.id) {
+            if let Some(disk_t) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &mem_t.id)) {
                 if mem_t.updated_at > disk_t.updated_at {
                     *disk_t = mem_t.clone();
                 }
@@ -3032,7 +3074,7 @@ pub async fn internal_abort_agent(
         }
     }
     let mut task_updated = false;
-    if let Some(t) = tasks.iter_mut().find(|t| t.id == p_trim) {
+    if let Some(t) = tasks.iter_mut().find(|t| task_id_matches(&t.id, p_trim)) {
         if t.status.as_deref() != Some("idle") {
             t.status = Some("idle".to_string());
             t.updated_at = Utc::now().timestamp_millis();
@@ -3434,7 +3476,7 @@ pub async fn steer_agent(
 
     let task_found = {
         if let Ok(guard) = state.tasks.lock() {
-            guard.iter().any(|t| t.id == task_id)
+            guard.iter().any(|t| task_id_matches(&t.id, &task_id))
         } else {
             false
         }
@@ -3442,7 +3484,7 @@ pub async fn steer_agent(
 
     if !task_found {
         let tasks = load_tasks_from_disk(&root).await;
-        if !tasks.iter().any(|t| t.id == task_id) {
+        if !tasks.iter().any(|t| task_id_matches(&t.id, &task_id)) {
             return Err(format!("Task {} not found", task_id));
         }
     }

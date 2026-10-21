@@ -244,7 +244,7 @@ pub async fn get_task_git_diff(
             let disk_tasks = load_tasks_from_disk(&root).await;
             disk_tasks
                 .into_iter()
-                .find(|t| t.id == task_id)
+                .find(|t| crate::commands::task_id_matches(&t.id, &task_id))
                 .ok_or_else(|| format!("Task {} not found", task_id))?
         }
     };

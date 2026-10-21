@@ -58,6 +58,7 @@ pub fn run() {
             set_agent_persona_color,
             set_agent_persona_icon,
             get_project_config_cmd,
+            get_active_project,
             get_registry,
             get_cortex_tree,
             read_cortex_file,
