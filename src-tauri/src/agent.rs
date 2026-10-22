@@ -4227,6 +4227,10 @@ Messages count: {}
         });
 
         let mut turn_content = String::new();
+        let mut turn_thoughts = String::new();
+        let turn_thought_id = format!("sub-th-{}-turn-{}", subagent_suffix, sub_turn);
+        let mut thought_start_instant: Option<std::time::Instant> = None;
+        let mut thought_end_instant: Option<std::time::Instant> = None;
         let mut turn_tool_calls: Vec<ToolCall> = Vec::new();
         let mut thinking_parser = ThinkingStreamParser::new();
         let turn_start_instant = std::time::Instant::now();
@@ -4250,11 +4254,17 @@ Messages count: {}
                     let parsed = thinking_parser.push(&token);
                     for (is_thought, text) in parsed {
                         if is_thought {
+                            if thought_start_instant.is_none() {
+                                thought_start_instant = Some(std::time::Instant::now());
+                            }
+                            thought_end_instant = Some(std::time::Instant::now());
+                            turn_thoughts.push_str(&text);
+
                             let th_item = ActivityItem {
-                                id: format!("sub-th-{}-{}", subagent_suffix, uuid::Uuid::new_v4().to_string().chars().take(4).collect::<String>()),
+                                id: turn_thought_id.clone(),
                                 item_type: "thought".to_string(),
                                 timestamp: chrono::Utc::now().to_rfc3339(),
-                                content: Some(text.clone()),
+                                content: Some(turn_thoughts.clone()),
                                 tool: None,
                                 duration_ms: None,
                                 images: None,
@@ -4286,12 +4296,17 @@ Messages count: {}
                     }
                     last_token_instant = Some(std::time::Instant::now());
                     turn_streamed_chars += thought.len();
+                    if thought_start_instant.is_none() {
+                        thought_start_instant = Some(std::time::Instant::now());
+                    }
+                    thought_end_instant = Some(std::time::Instant::now());
+                    turn_thoughts.push_str(&thought);
 
                     let th_item = ActivityItem {
-                        id: format!("sub-th-{}-{}", subagent_suffix, uuid::Uuid::new_v4().to_string().chars().take(4).collect::<String>()),
+                        id: turn_thought_id.clone(),
                         item_type: "thought".to_string(),
                         timestamp: chrono::Utc::now().to_rfc3339(),
-                        content: Some(thought.clone()),
+                        content: Some(turn_thoughts.clone()),
                         tool: None,
                         duration_ms: None,
                         images: None,
@@ -4406,11 +4421,17 @@ Messages count: {}
         // Flush thinking parser
         for (is_thought, text) in thinking_parser.flush() {
             if is_thought {
+                if thought_start_instant.is_none() {
+                    thought_start_instant = Some(std::time::Instant::now());
+                }
+                thought_end_instant = Some(std::time::Instant::now());
+                turn_thoughts.push_str(&text);
+
                 let th_item = ActivityItem {
-                    id: format!("sub-th-{}-{}", subagent_suffix, uuid::Uuid::new_v4().to_string().chars().take(4).collect::<String>()),
+                    id: turn_thought_id.clone(),
                     item_type: "thought".to_string(),
                     timestamp: chrono::Utc::now().to_rfc3339(),
-                    content: Some(text),
+                    content: Some(turn_thoughts.clone()),
                     tool: None,
                     duration_ms: None,
                     images: None,
@@ -4425,6 +4446,30 @@ Messages count: {}
                 }
             } else {
                 turn_content.push_str(&text);
+            }
+        }
+
+        // Finalize duration for the turn thought card
+        if !turn_thoughts.is_empty() {
+            let thought_duration_ms = thought_start_instant
+                .zip(thought_end_instant)
+                .map(|(s, e)| e.duration_since(s).as_secs_f64() * 1000.0);
+            let th_item = ActivityItem {
+                id: turn_thought_id.clone(),
+                item_type: "thought".to_string(),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                content: Some(turn_thoughts.clone()),
+                tool: None,
+                duration_ms: thought_duration_ms,
+                images: None,
+            };
+            let _ = crate::db::append_dialog_items(&ctx.repo_root, &subagent_dialog_id, std::slice::from_ref(&th_item));
+            if let Some(ref app) = ctx.app_handle {
+                let _ = app.emit("subagent:activity", serde_json::json!({
+                    "parentTaskId": parent_id,
+                    "subagentId": &subagent_id,
+                    "activity": &th_item,
+                }));
             }
         }
 
@@ -4505,6 +4550,11 @@ Messages count: {}
 ",
                 ts, subagent_id, sub_turn
             );
+            if !turn_thoughts.trim().is_empty() {
+                resp_log.push_str(&format!("Thoughts:
+{}
+", turn_thoughts.trim()));
+            }
             if !turn_content.trim().is_empty() {
                 resp_log.push_str(&format!("Content:
 {}
@@ -5073,6 +5123,42 @@ pub async fn retry_subagent_execution(
             info.prompt = format!("{}
 
 [USER GUIDANCE]: {}", info.prompt, trimmed);
+            let p_id = parent_task_id.unwrap_or(info.parent_task_id.as_str());
+            let sub_dialog_id = if resolved_id.contains(":sub:") {
+                resolved_id.clone()
+            } else if !p_id.is_empty() {
+                format!("{}:sub:{}", p_id, resolved_id)
+            } else {
+                resolved_id.clone()
+            };
+            let user_item = ActivityItem {
+                id: format!(
+                    "sub-user-{}-{}",
+                    sub_dialog_id.replace(':', "-"),
+                    chrono::Utc::now().timestamp_millis()
+                ),
+                item_type: "user".to_string(),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                content: Some(trimmed.to_string()),
+                tool: None,
+                duration_ms: None,
+                images: None,
+            };
+            let _ = crate::db::append_dialog_items(
+                &info.ctx.repo_root,
+                &sub_dialog_id,
+                std::slice::from_ref(&user_item),
+            );
+            if let Some(ref app) = info.ctx.app_handle {
+                let _ = app.emit(
+                    "subagent:activity",
+                    serde_json::json!({
+                        "parentTaskId": p_id,
+                        "subagentId": &resolved_id,
+                        "activity": &user_item,
+                    }),
+                );
+            }
         }
     }
     info.status = "running".to_string();
@@ -5628,9 +5714,97 @@ pub struct AgentSessionConfig {
     pub context_window: Option<u64>,
 }
 
+/// Checks if an opening tag candidate (<thinking> or <think>) at `pos` is a genuine model
+/// control tag rather than markdown inline code (`<thinking>`), code fence, or word substring.
+pub fn is_valid_opening_tag(buffer: &str, pos: usize, tag_len: usize) -> bool {
+    if pos + tag_len > buffer.len() {
+        return false;
+    }
+
+    // 1. Check character immediately preceding the tag
+    if pos > 0 {
+        let prev_char = buffer[..pos].chars().next_back().unwrap();
+        // If preceded by a backtick (e.g. `<thinking>` or ```<thinking>), it's markdown inline code or fence
+        if prev_char == '`' {
+            return false;
+        }
+        // If preceded by an alphanumeric char or underscore, it's inside an identifier/word (e.g. var<thinking>)
+        if prev_char.is_alphanumeric() || prev_char == '_' {
+            return false;
+        }
+    }
+
+    // 2. Check character immediately following the tag
+    if pos + tag_len < buffer.len() {
+        let next_char = buffer[pos + tag_len..].chars().next().unwrap();
+        // If immediately followed by a backtick (e.g. <thinking>`), it's markdown
+        if next_char == '`' {
+            return false;
+        }
+    }
+
+    // 3. Check if inside unclosed inline backtick code on the current line
+    let line_start = buffer[..pos].rfind('\n').map(|p| p + 1).unwrap_or(0);
+    let line_before = &buffer[line_start..pos];
+    let backticks_before = line_before.chars().filter(|&c| c == '`').count();
+    if backticks_before % 2 == 1 {
+        return false;
+    }
+
+    true
+}
+
+/// Checks if a closing tag candidate (</thinking> or </think>) at `pos` is a genuine model
+/// control tag rather than markdown inline code (`</thinking>`).
+pub fn is_valid_closing_tag(buffer: &str, pos: usize, tag_len: usize) -> bool {
+    if pos + tag_len > buffer.len() {
+        return false;
+    }
+
+    if pos > 0 {
+        let prev_char = buffer[..pos].chars().next_back().unwrap();
+        if prev_char == '`' {
+            return false;
+        }
+    }
+
+    if pos + tag_len < buffer.len() {
+        let next_char = buffer[pos + tag_len..].chars().next().unwrap();
+        if next_char == '`' {
+            return false;
+        }
+    }
+
+    let line_start = buffer[..pos].rfind('\n').map(|p| p + 1).unwrap_or(0);
+    let line_before = &buffer[line_start..pos];
+    let backticks_before = line_before.chars().filter(|&c| c == '`').count();
+    if backticks_before % 2 == 1 {
+        return false;
+    }
+
+    true
+}
+
+/// Helper to check if a potential partial tag prefix at `pos` could be a valid opening tag
+pub fn is_valid_partial_opening_tag(buffer: &str, pos: usize) -> bool {
+    if pos > 0 {
+        let prev_char = buffer[..pos].chars().next_back().unwrap();
+        if prev_char == '`' || prev_char.is_alphanumeric() || prev_char == '_' {
+            return false;
+        }
+    }
+    let line_start = buffer[..pos].rfind('\n').map(|p| p + 1).unwrap_or(0);
+    let backticks_before = buffer[line_start..pos].chars().filter(|&c| c == '`').count();
+    if backticks_before % 2 == 1 {
+        return false;
+    }
+    true
+}
+
 #[derive(Debug, Default)]
 pub struct ThinkingStreamParser {
     in_thinking: bool,
+    in_backtick: bool,
     buffer: String,
 }
 
@@ -5638,6 +5812,7 @@ impl ThinkingStreamParser {
     pub fn new() -> Self {
         Self {
             in_thinking: false,
+            in_backtick: false,
             buffer: String::new(),
         }
     }
@@ -5650,37 +5825,70 @@ impl ThinkingStreamParser {
         loop {
             if !self.in_thinking {
                 // Look for opening tag <thinking> or <think>
-                let open_thinking = self.buffer.find("<thinking>");
-                let open_think = self.buffer.find("<think>");
+                let mut earliest_open: Option<(usize, usize)> = None;
+                let mut search_pos = 0;
+                while search_pos < self.buffer.len() {
+                    let open_thinking = self.buffer[search_pos..].find("<thinking>").map(|p| search_pos + p);
+                    let open_think = self.buffer[search_pos..].find("<think>").map(|p| search_pos + p);
 
-                let earliest_open = match (open_thinking, open_think) {
-                    (Some(pos1), Some(pos2)) => {
-                        if pos1 <= pos2 {
-                            Some((pos1, "<thinking>".len()))
-                        } else {
-                            Some((pos2, "<think>".len()))
+                    let next_cand = match (open_thinking, open_think) {
+                        (Some(pos1), Some(pos2)) => {
+                            if pos1 <= pos2 {
+                                Some((pos1, "<thinking>".len()))
+                            } else {
+                                Some((pos2, "<think>".len()))
+                            }
                         }
+                        (Some(pos), None) => Some((pos, "<thinking>".len())),
+                        (None, Some(pos)) => Some((pos, "<think>".len())),
+                        (None, None) => None,
+                    };
+
+                    match next_cand {
+                        Some((pos, tag_len)) => {
+                            let backticks_before = self.buffer[..pos].chars().filter(|&c| c == '`').count();
+                            let effective_in_backtick = (self.in_backtick as usize + backticks_before) % 2 == 1;
+
+                            if !effective_in_backtick && is_valid_opening_tag(&self.buffer, pos, tag_len) {
+                                earliest_open = Some((pos, tag_len));
+                                break;
+                            } else {
+                                search_pos = pos + 1;
+                            }
+                        }
+                        None => break,
                     }
-                    (Some(pos), None) => Some((pos, "<thinking>".len())),
-                    (None, Some(pos)) => Some((pos, "<think>".len())),
-                    (None, None) => None,
-                };
+                }
 
                 if let Some((pos, tag_len)) = earliest_open {
                     if pos > 0 {
-                        outputs.push((false, self.buffer[..pos].to_string()));
+                        let text = self.buffer[..pos].to_string();
+                        for c in text.chars() {
+                            if c == '`' {
+                                self.in_backtick = !self.in_backtick;
+                            }
+                        }
+                        outputs.push((false, text));
                     }
                     self.in_thinking = true;
+                    self.in_backtick = false;
                     self.buffer = self.buffer[pos + tag_len..].to_string();
                     continue;
                 }
 
                 // If not found, check if end of buffer could be a partial opening tag
                 let mut partial_len = 0;
-                for tag in &["<thinking>", "<think>"] {
-                    for len in 1..tag.len() {
-                        if self.buffer.ends_with(&tag[..len]) && len > partial_len {
-                            partial_len = len;
+                if !self.in_backtick {
+                    for tag in &["<thinking>", "<think>"] {
+                        for len in 1..tag.len() {
+                            if self.buffer.ends_with(&tag[..len]) && len > partial_len {
+                                let pos = self.buffer.len() - len;
+                                let backticks_before = self.buffer[..pos].chars().filter(|&c| c == '`').count();
+                                let effective_in_backtick = (self.in_backtick as usize + backticks_before) % 2 == 1;
+                                if !effective_in_backtick && is_valid_partial_opening_tag(&self.buffer, pos) {
+                                    partial_len = len;
+                                }
+                            }
                         }
                     }
                 }
@@ -5688,39 +5896,68 @@ impl ThinkingStreamParser {
                 if partial_len > 0 {
                     let safe_len = self.buffer.len() - partial_len;
                     if safe_len > 0 {
-                        outputs.push((false, self.buffer[..safe_len].to_string()));
+                        let text = self.buffer[..safe_len].to_string();
+                        for c in text.chars() {
+                            if c == '`' {
+                                self.in_backtick = !self.in_backtick;
+                            }
+                        }
+                        outputs.push((false, text));
                         self.buffer = self.buffer[safe_len..].to_string();
                     }
                     break;
                 } else {
                     if !self.buffer.is_empty() {
-                        outputs.push((false, std::mem::take(&mut self.buffer)));
+                        let text = std::mem::take(&mut self.buffer);
+                        for c in text.chars() {
+                            if c == '`' {
+                                self.in_backtick = !self.in_backtick;
+                            }
+                        }
+                        outputs.push((false, text));
                     }
                     break;
                 }
             } else {
                 // In thinking: look for closing tag </thinking> or </think>
-                let close_thinking = self.buffer.find("</thinking>");
-                let close_think = self.buffer.find("</think>");
+                let mut earliest_close: Option<(usize, usize)> = None;
+                let mut search_pos = 0;
+                while search_pos < self.buffer.len() {
+                    let close_thinking = self.buffer[search_pos..].find("</thinking>").map(|p| search_pos + p);
+                    let close_think = self.buffer[search_pos..].find("</think>").map(|p| search_pos + p);
 
-                let earliest_close = match (close_thinking, close_think) {
-                    (Some(pos1), Some(pos2)) => {
-                        if pos1 <= pos2 {
-                            Some((pos1, "</thinking>".len()))
-                        } else {
-                            Some((pos2, "</think>".len()))
+                    let next_cand = match (close_thinking, close_think) {
+                        (Some(pos1), Some(pos2)) => {
+                            if pos1 <= pos2 {
+                                Some((pos1, "</thinking>".len()))
+                            } else {
+                                Some((pos2, "</think>".len()))
+                            }
                         }
+                        (Some(pos), None) => Some((pos, "</thinking>".len())),
+                        (None, Some(pos)) => Some((pos, "</think>".len())),
+                        (None, None) => None,
+                    };
+
+                    match next_cand {
+                        Some((pos, tag_len)) => {
+                            if is_valid_closing_tag(&self.buffer, pos, tag_len) {
+                                earliest_close = Some((pos, tag_len));
+                                break;
+                            } else {
+                                search_pos = pos + 1;
+                            }
+                        }
+                        None => break,
                     }
-                    (Some(pos), None) => Some((pos, "</thinking>".len())),
-                    (None, Some(pos)) => Some((pos, "</think>".len())),
-                    (None, None) => None,
-                };
+                }
 
                 if let Some((pos, tag_len)) = earliest_close {
                     if pos > 0 {
                         outputs.push((true, self.buffer[..pos].to_string()));
                     }
                     self.in_thinking = false;
+                    self.in_backtick = false;
                     self.buffer = self.buffer[pos + tag_len..].to_string();
                     continue;
                 }
@@ -5730,7 +5967,10 @@ impl ThinkingStreamParser {
                 for tag in &["</thinking>", "</think>"] {
                     for len in 1..tag.len() {
                         if self.buffer.ends_with(&tag[..len]) && len > partial_len {
-                            partial_len = len;
+                            let pos = self.buffer.len() - len;
+                            if is_valid_partial_opening_tag(&self.buffer, pos) {
+                                partial_len = len;
+                            }
                         }
                     }
                 }

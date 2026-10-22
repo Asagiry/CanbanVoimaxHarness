@@ -3952,4 +3952,75 @@ Rule: Strictly isolated worktrees.",
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
 
+    #[test]
+    fn test_thinking_parser_ignores_backtick_tags() {
+        let mut parser = ThinkingStreamParser::new();
+        let input = "Here is an explanation of `<thinking>` and `</thinking>` tags in markdown.";
+        let outputs = parser.push(input);
+        let mut flushed = parser.flush();
+        let mut all = outputs;
+        all.append(&mut flushed);
+
+        assert!(!all.is_empty(), "Parser must produce output");
+        for (is_thought, text) in &all {
+            assert!(
+                !is_thought,
+                "Backtick-wrapped tags must NEVER be classified as thought! Found is_thought=true for: '{}'",
+                text
+            );
+        }
+
+        let full_text: String = all.into_iter().map(|(_, t)| t).collect();
+        assert_eq!(full_text, input, "Full output text must match input without loss");
+    }
+
+    #[test]
+    fn test_thinking_parser_actual_reasoning() {
+        let mut parser = ThinkingStreamParser::new();
+        let input = "<thinking>This is actual reasoning</thinking>Final answer";
+        let outputs = parser.push(input);
+        let mut flushed = parser.flush();
+        let mut all = outputs;
+        all.append(&mut flushed);
+
+        let thoughts: Vec<String> = all.iter().filter(|(th, _)| *th).map(|(_, t)| t.clone()).collect();
+        let regular: Vec<String> = all.iter().filter(|(th, _)| !*th).map(|(_, t)| t.clone()).collect();
+
+        let joined_thought = thoughts.join("");
+        let joined_regular = regular.join("");
+
+        assert_eq!(joined_thought, "This is actual reasoning");
+        assert_eq!(joined_regular, "Final answer");
+    }
+
+    #[test]
+    fn test_thinking_parser_think_tag_and_streamed_chunks() {
+        // Test chunk-by-chunk streaming with backticks
+        let mut parser = ThinkingStreamParser::new();
+        let chunks = vec![
+            "Here is some text with `",
+            "<think>",
+            "` and then real reasoning: 
+",
+            "<think>",
+            "Deep thoughts here",
+            "</think>",
+            " Done!",
+        ];
+
+        let mut all = Vec::new();
+        for chunk in chunks {
+            all.extend(parser.push(chunk));
+        }
+        all.extend(parser.flush());
+
+        let thoughts: Vec<String> = all.iter().filter(|(th, _)| *th).map(|(_, t)| t.clone()).collect();
+        let regular: Vec<String> = all.iter().filter(|(th, _)| !*th).map(|(_, t)| t.clone()).collect();
+
+        assert_eq!(thoughts.join(""), "Deep thoughts here");
+        let regular_text = regular.join("");
+        assert!(regular_text.contains("`<think>`"));
+        assert!(regular_text.contains("Done!"));
+    }
+
 

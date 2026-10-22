@@ -1184,12 +1184,27 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       clearTimeout(dialogSaveTimers[taskId]);
       delete dialogSaveTimers[taskId];
     }
-    const feed = get().activityFeed[taskId];
+    const state = get();
+    const feed = state.activityFeed[taskId];
     if (!feed || feed.length === 0) return;
+
+    // Resolve target SQLite taskId:
+    // If this taskId is an active subagent or matches a known subagent, ensure it's saved under {parent_id}:sub:{subagent_id}
+    let targetDbTaskId = taskId;
+    const parentTaskId = state.activeTaskId;
+    if (parentTaskId && !taskId.includes(':sub:') && !taskId.startsWith('copilot:')) {
+      const resolvedSub = state.toolIdToSubagentId[taskId] || (state.activeSubagentId === taskId ? taskId : null);
+      if (resolvedSub) {
+        targetDbTaskId = resolvedSub.includes(':sub:') ? resolvedSub : `${parentTaskId}:sub:${resolvedSub}`;
+      }
+    }
 
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('save_task_dialog', { taskId, items: feed });
+      await invoke('save_task_dialog', { taskId: targetDbTaskId, items: feed });
+      if (targetDbTaskId !== taskId) {
+        await invoke('save_task_dialog', { taskId, items: feed }).catch(() => {});
+      }
     } catch (err) {
       console.info('save_task_dialog invoke error or web mode:', err);
     }
