@@ -17,9 +17,6 @@ export function isInvalidProjectPath(path?: string | null): boolean {
     normalized.endsWith('/dist') ||
     normalized.endsWith('/node_modules') ||
     normalized.endsWith('/src-tauri') ||
-    normalized.endsWith('/canbanvoimaxharness') ||
-    normalized === 'canbanvoimaxharness' ||
-    normalized.includes('/canbanvoimaxharness/') ||
     normalized === 'bin' ||
     normalized === 'release' ||
     normalized === 'debug'
