@@ -83,7 +83,13 @@ pub struct Task {
     pub tags: Option<Vec<String>>,
     #[serde(rename = "currentTokens", alias = "current_tokens", default)]
     pub current_tokens: Option<usize>,
-    #[serde(rename = "skipWorktree", alias = "skip_worktree", default)]
+    #[serde(
+        rename = "skipWorktree",
+        alias = "skip_worktree",
+        alias = "skipBacklogHook",
+        alias = "skip_backlog_hook",
+        default
+    )]
     pub skip_worktree: Option<bool>,
     #[serde(rename = "createdAt", alias = "created_at", default)]
     pub created_at: i64,

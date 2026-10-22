@@ -571,19 +571,21 @@ pub async fn create_task(
     stage_id: String,
     board_id: Option<String>,
     skip_worktree: Option<bool>,
+    skip_backlog_hook: Option<bool>,
     model: Option<String>,
     task_id: Option<String>,
     app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Task, String> {
+    let effective_skip = skip_backlog_hook.or(skip_worktree);
     let root = state.get_root();
     crate::logger::cvh_log_with_details(
         Some(&root),
         "INFO",
         "CREATE_TASK",
         &format!(
-            "create_task IPC called: title='{}', stage_id='{}', board_id={:?}, task_id_param={:?}, skip_wt={:?}, model={:?}",
-            title, stage_id, board_id, task_id, skip_worktree, model
+            "create_task IPC called: title='{}', stage_id='{}', board_id={:?}, task_id_param={:?}, skip_backlog_hook={:?}, model={:?}",
+            title, stage_id, board_id, task_id, effective_skip, model
         ),
         Some(&format!("root='{}'", root.display())),
     );
@@ -593,7 +595,7 @@ pub async fn create_task(
         description,
         stage_id,
         board_id,
-        skip_worktree,
+        effective_skip,
         model,
         task_id,
         Some(&app_handle),
@@ -719,8 +721,9 @@ pub async fn internal_create_task(
 
     // Check pipeline config for stage hooks (board-aware: first check columns
     // of effective_board_id, then fallback to pipeline.json).
+    // If skip_backlog_hook / skip_worktree is set, do NOT run on_enter hooks and do NOT provision builtin worktree.
     let skip = new_task.skip_worktree.unwrap_or(false);
-    {
+    if !skip {
         let boards_cfg = load_boards_config(root).await.ok();
         let col_from_board = boards_cfg.as_ref().and_then(|bc| {
             let b = bc.boards.iter().find(|b| b.id == effective_board_id)
@@ -779,12 +782,9 @@ pub async fn internal_create_task(
                 }
                 None => {}
             }
-            if needs_builtin_worktree(&col, &new_task, skip) {
+            if needs_builtin_worktree(&col, &new_task, false) {
                 ensure_builtin_worktree(root, &mut new_task).await;
             }
-        } else if stage_id == "backlog" && !skip {
-            // Column not explicitly configured, but stage is backlog: fallback default
-            ensure_builtin_worktree(root, &mut new_task).await;
         }
     }
 
@@ -1696,7 +1696,7 @@ pub async fn internal_move_task_stage(
     }
 
     // Worktree allocation: driven strictly by the configurable hook (builtin:create_worktree)
-    if !current_task.skip_worktree.unwrap_or(false) && needs_builtin_worktree(&target_col, current_task, current_task.skip_worktree.unwrap_or(false)) {
+    if needs_builtin_worktree(&target_col, current_task, false) {
         ensure_builtin_worktree(root, current_task).await;
     }
 
@@ -1838,7 +1838,7 @@ pub async fn internal_move_task_stage(
         }
         None => {}
     }
-    if !current_task.skip_worktree.unwrap_or(false) && needs_builtin_worktree(&target_col, current_task, current_task.skip_worktree.unwrap_or(false)) {
+    if needs_builtin_worktree(&target_col, current_task, false) {
         ensure_builtin_worktree(root, current_task).await;
     }
 
@@ -2698,34 +2698,30 @@ pub async fn run_agent(
         .or(agent_setting.temperature)
         .or(col.temperature);
 
-    let worktree_dir = if task.skip_worktree == Some(true) {
-        root.clone()
-    } else {
-        match &task.worktree_path {
-            Some(p) if !p.trim().is_empty() => {
-                let pb = Path::new(p.trim());
-                let abs = if pb.is_absolute() {
-                    pb.to_path_buf()
-                } else {
-                    root.join(pb)
-                };
-                if abs.exists() {
-                    abs
-                } else {
-                    eprintln!(
-                        "CVH [run_agent]: WARN task {} worktree {:?} does not exist — creating is forbidden, falling back to repo root {:?}",
-                        task_id, p, root
-                    );
-                    root.clone()
-                }
-            }
-            _ => {
+    let worktree_dir = match &task.worktree_path {
+        Some(p) if !p.trim().is_empty() => {
+            let pb = Path::new(p.trim());
+            let abs = if pb.is_absolute() {
+                pb.to_path_buf()
+            } else {
+                root.join(pb)
+            };
+            if abs.exists() {
+                abs
+            } else {
                 eprintln!(
-                    "CVH [run_agent]: WARN task {} has no worktree_path — creating is forbidden, falling back to repo root {:?}",
-                    task_id, root
+                    "CVH [run_agent]: WARN task {} worktree {:?} does not exist — creating is forbidden, falling back to repo root {:?}",
+                    task_id, p, root
                 );
                 root.clone()
             }
+        }
+        _ => {
+            eprintln!(
+                "CVH [run_agent]: WARN task {} has no worktree_path — creating is forbidden, falling back to repo root {:?}",
+                task_id, root
+            );
+            root.clone()
         }
     };
 

@@ -71,7 +71,7 @@ export const translations = {
     'newTask.descLabel': 'Description',
     'newTask.descPlaceholder': 'Details and task requirements...',
     'newTask.modelLabel': 'Agent Model',
-    'newTask.createWorktree': 'Create worktree on start',
+    'newTask.skipBacklogHook': 'Skip backlog hook',
 
     // Kanban Board & Columns
     'board.searchPlaceholder': 'Search...',
@@ -589,7 +589,7 @@ export const translations = {
     'newTask.descLabel': 'Описание',
     'newTask.descPlaceholder': 'Детали и требования к задаче...',
     'newTask.modelLabel': 'Модель агента',
-    'newTask.createWorktree': 'Создать worktree при старте',
+    'newTask.skipBacklogHook': 'Отключить хук бэклога',
 
     // Kanban Board & Columns
     'board.searchPlaceholder': 'Поиск...',

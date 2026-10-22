@@ -936,19 +936,23 @@ use std::path::PathBuf;
 
     #[test]
     fn test_backlog_default_without_explicit_on_enter() {
+        // Without explicit on_enter hook, backlog does NOT create a builtin worktree (no hardcoding!)
         let col = hook_col("backlog", None);
-        assert!(should_builtin_on_enter(&col));
-        // Явный shell-хук у бэклога отменяет дефолт.
+        assert!(!should_builtin_on_enter(&col));
+        // Explicit builtin marker enables builtin worktree
+        let col_builtin = hook_col("backlog", Some("builtin:create_worktree"));
+        assert!(should_builtin_on_enter(&col_builtin));
+        // Explicit shell hook is not builtin
         let col_shell = hook_col("backlog", Some(".cvh/hooks/custom.sh"));
         assert!(!should_builtin_on_enter(&col_shell));
-        // Не-backlog без хука — не builtin.
+        // Non-backlog without hook is not builtin
         let ready = hook_col("ready", None);
         assert!(!should_builtin_on_enter(&ready));
     }
 
     #[test]
     fn test_skip_flag_disables_builtin() {
-        let col = hook_col("backlog", None);
+        let col = hook_col("backlog", Some("builtin:create_worktree"));
         let task = task_with_wt("CVH-001", None);
         assert!(needs_builtin_worktree(&col, &task, false));
         assert!(!needs_builtin_worktree(&col, &task, true));
@@ -956,7 +960,7 @@ use std::path::PathBuf;
 
     #[test]
     fn test_shell_priority_existing_worktree_skips_builtin() {
-        let col = hook_col("backlog", None);
+        let col = hook_col("backlog", Some("builtin:create_worktree"));
         // Shell дал путь через stdout → worktree уже есть → builtin скипается.
         let mut task = task_with_wt("CVH-001", None);
         apply_worktree_from_hook_stdout(
@@ -1527,6 +1531,24 @@ Write code.
             "skip_worktree": false
         })).expect("deserialize t2");
         assert_eq!(t2.skip_worktree, Some(false));
+
+        // Deserialization with alias skipBacklogHook = true
+        let t_sbh: Task = serde_json::from_value(serde_json::json!({
+            "id": "CVH-102b",
+            "title": "Skip backlog hook task",
+            "stageId": "backlog",
+            "skipBacklogHook": true
+        })).expect("deserialize t_sbh");
+        assert_eq!(t_sbh.skip_worktree, Some(true));
+
+        // Deserialization with alias skip_backlog_hook = true
+        let t_sbh2: Task = serde_json::from_value(serde_json::json!({
+            "id": "CVH-102c",
+            "title": "Skip backlog hook task snake",
+            "stageId": "backlog",
+            "skip_backlog_hook": true
+        })).expect("deserialize t_sbh2");
+        assert_eq!(t_sbh2.skip_worktree, Some(true));
 
         // Deserialization with default when omitted
         let t3: Task = serde_json::from_value(serde_json::json!({

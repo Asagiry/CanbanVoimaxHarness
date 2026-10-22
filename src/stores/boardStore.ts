@@ -91,6 +91,8 @@ interface BoardState {
     stageId?: string;
     boardId?: string;
     skipWorktree?: boolean;
+    skip_backlog_hook?: boolean;
+    skipBacklogHook?: boolean;
     model?: string;
   }) => Promise<KanbanTask | null>;
   createSubtask: (parentId: string, targetColumnId?: string) => Promise<KanbanTask | null>;
@@ -218,15 +220,13 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
     ? raw.returnsCount
     : 0;
 
-  const skipWorktree = Boolean(raw.skipWorktree ?? raw.skip_worktree ?? false);
-  const branch = skipWorktree
-    ? (typeof raw.branch === 'string' && raw.branch.trim() !== '' ? raw.branch : undefined)
-    : (typeof raw.branch === 'string' && raw.branch.trim() !== '' ? raw.branch : `feat/${raw.id.toLowerCase()}`);
-  const worktreePath = skipWorktree
-    ? (typeof raw.worktreePath === 'string' && raw.worktreePath.trim() !== ''
-        ? raw.worktreePath
-        : (typeof raw.worktree_path === 'string' && raw.worktree_path.trim() !== '' ? raw.worktree_path : undefined))
-    : (raw.worktreePath || raw.worktree_path || `worktrees/${raw.id.toLowerCase()}`);
+  const skipWorktree = Boolean(raw.skipWorktree ?? raw.skip_worktree ?? raw.skipBacklogHook ?? raw.skip_backlog_hook ?? false);
+  const branch = typeof raw.branch === 'string' && raw.branch.trim() !== ''
+    ? raw.branch.trim()
+    : undefined;
+  const worktreePath = typeof raw.worktreePath === 'string' && raw.worktreePath.trim() !== ''
+    ? raw.worktreePath.trim()
+    : (typeof raw.worktree_path === 'string' && raw.worktree_path.trim() !== '' ? raw.worktree_path.trim() : undefined);
 
   const rawParentId = raw.parentId ?? raw.parent_id ?? undefined;
   const rawTitle = typeof raw.title === 'string' ? raw.title : '';
@@ -430,8 +430,8 @@ function mapBackendTaskToKanban(t: any): KanbanTask {
     columnId: fallbackCol,
     boardId: fallbackBoardId,
     persona: columns.find((c) => c.id === fallbackCol)?.persona ?? 'developer',
-    branch: `feat/${fallbackId.toLowerCase()}`,
-    worktreePath: `worktrees/${fallbackId.toLowerCase()}`,
+    branch: undefined,
+    worktreePath: undefined,
     status: 'idle' as TaskStatus,
     activeStageDuration: 0,
     stageDurations: {},
@@ -945,7 +945,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       input.stageId ||
       (state.columns.some((c) => c.id === 'backlog') ? 'backlog' : (state.columns[0]?.id ?? 'backlog'));
     const boardId = input.boardId || state.activeBoardId || 'development';
-    const skipWorktree = input.skipWorktree ?? false;
+    const skipBacklogHook = Boolean(input.skip_backlog_hook ?? input.skipBacklogHook ?? input.skipWorktree ?? false);
     const title = input.title.trim();
     if (!title) return null;
     const description = input.description?.trim() || '';
@@ -954,7 +954,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       'INFO',
       'BOARD_STORE',
       `addTask: initiated for title="${title}"`,
-      JSON.stringify({ targetColumnId, boardId, skipWorktree, model: input.model })
+      JSON.stringify({ targetColumnId, boardId, skipBacklogHook, model: input.model })
     );
 
     // BACKEND-AUTHORITATIVE TASK CREATION:
@@ -966,7 +966,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         description,
         stageId: targetColumnId,
         boardId,
-        skipWorktree,
+        skipWorktree: skipBacklogHook,
+        skipBacklogHook,
+        skip_backlog_hook: skipBacklogHook,
         model: input.model || undefined,
       });
 

@@ -22,12 +22,9 @@ pub fn is_builtin_worktree_hook(col: &crate::config::PipelineColumn) -> bool {
 }
 
 /// Нужен ли builtin на старте для колонки:
-/// явный маркер ИЛИ дефолт бэклога (id == "backlog" без явного on_enter).
+/// строго явный маркер `builtin:create_worktree` в `col.hooks["on_enter"]`.
 pub fn should_builtin_on_enter(col: &crate::config::PipelineColumn) -> bool {
-    if is_builtin_worktree_hook(col) {
-        return true;
-    }
-    col.id == "backlog" && !col.hooks.contains_key("on_enter")
+    is_builtin_worktree_hook(col)
 }
 
 pub fn task_has_worktree(task: &Task) -> bool {

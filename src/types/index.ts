@@ -54,6 +54,8 @@ export interface KanbanTask {
   handoverSummary?: string;
   currentTokens?: number;
   skipWorktree?: boolean;
+  skipBacklogHook?: boolean;
+  skip_backlog_hook?: boolean;
 }
 
 export interface PipelineColumn {
