@@ -549,10 +549,10 @@ use super::*;
         assert_eq!(parsed_single["title"], "Backend Rust Implementation");
         assert_eq!(parsed_single["column_id"], "dev");
 
-        // Verify on disk that CVH-002 has parent_id = "CVH-001"
+        // Verify on disk that CVH-002 has parent_id = None (standalone root task by default)
         let tasks_on_disk = crate::commands::tasks::load_tasks_from_disk(&base).await;
         let created_child = tasks_on_disk.iter().find(|t| t.id == "CVH-002").expect("CVH-002 on disk");
-        assert_eq!(created_child.parent_id.as_deref(), Some("CVH-001"));
+        assert_eq!(created_child.parent_id.as_deref(), None);
         assert_eq!(created_child.priority.as_deref(), Some("high"));
         assert_eq!(created_child.tags.as_ref().unwrap(), &vec!["rust".to_string(), "tauri".to_string()]);
 
@@ -563,7 +563,8 @@ use super::*;
                     "title": "Frontend UI Matrix",
                     "description": "Integrate into toolPolicyStore.ts",
                     "column_id": "dev",
-                    "priority": "medium"
+                    "priority": "medium",
+                    "is_subtask": true
                 },
                 {
                     "title": "End-to-End Test Suite",
@@ -587,7 +588,7 @@ use super::*;
         let t3 = tasks_after_batch.iter().find(|t| t.id == "CVH-003").expect("CVH-003");
         let t4 = tasks_after_batch.iter().find(|t| t.id == "CVH-004").expect("CVH-004");
         assert_eq!(t3.parent_id.as_deref(), Some("CVH-001"));
-        assert_eq!(t4.parent_id.as_deref(), Some("CVH-001"));
+        assert_eq!(t4.parent_id.as_deref(), None);
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }

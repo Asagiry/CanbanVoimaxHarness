@@ -564,6 +564,27 @@ pub fn estimate_tokens(messages: &[ChatMessage]) -> usize {
     total
 }
 
+/// Estimates the token count of a set of tool definitions schemas.
+pub fn estimate_tools_tokens(tools: &Option<Vec<OpenAITool>>) -> usize {
+    let mut total = 0;
+    if let Some(tool_list) = tools {
+        if !tool_list.is_empty() {
+            total += 12; // base tool definitions framing overhead
+            for tool in tool_list {
+                total += 12; // individual tool framing
+                total += estimate_text_tokens(&tool.tool_type);
+                total += estimate_text_tokens(&tool.function.name);
+                total += estimate_text_tokens(&tool.function.description);
+                let params_str = serde_json::to_string(&tool.function.parameters).unwrap_or_default();
+                if !params_str.is_empty() {
+                    total += estimate_text_tokens(&params_str);
+                }
+            }
+        }
+    }
+    total
+}
+
 /// Estimates the total token count of an entire LLM request,
 /// accounting for conversation messages and the full JSON schemas of tools definitions.
 pub fn estimate_request_tokens(

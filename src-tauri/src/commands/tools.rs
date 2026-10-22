@@ -25,6 +25,14 @@ pub async fn save_tool_policies(
         .map_err(|e| format!("Failed to save tool policies: {}", e))
 }
 
+#[tauri::command]
+pub async fn get_tool_definitions(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::llm::ToolDefinition>, String> {
+    let root = state.get_root();
+    Ok(crate::agent::get_all_tools(&root).await)
+}
+
 // ============================================================================
 // Custom Tools (.cvh/tools/*.json) IPC Commands
 // ============================================================================
