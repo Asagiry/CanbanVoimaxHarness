@@ -280,21 +280,11 @@ export default function RuleEditorModal() {
             <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] truncate">
               {activeFile.name}
             </span>
-            {isSettings ? (
-              <span className="px-1.5 py-0.5 rounded border border-[#ebebeb] dark:border-[#30363d] bg-[#f4f4f5] dark:bg-[#21262d] text-[10px] font-mono text-[#666666] dark:text-[#8b949e] shrink-0">
-                {t('ruleEditor.settingsBadge')}
-              </span>
-            ) : isHook ? (
+            {isHook && (
               <span className="px-1.5 py-0.5 rounded border border-[#ebebeb] dark:border-[#30363d] bg-[#f4f4f5] dark:bg-[#21262d] text-[10px] font-mono text-[#666666] dark:text-[#8b949e] shrink-0">
                 {t('ruleEditor.hookBadge')}
               </span>
-            ) : null}
-            {activeFile.isDirty && (
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" title={t('cortex.unsavedChanges')} />
             )}
-            <span className="text-[11px] text-[#8f8f8f] dark:text-[#8b949e] font-mono hidden sm:inline truncate max-w-xs">
-              {activeFile.path}
-            </span>
           </div>
 
           <div className="flex items-center space-x-2">
