@@ -12,6 +12,10 @@ export interface ToolMeta {
   isSubagentMaster?: boolean;
 }
 
+export function getToolTranslationKey(toolId: string, field: 'label' | 'description'): string {
+  return `tools.${toolId}.${field}`;
+}
+
 export const AVAILABLE_TOOLS: ToolMeta[] = [
   {
     id: 'create_task',

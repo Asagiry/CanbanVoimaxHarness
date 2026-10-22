@@ -4,7 +4,7 @@ import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import AgentIcon from '../common/AgentIcon';
 import { X, ChevronDown, Trash2 } from 'lucide-react';
-import { useTranslation } from '../../stores/languageStore';
+import { useTranslation, type TranslationKey } from '../../stores/languageStore';
 
 interface CustomTool {
   name: string;
@@ -67,6 +67,11 @@ function ToolParamRow({
   const currentValue = toolSettings[toolId]?.[param.key] ?? param.defaultValue;
   const [draft, setDraft] = useState(String(currentValue));
 
+  const paramLabelKey = `toolParam.${param.key}.label` as TranslationKey;
+  const paramUnitKey = `toolParam.${param.key}.unit` as TranslationKey;
+  const paramLabel = t(paramLabelKey) !== paramLabelKey ? t(paramLabelKey) : param.label;
+  const paramUnit = t(paramUnitKey) !== paramUnitKey ? t(paramUnitKey) : param.unit;
+
   useEffect(() => {
     setDraft(String(currentValue));
   }, [currentValue]);
@@ -104,7 +109,7 @@ function ToolParamRow({
     <div className="flex items-center justify-between gap-3 text-xs">
       <div className="min-w-0 flex-1">
         <span className="text-[11px] font-mono text-[#171717] dark:text-[#f0f6fc] block">
-          {param.label}
+          {paramLabel}
         </span>
         <span className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] font-mono block">
           {t('toolPolicy.rangeStep', { min: param.min, max: param.max, step: param.step })}
@@ -145,7 +150,7 @@ function ToolParamRow({
         </button>
 
         <span className="text-[10px] text-[#666666] dark:text-[#8b949e] font-mono min-w-[42px] text-left">
-          {param.unit}
+          {paramUnit}
         </span>
       </div>
     </div>
@@ -188,28 +193,10 @@ const CATEGORY_ORDER: Array<'orchestration' | 'interactive' | 'workflow' | 'syst
   'agent',
 ];
 
-const CATEGORY_LABELS: Record<string, string> = {
-  orchestration: 'Оркестрация и управление задачами',
-  interactive: 'Интерактивность',
-  workflow: 'Маршрутизация задач',
-  system: 'Команды и терминал',
-  fs: 'Файловая система',
-  web: 'Сеть и документация',
-  agent: 'Подагенты и планирование',
-};
-
-const CATEGORY_LABELS_EN: Record<string, string> = {
-  orchestration: 'Orchestration & Task Management',
-  interactive: 'Interactivity',
-  workflow: 'Task Routing',
-  system: 'Commands & Terminal',
-  fs: 'File System',
-  web: 'Network & Documentation',
-  agent: 'Subagents & Planning',
-};
-
-const getCategoryLabel = (catKey: string, lang: string) => {
-  return lang === 'ru' ? (CATEGORY_LABELS[catKey] || catKey) : (CATEGORY_LABELS_EN[catKey] || catKey);
+const getCategoryLabel = (catKey: string, t: (key: TranslationKey) => string) => {
+  const catTransKey = `toolPolicy.category.${catKey}` as TranslationKey;
+  const label = t(catTransKey);
+  return label !== catTransKey ? label : catKey;
 };
 
 export default function ToolPolicyModal() {
@@ -221,7 +208,7 @@ export default function ToolPolicyModal() {
     setStageTool,
     isToolAllowed,
   } = useToolPolicyStore();
-  const { language, t } = useTranslation();
+  const { t } = useTranslation();
 
   const { agentPersonas, loadAgentPersonas } = useCortexStore();
   const { columns } = useBoardStore();
@@ -324,27 +311,27 @@ export default function ToolPolicyModal() {
     const paramsRaw = customParamsText.trim() === '' ? '{}' : customParamsText.trim();
 
     if (!NAME_PATTERN.test(name)) {
-      setCustomFormError('Имя должно содержать только строчные латинские буквы, цифры и подчёркивание: [a-z0-9_].');
+      setCustomFormError(t('toolPolicy.errNamePattern'));
       return;
     }
     if (!description) {
-      setCustomFormError('Укажите описание инструмента.');
+      setCustomFormError(t('toolPolicy.errDescRequired'));
       return;
     }
     if (!command) {
-      setCustomFormError('Укажите команду — шаблон shell с {args}.');
+      setCustomFormError(t('toolPolicy.errCommandRequired'));
       return;
     }
     let parameters: Record<string, unknown>;
     try {
       const parsed: unknown = JSON.parse(paramsRaw);
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        setCustomFormError('Параметры должны быть JSON-объектом, например: {}.');
+        setCustomFormError(t('toolPolicy.errParamsObject'));
         return;
       }
       parameters = parsed as Record<string, unknown>;
     } catch (err) {
-      setCustomFormError(`Некорректный JSON в параметрах: ${err instanceof Error ? err.message : String(err)}`);
+      setCustomFormError(t('toolPolicy.errParamsJson', { error: err instanceof Error ? err.message : String(err) }));
       return;
     }
 
@@ -468,13 +455,17 @@ export default function ToolPolicyModal() {
                             colSpan={2 + agents.length}
                             className="py-1.5 px-3 text-[10px] font-semibold text-[#52525b] dark:text-[#8b949e] uppercase tracking-wider"
                           >
-                            {getCategoryLabel(catKey, language)}
+                            {getCategoryLabel(catKey, t)}
                           </td>
                         </tr>
                         {toolsInCat.map((tool) => {
                           const isGloballyActive = globalEnabled[tool.id] ?? false;
                           const isExpanded = expandedToolId === tool.id;
                           const isChild = Boolean(tool.parentTool);
+                          const toolLabelKey = `tools.${tool.id}.label` as TranslationKey;
+                          const toolDescKey = `tools.${tool.id}.description` as TranslationKey;
+                          const toolLabel = t(toolLabelKey) !== toolLabelKey ? t(toolLabelKey) : tool.label;
+                          const toolDesc = t(toolDescKey) !== toolDescKey ? t(toolDescKey) : tool.description;
 
                           return (
                             <tr
@@ -487,7 +478,7 @@ export default function ToolPolicyModal() {
                                 <button
                                   type="button"
                                   onClick={() => toggleExpanded(tool.id)}
-                                  title={isExpanded ? 'Свернуть описание' : 'Показать описание'}
+                                  title={isExpanded ? t('toolPolicy.collapseDesc') : t('toolPolicy.expandDesc')}
                                   className="flex items-start gap-1.5 text-left cursor-pointer group w-full"
                                 >
                                   {isChild && (
@@ -504,7 +495,7 @@ export default function ToolPolicyModal() {
                                         tool.isSubagentMaster ? 'font-semibold' : ''
                                       }`}
                                     >
-                                      {tool.label}
+                                      {toolLabel}
                                     </div>
                                     <div className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] font-mono leading-tight mt-0.5">
                                       {tool.name}
@@ -514,7 +505,7 @@ export default function ToolPolicyModal() {
                                 {isExpanded && (
                                   <div className="mt-2 space-y-2">
                                     <p className="text-[11px] text-[#666666] dark:text-[#8b949e] font-sans leading-snug">
-                                      {tool.description}
+                                      {toolDesc}
                                     </p>
                                     <ToolParamsEditor toolId={tool.id} />
                                   </div>
@@ -531,6 +522,11 @@ export default function ToolPolicyModal() {
                                   : true;
                                 const isAllowed = isToolAllowed(tool.id, agent.role);
                                 const isDisabled = isChild && !isMasterAllowed;
+                                const masterLabel = tool.parentTool
+                                  ? (t(`tools.${tool.parentTool}.label` as TranslationKey) !== `tools.${tool.parentTool}.label`
+                                      ? t(`tools.${tool.parentTool}.label` as TranslationKey)
+                                      : tool.parentTool)
+                                  : '';
 
                                 return (
                                   <td key={agent.role} className="py-2.5 px-2 text-center border-l border-[#ebebeb] dark:border-[#21262d] align-top">
@@ -544,7 +540,11 @@ export default function ToolPolicyModal() {
                                           enabled={false}
                                           disabled={true}
                                           onToggle={() => {}}
-                                          title={`${tool.label} отключен: мастер-тул '${tool.parentTool}' выключен для ${agent.role}`}
+                                          title={t('toolPolicy.masterDisabledNotice', {
+                                            tool: toolLabel,
+                                            master: masterLabel,
+                                            agent: agent.role,
+                                          })}
                                         />
                                       </span>
                                     ) : (
@@ -559,7 +559,11 @@ export default function ToolPolicyModal() {
                                               }
                                             }
                                           }}
-                                          title={`${tool.label} для агента ${agent.role}: ${isAllowed ? 'включено' : 'выключено'}`}
+                                          title={t('toolPolicy.toolAgentStatus', {
+                                            tool: toolLabel,
+                                            agent: agent.role,
+                                            status: isAllowed ? t('toolPolicy.statusEnabled') : t('toolPolicy.statusDisabled'),
+                                          })}
                                         />
                                       </span>
                                     )}
@@ -583,7 +587,7 @@ export default function ToolPolicyModal() {
                           <button
                             type="button"
                             onClick={() => toggleExpanded(customId)}
-                            title={isCustomExpanded ? 'Свернуть описание' : 'Показать описание'}
+                            title={isCustomExpanded ? t('toolPolicy.collapseDesc') : t('toolPolicy.expandDesc')}
                             className="flex items-start gap-1.5 text-left cursor-pointer group w-full"
                           >
                             <ChevronDown
@@ -594,7 +598,7 @@ export default function ToolPolicyModal() {
                                 {customTool.name}
                               </span>
                               <span className="ml-1.5 inline-block rounded border border-[#ebebeb] dark:border-[#30363d] bg-[#f4f4f5] dark:bg-[#161b22] px-1 py-px text-[10px] leading-none text-[#666666] dark:text-[#8b949e] align-middle">
-                                свой
+                                {t('toolPolicy.customBadge')}
                               </span>
                             </div>
                           </button>
@@ -616,7 +620,7 @@ export default function ToolPolicyModal() {
                             <td key={agent.role} className="py-2.5 px-2 text-center border-l border-[#ebebeb] dark:border-[#21262d] align-top">
                               {!isCustomGloballyActive ? (
                                 <span className="text-[10px] text-[#8f8f8f] select-none block pt-0.5">
-                                  Выкл
+                                  {t('toolPolicy.off')}
                                 </span>
                               ) : (
                                 <span className="inline-flex justify-center pt-0.5">
@@ -630,7 +634,11 @@ export default function ToolPolicyModal() {
                                         }
                                       }
                                     }}
-                                    title={`${customTool.name} для агента ${agent.role}: ${isCustomAllowed ? 'включено' : 'выключено'}`}
+                                    title={t('toolPolicy.toolAgentStatus', {
+                                      tool: customTool.name,
+                                      agent: agent.role,
+                                      status: isCustomAllowed ? t('toolPolicy.statusEnabled') : t('toolPolicy.statusDisabled'),
+                                    })}
                                   />
                                 </span>
                               )}
@@ -654,7 +662,7 @@ export default function ToolPolicyModal() {
                 return (
                   <div key={`global-cat-${catKey}`} className="space-y-2">
                     <h3 className="text-[11px] font-semibold text-[#52525b] dark:text-[#8b949e] uppercase tracking-wider px-1">
-                      {getCategoryLabel(catKey, language)}
+                      {getCategoryLabel(catKey, t)}
                     </h3>
                     <div className="space-y-2">
                       {toolsInCat.map((tool) => {
@@ -663,6 +671,15 @@ export default function ToolPolicyModal() {
                         const isChild = Boolean(tool.parentTool);
                         const isMasterGloballyActive = tool.parentTool ? (globalEnabled[tool.parentTool] ?? true) : true;
                         const isDisabled = isChild && !isMasterGloballyActive;
+                        const toolLabelKey = `tools.${tool.id}.label` as TranslationKey;
+                        const toolDescKey = `tools.${tool.id}.description` as TranslationKey;
+                        const toolLabel = t(toolLabelKey) !== toolLabelKey ? t(toolLabelKey) : tool.label;
+                        const toolDesc = t(toolDescKey) !== toolDescKey ? t(toolDescKey) : tool.description;
+                        const masterLabel = tool.parentTool
+                          ? (t(`tools.${tool.parentTool}.label` as TranslationKey) !== `tools.${tool.parentTool}.label`
+                              ? t(`tools.${tool.parentTool}.label` as TranslationKey)
+                              : tool.parentTool)
+                          : '';
 
                         return (
                           <div
@@ -679,7 +696,7 @@ export default function ToolPolicyModal() {
                               <button
                                 type="button"
                                 onClick={() => toggleExpanded(tool.id)}
-                                title={isExpanded ? 'Свернуть описание' : 'Показать описание'}
+                                title={isExpanded ? t('toolPolicy.collapseDesc') : t('toolPolicy.expandDesc')}
                                 className="flex items-start gap-1.5 text-left cursor-pointer min-w-0 flex-1 group"
                               >
                                 {isChild && (
@@ -692,7 +709,7 @@ export default function ToolPolicyModal() {
                                 />
                                 <div className="min-w-0 flex-1">
                                   <div className={`font-mono font-medium text-xs text-[#171717] dark:text-[#f0f6fc] truncate leading-tight group-hover:underline underline-offset-2 ${tool.isSubagentMaster ? 'font-semibold' : ''}`}>
-                                    {tool.label}
+                                    {toolLabel}
                                   </div>
                                   <div className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] font-mono leading-tight mt-0.5">
                                     {tool.name}
@@ -707,8 +724,14 @@ export default function ToolPolicyModal() {
                                   onToggle={() => toggleGlobalTool(tool.id)}
                                   title={
                                     isDisabled
-                                      ? `${tool.label} отключен (мастер-тул '${tool.parentTool}' выключен глобально)`
-                                      : `${tool.label}: ${isEnabled ? 'включено' : 'выключено'}`
+                                      ? t('toolPolicy.masterGlobalDisabledNotice', {
+                                          tool: toolLabel,
+                                          master: masterLabel,
+                                        })
+                                      : t('toolPolicy.toolGlobalStatus', {
+                                          tool: toolLabel,
+                                          status: isEnabled ? t('toolPolicy.statusEnabled') : t('toolPolicy.statusDisabled'),
+                                        })
                                   }
                                 />
                               </div>
@@ -716,7 +739,7 @@ export default function ToolPolicyModal() {
                             {isExpanded && (
                               <div className="mt-2 space-y-2">
                                 <p className="text-[11px] text-[#666666] dark:text-[#8b949e] font-sans leading-snug">
-                                  {tool.description}
+                                  {toolDesc}
                                 </p>
                                 <ToolParamsEditor toolId={tool.id} />
                               </div>
@@ -763,7 +786,7 @@ export default function ToolPolicyModal() {
                           <button
                             type="button"
                             onClick={() => toggleExpanded(expandId)}
-                            title={isExpanded ? 'Свернуть описание' : 'Показать описание'}
+                            title={isExpanded ? t('toolPolicy.collapseDesc') : t('toolPolicy.expandDesc')}
                             className="flex items-start gap-1.5 text-left cursor-pointer min-w-0 flex-1 group"
                           >
                             <ChevronDown

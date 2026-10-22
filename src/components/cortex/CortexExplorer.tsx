@@ -6,6 +6,7 @@ import type { PipelineColumn, PipelineConfig } from '../../types';
 import AgentIcon from '../common/AgentIcon';
 import PersonaSelect from '../common/PersonaSelect';
 import { getDefaultColumnIcon } from '../../lib/columnIcons';
+import { useTranslation } from '../../stores/languageStore';
 import {
   BACKLOG_COLOR,
   READY_COLOR,
@@ -97,6 +98,7 @@ export default function CortexExplorer() {
   const syncStagesFromColumns = useCortexStore((s) => s.syncStagesFromColumns);
   const { columns, boards } = useBoardStore();
   const setColumns = useBoardStore((s) => s.setColumns);
+  const { t } = useTranslation();
   const [filterQuery, setFilterQuery] = useState('');
   const [openSections, setOpenSections] = useState({ columns: true, agents: true });
   const [openRulesFolders, setOpenRulesFolders] = useState<Record<string, boolean>>({});
@@ -182,7 +184,7 @@ export default function CortexExplorer() {
 
   const handleDeleteAgent = async (role: string) => {
     if (role === 'cvh-dev') {
-      alert("Запрещено удалять встроенную персону 'cvh-dev'");
+      alert(t('cortex.deleteBuiltinForbidden'));
       return;
     }
 
@@ -190,14 +192,14 @@ export default function CortexExplorer() {
     for (const b of boards) {
       for (const c of b.columns) {
         if (c.persona === role) {
-          assignedList.push(`Доска «${b.name}» → колонка «${c.title}»`);
+          assignedList.push(t('cortex.boardColumnFormat', { board: b.name, column: c.title }));
         }
       }
     }
 
-    let confirmMsg = `Удалить агента «${role}»?`;
+    let confirmMsg = t('cortex.deleteAgentConfirm', { role });
     if (assignedList.length > 0) {
-      confirmMsg += `\n\nВнимание: агент назначен на колонки:\n- ${assignedList.join('\n- ')}\n\nНазначение персоны у этих колонок будет сброшено.`;
+      confirmMsg += t('cortex.deleteAgentAssignedWarning', { list: assignedList.join('\n- ') });
     }
 
     if (!window.confirm(confirmMsg)) {
@@ -208,7 +210,7 @@ export default function CortexExplorer() {
       await deleteAgentPersona(role);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      alert(`Ошибка при удалении агента: ${msg}`);
+      alert(t('cortex.deleteAgentError', { msg }));
     }
   };
 
@@ -298,7 +300,7 @@ export default function CortexExplorer() {
     if (!saved) {
       setColumns(prev);
       syncStagesFromColumns(prev);
-      setAgentError((prevMap) => ({ ...prevMap, [columnId]: 'Не удалось сохранить. Изменения откачены.' }));
+      setAgentError((prevMap) => ({ ...prevMap, [columnId]: t('columnMenu.saveErrorRollback') }));
     }
   };
 
@@ -350,12 +352,12 @@ export default function CortexExplorer() {
       {/* Sidebar Header */}
       <div className="px-3.5 py-2.5 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] flex items-center justify-between">
         <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc]">
-          Проводник разума агента
+          {t('cortex.title')}
         </span>
         <button
           type="button"
           onClick={handleRefreshPersonas}
-          title="Обновить агентов"
+          title={t('cortex.refreshAgents')}
           className="p-1 rounded hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] transition cursor-pointer"
         >
           <RotateCw className={`h-3.5 w-3.5 ${isRefreshingPersonas ? 'animate-spin' : ''}`} />
@@ -372,7 +374,7 @@ export default function CortexExplorer() {
             type="text"
             value={filterQuery}
             onChange={(e) => setFilterQuery(e.target.value)}
-            placeholder="Поиск колонок, агентов, файлов..."
+            placeholder={t('cortex.searchPlaceholder')}
             className="w-full pl-8 pr-2.5 py-1 text-xs rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] font-sans transition"
           />
         </div>
@@ -381,9 +383,9 @@ export default function CortexExplorer() {
       {/* Sections Tree */}
       <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1 font-mono text-xs">
         {/* СЕКЦИЯ 1: Колонки */}
-        <section aria-label="Колонки">
+        <section aria-label={t('cortex.columnsSection')}>
           <SectionHeader
-            title="Колонки"
+            title={t('cortex.columnsSection')}
             count={stages.length}
             open={openSections.columns}
             onToggle={() => toggleSection('columns')}
@@ -393,13 +395,13 @@ export default function CortexExplorer() {
               {stages.length === 0 && (
                 <div className="mx-1 mt-1 rounded-md border border-dashed border-[#d4d4d4] dark:border-[#30363d] bg-white dark:bg-[#161b22] px-3 py-4 text-center space-y-1.5">
                   <div className="text-xs font-sans font-semibold text-[#171717] dark:text-[#f0f6fc]">
-                    Нет агентов
+                    {t('cortex.noAgentsInColumns')}
                   </div>
                   <div className="text-[11px] font-sans text-[#666666] dark:text-[#8b949e] leading-relaxed">
-                    Создайте первую колонку-агента через + Колонка
+                    {t('cortex.createFirstColumnAgent')}
                   </div>
                   <div className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e]">
-                    Свежий проект стартует только с backlog и ready
+                    {t('cortex.freshProjectNotice')}
                   </div>
                 </div>
               )}
@@ -407,7 +409,7 @@ export default function CortexExplorer() {
               {stages.length > 0 && filteredColumnStages.length === 0 && (
                 <div className="mx-1 mt-1 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] px-3 py-4 text-center">
                   <div className="text-[11px] font-sans text-[#666666] dark:text-[#8b949e]">
-                    В колонках ничего не найдено
+                    {t('cortex.columnsNothingFound')}
                   </div>
                 </div>
               )}
@@ -446,9 +448,9 @@ export default function CortexExplorer() {
         </section>
 
         {/* СЕКЦИЯ 2: Агенты */}
-        <section aria-label="Агенты">
+        <section aria-label={t('cortex.agentsSection')}>
           <SectionHeader
-            title="Агенты"
+            title={t('cortex.agentsSection')}
             count={agentStages.length}
             open={openSections.agents}
             onToggle={() => toggleSection('agents')}
@@ -459,8 +461,8 @@ export default function CortexExplorer() {
                   e.stopPropagation();
                   setIsCreateAgentOpen(true);
                 }}
-                title="Создать агента"
-                aria-label="Создать агента"
+                title={t('cortex.createAgent')}
+                aria-label={t('cortex.createAgent')}
                 className="p-1 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d] transition cursor-pointer"
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -472,10 +474,10 @@ export default function CortexExplorer() {
               {agentStages.length === 0 && (
                 <div className="mx-1 mt-1 rounded-md border border-dashed border-[#d4d4d4] dark:border-[#30363d] bg-white dark:bg-[#161b22] px-3 py-4 text-center space-y-1.5">
                   <div className="text-xs font-sans font-semibold text-[#171717] dark:text-[#f0f6fc]">
-                    Нет доступных агентов
+                    {t('cortex.noAvailableAgents')}
                   </div>
                   <div className="text-[11px] font-sans text-[#666666] dark:text-[#8b949e] leading-relaxed">
-                    Агенты берутся из списка персон проекта
+                    {t('cortex.agentsFromProject')}
                   </div>
                 </div>
               )}
@@ -483,7 +485,7 @@ export default function CortexExplorer() {
               {agentStages.length > 0 && filteredAgentStages.length === 0 && (
                 <div className="mx-1 mt-1 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] px-3 py-4 text-center">
                   <div className="text-[11px] font-sans text-[#666666] dark:text-[#8b949e]">
-                    Среди агентов ничего не найдено
+                    {t('cortex.agentsNothingFound')}
                   </div>
                 </div>
               )}
@@ -531,7 +533,7 @@ export default function CortexExplorer() {
           onContextMenu={(e) => e.preventDefault()}
         >
           <div className="px-3 py-1.5 text-[10px] font-semibold text-[#a1a1aa] dark:text-[#8b949e] uppercase tracking-wider border-b border-[#f4f4f5] dark:border-[#21262d] mb-1 truncate">
-            Агент: {agentContextMenu.role}
+            {t('cortex.agentContextMenu', { role: agentContextMenu.role })}
           </div>
           <button
             onClick={() => {
@@ -542,7 +544,7 @@ export default function CortexExplorer() {
             className="w-full flex items-center space-x-2 px-3 py-1.5 text-left transition rounded-sm text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer"
           >
             <Palette className="h-3.5 w-3.5 text-[#71717a] dark:text-[#8b949e]" />
-            <span>Настроить цвет и иконку</span>
+            <span>{t('cortex.configureColorIcon')}</span>
           </button>
           <button
             onClick={() => {
@@ -556,10 +558,10 @@ export default function CortexExplorer() {
                 ? 'text-[#a1a1aa] dark:text-[#6e7681] cursor-not-allowed opacity-50'
                 : 'text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer'
             }`}
-            title={agentContextMenu.isBuiltin ? 'Нельзя переименовать встроенного агента' : undefined}
+            title={agentContextMenu.isBuiltin ? t('cortex.cannotRenameBuiltin') : undefined}
           >
             <Pencil className="h-3.5 w-3.5 text-[#71717a] dark:text-[#8b949e]" />
-            <span>Переименовать агента</span>
+            <span>{t('cortex.renameAgent')}</span>
           </button>
           <button
             onClick={() => {
@@ -574,10 +576,10 @@ export default function CortexExplorer() {
                 ? 'text-[#a1a1aa] dark:text-[#6e7681] cursor-not-allowed opacity-50'
                 : 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-700 dark:hover:text-red-300 cursor-pointer'
             }`}
-            title={agentContextMenu.isBuiltin ? 'Нельзя удалить встроенного агента' : undefined}
+            title={agentContextMenu.isBuiltin ? t('cortex.cannotDeleteBuiltin') : undefined}
           >
             <Trash2 className="h-3.5 w-3.5" />
-            <span>Удалить агента</span>
+            <span>{t('cortex.deleteAgent')}</span>
           </button>
         </div>
       )}
@@ -674,6 +676,7 @@ function StageHeaderButton({
   onToggle: () => void;
   onPlus?: () => void;
 }) {
+  const { t } = useTranslation();
   const isBuiltin = stage.personaName === 'cvh-dev' || Boolean(stage.isBuiltin);
   const isBacklog = stage.stageId === 'backlog';
   const isReady = stage.stageId === 'ready';
@@ -718,7 +721,7 @@ function StageHeaderButton({
 
           {isBuiltin && (
             <span className="px-1.5 py-0.5 rounded text-[10px] font-sans font-medium bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 shrink-0 self-center translate-y-[0.5px] leading-tight">
-              Встроенный
+              {t('cortex.builtinBadge')}
             </span>
           )}
         </div>
@@ -736,8 +739,8 @@ function StageHeaderButton({
             e.stopPropagation();
             onPlus();
           }}
-          title="Новое правило"
-          aria-label="Новое правило"
+          title={t('cortex.newRule')}
+          aria-label={t('cortex.newRule')}
           className="p-1 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d] transition cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shrink-0"
         >
           <Plus className="h-3.5 w-3.5" />
@@ -913,6 +916,7 @@ function AgentStageCard({
   onCloseCreate: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }) {
+  const { t } = useTranslation();
   const personaFile = stage.files.find((f) => f.type === 'persona');
   const ruleFiles = stage.files.filter((f) => f.type === 'rule');
   const settingsFile = stage.files.find((f) => f.type === 'settings');
@@ -974,15 +978,15 @@ function AgentStageCard({
           {personaFile && personaIsMissing && (
             <div className="px-2 py-1.5 rounded-md border border-dashed border-[#d4d4d4] dark:border-[#30363d] bg-white dark:bg-[#161b22] space-y-1">
               <div className="text-[11px] font-sans text-[#666666] dark:text-[#8b949e]">
-                Персона не настроена — нет файла
+                {t('cortex.personaNotConfigured')}
               </div>
               <button
                 onClick={() => onCreatePersona(personaFile.id)}
                 className="flex items-center space-x-1 px-2 py-1 rounded-md text-[11px] font-mono bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white dark:text-[#f0f6fc] transition cursor-pointer"
-                title="Создать шаблон персоны"
+                title={t('cortex.createPersonaTemplate')}
               >
                 <Plus className="h-3 w-3 shrink-0" />
-                <span>Создать шаблон</span>
+                <span>{t('cortex.createTemplate')}</span>
               </button>
             </div>
           )}
@@ -1035,6 +1039,7 @@ function AgentField({
   error: string | null;
   onChange: (columnId: string, value: string) => void;
 }) {
+  const { t } = useTranslation();
   const currentValue = current ?? '';
   const [draft, setDraft] = useState(currentValue);
 
@@ -1046,7 +1051,7 @@ function AgentField({
     <div className="px-0.5 py-0.5 min-w-0 w-full">
       <div className="flex items-center gap-1.5 min-w-0 w-full">
         <span className="text-[10px] font-sans font-semibold uppercase tracking-wide text-[#8f8f8f] shrink-0">
-          Агент
+          {t('cortex.agentField')}
         </span>
         {personas.length > 0 ? (
           <PersonaSelect
@@ -1054,7 +1059,7 @@ function AgentField({
             disabled={saving}
             onChange={(role) => onChange(columnId, role)}
             allowEmpty={true}
-            emptyLabel="без агента"
+            emptyLabel={t('cortex.noAgent')}
             personas={personas}
             compact={true}
             className="flex-1 min-w-0"
@@ -1076,7 +1081,7 @@ function AgentField({
               }
             }}
             placeholder="developer"
-            title="Агент колонки"
+            title={t('cortex.columnAgent')}
             className="flex-1 min-w-0 px-1.5 py-0.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] font-mono text-[11px] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] transition disabled:opacity-50"
           />
         )}
@@ -1108,6 +1113,7 @@ function RulesFolderBlock({
   onNew: () => void;
   onOpen: (fileId: string) => void;
 }) {
+  const { t } = useTranslation();
   if (files.length === 0 && isSearching) return null;
   return (
     <div className="space-y-0.5">
@@ -1121,7 +1127,7 @@ function RulesFolderBlock({
           ) : (
             <Folder className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
           )}
-          <span className="text-xs font-mono">Правила</span>
+          <span className="text-xs font-mono">{t('cortex.rules')}</span>
           <span className="text-[10px] font-mono text-[#8f8f8f]">rules/</span>
           <span className="text-[10px] text-[#8f8f8f] tabular-nums">({files.length})</span>
         </button>
@@ -1131,8 +1137,8 @@ function RulesFolderBlock({
             e.stopPropagation();
             onNew();
           }}
-          title="Новое правило"
-          aria-label="Новое правило"
+          title={t('cortex.newRule')}
+          aria-label={t('cortex.newRule')}
           className="p-1 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d] transition cursor-pointer opacity-0 group-hover/folder:opacity-100 focus:opacity-100 focus-visible:opacity-100 shrink-0"
         >
           <Plus className="h-3 w-3" />
@@ -1174,6 +1180,7 @@ function HooksFolderBlock({
   onNew?: () => void;
   onOpen: (fileId: string) => void;
 }) {
+  const { t } = useTranslation();
   if (files.length === 0 && isSearching) return null;
   return (
     <div className="space-y-0.5">
@@ -1187,7 +1194,7 @@ function HooksFolderBlock({
           ) : (
             <Folder className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
           )}
-          <span className="text-xs font-mono">Хуки</span>
+          <span className="text-xs font-mono">{t('cortex.hooks')}</span>
           <span className="text-[10px] font-mono text-[#8f8f8f]">hooks/</span>
           <span className="text-[10px] text-[#8f8f8f] tabular-nums">({files.length})</span>
         </button>
@@ -1198,8 +1205,8 @@ function HooksFolderBlock({
               e.stopPropagation();
               onNew();
             }}
-            title="Новый хук"
-            aria-label="Новый хук"
+            title={t('cortex.newHook')}
+            aria-label={t('cortex.newHook')}
             className="p-1 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d] transition cursor-pointer opacity-0 group-hover/folder:opacity-100 focus:opacity-100 focus-visible:opacity-100 shrink-0"
           >
             <Plus className="h-3 w-3" />
@@ -1217,7 +1224,7 @@ function HooksFolderBlock({
                 file={hookFile}
                 displayName={hookFile.name}
                 isActive={activeFileId === hookFile.id}
-                badge={isBuiltin ? 'встроенный' : hookMomentOf(hookFile.name)}
+                badge={isBuiltin ? t('personaSelect.builtin') : hookMomentOf(hookFile.name)}
                 icon={<Zap className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />}
                 onSelect={() => onOpen(hookFile.id)}
               />
@@ -1234,18 +1241,19 @@ function SettingMissingBlock({
 }: {
   onCreate: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="px-2 py-1.5 rounded-md border border-dashed border-[#d4d4d4] dark:border-[#30363d] bg-white dark:bg-[#161b22] space-y-1">
       <div className="text-[11px] font-sans text-[#666666] dark:text-[#8b949e]">
-        Настройки не заданы — нет файла
+        {t('cortex.settingNotConfigured')}
       </div>
       <button
         onClick={onCreate}
         className="flex items-center space-x-1 px-2 py-1 rounded-md text-[11px] font-mono bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white dark:text-[#f0f6fc] transition cursor-pointer"
-        title="Создать шаблон настроек"
+        title={t('cortex.createSettingTemplate')}
       >
         <Plus className="h-3 w-3 shrink-0" />
-        <span>Создать шаблон</span>
+        <span>{t('cortex.createTemplate')}</span>
       </button>
     </div>
   );
@@ -1263,6 +1271,7 @@ function NewCortexFileForm({
   // Секция колонок создаёт только хуки: fixedKind прячет переключатель вида.
   fixedKind?: 'rule' | 'hook';
 }) {
+  const { t } = useTranslation();
   const createCortexFile = useCortexStore((s) => s.createCortexFile);
   const [rawName, setRawName] = useState('');
   const [kind, setKind] = useState<'rule' | 'hook'>(fixedKind ?? initialKind);
@@ -1276,7 +1285,7 @@ function NewCortexFileForm({
   const previewName =
     rawName.trim().length === 0
       ? kind === 'rule'
-        ? 'имя-правила.md'
+        ? `${t('cortex.ruleFileNamePlaceholder')}.md`
         : `${hookMoment}.${hookExt}`
       : previewCortexFileName(rawName, kind, { hookMoment, hookExt });
 
@@ -1286,11 +1295,11 @@ function NewCortexFileForm({
         const trimmed = rawName.trim();
         const base = /\.md$/i.test(trimmed) ? trimmed.slice(0, -3).trim() : trimmed;
         if (!base) {
-          setError('Введите имя файла');
+          setError(t('cortex.enterFileName'));
           return;
         }
         if (!/^[A-Za-z0-9-_]+$/.test(base)) {
-          setError('Только латиница, цифры, - и _');
+          setError(t('cortex.latinDigitsOnly'));
           return;
         }
         const fileName = `${base}.md`;
@@ -1298,13 +1307,13 @@ function NewCortexFileForm({
           (f) => f.name.toLowerCase() === fileName.toLowerCase()
         );
         if (duplicate) {
-          setError(`Файл ${fileName} уже есть в стадии`);
+          setError(t('cortex.fileExists', { name: fileName }));
           return;
         }
       } else {
         const typed = rawName.trim().replace(/\.[A-Za-z0-9]+$/, '').trim();
         if (typed && !/^[A-Za-z0-9-_]+$/.test(typed)) {
-          setError('Только латиница, цифры, - и _');
+          setError(t('cortex.latinDigitsOnly'));
           return;
         }
         const fileName = previewCortexFileName(rawName, 'hook', { hookMoment, hookExt });
@@ -1312,7 +1321,7 @@ function NewCortexFileForm({
           (f) => f.name.toLowerCase() === fileName.toLowerCase()
         );
         if (duplicate) {
-          setError(`Файл ${fileName} уже есть в стадии`);
+          setError(t('cortex.fileExists', { name: fileName }));
           return;
         }
       }
@@ -1327,7 +1336,7 @@ function NewCortexFileForm({
       onClose();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setError(message || 'Не удалось создать файл');
+      setError(message || t('cortex.failedToCreateFile'));
     } finally {
       setIsSaving(false);
     }
@@ -1336,7 +1345,7 @@ function NewCortexFileForm({
   return (
     <div className="mx-1 mb-1 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] px-2 py-2 space-y-2">
       <div className="text-[11px] font-sans font-semibold text-[#171717] dark:text-[#f0f6fc]">
-        Новый файл агента
+        {t('cortex.newAgentFile')}
       </div>
 
       <input
@@ -1350,12 +1359,12 @@ function NewCortexFileForm({
           if (e.key === 'Enter') void handleSubmit();
           if (e.key === 'Escape') onClose();
         }}
-        placeholder={kind === 'rule' ? 'имя-правила' : 'имя-хука (можно пусто)'}
+        placeholder={kind === 'rule' ? t('cortex.ruleFileNamePlaceholder') : t('cortex.hookFileNamePlaceholder')}
         autoFocus
         className="w-full px-2 py-1 text-xs rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] font-mono placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] transition"
       />
       <div className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e]">
-        Латиница, цифры, - и _ (расширение добавится автоматически)
+        {t('cortex.fileNamingHint')}
       </div>
 
       {!fixedKind && (
@@ -1368,7 +1377,7 @@ function NewCortexFileForm({
               onChange={() => setKind('rule')}
               className="accent-[#171717] dark:accent-[#f0f6fc]"
             />
-            <span>Правило</span>
+            <span>{t('cortex.rule')}</span>
           </label>
           <label className="flex items-center gap-1 cursor-pointer">
             <input
@@ -1378,7 +1387,7 @@ function NewCortexFileForm({
               onChange={() => setKind('hook')}
               className="accent-[#171717] dark:accent-[#f0f6fc]"
             />
-            <span>Хук</span>
+            <span>{t('cortex.hook')}</span>
           </label>
         </div>
       )}
@@ -1408,7 +1417,7 @@ function NewCortexFileForm({
             </label>
           </div>
           <label className="flex items-center gap-1.5 text-[11px] font-mono text-[#4d4d4d] dark:text-[#c9d1d9]">
-            <span>Тип:</span>
+            <span>{t('cortex.type')}</span>
             <select
               value={hookExt}
               onChange={(e) => setHookExt(e.target.value as CortexHookExt)}
@@ -1437,14 +1446,14 @@ function NewCortexFileForm({
           disabled={isSaving}
           className="px-2.5 py-1 rounded-md text-[11px] font-mono bg-[#171717] dark:bg-[#238636] hover:bg-[#262626] dark:hover:bg-[#2ea043] text-white transition cursor-pointer disabled:opacity-50"
         >
-          {isSaving ? 'Создание...' : 'Создать'}
+          {isSaving ? t('common.saving') : t('common.create')}
         </button>
         <button
           onClick={onClose}
           disabled={isSaving}
           className="px-2.5 py-1 rounded-md text-[11px] font-mono bg-white dark:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#4d4d4d] dark:text-[#c9d1d9] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#30363d] transition cursor-pointer disabled:opacity-50"
         >
-          Отмена
+          {t('common.cancel')}
         </button>
       </div>
     </div>
@@ -1466,6 +1475,7 @@ function FileTreeItem({
   badge?: string | null;
   onSelect: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <button
       onClick={onSelect}
@@ -1487,7 +1497,7 @@ function FileTreeItem({
       </div>
 
       {file.isDirty && (
-        <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" title="Несохраненные изменения" />
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" title={t('cortex.unsavedChanges')} />
       )}
     </button>
   );
@@ -1523,6 +1533,7 @@ function EditAgentPersonaModal({
   );
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (isOpen && persona) {
@@ -1544,16 +1555,16 @@ function EditAgentPersonaModal({
     if (e) e.preventDefault();
     const trimmed = newName.trim().toLowerCase();
     if (!trimmed) {
-      setError('Имя агента не может быть пустым');
+      setError(t('cortex.errEmptyRole'));
       return;
     }
     if (!/^[a-z0-9][a-z0-9-]*$/.test(trimmed)) {
-      setError('Разрешены только строчные латинские буквы, цифры и дефис (^[a-z0-9][a-z0-9-]*$)');
+      setError(t('cortex.errRolePattern'));
       return;
     }
 
     if (!isAllowedAgentColor(selectedColor)) {
-      setError('Серый и зеленый цвета зарезервированы за Backlog и Ready и запрещены для агентов');
+      setError(t('cortex.errColorReserved'));
       return;
     }
 
@@ -1592,7 +1603,7 @@ function EditAgentPersonaModal({
         <div className="flex items-center justify-between border-b border-[#f4f4f5] dark:border-[#21262d] pb-3">
           <div className="flex items-center space-x-2">
             <Palette className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
-            <h3 className="font-semibold text-sm text-[#171717] dark:text-[#f0f6fc]">Настройка агента: {role}</h3>
+            <h3 className="font-semibold text-sm text-[#171717] dark:text-[#f0f6fc]">{t('cortex.configAgentTitle', { role })}</h3>
           </div>
           <button
             onClick={onClose}
@@ -1606,7 +1617,7 @@ function EditAgentPersonaModal({
           {/* Имя роли */}
           <div>
             <label className="block text-xs font-medium text-[#52525b] dark:text-[#8b949e] mb-1">
-              Имя роли агента
+              {t('cortex.roleNameLabel')}
             </label>
             <input
               type="text"
@@ -1616,12 +1627,12 @@ function EditAgentPersonaModal({
                 setNewName(e.target.value);
                 setError(null);
               }}
-              placeholder="имя-агента"
+              placeholder={t('cortex.roleNamePlaceholder')}
               className="w-full px-3 py-1.5 rounded-lg border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#161b22] text-[#171717] dark:text-[#f0f6fc] text-xs font-mono focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:outline-hidden transition disabled:opacity-50 disabled:bg-[#f4f4f5] dark:disabled:bg-[#0d1117] disabled:text-[#8f8f8f] dark:disabled:text-[#6e7681]"
             />
             {isBuiltin && (
               <p className="mt-1 text-[11px] text-[#71717a] dark:text-[#8b949e]">
-                Встроенного агента 'cvh-dev' нельзя переименовать
+                {t('cortex.builtinCannotRename')}
               </p>
             )}
           </div>
@@ -1630,7 +1641,7 @@ function EditAgentPersonaModal({
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-medium text-[#52525b] dark:text-[#8b949e]">
-                Цвет агента
+                {t('cortex.agentColorLabel')}
               </label>
               <span className="text-[10px] font-mono text-[#71717a] dark:text-[#8b949e]">
                 {selectedColor}
@@ -1657,7 +1668,7 @@ function EditAgentPersonaModal({
                 })}
               </div>
               <p className="text-[10px] font-sans text-[#71717a] dark:text-[#8b949e] leading-tight">
-                Серый (#64748b) и зеленый (#10b981) зарезервированы за Backlog и Ready и исключены из палитры агентов.
+                {t('cortex.colorNotice')}
               </p>
             </div>
           </div>
@@ -1666,7 +1677,7 @@ function EditAgentPersonaModal({
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-medium text-[#52525b] dark:text-[#8b949e]">
-                SVG Иконка агента
+                {t('cortex.agentIconLabel')}
               </label>
               <span className="text-[10px] font-mono text-[#71717a] dark:text-[#8b949e]">
                 [{selectedIcon}]
@@ -1713,14 +1724,14 @@ function EditAgentPersonaModal({
               disabled={isSubmitting}
               className="px-3 py-1.5 rounded-md text-xs font-medium text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
             >
-              Отмена
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
               className="px-3.5 py-1.5 rounded-md text-xs font-medium bg-[#171717] dark:bg-[#238636] hover:bg-[#262626] dark:hover:bg-[#2ea043] text-white transition cursor-pointer disabled:opacity-50 flex items-center space-x-1.5"
             >
-              {isSubmitting ? <span>Сохранение...</span> : <span>Сохранить</span>}
+              {isSubmitting ? <span>{t('common.saving')}</span> : <span>{t('common.save')}</span>}
             </button>
           </div>
         </form>
@@ -1742,6 +1753,7 @@ function CreateAgentModal({
   onClose,
   onCreateSuccess,
 }: CreateAgentModalProps) {
+  const { t } = useTranslation();
   const [roleName, setRoleName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1779,15 +1791,13 @@ function CreateAgentModal({
 
     const trimmed = roleName.trim().toLowerCase();
     if (!trimmed) {
-      setError('Имя роли не может быть пустым');
+      setError(t('cortex.errEmptyRole'));
       inputRef.current?.focus();
       return;
     }
 
     if (!/^[a-z0-9][a-z0-9-]*$/.test(trimmed)) {
-      setError(
-        'Разрешены только строчные латинские буквы, цифры и дефис (шаблон: ^[a-z0-9][a-z0-9-]*$)',
-      );
+      setError(t('cortex.errRolePattern'));
       inputRef.current?.focus();
       return;
     }
@@ -1796,7 +1806,7 @@ function CreateAgentModal({
       (r) => r.trim().toLowerCase() === trimmed,
     );
     if (isDuplicate) {
-      setError(`Агент с ролью «${trimmed}» уже существует`);
+      setError(t('cortex.roleExists', { role: trimmed }));
       inputRef.current?.focus();
       return;
     }
@@ -1834,10 +1844,10 @@ function CreateAgentModal({
             </div>
             <div>
               <h3 className="font-semibold text-sm text-[#171717] dark:text-[#f0f6fc]">
-                Новый агент
+                {t('cortex.newAgentModalTitle')}
               </h3>
               <p className="text-[11px] text-[#71717a] dark:text-[#8b949e]">
-                Создание изолированной персоны и правил
+                {t('cortex.newAgentSubtitle')}
               </p>
             </div>
           </div>
@@ -1845,7 +1855,7 @@ function CreateAgentModal({
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            aria-label="Закрыть"
+            aria-label={t('common.close')}
             className="p-1 rounded-md text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer disabled:opacity-50"
           >
             <X className="h-4 w-4" />
@@ -1855,7 +1865,7 @@ function CreateAgentModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-medium text-[#52525b] dark:text-[#8b949e] mb-1">
-              Имя роли
+              {t('cortex.roleName')}
             </label>
             <input
               ref={inputRef}
@@ -1870,14 +1880,14 @@ function CreateAgentModal({
               className="w-full px-3 py-2 rounded-lg border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#161b22] text-[#171717] dark:text-[#f0f6fc] text-xs font-mono placeholder-[#a1a1aa] dark:placeholder-[#6e7681] focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:outline-hidden transition disabled:opacity-50"
             />
             <p className="mt-1 text-[11px] text-[#71717a] dark:text-[#8b949e]">
-              Только строчные латинские буквы, цифры и дефис (например: architect, tester, security, db-lead)
+              {t('cortex.roleNameRulesHint')}
             </p>
           </div>
 
           {/* Превью файловой структуры */}
           <div className="rounded-lg border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22] p-2.5 text-[11px] font-mono text-[#52525b] dark:text-[#8b949e] space-y-1">
             <div className="text-[10px] uppercase font-sans font-semibold text-[#a1a1aa] dark:text-[#8b949e] tracking-wider mb-1">
-              Будет создано на диске:
+              {t('cortex.willBeCreated')}
             </div>
             <div className="flex items-center gap-1.5 truncate">
               <Folder className="h-3.5 w-3.5 text-[#71717a] dark:text-[#8b949e] shrink-0" />
@@ -1885,11 +1895,11 @@ function CreateAgentModal({
             </div>
             <div className="flex items-center gap-1.5 pl-4 truncate text-[#71717a] dark:text-[#8b949e]">
               <FileText className="h-3 w-3 shrink-0 text-[#6366f1]" />
-              <span className="truncate">persona.md (шаблон роли)</span>
+              <span className="truncate">{t('cortex.personaTemplatePreview')}</span>
             </div>
             <div className="flex items-center gap-1.5 pl-4 truncate text-[#71717a] dark:text-[#8b949e]">
               <Folder className="h-3 w-3 shrink-0" />
-              <span className="truncate">rules/ (каталог правил)</span>
+              <span className="truncate">{t('cortex.rulesDirPreview')}</span>
             </div>
           </div>
 
@@ -1906,7 +1916,7 @@ function CreateAgentModal({
               disabled={isSubmitting}
               className="px-3.5 py-1.5 rounded-md text-xs font-medium text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer disabled:opacity-50"
             >
-              Отмена
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
@@ -1916,12 +1926,12 @@ function CreateAgentModal({
               {isSubmitting ? (
                 <>
                   <RotateCw className="h-3.5 w-3.5 animate-spin" />
-                  <span>Создание...</span>
+                  <span>{t('common.saving')}</span>
                 </>
               ) : (
                 <>
                   <Plus className="h-3.5 w-3.5" />
-                  <span>Создать агента</span>
+                  <span>{t('cortex.createAgentBtn')}</span>
                 </>
               )}
             </button>

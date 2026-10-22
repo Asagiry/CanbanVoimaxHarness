@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import AgentIcon from './AgentIcon';
 import { getDeterministicAgentColor } from '../../lib/agentPalette';
 import { useCortexStore } from '../../stores/cortexStore';
+import { useTranslation } from '../../stores/languageStore';
 import { ChevronDown, Check, Plus, UserX } from 'lucide-react';
 
 interface PersonaItem {
@@ -44,6 +45,10 @@ export default function PersonaSelect({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const { agentPersonas } = useCortexStore();
+  const { t } = useTranslation();
+
+  const resolvedEmptyLabel = emptyLabel !== 'без агента' ? emptyLabel : t('personaSelect.noAgent');
+  const resolvedPlaceholder = placeholder !== 'Выберите агента...' ? placeholder : t('personaSelect.selectAgent');
 
   const personas = useMemo<PersonaItem[]>(() => {
     if (passedPersonas && passedPersonas.length > 0) {
@@ -100,13 +105,13 @@ export default function PersonaSelect({
             <div className="flex items-center gap-1.5 min-w-0 flex-1">
               <Plus className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
               <span className="text-indigo-600 dark:text-indigo-400 font-medium truncate">
-                + Новый агент
+                {t('personaSelect.newAgent')}
               </span>
             </div>
           ) : !value && allowEmpty ? (
             <div className="flex items-center gap-1.5 min-w-0 flex-1 text-[#8f8f8f] dark:text-[#8b949e]">
               <UserX className="h-3.5 w-3.5 shrink-0" />
-              <span className="font-sans truncate">{emptyLabel}</span>
+              <span className="font-sans truncate">{resolvedEmptyLabel}</span>
             </div>
           ) : selected ? (
             <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -118,7 +123,7 @@ export default function PersonaSelect({
               </span>
               {isBuiltin && (
                 <span className="px-1 py-0.2 rounded text-[9px] font-sans font-medium bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shrink-0">
-                  {compact ? 'встр.' : 'встроенный'}
+                  {compact ? t('personaSelect.builtinShort') : t('personaSelect.builtin')}
                 </span>
               )}
             </div>
@@ -131,7 +136,7 @@ export default function PersonaSelect({
             </div>
           ) : (
             <span className="text-[#8f8f8f] dark:text-[#8b949e] font-sans truncate">
-              {placeholder}
+              {resolvedPlaceholder}
             </span>
           )}
         </div>
@@ -159,7 +164,7 @@ export default function PersonaSelect({
             >
               <div className="flex items-center gap-2 min-w-0 flex-1 text-[#8f8f8f] dark:text-[#8b949e]">
                 <UserX className="h-3.5 w-3.5 shrink-0" />
-                <span className="font-sans">{emptyLabel}</span>
+                <span className="font-sans">{resolvedEmptyLabel}</span>
               </div>
               {!value && <Check className="h-3.5 w-3.5 text-[#171717] dark:text-[#f0f6fc] shrink-0" />}
             </button>
@@ -214,7 +219,7 @@ export default function PersonaSelect({
                 }`}
               >
                 <Plus className="h-3.5 w-3.5 shrink-0" />
-                <span>+ Новый агент</span>
+                <span>{t('personaSelect.newAgent')}</span>
               </button>
             </div>
           )}
