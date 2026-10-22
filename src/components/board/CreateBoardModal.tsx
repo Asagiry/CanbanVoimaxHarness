@@ -81,7 +81,7 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
     try {
       const created = await createBoard(trimmed);
       if (created) {
-        if (selectedPersona && selectedPersona !== 'developer') {
+        if (selectedPersona) {
           const matched = personas.find((p) => p.role === selectedPersona);
           const updatedColumns = created.columns.map((c) =>
             c.id === 'dev'

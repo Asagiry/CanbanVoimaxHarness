@@ -649,7 +649,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   saveCurrentBoard: async (columns: PipelineColumn[]) => {
     const { activeBoardId, boards } = get();
-    const current = boards.find((b) => b.id === activeBoardId);
+    const current = boards.find((b) => b.id === activeBoardId) ?? boards[0];
     if (!current) {
       set({ columns });
       return;
@@ -665,6 +665,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     set({ columns: nextColumns, boards: updatedBoards });
     try {
       const { invoke } = await import('@tauri-apps/api/core');
+      await get().saveCurrentBoard(nextColumns);
       let cfg: PipelineConfig | null = null;
       try {
         cfg = await invoke<PipelineConfig>('get_pipeline');
@@ -677,7 +678,6 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         columns: nextColumns,
       };
       await invoke('save_pipeline', { pipeline });
-      await get().saveCurrentBoard(nextColumns);
     } catch (err) {
       console.info('updateColumn failed or in web mode:', err);
     }

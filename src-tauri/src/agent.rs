@@ -255,26 +255,72 @@ pub async fn compile_primed_system_prompt(
     repo_root: &Path,
     role: &str,
 ) -> Result<String> {
+    compile_primed_system_prompt_with_tools(repo_root, role, None).await
+}
+
+pub async fn compile_primed_system_prompt_with_tools(
+    repo_root: &Path,
+    role: &str,
+    active_tools: Option<&[String]>,
+) -> Result<String> {
     let mut sections = Vec::new();
+
+    // Resolve active tool names: either explicitly provided, or dynamically from tool-policy
+    let resolved_tools: Vec<String> = if let Some(tools) = active_tools {
+        tools.to_vec()
+    } else {
+        let tool_policy = load_tool_policies(repo_root).await.unwrap_or_default();
+        let agent_setting = load_agent_setting(repo_root, role).await;
+        let is_orch = role.to_lowercase().contains("orchestrat")
+            || role.to_lowercase().contains("оркестрат")
+            || role == "copilot";
+        crate::config::CANONICAL_TOOLS
+            .iter()
+            .filter(|&&name| {
+                if (name == "create_task" || name == "create_tasks" || name == "complete_task") && !is_orch {
+                    return false;
+                }
+                if tool_policy.stage_overrides.contains_key(role) {
+                    if !is_tool_allowed(&tool_policy, Some(role), name) {
+                        return false;
+                    }
+                } else if !is_tool_allowed(&tool_policy, None, name) {
+                    return false;
+                }
+                if !agent_allows_tool(agent_setting.allowed_tools.as_deref(), name) {
+                    return false;
+                }
+                true
+            })
+            .map(|&s| s.to_string())
+            .collect()
+    };
+
+    let tools_line = format!("tools: [{}]", resolved_tools.join(", "));
 
     // 1. Role Persona: directory path (.cvh/agents/<role>/persona.md) → built-in fallback.
     let persona_path = crate::config::agent_persona_path(repo_root, role);
     if persona_path.is_file() {
         if let Ok(persona_text) = tokio::fs::read_to_string(&persona_path).await {
-            sections.push(format!("# Role Persona: {}\n\n{}", role, persona_text.trim()));
+            let sanitized_persona = crate::config::update_frontmatter_tools(&persona_text, &tools_line);
+            sections.push(format!("# Role Persona: {}\n\n{}", role, sanitized_persona.trim()));
         } else if role == "cvh-dev" {
-            sections.push(BUILTIN_CVH_DEV_PROMPT.to_string());
+            let sanitized = crate::config::update_frontmatter_tools(BUILTIN_CVH_DEV_PROMPT, &tools_line);
+            sections.push(sanitized);
         } else if role == "developer" {
-            sections.push(BUILTIN_DEVELOPER_PROMPT.to_string());
+            let sanitized = crate::config::update_frontmatter_tools(BUILTIN_DEVELOPER_PROMPT, &tools_line);
+            sections.push(sanitized);
         } else {
-            sections.push(format!("# Role Persona: {}\nYou are an expert AI agent in {}.", role, role));
+            sections.push(format!("---\n{}\n---\n# Role Persona: {}\nYou are an expert AI agent in {}.", tools_line, role, role));
         }
     } else if role == "cvh-dev" {
-        sections.push(BUILTIN_CVH_DEV_PROMPT.to_string());
+        let sanitized = crate::config::update_frontmatter_tools(BUILTIN_CVH_DEV_PROMPT, &tools_line);
+        sections.push(sanitized);
     } else if role == "developer" {
-        sections.push(BUILTIN_DEVELOPER_PROMPT.to_string());
+        let sanitized = crate::config::update_frontmatter_tools(BUILTIN_DEVELOPER_PROMPT, &tools_line);
+        sections.push(sanitized);
     } else {
-        sections.push(format!("# Role Persona: {}\nYou are an expert AI agent in {}.", role, role));
+        sections.push(format!("---\n{}\n---\n# Role Persona: {}\nYou are an expert AI agent in {}.", tools_line, role, role));
     }
 
     // 1b. Per-agent rules: `.cvh/agents/<role>/rules/*.md`, alphabetical.
@@ -302,22 +348,52 @@ pub async fn compile_primed_system_prompt(
         }
     }
 
-    // 2. Tool Instructions (SWE-bench Industrial Suite)
-    sections.push(
-        "# Scoped Tool Execution Mandate\n\
-        You have direct tool access scoped to your isolated worktree. \
-        Use `read_file`, `write_file`, `edit_file`, `glob`, `grep`, and `execute_command` to inspect, modify, and verify code. \
-        Always use Ground Truth Sensors (e.g. `cargo check`, `npm run build`) via `execute_command` to verify changes.\n\
-        \n\
-        ## Subagent Delegation Mandate\n\
-        - When delegating work to a subagent, prefer `subagent` (oneshot sync) which blocks and waits for the full report before proceeding.\n\
-        - If you use `subagent_bg` for background execution, you MUST call `collect_subagent` with the returned `subagent_id` to wait for and consume the subagent's report before taking subsequent actions or finishing the task. Never fire-and-forget background subagents without collecting them.\n\
-        \n\
-        ## Execution Protocol & Final Answer Discipline:\n\
-        - While you are still planning, researching, writing files, or executing tools, do NOT write a concluding summary or farewell message in your turn content. Keep turn content focused strictly on immediate intent or leave content empty when issuing tool calls.\n\
-        - ONLY output your comprehensive final answer when ALL tools have finished executing, all verifications have passed, and NO further tool calls are required."
-            .to_string(),
-    );
+    // 2. Dynamic Tool Instructions & Execution Mandates
+    let has_fs_tools = resolved_tools.iter().any(|t| {
+        matches!(t.as_str(), "read_file" | "write_file" | "edit_file" | "execute_command" | "glob" | "grep")
+    });
+    let has_subagents = resolved_tools.iter().any(|t| {
+        matches!(t.as_str(), "subagent" | "subagent_bg")
+    });
+
+    let mut tool_sections = Vec::new();
+    if has_fs_tools {
+        let active_fs_tools: Vec<&str> = ["read_file", "write_file", "edit_file", "glob", "grep", "execute_command"]
+            .into_iter()
+            .filter(|t| resolved_tools.iter().any(|at| at == *t))
+            .collect();
+        let active_fs_str = active_fs_tools.iter().map(|t| format!("`{}`", t)).collect::<Vec<_>>().join(", ");
+        let mut fs_mandate = format!(
+            "# Scoped Tool Execution Mandate\nYou have direct tool access scoped to your isolated worktree. Use {} to inspect, modify, and verify code.",
+            active_fs_str
+        );
+        if resolved_tools.iter().any(|t| t == "execute_command") {
+            fs_mandate.push_str("\nAlways use Ground Truth Sensors (e.g. `cargo check`, `npm run build`) via `execute_command` to verify changes.");
+        }
+        tool_sections.push(fs_mandate);
+    }
+
+    if has_subagents {
+        let mut sub_mandate = String::from("## Subagent Delegation Mandate\n");
+        if resolved_tools.iter().any(|t| t == "subagent") {
+            sub_mandate.push_str("- When delegating work to a subagent, prefer `subagent` (oneshot sync) which blocks and waits for the full report before proceeding.\n");
+        }
+        if resolved_tools.iter().any(|t| t == "subagent_bg") {
+            sub_mandate.push_str("- If you use `subagent_bg` for background execution, you MUST call `collect_subagent` with the returned `subagent_id` to wait for and consume the subagent's report before taking subsequent actions or finishing the task. Never fire-and-forget background subagents without collecting them.\n");
+        }
+        tool_sections.push(sub_mandate.trim().to_string());
+    }
+
+    if !resolved_tools.is_empty() {
+        tool_sections.push(
+            "## Execution Protocol & Final Answer Discipline:\n- While you are still planning, researching, writing files, or executing tools, do NOT write a concluding summary or farewell message in your turn content. Keep turn content focused strictly on immediate intent or leave content empty when issuing tool calls.\n- ONLY output your comprehensive final answer when ALL tools have finished executing, all verifications have passed, and NO further tool calls are required."
+                .to_string(),
+        );
+    }
+
+    if !tool_sections.is_empty() {
+        sections.push(tool_sections.join("\n\n"));
+    }
 
     Ok(sections.join("\n\n---\n\n"))
 }
@@ -502,17 +578,6 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
                 "properties": {
                     "summary": { "type": "string", "description": "Подробное саммари изменений, результатов и проверок (опционально, есть дефолт)" },
                     "stage_id": { "type": "string", "description": "Целевой этап пайплайна (например, 'review', 'retro', 'ready'). Алиасы: 'target_stage', 'column_id'. Если не указан — переход на следующий по порядку этап." }
-                }
-            }),
-        ),
-        ToolDefinition::function(
-            "move_task",
-            "Переместить задачу на указанный этап пайплайна (например, 'review', 'retro', 'ready') или на следующий этап. Алиас для advance_task.",
-            serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "stage_id": { "type": "string", "description": "Целевой этап пайплайна (например, 'review', 'ready'). Алиасы: 'target_stage', 'column_id'." },
-                    "summary": { "type": "string", "description": "Саммари проделанной работы для следующего агента (опционально)" }
                 }
             }),
         ),
@@ -4637,7 +4702,7 @@ pub fn reconstruct_messages_from_dialog(
                             trimmed.to_string()
                         } else {
                             format!(
-                                "### [УКАЗАНИЕ ПОЛЬЗОВАТЕЛЯ / USER STEER]\n{}\n\nПримите это указание во внимание немедленно и скорректируйте дальнейшие действия.",
+                                "### [УКАЗАНИЕ ПОЛЬЗОВАТЕЛЯ / USER STEER]\n{}",
                                 trimmed
                             )
                         };
@@ -4733,8 +4798,59 @@ pub async fn run_agent_loop<F>(
 where
     F: Fn(AgentEvent) + Send + Sync + 'static,
 {
-    // Deterministic static system prompt
-    let system_prompt = compile_primed_system_prompt(&config.repo_root, &config.role).await?;
+    // Tool Policy Matrix (§ 2.16 & § 2.21):
+    // tool-policy.json is the single authoritative source of truth for tool permissions.
+    let tool_policy = load_tool_policies(&config.repo_root)
+        .await
+        .unwrap_or_default();
+
+    // Bi-directional synchronization of allowed tools into YAML frontmatter of persona.md (§ 2.21)
+    let _ = crate::config::sync_tool_policies_to_personas(&config.repo_root, &tool_policy).await;
+
+    // Best-effort per-agent overrides (missing/broken → defaults).
+    let agent_setting = load_agent_setting(&config.repo_root, &config.role).await;
+    let agent_allowed = agent_setting.allowed_tools.clone();
+
+    let all_tools = get_all_tools(&config.repo_root).await;
+    let is_orch = config.role.to_lowercase().contains("orchestrat")
+        || config.role.to_lowercase().contains("оркестрат")
+        || config.stage_id.to_lowercase().contains("orchestrat")
+        || config.stage_id.to_lowercase().contains("оркестрат")
+        || config.stage_id == "backlog"
+        || config.role == "copilot";
+
+    let mut active_tools: Vec<ToolDefinition> = all_tools
+        .into_iter()
+        .filter(|t| {
+            let name = &t.function.name;
+            if (name == "create_task" || name == "create_tasks" || name == "complete_task") && !is_orch {
+                return false;
+            }
+            if !is_tool_allowed(&tool_policy, Some(&config.stage_id), name) {
+                return false;
+            }
+            if tool_policy.stage_overrides.contains_key(&config.role)
+                && !is_tool_allowed(&tool_policy, Some(&config.role), name)
+            {
+                return false;
+            }
+            if !agent_allows_tool(agent_allowed.as_deref(), name) {
+                return false;
+            }
+            true
+        })
+        .collect();
+
+    // Deterministic sorting of tool definitions for prefix caching
+    active_tools.sort_by(|a, b| a.function.name.cmp(&b.function.name));
+    let active_tool_names: Vec<String> = active_tools.iter().map(|t| t.function.name.clone()).collect();
+
+    // Deterministic static system prompt with sanitized frontmatter and dynamic tool mandates
+    let system_prompt = compile_primed_system_prompt_with_tools(
+        &config.repo_root,
+        &config.role,
+        Some(&active_tool_names),
+    ).await?;
 
     // Zero-Turn Memory Priming Relay Handoff (§ 2.9 AGENTS.md):
     // If task has handover_summary, inject at the beginning of the prompt.
@@ -4821,7 +4937,7 @@ where
         let steer_trimmed = steer.trim();
         if !steer_trimmed.is_empty() {
             let formatted_steer = format!(
-                "### [УКАЗАНИЕ ПОЛЬЗОВАТЕЛЯ / USER STEER]\n{}\n\nПримите это указание во внимание немедленно и скорректируйте дальнейшие действия.",
+                "### [УКАЗАНИЕ ПОЛЬЗОВАТЕЛЯ / USER STEER]\n{}",
                 steer_trimmed
             );
 
@@ -4870,52 +4986,6 @@ where
             }
         }
     }
-
-    // Tool Policy Matrix (§ 2.16 & § 2.21):
-    // tool-policy.json is the single authoritative source of truth for tool permissions.
-    let tool_policy = load_tool_policies(&config.repo_root)
-        .await
-        .unwrap_or_default();
-
-    // Bi-directional synchronization of allowed tools into YAML frontmatter of persona.md (§ 2.21)
-    let _ = crate::config::sync_tool_policies_to_personas(&config.repo_root, &tool_policy).await;
-
-    // Best-effort per-agent overrides (missing/broken → defaults).
-    let agent_setting = load_agent_setting(&config.repo_root, &config.role).await;
-    let agent_allowed = agent_setting.allowed_tools.clone();
-
-    let all_tools = get_all_tools(&config.repo_root).await;
-    let is_orch = config.role.to_lowercase().contains("orchestrat")
-        || config.role.to_lowercase().contains("оркестрат")
-        || config.stage_id.to_lowercase().contains("orchestrat")
-        || config.stage_id.to_lowercase().contains("оркестрат")
-        || config.stage_id == "backlog"
-        || config.role == "copilot";
-
-    let mut active_tools: Vec<ToolDefinition> = all_tools
-        .into_iter()
-        .filter(|t| {
-            let name = &t.function.name;
-            if (name == "create_task" || name == "create_tasks" || name == "complete_task") && !is_orch {
-                return false;
-            }
-            if !is_tool_allowed(&tool_policy, Some(&config.stage_id), name) {
-                return false;
-            }
-            if tool_policy.stage_overrides.contains_key(&config.role)
-                && !is_tool_allowed(&tool_policy, Some(&config.role), name)
-            {
-                return false;
-            }
-            if !agent_allows_tool(agent_allowed.as_deref(), name) {
-                return false;
-            }
-            true
-        })
-        .collect();
-
-    // Deterministic sorting of tool definitions for prefix caching
-    active_tools.sort_by(|a, b| a.function.name.cmp(&b.function.name));
 
     let llm_client = LlmClient::new();
 

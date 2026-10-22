@@ -136,6 +136,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
         title: cfg?.title ?? 'Инженерный пайплайн',
         columns: next,
       };
+      await useBoardStore.getState().saveCurrentBoard(next);
       await invoke('save_pipeline', { pipeline });
       return true;
     } catch (err) {
@@ -156,6 +157,9 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
     const prev = columns;
     const next = prev.map((c) => (c.id === column.id ? { ...c, title } : c));
     setColumns(next);
+    if (updateColumn) {
+      await updateColumn(column.id, { title });
+    }
     const saved = await savePipelineConfig(next);
     setRenameSaving(false);
     if (!saved) {
@@ -252,6 +256,9 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
     );
     setColumns(next);
     useCortexStore.getState().syncStagesFromColumns(next);
+    if (updateColumn) {
+      await updateColumn(column.id, { persona: nextPersona, icon: nextIcon, color: nextColor });
+    }
     const saved = await savePipelineConfig(next);
     setPersonaSaving(false);
     if (!saved) {

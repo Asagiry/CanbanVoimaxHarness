@@ -2707,7 +2707,7 @@ data: [DONE]
         let steer_content = reconstructed[5].content.as_deref().unwrap();
         assert!(steer_content.contains("### [УКАЗАНИЕ ПОЛЬЗОВАТЕЛЯ / USER STEER]"));
         assert!(steer_content.contains("Поправь баг в agent.rs вместо main.rs"));
-        assert!(steer_content.contains("Примите это указание во внимание немедленно"));
+        assert!(!steer_content.contains("Примите это указание во внимание"));
     }
     #[tokio::test]
     async fn test_steer_sqlite_persistence_and_context_reconstruction() {
@@ -2748,7 +2748,45 @@ data: [DONE]
         let steer_text = reconstructed[2].content.as_deref().unwrap();
         assert!(steer_text.contains("### [УКАЗАНИЕ ПОЛЬЗОВАТЕЛЯ / USER STEER]"));
         assert!(steer_text.contains("Сфокусируйся на оптимизации компилятора"));
-        assert!(steer_text.contains("Примите это указание во внимание немедленно и скорректируйте дальнейшие действия."));
+        assert!(!steer_text.contains("Примите это указание во внимание"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_system_prompt_tool_leak_prevention() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_tool_leak_{}", uuid::Uuid::new_v4()));
+        let dev_dir = base.join(".cvh").join("agents").join("developer");
+        tokio::fs::create_dir_all(&dev_dir).await.expect("test dirs");
+        tokio::fs::write(
+            dev_dir.join("persona.md"),
+            "---\nname: developer\ntools: [read_file, write_file, edit_file, advance_task]\n---\nYou are a developer.",
+        )
+        .await
+        .expect("persona seed");
+
+        // Case 1: Only advance_task is allowed (user turned off all other tools)
+        let tools_advance_only = vec!["advance_task".to_string()];
+        let prompt = compile_primed_system_prompt_with_tools(&base, "developer", Some(&tools_advance_only))
+            .await
+            .expect("compile prompt");
+
+        assert!(prompt.contains("tools: [advance_task]"), "frontmatter must contain only allowed tools");
+        assert!(!prompt.contains("read_file"), "disabled read_file must NOT leak in prompt");
+        assert!(!prompt.contains("write_file"), "disabled write_file must NOT leak in prompt");
+        assert!(!prompt.contains("Scoped Tool Execution Mandate"), "mandate for fs tools must NOT appear");
+        assert!(!prompt.contains("Subagent Delegation Mandate"), "mandate for subagent must NOT appear");
+
+        // Case 2: Only read_file and advance_task
+        let tools_fs = vec!["read_file".to_string(), "advance_task".to_string()];
+        let prompt_fs = compile_primed_system_prompt_with_tools(&base, "developer", Some(&tools_fs))
+            .await
+            .expect("compile prompt");
+
+        assert!(prompt_fs.contains("tools: [read_file, advance_task]"));
+        assert!(prompt_fs.contains("Scoped Tool Execution Mandate"));
+        assert!(!prompt_fs.contains("Subagent Delegation Mandate"));
+        assert!(!prompt_fs.contains("`write_file`"));
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
