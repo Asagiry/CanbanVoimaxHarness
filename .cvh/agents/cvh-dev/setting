@@ -1,6 +1,28 @@
 {
   "model": "gemini-3.8-flash-high",
-  "context_window": 200000,
   "temperature": 0.2,
-  "max_tokens": 8192
+  "contextWindow": 200000,
+  "maxTokens": 8192,
+  "allowedTools": [
+    "execute_command",
+    "read_file",
+    "edit_file",
+    "write_file",
+    "glob",
+    "grep",
+    "web_search",
+    "web_fetch",
+    "subagent",
+    "subagent_bg",
+    "collect_subagent",
+    "todo_write",
+    "advance_task",
+    "reject_task",
+    "question",
+    "create_task",
+    "complete_task",
+    "list_tasks",
+    "get_task_history",
+    "load_rule"
+  ]
 }

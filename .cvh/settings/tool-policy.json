@@ -1,96 +1,138 @@
 {
   "globalEnabled": {
-    "execute_command": true,
-    "read_file": true,
-    "edit_file": true,
+    "subagent": true,
     "write_file": true,
     "glob": true,
-    "grep": true,
-    "web_search": true,
-    "web_fetch": true,
-    "subagent": true,
-    "subagent_bg": true,
-    "collect_subagent": true,
-    "todo_write": true,
-    "advance_task": true,
-    "reject_task": true,
-    "question": true,
-    "create_task": true,
-    "complete_task": true,
     "list_tasks": true,
+    "grep": true,
+    "edit_file": true,
+    "load_rule": true,
+    "todo_write": true,
+    "web_search": true,
+    "read_file": true,
+    "complete_task": true,
+    "execute_command": true,
+    "question": true,
+    "subagent_bg": true,
+    "advance_task": true,
+    "subagent_sync": true,
+    "reject_task": true,
+    "collect_subagent": true,
+    "web_fetch": true,
     "get_task_history": true,
-    "load_rule": true
+    "create_task": true
   },
   "stageOverrides": {
+    "dev": {
+      "edit_file": true,
+      "collect_subagent": true,
+      "todo_write": true,
+      "complete_task": true,
+      "read_file": true,
+      "advance_task": true,
+      "execute_command": true,
+      "load_rule": true,
+      "web_search": true,
+      "reject_task": true,
+      "write_file": true,
+      "grep": true,
+      "get_task_history": true,
+      "list_tasks": true,
+      "question": true,
+      "subagent": true,
+      "web_fetch": true,
+      "glob": true,
+      "create_task": true,
+      "subagent_bg": true
+    },
+    "developer": {
+      "subagent": true,
+      "advance_task": true,
+      "glob": true,
+      "execute_command": true,
+      "complete_task": true,
+      "web_search": true,
+      "list_tasks": true,
+      "reject_task": true,
+      "write_file": true,
+      "question": true,
+      "grep": true,
+      "load_rule": true,
+      "read_file": true,
+      "edit_file": true,
+      "todo_write": true,
+      "get_task_history": true,
+      "create_task": true,
+      "web_fetch": true
+    },
+    "retro": {
+      "reject_task": true,
+      "create_task": false,
+      "grep": true,
+      "write_file": true,
+      "complete_task": false,
+      "execute_command": true,
+      "collect_subagent": true,
+      "question": true,
+      "read_file": true,
+      "subagent": true,
+      "todo_write": true,
+      "web_search": true,
+      "advance_task": true,
+      "glob": true,
+      "subagent_bg": true,
+      "web_fetch": true
+    },
+    "orchestrator": {
+      "complete_task": true,
+      "create_task": true
+    },
+    "review": {
+      "glob": true,
+      "create_task": false,
+      "grep": true,
+      "complete_task": false,
+      "subagent_bg": true,
+      "todo_write": true,
+      "edit_file": false,
+      "subagent": true,
+      "collect_subagent": true,
+      "question": true,
+      "read_file": true,
+      "advance_task": true,
+      "reject_task": true,
+      "execute_command": true,
+      "write_file": false,
+      "web_search": true,
+      "web_fetch": true
+    },
+    "cvh-dev": {
+      "create_task": true,
+      "complete_task": true
+    },
     "backlog": {
       "create_task": true,
       "complete_task": true
-    },
-    "orchestrator": {
-      "create_task": true,
-      "complete_task": true
-    },
-    "dev": {
-      "execute_command": true,
-      "read_file": true,
-      "edit_file": true,
-      "write_file": true,
-      "glob": true,
-      "grep": true,
-      "web_search": true,
-      "web_fetch": true,
-      "subagent": true,
-      "subagent_bg": true,
-      "todo_write": true,
-      "advance_task": true,
-      "reject_task": true,
-      "question": true,
-      "create_task": false,
-      "complete_task": false,
-      "list_tasks": true,
-      "get_task_history": true,
-      "load_rule": true
-    },
-    "review": {
-      "read_file": true,
-      "grep": true,
-      "glob": true,
-      "execute_command": true,
-      "edit_file": false,
-      "write_file": false,
-      "web_search": true,
-      "web_fetch": true,
-      "subagent": true,
-      "subagent_bg": true,
-      "todo_write": true,
-      "advance_task": true,
-      "reject_task": true,
-      "question": true,
-      "create_task": false,
-      "complete_task": false,
-      "list_tasks": true,
-      "get_task_history": true,
-      "load_rule": true
-    },
-    "retro": {
-      "read_file": true,
-      "execute_command": true,
-      "write_file": true,
-      "glob": true,
-      "grep": true,
-      "web_search": true,
-      "web_fetch": true,
-      "subagent": true,
-      "subagent_bg": true,
-      "todo_write": true,
-      "advance_task": true,
-      "reject_task": true,
-      "question": true,
-      "create_task": false,
-      "complete_task": false,
-      "list_tasks": true,
-      "get_task_history": true,
-      "load_rule": true
     }
-  }
+  },
+  "toolSettings": {
+    "read_file": {
+      "max_lines": 2000
+    },
+    "subagent_bg": {
+      "max_concurrent": 3
+    },
+    "subagent": {
+      "max_concurrent": 3
+    },
+    "execute_command": {
+      "timeout_sec": 180
+    },
+    "todo_write": {
+      "max_items": 15,
+      "min_items": 3
+    }
+  },
+  "toolDescriptions": {},
+  "toolCustomSchemas": {}
 }
