@@ -96,8 +96,78 @@ function parseCleanDiff(patch?: string | null): ParsedDiffLine[] {
 
 const isCvhPath = (p: string): boolean => {
   if (!p) return false;
-  const norm = p.replace(/\\/g, '/');
-  return norm === '.cvh' || norm.startsWith('.cvh/') || norm.includes('/.cvh/') || norm.endsWith('/.cvh');
+  const norm = p.replace(/\\/g, '/').trim();
+  if (!norm) return false;
+
+  // 1. Always hide runtime, secret, database, and log artifacts
+  if (
+    norm.includes('harness.db') ||
+    norm.startsWith('worktrees/') ||
+    norm.includes('/worktrees/') ||
+    norm.endsWith('llm.json') ||
+    norm.includes('/llm.json') ||
+    norm.startsWith('.cvh/spill/') ||
+    norm.includes('/.cvh/spill/') ||
+    norm.startsWith('spill/') ||
+    norm.includes('/spill/') ||
+    norm.startsWith('.cvh/logs/') ||
+    norm.includes('/.cvh/logs/') ||
+    norm.startsWith('logs/') ||
+    norm.includes('/logs/') ||
+    norm.endsWith('.log') ||
+    norm.startsWith('.cvh/dialogs/') ||
+    norm.includes('/.cvh/dialogs/') ||
+    norm.includes('/dialogs/') ||
+    norm.endsWith('tasks.json') ||
+    norm.includes('/tasks.json') ||
+    norm.startsWith('.cvh/tasks/') ||
+    norm.includes('/.cvh/tasks/') ||
+    norm.includes('/tasks/') ||
+    norm.endsWith('.secret') ||
+    norm.includes('.secret/') ||
+    norm.includes('/.secret') ||
+    norm.endsWith('.key') ||
+    norm.includes('.key/') ||
+    norm.includes('/.key')
+  ) {
+    return true;
+  }
+
+  // 2. Bare .cvh directory itself is hidden
+  if (norm === '.cvh' || norm === '.cvh/' || norm.endsWith('/.cvh') || norm.endsWith('/.cvh/')) {
+    return true;
+  }
+
+  // 3. Explicitly allowed CVH configuration files & directories:
+  //    .cvh/rules/, .cvh/agents/, .cvh/settings/, .cvh/tools/, .cvh/hooks/,
+  //    .cvh/boards.json, .cvh/pipeline.json
+  const isCvhConfig =
+    norm.startsWith('.cvh/rules/') ||
+    norm.includes('/.cvh/rules/') ||
+    norm.startsWith('.cvh/agents/') ||
+    norm.includes('/.cvh/agents/') ||
+    norm.startsWith('.cvh/settings/') ||
+    norm.includes('/.cvh/settings/') ||
+    norm.startsWith('.cvh/tools/') ||
+    norm.includes('/.cvh/tools/') ||
+    norm.startsWith('.cvh/hooks/') ||
+    norm.includes('/.cvh/hooks/') ||
+    norm === '.cvh/boards.json' ||
+    norm.endsWith('/.cvh/boards.json') ||
+    norm === '.cvh/pipeline.json' ||
+    norm.endsWith('/.cvh/pipeline.json');
+
+  if (isCvhConfig) {
+    return false;
+  }
+
+  // 4. Any other file inside .cvh is considered internal runtime and hidden
+  if (norm.startsWith('.cvh/') || norm.includes('/.cvh/')) {
+    return true;
+  }
+
+  // 5. Standard workspace files outside .cvh are visible
+  return false;
 };
 
 function formatFilesCount(count: number, lang: Language = 'en'): string {
