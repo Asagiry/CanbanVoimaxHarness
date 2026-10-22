@@ -957,6 +957,21 @@ pub async fn get_all_tools_for_role(repo_root: &Path, role: Option<&str>) -> Vec
             if let Some(custom_desc) = tool_policy.tool_descriptions.get(&tool.function.name) {
                 tool.function.description = custom_desc.clone();
             }
+            let custom_schema = tool_policy
+                .tool_custom_schemas
+                .get(&tool.function.name)
+                .or_else(|| {
+                    if tool.function.name == "subagent" {
+                        tool_policy.tool_custom_schemas.get("subagent_sync")
+                    } else {
+                        None
+                    }
+                });
+            if let Some(custom_val) = custom_schema {
+                if let Ok(custom_def) = serde_json::from_value::<ToolDefinition>(custom_val.clone()) {
+                    *tool = custom_def;
+                }
+            }
         }
     }
     tools
@@ -2512,22 +2527,25 @@ pub async fn execute_tool(
                 };
 
                 if let Some((resolved_id, rx)) = rx_opt {
-                    {
-                        let mut sessions = SUBAGENT_SESSIONS.lock().await;
-                        sessions.remove(&resolved_id);
-                    }
                     match rx.await {
                         Ok(report) => {
+                            let mut sessions = SUBAGENT_SESSIONS.lock().await;
+                            sessions.remove(&resolved_id);
                             collected_reports.push((resolved_id, report));
                             continue;
                         }
                         Err(_) => {
-                            if let Some((_, session)) = find_subagent_session(task_id, &resolved_id).await {
+                            let is_aborted = if let Some((_, session)) = find_subagent_session(task_id, &resolved_id).await {
                                 let info = session.retry_info.lock().await;
-                                if info.status == "aborted" || session.abort_handle.load(Ordering::SeqCst) {
-                                    collected_reports.push((resolved_id, "[Субагент прерван пользователем / Subagent aborted by user]".to_string()));
-                                    continue;
-                                }
+                                info.status == "aborted" || session.abort_handle.load(Ordering::SeqCst)
+                            } else {
+                                false
+                            };
+                            let mut sessions = SUBAGENT_SESSIONS.lock().await;
+                            sessions.remove(&resolved_id);
+                            if is_aborted {
+                                collected_reports.push((resolved_id, "[Субагент прерван пользователем / Subagent aborted by user]".to_string()));
+                                continue;
                             }
                             bail!("Subagent [{}] channel closed before completion", resolved_id);
                         }
@@ -4275,6 +4293,9 @@ Messages count: {}
             info.status = "error".to_string();
             info.last_error = Some(err_msg.clone());
             info.duration_ms = Some(duration_ms);
+            if let Some(sender) = session.sender.lock().await.take() {
+                let _ = sender.send(format!("[Subagent error: {}]", err_msg));
+            }
         }
 
         bail!("Subagent [{}] error: {}", subagent_id, err_msg);

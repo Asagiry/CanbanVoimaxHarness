@@ -88,17 +88,14 @@ function KanbanCard({ task, index }: KanbanCardProps) {
     useShallow((s) => (isDone ? s.tasks.filter((t) => t.parentId === task.id) : []))
   );
 
-  const stageStart = task.stageEnteredAt || task.updatedAt || task.createdAt;
-  const currentStageDuration = isDone
-    ? (task.activeStageDuration ?? 0)
-    : stageStart
+  const isRunning = task.status === 'running';
+  const stageStart = task.stageEnteredAt;
+  const currentStageDuration = isRunning && stageStart
     ? Math.max(0, Math.floor((Date.now() - stageStart) / 1000))
     : (task.activeStageDuration ?? 0);
 
-  const currentTotalElapsed = isDone
-    ? (task.totalElapsed ?? 0)
-    : task.createdAt
-    ? Math.max(0, Math.floor((Date.now() - task.createdAt) / 1000))
+  const currentTotalElapsed = isRunning && stageStart
+    ? (task.totalElapsed ?? 0) + Math.max(0, Math.floor((Date.now() - stageStart) / 1000))
     : (task.totalElapsed ?? 0);
 
   const handleContextMenu = (e: React.MouseEvent) => {

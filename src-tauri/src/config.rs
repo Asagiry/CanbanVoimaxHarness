@@ -1921,6 +1921,8 @@ pub struct ToolPolicyConfig {
     pub tool_settings: HashMap<String, serde_json::Value>,
     #[serde(default, rename = "toolDescriptions")]
     pub tool_descriptions: HashMap<String, String>,
+    #[serde(default, rename = "toolCustomSchemas")]
+    pub tool_custom_schemas: HashMap<String, serde_json::Value>,
 }
 
 pub fn default_tool_settings() -> HashMap<String, serde_json::Value> {
@@ -2050,6 +2052,7 @@ impl Default for ToolPolicyConfig {
             stage_overrides,
             tool_settings: default_tool_settings(),
             tool_descriptions: HashMap::new(),
+            tool_custom_schemas: HashMap::new(),
         }
     }
 }

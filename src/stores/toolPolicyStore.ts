@@ -499,6 +499,7 @@ export interface ToolPolicyState {
   stageOverrides: Record<string, Record<string, boolean>>;
   toolSettings: ToolSettings;
   toolDescriptions: Record<string, string>;
+  toolCustomSchemas: Record<string, unknown>;
 
   // Actions
   openModal: () => void;
@@ -509,6 +510,8 @@ export interface ToolPolicyState {
   getToolSetting: (toolId: string, key: string, defaultValue: number) => number;
   setToolDescription: (toolId: string, description: string) => void;
   resetToolDescription: (toolId: string) => void;
+  setToolCustomSchema: (toolId: string, schema: unknown) => void;
+  resetToolCustomSchema: (toolId: string) => void;
   isToolAllowed: (toolId: string, stageId?: string) => boolean;
   calculateSavedTokens: (stageId?: string) => number;
   resetDefaults: () => void;
@@ -626,6 +629,7 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
   stageOverrides: DEFAULT_OVERRIDES,
   toolSettings: DEFAULT_TOOL_SETTINGS,
   toolDescriptions: {},
+  toolCustomSchemas: {},
 
   openModal: () => set({ isModalOpen: true }),
   closeModal: () => set({ isModalOpen: false }),
@@ -686,6 +690,25 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
       const next = { ...state.toolDescriptions };
       delete next[toolId];
       return { toolDescriptions: next };
+    });
+    get().saveToTauri();
+  },
+
+  setToolCustomSchema: (toolId, schema) => {
+    set((state) => ({
+      toolCustomSchemas: {
+        ...state.toolCustomSchemas,
+        [toolId]: schema,
+      },
+    }));
+    get().saveToTauri();
+  },
+
+  resetToolCustomSchema: (toolId) => {
+    set((state) => {
+      const next = { ...state.toolCustomSchemas };
+      delete next[toolId];
+      return { toolCustomSchemas: next };
     });
     get().saveToTauri();
   },
@@ -756,6 +779,7 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
       stageOverrides: { ...DEFAULT_OVERRIDES },
       toolSettings: { ...DEFAULT_TOOL_SETTINGS },
       toolDescriptions: {},
+      toolCustomSchemas: {},
     });
     get().saveToTauri();
   },
@@ -768,6 +792,7 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
         stageOverrides?: Record<string, Record<string, boolean>>;
         toolSettings?: ToolSettings;
         toolDescriptions?: Record<string, string>;
+        toolCustomSchemas?: Record<string, unknown>;
       }>('get_tool_policies');
 
       if (policies) {
@@ -785,6 +810,7 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
           stageOverrides: policies.stageOverrides || DEFAULT_OVERRIDES,
           toolSettings: mergedSettings,
           toolDescriptions: policies.toolDescriptions || {},
+          toolCustomSchemas: policies.toolCustomSchemas || {},
         });
       }
     } catch {
@@ -795,13 +821,14 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
   saveToTauri: async () => {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const { globalEnabled, stageOverrides, toolSettings, toolDescriptions } = get();
+      const { globalEnabled, stageOverrides, toolSettings, toolDescriptions, toolCustomSchemas } = get();
       await invoke('save_tool_policies', {
         policies: {
           globalEnabled,
           stageOverrides,
           toolSettings,
           toolDescriptions,
+          toolCustomSchemas,
         },
       });
     } catch {
