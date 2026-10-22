@@ -165,6 +165,30 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     category: 'agent',
     tokenWeight: 280,
   },
+  {
+    id: 'load_rule',
+    name: 'load_rule',
+    label: 'Загрузка правил',
+    description: 'Динамическая JIT-загрузка стандартов и правил проекта по выбранной теме.',
+    category: 'system',
+    tokenWeight: 180,
+  },
+  {
+    id: 'list_tasks',
+    name: 'list_tasks',
+    label: 'Реестр задач',
+    description: 'Компактный реестр последних задач с Канбан-доски для аудита и аналитики.',
+    category: 'workflow',
+    tokenWeight: 220,
+  },
+  {
+    id: 'get_task_history',
+    name: 'get_task_history',
+    label: 'История задачи',
+    description: 'Подробный пошаговый рентген выполнения задачи (ТЗ, тулы, ошибки, вердикт).',
+    category: 'workflow',
+    tokenWeight: 280,
+  },
 ];
 
 export interface ToolParamDef {
@@ -224,7 +248,7 @@ export const TOOL_PARAM_DEFS: Record<string, ToolParamDef[]> = {
     {
       key: 'max_items',
       label: 'Максимум пунктов чеклиста',
-      defaultValue: 15,
+      defaultValue: 20,
       min: 3,
       max: 50,
       step: 1,
@@ -250,7 +274,7 @@ export const DEFAULT_TOOL_SETTINGS: ToolSettings = {
   read_file: { max_lines: 2000 },
   subagent: { max_concurrent: 3 },
   subagent_bg: { max_concurrent: 3 },
-  todo_write: { min_items: 3, max_items: 15 },
+  todo_write: { min_items: 3, max_items: 20 },
   execute_command: { timeout_sec: 180 },
 };
 
@@ -293,6 +317,9 @@ const DEFAULT_GLOBAL: Record<string, boolean> = {
   question: true,
   create_task: true,
   complete_task: true,
+  load_rule: true,
+  list_tasks: true,
+  get_task_history: true,
 };
 
 const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
@@ -323,6 +350,9 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     question: true,
     create_task: false,
     complete_task: false,
+    load_rule: true,
+    list_tasks: true,
+    get_task_history: true,
   },
   dev: {
     advance_task: true,
@@ -343,6 +373,9 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     question: true,
     create_task: false,
     complete_task: false,
+    load_rule: true,
+    list_tasks: true,
+    get_task_history: true,
   },
   retro: {
     advance_task: true,
@@ -363,6 +396,9 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     question: true,
     create_task: false,
     complete_task: false,
+    load_rule: true,
+    list_tasks: true,
+    get_task_history: true,
   },
 };
 

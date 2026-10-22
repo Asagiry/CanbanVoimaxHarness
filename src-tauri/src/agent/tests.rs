@@ -81,7 +81,9 @@ use super::*;
             .await
             .expect("non-md seed");
 
-        let prompt = compile_primed_system_prompt(&base, "dev")
+        // When load_rule is not in active tools (fallback), rules are inlined alphabetically.
+        let tools_no_loadrule = vec!["read_file".to_string(), "edit_file".to_string()];
+        let prompt = compile_primed_system_prompt_with_tools(&base, "dev", Some(&tools_no_loadrule))
             .await
             .expect("prompt failed");
 
@@ -95,6 +97,82 @@ use super::*;
         assert!(prompt.contains("Scoped Tool Execution Mandate"));
 
         let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_system_prompt_jit_rules_with_load_rule() {
+        // When load_rule is present, rule bodies are decoupled and JIT modular rules banner is added.
+        let base =
+            std::path::PathBuf::from("target").join(format!("cvh_jit_rules_{}", uuid::Uuid::new_v4()));
+        let agents = base.join(".cvh").join("agents");
+        let role_dir = agents.join("dev");
+        tokio::fs::create_dir_all(role_dir.join("rules"))
+            .await
+            .expect("test dirs");
+        tokio::fs::write(role_dir.join("persona.md"), "FLAT_PERSONA_MARKER")
+            .await
+            .expect("persona seed");
+        tokio::fs::write(role_dir.join("rules").join("a_first.md"), "RULE_A_BODY_SECRET")
+            .await
+            .expect("rule a");
+        tokio::fs::write(role_dir.join("rules").join("b_second.md"), "RULE_B_BODY_SECRET")
+            .await
+            .expect("rule b");
+
+        let tools_with_loadrule = vec!["read_file".to_string(), "load_rule".to_string()];
+        let prompt = compile_primed_system_prompt_with_tools(&base, "dev", Some(&tools_with_loadrule))
+            .await
+            .expect("prompt failed");
+
+        assert!(prompt.contains("FLAT_PERSONA_MARKER"));
+        assert!(prompt.contains("# Modular Rules (JIT On-Demand)"));
+        assert!(prompt.contains("Architectural standards, domain invariants, and tech guidelines are decoupled from the prompt to optimize tokens."));
+        assert!(prompt.contains("Use the `load_rule` tool to dynamically load rules when working on specific topics or technologies."));
+        assert!(!prompt.contains("RULE_A_BODY_SECRET"), "Rule bodies must NOT be inlined when load_rule is active!");
+        assert!(!prompt.contains("RULE_B_BODY_SECRET"), "Rule bodies must NOT be inlined when load_rule is active!");
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_create_task_allowed_in_active_tools_with_policy_override() {
+        use std::collections::HashMap;
+        let mut policy = crate::config::ToolPolicyConfig::default();
+
+        // 1. When overridden to false in stage_overrides, create_task must be inactive
+        let mut dev_map = HashMap::new();
+        dev_map.insert("create_task".to_string(), false);
+        dev_map.insert("complete_task".to_string(), false);
+        dev_map.insert("read_file".to_string(), true);
+        policy.stage_overrides.insert("dev".to_string(), dev_map);
+
+        assert!(
+            !is_tool_active_for_agent("create_task", &policy, "developer", Some("dev"), None),
+            "create_task must be inactive when overridden to false"
+        );
+
+        // 2. When explicitly enabled by user in policy matrix, create_task must be active!
+        let mut dev_map_allowed = HashMap::new();
+        dev_map_allowed.insert("create_task".to_string(), true);
+        dev_map_allowed.insert("complete_task".to_string(), true);
+        dev_map_allowed.insert("read_file".to_string(), true);
+        policy.stage_overrides.insert("dev".to_string(), dev_map_allowed);
+
+        assert!(
+            is_tool_active_for_agent("create_task", &policy, "developer", Some("dev"), None),
+            "create_task must be active for developer when explicitly enabled in tool-policy!"
+        );
+        assert!(
+            is_tool_active_for_agent("complete_task", &policy, "developer", Some("dev"), None),
+            "complete_task must be active for developer when explicitly enabled in tool-policy!"
+        );
+
+        // 3. Orchestrator role is permitted
+        let orch_policy = crate::config::ToolPolicyConfig::default();
+        assert!(
+            is_tool_active_for_agent("create_task", &orch_policy, "orchestrator", Some("orchestrator"), None),
+            "orchestrator must be able to create tasks"
+        );
     }
 
     #[tokio::test]

@@ -259,6 +259,81 @@ pub async fn compile_primed_system_prompt(
     compile_primed_system_prompt_with_tools(repo_root, role, None).await
 }
 
+/// Determines if a tool is active/permitted for an agent, honoring the Two-Level Tool Policy (§ 2.5)
+/// and resolving task card operations (create_task / complete_task) based on explicit overrides.
+pub fn is_tool_active_for_agent(
+    name: &str,
+    tool_policy: &crate::config::ToolPolicyConfig,
+    role: &str,
+    stage_id: Option<&str>,
+    agent_allowed_tools: Option<&[String]>,
+) -> bool {
+    let effective_stage = stage_id.unwrap_or(role);
+    let is_orch = role.to_lowercase().contains("orchestrat")
+        || role.to_lowercase().contains("оркестрат")
+        || effective_stage.to_lowercase().contains("orchestrat")
+        || effective_stage.to_lowercase().contains("оркестрат")
+        || effective_stage == "backlog"
+        || role == "copilot";
+
+    let is_card_op = name == "create_task" || name == "create_tasks" || name == "complete_task";
+    if is_card_op && !is_orch {
+        let stage_override = tool_policy
+            .stage_overrides
+            .get(effective_stage)
+            .and_then(|m| m.get(name).or_else(|| m.get(crate::config::normalize_tool_name(name))))
+            .copied();
+
+        let role_override = tool_policy
+            .stage_overrides
+            .get(role)
+            .and_then(|m| m.get(name).or_else(|| m.get(crate::config::normalize_tool_name(name))))
+            .copied();
+
+        let alt_override = if stage_override.is_none() && role_override.is_none() {
+            let alt = match role {
+                "developer" => Some("dev"),
+                "dev" => Some("developer"),
+                "reviewer" => Some("review"),
+                "review" => Some("reviewer"),
+                _ => None,
+            };
+            alt.and_then(|a| {
+                tool_policy
+                    .stage_overrides
+                    .get(a)
+                    .and_then(|m| m.get(name).or_else(|| m.get(crate::config::normalize_tool_name(name))))
+                    .copied()
+            })
+        } else {
+            None
+        };
+
+        let explicit_override = stage_override.or(role_override).or(alt_override);
+        match explicit_override {
+            Some(true) => {
+                // Explicitly allowed in tool policy! Proceed to standard is_tool_allowed checks.
+            }
+            Some(false) | None => {
+                return false;
+            }
+        }
+    }
+
+    if !is_tool_allowed(tool_policy, Some(effective_stage), name) {
+        return false;
+    }
+    if tool_policy.stage_overrides.contains_key(role)
+        && !is_tool_allowed(tool_policy, Some(role), name)
+    {
+        return false;
+    }
+    if !agent_allows_tool(agent_allowed_tools, name) {
+        return false;
+    }
+    true
+}
+
 pub async fn compile_primed_system_prompt_with_tools(
     repo_root: &Path,
     role: &str,
@@ -272,26 +347,16 @@ pub async fn compile_primed_system_prompt_with_tools(
     } else {
         let tool_policy = load_tool_policies(repo_root).await.unwrap_or_default();
         let agent_setting = load_agent_setting(repo_root, role).await;
-        let is_orch = role.to_lowercase().contains("orchestrat")
-            || role.to_lowercase().contains("оркестрат")
-            || role == "copilot";
         crate::config::CANONICAL_TOOLS
             .iter()
             .filter(|&&name| {
-                if (name == "create_task" || name == "create_tasks" || name == "complete_task") && !is_orch {
-                    return false;
-                }
-                if tool_policy.stage_overrides.contains_key(role) {
-                    if !is_tool_allowed(&tool_policy, Some(role), name) {
-                        return false;
-                    }
-                } else if !is_tool_allowed(&tool_policy, None, name) {
-                    return false;
-                }
-                if !agent_allows_tool(agent_setting.allowed_tools.as_deref(), name) {
-                    return false;
-                }
-                true
+                is_tool_active_for_agent(
+                    name,
+                    &tool_policy,
+                    role,
+                    None,
+                    agent_setting.allowed_tools.as_deref(),
+                )
             })
             .map(|&s| s.to_string())
             .collect()
@@ -325,26 +390,34 @@ pub async fn compile_primed_system_prompt_with_tools(
     }
 
     // 1b. Per-agent rules: `.cvh/agents/<role>/rules/*.md`, alphabetical.
-    let rules_dir = crate::config::agent_rules_dir(repo_root, role);
-    if rules_dir.is_dir() {
-        if let Ok(mut entries) = tokio::fs::read_dir(&rules_dir).await {
-            let mut rules: Vec<(String, String)> = Vec::new();
-            while let Ok(Some(entry)) = entries.next_entry().await {
-                let path = entry.path();
-                if !path.is_file() {
-                    continue;
+    // Modular Rules (JIT On-Demand): If `load_rule` is active, decouple rule bodies from prompt to optimize tokens.
+    let has_load_rule = resolved_tools.iter().any(|t| t == "load_rule");
+    if has_load_rule {
+        sections.push(
+            "# Modular Rules (JIT On-Demand)\nArchitectural standards, domain invariants, and tech guidelines are decoupled from the prompt to optimize tokens.\nUse the `load_rule` tool to dynamically load rules when working on specific topics or technologies.".to_string(),
+        );
+    } else {
+        let rules_dir = crate::config::agent_rules_dir(repo_root, role);
+        if rules_dir.is_dir() {
+            if let Ok(mut entries) = tokio::fs::read_dir(&rules_dir).await {
+                let mut rules: Vec<(String, String)> = Vec::new();
+                while let Ok(Some(entry)) = entries.next_entry().await {
+                    let path = entry.path();
+                    if !path.is_file() {
+                        continue;
+                    }
+                    if path.extension().and_then(|e| e.to_str()) != Some("md") {
+                        continue;
+                    }
+                    let fname = entry.file_name().to_string_lossy().to_string();
+                    if let Ok(content) = tokio::fs::read_to_string(&path).await {
+                        rules.push((fname, content));
+                    }
                 }
-                if path.extension().and_then(|e| e.to_str()) != Some("md") {
-                    continue;
+                rules.sort_by(|a, b| a.0.cmp(&b.0));
+                for (fname, content) in rules {
+                    sections.push(format!("## Rule: {}\n\n{}", fname, content.trim()));
                 }
-                let fname = entry.file_name().to_string_lossy().to_string();
-                if let Ok(content) = tokio::fs::read_to_string(&path).await {
-                    rules.push((fname, content));
-                }
-            }
-            rules.sort_by(|a, b| a.0.cmp(&b.0));
-            for (fname, content) in rules {
-                sections.push(format!("## Rule: {}\n\n{}", fname, content.trim()));
             }
         }
     }
@@ -552,12 +625,13 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "todo_write",
-            "Record and update task plan list to show progress. Add todos with status pending | in_progress | completed.",
+            "Record and update task plan list to show progress (max 20 items). Add todos with status pending | in_progress | completed.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
                     "todos": {
                         "type": "array",
+                        "maxItems": 20,
                         "items": {
                             "type": "object",
                             "properties": {
@@ -1887,17 +1961,17 @@ pub async fn execute_tool(
     }
 
     // § 2.8 Invariant: task card manipulation tools ("create_task", "complete_task")
-    // are reserved for UI/orchestrators (developers/reviewers/cvh-dev cannot create or complete tasks bypassing the board).
+    // are reserved for UI/orchestrators unless explicitly allowed by tool-policy.json (§ 2.5).
     if normalized_tool_name == "create_task" || normalized_tool_name == "create_tasks" {
         let role = ctx.role.unwrap_or("");
-        let stage = ctx.stage_id.unwrap_or("");
-        let is_orchestrator = role.to_lowercase().contains("orchestrat")
-            || role.to_lowercase().contains("оркестрат")
-            || stage.to_lowercase().contains("orchestrat")
-            || stage.to_lowercase().contains("оркестрат")
-            || stage == "backlog"
-            || role == "copilot";
-        if !is_orchestrator {
+        let is_allowed = is_tool_active_for_agent(
+            normalized_tool_name,
+            tool_policy,
+            role,
+            ctx.stage_id,
+            agent_allowed_tools,
+        );
+        if !is_allowed {
             bail!(
                 "PermissionDenied: Агент '{}' не может использовать '{}': создание карточек задач зарезервировано для оркестраторов (§ 2.8)",
                 role,
@@ -1906,12 +1980,19 @@ pub async fn execute_tool(
         }
     }
     if normalized_tool_name == "complete_task" {
-        if let Some(role) = ctx.role {
-            if role == "cvh-dev" {
-                bail!(
-                    "PermissionDenied: Агент 'cvh-dev' не может завершать задачи (§ 2.8). Завершение карточек зарезервировано для оркестратора и пользователя."
-                );
-            }
+        let role = ctx.role.unwrap_or("");
+        let is_allowed = is_tool_active_for_agent(
+            normalized_tool_name,
+            tool_policy,
+            role,
+            ctx.stage_id,
+            agent_allowed_tools,
+        );
+        if !is_allowed {
+            bail!(
+                "PermissionDenied: Агент '{}' не может завершать задачи (§ 2.8). Завершение карточек зарезервировано для оркестратора и пользователя.",
+                role
+            );
         }
     }
 
@@ -2475,6 +2556,8 @@ pub async fn execute_tool(
                 .and_then(|v| v.as_array())
                 .context("Missing required parameter 'todos' (must be array)")?;
 
+            let total_raw = raw_todos.len();
+
             let _min_items = ctx
                 .tool_policy
                 .tool_settings
@@ -2489,7 +2572,7 @@ pub async fn execute_tool(
                 .get("todo_write")
                 .and_then(|v| v.get("max_items"))
                 .and_then(|v| v.as_u64())
-                .unwrap_or(15) as usize;
+                .unwrap_or(20) as usize;
 
             let mut parsed_todos: Vec<TodoItem> = Vec::new();
             let mut completed_cnt = 0;
@@ -2579,10 +2662,18 @@ pub async fn execute_tool(
                 }
             }
 
-            format!(
-                "Updated todo list: {} completed, {} in progress, {} pending.",
-                completed_cnt, in_progress_cnt, pending_cnt
-            )
+            if total_raw > max_items {
+                let truncated_count = total_raw - max_items;
+                format!(
+                    "Updated todo list: {} completed, {} in progress, {} pending. (Note: {} items were truncated to stay within the max limit of {}).",
+                    completed_cnt, in_progress_cnt, pending_cnt, truncated_count, max_items
+                )
+            } else {
+                format!(
+                    "Updated todo list: {} completed, {} in progress, {} pending.",
+                    completed_cnt, in_progress_cnt, pending_cnt
+                )
+            }
         }
 
         "advance_task" | "move_task" => {
@@ -5242,32 +5333,17 @@ where
     let agent_allowed = agent_setting.allowed_tools.clone();
 
     let all_tools = get_all_tools_for_role(&config.repo_root, Some(&config.role)).await;
-    let is_orch = config.role.to_lowercase().contains("orchestrat")
-        || config.role.to_lowercase().contains("оркестрат")
-        || config.stage_id.to_lowercase().contains("orchestrat")
-        || config.stage_id.to_lowercase().contains("оркестрат")
-        || config.stage_id == "backlog"
-        || config.role == "copilot";
 
     let mut active_tools: Vec<ToolDefinition> = all_tools
         .into_iter()
         .filter(|t| {
-            let name = &t.function.name;
-            if (name == "create_task" || name == "create_tasks" || name == "complete_task") && !is_orch {
-                return false;
-            }
-            if !is_tool_allowed(&tool_policy, Some(&config.stage_id), name) {
-                return false;
-            }
-            if tool_policy.stage_overrides.contains_key(&config.role)
-                && !is_tool_allowed(&tool_policy, Some(&config.role), name)
-            {
-                return false;
-            }
-            if !agent_allows_tool(agent_allowed.as_deref(), name) {
-                return false;
-            }
-            true
+            is_tool_active_for_agent(
+                &t.function.name,
+                &tool_policy,
+                &config.role,
+                Some(&config.stage_id),
+                agent_allowed.as_deref(),
+            )
         })
         .collect();
 

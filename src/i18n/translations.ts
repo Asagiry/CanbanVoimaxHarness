@@ -341,6 +341,12 @@ export const translations = {
     'tools.collect_subagent.description': 'Await completion and collect background subagent reports by subagent_id without polling.',
     'tools.todo_write.label': 'Execution Plan',
     'tools.todo_write.description': 'Record and update task action plan: pending | in_progress | completed steps.',
+    'tools.load_rule.label': 'Load Rule',
+    'tools.load_rule.description': 'Dynamic JIT loading of project standards and rules by selected topic.',
+    'tools.list_tasks.label': 'Task Registry',
+    'tools.list_tasks.description': 'Compact registry of recent Kanban board tasks for audit and analytics.',
+    'tools.get_task_history.label': 'Task History',
+    'tools.get_task_history.description': 'Detailed step-by-step X-ray of task execution (requirements, tools, errors, verdict).',
 
     // Tool Parameters
     'toolParam.max_lines.label': 'Read line limit per call',
@@ -823,6 +829,12 @@ export const translations = {
     'tools.collect_subagent.description': 'Ожидание завершения и получение отчетов фоновых субагентов по subagent_id без поллинга.',
     'tools.todo_write.label': 'План выполнения',
     'tools.todo_write.description': 'Фиксация и обновление плана задачи: шаги pending | in_progress | completed',
+    'tools.load_rule.label': 'Загрузка правил',
+    'tools.load_rule.description': 'Динамическая JIT-загрузка стандартов и правил проекта по выбранной теме.',
+    'tools.list_tasks.label': 'Реестр задач',
+    'tools.list_tasks.description': 'Компактный реестр последних задач с Канбан-доски для аудита и аналитики.',
+    'tools.get_task_history.label': 'История задачи',
+    'tools.get_task_history.description': 'Подробный пошаговый рентген выполнения задачи (ТЗ, тулы, ошибки, вердикт).',
 
     // Tool Parameters
     'toolParam.max_lines.label': 'Лимит чтения строк за раз',
