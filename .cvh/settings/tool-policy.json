@@ -16,7 +16,10 @@
     "reject_task": true,
     "question": true,
     "create_task": true,
-    "complete_task": true
+    "complete_task": true,
+    "list_tasks": true,
+    "get_task_history": true,
+    "load_rule": true
   },
   "stageOverrides": {
     "backlog": {
@@ -43,7 +46,10 @@
       "reject_task": true,
       "question": true,
       "create_task": false,
-      "complete_task": false
+      "complete_task": false,
+      "list_tasks": true,
+      "get_task_history": true,
+      "load_rule": true
     },
     "review": {
       "read_file": true,
@@ -61,7 +67,10 @@
       "reject_task": true,
       "question": true,
       "create_task": false,
-      "complete_task": false
+      "complete_task": false,
+      "list_tasks": true,
+      "get_task_history": true,
+      "load_rule": true
     },
     "retro": {
       "read_file": true,
@@ -78,7 +87,10 @@
       "reject_task": true,
       "question": true,
       "create_task": false,
-      "complete_task": false
+      "complete_task": false,
+      "list_tasks": true,
+      "get_task_history": true,
+      "load_rule": true
     }
   }
 }
