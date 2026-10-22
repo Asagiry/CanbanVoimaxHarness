@@ -1,14 +1,24 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { ToolExecution } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
-import { getRoleBadgeStyle } from '../../lib/agentPalette';
-import { formatSubagentDisplayTitle, formatSubagentRoleDisplay, getSubagentOrderMap } from './SubagentsSidebar';
+import { useTranslation } from '../../stores/languageStore';
+import { getRoleBadgeStyle, getDeterministicAgentIcon } from '../../lib/agentPalette';
+import AgentIcon from '../common/AgentIcon';
+import {
+  formatSubagentDisplayTitle,
+  formatSubagentRoleDisplay,
+  getSubagentOrderMap,
+  formatDuration,
+  formatSteps,
+} from './SubagentsSidebar';
 import { formatDurationCompact } from './ThinkingCard';
 import { FileExtensionBadge, getLanguageBadgeConfig } from '../common/BrandFileIcons';
 import {
   ChevronRight,
+  ChevronDown,
+  Clock,
   Copy,
   Check,
   X,
@@ -34,6 +44,7 @@ function CompactContextExecutionCard({ tool }: { tool: ToolExecution }) {
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeStep, setActiveStep] = useState(1);
   const [progressPct, setProgressPct] = useState(25);
+  const { t } = useTranslation();
 
   const isRunning = tool.status === 'running';
   const isSuccess = tool.status === 'success';
@@ -201,17 +212,17 @@ function CompactContextExecutionCard({ tool }: { tool: ToolExecution }) {
           {isRunning ? (
             <div className="flex items-center space-x-1.5">
               <span className="inline-flex rounded-full h-2 w-2 bg-indigo-500 animate-pulse shrink-0" />
-              <span className="text-[11px] font-mono text-indigo-600 dark:text-indigo-400">В процессе</span>
+              <span className="text-[11px] font-mono text-indigo-600 dark:text-indigo-400">{t('tools.status.running')}</span>
             </div>
           ) : isSuccess ? (
             <div className="flex items-center space-x-1.5">
               <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 stroke-[2.5]" />
-              <span className="text-[11px] font-mono font-medium text-emerald-600 dark:text-emerald-400">Готово</span>
+              <span className="text-[11px] font-mono font-medium text-emerald-600 dark:text-emerald-400">{t('tools.status.done')}</span>
             </div>
           ) : (
             <div className="flex items-center space-x-1.5">
               <X className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400 stroke-[2.5]" />
-              <span className="text-[11px] font-mono font-medium text-rose-600 dark:text-rose-400">Ошибка</span>
+              <span className="text-[11px] font-mono font-medium text-rose-600 dark:text-rose-400">{t('tools.status.error')}</span>
             </div>
           )}
         </div>
@@ -318,10 +329,388 @@ function CompactContextExecutionCard({ tool }: { tool: ToolExecution }) {
   );
 }
 
+function CollectSubagentExecutionCard({ tool }: { tool: ToolExecution }) {
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [now, setNow] = useState(() => Date.now());
+  const { t, language } = useTranslation();
+
+  const activeTaskId = useDrawerStore((s) => s.activeTaskId);
+  const storeSubagents = useDrawerStore((s) => s.subagents);
+  const activityFeed = useDrawerStore((s) => s.activityFeed);
+  const toolExecutions = useDrawerStore((s) => s.toolExecutions);
+  const toolIdToSubagentId = useDrawerStore((s) => s.toolIdToSubagentId);
+  const openSubagent = useDrawerStore((s) => s.openSubagent);
+  const boardTasks = useBoardStore((s) => s.tasks);
+  const columns = useBoardStore((s) => s.columns);
+  const agentPersonas = useCortexStore((s) => s.agentPersonas);
+
+  const params: Record<string, unknown> =
+    tool.params && typeof tool.params === 'object'
+      ? (tool.params as Record<string, unknown>)
+      : {};
+
+  const rawIds: string[] = [];
+  const extractIds = (val: unknown) => {
+    if (!val) return;
+    if (Array.isArray(val)) {
+      for (const item of val) {
+        if (typeof item === 'string' && item.trim()) rawIds.push(item.trim());
+      }
+    } else if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (!trimmed) return;
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            for (const item of parsed) {
+              if (typeof item === 'string' && item.trim()) rawIds.push(item.trim());
+            }
+            return;
+          }
+        } catch {}
+      }
+      trimmed.split(',').forEach((s) => {
+        const part = s.trim();
+        if (part) rawIds.push(part);
+      });
+    }
+  };
+
+  extractIds(params?.subagent_ids);
+  extractIds(params?.subagent_id);
+  extractIds(params?.ids);
+
+  const uniqueIds = Array.from(new Set(rawIds));
+
+  const orderMap = useMemo(() => {
+    return activeTaskId
+      ? getSubagentOrderMap(activeTaskId, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks, columns)
+      : new Map<string, number>();
+  }, [activeTaskId, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks, columns]);
+
+  const awaitedSubagents = useMemo(() => {
+    const list = (activeTaskId ? storeSubagents[activeTaskId] : null) || [];
+    const allTools = (activeTaskId ? toolExecutions[activeTaskId] : null) || [];
+
+    // If no uniqueIds specified, show all known subagents for the task
+    const targetIds = uniqueIds.length > 0 ? uniqueIds : list.map((s) => s.id);
+
+    return targetIds.map((id, idx) => {
+      // 1. Check in storeSubagents
+      const storeSub = list.find((s) => s.id === id || s.toolCallId === id || toolIdToSubagentId[id] === s.id);
+
+      // 2. Check in board subtasks
+      const boardSub = boardTasks.find((b) => b.id === id || (b.parentId === activeTaskId && b.id.endsWith(id)));
+
+      // 3. Check in tool executions (tool that spawned this subagent)
+      const spawnTool = allTools.find((t) => {
+        const p = (t.params || {}) as Record<string, unknown>;
+        return (
+          t.id === id ||
+          p.subagent_id === id ||
+          toolIdToSubagentId[t.id] === id
+        );
+      });
+
+      const resolvedId = storeSub?.id || boardSub?.id || (toolIdToSubagentId[id] || id);
+
+      // Resolve number
+      let num = orderMap.get(resolvedId) ?? orderMap.get(id);
+      if (num === undefined && storeSub?.toolCallId) {
+        num = orderMap.get(storeSub.toolCallId);
+      }
+      if (num === undefined) {
+        const match = id.match(/(?:call_|subagent_|sub-|_|#)(\d+)$/i);
+        if (match) num = parseInt(match[1], 10);
+      }
+      if (num === undefined || isNaN(num)) num = idx + 1;
+
+      // Role
+      const role = storeSub?.role || boardSub?.persona || (spawnTool?.params as any)?.role || 'general';
+
+      // Title
+      const rawTitle = storeSub?.title || boardSub?.title || (spawnTool?.params as any)?.title || (spawnTool?.params as any)?.prompt;
+      const displayTitle = formatSubagentDisplayTitle(rawTitle, language);
+
+      // Status
+      let status: 'running' | 'finished' | 'stopped' | 'error' = 'running';
+      if (storeSub?.status) {
+        status = storeSub.status as any;
+      } else if (boardSub?.status) {
+        status = boardSub.status === 'done' ? 'finished' : boardSub.status === 'running' ? 'running' : 'finished';
+      } else if (tool.status === 'success') {
+        status = 'finished';
+      } else if (spawnTool) {
+        status = spawnTool.status === 'running' ? 'running' : spawnTool.status === 'success' ? 'finished' : 'running';
+      }
+
+      // Duration & Start Time
+      const durationMs = storeSub?.durationMs ?? spawnTool?.durationMs;
+      let startTime: number | undefined = storeSub?.createdAt;
+      if (!startTime && spawnTool?.timestamp) {
+        const parsed = Date.parse(spawnTool.timestamp);
+        if (!isNaN(parsed)) startTime = parsed;
+      }
+
+      // Steps count
+      const feed = (activityFeed[resolvedId] || activityFeed[id] || (storeSub?.toolCallId ? activityFeed[storeSub.toolCallId] : [])) || [];
+      const stepsCount = Math.max(storeSub?.stepsCount || 0, feed.length);
+
+      const isBg = Boolean(storeSub?.isBg || (spawnTool && spawnTool.toolName === 'subagent_bg'));
+      const isBoardSubtask = Boolean(boardSub);
+
+      return {
+        id: resolvedId,
+        rawId: id,
+        number: num,
+        role,
+        title: displayTitle,
+        status,
+        durationMs,
+        startTime,
+        stepsCount,
+        isBg,
+        isBoardSubtask,
+      };
+    });
+  }, [uniqueIds, activeTaskId, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks, orderMap, language, tool.status, activityFeed]);
+
+  const hasRunning = awaitedSubagents.some((s) => s.status === 'running');
+  useEffect(() => {
+    if (!hasRunning) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [hasRunning]);
+
+  const isRunning = tool.status === 'running';
+  const isSuccess = tool.status === 'success';
+
+  return (
+    <div className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] p-3 shadow-xs my-2 select-none transition-all duration-150">
+      {/* Header: Clickable to toggle expand/collapse */}
+      <div
+        onClick={() => setIsExpanded((prev) => !prev)}
+        className="flex items-center justify-between gap-2.5 cursor-pointer"
+      >
+        <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
+          <FolderDown className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0 select-none" />
+
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase border border-sky-200 dark:border-sky-800/60 bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 shrink-0">
+            {t('tools.collect.badge')}
+          </span>
+
+          <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] shrink-0">
+            collect_subagent
+          </span>
+
+          {/* Target subagents rendered as separate purple badges */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {uniqueIds.length > 0 ? (
+              uniqueIds.map((id, idx) => {
+                let num = orderMap.get(id) ?? orderMap.get(toolIdToSubagentId[id]);
+                if (num === undefined && activeTaskId) {
+                  const found = storeSubagents[activeTaskId]?.find((s) => s.id === id || s.toolCallId === id);
+                  if (found) num = orderMap.get(found.id) ?? (found.toolCallId ? orderMap.get(found.toolCallId) : undefined);
+                }
+                if (num === undefined) {
+                  const match = id.match(/(?:call_|subagent_|sub-|_|#)(\d+)$/i);
+                  if (match) num = parseInt(match[1], 10);
+                }
+                if (num === undefined || isNaN(num)) num = idx + 1;
+
+                return (
+                  <span
+                    key={id}
+                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase border border-purple-200 dark:border-purple-800/60 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 shrink-0"
+                  >
+                    {t('subagents.subagentWithNum', { index: num })}
+                  </span>
+                );
+              })
+            ) : (
+              <span className="font-mono text-[11px] text-[#71717a] dark:text-[#8b949e] px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] truncate">
+                {t('tools.collect.all')}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Right side status and Chevron toggle */}
+        <div className="flex items-center space-x-2 shrink-0">
+          {isRunning ? (
+            <div className="flex items-center space-x-1.5">
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              </span>
+              <span className="text-[11px] font-mono text-[#15803d] dark:text-[#7ee787]">
+                {t('tools.collect.waiting')}
+              </span>
+            </div>
+          ) : isSuccess ? (
+            <div className="flex items-center space-x-1.5">
+              <Check className="h-3.5 w-3.5 text-[#15803d] dark:text-[#7ee787] stroke-[2.5]" />
+              <span className="text-[11px] font-mono font-medium text-[#15803d] dark:text-[#7ee787]">
+                {t('tools.collect.received')}
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center space-x-1.5">
+              <X className="h-3.5 w-3.5 text-[#dc2626] dark:text-[#ff7b72] stroke-[2.5]" />
+              <span className="text-[11px] font-mono font-medium text-[#dc2626] dark:text-[#ff7b72]">
+                {t('tools.collect.error')}
+              </span>
+            </div>
+          )}
+
+          <div className="p-0.5 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] transition">
+            <ChevronDown
+              className={`h-4 w-4 transition-transform duration-200 ${
+                isExpanded ? 'rotate-180' : ''
+              }`}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Expanded Subagent Cards List & stdout */}
+      {isExpanded && (
+        <div className="mt-2.5 pt-2 border-t border-[#f4f4f5] dark:border-[#21262d] space-y-1.5">
+          {awaitedSubagents.length > 0 ? (
+            awaitedSubagents.map((sub) => {
+              const persona = agentPersonas.find(
+                (p) => p.role.toLowerCase() === (sub.role || '').toLowerCase()
+              );
+              const roleBadgeStyle = getRoleBadgeStyle(sub.role, persona?.color);
+              const personaIcon = persona?.icon || getDeterministicAgentIcon(sub.role);
+              const durationStr =
+                sub.status === 'running'
+                  ? sub.startTime
+                    ? formatDuration(Math.max(0, now - sub.startTime), true)
+                    : formatDuration(sub.durationMs, true)
+                  : formatDuration(sub.durationMs, false);
+
+              const subStatus = sub.status as string;
+              const subIsRunning = subStatus === 'running';
+              const subIsSuccess = subStatus === 'finished' || subStatus === 'done' || subStatus === 'success';
+              const subIsAborted = subStatus === 'stopped' || subStatus === 'aborted' || subStatus === 'paused';
+
+              return (
+                <div
+                  key={sub.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openSubagent(sub.id, sub.title, sub.role, '');
+                  }}
+                  className="group flex items-center justify-between gap-2.5 px-3 py-2 rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#21262d] hover:border-[#171717]/40 dark:hover:border-[#30363d] cursor-pointer transition-colors text-xs"
+                >
+                  {/* Left: Purple badge + Role icon & badge + Title */}
+                  <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase border border-purple-200 dark:border-purple-800/60 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 shrink-0">
+                      {t('subagents.subagentWithNum', { index: sub.number })}
+                    </span>
+
+                    {sub.isBg ? (
+                      <div className="relative shrink-0 flex items-center justify-center">
+                        <Layers className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+                        <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-purple-500 ring-1 ring-white dark:ring-[#0d1117]" />
+                      </div>
+                    ) : sub.isBoardSubtask ? (
+                      <AgentIcon name={personaIcon} className="h-3.5 w-3.5 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
+                    ) : (
+                      <div className="relative shrink-0 flex items-center justify-center">
+                        <Zap className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 fill-sky-500/20" />
+                        <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-sky-500 ring-1 ring-white dark:ring-[#0d1117]" />
+                      </div>
+                    )}
+
+                    <span
+                      style={roleBadgeStyle}
+                      className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase border shrink-0 select-none"
+                    >
+                      {formatSubagentRoleDisplay(sub.role, sub.number, sub.isBoardSubtask, language)}
+                    </span>
+
+                    <span className="font-sans font-medium text-[11px] text-[#171717] dark:text-[#f0f6fc] group-hover:text-[#000000] dark:group-hover:text-white transition-colors truncate">
+                      {sub.title}
+                    </span>
+                  </div>
+
+                  {/* Right: Duration + Steps + Live status + Chevron */}
+                  <div className="flex items-center space-x-2 shrink-0">
+                    {durationStr && durationStr !== '—' && (
+                      <div className="flex items-center space-x-1 font-mono text-[10px] text-[#71717a] dark:text-[#8b949e]">
+                        <Clock className="h-3 w-3 shrink-0" />
+                        <span className="tabular-nums">{durationStr}</span>
+                      </div>
+                    )}
+
+                    <span className="font-mono text-[10px] text-[#71717a] dark:text-[#8b949e] px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] shrink-0 tabular-nums">
+                      {formatSteps(sub.stepsCount, language)}
+                    </span>
+
+                    {subIsRunning ? (
+                      <div className="flex items-center space-x-1">
+                        <span className="relative flex h-1.5 w-1.5 shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+                        </span>
+                        <span className="text-[10px] font-mono text-[#15803d] dark:text-[#7ee787]">
+                          {t('tools.status.running')}
+                        </span>
+                      </div>
+                    ) : subIsSuccess ? (
+                      <div className="flex items-center space-x-1">
+                        <Check className="h-3 w-3 text-[#15803d] dark:text-[#7ee787] stroke-[2.5]" />
+                        <span className="text-[10px] font-mono font-medium text-[#15803d] dark:text-[#7ee787]">
+                          {t('tools.status.done')}
+                        </span>
+                      </div>
+                    ) : subIsAborted ? (
+                      <div className="flex items-center space-x-1">
+                        <X className="h-3 w-3 text-[#d97706] dark:text-[#f59e0b] stroke-[2.5]" />
+                        <span className="text-[10px] font-mono font-medium text-[#d97706] dark:text-[#f59e0b]">
+                          {t('tools.status.aborted')}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-1">
+                        <X className="h-3 w-3 text-[#dc2626] dark:text-[#ff7b72] stroke-[2.5]" />
+                        <span className="text-[10px] font-mono font-medium text-[#dc2626] dark:text-[#ff7b72]">
+                          {t('tools.status.error')}
+                        </span>
+                      </div>
+                    )}
+
+                    <ChevronRight className="h-3.5 w-3.5 text-[#8f8f8f] group-hover:text-[#171717] dark:group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="py-2 text-center text-xs text-[#8f8f8f] dark:text-[#8b949e] font-mono">
+              {t('tools.subagent_list.notFound')}
+            </div>
+          )}
+
+          {/* Report excerpt if available */}
+          {tool.stdout && (
+            <div className="mt-2 pt-2 border-t border-[#f4f4f5] dark:border-[#21262d] text-[11px] font-mono text-[#52525b] dark:text-[#8b949e] line-clamp-3 leading-relaxed">
+              {tool.stdout}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { t, language } = useTranslation();
   const openSubagent = useDrawerStore((s) => s.openSubagent);
   const agentPersonas = useCortexStore((s) => s.agentPersonas);
   const activeTaskId = useDrawerStore((s) => s.activeTaskId);
@@ -349,7 +738,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   // Subagent interactive card (subagent and subagent_bg)
   if (toolName === 'subagent' || toolName === 'subagent_bg') {
     const rawRole = (params?.role as string) || 'general';
-    const title = (params?.title as string) || (params?.prompt as string)?.slice(0, 60) || 'Делегированная задача субагента';
+    const title = (params?.title as string) || (params?.prompt as string)?.slice(0, 60) || t('subagents.delegatedTask');
     const prompt = (params?.prompt as string) || '';
     const isBg = toolName === 'subagent_bg' || (params?.is_bg === true) || (params?.isBg === true);
 
@@ -493,22 +882,22 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                 </span>
-                <span className="text-[11px] font-mono text-[#15803d] dark:text-[#7ee787]">Выполняется</span>
+                <span className="text-[11px] font-mono text-[#15803d] dark:text-[#7ee787]">{t('tools.status.running')}</span>
               </div>
             ) : isSuccess ? (
               <div className="flex items-center space-x-1.5">
                 <Check className="h-3.5 w-3.5 text-[#15803d] dark:text-[#7ee787] stroke-[2.5]" />
-                <span className="text-[11px] font-mono font-medium text-[#15803d] dark:text-[#7ee787]">Готово</span>
+                <span className="text-[11px] font-mono font-medium text-[#15803d] dark:text-[#7ee787]">{t('tools.status.done')}</span>
               </div>
             ) : isAborted ? (
               <div className="flex items-center space-x-1.5">
                 <X className="h-3.5 w-3.5 text-[#d97706] dark:text-[#f59e0b] stroke-[2.5]" />
-                <span className="text-[11px] font-mono font-medium text-[#d97706] dark:text-[#f59e0b]">Прервано</span>
+                <span className="text-[11px] font-mono font-medium text-[#d97706] dark:text-[#f59e0b]">{t('tools.status.aborted')}</span>
               </div>
             ) : (
               <div className="flex items-center space-x-1.5">
                 <X className="h-3.5 w-3.5 text-[#dc2626] dark:text-[#ff7b72] stroke-[2.5]" />
-                <span className="text-[11px] font-mono font-medium text-[#dc2626] dark:text-[#ff7b72]">Ошибка</span>
+                <span className="text-[11px] font-mono font-medium text-[#dc2626] dark:text-[#ff7b72]">{t('tools.status.error')}</span>
               </div>
             )}
 
@@ -534,142 +923,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
   // Collect subagent interactive card
   if (toolName === 'collect_subagent') {
-    const rawIds: string[] = [];
-    const extractIds = (val: unknown) => {
-      if (!val) return;
-      if (Array.isArray(val)) {
-        for (const item of val) {
-          if (typeof item === 'string' && item.trim()) rawIds.push(item.trim());
-        }
-      } else if (typeof val === 'string') {
-        const trimmed = val.trim();
-        if (!trimmed) return;
-        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-          try {
-            const parsed = JSON.parse(trimmed);
-            if (Array.isArray(parsed)) {
-              for (const item of parsed) {
-                if (typeof item === 'string' && item.trim()) rawIds.push(item.trim());
-              }
-              return;
-            }
-          } catch {}
-        }
-        trimmed.split(',').forEach((s) => {
-          const part = s.trim();
-          if (part) rawIds.push(part);
-        });
-      }
-    };
-
-    extractIds(params?.subagent_ids);
-    extractIds(params?.subagent_id);
-    extractIds(params?.ids);
-
-    const uniqueIds = Array.from(new Set(rawIds));
-
-    const orderMap = activeTaskId
-      ? getSubagentOrderMap(activeTaskId, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks)
-      : new Map<string, number>();
-
-    const formatIdLabel = (id: string, index: number): string => {
-      let num: number | undefined = orderMap.get(id);
-      if (num === undefined && toolIdToSubagentId[id]) {
-        num = orderMap.get(toolIdToSubagentId[id]);
-      }
-      if (num === undefined && activeTaskId) {
-        const list = storeSubagents[activeTaskId] || [];
-        const found = list.find((s) => s.id === id || s.toolCallId === id);
-        if (found) {
-          num = orderMap.get(found.id) ?? (found.toolCallId ? orderMap.get(found.toolCallId) : undefined);
-        }
-      }
-      if (num === undefined) {
-        const match = id.match(/(?:call_|subagent_|sub-|_|#)(\d+)$/i);
-        if (match) {
-          num = parseInt(match[1], 10);
-        }
-      }
-      if (num === undefined || isNaN(num)) {
-        num = index + 1;
-      }
-      return `субагент #${num}`;
-    };
-
-    const displayBadgeText =
-      uniqueIds.length > 0
-        ? uniqueIds.map((id, idx) => formatIdLabel(id, idx)).join(', ')
-        : 'все субагенты';
-
-    const isRunning = tool.status === 'running';
-    const isSuccess = tool.status === 'success';
-    const firstSubagentId = uniqueIds[0];
-
-    return (
-      <div
-        onClick={() => {
-          if (uniqueIds.length === 1 && firstSubagentId) {
-            openSubagent(firstSubagentId, formatIdLabel(firstSubagentId, 0), 'general', '');
-          }
-        }}
-        className={`group rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] hover:bg-[#f9f9f9] dark:hover:bg-[#1c2128] p-3 shadow-xs transition-all duration-150 select-none my-2 ${
-          uniqueIds.length === 1
-            ? 'cursor-pointer hover:border-[#171717]/40 dark:hover:border-[#30363d]'
-            : 'cursor-default'
-        }`}
-      >
-        <div className="flex items-center justify-between gap-2.5">
-          <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
-            <FolderDown className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0 select-none" />
-
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase border border-sky-200 dark:border-sky-800/60 bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 shrink-0">
-              СБОР
-            </span>
-
-            <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] shrink-0">
-              collect_subagent
-            </span>
-
-            <span className="font-mono text-[11px] text-[#71717a] dark:text-[#8b949e] px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] truncate">
-              {displayBadgeText}
-            </span>
-          </div>
-
-          <div className="flex items-center space-x-2 shrink-0">
-            {isRunning ? (
-              <div className="flex items-center space-x-1.5">
-                <span className="relative flex h-2 w-2 shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                </span>
-                <span className="text-[11px] font-mono text-[#15803d] dark:text-[#7ee787]">Ожидание отчета</span>
-              </div>
-            ) : isSuccess ? (
-              <div className="flex items-center space-x-1.5">
-                <Check className="h-3.5 w-3.5 text-[#15803d] dark:text-[#7ee787] stroke-[2.5]" />
-                <span className="text-[11px] font-mono font-medium text-[#15803d] dark:text-[#7ee787]">Отчет получен</span>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-1.5">
-                <X className="h-3.5 w-3.5 text-[#dc2626] dark:text-[#ff7b72] stroke-[2.5]" />
-                <span className="text-[11px] font-mono font-medium text-[#dc2626] dark:text-[#ff7b72]">Ошибка сбора</span>
-              </div>
-            )}
-
-            {uniqueIds.length === 1 && (
-              <ChevronRight className="h-4 w-4 text-[#8f8f8f] group-hover:text-[#171717] dark:group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
-            )}
-          </div>
-        </div>
-
-        {/* Report excerpt if available */}
-        {tool.stdout && (
-          <div className="mt-2 pt-2 border-t border-[#f4f4f5] dark:border-[#21262d] text-[11px] font-mono text-[#52525b] dark:text-[#8b949e] line-clamp-2 leading-relaxed">
-            {tool.stdout}
-          </div>
-        )}
-      </div>
-    );
+    return <CollectSubagentExecutionCard tool={tool} />;
   }
 
   // Subagent list interactive card (subagent_list or list_subagents)
@@ -710,7 +964,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             discoveredList.push({
               id: sid,
               number: mappedNum,
-              title: (item.title || item.name || item.prompt?.slice(0, 50) || `Субагент #${mappedNum}`) as string,
+              title: (item.title || item.name || item.prompt?.slice(0, 50) || t('subagents.subagentWithNum', { index: mappedNum })) as string,
               role: (item.role || 'general') as string,
               status: (item.status || 'finished') as string,
               durationMs: typeof item.duration_ms === 'number' ? item.duration_ms : typeof item.durationMs === 'number' ? item.durationMs : undefined,
@@ -729,7 +983,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
         discoveredList.push({
           id: sub.id,
           number: mappedNum,
-          title: sub.title || `Субагент #${mappedNum}`,
+          title: sub.title || t('subagents.subagentWithNum', { index: mappedNum }),
           role: sub.role || 'general',
           status: sub.status,
           durationMs: sub.durationMs,
@@ -749,7 +1003,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             </div>
 
             <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase border border-purple-200 dark:border-purple-800/60 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 shrink-0">
-              СПИСОК
+              {t('tools.subagent_list.badge')}
             </span>
 
             <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] shrink-0">
@@ -757,7 +1011,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             </span>
 
             <span className="font-mono text-[11px] text-[#71717a] dark:text-[#8b949e] px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] truncate">
-              всего: {discoveredList.length}
+              {t('tools.subagent_list.total', { count: discoveredList.length })}
             </span>
           </div>
 
@@ -768,19 +1022,21 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                 </span>
-                <span className="text-[11px] font-mono text-[#15803d] dark:text-[#7ee787]">Поиск</span>
+                <span className="text-[11px] font-mono text-[#15803d] dark:text-[#7ee787]">{t('tools.subagent_list.search')}</span>
               </div>
             ) : isSuccess ? (
               <div className="flex items-center space-x-1.5">
                 <Check className="h-3.5 w-3.5 text-[#15803d] dark:text-[#7ee787] stroke-[2.5]" />
                 <span className="text-[11px] font-mono font-medium text-[#15803d] dark:text-[#7ee787]">
-                  {discoveredList.length > 0 ? `Найдено: ${discoveredList.length}` : 'Список получен'}
+                  {discoveredList.length > 0
+                    ? t('tools.subagent_list.found', { count: discoveredList.length })
+                    : t('tools.subagent_list.received')}
                 </span>
               </div>
             ) : (
               <div className="flex items-center space-x-1.5">
                 <X className="h-3.5 w-3.5 text-[#dc2626] dark:text-[#ff7b72] stroke-[2.5]" />
-                <span className="text-[11px] font-mono font-medium text-[#dc2626] dark:text-[#ff7b72]">Ошибка</span>
+                <span className="text-[11px] font-mono font-medium text-[#dc2626] dark:text-[#ff7b72]">{t('tools.status.error')}</span>
               </div>
             )}
 
@@ -800,7 +1056,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
                 (p) => p.role.toLowerCase() === (sub.role || '').toLowerCase()
               );
               const roleBadgeStyle = getRoleBadgeStyle(sub.role, persona?.color);
-              const displaySubTitle = formatSubagentDisplayTitle(sub.title || `Субагент #${sub.number}`);
+              const displaySubTitle = formatSubagentDisplayTitle(sub.title || t('subagents.subagentWithNum', { index: sub.number }), language);
               const subIsRunning = sub.status === 'running';
               const subIsSuccess = sub.status === 'finished' || sub.status === 'done' || (sub.status as string) === 'success';
               const subIsAborted = sub.status === 'stopped' || sub.status === 'aborted';
@@ -822,7 +1078,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
                       style={roleBadgeStyle}
                       className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold uppercase tracking-wider border shrink-0 select-none"
                     >
-                      {formatSubagentRoleDisplay(sub.role, sub.number)}
+                      {formatSubagentRoleDisplay(sub.role, sub.number, false, language)}
                     </span>
 
                     <span className="font-sans font-medium text-[11px] text-[#171717] dark:text-[#f0f6fc] group-hover:text-[#000000] dark:group-hover:text-white transition-colors truncate">
@@ -838,28 +1094,28 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
                           <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
                         </span>
                         <span className="text-[10px] font-mono text-[#15803d] dark:text-[#7ee787]">
-                          Выполняется
+                          {t('tools.status.running')}
                         </span>
                       </div>
                     ) : subIsSuccess ? (
                       <div className="flex items-center space-x-1">
                         <Check className="h-3 w-3 text-[#15803d] dark:text-[#7ee787] stroke-[2.5]" />
                         <span className="text-[10px] font-mono font-medium text-[#15803d] dark:text-[#7ee787]">
-                          Готово
+                          {t('tools.status.done')}
                         </span>
                       </div>
                     ) : subIsAborted ? (
                       <div className="flex items-center space-x-1">
                         <X className="h-3 w-3 text-[#d97706] dark:text-[#f59e0b] stroke-[2.5]" />
                         <span className="text-[10px] font-mono font-medium text-[#d97706] dark:text-[#f59e0b]">
-                          Прервано
+                          {t('tools.status.aborted')}
                         </span>
                       </div>
                     ) : (
                       <div className="flex items-center space-x-1">
                         <X className="h-3 w-3 text-[#dc2626] dark:text-[#ff7b72] stroke-[2.5]" />
                         <span className="text-[10px] font-mono font-medium text-[#dc2626] dark:text-[#ff7b72]">
-                          Ошибка
+                          {t('tools.status.error')}
                         </span>
                       </div>
                     )}
@@ -878,7 +1134,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
           </div>
         ) : !isRunning ? (
           <div className="mt-2 pt-2 border-t border-[#f4f4f5] dark:border-[#21262d] text-[11px] font-mono text-[#8f8f8f] dark:text-[#8b949e]">
-            Субагенты не обнаружены
+            {t('tools.subagent_list.notFound')}
           </div>
         ) : null}
       </div>
@@ -1061,7 +1317,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
         raw = str(p.role) || str(p.description) || str(p.prompt) || '';
         break;
       case 'compact_context':
-        raw = 'Оптимизация контекста';
+        raw = t('drawer.compactContext');
         break;
       default: {
         const firstStr = Object.values(p).find(
@@ -1111,13 +1367,13 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       }
       case 'compact_context': {
         if (tool.status === 'running') {
-          return 'выполняется...';
+          return t('tools.status.running');
         }
         if (tool.status === 'success') {
           if (typeof p.savedTokens === 'number') {
-            return `-${p.savedTokens} токенов`;
+            return `-${p.savedTokens} ${t('toolParam.auto_compact_tokens.unit')}`;
           }
-          return 'готово';
+          return t('tools.status.done');
         }
         return null;
       }
