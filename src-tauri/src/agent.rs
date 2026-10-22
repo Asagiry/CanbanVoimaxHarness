@@ -3879,6 +3879,7 @@ pub fn run_inprocess_subagent(
         effective_sub_tools
     );
 
+    let system_tokens = compactor::estimate_text_tokens(&system_prompt) as u64;
     let mut sub_messages = vec![
         ChatMessage::system(system_prompt).with_cache_control(crate::llm::CacheControl::ephemeral()),
         ChatMessage::user(format!("# Objective: {}
@@ -3922,18 +3923,23 @@ pub fn run_inprocess_subagent(
             break;
         }
 
+        let req_tools = if active_sub_tool_defs.is_empty() {
+            None
+        } else {
+            Some(active_sub_tool_defs.clone())
+        };
+        let tool_tokens = compactor::estimate_tools_tokens(&req_tools) as u64;
+
         let req = OpenAIChatRequest {
             model: model.to_string(),
             messages: sub_messages.clone(),
             temperature,
             stream: true,
-            tools: if active_sub_tool_defs.is_empty() {
-                None
-            } else {
-                Some(active_sub_tool_defs.clone())
-            },
+            tools: req_tools.clone(),
             reasoning_effort: reasoning_effort.clone(),
-            stream_options: None,
+            stream_options: Some(crate::llm::StreamOptions {
+                include_usage: true,
+            }),
         };
 
         // Log raw request for complete transparency & debugging (§ llm_debug.log)
@@ -3973,6 +3979,11 @@ Messages count: {}
         let mut turn_content = String::new();
         let mut turn_tool_calls: Vec<ToolCall> = Vec::new();
         let mut thinking_parser = ThinkingStreamParser::new();
+        let turn_start_instant = std::time::Instant::now();
+        let mut first_token_instant: Option<std::time::Instant> = None;
+        let mut last_token_instant: Option<std::time::Instant> = None;
+        let mut turn_streamed_chars: usize = 0;
+        let mut received_usage = false;
 
         while let Some(chunk) = rx.recv().await {
             if ctx.abort_handle.load(Ordering::SeqCst) {
@@ -3980,6 +3991,12 @@ Messages count: {}
             }
             match chunk {
                 StreamChunk::Token(token) => {
+                    if first_token_instant.is_none() {
+                        first_token_instant = Some(std::time::Instant::now());
+                    }
+                    last_token_instant = Some(std::time::Instant::now());
+                    turn_streamed_chars += token.len();
+
                     let parsed = thinking_parser.push(&token);
                     for (is_thought, text) in parsed {
                         if is_thought {
@@ -4005,7 +4022,21 @@ Messages count: {}
                         }
                     }
                 }
+                StreamChunk::Output(output) => {
+                    if first_token_instant.is_none() {
+                        first_token_instant = Some(std::time::Instant::now());
+                    }
+                    last_token_instant = Some(std::time::Instant::now());
+                    turn_streamed_chars += output.len();
+                    turn_content.push_str(&output);
+                }
                 StreamChunk::Thought(thought) => {
+                    if first_token_instant.is_none() {
+                        first_token_instant = Some(std::time::Instant::now());
+                    }
+                    last_token_instant = Some(std::time::Instant::now());
+                    turn_streamed_chars += thought.len();
+
                     let th_item = ActivityItem {
                         id: format!("sub-th-{}-{}", subagent_suffix, uuid::Uuid::new_v4().to_string().chars().take(4).collect::<String>()),
                         item_type: "thought".to_string(),
@@ -4025,11 +4056,93 @@ Messages count: {}
                     }
                 }
                 StreamChunk::ToolCall { id, name, arguments } => {
+                    if first_token_instant.is_none() {
+                        first_token_instant = Some(std::time::Instant::now());
+                    }
+                    last_token_instant = Some(std::time::Instant::now());
+                    turn_streamed_chars += name.len() + arguments.len();
+
                     turn_tool_calls.push(ToolCall {
                         id,
                         call_type: "function".to_string(),
                         function: crate::llm::FunctionCall { name, arguments },
                     });
+                }
+                StreamChunk::Usage {
+                    input_tokens,
+                    output_tokens,
+                    cache_read_tokens,
+                    cache_creation_tokens,
+                } => {
+                    received_usage = true;
+                    let total_input = input_tokens + cache_read_tokens;
+                    let cache_hit_rate = if total_input > 0 {
+                        (cache_read_tokens as f32 / total_input as f32) * 100.0
+                    } else {
+                        0.0
+                    };
+                    let start_time = first_token_instant.unwrap_or(turn_start_instant);
+                    let end_time = last_token_instant.unwrap_or_else(std::time::Instant::now);
+                    let duration_secs = end_time.duration_since(start_time).as_secs_f64();
+                    let duration_ms = duration_secs * 1000.0;
+                    let tps = if duration_secs > 0.05 && output_tokens > 0 {
+                        (output_tokens as f64 / duration_secs) as f32
+                    } else {
+                        0.0
+                    };
+                    eprintln!(
+                        "CVH [subagent telemetry] turn={} subagent={} input={} output={} cache_read={} hit_rate={:.1}% duration={:.2}s tps={:.1}",
+                        sub_turn, subagent_id, input_tokens, output_tokens, cache_read_tokens, cache_hit_rate, duration_secs, tps
+                    );
+                    if let Some(ref app) = ctx.app_handle {
+                        let _ = app.emit(
+                            "agent:telemetry",
+                            serde_json::json!({
+                                "taskId": &subagent_id,
+                                "inputTokens": input_tokens,
+                                "outputTokens": output_tokens,
+                                "cacheReadTokens": cache_read_tokens,
+                                "cacheCreationTokens": cache_creation_tokens,
+                                "cacheHitRate": cache_hit_rate,
+                                "durationMs": duration_ms,
+                                "tps": tps,
+                                "systemTokens": system_tokens,
+                                "toolTokens": tool_tokens,
+                            }),
+                        );
+                        if let Some(ref cid) = tool_call_id {
+                            if cid != &subagent_id {
+                                let _ = app.emit(
+                                    "agent:telemetry",
+                                    serde_json::json!({
+                                        "taskId": cid,
+                                        "inputTokens": input_tokens,
+                                        "outputTokens": output_tokens,
+                                        "cacheReadTokens": cache_read_tokens,
+                                        "cacheCreationTokens": cache_creation_tokens,
+                                        "cacheHitRate": cache_hit_rate,
+                                        "durationMs": duration_ms,
+                                        "tps": tps,
+                                        "systemTokens": system_tokens,
+                                        "toolTokens": tool_tokens,
+                                    }),
+                                );
+                            }
+                        }
+                    }
+                    let telem_record = crate::db::TelemetryRecord {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        task_id: subagent_id.clone(),
+                        model: Some(model.to_string()),
+                        input_tokens: input_tokens as i64,
+                        output_tokens: output_tokens as i64,
+                        cached_tokens: cache_read_tokens as i64,
+                        tps: tps as f64,
+                        ttft_ms: 0.0,
+                        duration_ms,
+                        created_at: chrono::Utc::now().timestamp_millis(),
+                    };
+                    let _ = crate::db::db_record_telemetry(&ctx.repo_root, &telem_record);
                 }
                 StreamChunk::Done => break,
                 StreamChunk::Error(e) => {
@@ -4037,7 +4150,6 @@ Messages count: {}
                     sub_error = Some(e);
                     break;
                 }
-                _ => {}
             }
         }
 
@@ -4064,6 +4176,75 @@ Messages count: {}
             } else {
                 turn_content.push_str(&text);
             }
+        }
+
+        // Fallback telemetry if provider did not emit a usage chunk
+        if !received_usage && !ctx.abort_handle.load(Ordering::SeqCst) {
+            let start_time = first_token_instant.unwrap_or(turn_start_instant);
+            let end_time = last_token_instant.unwrap_or_else(std::time::Instant::now);
+            let duration_secs = end_time.duration_since(start_time).as_secs_f64();
+            let duration_ms = duration_secs * 1000.0;
+            let output_tokens = (compactor::estimate_text_tokens(&turn_content) as u64)
+                .max((turn_streamed_chars as f64 / 3.8).ceil() as u64);
+            let input_tokens = compactor::estimate_request_tokens(&sub_messages, req_tools.as_deref()) as u64;
+            let tps = if duration_secs > 0.05 && output_tokens > 0 {
+                (output_tokens as f64 / duration_secs) as f32
+            } else {
+                0.0
+            };
+            eprintln!(
+                "CVH [subagent telemetry:fallback] turn={} subagent={} input={} output={} duration={:.2}s tps={:.1}",
+                sub_turn, subagent_id, input_tokens, output_tokens, duration_secs, tps
+            );
+            if let Some(ref app) = ctx.app_handle {
+                let _ = app.emit(
+                    "agent:telemetry",
+                    serde_json::json!({
+                        "taskId": &subagent_id,
+                        "inputTokens": input_tokens,
+                        "outputTokens": output_tokens,
+                        "cacheReadTokens": 0,
+                        "cacheCreationTokens": 0,
+                        "cacheHitRate": 0.0,
+                        "durationMs": duration_ms,
+                        "tps": tps,
+                        "systemTokens": system_tokens,
+                        "toolTokens": tool_tokens,
+                    }),
+                );
+                if let Some(ref cid) = tool_call_id {
+                    if cid != &subagent_id {
+                        let _ = app.emit(
+                            "agent:telemetry",
+                            serde_json::json!({
+                                "taskId": cid,
+                                "inputTokens": input_tokens,
+                                "outputTokens": output_tokens,
+                                "cacheReadTokens": 0,
+                                "cacheCreationTokens": 0,
+                                "cacheHitRate": 0.0,
+                                "durationMs": duration_ms,
+                                "tps": tps,
+                                "systemTokens": system_tokens,
+                                "toolTokens": tool_tokens,
+                            }),
+                        );
+                    }
+                }
+            }
+            let telem_record = crate::db::TelemetryRecord {
+                id: uuid::Uuid::new_v4().to_string(),
+                task_id: subagent_id.clone(),
+                model: Some(model.to_string()),
+                input_tokens: input_tokens as i64,
+                output_tokens: output_tokens as i64,
+                cached_tokens: 0,
+                tps: tps as f64,
+                ttft_ms: 0.0,
+                duration_ms,
+                created_at: chrono::Utc::now().timestamp_millis(),
+            };
+            let _ = crate::db::db_record_telemetry(&ctx.repo_root, &telem_record);
         }
 
         // Log raw response for complete transparency & debugging (§ llm_debug.log)
@@ -4313,6 +4494,7 @@ Messages count: {}
             "Предоставь краткий и исчерпывающий финальный отчет о результатах выполненной работы и найденных данных (Provide a concise, comprehensive final report summarizing your findings and work done)."
         ));
 
+        let synth_system_tokens = system_tokens;
         let req = OpenAIChatRequest {
             model: model.to_string(),
             messages: sub_messages.clone(),
@@ -4320,7 +4502,9 @@ Messages count: {}
             stream: true,
             tools: None,
             reasoning_effort: reasoning_effort.clone(),
-            stream_options: None,
+            stream_options: Some(crate::llm::StreamOptions {
+                include_usage: true,
+            }),
         };
 
         let (tx, mut rx) = mpsc::channel::<StreamChunk>(100);
@@ -4336,16 +4520,95 @@ Messages count: {}
 
         let mut synth_content = String::new();
         let mut thinking_parser = ThinkingStreamParser::new();
+        let synth_start_instant = std::time::Instant::now();
+        let mut synth_first_token_instant: Option<std::time::Instant> = None;
+        let mut synth_last_token_instant: Option<std::time::Instant> = None;
+        let mut synth_streamed_chars: usize = 0;
+        let mut synth_received_usage = false;
+
         while let Some(chunk) = rx.recv().await {
             if ctx.abort_handle.load(Ordering::SeqCst) {
                 break;
             }
             match chunk {
                 StreamChunk::Token(token) => {
+                    if synth_first_token_instant.is_none() {
+                        synth_first_token_instant = Some(std::time::Instant::now());
+                    }
+                    synth_last_token_instant = Some(std::time::Instant::now());
+                    synth_streamed_chars += token.len();
+
                     let parsed = thinking_parser.push(&token);
                     for (is_thought, text) in parsed {
                         if !is_thought {
                             synth_content.push_str(&text);
+                        }
+                    }
+                }
+                StreamChunk::Output(output) => {
+                    if synth_first_token_instant.is_none() {
+                        synth_first_token_instant = Some(std::time::Instant::now());
+                    }
+                    synth_last_token_instant = Some(std::time::Instant::now());
+                    synth_streamed_chars += output.len();
+                    synth_content.push_str(&output);
+                }
+                StreamChunk::Usage {
+                    input_tokens,
+                    output_tokens,
+                    cache_read_tokens,
+                    cache_creation_tokens,
+                } => {
+                    synth_received_usage = true;
+                    let total_input = input_tokens + cache_read_tokens;
+                    let cache_hit_rate = if total_input > 0 {
+                        (cache_read_tokens as f32 / total_input as f32) * 100.0
+                    } else {
+                        0.0
+                    };
+                    let start_time = synth_first_token_instant.unwrap_or(synth_start_instant);
+                    let end_time = synth_last_token_instant.unwrap_or_else(std::time::Instant::now);
+                    let duration_secs = end_time.duration_since(start_time).as_secs_f64();
+                    let duration_ms = duration_secs * 1000.0;
+                    let tps = if duration_secs > 0.05 && output_tokens > 0 {
+                        (output_tokens as f64 / duration_secs) as f32
+                    } else {
+                        0.0
+                    };
+                    if let Some(ref app) = ctx.app_handle {
+                        let _ = app.emit(
+                            "agent:telemetry",
+                            serde_json::json!({
+                                "taskId": &subagent_id,
+                                "inputTokens": input_tokens,
+                                "outputTokens": output_tokens,
+                                "cacheReadTokens": cache_read_tokens,
+                                "cacheCreationTokens": cache_creation_tokens,
+                                "cacheHitRate": cache_hit_rate,
+                                "durationMs": duration_ms,
+                                "tps": tps,
+                                "systemTokens": synth_system_tokens,
+                                "toolTokens": 0,
+                            }),
+                        );
+                        if let Some(ref cid) = tool_call_id {
+                            if cid != &subagent_id {
+                                let _ = app.emit(
+                                    "agent:telemetry",
+                                    serde_json::json!({
+                                        "taskId": cid,
+                                        "inputTokens": input_tokens,
+                                        "outputTokens": output_tokens,
+                                        "cacheReadTokens": cache_read_tokens,
+                                        "cacheCreationTokens": cache_creation_tokens,
+                                        "cacheHitRate": cache_hit_rate,
+                                        "durationMs": duration_ms,
+                                        "tps": tps,
+                                        "systemTokens": synth_system_tokens,
+                                        "toolTokens": 0,
+                                    }),
+                                );
+                            }
                         }
                     }
                 }
@@ -4360,6 +4623,57 @@ Messages count: {}
         for (is_thought, text) in thinking_parser.flush() {
             if !is_thought {
                 synth_content.push_str(&text);
+            }
+        }
+
+        if !synth_received_usage && !ctx.abort_handle.load(Ordering::SeqCst) {
+            let start_time = synth_first_token_instant.unwrap_or(synth_start_instant);
+            let end_time = synth_last_token_instant.unwrap_or_else(std::time::Instant::now);
+            let duration_secs = end_time.duration_since(start_time).as_secs_f64();
+            let duration_ms = duration_secs * 1000.0;
+            let output_tokens = (compactor::estimate_text_tokens(&synth_content) as u64)
+                .max((synth_streamed_chars as f64 / 3.8).ceil() as u64);
+            let input_tokens = compactor::estimate_request_tokens(&sub_messages, None) as u64;
+            let tps = if duration_secs > 0.05 && output_tokens > 0 {
+                (output_tokens as f64 / duration_secs) as f32
+            } else {
+                0.0
+            };
+            if let Some(ref app) = ctx.app_handle {
+                let _ = app.emit(
+                    "agent:telemetry",
+                    serde_json::json!({
+                        "taskId": &subagent_id,
+                        "inputTokens": input_tokens,
+                        "outputTokens": output_tokens,
+                        "cacheReadTokens": 0,
+                        "cacheCreationTokens": 0,
+                        "cacheHitRate": 0.0,
+                        "durationMs": duration_ms,
+                        "tps": tps,
+                        "systemTokens": synth_system_tokens,
+                        "toolTokens": 0,
+                    }),
+                );
+                if let Some(ref cid) = tool_call_id {
+                    if cid != &subagent_id {
+                        let _ = app.emit(
+                            "agent:telemetry",
+                            serde_json::json!({
+                                "taskId": cid,
+                                "inputTokens": input_tokens,
+                                "outputTokens": output_tokens,
+                                "cacheReadTokens": 0,
+                                "cacheCreationTokens": 0,
+                                "cacheHitRate": 0.0,
+                                "durationMs": duration_ms,
+                                "tps": tps,
+                                "systemTokens": synth_system_tokens,
+                                "toolTokens": 0,
+                            }),
+                        );
+                    }
+                }
             }
         }
 
