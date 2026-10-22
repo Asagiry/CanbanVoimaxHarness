@@ -1481,16 +1481,19 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
 // Automatic .gitignore Synchronization for .cvh Local Runtime
 // ============================================================================
 
-pub const CVH_GITIGNORE_HEADER: &str = "# CanbanVoimaxHarness Local Workspace";
-pub const CVH_GITIGNORE_LEGACY_HEADER: &str = "# CanbanVoimaxHarness Local Runtime";
+pub const CVH_GITIGNORE_HEADER: &str = "# CanbanVoimaxHarness Internal Runtime & Database";
+pub const CVH_GITIGNORE_LEGACY_HEADER: &str = "# CanbanVoimaxHarness Local Workspace";
+pub const CVH_GITIGNORE_ANCIENT_HEADER: &str = "# CanbanVoimaxHarness Local Runtime";
 pub const CVH_RUNTIME_GITIGNORE_ENTRIES: &[&str] = &[
-    ".cvh/",
-    ".cvh/worktrees/",
-    ".cvh/llm.json",
     ".cvh/harness.db*",
+    ".cvh/worktrees/",
+    ".cvh/dialogs/",
     ".cvh/spill/",
+    ".cvh/logs/",
+    ".cvh/tasks/",
     ".cvh/tasks.json",
-    ".cvh/llm_debug.log",
+    ".cvh/llm.json",
+    "**/.cvh/llm.json",
 ];
 
 /// Ensures that `<repo_root>/.gitignore` exists and contains all required
@@ -1595,7 +1598,9 @@ pub fn ensure_project_gitignore(repo_root: &Path) -> std::io::Result<()> {
     // 3. Append missing lines with clean section header without duplicating
     let has_header = lines.iter().any(|l| {
         let t = l.trim();
-        t == CVH_GITIGNORE_HEADER || t == CVH_GITIGNORE_LEGACY_HEADER
+        t == CVH_GITIGNORE_HEADER
+            || t == CVH_GITIGNORE_LEGACY_HEADER
+            || t == CVH_GITIGNORE_ANCIENT_HEADER
     });
 
     let mut output = existing_content;

@@ -198,10 +198,84 @@ pub struct TaskGitDiff {
     pub branch: String,
 }
 
-/// Returns true if the file path is inside or represents the `.cvh` directory.
+/// Returns true if the file path is an internal CVH runtime, database, secret,
+/// or worktree artifact that must be hidden from Git diffs.
+/// Configuration files under `.cvh/` (rules, agents, settings, tools, hooks,
+/// boards.json, pipeline.json) return false so they can be tracked and reviewed.
 pub fn is_cvh_path(path: &str) -> bool {
     let norm = path.replace('\\', "/");
-    norm == ".cvh" || norm.starts_with(".cvh/") || norm.contains("/.cvh/") || norm.ends_with("/.cvh")
+    let norm = norm.trim();
+    if norm.is_empty() {
+        return false;
+    }
+
+    // 1. Always hide runtime, secret, database, and log artifacts
+    if norm.contains("harness.db")
+        || norm.starts_with("worktrees/")
+        || norm.contains("/worktrees/")
+        || norm.ends_with("llm.json")
+        || norm.contains("/llm.json")
+        || norm.starts_with(".cvh/spill/")
+        || norm.contains("/.cvh/spill/")
+        || norm.starts_with("spill/")
+        || norm.contains("/spill/")
+        || norm.starts_with(".cvh/logs/")
+        || norm.contains("/.cvh/logs/")
+        || norm.starts_with("logs/")
+        || norm.contains("/logs/")
+        || norm.ends_with(".log")
+        || norm.starts_with(".cvh/dialogs/")
+        || norm.contains("/.cvh/dialogs/")
+        || norm.contains("/dialogs/")
+        || norm.ends_with("tasks.json")
+        || norm.contains("/tasks.json")
+        || norm.starts_with(".cvh/tasks/")
+        || norm.contains("/.cvh/tasks/")
+        || norm.contains("/tasks/")
+        || norm.ends_with(".secret")
+        || norm.contains(".secret/")
+        || norm.contains("/.secret")
+        || norm.ends_with(".key")
+        || norm.contains(".key/")
+        || norm.contains("/.key")
+    {
+        return true;
+    }
+
+    // 2. Bare .cvh directory itself is hidden
+    if norm == ".cvh" || norm == ".cvh/" || norm.ends_with("/.cvh") || norm.ends_with("/.cvh/") {
+        return true;
+    }
+
+    // 3. Explicitly allowed CVH configuration files & directories:
+    //    .cvh/rules/, .cvh/agents/, .cvh/settings/, .cvh/tools/, .cvh/hooks/,
+    //    .cvh/boards.json, .cvh/pipeline.json
+    let is_cvh_config = norm.starts_with(".cvh/rules/")
+        || norm.contains("/.cvh/rules/")
+        || norm.starts_with(".cvh/agents/")
+        || norm.contains("/.cvh/agents/")
+        || norm.starts_with(".cvh/settings/")
+        || norm.contains("/.cvh/settings/")
+        || norm.starts_with(".cvh/tools/")
+        || norm.contains("/.cvh/tools/")
+        || norm.starts_with(".cvh/hooks/")
+        || norm.contains("/.cvh/hooks/")
+        || norm == ".cvh/boards.json"
+        || norm.ends_with("/.cvh/boards.json")
+        || norm == ".cvh/pipeline.json"
+        || norm.ends_with("/.cvh/pipeline.json");
+
+    if is_cvh_config {
+        return false;
+    }
+
+    // 4. Any other file inside .cvh is considered internal runtime and hidden
+    if norm.starts_with(".cvh/") || norm.contains("/.cvh/") {
+        return true;
+    }
+
+    // 5. Standard workspace files outside .cvh are visible
+    false
 }
 
 pub fn parse_diff_blocks(diff_output: &str) -> HashMap<String, String> {
@@ -481,13 +555,44 @@ mod tests {
 
     #[test]
     fn test_is_cvh_path() {
+        // Bare .cvh directory
         assert!(is_cvh_path(".cvh"));
         assert!(is_cvh_path(".cvh/"));
+        assert!(is_cvh_path("foo/.cvh"));
+
+        // Runtime database, worktrees, tasks, spill, logs, secrets
         assert!(is_cvh_path(".cvh/tasks.json"));
         assert!(is_cvh_path(".cvh\\tasks.json"));
         assert!(is_cvh_path("worktrees/t-1/.cvh/tasks.json"));
+        assert!(is_cvh_path("worktrees/t-1/src/main.rs"));
+        assert!(is_cvh_path(".cvh/harness.db"));
+        assert!(is_cvh_path(".cvh/harness.db-wal"));
+        assert!(is_cvh_path(".cvh/harness.db-shm"));
+        assert!(is_cvh_path(".cvh/worktrees/feat-x/file.txt"));
+        assert!(is_cvh_path(".cvh/llm.json"));
+        assert!(is_cvh_path("foo/.cvh/llm.json"));
+        assert!(is_cvh_path(".cvh/spill/exec_output.log"));
+        assert!(is_cvh_path(".cvh/logs/debug.log"));
+        assert!(is_cvh_path(".cvh/dialogs/cvh-001.json"));
+        assert!(is_cvh_path(".cvh/tasks/cvh-001.json"));
+        assert!(is_cvh_path(".cvh/secret.key"));
+        assert!(is_cvh_path(".cvh/agents/developer/.secret"));
         assert!(is_cvh_path("foo\\.cvh\\bar.txt"));
-        assert!(is_cvh_path("foo/.cvh"));
+
+        // Allowed configuration files must NOT be hidden (!is_cvh_path)
+        assert!(!is_cvh_path(".cvh/rules/guidelines.md"));
+        assert!(!is_cvh_path(".cvh\\rules\\guidelines.md"));
+        assert!(!is_cvh_path(".cvh/agents/developer/persona.md"));
+        assert!(!is_cvh_path(".cvh/settings/tool-policy.json"));
+        assert!(!is_cvh_path(".cvh/tools/custom.json"));
+        assert!(!is_cvh_path(".cvh/hooks/on_enter.bat"));
+        assert!(!is_cvh_path(".cvh/boards.json"));
+        assert!(!is_cvh_path(".cvh\\boards.json"));
+        assert!(!is_cvh_path(".cvh/pipeline.json"));
+        assert!(!is_cvh_path(".cvh\\pipeline.json"));
+        assert!(!is_cvh_path("subproject/.cvh/boards.json"));
+
+        // Normal codebase files outside .cvh
         assert!(!is_cvh_path("src/main.rs"));
         assert!(!is_cvh_path("something_else.cvh_file"));
         assert!(!is_cvh_path("not_dot_cvh/file.txt"));
@@ -509,6 +614,12 @@ index abc..def 100644
 @@ -1 +1 @@
 -old
 +new
+diff --git a/.cvh/boards.json b/.cvh/boards.json
+index 111..222 100644
+--- a/.cvh/boards.json
++++ b/.cvh/boards.json
+@@ -1 +1 @@
++{\"name\": \"test\"}
 diff --git a/src/lib.rs b/src/lib.rs
 index 789..012 100644
 --- a/src/lib.rs
@@ -519,6 +630,7 @@ index 789..012 100644
         let blocks = parse_diff_blocks(diff_text);
         assert!(blocks.contains_key("src/main.rs"));
         assert!(blocks.contains_key("src/lib.rs"));
+        assert!(blocks.contains_key(".cvh/boards.json"));
         assert!(!blocks.contains_key(".cvh/tasks.json"));
     }
 }

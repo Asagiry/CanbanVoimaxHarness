@@ -32,12 +32,18 @@ Thumbs.db
 .tmp/
 *.log
 .xwin-cache/
-# CanbanVoimaxHarness Local Workspace
-.cvh/
-
-# LLM Settings & Secrets (API Keys)
+# CanbanVoimaxHarness Internal Runtime & Database
+.cvh/harness.db*
+.cvh/worktrees/
+.cvh/dialogs/
+.cvh/spill/
+.cvh/logs/
+.cvh/tasks/
+.cvh/tasks.json
 .cvh/llm.json
 **/.cvh/llm.json
+
+# LLM Settings & Secrets (API Keys)
 llm.json
 *.secret
 *.key
@@ -45,12 +51,6 @@ llm.json
 .env.*
 .env.local
 *.local
-.cvh/harness.db*
-.cvh/worktrees/
-.cvh/dialogs/
-.cvh/spill/
-.cvh/tasks/
-.cvh/tasks.json
 package-lock.json
 
 # Local release bundles (binaries stay untracked)
