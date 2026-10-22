@@ -60,22 +60,35 @@ export default function ContextGauge({
     resolvedPersonaLimit ||
     stageLimit;
 
-  // Селективные подписки per taskId: гейдж чужой задачи не пересчитывается
-  // при стриме активной (раньше подписка на весь стор дёргала все гейджи).
-  const thoughts = useDrawerStore((s) => s.streamEntries[taskId]?.thoughts);
-  const outputs = useDrawerStore((s) => s.streamEntries[taskId]?.outputs);
-  const tools = useDrawerStore((s) => s.toolExecutions[taskId]);
-  const feed = useDrawerStore((s) => s.activityFeed[taskId]);
-  const tokenOverride = useDrawerStore((s) => s.tokenOverrides[taskId]);
+  // Селективные подписки per taskId (с поддержкой subagentId <-> toolCallId маппинга)
+  const thoughts = useDrawerStore((s) => s.streamEntries[taskId]?.thoughts || (s.toolIdToSubagentId[taskId] ? s.streamEntries[s.toolIdToSubagentId[taskId]]?.thoughts : undefined));
+  const outputs = useDrawerStore((s) => s.streamEntries[taskId]?.outputs || (s.toolIdToSubagentId[taskId] ? s.streamEntries[s.toolIdToSubagentId[taskId]]?.outputs : undefined));
+  const tools = useDrawerStore((s) => s.toolExecutions[taskId] || (s.toolIdToSubagentId[taskId] ? s.toolExecutions[s.toolIdToSubagentId[taskId]] : undefined));
+  const feed = useDrawerStore((s) => s.activityFeed[taskId] || (s.toolIdToSubagentId[taskId] ? s.activityFeed[s.toolIdToSubagentId[taskId]] : undefined));
+  const tokenOverride = useDrawerStore((s) => s.tokenOverrides[taskId] ?? (s.toolIdToSubagentId[taskId] ? s.tokenOverrides[s.toolIdToSubagentId[taskId]] : undefined));
   const taskCurrentTokens = useBoardStore((s) => s.tasks.find((t) => t.id === taskId)?.currentTokens);
-  const telemetry = useDrawerStore((s) => s.taskTelemetry[taskId]);
+  const telemetry = useDrawerStore((s) =>
+    s.taskTelemetry[taskId] ||
+    (s.toolIdToSubagentId[taskId] ? s.taskTelemetry[s.toolIdToSubagentId[taskId]] : undefined) ||
+    (s.subagentIdToToolId[taskId] ? s.taskTelemetry[s.subagentIdToToolId[taskId]] : undefined)
+  );
   const thinkingStart = useDrawerStore((s) => s.thinkingStartTime[taskId] ?? null);
   const genStart = useDrawerStore((s) => s.generationStartTime[taskId] ?? null);
   const genEnd = useDrawerStore((s) => s.generationEndTime[taskId] ?? null);
   const taskStart = useDrawerStore((s) => s.taskStartTime[taskId] ?? null);
   const taskEnd = useDrawerStore((s) => s.taskEndTime[taskId] ?? null);
-  const streamedTurnTokens = useDrawerStore((s) => s.streamedTurnTokens[taskId] ?? 0);
-  const frozenTps = useDrawerStore((s) => s.finalTps[taskId] ?? null);
+  const streamedTurnTokens = useDrawerStore((s) =>
+    s.streamedTurnTokens[taskId] ??
+    (s.toolIdToSubagentId[taskId] ? s.streamedTurnTokens[s.toolIdToSubagentId[taskId]] : undefined) ??
+    (s.subagentIdToToolId[taskId] ? s.streamedTurnTokens[s.subagentIdToToolId[taskId]] : undefined) ??
+    0
+  );
+  const frozenTps = useDrawerStore((s) =>
+    s.finalTps[taskId] ??
+    (s.toolIdToSubagentId[taskId] ? s.finalTps[s.toolIdToSubagentId[taskId]] : undefined) ??
+    (s.subagentIdToToolId[taskId] ? s.finalTps[s.subagentIdToToolId[taskId]] : undefined) ??
+    null
+  );
   const cumulativeOutputTokens = useDrawerStore((s) => s.cumulativeOutputTokens[taskId] ?? 0);
   const cumulativeGenerationSec = useDrawerStore((s) => s.cumulativeGenerationSec[taskId] ?? 0);
   const setTaskTokens = useDrawerStore((s) => s.setTaskTokens);
@@ -227,10 +240,9 @@ export default function ContextGauge({
       }
     }
 
-    // System prompt base size: ~1,500 tokens (rules trimmed via dynamic load_rule)
-    const baseSystem = 1500;
-    // Standard tool schemas overhead: ~1,500 tokens
-    const baseTool = 1500;
+    const isSubagent = taskId.includes('.sub-') || taskId.includes(':sub:') || taskId.includes('.');
+    const baseSystem = isSubagent ? 300 : 650;
+    const baseTool = isSubagent ? 400 : 500;
 
     let messageChars = textChars;
     for (const t of toolsArr) {
@@ -247,23 +259,16 @@ export default function ContextGauge({
     // Accurate multilingual BPE estimation for Cyrillic and mixed text (~2.2 chars per token)
     const rawMsgTokens = Math.max(hasMessages ? 100 : 0, Math.round(messageChars / 2.2));
 
-    // Honest totalInput accounting for caching proxies/Anthropic cache read tokens
-    const totalInput = Math.max(
-      telemetry?.inputTokens || 0,
-      (telemetry?.inputTokens || 0) + (telemetry?.cacheReadTokens || 0)
-    );
-
     // Context resolution priority cascade:
     // 1. Explicit currentEstimatedTokens prop
     // 2. Verified server telemetry (telemetry?.inputTokens > 0) has absolute priority over old compaction overrides and resolvedCompactTokens!
-    //    Старое значение сжатия (tokenOverride / resolvedCompactTokens) используется ТОЛЬКО если telemetry?.inputTokens === 0 (т.е. сразу после нажатия кнопки сжатия, до выполнения первого хода LLM).
     // 3. In-memory compaction override (tokenOverride) or resolved compacted tokens (resolvedCompactTokens)
-    // 4. Heuristic fallback based on baseSystem (~1500) + baseTool (~1500) + dynamicMsgTokens
+    // 4. Heuristic fallback based on baseSystem + baseTool + dynamicMsgTokens
     let total: number;
     if (currentEstimatedTokens !== undefined) {
       total = currentEstimatedTokens;
     } else if ((telemetry?.inputTokens || 0) > 0) {
-      total = totalInput;
+      total = telemetry.inputTokens + (streamedTurnTokens > 0 ? streamedTurnTokens : 0);
     } else if (resolvedCompactTokens !== undefined || tokenOverride !== undefined) {
       const baseCompacted = (tokenOverride ?? resolvedCompactTokens)!;
       const out = streamedTurnTokens > 0 ? streamedTurnTokens : 0;
@@ -289,7 +294,7 @@ export default function ContextGauge({
     ) {
       sys = telemetry.systemTokens;
       tool = telemetry.toolTokens;
-      msg = Math.max(0, totalInput - sys - tool);
+      msg = Math.max(0, total - sys - tool);
     } else if (hasMessages) {
       const msgWeight = Math.max(1, rawMsgTokens);
       const totalWeight = baseSystem + baseTool + msgWeight;
@@ -361,7 +366,8 @@ export default function ContextGauge({
     const outputsCount = outputs?.length || 0;
     return Math.max(toolsCount + outputsCount, thoughtsCount, 0);
   }, [tools, thoughts, outputs]);
-  const effectiveTurns = turns !== undefined ? turns : calculatedTurns;
+  const isSubagentTask = taskId.includes('.sub-') || taskId.includes(':sub:') || taskId.includes('.');
+  const effectiveTurns = turns !== undefined && !isSubagentTask ? turns : calculatedTurns;
 
   // Telemetry: cache hit % + output throughput (TPS) + RPM step rate
   const totalInputTokens = (telemetry?.inputTokens || 0) + (telemetry?.cacheReadTokens || 0);
