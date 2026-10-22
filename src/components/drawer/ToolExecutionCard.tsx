@@ -115,11 +115,19 @@ function CompactContextExecutionCard({ tool }: { tool: ToolExecution }) {
   const durationText = formatDurationCompact(tool.durationMs);
 
   return (
-    <div className="group rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] hover:border-[#d4d4d8] dark:hover:border-[#30363d] overflow-hidden text-xs shadow-2xs transition-colors my-1">
+    <div
+      className={`group rounded-md border text-xs shadow-2xs hover:shadow-xs overflow-hidden my-1 animate-silk-entrance transition-colors bg-white dark:bg-[#161b22] ${
+        isRunning
+          ? 'border-amber-500/40 dark:border-amber-500/30 bg-amber-500/[0.02]'
+          : 'border-[#ebebeb] dark:border-[#21262d]'
+      }`}
+    >
       {/* Header Strip */}
       <div
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center justify-between px-2.5 py-1.5 hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] cursor-pointer transition select-none gap-2 text-xs min-h-[30px]"
+        className={`flex items-center justify-between px-2.5 py-1.5 bg-[#f8f8f9] dark:bg-[#161b22] hover:bg-[#f2f2f3] dark:hover:bg-[#1c2128] transition-colors cursor-pointer select-none gap-2 text-xs min-h-[30px] ${
+          isExpanded ? 'border-b border-[#ebebeb] dark:border-[#21262d]' : ''
+        }`}
       >
         <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
           <button
@@ -275,7 +283,7 @@ function CompactContextExecutionCard({ tool }: { tool: ToolExecution }) {
 
       {/* Expanded Details */}
       {isExpanded && (
-        <div className="p-3 border-t border-[#ebebeb] dark:border-[#21262d] space-y-2 font-mono text-xs bg-white dark:bg-[#0d1117]">
+        <div className="bg-white dark:bg-[#0d1117] p-3 border-t border-[#ebebeb] dark:border-[#21262d] space-y-2 font-mono text-xs">
           {tool.stdout && (
             <div>
               <span className="text-[10px] text-[#666666] dark:text-[#8b949e] block mb-1">
@@ -838,19 +846,19 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
   const renderStatusIndicator = () => {
     if (tool.status === 'running') {
       return (
-        <span className="inline-flex rounded-full h-2 w-2 bg-amber-500 shrink-0" />
+        <span className="inline-flex rounded-full h-2 w-2 bg-amber-500 animate-pulse ring-2 ring-amber-500/20 shrink-0" />
       );
     }
     if (!isFailed && tool.status === 'success') {
       return (
         <span className="flex items-center shrink-0">
-          <Check className="h-3.5 w-3.5 text-emerald-600 stroke-[2.5]" />
+          <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 stroke-[2.5]" />
         </span>
       );
     }
     return (
       <span className="flex items-center shrink-0">
-        <X className="h-3.5 w-3.5 text-rose-600 stroke-[2.5]" />
+        <X className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400 stroke-[2.5]" />
       </span>
     );
   };
@@ -1081,12 +1089,22 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
     );
   };
 
+  const isRunning = tool.status === 'running';
+
   return (
-    <div className="group rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] hover:border-[#d4d4d8] dark:hover:border-[#30363d] overflow-hidden text-xs shadow-2xs transition-colors my-1">
+    <div
+      className={`group rounded-md border text-xs shadow-2xs hover:shadow-xs overflow-hidden my-1 animate-silk-entrance transition-colors bg-white dark:bg-[#161b22] ${
+        isRunning
+          ? 'border-amber-500/40 dark:border-amber-500/30 bg-amber-500/[0.02]'
+          : 'border-[#ebebeb] dark:border-[#21262d]'
+      }`}
+    >
       {/* Header Strip */}
       <div
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center justify-between px-2.5 py-1.5 hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] cursor-pointer transition select-none gap-2 text-xs min-h-[30px]"
+        className={`flex items-center justify-between px-2.5 py-1.5 bg-[#f8f8f9] dark:bg-[#161b22] hover:bg-[#f2f2f3] dark:hover:bg-[#1c2128] transition-colors cursor-pointer select-none gap-2 text-xs min-h-[30px] ${
+          isExpanded ? 'border-b border-[#ebebeb] dark:border-[#21262d]' : ''
+        }`}
       >
         {isReadOp ? (
           /* Read operation tactile card: [Analyzed C# Transit.cs #L4270-4300] */
@@ -1302,7 +1320,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
       {/* Expanded Details */}
       {isExpanded && (
-        <div className="p-3 border-t border-[#ebebeb] dark:border-[#21262d] space-y-2.5 font-mono text-xs bg-white dark:bg-[#0d1117]">
+        <div className="bg-white dark:bg-[#0d1117] p-3 border-t border-[#ebebeb] dark:border-[#21262d] space-y-2.5 font-mono text-xs">
           {isReadOp ? (
             <div className="space-y-2">
               {rawFilePath && (
