@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
-import { useToolPolicyStore, AVAILABLE_TOOLS, TOOL_PARAM_DEFS } from '../../stores/toolPolicyStore';
+import { useToolPolicyStore, AVAILABLE_TOOLS, TOOL_PARAM_DEFS, getToolTranslationKey } from '../../stores/toolPolicyStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import AgentIcon from '../common/AgentIcon';
@@ -462,8 +462,8 @@ export default function ToolPolicyModal() {
                           const isGloballyActive = globalEnabled[tool.id] ?? false;
                           const isExpanded = expandedToolId === tool.id;
                           const isChild = Boolean(tool.parentTool);
-                          const toolLabelKey = `tools.${tool.id}.label` as TranslationKey;
-                          const toolDescKey = `tools.${tool.id}.description` as TranslationKey;
+                          const toolLabelKey = getToolTranslationKey(tool.id, 'label') as TranslationKey;
+                          const toolDescKey = getToolTranslationKey(tool.id, 'description') as TranslationKey;
                           const toolLabel = t(toolLabelKey) !== toolLabelKey ? t(toolLabelKey) : tool.label;
                           const toolDesc = t(toolDescKey) !== toolDescKey ? t(toolDescKey) : tool.description;
 
@@ -523,8 +523,8 @@ export default function ToolPolicyModal() {
                                 const isAllowed = isToolAllowed(tool.id, agent.role);
                                 const isDisabled = isChild && !isMasterAllowed;
                                 const masterLabel = tool.parentTool
-                                  ? (t(`tools.${tool.parentTool}.label` as TranslationKey) !== `tools.${tool.parentTool}.label`
-                                      ? t(`tools.${tool.parentTool}.label` as TranslationKey)
+                                  ? (t(getToolTranslationKey(tool.parentTool, 'label') as TranslationKey) !== getToolTranslationKey(tool.parentTool, 'label')
+                                      ? t(getToolTranslationKey(tool.parentTool, 'label') as TranslationKey)
                                       : tool.parentTool)
                                   : '';
 
@@ -671,13 +671,13 @@ export default function ToolPolicyModal() {
                         const isChild = Boolean(tool.parentTool);
                         const isMasterGloballyActive = tool.parentTool ? (globalEnabled[tool.parentTool] ?? true) : true;
                         const isDisabled = isChild && !isMasterGloballyActive;
-                        const toolLabelKey = `tools.${tool.id}.label` as TranslationKey;
-                        const toolDescKey = `tools.${tool.id}.description` as TranslationKey;
+                        const toolLabelKey = getToolTranslationKey(tool.id, 'label') as TranslationKey;
+                        const toolDescKey = getToolTranslationKey(tool.id, 'description') as TranslationKey;
                         const toolLabel = t(toolLabelKey) !== toolLabelKey ? t(toolLabelKey) : tool.label;
                         const toolDesc = t(toolDescKey) !== toolDescKey ? t(toolDescKey) : tool.description;
                         const masterLabel = tool.parentTool
-                          ? (t(`tools.${tool.parentTool}.label` as TranslationKey) !== `tools.${tool.parentTool}.label`
-                              ? t(`tools.${tool.parentTool}.label` as TranslationKey)
+                          ? (t(getToolTranslationKey(tool.parentTool, 'label') as TranslationKey) !== getToolTranslationKey(tool.parentTool, 'label')
+                              ? t(getToolTranslationKey(tool.parentTool, 'label') as TranslationKey)
                               : tool.parentTool)
                           : '';
 

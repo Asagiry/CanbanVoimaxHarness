@@ -197,7 +197,7 @@ export default function PersonaSelect({
                   </span>
                   {pIsBuiltin && (
                     <span className="px-1 py-0.2 rounded text-[9px] font-sans font-medium bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shrink-0">
-                      встроенный
+                      {t('personaSelect.builtin')}
                     </span>
                   )}
                 </div>
