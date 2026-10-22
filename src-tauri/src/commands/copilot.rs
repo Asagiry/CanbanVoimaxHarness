@@ -536,7 +536,7 @@ async fn run_copilot_react_loop(
 
             let (result_str, success) = match exec_result {
                 Ok(out) => (out, true),
-                Err(e) => (format!("Error executing {}: {}", tc.function.name, e), false),
+                Err(e) => (format!("Error executing {}: {:#}", tc.function.name, e), false),
             };
 
             // Emit tool_result event

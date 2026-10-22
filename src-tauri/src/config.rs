@@ -405,16 +405,7 @@ fn discover_project_root_raw() -> PathBuf {
         }
     }
 
-    // 4. If current_dir itself is external non-git project:
-    if !current_is_bin && !current_is_app && current.exists() && current.is_dir() && current != Path::new(".") {
-        eprintln!(
-            "CVH [discover_project_root]: Using current_dir as non-git project root: {:?}",
-            current
-        );
-        return current;
-    }
-
-    // 5. Otherwise, no valid external project found: return empty PathBuf::new()
+    // 4. Otherwise, no valid external project found: return empty PathBuf::new()
     // so frontend presents the project selection screen on startup.
     eprintln!(
         "CVH [discover_project_root]: No valid project root discovered (current_dir is app codebase, binary, or unselected: {:?}). Returning empty path.",
@@ -1737,13 +1728,29 @@ pub async fn atomic_write_file(path: &Path, content: &str) -> Result<()> {
     }
 
     let tmp_path = path.with_extension(format!("tmp.{}", uuid::Uuid::new_v4()));
-    tokio::fs::write(&tmp_path, content)
-        .await
-        .with_context(|| format!("Failed to write temporary file {:?}", tmp_path))?;
+    let atomic_res: Result<()> = async {
+        tokio::fs::write(&tmp_path, content)
+            .await
+            .with_context(|| format!("Failed to write temporary file {:?}", tmp_path))?;
 
-    tokio::fs::rename(&tmp_path, path)
-        .await
-        .with_context(|| format!("Failed to replace destination file {:?} with temporary file {:?}", path, tmp_path))?;
+        tokio::fs::rename(&tmp_path, path)
+            .await
+            .with_context(|| format!("Failed to replace destination file {:?} with temporary file {:?}", path, tmp_path))?;
+
+        Ok(())
+    }
+    .await;
+
+    if let Err(atomic_err) = atomic_res {
+        eprintln!(
+            "CVH [atomic_write_file]: Atomic write failed for {:?} ({:#}), falling back to direct write",
+            path, atomic_err
+        );
+        let _ = tokio::fs::remove_file(&tmp_path).await;
+        tokio::fs::write(path, content)
+            .await
+            .with_context(|| format!("Failed to write file directly to {:?} (fallback after atomic error: {:#})", path, atomic_err))?;
+    }
 
     Ok(())
 }

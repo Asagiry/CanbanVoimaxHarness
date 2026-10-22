@@ -3609,7 +3609,7 @@ Messages count: {}
 
             let (res_str, is_success) = match exec_res {
                 Ok(s) => (s, true),
-                Err(e) => (format!("Error executing {}: {}", tc.function.name, e), false),
+                Err(e) => (format!("Error executing {}: {:#}", tc.function.name, e), false),
             };
 
             let tool_exec_done = serde_json::json!({
@@ -5502,7 +5502,7 @@ Messages count: {}
 
             let (result_str, success) = match exec_result {
                 Ok(out) => (out, true),
-                Err(e) => (format!("Error executing {}: {}", tc.function.name, e), false),
+                Err(e) => (format!("Error executing {}: {:#}", tc.function.name, e), false),
             };
 
             if is_sub && success {
