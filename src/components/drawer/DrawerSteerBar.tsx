@@ -13,8 +13,6 @@ import {
   Plus,
   ChevronDown,
   Square,
-  Layers,
-  Zap,
 } from 'lucide-react';
 
 export interface DrawerSteerBarProps {
@@ -65,20 +63,6 @@ export default function DrawerSteerBar({
     if (!activeSubagentId) return false;
     return boardTasks.some((t) => t.id === activeSubagentId);
   }, [activeSubagentId, boardTasks]);
-
-  const activeSubagentIsBg = React.useMemo(() => {
-    if (!activeSubagentId || !task?.id) return false;
-    const subs = storeSubagents[task.id] || [];
-    const directSub = subs.find((s) => s.id === activeSubagentId || s.toolCallId === activeSubagentId);
-    if (directSub?.isBg !== undefined) return directSub.isBg;
-    const tools = toolExecutions[task.id] || [];
-    const t = tools.find((x) => x.id === activeSubagentId || (x.params as any)?.subagent_id === activeSubagentId);
-    if (t) {
-      const p = t.params as any;
-      return t.toolName === 'subagent_bg' || p?.is_bg === true || p?.isBg === true;
-    }
-    return false;
-  }, [activeSubagentId, task?.id, storeSubagents, toolExecutions]);
 
   const columns = useBoardStore((s) => s.columns);
   const currentColumn = columns.find((c) => c.id === task.columnId);
@@ -308,19 +292,6 @@ export default function DrawerSteerBar({
                   >
                     {formatSubagentRoleDisplay(activeSubagentRole, subagentNumber || 1, isBoardSubtask, language)}
                   </span>
-                  {!isBoardSubtask && (
-                    activeSubagentIsBg ? (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30 select-none shrink-0">
-                        <Layers className="h-2.5 w-2.5 shrink-0" />
-                        <span>{language === 'ru' ? 'ФОН' : 'BG'}</span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/30 select-none shrink-0">
-                        <Zap className="h-2.5 w-2.5 shrink-0 fill-sky-500/20" />
-                        <span>{language === 'ru' ? 'СИНХР' : 'SYNC'}</span>
-                      </span>
-                    )
-                  )}
                 </div>
               )}
             </div>

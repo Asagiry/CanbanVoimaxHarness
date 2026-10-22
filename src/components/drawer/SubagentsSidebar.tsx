@@ -538,7 +538,7 @@ export default function SubagentsSidebar({
                 }`}
                 style={isActive ? activeCardStyle : undefined}
               >
-                {/* Card Top Row: Role Icon + Role Badge + BG/SYNC Mini-Badge + Status */}
+                {/* Card Top Row: Role Icon + Role Badge + Status */}
                 <div className="flex items-center justify-between gap-1.5 mb-1.5">
                   <div className="flex items-center space-x-1.5 min-w-0 flex-wrap gap-y-1">
                     {sub.isBg ? (
@@ -560,25 +560,6 @@ export default function SubagentsSidebar({
                     >
                       {roleDisplay}
                     </span>
-
-                    {/* Clear BG vs SYNC Mini-Badge */}
-                    {sub.isBg ? (
-                      <span
-                        title={language === 'ru' ? 'Фоновый субагент' : 'Background subagent'}
-                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30 select-none shrink-0"
-                      >
-                        <Layers className="h-2.5 w-2.5 shrink-0" />
-                        <span>{language === 'ru' ? 'ФОН' : 'BG'}</span>
-                      </span>
-                    ) : !isBoardSubtask ? (
-                      <span
-                        title={language === 'ru' ? 'Синхронный вызов' : 'Synchronous subagent'}
-                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/30 select-none shrink-0"
-                      >
-                        <Zap className="h-2.5 w-2.5 shrink-0 fill-sky-500/20" />
-                        <span>{language === 'ru' ? 'СИНХР' : 'SYNC'}</span>
-                      </span>
-                    ) : null}
                   </div>
 
                   {/* Status Indicator & Granular Stop Button */}

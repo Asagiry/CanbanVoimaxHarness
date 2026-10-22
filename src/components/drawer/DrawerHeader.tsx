@@ -211,19 +211,6 @@ export default function DrawerHeader({
               >
                 {formatSubagentRoleDisplay(activeSubagentRole, subagentNumber || 1, isBoardSubtask, language)}
               </span>
-              {!isBoardSubtask && (
-                activeSubagentIsBg ? (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30 select-none shrink-0">
-                    <Layers className="h-2.5 w-2.5 shrink-0" />
-                    <span>{language === 'ru' ? 'ФОН' : 'BG'}</span>
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/30 select-none shrink-0">
-                    <Zap className="h-2.5 w-2.5 shrink-0 fill-sky-500/20" />
-                    <span>{language === 'ru' ? 'СИНХР' : 'SYNC'}</span>
-                  </span>
-                )
-              )}
             </div>
           ) : task && workingColumns.length > 0 ? (
             <div

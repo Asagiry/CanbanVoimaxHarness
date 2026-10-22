@@ -419,18 +419,6 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
               {formatSubagentRoleDisplay(rawRole, subagentNumber || 1)}
             </span>
 
-            {isBg ? (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30 select-none shrink-0">
-                <Layers className="h-2.5 w-2.5 shrink-0" />
-                <span>ФОН</span>
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/30 select-none shrink-0">
-                <Zap className="h-2.5 w-2.5 shrink-0 fill-sky-500/20" />
-                <span>СИНХР</span>
-              </span>
-            )}
-
             <span className="font-sans font-medium text-xs text-[#0d0d0d] dark:text-[#f0f6fc] group-hover:text-[#171717] dark:group-hover:text-white transition-colors truncate">
               {displayTitle}
             </span>

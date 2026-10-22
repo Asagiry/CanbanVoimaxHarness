@@ -270,46 +270,25 @@ pub fn is_binary_or_target_dir(path: &Path) -> bool {
     false
 }
 
-/// Checks if a directory is the CanbanVoimaxHarness application codebase itself
-/// (or its binary/release distribution). The application's own directory must NEVER
-/// be automatically treated as a user project root.
+/// Checks if a directory is the compiled binary distribution directory of the running app.
+/// If the directory is a git repository (contains `.git`), it is treated as a valid
+/// source codebase (even if named CanbanVoimaxHarness) and permitted.
 pub fn is_app_own_directory(path: &Path) -> bool {
     let path_str = path.to_string_lossy();
     if path_str.trim().is_empty() {
         return false;
     }
-    // Check if the current running executable is inside or identical to this path
+    // If the path contains .git, it is a git repository with source code - allow it!
+    if path.join(".git").exists() {
+        return false;
+    }
+    // Block only the directory of the running compiled binary (exe_dir) when there is no .git
     if let Ok(current_exe) = std::env::current_exe() {
         if let Some(exe_dir) = current_exe.parent() {
             if path == exe_dir || path.starts_with(exe_dir) {
                 return true;
             }
         }
-    }
-    // Check if path is named CanbanVoimaxHarness or contains the app artifacts directly
-    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-        if name.eq_ignore_ascii_case("CanbanVoimaxHarness") {
-            return true;
-        }
-    }
-    let tauri_conf = path.join("src-tauri").join("tauri.conf.json");
-    if tauri_conf.exists() {
-        if let Ok(content) = std::fs::read_to_string(&tauri_conf) {
-            if content.contains("\"com.voimax.cvh\"") || content.contains("\"CanbanVoimaxHarness\"") {
-                return true;
-            }
-        }
-    }
-    let pkg_json = path.join("package.json");
-    if pkg_json.exists() {
-        if let Ok(content) = std::fs::read_to_string(&pkg_json) {
-            if content.contains("\"canban-voimax-harness\"") || content.contains("\"CanbanVoimaxHarness\"") {
-                return true;
-            }
-        }
-    }
-    if path.join("canban-voimax-harness.exe").exists() {
-        return true;
     }
     false
 }
@@ -2973,12 +2952,23 @@ mod tests {
 
     #[test]
     fn test_is_app_own_directory_protection() {
-        assert!(is_app_own_directory(Path::new(r"C:\Users\VibeCode\CanbanVoimaxHarness")));
-        assert!(is_app_own_directory(Path::new(r"C:\Users\VibeCode\CanbanVoimaxHarness\Release\Windows\bin")));
-        assert!(is_app_own_directory(Path::new("CanbanVoimaxHarness")));
+        // Exe directory of the running test binary has no .git, so it should be blocked
+        if let Ok(current_exe) = std::env::current_exe() {
+            if let Some(exe_dir) = current_exe.parent() {
+                assert!(is_app_own_directory(exe_dir));
+            }
+        }
 
-        // Normal user project must not be app own directory
+        // Repositories named CanbanVoimaxHarness or normal user projects must NOT be blocked
+        assert!(!is_app_own_directory(Path::new(r"C:\Users\VibeCode\CanbanVoimaxHarness")));
+        assert!(!is_app_own_directory(Path::new("CanbanVoimaxHarness")));
         assert!(!is_app_own_directory(Path::new(r"C:\projects\web-dashboard")));
+
+        // A directory containing .git is a source repository and must NEVER be blocked
+        let temp_dir = std::env::temp_dir().join(format!("cvh_git_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let _ = std::fs::create_dir_all(temp_dir.join(".git"));
+        assert!(!is_app_own_directory(&temp_dir));
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
     #[test]
@@ -2986,7 +2976,7 @@ mod tests {
         assert_eq!(resolve_actual_repo_root(Path::new("")), PathBuf::new());
         assert_eq!(resolve_actual_repo_root(Path::new("Release/Windows/bin")), PathBuf::new());
         assert_eq!(resolve_actual_repo_root(Path::new("Release/Windows/installer")), PathBuf::new());
-        assert_eq!(resolve_actual_repo_root(Path::new(r"C:\Users\VibeCode\CanbanVoimaxHarness")), PathBuf::new());
+        assert_eq!(resolve_actual_repo_root(Path::new(r"C:\Users\VibeCode\CanbanVoimaxHarness")), PathBuf::from(r"C:\Users\VibeCode\CanbanVoimaxHarness"));
         assert_eq!(resolve_actual_repo_root(Path::new(r"C:\Users\VibeCode\CanbanVoimaxHarness\Release\Windows\bin")), PathBuf::new());
     }
 }
