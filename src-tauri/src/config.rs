@@ -1810,14 +1810,21 @@ pub async fn save_pipeline_config(root_path: impl AsRef<Path>, config: &Pipeline
         .context("Failed to serialize PipelineConfig to JSON")?;
     atomic_write_file(&pipeline_path, &serialized).await?;
 
+    let boards_file = root.join(".cvh").join("boards.json");
     if let Some(ref boards) = normalized.boards {
         let boards_cfg = BoardsConfig {
             active_board_id: normalized.active_board_id.clone().unwrap_or_else(default_board_id),
             boards: boards.clone(),
         };
-        let boards_file = root.join(".cvh").join("boards.json");
         if let Ok(serialized_boards) = serde_json::to_string_pretty(&boards_cfg) {
             let _ = atomic_write_file(&boards_file, &serialized_boards).await;
+        }
+    } else if let Ok(mut boards_cfg) = load_boards_config(root).await {
+        if let Some(active_board) = boards_cfg.boards.iter_mut().find(|b| b.id == boards_cfg.active_board_id) {
+            active_board.columns = normalized.columns.clone();
+            if let Ok(serialized_boards) = serde_json::to_string_pretty(&boards_cfg) {
+                let _ = atomic_write_file(&boards_file, &serialized_boards).await;
+            }
         }
     }
     Ok(())
