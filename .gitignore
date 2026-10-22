@@ -33,7 +33,24 @@ Thumbs.db
 *.log
 .xwin-cache/
 # CanbanVoimaxHarness Local Workspace
-.cvh/
+.cvh/*
+!.cvh/boards.json
+!.cvh/pipeline.json
+!.cvh/config.json
+!.cvh/settings/
+.cvh/settings/sequence.json
+!.cvh/settings/tool-policy.json
+!.cvh/agents/
+!.cvh/rules/
+!.cvh/hooks/
+.cvh/harness.db*
+.cvh/worktrees/
+.cvh/dialogs/
+.cvh/spill/
+.cvh/tasks/
+.cvh/tasks.json
+.cvh/task-sequence.json
+.cvh/llm_debug.log
 
 # LLM Settings & Secrets (API Keys)
 .cvh/llm.json

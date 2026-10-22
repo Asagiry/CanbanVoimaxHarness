@@ -51,7 +51,7 @@ activation: on-enter <column-id> runs run_agent(<task-id>)
 ### 3.1 Role Boundary: Infrastructure vs. Workflow Orchestration
 - **cvh-dev (Harness Router / Infrastructure Architect)**:
   - Sole focus: configuring, repairing, and initializing `.cvh/` infrastructure (boards, pipelines, personas, rules, hooks, tool-policies).
-  - **ABSOLUTE BAN ON TASK CREATION / COMPLETION**: `cvh-dev` MUST NOT call `create_task`, `create_tasks`, or `complete_task`. Operational task card creation and completion are strictly for workflow orchestrators (Root Orchestrator / Level 0), human users, and the Sidecar Copilot.
+  - **Task Card Operations**: `cvh-dev` primarily uses `advance_task` / `move_task`. When explicitly enabled in tool policy or requested by the user, `cvh-dev` is permitted to invoke `complete_task` or `create_task`.
   - **Handoff Mechanism**: When `cvh-dev` finishes its work, it calls `advance_task` / `move_task` with a comprehensive `summary` to advance the card to the next pipeline stage (e.g. `review`), or `reject_task` with `reason` if verification fails.
 
 ---

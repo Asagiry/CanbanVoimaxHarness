@@ -3,7 +3,7 @@
   "boards": [
     {
       "id": "development",
-      "name": "cvh-board",
+      "name": "CanbanVoimaxHarness",
       "columns": [
         {
           "id": "backlog",
@@ -23,22 +23,24 @@
             "web_search",
             "web_fetch"
           ],
-          "hooks": {},
+          "hooks": {
+            "on_enter": "builtin:create_worktree"
+          },
           "routes": null,
           "autoRun": null,
           "terminal": null
         },
         {
           "id": "dev",
-          "title": "CVH Development",
+          "title": "Developer",
           "color": "#6366f1",
           "icon": "Bot",
-          "persona": "cvh-dev",
+          "persona": "developer",
           "onEnterScript": null,
           "modelOverride": "gemini-3.8-flash-high",
           "reasoningEffort": null,
           "temperature": 0.2,
-          "gatekeeperSensor": null,
+          "gatekeeperSensor": ".cvh/hooks/gatekeeper_sensor.bat",
           "allowedTools": [
             "execute_command",
             "read_file",
@@ -46,11 +48,63 @@
             "write_file",
             "glob",
             "grep",
-            "web_search"
+            "load_rule",
+            "todo_write",
+            "question",
+            "subagent",
+            "subagent_bg",
+            "collect_subagent",
+            "subagent_list",
+            "advance_task",
+            "list_tasks",
+            "get_task_history",
+            "web_search",
+            "web_fetch"
           ],
           "hooks": {},
           "routes": null,
-          "autoRun": null,
+          "autoRun": true,
+          "terminal": null
+        },
+        {
+          "id": "review",
+          "title": "Review",
+          "color": "#f59e0b",
+          "icon": "ShieldCheck",
+          "persona": "reviewer",
+          "onEnterScript": null,
+          "modelOverride": "gemini-3.8-flash-high",
+          "reasoningEffort": null,
+          "temperature": 0.1,
+          "gatekeeperSensor": ".cvh/hooks/gatekeeper_sensor.bat",
+          "allowedTools": [
+            "read_file",
+            "glob",
+            "grep",
+            "execute_command",
+            "load_rule",
+            "todo_write",
+            "advance_task",
+            "reject_task",
+            "question",
+            "subagent",
+            "subagent_bg",
+            "collect_subagent",
+            "subagent_list",
+            "list_tasks",
+            "get_task_history",
+            "web_search",
+            "web_fetch"
+          ],
+          "hooks": {
+            "on_finish": ".cvh/hooks/on_review_finish.bat"
+          },
+          "routes": {
+            "on_approved": "ready",
+            "on_approved_with_caveats": "ready",
+            "on_changes_requested": "dev"
+          },
+          "autoRun": true,
           "terminal": null
         },
         {
@@ -69,7 +123,9 @@
             "glob",
             "grep"
           ],
-          "hooks": {},
+          "hooks": {
+            "on_enter": ".cvh/hooks/on_enter_ready.bat"
+          },
           "routes": null,
           "autoRun": null,
           "terminal": true
