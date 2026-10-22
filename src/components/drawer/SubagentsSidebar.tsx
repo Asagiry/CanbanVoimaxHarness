@@ -89,8 +89,10 @@ function getSubagentsForTask(
   storeSubagents: Record<string, SubagentInfo[]>,
   toolExecutions: Record<string, ToolExecution[]>,
   toolIdToSubagentId: Record<string, string>,
-  boardTasks: KanbanTask[]
+  boardTasks: KanbanTask[],
+  columns?: { id: string; persona?: string | null }[]
 ): SubagentInfo[] {
+  const cols = columns || useBoardStore.getState().columns || [];
   const map = new Map<string, SubagentInfo>();
 
   // 1. Explicit store subagents (from backend list_subagents + live events)
@@ -159,7 +161,9 @@ function getSubagentsForTask(
     if (!map.has(child.id)) {
       const childCreated = (child as any).createdAt ? Number((child as any).createdAt) : undefined;
       const isReviewSubtask = child.title.toLowerCase().includes('ревью') || child.title.toLowerCase().includes('review');
-      const resolvedRole = isReviewSubtask ? 'reviewer' : (child.persona || 'reviewer');
+      const childStageId = (child as any).stageId || child.columnId;
+      const col = (cols || []).find((c) => c.id === childStageId);
+      const resolvedRole = isReviewSubtask ? 'reviewer' : (col?.persona || 'developer');
       map.set(child.id, {
         id: child.id,
         parentTaskId: taskId,
@@ -251,11 +255,12 @@ export function getSubagentOrderMap(
   storeSubagents: Record<string, SubagentInfo[]>,
   toolExecutions: Record<string, ToolExecution[]>,
   toolIdToSubagentId: Record<string, string>,
-  boardTasks: KanbanTask[]
+  boardTasks: KanbanTask[],
+  columns?: { id: string; persona?: string | null }[]
 ): Map<string, number> {
   const map = new Map<string, number>();
   if (!taskId) return map;
-  const list = getSubagentsForTask(taskId, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks);
+  const list = getSubagentsForTask(taskId, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks, columns);
   list.forEach((sub, idx) => {
     const num = idx + 1;
     map.set(sub.id, num);
@@ -292,6 +297,7 @@ export default function SubagentsSidebar({
   } = useDrawerStore();
 
   const boardTasks = useBoardStore((s) => s.tasks);
+  const columns = useBoardStore((s) => s.columns);
   const agentPersonas = useCortexStore((s) => s.agentPersonas);
 
   // Width & Resizability (default 320px, stored in localStorage)
@@ -371,11 +377,11 @@ export default function SubagentsSidebar({
   }, []);
 
   const orderMap = useMemo(() => {
-    return getSubagentOrderMap(taskId, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks);
-  }, [taskId, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks]);
+    return getSubagentOrderMap(taskId, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks, columns);
+  }, [taskId, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks, columns]);
 
   const allSubagents = useMemo(() => {
-    const subs = getSubagentsForTask(taskId, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks);
+    const subs = getSubagentsForTask(taskId, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks, columns);
     return subs.map((sub) => {
       const feed = activityFeed[sub.id] || (sub.toolCallId ? activityFeed[sub.toolCallId] : []) || [];
       return {
@@ -383,7 +389,7 @@ export default function SubagentsSidebar({
         stepsCount: Math.max(sub.stepsCount || 0, feed.length),
       };
     });
-  }, [taskId, storeSubagents, toolExecutions, toolIdToSubagentId, activityFeed, boardTasks]);
+  }, [taskId, storeSubagents, toolExecutions, toolIdToSubagentId, activityFeed, boardTasks, columns]);
 
   const hasRunningSubagents = allSubagents.some((s) => s.status === 'running');
   const [now, setNow] = useState(() => Date.now());

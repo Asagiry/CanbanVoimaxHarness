@@ -1065,7 +1065,7 @@ export default function DrawerActivityStream({
               return (
                 <div
                   key={key}
-                  className="animate-in fade-in slide-in-from-bottom-2 duration-150 ease-out motion-reduce:animate-none"
+                  className="animate-silk-entrance motion-reduce:animate-none"
                 >
                   <QuestionPromptCard
                     activity={activity}
@@ -1080,7 +1080,7 @@ export default function DrawerActivityStream({
               return (
                 <div
                   key={key}
-                  className="animate-in fade-in slide-in-from-bottom-2 duration-150 ease-out motion-reduce:animate-none"
+                  className="animate-silk-entrance motion-reduce:animate-none"
                 >
                   <CompactedContextCard
                     activity={activity}
@@ -1095,7 +1095,7 @@ export default function DrawerActivityStream({
               return (
                 <div
                   key={key}
-                  className="animate-in fade-in slide-in-from-bottom-2 duration-150 ease-out motion-reduce:animate-none"
+                  className="animate-silk-entrance motion-reduce:animate-none"
                 >
                   <ThinkingCard
                     thought={activity}
@@ -1117,7 +1117,7 @@ export default function DrawerActivityStream({
               return (
                 <div
                   key={key}
-                  className="animate-in fade-in slide-in-from-bottom-2 duration-150 ease-out motion-reduce:animate-none"
+                  className="animate-silk-entrance motion-reduce:animate-none"
                 >
                   <ToolExecutionCard
                     tool={toolWithDuration}
@@ -1132,7 +1132,7 @@ export default function DrawerActivityStream({
               return (
                 <div
                   key={key}
-                  className="animate-in fade-in slide-in-from-bottom-2 duration-150 ease-out motion-reduce:animate-none rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#0d1117] p-3.5 shadow-xs"
+                  className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#0d1117] p-3.5 shadow-xs"
                 >
                   <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-[#ebebeb] dark:border-[#21262d] text-[10px] font-mono text-[#666666] dark:text-[#8b949e]">
                     <div className="flex items-center space-x-1.5 text-[#171717] dark:text-[#f0f6fc] font-medium">
@@ -1174,7 +1174,7 @@ export default function DrawerActivityStream({
               return (
                 <div
                   key={key}
-                  className="animate-in fade-in slide-in-from-bottom-2 duration-150 ease-out motion-reduce:animate-none flex items-center space-x-2 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#f4f4f5] dark:bg-[#161b22] px-3 py-2 text-xs text-[#4d4d4d] dark:text-[#c9d1d9] font-mono shadow-xs"
+                  className="animate-silk-entrance motion-reduce:animate-none flex items-center space-x-2 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#f4f4f5] dark:bg-[#161b22] px-3 py-2 text-xs text-[#4d4d4d] dark:text-[#c9d1d9] font-mono shadow-xs"
                 >
                   <Info className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
                   <span className="flex-1">{activity?.content ?? ''}</span>
@@ -1187,7 +1187,7 @@ export default function DrawerActivityStream({
               return (
                 <div
                   key={key}
-                  className="animate-in fade-in slide-in-from-bottom-2 duration-150 ease-out motion-reduce:animate-none flex items-start space-x-2 rounded-md border border-[#fecaca] dark:border-[#da3633] bg-[#fef2f2] dark:bg-[#3b1219] p-3 text-xs text-[#991b1b] dark:text-[#ff7b72] font-mono shadow-xs"
+                  className="animate-silk-entrance motion-reduce:animate-none flex items-start space-x-2 rounded-md border border-[#fecaca] dark:border-[#da3633] bg-[#fef2f2] dark:bg-[#3b1219] p-3 text-xs text-[#991b1b] dark:text-[#ff7b72] font-mono shadow-xs"
                 >
                   <AlertTriangle className="h-4 w-4 text-[#dc2626] dark:text-[#ff7b72] shrink-0 mt-0.5" />
                   <div className="flex-1 whitespace-pre-wrap select-text">
@@ -1288,7 +1288,7 @@ export default function DrawerActivityStream({
               return (
                 <div
                   key={key}
-                  className="animate-in fade-in slide-in-from-bottom-2 duration-150 ease-out motion-reduce:animate-none"
+                  className="animate-silk-entrance motion-reduce:animate-none"
                 >
                   <AgentExplanationCard
                     activity={activity}
@@ -1306,7 +1306,7 @@ export default function DrawerActivityStream({
             return (
               <div
                 key={key}
-                className="animate-in fade-in slide-in-from-bottom-2 duration-150 ease-out motion-reduce:animate-none rounded-lg border border-[#e4e4e7] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-xs overflow-hidden my-2"
+                className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-[#e4e4e7] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-xs overflow-hidden my-2"
               >
                 <div
                   onClick={() => toggleOutput(key)}

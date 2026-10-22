@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
-import { useToolPolicyStore, AVAILABLE_TOOLS, TOOL_PARAM_DEFS, getToolTranslationKey } from '../../stores/toolPolicyStore';
+import { useToolPolicyStore, AVAILABLE_TOOLS, TOOL_PARAM_DEFS, getToolTranslationKey, type ToolMeta } from '../../stores/toolPolicyStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import AgentIcon from '../common/AgentIcon';
@@ -181,6 +181,136 @@ function ToolParamsEditor({ toolId }: { toolId: string }) {
   );
 }
 
+function ToolSchemaEditor({ tool }: { tool: ToolMeta }) {
+  const { toolDescriptions, setToolDescription, resetToolDescription } = useToolPolicyStore();
+  const defaultDesc = tool.description;
+  const customDesc = toolDescriptions[tool.id];
+  const activeDesc = customDesc ?? defaultDesc;
+  const isCustomized = customDesc !== undefined && customDesc !== defaultDesc;
+
+  const [draftDesc, setDraftDesc] = useState(activeDesc);
+  const [isEditing, setIsEditing] = useState(false);
+  const [savedFeedback, setSavedFeedback] = useState(false);
+
+  useEffect(() => {
+    setDraftDesc(activeDesc);
+  }, [activeDesc]);
+
+  const handleSave = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setToolDescription(tool.id, draftDesc);
+    setIsEditing(false);
+    setSavedFeedback(true);
+    setTimeout(() => setSavedFeedback(false), 2000);
+  };
+
+  const handleReset = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    resetToolDescription(tool.id);
+    setDraftDesc(defaultDesc);
+    setIsEditing(false);
+  };
+
+  const schemaJson = useMemo(() => {
+    const obj = {
+      name: tool.id,
+      description: isEditing ? draftDesc : activeDesc,
+      parameters: tool.parameters || { type: 'object', properties: {} },
+    };
+    return JSON.stringify(obj, null, 2);
+  }, [tool.id, tool.parameters, isEditing, draftDesc, activeDesc]);
+
+  return (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      className="mt-2.5 p-2.5 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9fb] dark:bg-[#07090e] space-y-2 select-none"
+    >
+      <div className="flex items-center justify-between gap-2 border-b border-[#ebebeb] dark:border-[#21262d] pb-1.5 flex-wrap">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-[#666666] dark:text-[#8b949e] font-semibold">
+            Схема инструмента
+          </span>
+          {isCustomized && (
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+              Кастомное описание
+            </span>
+          )}
+          {savedFeedback && (
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 animate-pulse">
+              Сохранено
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          {isEditing ? (
+            <>
+              <button
+                type="button"
+                onClick={handleSave}
+                className="px-2 py-0.5 rounded border border-[#171717] dark:border-[#f0f6fc] bg-[#171717] dark:bg-[#f0f6fc] text-white dark:text-[#0d1117] text-[10px] font-mono font-medium hover:opacity-90 transition cursor-pointer"
+              >
+                Сохранить описание
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDraftDesc(activeDesc);
+                  setIsEditing(false);
+                }}
+                className="px-2 py-0.5 rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] text-[10px] font-mono hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer"
+              >
+                Отмена
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className="px-2 py-0.5 rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#161b22] text-[#171717] dark:text-[#f0f6fc] text-[10px] font-mono hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer"
+              >
+                Редактировать
+              </button>
+              {isCustomized && (
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="px-2 py-0.5 rounded border border-[#fecaca] dark:border-[#da3633]/40 bg-[#fef2f2] dark:bg-[#3b1219] text-[#991b1b] dark:text-[#ff7b72] text-[10px] font-mono hover:opacity-90 transition cursor-pointer"
+                >
+                  Сбросить по умолчанию
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {isEditing && (
+        <div className="space-y-1 pt-1">
+          <label className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] block">
+            Описание для нейросети
+          </label>
+          <textarea
+            value={draftDesc}
+            onChange={(e) => setDraftDesc(e.target.value)}
+            rows={2}
+            className="w-full rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] font-mono text-xs p-2 focus:outline-hidden focus:border-[#171717] dark:focus:border-[#58a6ff] resize-y"
+            placeholder="Описание инструмента, которое отправляется в API..."
+          />
+        </div>
+      )}
+
+      <div className="pt-1">
+        <pre className="font-mono text-[10.5px] leading-relaxed p-2.5 rounded border border-[#ebebeb] dark:border-[#21262d] bg-[#f4f4f5] dark:bg-[#0d1117] text-[#24292f] dark:text-[#c9d1d9] overflow-x-auto max-h-[220px]">
+          {schemaJson}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
+
 const NAME_PATTERN = /^[a-z0-9_]+$/;
 
 const CATEGORY_ORDER: Array<'orchestration' | 'interactive' | 'workflow' | 'system' | 'fs' | 'web' | 'agent'> = [
@@ -207,6 +337,7 @@ export default function ToolPolicyModal() {
     toggleGlobalTool,
     setStageTool,
     isToolAllowed,
+    toolDescriptions,
   } = useToolPolicyStore();
   const { t } = useTranslation();
 
@@ -463,9 +594,7 @@ export default function ToolPolicyModal() {
                           const isExpanded = expandedToolId === tool.id;
                           const isChild = Boolean(tool.parentTool);
                           const toolLabelKey = getToolTranslationKey(tool.id, 'label') as TranslationKey;
-                          const toolDescKey = getToolTranslationKey(tool.id, 'description') as TranslationKey;
                           const toolLabel = t(toolLabelKey) !== toolLabelKey ? t(toolLabelKey) : tool.label;
-                          const toolDesc = t(toolDescKey) !== toolDescKey ? t(toolDescKey) : tool.description;
 
                           return (
                             <tr
@@ -490,12 +619,19 @@ export default function ToolPolicyModal() {
                                     className={`w-4 h-4 shrink-0 mt-0.5 text-[#8f8f8f] dark:text-[#6e7681] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                                   />
                                   <div className="min-w-0 flex-1">
-                                    <div
-                                      className={`font-medium text-[#171717] dark:text-[#f0f6fc] group-hover:underline underline-offset-2 leading-tight ${
-                                        tool.isSubagentMaster ? 'font-semibold' : ''
-                                      }`}
-                                    >
-                                      {toolLabel}
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <div
+                                        className={`font-medium text-[#171717] dark:text-[#f0f6fc] group-hover:underline underline-offset-2 leading-tight ${
+                                          tool.isSubagentMaster ? 'font-semibold' : ''
+                                        }`}
+                                      >
+                                        {toolLabel}
+                                      </div>
+                                      {toolDescriptions[tool.id] !== undefined && toolDescriptions[tool.id] !== tool.description && (
+                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                                          Кастомное описание
+                                        </span>
+                                      )}
                                     </div>
                                     <div className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] font-mono leading-tight mt-0.5">
                                       {tool.name}
@@ -504,10 +640,8 @@ export default function ToolPolicyModal() {
                                 </button>
                                 {isExpanded && (
                                   <div className="mt-2 space-y-2">
-                                    <p className="text-[11px] text-[#666666] dark:text-[#8b949e] font-sans leading-snug">
-                                      {toolDesc}
-                                    </p>
                                     <ToolParamsEditor toolId={tool.id} />
+                                    <ToolSchemaEditor tool={tool} />
                                   </div>
                                 )}
                               </td>
@@ -672,9 +806,7 @@ export default function ToolPolicyModal() {
                         const isMasterGloballyActive = tool.parentTool ? (globalEnabled[tool.parentTool] ?? true) : true;
                         const isDisabled = isChild && !isMasterGloballyActive;
                         const toolLabelKey = getToolTranslationKey(tool.id, 'label') as TranslationKey;
-                        const toolDescKey = getToolTranslationKey(tool.id, 'description') as TranslationKey;
                         const toolLabel = t(toolLabelKey) !== toolLabelKey ? t(toolLabelKey) : tool.label;
-                        const toolDesc = t(toolDescKey) !== toolDescKey ? t(toolDescKey) : tool.description;
                         const masterLabel = tool.parentTool
                           ? (t(getToolTranslationKey(tool.parentTool, 'label') as TranslationKey) !== getToolTranslationKey(tool.parentTool, 'label')
                               ? t(getToolTranslationKey(tool.parentTool, 'label') as TranslationKey)
@@ -708,8 +840,15 @@ export default function ToolPolicyModal() {
                                   className={`w-4 h-4 shrink-0 mt-0.5 text-[#8f8f8f] dark:text-[#8b949e] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                                 />
                                 <div className="min-w-0 flex-1">
-                                  <div className={`font-mono font-medium text-xs text-[#171717] dark:text-[#f0f6fc] truncate leading-tight group-hover:underline underline-offset-2 ${tool.isSubagentMaster ? 'font-semibold' : ''}`}>
-                                    {toolLabel}
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <div className={`font-mono font-medium text-xs text-[#171717] dark:text-[#f0f6fc] truncate leading-tight group-hover:underline underline-offset-2 ${tool.isSubagentMaster ? 'font-semibold' : ''}`}>
+                                      {toolLabel}
+                                    </div>
+                                    {toolDescriptions[tool.id] !== undefined && toolDescriptions[tool.id] !== tool.description && (
+                                      <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                                        Кастомное описание
+                                      </span>
+                                    )}
                                   </div>
                                   <div className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] font-mono leading-tight mt-0.5">
                                     {tool.name}
@@ -738,10 +877,8 @@ export default function ToolPolicyModal() {
                             </div>
                             {isExpanded && (
                               <div className="mt-2 space-y-2">
-                                <p className="text-[11px] text-[#666666] dark:text-[#8b949e] font-sans leading-snug">
-                                  {toolDesc}
-                                </p>
                                 <ToolParamsEditor toolId={tool.id} />
+                                <ToolSchemaEditor tool={tool} />
                               </div>
                             )}
                           </div>

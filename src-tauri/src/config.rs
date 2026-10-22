@@ -1919,6 +1919,8 @@ pub struct ToolPolicyConfig {
     pub stage_overrides: HashMap<String, HashMap<String, bool>>,
     #[serde(default = "default_tool_settings", rename = "toolSettings")]
     pub tool_settings: HashMap<String, serde_json::Value>,
+    #[serde(default, rename = "toolDescriptions")]
+    pub tool_descriptions: HashMap<String, String>,
 }
 
 pub fn default_tool_settings() -> HashMap<String, serde_json::Value> {
@@ -2047,6 +2049,7 @@ impl Default for ToolPolicyConfig {
             global_enabled: default_global_tools(),
             stage_overrides,
             tool_settings: default_tool_settings(),
+            tool_descriptions: HashMap::new(),
         }
     }
 }

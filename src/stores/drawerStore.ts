@@ -28,6 +28,8 @@ interface TaskTelemetry {
   cacheHitRate: number;
   durationMs?: number;
   tps?: number;
+  systemTokens?: number;
+  toolTokens?: number;
 }
 
 interface DrawerState {
