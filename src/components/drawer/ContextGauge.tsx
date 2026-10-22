@@ -253,28 +253,27 @@ export default function ContextGauge({
       (telemetry?.inputTokens || 0) + (telemetry?.cacheReadTokens || 0)
     );
 
-    // Context resolution priority cascade (strictly obeying AGENTS.md § 2.24):
+    // Context resolution priority cascade:
     // 1. Explicit currentEstimatedTokens prop
-    // 2. In-memory compaction override (tokenOverride) or resolved compacted tokens (resolvedCompactTokens)
-    //    MUST have absolute priority over stale server telemetry (totalInput) from prior turns!
-    // 3. Verified server telemetry totalInput + streamed turn output tokens
+    // 2. Verified server telemetry (telemetry?.inputTokens > 0) has absolute priority over old compaction overrides and resolvedCompactTokens!
+    //    Старое значение сжатия (tokenOverride / resolvedCompactTokens) используется ТОЛЬКО если telemetry?.inputTokens === 0 (т.е. сразу после нажатия кнопки сжатия, до выполнения первого хода LLM).
+    // 3. In-memory compaction override (tokenOverride) or resolved compacted tokens (resolvedCompactTokens)
     // 4. Heuristic fallback based on baseSystem (~1500) + baseTool (~1500) + dynamicMsgTokens
     let total: number;
     if (currentEstimatedTokens !== undefined) {
       total = currentEstimatedTokens;
+    } else if ((telemetry?.inputTokens || 0) > 0) {
+      total = totalInput;
     } else if (resolvedCompactTokens !== undefined || tokenOverride !== undefined) {
       const baseCompacted = (tokenOverride ?? resolvedCompactTokens)!;
       const out = streamedTurnTokens > 0 ? streamedTurnTokens : 0;
       total = baseCompacted + out;
-    } else if (totalInput > 0) {
-      const out = (telemetry?.outputTokens || 0) > 0 ? telemetry.outputTokens : streamedTurnTokens;
-      total = totalInput + out;
     } else {
       const dynamicMsgTokens = Math.max(100, rawMsgTokens);
       total = baseSystem + baseTool + dynamicMsgTokens;
     }
 
-    // Honest segment token allocation without artificial jumps:
+    // Honest segment token allocation:
     let sys = baseSystem;
     let tool = baseTool;
     let msg = 0;
@@ -283,6 +282,14 @@ export default function ContextGauge({
       sys = 0;
       tool = 0;
       msg = 0;
+    } else if (
+      (telemetry?.inputTokens || 0) > 0 &&
+      typeof telemetry?.systemTokens === 'number' &&
+      typeof telemetry?.toolTokens === 'number'
+    ) {
+      sys = telemetry.systemTokens;
+      tool = telemetry.toolTokens;
+      msg = Math.max(0, totalInput - sys - tool);
     } else if (hasMessages) {
       const msgWeight = Math.max(1, rawMsgTokens);
       const totalWeight = baseSystem + baseTool + msgWeight;
@@ -327,6 +334,8 @@ export default function ContextGauge({
     telemetry?.inputTokens,
     telemetry?.cacheReadTokens,
     telemetry?.outputTokens,
+    telemetry?.systemTokens,
+    telemetry?.toolTokens,
     streamedTurnTokens,
     thoughts,
     outputs,

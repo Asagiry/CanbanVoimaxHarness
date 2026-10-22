@@ -121,6 +121,21 @@
 }
 
 /* Tactile Micro-Animations: Silk Stream (@tailwindcss-animate compatibility) */
+@keyframes silk-entrance {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-silk-entrance {
+  animation: silk-entrance 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 @keyframes enter {
   from {
     opacity: var(--tw-enter-opacity, 1);

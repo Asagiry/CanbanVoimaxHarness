@@ -183,6 +183,12 @@ function KanbanCard({ task, index }: KanbanCardProps) {
             onMouseLeave={() => setHoveredTaskId(null)}
             style={{
               ...provided.draggableProps.style,
+              transform: snapshot.isDragging && provided.draggableProps.style?.transform
+                ? `${provided.draggableProps.style.transform} rotate(1.8deg) scale(1.025)`
+                : provided.draggableProps.style?.transform,
+              transition: provided.draggableProps.style?.transition
+                ? `${provided.draggableProps.style.transition}, transform 0.08s ease-out, box-shadow 0.15s ease-out`
+                : 'transform 0.08s ease-out, box-shadow 0.15s ease-out',
               borderColor: snapshot.isDragging
                 ? undefined
                 : isHighlighted

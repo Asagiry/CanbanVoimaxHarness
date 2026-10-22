@@ -299,6 +299,8 @@ export default function App() {
             cacheHitRate,
             durationMs,
             tps,
+            systemTokens,
+            toolTokens,
           } = event.payload || {};
           if (!taskId) return;
           const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
@@ -309,6 +311,8 @@ export default function App() {
           const cCreate = num(cacheCreationTokens);
           const totalIn = inTok + cRead;
           const hitRate = num(cacheHitRate) || (totalIn > 0 ? (cRead / totalIn) * 100 : 0);
+          const sysTok = typeof systemTokens === 'number' && Number.isFinite(systemTokens) ? systemTokens : undefined;
+          const toolTok = typeof toolTokens === 'number' && Number.isFinite(toolTokens) ? toolTokens : undefined;
 
           updateTelemetry(taskId, {
             inputTokens: inTok,
@@ -318,6 +322,8 @@ export default function App() {
             cacheHitRate: hitRate,
             durationMs: num(durationMs),
             tps: tpsVal,
+            ...(sysTok !== undefined ? { systemTokens: sysTok } : {}),
+            ...(toolTok !== undefined ? { toolTokens: toolTok } : {}),
           });
 
           const drawerState = useDrawerStore.getState();

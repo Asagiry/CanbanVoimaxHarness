@@ -10,6 +10,7 @@ export interface ToolMeta {
   tokenWeight: number;
   parentTool?: string;
   isSubagentMaster?: boolean;
+  parameters?: Record<string, unknown>;
 }
 
 export function getToolTranslationKey(toolId: string, field: 'label' | 'description'): string {
@@ -24,6 +25,18 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     description: 'Декомпозиция требований и создание новой карточки задачи на Канбан-доске с привязкой к текущей задаче.',
     category: 'orchestration',
     tokenWeight: 260,
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Краткое и емкое название задачи' },
+        description: { type: 'string', description: 'Полные технические требования, критерии приёмки и файлы' },
+        column_id: { type: 'string', description: "Целевая колонка (по умолчанию 'dev' или первая рабочая колонка)" },
+        board_id: { type: 'string', description: 'Целевая доска (по умолчанию доска текущей задачи)' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Теги задачи' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Приоритет задачи: low, medium, high' },
+      },
+      required: ['title', 'description'],
+    },
   },
   {
     id: 'complete_task',
@@ -32,6 +45,14 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     description: 'Финализация задачи оркестратора и перевод в Готово. Защищено инвариантом Anti-Bypass.',
     category: 'orchestration',
     tokenWeight: 220,
+    parameters: {
+      type: 'object',
+      properties: {
+        task_id: { type: 'string', description: "ID завершаемой задачи (например, 'CVH-001'). Если не указан, завершается текущая задача." },
+        summary: { type: 'string', description: 'Исчерпывающее саммари плана декомпозиции и выполненной работы' },
+      },
+      required: ['summary'],
+    },
   },
   {
     id: 'question',
@@ -40,6 +61,26 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     description: 'Задать уточняющий вопрос пользователю и ожидать ответа в интерфейсе. Алиас: ask_user.',
     category: 'interactive',
     tokenWeight: 240,
+    parameters: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'The specific question to ask the user.' },
+        options: {
+          type: 'array',
+          description: "Predefined choices for the user. If recommended, put '(Рекомендуется)' in label.",
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string', description: 'Short option label' },
+              description: { type: 'string', description: 'Clarifying subtitle or tradeoff' },
+            },
+            required: ['label'],
+          },
+        },
+        multiple: { type: 'boolean', description: 'Whether multiple options can be chosen' },
+      },
+      required: ['text'],
+    },
   },
   {
     id: 'advance_task',
@@ -48,6 +89,13 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     description: 'Передать задачу на следующий этап пайплайна с обязательным саммари проделанной работы.',
     category: 'workflow',
     tokenWeight: 220,
+    parameters: {
+      type: 'object',
+      properties: {
+        summary: { type: 'string', description: 'Подробное саммари изменений, результатов и проверок (опционально, есть дефолт)' },
+        stage_id: { type: 'string', description: "Целевой этап пайплайна (например, 'review', 'retro', 'ready'). Алиасы: 'target_stage', 'column_id'. Если не указан — переход на следующий по порядку этап." },
+      },
+    },
   },
   {
     id: 'reject_task',
@@ -56,6 +104,13 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     description: 'Вернуть задачу на предыдущий этап пайплайна с указанием причины отклонения и замечаний.',
     category: 'workflow',
     tokenWeight: 220,
+    parameters: {
+      type: 'object',
+      properties: {
+        reason: { type: 'string', description: 'Причина отклонения: упавшие проверки, баги, необходимые исправления' },
+      },
+      required: ['reason'],
+    },
   },
   {
     id: 'execute_command',
@@ -64,6 +119,14 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     description: 'Выполнение команд в изолированном каталоге worktree.',
     category: 'system',
     tokenWeight: 320,
+    parameters: {
+      type: 'object',
+      properties: {
+        command: { type: 'string', description: "Command string to run (e.g. 'cargo check', or 'cmd')." },
+        timeout_seconds: { type: 'integer', description: 'Execution timeout in seconds (default: 60).' },
+      },
+      required: ['command'],
+    },
   },
   {
     id: 'read_file',
@@ -72,6 +135,15 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     description: 'Просмотр содержимого файлов UTF-8 со смещением строк.',
     category: 'fs',
     tokenWeight: 260,
+    parameters: {
+      type: 'object',
+      properties: {
+        file_path: { type: 'string', description: "Relative file path within worktree (or 'path')." },
+        offset: { type: 'integer', description: '1-based starting line number (default: 1).' },
+        limit: { type: 'integer', description: 'Maximum number of lines to return (default: 2000).' },
+      },
+      required: ['file_path'],
+    },
   },
   {
     id: 'edit_file',
@@ -80,6 +152,16 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     description: 'Точечная замена строк в файлах с фиксацией различий.',
     category: 'fs',
     tokenWeight: 310,
+    parameters: {
+      type: 'object',
+      properties: {
+        file_path: { type: 'string', description: "Relative file path within worktree (or 'path')." },
+        old_string: { type: 'string', description: "Existing text substring to replace (or 'old_str')." },
+        new_string: { type: 'string', description: "Replacement text substring (or 'new_str')." },
+        replace_all: { type: 'boolean', description: 'Replace all occurrences (default: false).' },
+      },
+      required: ['file_path', 'old_string', 'new_string'],
+    },
   },
   {
     id: 'write_file',
@@ -88,6 +170,14 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     description: 'Атомарная запись полного содержимого файла в worktree.',
     category: 'fs',
     tokenWeight: 260,
+    parameters: {
+      type: 'object',
+      properties: {
+        file_path: { type: 'string', description: "Relative file path within worktree (or 'path')." },
+        content: { type: 'string', description: 'Complete file text content to write.' },
+      },
+      required: ['file_path', 'content'],
+    },
   },
   {
     id: 'glob',
@@ -96,6 +186,14 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     description: 'Поиск файлов по маске внутри каталога проекта.',
     category: 'fs',
     tokenWeight: 240,
+    parameters: {
+      type: 'object',
+      properties: {
+        pattern: { type: 'string', description: "Glob pattern (e.g. '**/*.rs', 'src/**/*.ts')." },
+        path: { type: 'string', description: "Subdirectory to search in (default: '.')." },
+      },
+      required: ['pattern'],
+    },
   },
   {
     id: 'grep',
@@ -104,6 +202,14 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     description: 'Поиск регулярных выражений с номерами строк.',
     category: 'fs',
     tokenWeight: 250,
+    parameters: {
+      type: 'object',
+      properties: {
+        pattern: { type: 'string', description: 'Regular expression pattern.' },
+        path: { type: 'string', description: "Directory or file to search (default: '.')." },
+      },
+      required: ['pattern'],
+    },
   },
   {
     id: 'web_search',
@@ -112,6 +218,14 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     description: 'Поиск документации и внешних решений в интернете.',
     category: 'web',
     tokenWeight: 290,
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Search query terms.' },
+        limit: { type: 'integer', description: 'Maximum number of results to return (default: 5).' },
+      },
+      required: ['query'],
+    },
   },
   {
     id: 'web_fetch',
@@ -120,6 +234,13 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     description: 'Загрузка внешних веб-страниц с преобразованием в Markdown.',
     category: 'web',
     tokenWeight: 280,
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'The target HTTP or HTTPS URL.' },
+      },
+      required: ['url'],
+    },
   },
   {
     id: 'subagent',
@@ -129,6 +250,20 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     category: 'agent',
     tokenWeight: 310,
     isSubagentMaster: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: "Short task description (e.g. 'Analyze project architecture', 'Find memory leak')." },
+        role: { type: 'string', description: "Subagent role persona (e.g. 'general', 'developer', 'reviewer', 'explorer'). Default: 'general'." },
+        prompt: { type: 'string', description: 'Detailed task instructions.' },
+        tools: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional list of tools allowed for this subagent. If omitted, defaults to ALL tools available to the parent agent.',
+        },
+      },
+      required: ['title', 'prompt'],
+    },
   },
   {
     id: 'subagent_sync',
@@ -138,6 +273,20 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     category: 'agent',
     tokenWeight: 290,
     parentTool: 'subagent',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Short task description.' },
+        role: { type: 'string', description: "Subagent role persona. Default: 'general'." },
+        prompt: { type: 'string', description: 'Detailed task instructions.' },
+        tools: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional list of tools allowed for this subagent.',
+        },
+      },
+      required: ['title', 'prompt'],
+    },
   },
   {
     id: 'subagent_bg',
@@ -147,6 +296,20 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     category: 'agent',
     tokenWeight: 290,
     parentTool: 'subagent',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Short task description.' },
+        role: { type: 'string', description: "Subagent role persona. Default: 'general'." },
+        prompt: { type: 'string', description: 'Detailed task instructions.' },
+        tools: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional list of tools allowed for this subagent.',
+        },
+      },
+      required: ['title', 'prompt'],
+    },
   },
   {
     id: 'collect_subagent',
@@ -156,6 +319,17 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     category: 'agent',
     tokenWeight: 260,
     parentTool: 'subagent',
+    parameters: {
+      type: 'object',
+      properties: {
+        subagent_id: { type: 'string', description: 'Single subagent_id to await.' },
+        subagent_ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'List of subagent_ids to await.',
+        },
+      },
+    },
   },
   {
     id: 'todo_write',
@@ -164,6 +338,24 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     description: 'Фиксация и обновление плана задачи: шаги pending | in_progress | completed',
     category: 'agent',
     tokenWeight: 280,
+    parameters: {
+      type: 'object',
+      properties: {
+        todos: {
+          type: 'array',
+          maxItems: 20,
+          items: {
+            type: 'object',
+            properties: {
+              content: { type: 'string' },
+              status: { type: 'string', enum: ['pending', 'in_progress', 'completed'] },
+            },
+            required: ['content', 'status'],
+          },
+        },
+      },
+      required: ['todos'],
+    },
   },
   {
     id: 'load_rule',
@@ -172,6 +364,13 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     description: 'Динамическая JIT-загрузка стандартов и правил проекта по выбранной теме.',
     category: 'system',
     tokenWeight: 180,
+    parameters: {
+      type: 'object',
+      properties: {
+        topic: { type: 'string', description: 'Rule topic or category name' },
+      },
+      required: ['topic'],
+    },
   },
   {
     id: 'list_tasks',
@@ -180,6 +379,14 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     description: 'Компактный реестр последних задач с Канбан-доски для аудита и аналитики.',
     category: 'workflow',
     tokenWeight: 220,
+    parameters: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer', description: 'Максимальное количество задач (по умолчанию 20, максимум 50)' },
+        stage_id: { type: 'string', description: "Опциональный фильтр по этапу/колонке (например, 'ready', 'dev')" },
+        query: { type: 'string', description: 'Опциональный текстовый поиск по title, id или handover_summary' },
+      },
+    },
   },
   {
     id: 'get_task_history',
@@ -188,6 +395,14 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     description: 'Подробный пошаговый рентген выполнения задачи (ТЗ, тулы, ошибки, вердикт).',
     category: 'workflow',
     tokenWeight: 280,
+    parameters: {
+      type: 'object',
+      properties: {
+        task_id: { type: 'string', description: "ID задачи (например 'CVH-042' или 'CVH-042.1')" },
+        include_tool_outputs: { type: 'boolean', description: 'По умолчанию false. Если true — выводит сжатые результаты выполнения инструментов.' },
+      },
+      required: ['task_id'],
+    },
   },
 ];
 
@@ -283,6 +498,7 @@ export interface ToolPolicyState {
   globalEnabled: Record<string, boolean>;
   stageOverrides: Record<string, Record<string, boolean>>;
   toolSettings: ToolSettings;
+  toolDescriptions: Record<string, string>;
 
   // Actions
   openModal: () => void;
@@ -291,6 +507,8 @@ export interface ToolPolicyState {
   setStageTool: (stageId: string, toolId: string, enabled: boolean) => void;
   setToolSetting: (toolId: string, key: string, value: number) => void;
   getToolSetting: (toolId: string, key: string, defaultValue: number) => number;
+  setToolDescription: (toolId: string, description: string) => void;
+  resetToolDescription: (toolId: string) => void;
   isToolAllowed: (toolId: string, stageId?: string) => boolean;
   calculateSavedTokens: (stageId?: string) => number;
   resetDefaults: () => void;
@@ -407,6 +625,7 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
   globalEnabled: DEFAULT_GLOBAL,
   stageOverrides: DEFAULT_OVERRIDES,
   toolSettings: DEFAULT_TOOL_SETTINGS,
+  toolDescriptions: {},
 
   openModal: () => set({ isModalOpen: true }),
   closeModal: () => set({ isModalOpen: false }),
@@ -450,6 +669,25 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
   getToolSetting: (toolId, key, defaultValue) => {
     const { toolSettings } = get();
     return toolSettings[toolId]?.[key] ?? defaultValue;
+  },
+
+  setToolDescription: (toolId, description) => {
+    set((state) => ({
+      toolDescriptions: {
+        ...state.toolDescriptions,
+        [toolId]: description,
+      },
+    }));
+    get().saveToTauri();
+  },
+
+  resetToolDescription: (toolId) => {
+    set((state) => {
+      const next = { ...state.toolDescriptions };
+      delete next[toolId];
+      return { toolDescriptions: next };
+    });
+    get().saveToTauri();
   },
 
   isToolAllowed: (toolId, stageOrAgentId) => {
@@ -517,6 +755,7 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
       globalEnabled: { ...DEFAULT_GLOBAL },
       stageOverrides: { ...DEFAULT_OVERRIDES },
       toolSettings: { ...DEFAULT_TOOL_SETTINGS },
+      toolDescriptions: {},
     });
     get().saveToTauri();
   },
@@ -528,6 +767,7 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
         globalEnabled?: Record<string, boolean>;
         stageOverrides?: Record<string, Record<string, boolean>>;
         toolSettings?: ToolSettings;
+        toolDescriptions?: Record<string, string>;
       }>('get_tool_policies');
 
       if (policies) {
@@ -544,6 +784,7 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
           globalEnabled: policies.globalEnabled || DEFAULT_GLOBAL,
           stageOverrides: policies.stageOverrides || DEFAULT_OVERRIDES,
           toolSettings: mergedSettings,
+          toolDescriptions: policies.toolDescriptions || {},
         });
       }
     } catch {
@@ -554,12 +795,13 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
   saveToTauri: async () => {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const { globalEnabled, stageOverrides, toolSettings } = get();
+      const { globalEnabled, stageOverrides, toolSettings, toolDescriptions } = get();
       await invoke('save_tool_policies', {
         policies: {
           globalEnabled,
           stageOverrides,
           toolSettings,
+          toolDescriptions,
         },
       });
     } catch {
