@@ -23,7 +23,7 @@ export const AGENT_PALETTE: readonly string[] = [
   '#f59e0b', // amber
   '#a855f7', // purple
   '#0284c7', // sky
-  '#ef4444', // red
+  '#3b82f6', // blue (pleasant non-aggressive blue, replacing red alert)
   '#6366f1', // indigo
   '#14b8a6', // teal
   '#ec4899', // pink
@@ -57,11 +57,16 @@ export const AGENT_ICONS: readonly string[] = [
  * Детерминированный выбор цвета для роли агента из AGENT_PALETTE.
  */
 export function getDeterministicAgentColor(role: string): string {
+  if (!role) return '#6366f1';
   const trimmed = role.trim();
-  if (trimmed === 'cvh-dev') return '#6366f1';
-  if (trimmed === 'developer' || trimmed === 'dev') return '#0284c7';
-  if (trimmed === 'reviewer' || trimmed === 'review') return '#a855f7';
-  if (trimmed === 'retro') return '#f59e0b';
+  if (!trimmed) return '#6366f1';
+  const lower = trimmed.toLowerCase();
+  if (lower === 'cvh-dev') return '#6366f1';
+  if (lower === 'developer' || lower === 'dev') return '#0284c7';
+  if (lower === 'reviewer' || lower === 'review') return '#a855f7';
+  if (lower === 'retro') return '#f59e0b';
+  if (lower === 'general') return '#6366f1';
+  if (lower === 'oneshot') return '#0284c7';
   
   let hash = 5381;
   for (let i = 0; i < trimmed.length; i++) {

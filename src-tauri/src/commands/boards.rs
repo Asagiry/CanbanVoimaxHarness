@@ -20,7 +20,7 @@ pub const AGENT_ICONS: &[&str] = &[
 /// Серый (#64748b, #6b7280) и зеленый (#10b981, #22c55e) исключены,
 /// так как они навсегда зарезервированы за Backlog и Ready.
 pub const AGENT_PALETTE: &[&str] = &[
-    "#f59e0b", "#a855f7", "#0284c7", "#ef4444", "#6366f1",
+    "#f59e0b", "#a855f7", "#0284c7", "#3b82f6", "#6366f1",
     "#14b8a6", "#ec4899", "#f97316", "#06b6d4", "#8b5cf6",
 ];
 
@@ -43,6 +43,12 @@ pub fn deterministic_color_for_role(role: &str) -> String {
     }
     if trimmed == "retro" {
         return "#f59e0b".to_string();
+    }
+    if trimmed.eq_ignore_ascii_case("general") {
+        return "#6366f1".to_string();
+    }
+    if trimmed.eq_ignore_ascii_case("oneshot") {
+        return "#0284c7".to_string();
     }
     let hash: usize = trimmed.bytes().fold(5381usize, |acc, b| {
         acc.wrapping_mul(33).wrapping_add(b as usize)

@@ -18,6 +18,8 @@ import {
   GitBranch,
   Sun,
   Moon,
+  Layers,
+  Zap,
 } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useTranslation } from '../../stores/languageStore';
@@ -94,6 +96,20 @@ export default function DrawerHeader({
     if (!activeSubagentId) return false;
     return boardTasks.some((t) => t.id === activeSubagentId);
   }, [activeSubagentId, boardTasks]);
+
+  const activeSubagentIsBg = React.useMemo(() => {
+    if (!activeSubagentId || !task?.id) return false;
+    const subs = storeSubagents[task.id] || [];
+    const directSub = subs.find((s) => s.id === activeSubagentId || s.toolCallId === activeSubagentId);
+    if (directSub?.isBg !== undefined) return directSub.isBg;
+    const tools = toolExecutions[task.id] || [];
+    const t = tools.find((x) => x.id === activeSubagentId || (x.params as any)?.subagent_id === activeSubagentId);
+    if (t) {
+      const p = t.params as any;
+      return t.toolName === 'subagent_bg' || p?.is_bg === true || p?.isBg === true;
+    }
+    return false;
+  }, [activeSubagentId, task?.id, storeSubagents, toolExecutions]);
 
   const workingColumns = columns.filter(
     (c) => c.id !== 'backlog' && c.id !== 'ready' && !c.terminal
@@ -172,17 +188,42 @@ export default function DrawerHeader({
               className="flex items-center space-x-2 px-3 py-1 rounded-md bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-xs font-mono max-w-xl mx-auto shadow-2xs select-none pointer-events-auto min-w-0"
             >
               <span className="flex items-center space-x-1.5 font-semibold text-[#171717] dark:text-[#f0f6fc] truncate min-w-0">
-                <AgentIcon name={matchedPersona?.icon} className="h-3.5 w-3.5 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
+                {activeSubagentIsBg ? (
+                  <div className="relative shrink-0 flex items-center justify-center">
+                    <Layers className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+                    <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-purple-500 ring-1 ring-white dark:ring-[#161b22]" />
+                  </div>
+                ) : isBoardSubtask ? (
+                  <AgentIcon name={matchedPersona?.icon} className="h-3.5 w-3.5 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
+                ) : (
+                  <div className="relative shrink-0 flex items-center justify-center">
+                    <Zap className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 fill-sky-500/20" />
+                    <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-sky-500 ring-1 ring-white dark:ring-[#161b22]" />
+                  </div>
+                )}
                 <span className="truncate" title={activeSubagentTitle || undefined}>
-                  {formatSubagentDisplayTitle(activeSubagentTitle)}
+                  {formatSubagentDisplayTitle(activeSubagentTitle, language)}
                 </span>
               </span>
               <span
                 style={getRoleBadgeStyle(activeSubagentRole, matchedPersona?.color)}
                 className="px-2 py-0.5 rounded text-[11px] font-mono font-bold uppercase tracking-wider border shrink-0 select-none"
               >
-                {formatSubagentRoleDisplay(activeSubagentRole, subagentNumber || 1, isBoardSubtask)}
+                {formatSubagentRoleDisplay(activeSubagentRole, subagentNumber || 1, isBoardSubtask, language)}
               </span>
+              {!isBoardSubtask && (
+                activeSubagentIsBg ? (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30 select-none shrink-0">
+                    <Layers className="h-2.5 w-2.5 shrink-0" />
+                    <span>{language === 'ru' ? 'ФОН' : 'BG'}</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/30 select-none shrink-0">
+                    <Zap className="h-2.5 w-2.5 shrink-0 fill-sky-500/20" />
+                    <span>{language === 'ru' ? 'СИНХР' : 'SYNC'}</span>
+                  </span>
+                )
+              )}
             </div>
           ) : task && workingColumns.length > 0 ? (
             <div
