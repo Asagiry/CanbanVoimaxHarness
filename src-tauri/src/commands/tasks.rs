@@ -109,18 +109,29 @@ pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
         }
     };
 
-    // 2. Fallback to .cvh/tasks.json or project backup if SQLite returned empty
+    // 2. One-time migration: if SQLite returned 0 tasks, but legacy .cvh/tasks.json exists
+    let local_tasks_file = actual_root.join(".cvh").join("tasks.json");
     if tasks.is_empty() {
-        let local_tasks_file = actual_root.join(".cvh").join("tasks.json");
         if local_tasks_file.exists() {
             if let Ok(content) = tokio::fs::read_to_string(&local_tasks_file).await {
                 let trimmed = content.trim();
                 if !trimmed.is_empty() {
                     if let Ok(parsed) = serde_json::from_str::<Vec<Task>>(trimmed) {
-                        tasks = parsed;
+                        if !parsed.is_empty() {
+                            tasks = parsed;
+                            let _ = crate::db::db_upsert_all_tasks(&actual_root, &tasks);
+                            crate::logger::cvh_log(
+                                Some(&actual_root),
+                                "INFO",
+                                "MIGRATION",
+                                &format!("Migrated {} tasks from legacy tasks.json to SQLite", tasks.len()),
+                            );
+                        }
                     }
                 }
             }
+            // Safely remove legacy file so it no longer clutters disk
+            let _ = tokio::fs::remove_file(&local_tasks_file).await;
         }
 
         if tasks.is_empty() {
@@ -137,17 +148,16 @@ pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
                                     backup_file
                                 );
                                 tasks = parsed;
+                                let _ = crate::db::db_upsert_all_tasks(&actual_root, &tasks);
                             }
                         }
                     }
                 }
             }
         }
-
-        // Seed SQLite immediately if loaded from fallback JSON
-        if !tasks.is_empty() {
-            let _ = crate::db::db_upsert_all_tasks(&actual_root, &tasks);
-        }
+    } else if local_tasks_file.exists() {
+        // Safe cleanup if SQLite already has tasks but stale tasks.json still lingers
+        let _ = tokio::fs::remove_file(&local_tasks_file).await;
     }
 
     let modified = heal_tasks(&mut tasks, &boards_cfg);
@@ -197,7 +207,7 @@ pub async fn save_tasks_to_disk(repo_root: &Path, tasks: &[Task]) -> Result<(), 
         return Ok(());
     }
 
-    // 1. Primary Source of Truth: High-speed SQLite database (.cvh/harness.db)
+    // 1. 100% Single Source of Truth: High-speed SQLite database (.cvh/harness.db)
     let db_res = crate::db::db_upsert_all_tasks(&actual_root, tasks);
     if let Err(ref e) = db_res {
         crate::logger::cvh_log(
@@ -208,24 +218,31 @@ pub async fn save_tasks_to_disk(repo_root: &Path, tasks: &[Task]) -> Result<(), 
         );
     }
 
-    // 2. Snapshot to .cvh/tasks.json and project backup
+    // 2. Snapshot to project backup in LocalAppData for disaster recovery
     let serialized = serde_json::to_string_pretty(tasks)
         .map_err(|e| format!("Failed to serialize tasks: {}", e))?;
-
-    let local_tasks_file = actual_root.join(".cvh").join("tasks.json");
-    let local_res = atomic_write_file(&local_tasks_file, &serialized).await;
 
     let backup_file = get_project_tasks_backup_file(&actual_root);
     let backup_res = atomic_write_file(&backup_file, &serialized).await;
 
     let ids: Vec<&str> = tasks.iter().map(|t| t.id.as_str()).collect();
-    match (local_res, backup_res) {
-        (Ok(_), _) => {
+    match (db_res, backup_res) {
+        (Ok(_), Ok(_)) => {
             crate::logger::cvh_log_with_details(
                 Some(&actual_root),
                 "INFO",
                 "SAVE_TASKS",
-                &format!("save_tasks_to_disk: successfully saved {} tasks to SQLite & {:?}", tasks.len(), local_tasks_file),
+                &format!("save_tasks_to_disk: successfully saved {} tasks to SQLite & disaster backup", tasks.len()),
+                Some(&format!("Saved IDs: [{}]", ids.join(", "))),
+            );
+            Ok(())
+        }
+        (Ok(_), Err(e)) => {
+            crate::logger::cvh_log_with_details(
+                Some(&actual_root),
+                "WARN",
+                "SAVE_TASKS",
+                &format!("save_tasks_to_disk: saved {} tasks to SQLite, but disaster backup failed: {}", tasks.len(), e),
                 Some(&format!("Saved IDs: [{}]", ids.join(", "))),
             );
             Ok(())
@@ -235,16 +252,13 @@ pub async fn save_tasks_to_disk(repo_root: &Path, tasks: &[Task]) -> Result<(), 
                 Some(&actual_root),
                 "WARN",
                 "SAVE_TASKS",
-                &format!(
-                    "save_tasks_to_disk: failed local repo {:?}: {}, but persisted to project backup {:?}",
-                    local_tasks_file, e, backup_file
-                ),
+                &format!("save_tasks_to_disk: SQLite error: {}, but persisted to disaster backup {:?}", e, backup_file),
                 Some(&format!("Saved IDs: [{}]", ids.join(", "))),
             );
             Ok(())
         }
         (Err(e1), Err(e2)) => {
-            let err_msg = format!("Failed to save tasks to both local ({}) and backup ({})", e1, e2);
+            let err_msg = format!("Failed to save tasks to both SQLite ({}) and backup ({})", e1, e2);
             crate::logger::cvh_log(
                 Some(&actual_root),
                 "ERROR",
@@ -2510,7 +2524,7 @@ pub async fn run_agent(
                 "ERROR",
                 "RUN_AGENT",
                 &format!("run_agent REJECTED: Task '{}' not found (in-memory: {}, disk: {})", task_id, mem_count, tasks_to_use.len()),
-                Some(&format!("Available tasks in {:?}: [{}]", root.join(".cvh").join("tasks.json"), available_ids.join(", "))),
+                Some(&format!("Available tasks in SQLite: [{}]", available_ids.join(", "))),
             );
             return Err(err_msg);
         }
@@ -2729,7 +2743,7 @@ pub async fn run_agent(
         };
     }
 
-    // Persist status "running" to tasks.json and update state.tasks
+    // Persist status "running" to database and update state.tasks
     {
         let mut all_tasks = load_tasks_from_disk(&root).await;
         if let Some(t) = all_tasks.iter_mut().find(|t| task_id_matches(&t.id, &task_id)) {

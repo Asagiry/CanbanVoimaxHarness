@@ -291,12 +291,12 @@ async fn copy_dir_recursive_filtered(src_dir: &Path, dst_dir: &Path) {
 /// Synchronizes the live runtime-state from `<root>/.cvh` into the fresh
 /// worktree's `<worktree>/.cvh`, overwriting the stale committed snapshot.
 ///
-/// Copies (if present in root): `pipeline.json`, `boards.json`, `tasks.json`,
+/// Copies (if present in root): `pipeline.json`, `boards.json`,
 /// `settings/tool-policy.json`, `agents/*.md`, `tools/*.json`, `hooks/` and
 /// `skills/` (recursively, minus secrets).
 ///
-/// Never copies: `worktrees/` (nesting!), `dialogs/`, `tasks/<id>/`, `spill/`,
-/// secrets (`llm.json`, `*.secret`, `*.key`, `.env*`).
+/// Never copies: `worktrees/` (nesting!), `dialogs/`, `tasks/<id>/`, `tasks.json`,
+/// `spill/`, secrets (`llm.json`, `*.secret`, `*.key`, `.env*`).
 ///
 /// Best-effort: all errors are `eprintln!` warnings, never propagated.
 pub async fn sync_cvh_runtime_state(repo_root: &Path, worktree_abs: &Path) {
@@ -314,7 +314,7 @@ pub async fn sync_cvh_runtime_state(repo_root: &Path, worktree_abs: &Path) {
     }
 
     // Single files (overwrite stale snapshot when root has a live copy).
-    for rel in ["pipeline.json", "boards.json", "tasks.json"] {
+    for rel in ["pipeline.json", "boards.json"] {
         let src = src_cvh.join(rel);
         if tokio::fs::try_exists(&src).await.unwrap_or(false) {
             if let Some(name) = src.file_name().and_then(|n| n.to_str()) {
@@ -324,6 +324,12 @@ pub async fn sync_cvh_runtime_state(repo_root: &Path, worktree_abs: &Path) {
             }
             copy_file_overwrite(&src, &dst_cvh.join(rel)).await;
         }
+    }
+
+    // Worktrees must be clean and never contain or sync tasks.json.
+    let dst_tasks = dst_cvh.join("tasks.json");
+    if tokio::fs::try_exists(&dst_tasks).await.unwrap_or(false) {
+        let _ = tokio::fs::remove_file(&dst_tasks).await;
     }
     // Canonical Tool Policy Matrix only (not the whole settings/ dir).
     let src_policy = src_cvh.join("settings").join("tool-policy.json");
@@ -531,7 +537,7 @@ mod tests {
         // Overwritten stale files carry the live content now.
         assert_eq!(read_str(&dst_cvh.join("pipeline.json")), r#"{"live":true}"#);
         assert_eq!(read_str(&dst_cvh.join("boards.json")), r#"{"boards":[]}"#);
-        assert_eq!(read_str(&dst_cvh.join("tasks.json")), r#"[]"#);
+        assert!(!dst_cvh.join("tasks.json").exists(), "tasks.json must not be synced to worktrees");
         assert_eq!(
             read_str(&dst_cvh.join("settings").join("tool-policy.json")),
             r#"{"globalEnabled":{}}"#
@@ -576,14 +582,17 @@ mod tests {
         assert!(!dst_cvh.join("dialogs").exists());
         assert!(
             !dst_cvh.join("tasks").exists(),
-            "tasks/<id>/ must never be synced (tasks.json alone is)"
+            "tasks/<id>/ must never be synced"
         );
         assert!(!dst_cvh.join("spill").exists());
         assert!(!dst_cvh.join("llm.json").exists());
         assert!(!dst_cvh.join("hooks").join("evil.secret").exists());
         assert!(!dst_cvh.join("skills").join(".env.local").exists());
-        // tasks.json itself IS synced even though tasks/<id>/ is not.
-        assert!(dst_cvh.join("tasks.json").is_file());
+        // tasks.json must never be synced to worktrees.
+        assert!(
+            !dst_cvh.join("tasks.json").exists(),
+            "tasks.json must never be synced to worktrees"
+        );
 
         let _ = std::fs::remove_dir_all(&tmp);
     }
