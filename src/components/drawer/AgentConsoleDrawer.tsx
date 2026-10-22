@@ -462,10 +462,6 @@ export default function AgentConsoleDrawer() {
     setRunError(null);
 
     const mainText = trimmed || (images.length > 0 ? 'Изображение прикреплено' : '');
-    const imageNotice = images.length > 0
-      ? `\n[Прикреплено ${images.length} изображений: ${images.map((i) => i.name).join(', ')}]`
-      : '';
-    const fullMessage = `${mainText}${imageNotice}`;
 
     setActiveAgentTask(task.id, true);
     if (activeSubagentId) {
@@ -482,7 +478,7 @@ export default function AgentConsoleDrawer() {
         await invoke('retry_subagent', {
           parentTaskId: task.id,
           subagentId: resolvedSubagentId,
-          message: fullMessage,
+          message: mainText,
         });
       } catch (err) {
         console.info('retry_subagent invoke error or web mode:', err);
@@ -498,7 +494,7 @@ export default function AgentConsoleDrawer() {
     // Do NOT pollute task description with user steer messages.
     // If task has no description yet, set initial prompt. Otherwise, keep original description untouched.
     if (!task.description) {
-      updateTask(task.id, { description: fullMessage, status: 'running', isTimerRunning: true });
+      updateTask(task.id, { description: mainText, status: 'running', isTimerRunning: true });
     } else {
       updateTask(task.id, { status: 'running', isTimerRunning: true });
     }
@@ -506,13 +502,13 @@ export default function AgentConsoleDrawer() {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       await syncTasksBackend(useBoardStore.getState().tasks);
-      if (isRunning) {
-        await invoke('steer_agent', { taskId: task.id, message: fullMessage });
-      } else {
-        await invoke('run_agent', { taskId: task.id, prompt: fullMessage });
-      }
+      await invoke('steer_agent', {
+        taskId: task.id,
+        message: mainText,
+        images: imageUrls.length > 0 ? imageUrls : undefined,
+      });
     } catch (err: any) {
-      console.info('steer_agent / run_agent invoke failed or web mode:', err);
+      console.info('steer_agent invoke failed or web mode:', err);
       const errMsg = err?.message || (typeof err === 'string' ? err : 'Ошибка отправки команды агенту');
       setRunError(errMsg);
       if (!isRunning) {

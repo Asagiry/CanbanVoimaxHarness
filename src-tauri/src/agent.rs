@@ -4473,6 +4473,7 @@ pub struct AgentSessionConfig {
     pub task_description: String,
     pub handover_summary: Option<String>,
     pub steer_prompt: Option<String>,
+    pub steer_images: Option<Vec<String>>,
     pub base_url: String,
     pub api_key: Option<String>,
     pub model: String,
@@ -4691,15 +4692,40 @@ pub fn reconstruct_messages_from_dialog(
                                 trimmed
                             )
                         };
-                        messages.push(ChatMessage::user(formatted));
+                        if let Some(ref imgs) = item.images {
+                            if !imgs.is_empty() {
+                                messages.push(ChatMessage::user_with_images(formatted, imgs.clone()));
+                            } else {
+                                messages.push(ChatMessage::user(formatted));
+                            }
+                        } else {
+                            messages.push(ChatMessage::user(formatted));
+                        }
                     }
                 }
             }
             "user" => {
                 if let Some(ref c) = item.content {
                     let trimmed = c.trim();
-                    if !trimmed.is_empty() && trimmed != initial_user_prompt.trim() {
-                        messages.push(ChatMessage::user(trimmed));
+                    if !trimmed.is_empty() {
+                        if trimmed == initial_user_prompt.trim() {
+                            if let Some(ref imgs) = item.images {
+                                if !imgs.is_empty() && messages.len() >= 2 && messages[1].role == Role::User {
+                                    messages[1] = ChatMessage::user_with_images(initial_user_prompt, imgs.clone())
+                                        .with_cache_control(crate::llm::CacheControl::ephemeral());
+                                }
+                            }
+                        } else {
+                            if let Some(ref imgs) = item.images {
+                                if !imgs.is_empty() {
+                                    messages.push(ChatMessage::user_with_images(trimmed, imgs.clone()));
+                                } else {
+                                    messages.push(ChatMessage::user(trimmed));
+                                }
+                            } else {
+                                messages.push(ChatMessage::user(trimmed));
+                            }
+                        }
                     }
                 }
             }
@@ -4932,7 +4958,24 @@ where
             }).unwrap_or(false);
 
             if !already_appended {
-                messages.push(ChatMessage::user(formatted_steer));
+                if let Some(ref imgs) = config.steer_images {
+                    if !imgs.is_empty() {
+                        messages.push(ChatMessage::user_with_images(formatted_steer, imgs.clone()));
+                    } else {
+                        messages.push(ChatMessage::user(formatted_steer));
+                    }
+                } else {
+                    messages.push(ChatMessage::user(formatted_steer));
+                }
+            } else if let Some(ref imgs) = config.steer_images {
+                if !imgs.is_empty() {
+                    if let Some(last_msg) = messages.last_mut() {
+                        if last_msg.role == Role::User {
+                            let text = last_msg.text_content().unwrap_or(&formatted_steer).to_string();
+                            *last_msg = ChatMessage::user_with_images(text, imgs.clone());
+                        }
+                    }
+                }
             }
 
             // Persist steer message to SQLite dialog_items ("type": "steer") so load_task_dialog also retains it
@@ -4946,13 +4989,22 @@ where
             };
 
             if !already_in_db {
-                let _ = crate::commands::dialogs::append_task_dialog_activity(
-                    &config.repo_root,
-                    &config.task_id,
-                    "steer",
-                    steer_trimmed,
-                    config.app_handle.as_ref(),
-                ).await;
+                let new_item = crate::db::ActivityItem {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    item_type: "steer".to_string(),
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    content: Some(steer_trimmed.to_string()),
+                    tool: None,
+                    duration_ms: None,
+                    images: config.steer_images.clone(),
+                };
+                let _ = crate::db::append_dialog_items(&config.repo_root, &config.task_id, std::slice::from_ref(&new_item));
+                if let Some(app) = config.app_handle.as_ref() {
+                    let _ = app.emit("task:dialog", serde_json::json!({
+                        "taskId": config.task_id,
+                        "item": new_item,
+                    }));
+                }
             }
         }
     }

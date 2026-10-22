@@ -2445,6 +2445,7 @@ pub async fn resolve_task_active_agent_model(
 pub async fn run_agent(
     task_id: String,
     prompt: Option<String>,
+    images: Option<Vec<String>>,
     app_handle: AppHandle,
 ) -> Result<String, String> {
     let root = app_handle.state::<AppState>().get_root();
@@ -2541,7 +2542,7 @@ pub async fn run_agent(
                 .and_then(|map| map.get(&task_id).and_then(|cs| cs.lock().map(|g| g.messages.len() > 2).ok()))
                 .unwrap_or(false);
 
-            if task.description.trim().is_empty() && !has_existing_context {
+            if task.description.trim().is_empty() && !has_existing_context && images.is_none() {
                 task.description = p_trimmed.to_string();
                 task.updated_at = Utc::now().timestamp_millis();
 
@@ -2559,7 +2560,7 @@ pub async fn run_agent(
                     }
                 }
                 None
-            } else if p_trimmed == task.description.trim() {
+            } else if p_trimmed == task.description.trim() && images.is_none() {
                 // If prompt matches task description, this is an autorun / task run, NOT a steer!
                 None
             } else {
@@ -2796,6 +2797,7 @@ pub async fn run_agent(
         task_description: initial_description,
         handover_summary: task.handover_summary.clone(),
         steer_prompt,
+        steer_images: images.clone(),
         base_url,
         api_key,
         model,
@@ -3870,6 +3872,7 @@ pub async fn compact_context(
 pub async fn steer_agent(
     task_id: String,
     message: String,
+    images: Option<Vec<String>>,
     app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
@@ -3890,31 +3893,46 @@ pub async fn steer_agent(
         }
     }
 
-    // Persist steer message into SQLite dialog_items via append_task_dialog_activity
+    // Persist steer message into SQLite dialog_items
     // only if not already persisted (e.g. from optimistic client save)
-    let already_in_db = if let Ok(items) = crate::db::load_dialog_items(&root, &task_id) {
-        items.iter().rev().take(3).any(|it| {
+    let mut already_in_db = false;
+    if let Ok(mut items) = crate::db::load_dialog_items(&root, &task_id) {
+        if let Some(it) = items.iter_mut().rev().take(3).find(|it| {
             (it.item_type == "steer" || it.item_type == "user")
                 && it.content.as_deref().map(str::trim) == Some(message.trim())
-        })
-    } else {
-        false
-    };
+        }) {
+            already_in_db = true;
+            if (it.images.is_none() || it.images.as_ref().map(|v| v.is_empty()).unwrap_or(false))
+                && images.as_ref().map(|v| !v.is_empty()).unwrap_or(false)
+            {
+                it.images = images.clone();
+                let _ = crate::db::append_dialog_items(&root, &task_id, std::slice::from_ref(it));
+            }
+        }
+    }
 
     if !already_in_db {
-        let _ = append_task_dialog_activity(
-            &root,
-            &task_id,
-            "steer",
-            &message,
-            Some(&app_handle),
-        ).await;
+        let new_item = crate::db::ActivityItem {
+            id: uuid::Uuid::new_v4().to_string(),
+            item_type: "steer".to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            content: Some(message.clone()),
+            tool: None,
+            duration_ms: None,
+            images: images.clone(),
+        };
+        let _ = crate::db::append_dialog_items(&root, &task_id, std::slice::from_ref(&new_item));
+        let _ = app_handle.emit("task:dialog", serde_json::json!({
+            "taskId": task_id,
+            "item": new_item,
+        }));
     }
 
     let steer_payload = serde_json::json!({
         "taskId": task_id,
         "content": message,
-        "type": "steer"
+        "type": "steer",
+        "images": images,
     });
     let _ = app_handle.emit("agent:steer", steer_payload);
 
@@ -3960,7 +3978,7 @@ pub async fn steer_agent(
         }
     }
 
-    run_agent(task_id, Some(message), app_handle).await
+    run_agent(task_id, Some(message), images, app_handle).await
 }
 
 /// Resolves the context window strictly for a task or agent persona role.

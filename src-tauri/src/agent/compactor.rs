@@ -535,7 +535,17 @@ pub fn estimate_tokens(messages: &[ChatMessage]) -> usize {
         total += 4; // base message framing
 
         if let Some(ref content) = msg.content {
-            total += estimate_text_tokens(content);
+            match content {
+                crate::llm::MessageContent::Text(t) => total += estimate_text_tokens(t),
+                crate::llm::MessageContent::Parts(parts) => {
+                    for p in parts {
+                        match p {
+                            crate::llm::ContentPart::Text { text } => total += estimate_text_tokens(text),
+                            crate::llm::ContentPart::ImageUrl { .. } => total += 1600,
+                        }
+                    }
+                }
+            }
         }
         if let Some(ref name) = msg.name {
             total += estimate_text_tokens(name);
@@ -711,7 +721,7 @@ pub fn evaporate_tool_logs(messages: &mut Vec<ChatMessage>, current_turn: usize)
                         char_len, code, tool_name
                     );
 
-                    msg.content = Some(replacement);
+                    msg.content = Some(replacement.into());
                     evaporated_count += 1;
                 }
             }
@@ -734,7 +744,7 @@ pub fn evaporate_tool_logs(messages: &mut Vec<ChatMessage>, current_turn: usize)
                 let char_len = content.chars().count();
 
                 if has_embedded_think {
-                    let mut new_content = content.clone();
+                    let mut new_content = content.to_string();
                     let mut modified = false;
 
                     while let Some(start_idx) = new_content.find("<think>") {
@@ -770,12 +780,12 @@ pub fn evaporate_tool_logs(messages: &mut Vec<ChatMessage>, current_turn: usize)
                     }
 
                     if modified {
-                        msg.content = Some(new_content);
+                        msg.content = Some(new_content.into());
                         evaporated_count += 1;
                     }
                 } else if is_explicit_thought && char_len > 500 {
                     let replacement = format!("[Thought evaporated: {} chars truncated]", char_len);
-                    msg.content = Some(replacement);
+                    msg.content = Some(replacement.into());
                     evaporated_count += 1;
                 }
             }
@@ -811,7 +821,7 @@ pub fn condense_older_messages(
         if msg.role == Role::System && i > 0 {
             if let Some(ref c) = msg.content {
                 if c.starts_with("# Compacted Context Summary") {
-                    existing_summary = Some(c.clone());
+                    existing_summary = Some(c.to_string());
                     continue;
                 }
             }
