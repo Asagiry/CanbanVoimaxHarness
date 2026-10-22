@@ -81,22 +81,51 @@ export default function ContextGauge({
   const setTaskTokens = useDrawerStore((s) => s.setTaskTokens);
   const evaporateClientToolLogs = useDrawerStore((s) => s.evaporateClientToolLogs);
 
-  // Extract latest compacted tokens from activity feed if persisted
-  const latestCompactedTokens = useMemo(() => {
-    if (!feed || feed.length === 0) return undefined;
+  // Extract latest compacted tokens from activity feed if persisted, plus any post-compaction messages
+  const { latestCompactedTokens, postCompactionTokens } = useMemo(() => {
+    if (!feed || feed.length === 0) return { latestCompactedTokens: undefined, postCompactionTokens: 0 };
+    let compactedIdx = -1;
+    let baseTokens: number | undefined = undefined;
+
     for (let i = feed.length - 1; i >= 0; i--) {
       const it = feed[i];
       if (it.type === 'compacted' && it.tool) {
         const tData = it.tool as any;
         if (typeof tData?.tokensAfter === 'number') {
-          return tData.tokensAfter;
+          baseTokens = tData.tokensAfter;
+          compactedIdx = i;
+          break;
         }
       }
     }
-    return undefined;
+
+    if (baseTokens === undefined || compactedIdx === -1) {
+      return { latestCompactedTokens: undefined, postCompactionTokens: 0 };
+    }
+
+    let postChars = 0;
+    for (let i = compactedIdx + 1; i < feed.length; i++) {
+      const it = feed[i];
+      postChars += (it.content?.length || 0);
+      if (it.tool) {
+        postChars += (it.tool.stdout?.length || 0);
+        postChars += (it.tool.stderr?.length || 0);
+        postChars += JSON.stringify(it.tool.params || {}).length;
+      }
+    }
+
+    return {
+      latestCompactedTokens: baseTokens,
+      postCompactionTokens: Math.round(postChars / 2.2),
+    };
   }, [feed]);
 
-  const resolvedCompactTokens = tokenOverride ?? taskCurrentTokens ?? latestCompactedTokens;
+  const effectiveCompactedTokens =
+    tokenOverride ??
+    taskCurrentTokens ??
+    (latestCompactedTokens !== undefined ? latestCompactedTokens + postCompactionTokens : undefined);
+
+  const resolvedCompactTokens = effectiveCompactedTokens;
 
   // Prime in-memory token override if found from task state or feed
   useEffect(() => {
@@ -199,8 +228,10 @@ export default function ContextGauge({
       }
     }
 
-    const baseSystem = 6000;
-    const baseTool = 3500;
+    // System prompt base size: ~1,500 tokens (rules trimmed via dynamic load_rule)
+    const baseSystem = 1500;
+    // Standard tool schemas overhead: ~1,500 tokens
+    const baseTool = 1500;
 
     let messageChars = textChars;
     for (const t of toolsArr) {
@@ -223,25 +254,28 @@ export default function ContextGauge({
       (telemetry?.inputTokens || 0) + (telemetry?.cacheReadTokens || 0)
     );
 
-    // Context resolution priority order:
+    // Context resolution priority cascade (strictly obeying AGENTS.md § 2.24):
     // 1. Explicit currentEstimatedTokens prop
-    // 2. Verified server telemetry totalInput + streamed turn output tokens (true model prompt context from latest turn)
-    // 3. In-memory compaction override or compacted tokens from persisted feed
-    // 4. Fallback heuristic with realistic system prompt (~6000), tools (~3500), and multilingual messages (~2.2 chars/tok)
+    // 2. In-memory compaction override (tokenOverride) or resolved compacted tokens (resolvedCompactTokens)
+    //    MUST have absolute priority over stale server telemetry (totalInput) from prior turns!
+    // 3. Verified server telemetry totalInput + streamed turn output tokens
+    // 4. Heuristic fallback based on baseSystem (~1500) + baseTool (~1500) + dynamicMsgTokens
     let total: number;
     if (currentEstimatedTokens !== undefined) {
       total = currentEstimatedTokens;
+    } else if (resolvedCompactTokens !== undefined || tokenOverride !== undefined) {
+      const baseCompacted = (tokenOverride ?? resolvedCompactTokens)!;
+      const out = streamedTurnTokens > 0 ? streamedTurnTokens : 0;
+      total = baseCompacted + out;
     } else if (totalInput > 0) {
       const out = (telemetry?.outputTokens || 0) > 0 ? telemetry.outputTokens : streamedTurnTokens;
       total = totalInput + out;
-    } else if (resolvedCompactTokens !== undefined) {
-      total = resolvedCompactTokens;
     } else {
-      const dynamicMsgTokens = Math.max(300, rawMsgTokens);
+      const dynamicMsgTokens = Math.max(100, rawMsgTokens);
       total = baseSystem + baseTool + dynamicMsgTokens;
     }
 
-    // Segment token allocation:
+    // Honest segment token allocation without artificial jumps:
     let sys = baseSystem;
     let tool = baseTool;
     let msg = 0;
@@ -255,24 +289,20 @@ export default function ContextGauge({
       const totalWeight = baseSystem + baseTool + msgWeight;
 
       if (total < totalWeight) {
-        // Proportional allocation across all 3 segments: don't squash messageTokens to 0!
+        // Honest proportional allocation across all 3 segments: don't squash messageTokens to 0!
         const ratio = total / totalWeight;
         sys = Math.round(baseSystem * ratio);
         tool = Math.round(baseTool * ratio);
         msg = Math.max(1, total - sys - tool);
-        if (sys + tool + msg > total) {
-          if (tool > msg) tool = Math.max(0, total - sys - msg);
-          else sys = Math.max(0, total - tool - msg);
-        }
       } else {
         sys = baseSystem;
         tool = baseTool;
         msg = Math.max(1, total - sys - tool);
       }
     } else {
-      // No messages in conversation yet: allocate only to system and tool definitions
-      if (total < sys + tool) {
-        const ratio = total / (sys + tool);
+      // No messages in conversation yet: allocate between system and tool definitions
+      if (total < baseSystem + baseTool) {
+        const ratio = total / (baseSystem + baseTool);
         sys = Math.round(baseSystem * ratio);
         tool = Math.max(0, total - sys);
         msg = 0;
@@ -289,8 +319,21 @@ export default function ContextGauge({
       toolDefTokens: tool,
       messageTokens: msg,
     };
-    // Лёгкие deps: слайсы текущей задачи и серверная телеметрия
-  }, [taskId, currentEstimatedTokens, resolvedCompactTokens, telemetry?.inputTokens, telemetry?.cacheReadTokens, telemetry?.outputTokens, streamedTurnTokens, thoughts, outputs, tools, feed]);
+    // Lightweight reactive deps: task slices, token override, and server telemetry
+  }, [
+    taskId,
+    currentEstimatedTokens,
+    resolvedCompactTokens,
+    tokenOverride,
+    telemetry?.inputTokens,
+    telemetry?.cacheReadTokens,
+    telemetry?.outputTokens,
+    streamedTurnTokens,
+    thoughts,
+    outputs,
+    tools,
+    feed,
+  ]);
 
   const percent = Math.min(100, Math.max(0, Math.round((totalUsedTokens / effectiveLimit) * 100)));
 

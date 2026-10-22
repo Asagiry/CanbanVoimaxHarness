@@ -183,6 +183,10 @@ export const translations = {
     'drawer.thinkingCopied': 'Thinking copied',
     'drawer.dialogueCompacted': 'Dialogue history compacted',
     'drawer.compacting': 'Compacting...',
+    'drawer.contextCompacted': 'Context compacted',
+    'drawer.compactedCount': 'Compacted {count} {pluralMsg}',
+    'drawer.freedTokens': 'Freed -{tokens} tokens',
+    'drawer.optimizationTitle': 'Context Optimization',
 
     // Git Diff Sidebar
     'gitDiff.title': 'Git Diff',
@@ -671,6 +675,10 @@ export const translations = {
     'drawer.thinkingCopied': 'Размышления скопированы',
     'drawer.dialogueCompacted': 'История диалога сжата',
     'drawer.compacting': 'Сжатие...',
+    'drawer.contextCompacted': 'Контекст сжат',
+    'drawer.compactedCount': 'Сжато {count} {pluralMsg}',
+    'drawer.freedTokens': 'Освобождено -{tokens} токенов',
+    'drawer.optimizationTitle': 'Оптимизация контекста',
 
     // Git Diff Sidebar
     'gitDiff.title': 'Git Diff',
