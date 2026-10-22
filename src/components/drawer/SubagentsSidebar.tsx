@@ -16,6 +16,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Square,
+  Zap,
 } from 'lucide-react';
 import { useTranslation, Language } from '../../stores/languageStore';
 
@@ -537,16 +538,21 @@ export default function SubagentsSidebar({
                 }`}
                 style={isActive ? activeCardStyle : undefined}
               >
-                {/* Card Top Row: Role Icon + Role Badge + [BG] + Status */}
+                {/* Card Top Row: Role Icon + Role Badge + BG/SYNC Mini-Badge + Status */}
                 <div className="flex items-center justify-between gap-1.5 mb-1.5">
-                  <div className="flex items-center space-x-1.5 min-w-0">
+                  <div className="flex items-center space-x-1.5 min-w-0 flex-wrap gap-y-1">
                     {sub.isBg ? (
                       <div className="relative shrink-0 flex items-center justify-center">
                         <Layers className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
                         <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-purple-500 ring-1 ring-white dark:ring-[#0d1117]" />
                       </div>
-                    ) : (
+                    ) : isBoardSubtask ? (
                       <AgentIcon name={personaIcon} className="h-3.5 w-3.5 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
+                    ) : (
+                      <div className="relative shrink-0 flex items-center justify-center">
+                        <Zap className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 fill-sky-500/20" />
+                        <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-sky-500 ring-1 ring-white dark:ring-[#0d1117]" />
+                      </div>
                     )}
                     <span
                       style={roleBadgeStyle}
@@ -554,6 +560,25 @@ export default function SubagentsSidebar({
                     >
                       {roleDisplay}
                     </span>
+
+                    {/* Clear BG vs SYNC Mini-Badge */}
+                    {sub.isBg ? (
+                      <span
+                        title={language === 'ru' ? 'Фоновый субагент' : 'Background subagent'}
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30 select-none shrink-0"
+                      >
+                        <Layers className="h-2.5 w-2.5 shrink-0" />
+                        <span>{language === 'ru' ? 'ФОН' : 'BG'}</span>
+                      </span>
+                    ) : !isBoardSubtask ? (
+                      <span
+                        title={language === 'ru' ? 'Синхронный вызов' : 'Synchronous subagent'}
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/30 select-none shrink-0"
+                      >
+                        <Zap className="h-2.5 w-2.5 shrink-0 fill-sky-500/20" />
+                        <span>{language === 'ru' ? 'СИНХР' : 'SYNC'}</span>
+                      </span>
+                    ) : null}
                   </div>
 
                   {/* Status Indicator & Granular Stop Button */}
@@ -612,51 +637,83 @@ export default function SubagentsSidebar({
                   {formatSubagentDisplayTitle(sub.title, language)}
                 </div>
 
-                {/* Card Footer: Metrics (Duration + Steps) */}
+                {/* Card Footer: Metrics (Duration + Steps + Execution Mode) */}
                 <div className="flex items-center justify-between text-[11px] font-mono text-[#71717a] dark:text-[#8b949e] pt-1.5 border-t border-[#f4f4f5] dark:border-[#21262d]/60">
-                  <div className="flex items-center space-x-1">
-                    <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
-                    <span className="tabular-nums">
-                      {(() => {
-                        const isSubRunning = sub.status === 'running';
-                        if (isSubRunning) {
-                          // Real elapsed from sub.createdAt to now for running subagents
-                          const liveMs = sub.createdAt && sub.createdAt > 0
-                            ? Math.max(0, now - sub.createdAt)
-                            : 0;
-                          return formatDuration(liveMs, true);
-                        }
-                        // For completed subagents: real durationMs or finish - start difference
-                        let finalMs = sub.durationMs;
-                        // Guard against 181ms spawn duration on bg subagents
-                        if (sub.isBg && finalMs !== undefined && finalMs < 1000 && sub.createdAt) {
-                          if (sub.finishedAt) {
+                  <div className="flex items-center space-x-2">
+                    <div
+                      className="flex items-center space-x-1"
+                      title={language === 'ru' ? 'Время выполнения' : 'Execution duration'}
+                    >
+                      <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
+                      <span className="tabular-nums">
+                        {(() => {
+                          const isSubRunning = sub.status === 'running';
+                          if (isSubRunning) {
+                            // Real elapsed from sub.createdAt to now for running subagents
+                            const liveMs = sub.createdAt && sub.createdAt > 0
+                              ? Math.max(0, now - sub.createdAt)
+                              : 0;
+                            return formatDuration(liveMs, true);
+                          }
+                          // For completed subagents: real durationMs or finish - start difference
+                          let finalMs = sub.durationMs;
+                          // Guard against 181ms spawn duration on bg subagents
+                          if (sub.isBg && finalMs !== undefined && finalMs < 1000 && sub.createdAt) {
+                            if (sub.finishedAt) {
+                              finalMs = Math.max(0, sub.finishedAt - sub.createdAt);
+                            } else {
+                              finalMs = undefined;
+                            }
+                          }
+                          if (!finalMs && sub.createdAt && sub.finishedAt) {
                             finalMs = Math.max(0, sub.finishedAt - sub.createdAt);
-                          } else {
-                            finalMs = undefined;
                           }
-                        }
-                        if (!finalMs && sub.createdAt && sub.finishedAt) {
-                          finalMs = Math.max(0, sub.finishedAt - sub.createdAt);
-                        }
-                        if (!finalMs && sub.createdAt) {
-                          const feed = activityFeed[sub.id] || (sub.toolCallId ? activityFeed[sub.toolCallId] : []) || [];
-                          let feedDuration = 0;
-                          for (const it of feed) {
-                            if (it.durationMs && it.durationMs > 0) feedDuration += it.durationMs;
+                          if (!finalMs && sub.createdAt) {
+                            const feed = activityFeed[sub.id] || (sub.toolCallId ? activityFeed[sub.toolCallId] : []) || [];
+                            let feedDuration = 0;
+                            for (const it of feed) {
+                              if (it.durationMs && it.durationMs > 0) feedDuration += it.durationMs;
+                            }
+                            if (feedDuration > 0) {
+                              finalMs = feedDuration;
+                            }
                           }
-                          if (feedDuration > 0) {
-                            finalMs = feedDuration;
-                          }
-                        }
-                        return formatDuration(finalMs, false);
-                      })()}
-                    </span>
+                          return formatDuration(finalMs, false);
+                        })()}
+                      </span>
+                    </div>
+                    <div
+                      className="flex items-center space-x-1"
+                      title={language === 'ru' ? 'Шаги субагента' : 'Subagent steps'}
+                    >
+                      <Layers className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
+                      <span className="tabular-nums">{formatSteps(sub.stepsCount || 0, language)}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-1">
-                    <Layers className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
-                    <span className="tabular-nums">{formatSteps(sub.stepsCount || 0, language)}</span>
-                  </div>
+
+                  {/* Mode Label & Tooltip */}
+                  {!isBoardSubtask && (
+                    <div
+                      className="flex items-center space-x-1 text-[10px] shrink-0"
+                      title={
+                        sub.isBg
+                          ? (language === 'ru' ? 'Фоновый субагент (параллельный поток)' : 'Background subagent (parallel flow)')
+                          : (language === 'ru' ? 'Синхронный вызов (прямой вызов)' : 'Synchronous call (direct call)')
+                      }
+                    >
+                      {sub.isBg ? (
+                        <span className="inline-flex items-center gap-1 font-sans font-medium text-purple-600 dark:text-purple-400">
+                          <span className="h-1.5 w-1.5 rounded-full bg-purple-500 shrink-0" />
+                          <span>{language === 'ru' ? 'Фоновый субагент' : 'Background agent'}</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 font-sans font-medium text-sky-600 dark:text-sky-400">
+                          <span className="h-1.5 w-1.5 rounded-full bg-sky-500 shrink-0" />
+                          <span>{language === 'ru' ? 'Синхронный вызов' : 'Synchronous call'}</span>
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );

@@ -3,7 +3,6 @@ import { ToolExecution } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
-import AgentIcon from '../common/AgentIcon';
 import { getRoleBadgeStyle } from '../../lib/agentPalette';
 import { formatSubagentDisplayTitle, formatSubagentRoleDisplay, getSubagentOrderMap } from './SubagentsSidebar';
 import { formatDurationCompact } from './ThinkingCard';
@@ -18,6 +17,7 @@ import {
   FileText,
   Minimize2,
   Layers,
+  Zap,
 } from 'lucide-react';
 
 interface ToolExecutionCardProps {
@@ -366,7 +366,6 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
     const persona = agentPersonas.find(
       (p) => p.role.toLowerCase() === rawRole.toLowerCase()
     );
-    const personaIcon = persona?.icon || 'Bot';
     const roleBadgeStyle = getRoleBadgeStyle(rawRole, persona?.color);
     const isRunning = tool.status === 'running';
     const isSuccess = tool.status === 'success';
@@ -407,7 +406,10 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
                 <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-purple-500 ring-1 ring-white dark:ring-[#161b22]" />
               </div>
             ) : (
-              <AgentIcon name={personaIcon} className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
+              <div className="relative shrink-0 flex items-center justify-center">
+                <Zap className="h-4 w-4 text-sky-600 dark:text-sky-400 fill-sky-500/20" />
+                <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-sky-500 ring-1 ring-white dark:ring-[#161b22]" />
+              </div>
             )}
 
             <span
@@ -416,6 +418,18 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             >
               {formatSubagentRoleDisplay(rawRole, subagentNumber || 1)}
             </span>
+
+            {isBg ? (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30 select-none shrink-0">
+                <Layers className="h-2.5 w-2.5 shrink-0" />
+                <span>ФОН</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/30 select-none shrink-0">
+                <Zap className="h-2.5 w-2.5 shrink-0 fill-sky-500/20" />
+                <span>СИНХР</span>
+              </span>
+            )}
 
             <span className="font-sans font-medium text-xs text-[#0d0d0d] dark:text-[#f0f6fc] group-hover:text-[#171717] dark:group-hover:text-white transition-colors truncate">
               {displayTitle}
