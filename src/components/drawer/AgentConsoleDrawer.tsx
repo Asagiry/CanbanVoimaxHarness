@@ -468,10 +468,31 @@ export default function AgentConsoleDrawer() {
       setActiveAgentTask(activeSubagentId, true);
       // Append user steer message into subagent feed
       appendOutput(activeSubagentId, mainText, 'user', imageUrls.length > 0 ? imageUrls : undefined);
-      useDrawerStore.getState().flushSaveDialog(activeSubagentId);
 
       const resolvedSubagentId =
         useDrawerStore.getState().toolIdToSubagentId[activeSubagentId] || activeSubagentId;
+      if (resolvedSubagentId !== activeSubagentId) {
+        appendOutput(resolvedSubagentId, mainText, 'user', imageUrls.length > 0 ? imageUrls : undefined);
+      }
+
+      const subagentDialogId = resolvedSubagentId.includes(':sub:')
+        ? resolvedSubagentId
+        : `${task.id}:sub:${resolvedSubagentId}`;
+
+      // Persist to SQLite immediately under canonical key {parent_id}:sub:{subagent_id}
+      const subFeed =
+        useDrawerStore.getState().activityFeed[activeSubagentId] ||
+        useDrawerStore.getState().activityFeed[resolvedSubagentId] ||
+        [];
+      if (subFeed.length > 0) {
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          await invoke('save_task_dialog', { taskId: subagentDialogId, items: subFeed });
+        } catch (err) {
+          console.info('save_task_dialog for subagent error:', err);
+        }
+      }
+      useDrawerStore.getState().flushSaveDialog(activeSubagentId);
 
       try {
         const { invoke } = await import('@tauri-apps/api/core');
