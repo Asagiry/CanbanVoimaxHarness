@@ -475,6 +475,7 @@ use super::*;
         assert!(prompt.contains("## Subagent Delegation Mandate"));
         assert!(prompt.contains("prefer `subagent` (oneshot sync)"));
         assert!(prompt.contains("MUST call `collect_subagent`"));
+        assert!(prompt.contains("Single-Action Collection"));
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
@@ -1622,6 +1623,214 @@ use super::*;
         assert!(res_batch.contains("Report 3 completed"));
         assert!(res_batch.contains("Report 4 completed"));
         assert!(res_batch.contains("---"));
+    }
+
+    #[tokio::test]
+    async fn test_collect_subagent_resilient_on_channel_closed() {
+        let (tx, rx) = oneshot::channel::<String>();
+        let flag = Arc::new(AtomicBool::new(false));
+        let policy = ToolPolicyConfig::default();
+        let target_root = std::path::PathBuf::from("target");
+        let workdir = std::path::PathBuf::from("target").join(format!("cvh_test_subagent_resilient_{}", uuid::Uuid::new_v4()));
+
+        let ctx = OwnedToolContext {
+            repo_root: target_root.clone(),
+            worktree_dir: workdir.clone(),
+            stage_id: Some("dev".to_string()),
+            role: Some("developer".to_string()),
+            abort_handle: Arc::clone(&flag),
+            tool_policy: policy.clone(),
+            task_id: Some("CVH-085".to_string()),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: Some("gemini-3.8-flash-high".to_string()),
+            temperature: None,
+            reasoning_effort: None,
+            call_id: Some("call_resilient_1".to_string()),
+        };
+
+        let sub_id = "CVH-085.sub-resilient-1".to_string();
+        let session = SubagentSession::new(
+            Some(tx),
+            SubagentRetryInfo {
+                parent_task_id: "CVH-085".to_string(),
+                subagent_id: sub_id.clone(),
+                tool_call_id: Some("call_resilient_1".to_string()),
+                title: "Resilient Task".to_string(),
+                role: "developer".to_string(),
+                prompt: "Run resilient".to_string(),
+                requested_tools: None,
+                ctx: ctx.clone(),
+                status: "finished".to_string(),
+                last_error: None,
+                report: Some("Session saved report successfully".to_string()),
+                is_bg: true,
+                duration_ms: Some(120.0),
+                steps: 2,
+            },
+        );
+
+        {
+            let mut receivers = SUBAGENT_RECEIVERS.lock().await;
+            receivers.insert(sub_id.clone(), rx);
+            let mut sessions = SUBAGENT_SESSIONS.lock().await;
+            sessions.insert(sub_id.clone(), session);
+        }
+
+        // Drop sender to simulate channel closed (e.g. sender dropped without sending)
+        {
+            let sessions = SUBAGENT_SESSIONS.lock().await;
+            if let Some(s) = sessions.get(&sub_id) {
+                let _ = s.sender.lock().await.take();
+            }
+        }
+
+        let tool_ctx = ToolContext {
+            repo_root: &target_root,
+            worktree_dir: &workdir,
+            stage_id: Some("dev"),
+            role: Some("developer"),
+            abort_handle: flag,
+            tool_policy: &policy,
+            task_id: Some("CVH-085"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        let res = execute_tool(&tool_ctx, "collect_subagent", &serde_json::json!({
+            "subagent_id": &sub_id
+        }))
+        .await
+        .expect("must recover report from SUBAGENT_SESSIONS even when channel closed");
+
+        assert_eq!(res, "Session saved report successfully");
+    }
+
+    #[tokio::test]
+    async fn test_collect_subagent_deterministic_order() {
+        let (tx1, rx1) = oneshot::channel::<String>();
+        let (tx2, rx2) = oneshot::channel::<String>();
+        let flag = Arc::new(AtomicBool::new(false));
+        let policy = ToolPolicyConfig::default();
+        let target_root = std::path::PathBuf::from("target");
+        let workdir = std::path::PathBuf::from("target").join(format!("cvh_test_subagent_det_{}", uuid::Uuid::new_v4()));
+
+        let ctx = OwnedToolContext {
+            repo_root: target_root.clone(),
+            worktree_dir: workdir.clone(),
+            stage_id: Some("dev".to_string()),
+            role: Some("developer".to_string()),
+            abort_handle: Arc::clone(&flag),
+            tool_policy: policy.clone(),
+            task_id: Some("CVH-086".to_string()),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: Some("gemini-3.8-flash-high".to_string()),
+            temperature: None,
+            reasoning_effort: None,
+            call_id: Some("call_det".to_string()),
+        };
+
+        let sub_id_a = "CVH-086.sub-det-A".to_string();
+        let sub_id_b = "CVH-086.sub-det-B".to_string();
+
+        let session_a = SubagentSession::new(Some(tx1), SubagentRetryInfo {
+            parent_task_id: "CVH-086".to_string(),
+            subagent_id: sub_id_a.clone(),
+            tool_call_id: Some("call_a".to_string()),
+            title: "Task A".to_string(),
+            role: "developer".to_string(),
+            prompt: "Prompt A".to_string(),
+            requested_tools: None,
+            ctx: ctx.clone(),
+            status: "running".to_string(),
+            last_error: None,
+            report: None,
+            is_bg: true,
+            duration_ms: None,
+            steps: 0,
+        });
+
+        let session_b = SubagentSession::new(Some(tx2), SubagentRetryInfo {
+            parent_task_id: "CVH-086".to_string(),
+            subagent_id: sub_id_b.clone(),
+            tool_call_id: Some("call_b".to_string()),
+            title: "Task B".to_string(),
+            role: "reviewer".to_string(),
+            prompt: "Prompt B".to_string(),
+            requested_tools: None,
+            ctx: ctx.clone(),
+            status: "running".to_string(),
+            last_error: None,
+            report: None,
+            is_bg: true,
+            duration_ms: None,
+            steps: 0,
+        });
+
+        {
+            let mut receivers = SUBAGENT_RECEIVERS.lock().await;
+            receivers.insert(sub_id_a.clone(), rx1);
+            receivers.insert(sub_id_b.clone(), rx2);
+            let mut sessions = SUBAGENT_SESSIONS.lock().await;
+            sessions.insert(sub_id_a.clone(), session_a);
+            sessions.insert(sub_id_b.clone(), session_b);
+        }
+
+        // Send results: sub_id_b finishes first, then sub_id_a
+        {
+            let sessions = SUBAGENT_SESSIONS.lock().await;
+            if let Some(s) = sessions.get(&sub_id_b) {
+                if let Some(snd) = s.sender.lock().await.take() {
+                    let _ = snd.send("Report B finished early".to_string());
+                }
+            }
+            if let Some(s) = sessions.get(&sub_id_a) {
+                if let Some(snd) = s.sender.lock().await.take() {
+                    let _ = snd.send("Report A finished later".to_string());
+                }
+            }
+        }
+
+        let tool_ctx = ToolContext {
+            repo_root: &target_root,
+            worktree_dir: &workdir,
+            stage_id: Some("dev"),
+            role: Some("developer"),
+            abort_handle: flag,
+            tool_policy: &policy,
+            task_id: Some("CVH-086"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        // Collect in order [sub_id_a, sub_id_b]
+        let batch_res = execute_tool(&tool_ctx, "collect_subagent", &serde_json::json!({
+            "subagent_ids": [&sub_id_a, &sub_id_b]
+        }))
+        .await
+        .expect("batch collection");
+
+        // Verification: output preserves exact input order of subagent_ids
+        let pos_a = batch_res.find("Report A finished later").expect("Report A present");
+        let pos_b = batch_res.find("Report B finished early").expect("Report B present");
+        assert!(pos_a < pos_b, "Report A must precede Report B matching subagent_ids order");
     }
 
     // -------------------------------------------------------------------------
@@ -3005,6 +3214,58 @@ data: [DONE]
         assert!(steer_content.contains("Поправь баг в agent.rs вместо main.rs"));
         assert!(!steer_content.contains("Примите это указание во внимание"));
     }
+
+    #[test]
+    fn test_reconstruct_messages_from_frontend_dialog_items() {
+        let items = vec![ActivityItem {
+            id: "call_123".to_string(),
+            item_type: "tool".to_string(),
+            timestamp: "12:00:00".to_string(),
+            content: None,
+            tool: Some(serde_json::json!({
+                "id": "call_123",
+                "toolName": "subagent_bg",
+                "params": {
+                    "role": "developer",
+                    "title": "Test"
+                },
+                "stdout": "Success report"
+            })),
+            duration_ms: Some(150.0),
+            images: None,
+        }];
+
+        let reconstructed = reconstruct_messages_from_dialog(
+            "SYSTEM PROMPT",
+            "INITIAL OBJECTIVE",
+            &items,
+        );
+
+        // Sequence: [0] System, [1] User, [2] Assistant (ToolCall), [3] Tool response
+        assert_eq!(reconstructed.len(), 4);
+        assert_eq!(reconstructed[0].role, Role::System);
+        assert_eq!(reconstructed[1].role, Role::User);
+
+        // Assistant with tool call
+        assert_eq!(reconstructed[2].role, Role::Assistant);
+        let tool_calls = reconstructed[2].tool_calls.as_ref().expect("tool_calls present");
+        assert_eq!(tool_calls.len(), 1);
+        let tc = &tool_calls[0];
+        assert_eq!(tc.id, "call_123");
+        assert_eq!(tc.function.name, "subagent_bg");
+        assert_ne!(tc.function.name, "unknown_tool");
+
+        let parsed_args: serde_json::Value =
+            serde_json::from_str(&tc.function.arguments).expect("valid args json");
+        assert_eq!(parsed_args["role"], "developer");
+        assert_eq!(parsed_args["title"], "Test");
+
+        // Tool response
+        assert_eq!(reconstructed[3].role, Role::Tool);
+        assert_eq!(reconstructed[3].tool_call_id.as_deref(), Some("call_123"));
+        assert_eq!(reconstructed[3].content.as_deref(), Some("Success report"));
+    }
+
     #[tokio::test]
     async fn test_steer_sqlite_persistence_and_context_reconstruction() {
         let base = std::path::PathBuf::from("target").join(format!("cvh_steer_test_{}", uuid::Uuid::new_v4()));

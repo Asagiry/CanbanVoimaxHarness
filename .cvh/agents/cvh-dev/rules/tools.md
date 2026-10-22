@@ -43,6 +43,7 @@ All standard tools are defined in Rust backend (`src-tauri/src/agent.rs`) and ex
   - **Parameters**: Same as `subagent` (`title`, `prompt`, `role`, `tools`).
 - **`collect_subagent`**:
   - **Description**: Awaits the completion of one or multiple background subagents (launched via `subagent_bg`) and retrieves their final reports without busy-polling loops. Implements 3-tier resolution across channels, in-memory cache, and SQLite WAL (`.cvh/harness.db`).
+  - **Single-Action Collection**: When invoking `collect_subagent`, you MUST invoke it as the ONLY tool call in that turn. Do NOT batch file reads or other tools alongside `collect_subagent`; wait to consume and analyze the received reports before planning next steps.
   - **Parameters**:
     - `subagent_id` (string, optional): Single subagent ID to await.
     - `subagent_ids` (string[], optional): Array of subagent IDs to await.
