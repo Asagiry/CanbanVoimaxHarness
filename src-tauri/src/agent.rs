@@ -2697,7 +2697,7 @@ pub async fn execute_tool(
 
             // 2. Check SQLite dialog_items for persisted subagents not in active sessions
             if !target_task_id.is_empty() {
-                if let Ok(dialog_keys) = crate::db::list_subagent_dialog_keys(&ctx.repo_root, target_task_id) {
+                if let Ok(dialog_keys) = crate::db::list_subagent_dialog_keys(ctx.repo_root, target_task_id) {
                     for key in dialog_keys {
                         let sub_id = if key.contains(":sub:") {
                             key.rsplit(":sub:").next().unwrap_or(&key).to_string()
@@ -2709,14 +2709,13 @@ pub async fn execute_tool(
                             continue;
                         }
 
-                        if let Ok(items) = crate::db::load_dialog_items(&ctx.repo_root, &key) {
+                        if let Ok(items) = crate::db::load_dialog_items(ctx.repo_root, &key) {
                             if items.is_empty() {
                                 continue;
                             }
 
                             let mut title = "Subagent".to_string();
                             let mut role = "general".to_string();
-                            let mut has_output = false;
                             let mut has_error = false;
                             let mut has_abort = false;
                             let mut steps = 0;
@@ -2727,7 +2726,6 @@ pub async fn execute_tool(
                                     steps += 1;
                                 }
                                 if it.item_type == "output" {
-                                    has_output = true;
                                     if let Some(dur) = it.duration_ms {
                                         duration_ms = Some(dur);
                                     }
@@ -2766,8 +2764,6 @@ pub async fn execute_tool(
                                 "aborted"
                             } else if has_error {
                                 "error"
-                            } else if has_output {
-                                "completed"
                             } else {
                                 "completed"
                             };
@@ -3776,7 +3772,7 @@ pub async fn execute_tool(
                                 .or_else(|| if status == "failed" { it.content.as_deref() } else { None })
                                 .unwrap_or("none");
                             let out = t.get("stdout").or_else(|| t.get("result")).and_then(|v| v.as_str())
-                                .or_else(|| it.content.as_deref());
+                                .or(it.content.as_deref());
                             (name, params_str, status, duration, err, out)
                         } else {
                             ("unknown", "{}".to_string(), "unknown", it.duration_ms.unwrap_or(0.0), "none", it.content.as_deref())
