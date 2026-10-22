@@ -591,9 +591,10 @@ function CollectSubagentExecutionCard({ tool }: { tool: ToolExecution }) {
                     : formatDuration(sub.durationMs, true)
                   : formatDuration(sub.durationMs, false);
 
-              const subIsRunning = sub.status === 'running';
-              const subIsSuccess = sub.status === 'finished' || sub.status === 'done' || (sub.status as string) === 'success';
-              const subIsAborted = sub.status === 'stopped' || sub.status === 'aborted' || sub.status === 'paused';
+              const subStatus = sub.status as string;
+              const subIsRunning = subStatus === 'running';
+              const subIsSuccess = subStatus === 'finished' || subStatus === 'done' || subStatus === 'success';
+              const subIsAborted = subStatus === 'stopped' || subStatus === 'aborted' || subStatus === 'paused';
 
               return (
                 <div
