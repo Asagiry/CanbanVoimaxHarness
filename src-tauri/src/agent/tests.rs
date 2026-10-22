@@ -166,6 +166,27 @@ use super::*;
             is_tool_active_for_agent("complete_task", &policy, "developer", Some("dev"), None),
             "complete_task must be active for developer when explicitly enabled in tool-policy!"
         );
+        assert!(
+            is_tool_active_for_agent("create_task", &policy, "cvh-dev", Some("dev"), None),
+            "create_task must be active for cvh-dev when enabled in dev stage-override"
+        );
+        assert!(
+            is_tool_active_for_agent("complete_task", &policy, "cvh-dev", Some("dev"), None),
+            "complete_task must be active for cvh-dev when enabled in dev stage-override"
+        );
+        assert!(
+            is_tool_active_for_agent("complete_task", &policy, "cvh-dev", None, None),
+            "complete_task must be active for cvh-dev even without stage_id via fallback convention"
+        );
+
+        let mut cvh_denied_policy = crate::config::ToolPolicyConfig::default();
+        let mut cvh_denied_map = HashMap::new();
+        cvh_denied_map.insert("complete_task".to_string(), false);
+        cvh_denied_policy.stage_overrides.insert("cvh-dev".to_string(), cvh_denied_map);
+        assert!(
+            !is_tool_active_for_agent("complete_task", &cvh_denied_policy, "cvh-dev", None, None),
+            "complete_task must be inactive for cvh-dev when role override is false"
+        );
 
         // 3. Orchestrator role is permitted
         let orch_policy = crate::config::ToolPolicyConfig::default();
@@ -625,60 +646,12 @@ use super::*;
             call_id: None,
         };
 
-        // 1. Regular dev agent attempting to bypass pipeline with complete_task MUST BE REJECTED
-        let bypass_err = execute_tool(&dev_ctx, "complete_task", &serde_json::json!({
-            "summary": "Trying to skip review and retro"
-        }))
-        .await
-        .expect_err("Regular dev agent must be rejected from complete_task");
-
-        assert!(
-            bypass_err.to_string().contains("complete_task is restricted to orchestrator tasks that created subtasks."),
-            "Error must match Anti-Bypass Invariant string, got: {}",
-            bypass_err
-        );
-
-        // Verify task is still in 'dev' with status 'running'
-        let tasks_check1 = crate::commands::tasks::load_tasks_from_disk(&base).await;
-        let t10 = tasks_check1.iter().find(|t| t.id == "CVH-010").unwrap();
-        assert_eq!(t10.stage_id, "dev");
-        assert_eq!(t10.status.as_deref(), Some("running"));
-
-        // 2. Now let's spawn a child task linked to CVH-010
-        let child_task = Task {
-            id: "CVH-011".to_string(),
-            title: "Child Subtask".to_string(),
-            description: "Subtask 1".to_string(),
-            stage_id: "dev".to_string(),
-            board_id: Some("development".to_string()),
-            worktree_path: None,
-            branch: None,
-            verdict: None,
-            custom_flow: None,
-            status: Some("idle".to_string()),
-            model: None,
-            parent_id: Some("CVH-010".to_string()),
-            subtask_index: None,
-            waiting_for_subtask_id: None,
-            handover_summary: None,
-            cover_image: None,
-            attachments: None,
-            todos: None,
-            priority: None,
-            tags: None,
-            current_tokens: None,
-            skip_worktree: None,
-            created_at: 0,
-            updated_at: 0,
-        };
-        crate::commands::tasks::save_tasks_to_disk(&base, &[t10.clone(), child_task]).await.expect("save with child");
-
-        // Now CVH-010 has spawned child tasks -> complete_task MUST SUCCEED
+        // 1. When allowed by tool-policy (default for dev), calling complete_task succeeds directly without requiring child tasks
         let complete_res = execute_tool(&dev_ctx, "complete_task", &serde_json::json!({
-            "summary": "Decomposition finished and subtasks spawned"
+            "summary": "Finished task directly without requiring child subtasks"
         }))
         .await
-        .expect("complete_task must succeed for task with child subtasks");
+        .expect("complete_task must succeed when allowed by tool-policy");
 
         let parsed_res: serde_json::Value = serde_json::from_str(&complete_res).expect("parse complete json");
         assert_eq!(parsed_res["task_id"], "CVH-010");
@@ -690,25 +663,62 @@ use super::*;
         let t10_done = tasks_final.iter().find(|t| t.id == "CVH-010").unwrap();
         assert_eq!(t10_done.stage_id, "ready");
         assert_eq!(t10_done.status.as_deref(), Some("done"));
-        assert_eq!(t10_done.handover_summary.as_deref(), Some("Decomposition finished and subtasks spawned"));
+        assert_eq!(t10_done.handover_summary.as_deref(), Some("Finished task directly without requiring child subtasks"));
+
+        // 2. When policy explicitly denies complete_task, it is rejected with PermissionDenied
+        let mut denied_policy = ToolPolicyConfig::default();
+        denied_policy.stage_overrides.get_mut("dev").unwrap().insert("complete_task".to_string(), false);
+        let denied_ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("dev"),
+            role: Some("developer"),
+            abort_handle: Arc::clone(&flag),
+            tool_policy: &denied_policy,
+            task_id: Some("CVH-010"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+        let bypass_err = execute_tool(&denied_ctx, "complete_task", &serde_json::json!({
+            "summary": "Should be denied by policy"
+        }))
+        .await
+        .expect_err("complete_task must be rejected when disabled by policy");
+        assert!(bypass_err.to_string().contains("PermissionDenied"));
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
 
     #[tokio::test]
-    async fn test_cvh_dev_cannot_create_or_complete_tasks() {
+    async fn test_cvh_dev_card_tools_governed_by_policy() {
         let base = std::path::PathBuf::from("target").join(format!("cvh_dev_scope_test_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
 
+        let seed_task = make_test_task("CVH-999", "dev", "development");
+        crate::commands::tasks::save_tasks_to_disk(&base, &[seed_task]).await.expect("save seed task");
+
         let flag = Arc::new(AtomicBool::new(false));
-        let policy = ToolPolicyConfig::default();
-        let cvh_dev_ctx = ToolContext {
+
+        // 1. When policy denies create_task and complete_task for cvh-dev, it must fail with PermissionDenied
+        let mut denied_policy = ToolPolicyConfig::default();
+        let mut cvh_denied_map = HashMap::new();
+        cvh_denied_map.insert("create_task".to_string(), false);
+        cvh_denied_map.insert("complete_task".to_string(), false);
+        denied_policy.stage_overrides.insert("cvh-dev".to_string(), cvh_denied_map);
+
+        let cvh_dev_denied_ctx = ToolContext {
             repo_root: &base,
             worktree_dir: &base,
             stage_id: Some("dev"),
             role: Some("cvh-dev"),
             abort_handle: Arc::clone(&flag),
-            tool_policy: &policy,
+            tool_policy: &denied_policy,
             task_id: Some("CVH-999"),
             agent_allowed_tools: None,
             app_handle: None,
@@ -720,21 +730,58 @@ use super::*;
             call_id: None,
         };
 
-        // 1. Calling create_task as cvh-dev must fail
-        let create_err = execute_tool(&cvh_dev_ctx, "create_task", &serde_json::json!({
+        let create_err = execute_tool(&cvh_dev_denied_ctx, "create_task", &serde_json::json!({
             "title": "Forbidden task"
         }))
         .await
-        .expect_err("cvh-dev must NOT be allowed to call create_task");
-        assert!(create_err.to_string().contains("cvh-dev"));
+        .expect_err("cvh-dev must be rejected when policy disables create_task");
+        assert!(create_err.to_string().contains("PermissionDenied"));
 
-        // 2. Calling complete_task as cvh-dev must fail
-        let complete_err = execute_tool(&cvh_dev_ctx, "complete_task", &serde_json::json!({
+        let complete_err = execute_tool(&cvh_dev_denied_ctx, "complete_task", &serde_json::json!({
             "summary": "Trying to complete task"
         }))
         .await
-        .expect_err("cvh-dev must NOT be allowed to call complete_task");
-        assert!(complete_err.to_string().contains("cvh-dev"));
+        .expect_err("cvh-dev must be rejected when policy disables complete_task");
+        assert!(complete_err.to_string().contains("PermissionDenied"));
+
+        // 2. When policy explicitly allows create_task and complete_task for cvh-dev, it must succeed without hardcoded role errors!
+        let mut allowed_policy = ToolPolicyConfig::default();
+        let mut cvh_allowed_map = HashMap::new();
+        cvh_allowed_map.insert("create_task".to_string(), true);
+        cvh_allowed_map.insert("complete_task".to_string(), true);
+        allowed_policy.stage_overrides.insert("cvh-dev".to_string(), cvh_allowed_map);
+
+        let cvh_dev_allowed_ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("dev"),
+            role: Some("cvh-dev"),
+            abort_handle: Arc::clone(&flag),
+            tool_policy: &allowed_policy,
+            task_id: Some("CVH-999"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        let create_res = execute_tool(&cvh_dev_allowed_ctx, "create_task", &serde_json::json!({
+            "title": "Allowed Task by Policy"
+        }))
+        .await
+        .expect("cvh-dev must succeed in create_task when allowed by policy");
+        assert!(create_res.contains("Allowed Task by Policy"));
+
+        let complete_res = execute_tool(&cvh_dev_allowed_ctx, "complete_task", &serde_json::json!({
+            "summary": "Task completed by cvh-dev per policy"
+        }))
+        .await
+        .expect("cvh-dev must succeed in complete_task when allowed by policy");
+        assert!(complete_res.contains("ready") || complete_res.contains("done"));
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
@@ -2338,7 +2385,13 @@ line 2 again"
         tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
 
         let flag = Arc::new(AtomicBool::new(false));
-        let policy = ToolPolicyConfig::default();
+        let mut policy = ToolPolicyConfig::default();
+        let mut cvh_denied = HashMap::new();
+        cvh_denied.insert("create_task".to_string(), false);
+        cvh_denied.insert("create_tasks".to_string(), false);
+        cvh_denied.insert("complete_task".to_string(), false);
+        policy.stage_overrides.insert("cvh-dev".to_string(), cvh_denied);
+
         let cvh_dev_ctx = ToolContext {
             repo_root: &base,
             worktree_dir: &base,
@@ -2357,12 +2410,12 @@ line 2 again"
             call_id: None,
         };
 
-        // 1. § 2.8 Invariant: Task card manipulation tools are strictly forbidden for cvh-dev
+        // 1. Tool policy matrix enforcement: when card manipulation tools are disabled by policy, cvh-dev is denied
         let forbidden_card_tools = ["create_task", "create_tasks", "complete_task"];
         for tool in &forbidden_card_tools {
             let err = execute_tool(&cvh_dev_ctx, tool, &serde_json::json!({ "title": "Test" }))
                 .await
-                .expect_err(&format!("Tool '{}' must be forbidden for cvh-dev per § 2.8", tool));
+                .expect_err(&format!("Tool '{}' must be forbidden for cvh-dev when disabled in policy", tool));
 
             assert!(
                 err.to_string().contains("PermissionDenied"),
@@ -2370,12 +2423,20 @@ line 2 again"
                 tool,
                 err
             );
-            assert!(
-                err.to_string().contains("cvh-dev"),
-                "Error should mention role 'cvh-dev', got: {}",
-                err
-            );
         }
+
+        // 1b. When explicitly allowed by tool policy matrix, card tools succeed for cvh-dev!
+        let mut allowed_policy = ToolPolicyConfig::default();
+        let mut cvh_allowed = HashMap::new();
+        cvh_allowed.insert("create_task".to_string(), true);
+        cvh_allowed.insert("complete_task".to_string(), true);
+        allowed_policy.stage_overrides.insert("cvh-dev".to_string(), cvh_allowed);
+        let cvh_dev_allowed_ctx = ToolContext {
+            tool_policy: &allowed_policy,
+            ..cvh_dev_ctx
+        };
+        let create_res = execute_tool(&cvh_dev_allowed_ctx, "create_task", &serde_json::json!({ "title": "Test Task" })).await;
+        assert!(create_res.is_ok(), "create_task must succeed for cvh-dev when allowed by policy");
 
         // 2. Tools allowed by the Tool Policy Matrix (including todo_write) work for cvh-dev
         let todo_res = execute_tool(&cvh_dev_ctx, "todo_write", &serde_json::json!({

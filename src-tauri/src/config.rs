@@ -2256,7 +2256,9 @@ pub async fn sync_tool_policies_to_personas(
             });
 
             from_boards.or_else(|| {
-                if (role == "developer" || role == "cvh-dev") && config.stage_overrides.contains_key("dev") {
+                if config.stage_overrides.contains_key(&role) {
+                    Some(role.clone())
+                } else if (role == "developer" || role == "cvh-dev") && config.stage_overrides.contains_key("dev") {
                     Some("dev".to_string())
                 } else if role == "reviewer" && config.stage_overrides.contains_key("review") {
                     Some("review".to_string())
@@ -2268,22 +2270,12 @@ pub async fn sync_tool_policies_to_personas(
             })
         };
 
-        let is_orchestrator = role.to_lowercase().contains("orchestrat")
-            || role.to_lowercase().contains("оркестрат")
-            || stage_target.as_deref().map(|s| s.to_lowercase()).unwrap_or_default().contains("orchestrat")
-            || stage_target.as_deref().map(|s| s.to_lowercase()).unwrap_or_default().contains("оркестрат")
-            || stage_target.as_deref() == Some("backlog")
-            || role == "copilot";
-
         let mut enabled_tools = Vec::new();
         for &tool in CANONICAL_TOOLS {
-            // § 2.8 Invariant: create_task and complete_task are strictly reserved for orchestrators
-            if (tool == "create_task" || tool == "complete_task") && !is_orchestrator {
+            if !crate::agent::is_tool_active_for_agent(tool, config, &role, stage_target.as_deref(), None) {
                 continue;
             }
-            if is_tool_allowed(config, stage_target.as_deref(), tool) {
-                enabled_tools.push(tool);
-            }
+            enabled_tools.push(tool);
         }
 
         let tools_line = format!("tools: [{}]", enabled_tools.join(", "));

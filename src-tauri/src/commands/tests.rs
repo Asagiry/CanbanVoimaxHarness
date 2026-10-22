@@ -1429,6 +1429,8 @@ Write code.
         dev_map.insert("glob".to_string(), true);
         dev_map.insert("grep".to_string(), true);
         dev_map.insert("web_search".to_string(), false);
+        dev_map.insert("create_task".to_string(), true);
+        dev_map.insert("complete_task".to_string(), true);
         policy.stage_overrides.insert("dev".to_string(), dev_map);
 
         crate::config::sync_tool_policies_to_personas(&base, &policy)
@@ -1442,6 +1444,8 @@ Write code.
         assert!(updated.contains("edit_file"));
         assert!(updated.contains("write_file"));
         assert!(!updated.contains("web_search"));
+        assert!(updated.contains("create_task"), "create_task must be written to persona frontmatter when enabled in tool-policy!");
+        assert!(updated.contains("complete_task"), "complete_task must be written to persona frontmatter when enabled in tool-policy!");
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }

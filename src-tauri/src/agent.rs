@@ -292,10 +292,11 @@ pub fn is_tool_active_for_agent(
 
         let alt_override = if stage_override.is_none() && role_override.is_none() {
             let alt = match role {
-                "developer" => Some("dev"),
+                "developer" | "cvh-dev" => Some("dev"),
                 "dev" => Some("developer"),
                 "reviewer" => Some("review"),
                 "review" => Some("reviewer"),
+                "retro" | "retrospective" => Some("retro"),
                 _ => None,
             };
             alt.and_then(|a| {
@@ -309,7 +310,7 @@ pub fn is_tool_active_for_agent(
             None
         };
 
-        let explicit_override = stage_override.or(role_override).or(alt_override);
+        let explicit_override = role_override.or(stage_override).or(alt_override);
         match explicit_override {
             Some(true) => {
                 // Explicitly allowed in tool policy! Proceed to standard is_tool_allowed checks.
@@ -3256,15 +3257,7 @@ pub async fn execute_tool(
                 .position(|t| crate::commands::task_id_matches(&t.id, current_task_id))
                 .ok_or_else(|| anyhow::anyhow!("Task {} not found", current_task_id))?;
 
-            // Anti-Bypass Security Check:
-            // Check if current task has spawned child tasks (parent_id linkage or created_subtasks), OR if the column is an orchestrator column.
-            let has_child_tasks = tasks
-                .iter()
-                .any(|t| t.parent_id.as_deref().is_some_and(|pid| crate::commands::task_id_matches(pid, current_task_id)));
-
             let current_task = &tasks[current_task_idx];
-            let stage_name = ctx.stage_id.unwrap_or(&current_task.stage_id).to_lowercase();
-            let role_name = ctx.role.unwrap_or_default().to_lowercase();
 
             let boards_cfg = crate::config::load_boards_config(repo_root).await.ok();
             let board_cols = boards_cfg.as_ref().and_then(|bc| {
@@ -3275,28 +3268,6 @@ pub async fn execute_tool(
                 };
                 b.map(|b| b.columns.clone())
             });
-
-            let is_col_orchestrator = if let Some(ref cols) = board_cols {
-                cols.iter().any(|c| {
-                    c.id == current_task.stage_id
-                        && (c.id.to_lowercase().contains("orchestrat")
-                            || c.title.to_lowercase().contains("orchestrat")
-                            || c.title.to_lowercase().contains("оркестрат")
-                            || c.persona.as_deref().map(|p| p.to_lowercase().contains("orchestrat") || p.to_lowercase().contains("оркестрат")).unwrap_or(false))
-                })
-            } else {
-                false
-            };
-
-            let is_orchestrator = is_col_orchestrator
-                || stage_name.contains("orchestrat")
-                || stage_name.contains("оркестрат")
-                || role_name.contains("orchestrat")
-                || role_name.contains("оркестрат");
-
-            if !has_child_tasks && !is_orchestrator {
-                bail!("complete_task is restricted to orchestrator tasks that created subtasks.");
-            }
 
             // Find terminal column (ready / done)
             let columns = match board_cols {
