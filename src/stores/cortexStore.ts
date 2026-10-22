@@ -101,12 +101,15 @@ interface CortexState {
 
   // Actions
   toggleStageExpand: (stageId: string) => void;
+  expandStage: (stageId: string) => void;
   focusStage: (stageId: string) => void;
   // Перестроить стадии из колонок доски: колонка с persona = агент
   syncStagesFromColumns: (columns: PipelineColumn[]) => void;
   // Загрузить доступных агентов (`list_agent_personas`) и перестроить секцию «Агенты».
   // Ошибка IPC → пустой список, секция показывает подсказку. Колонки не трогает.
   loadAgentPersonas: () => Promise<void>;
+  // Алиас loadAgentPersonas для явной синхронизации персон агентов
+  syncAgentPersonas: () => Promise<void>;
   renameAgentPersona: (oldRole: string, newRole: string) => Promise<void>;
   deleteAgentPersona: (role: string) => Promise<void>;
   setAgentPersonaColor: (role: string, color: string) => Promise<void>;
@@ -457,6 +460,17 @@ export const useCortexStore = create<CortexState>((set, get) => ({
       ),
       agentStages: state.agentStages.map((st) =>
         st.stageId === stageId ? { ...st, isExpanded: !st.isExpanded } : st
+      ),
+    }));
+  },
+
+  expandStage: (stageId) => {
+    set((state) => ({
+      stages: state.stages.map((st) =>
+        st.stageId === stageId ? { ...st, isExpanded: true } : st
+      ),
+      agentStages: state.agentStages.map((st) =>
+        st.stageId === stageId ? { ...st, isExpanded: true } : st
       ),
     }));
   },
@@ -839,6 +853,10 @@ export const useCortexStore = create<CortexState>((set, get) => ({
 
     // Реактивно синхронизировать колонки сразу при загрузке агентов (иконка и цвет персоны)
     get().syncStagesFromColumns(useBoardStore.getState().columns);
+  },
+
+  syncAgentPersonas: async () => {
+    await get().loadAgentPersonas();
   },
 
   setAgentPersonaColor: async (role: string, color: string) => {
