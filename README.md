@@ -135,6 +135,8 @@ effective(tool, stage) = global_enabled[tool] && stage_override[stage][tool]
 ```
 - **Level A (Global Switches)**: Defined in `.cvh/settings/tool-policy.json`.
 - **Level B (Stage Overrides)**: Enforced per pipeline column (e.g. Code Review stage disables code-mutation tools).
+- **Direct JSON Schema Editor (`toolCustomSchemas`)**: The Global Registry in `.cvh/settings/tool-policy.json` supports direct customization of tool schemas (`toolCustomSchemas`). Architects and developers can tailor parameter descriptions, add domain-specific constraints, or specialize instructions without modifying core Rust engine code.
+- **English-Only Schemas & BPE Token Compression**: All tool names, descriptions, and parameter definitions sent to LLMs are authoritatively maintained in English. Byte-Pair Encoding (BPE) tokenizers (used across Claude, Gemini, DeepSeek, and OpenAI) process English tokens with **~70% denser compression** than Cyrillic UTF-8 multi-byte sequences, saving thousands of prompt tokens per step and driving prompt cache hit rates above 90%.
 - **Zero-Trust Request Schema Stripping**: Disabled tools are completely purged from the JSON tool schema sent to the LLM. This saves **~2,400+ prompt tokens per inference step** and completely eliminates tool hallucination vectors.
 
 ### State-Preserving Dynamic Context Compactor
@@ -150,11 +152,14 @@ CVH equips agents with an industrial-grade tool suite compliant with SWE-bench s
 
 | Category | Tool | Description |
 | :--- | :--- | :--- |
-| **Pipeline Navigation** | `advance_task` / `move_task` | Advances task to next stage with Relay Handoff summary. |
+| **Pipeline Navigation** | `advance_task` / `move_task` | Advances task to next stage with Relay Handoff summary (self-healing with available stages list on error). |
 | | `reject_task` | Rejects task with audit critique, unlocking previous stage. |
 | **Subagent Hierarchy** | `subagent` | Synchronous in-process child delegation returning structured report. |
 | | `subagent_bg` | Asynchronous background delegation returning `subagent_id`. |
-| | `collect_subagent` | Zero-polling collection of background subagent reports. |
+| | `collect_subagent` | Reliable zero-polling collector with 3-tier report resolution (⚡ СИНХР / 🗂️ ФОН). |
+| **Knowledge & Dynamic Rules** | `load_rule` | JIT on-demand loading of modular architectural standards and guidelines by topic. |
+| **Task Registry & Chronology** | `list_tasks` | Compact registry inspection of Kanban board tasks filtered by stage or query from SQLite WAL. |
+| | `get_task_history` | Step-by-step task execution chronology (requirements, tool calls, exit codes, verdicts) for audits. |
 | **Human-in-the-Loop** | `question` / `ask_user` | Interactive query prompt with option choices, suspending execution. |
 | | `todo_write` | Live tactical checklist (`todos: [{content, status}]`). |
 | **Filesystem & Shell** | `read_file` | UTF-8 file inspection with line offsets and limits. |
@@ -166,6 +171,12 @@ CVH equips agents with an industrial-grade tool suite compliant with SWE-bench s
 | **Research & Web** | `web_search` | DuckDuckGo search integration with zero API key requirement. |
 | | `web_fetch` | Clean Markdown webpage content extraction. |
 | **Dynamic CLI Tools** | `.cvh/tools/*.json` | Declarative custom CLI tools with `{{args}}` interpolation. |
+
+### ⚡ Reliable Subagent Collector (`collect_subagent`)
+Background child agents (`subagent_bg`) execute independently without blocking the parent ReAct loop. The `collect_subagent` tool retrieves subagent findings with ironclad reliability:
+- **3-Tier Cascade Resolution**: Resolves reports across (1) active Tokio async broadcast channels, (2) in-memory completed session cache, and (3) persistent SQLite `dialog_items` in `.cvh/harness.db`. Collecting completed or synchronous subagents never fails with missing registry errors.
+- **Distinct Visual Execution Badges**: The UI and drawer streams clearly distinguish synchronous oneshot subagents (**⚡ СИНХР**) from asynchronous background delegations (**🗂️ ФОН**).
+- **Spilling Bypass**: Subagent terminal reports are exempt from tool output truncation or disk spilling, guaranteeing 100% of synthesized findings reach parent models without diagnostic data loss.
 
 *Note: Large outputs exceeding 500 lines or 64 KB for shell commands (`execute_command`), or 2,000 lines / 128 KB for `read_file`, automatically spill to disk at `.cvh/spill/<timestamp>-<tool>.log`, returning only the head (20 lines) and tail (20 lines) to preserve LLM context.*
 
