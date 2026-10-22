@@ -1667,9 +1667,11 @@ pub async fn internal_move_task_stage(
                                 .cloned()
                         })
                         .ok_or_else(|| {
+                            let available_stages: Vec<&str> = pipeline.columns.iter().map(|c| c.id.as_str()).collect();
                             format!(
-                                "Target stage {} not found in pipeline or board",
-                                target_stage_id
+                                "Target stage '{}' not found in pipeline or board. Available stages: {:?}",
+                                target_stage_id,
+                                available_stages
                             )
                         })?
                 }
@@ -2208,7 +2210,14 @@ pub async fn internal_advance_task_to_stage(
             .iter()
             .find(|c| stage_id_matches(&c.id, target_stage_id))
             .cloned()
-            .ok_or_else(|| format!("Target stage '{}' not found in columns", target_stage_id))?
+            .ok_or_else(|| {
+                let available_stages: Vec<&str> = columns.iter().map(|c| c.id.as_str()).collect();
+                format!(
+                    "Target stage '{}' not found in columns. Available stages: {:?}",
+                    target_stage_id,
+                    available_stages
+                )
+            })?
     } else {
         let curr_idx = columns
             .iter()

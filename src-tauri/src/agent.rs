@@ -650,36 +650,36 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "advance_task",
-            "Передать задачу на следующий этап пайплайна (шаг вперед) или переместить на конкретный этап (target_stage / stage_id). Обязательно передайте саммари проделанной работы для следующего агента. Алиасы: 'move_task', 'move_task_stage', 'advance_stage', 'next_stage'.",
+            "Advance task to the next sequential pipeline stage or transition to a specific stage (stage_id / target_stage). Requires comprehensive summary of completed work and verification proof.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "summary": { "type": "string", "description": "Подробное саммари изменений, результатов и проверок (опционально, есть дефолт)" },
-                    "stage_id": { "type": "string", "description": "Целевой этап пайплайна (например, 'review', 'retro', 'ready'). Алиасы: 'target_stage', 'column_id'. Если не указан — переход на следующий по порядку этап." }
+                    "summary": { "type": "string", "description": "Comprehensive summary of modifications, sensor results, and verification proof." },
+                    "stage_id": { "type": "string", "description": "Target pipeline stage ID (e.g. 'review', 'retro', 'ready'). Defaults to sequential next stage." }
                 }
             }),
         ),
         ToolDefinition::function(
             "reject_task",
-            "Вернуть задачу на предыдущий этап пайплайна (шаг назад с замечаниями). Обязательно укажите причину отклонения и конкретные замечания.",
+            "Reject task and return it to the previous pipeline stage with feedback. Requires specific reasons and actionable change requests.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "reason": { "type": "string", "description": "Причина отклонения: упавшие проверки, баги, необходимые исправления" }
+                    "reason": { "type": "string", "description": "Rejection rationale: failing sensors, bugs, or required fixes." }
                 },
                 "required": ["reason"]
             }),
         ),
         ToolDefinition::function(
             "question",
-            "Задать интерактивный уточняющий вопрос пользователю и приостановить выполнение агента до получения ответа (Human-in-the-Loop). Алиас: 'ask_user'.",
+            "Ask an interactive clarifying question to the human user and suspend agent execution until answered (Human-in-the-Loop). Alias: 'ask_user'.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
                     "text": { "type": "string", "description": "The specific question to ask the user." },
                     "options": {
                         "type": "array",
-                        "description": "Predefined choices for the user. If recommended, put '(Рекомендуется)' in label.",
+                        "description": "Predefined choices for the user. If recommended, append '(Recommended)' to label.",
                         "items": {
                             "type": "object",
                             "properties": {
@@ -696,23 +696,23 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "create_task",
-            "Декомпозировать требования и создать новую карточку задачи на Канбан-доске.",
+            "Decompose requirements and create a new task card on the Kanban board.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "title": { "type": "string", "description": "Краткое и емкое название задачи" },
-                    "description": { "type": "string", "description": "Полные технические требования, критерии приёмки и файлы" },
-                    "column_id": { "type": "string", "description": "Целевая колонка (по умолчанию 'backlog')" },
-                    "board_id": { "type": "string", "description": "Целевая доска (по умолчанию доска текущей задачи)" },
+                    "title": { "type": "string", "description": "Concise imperative task title." },
+                    "description": { "type": "string", "description": "Detailed technical requirements, acceptance criteria, and file targets." },
+                    "column_id": { "type": "string", "description": "Target column ID (defaults to 'backlog')." },
+                    "board_id": { "type": "string", "description": "Target board ID (defaults to current task's board)." },
                     "tags": {
                         "type": "array",
                         "items": { "type": "string" },
-                        "description": "Теги задачи"
+                        "description": "Task tags."
                     },
                     "priority": {
                         "type": "string",
                         "enum": ["low", "medium", "high"],
-                        "description": "Приоритет задачи: low, medium, high"
+                        "description": "Task priority: low, medium, high."
                     },
                     "is_subtask": {
                         "type": "boolean",
@@ -728,29 +728,29 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "create_tasks",
-            "Пакетно декомпозировать требования и создать несколько карточек задач на Канбан-доске для оркестратора.",
+            "Batch decompose requirements and create multiple task cards on the Kanban board.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
                     "tasks": {
                         "type": "array",
-                        "description": "Список задач для создания",
+                        "description": "Array of task objects to create.",
                         "items": {
                             "type": "object",
                             "properties": {
-                                "title": { "type": "string", "description": "Краткое и емкое название задачи" },
-                                "description": { "type": "string", "description": "Полные технические требования, критерии приёмки и файлы" },
-                                "column_id": { "type": "string", "description": "Целевая колонка (по умолчанию 'backlog')" },
-                                "board_id": { "type": "string", "description": "Целевая доска (по умолчанию доска текущей задачи)" },
+                                "title": { "type": "string", "description": "Concise imperative task title." },
+                                "description": { "type": "string", "description": "Detailed technical requirements, acceptance criteria, and file targets." },
+                                "column_id": { "type": "string", "description": "Target column ID (defaults to 'backlog')." },
+                                "board_id": { "type": "string", "description": "Target board ID (defaults to current task's board)." },
                                 "tags": {
                                     "type": "array",
                                     "items": { "type": "string" },
-                                    "description": "Теги задачи"
+                                    "description": "Task tags."
                                 },
                                 "priority": {
                                     "type": "string",
                                     "enum": ["low", "medium", "high"],
-                                    "description": "Приоритет задачи: low, medium, high"
+                                    "description": "Task priority: low, medium, high."
                                 },
                                 "is_subtask": {
                                     "type": "boolean",
@@ -770,50 +770,50 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "complete_task",
-            "Завершить задачу и перевести её в финальную колонку Готово (ready/done). Записывает вердикт APPROVED и итоговое саммари.",
+            "Complete task and transition it to the terminal column (ready/done). Records APPROVED verdict and final handover summary.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "task_id": { "type": "string", "description": "ID завершаемой задачи (например, 'CVH-001'). Если не указан, завершается текущая задача." },
-                    "summary": { "type": "string", "description": "Исчерпывающее саммари плана декомпозиции и выполненной работы" }
+                    "task_id": { "type": "string", "description": "ID of task to complete (e.g. 'CVH-001'). If omitted, completes the current task." },
+                    "summary": { "type": "string", "description": "Comprehensive summary of completed work, changes, and verification proof." }
                 },
                 "required": ["summary"]
             }),
         ),
         ToolDefinition::function(
             "list_tasks",
-            "Получить компактный реестр последних задач с доски для анализа, ретроспективы или аудита качества.",
+            "Retrieve a compact registry of recent Kanban board tasks for analysis, retrospectives, or quality audits.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
                     "limit": {
                         "type": "integer",
-                        "description": "Максимальное количество задач (по умолчанию 20, максимум 50)"
+                        "description": "Maximum number of tasks to return (default: 20, max: 50)."
                     },
                     "stage_id": {
                         "type": "string",
-                        "description": "Опциональный фильтр по этапу/колонке (например, 'ready', 'dev')"
+                        "description": "Optional filter by stage or column ID (e.g. 'ready', 'dev')."
                     },
                     "query": {
                         "type": "string",
-                        "description": "Опциональный текстовый поиск по title, id или handover_summary"
+                        "description": "Optional text search query across title, id, or handover summary."
                     }
                 }
             }),
         ),
         ToolDefinition::function(
             "get_task_history",
-            "Получить подробную хронологию выполнения задачи (исходное описание, последовательность вызовов инструментов с кодами ошибок, вердикт и финальный ответ) для глубокого аудита качества.",
+            "Retrieve step-by-step execution chronology of a task (original requirements, tool invocations, exit codes, verdict, and final response) for quality audit.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
                     "task_id": {
                         "type": "string",
-                        "description": "ID задачи (например 'CVH-042' или 'CVH-042.1')"
+                        "description": "Task ID (e.g. 'CVH-042' or 'CVH-042.1')."
                     },
                     "include_tool_outputs": {
                         "type": "boolean",
-                        "description": "По умолчанию false. Если true — выводит сжатые результаты выполнения инструментов."
+                        "description": "If true, includes trimmed tool outputs (default: false)."
                     }
                 },
                 "required": ["task_id"]
@@ -880,19 +880,19 @@ pub fn get_load_rule_tool(repo_root: &Path, role: Option<&str>) -> ToolDefinitio
     let rule_prop = if !available_rules.is_empty() {
         serde_json::json!({
             "type": "string",
-            "description": "Загрузить стандарт, архитектурный инвариант или гайдлайн проекта по конкретной теме.",
+            "description": "Modular rule topic to load dynamically.",
             "enum": available_rules
         })
     } else {
         serde_json::json!({
             "type": "string",
-            "description": "Загрузить стандарт, архитектурный инвариант или гайдлайн проекта по конкретной теме."
+            "description": "Modular rule topic to load dynamically."
         })
     };
 
     ToolDefinition::function(
         "load_rule",
-        "Загрузить стандарт, архитектурный инвариант или гайдлайн проекта по конкретной теме.",
+        "Dynamically load a modular project standard, architectural invariant, or tech guideline by topic.",
         serde_json::json!({
             "type": "object",
             "properties": {
@@ -6269,16 +6269,18 @@ Messages count: {}
 
             // Stage transition termination (§ 2.27 & § 1):
             // When any executed tool call is "advance_task", "move_task", or "reject_task" (or aliases):
-            // The agent has handed over or finalized the task.
-            // Unconditionally trip abort_flag, emit AgentEvent::Finished, break the ReAct loop, and return Ok(result_str).
+            // If the transition SUCCEEDED (success == true), the agent has handed over or finalized the task.
+            // Trip abort_flag, emit AgentEvent::Finished, break the ReAct loop, and return Ok(result_str).
             // Under NO circumstances send the result back to the LLM for an extra turn or allow duplicate advance_task calls.
+            // However, if the transition FAILED (!success, e.g. target stage not found), do NOT terminate the loop.
+            // Let the error tool_response return to the LLM so the model can inspect available stages and self-correct!
             let norm_name = tc.function.name.trim().to_lowercase();
             let is_stage_transition = matches!(
                 norm_name.as_str(),
                 "advance_task" | "move_task" | "reject_task" | "move_task_stage" | "advance_stage" | "next_stage"
             ) || canonical_tool_name(&norm_name) == "advance_task";
 
-            if is_stage_transition {
+            if is_stage_transition && success {
                 // Immediately trip abort_flag to prevent any subsequent ticks or parallel operations
                 abort_flag.store(true, Ordering::SeqCst);
 

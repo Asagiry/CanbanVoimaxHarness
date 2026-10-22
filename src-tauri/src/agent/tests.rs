@@ -2738,6 +2738,156 @@ data: [DONE]
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
+
+    #[tokio::test]
+    async fn test_standard_tools_descriptions_english_only() {
+        let tools = get_standard_tools();
+        assert!(!tools.is_empty(), "standard tools must not be empty");
+
+        fn assert_no_cyrillic(text: &str, context: &str) {
+            for ch in text.chars() {
+                assert!(
+                    !(('а'..='я').contains(&ch) || ('А'..='Я').contains(&ch) || ch == 'ё' || ch == 'Ё'),
+                    "Found Cyrillic character '{}' in {}: "{}"",
+                    ch,
+                    context,
+                    text
+                );
+            }
+        }
+
+        fn check_json_descriptions(val: &serde_json::Value, path: &str) {
+            match val {
+                serde_json::Value::Object(map) => {
+                    for (k, v) in map {
+                        let current_path = format!("{}.{}", path, k);
+                        if k == "description" {
+                            if let Some(desc_str) = v.as_str() {
+                                assert_no_cyrillic(desc_str, &current_path);
+                            }
+                        }
+                        check_json_descriptions(v, &current_path);
+                    }
+                }
+                serde_json::Value::Array(arr) => {
+                    for (i, v) in arr.iter().enumerate() {
+                        check_json_descriptions(v, &format!("{}[{}]", path, i));
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        for tool in &tools {
+            let name = &tool.function.name;
+            assert_no_cyrillic(&tool.function.description, &format!("tool '{}' description", name));
+            check_json_descriptions(&tool.function.parameters, &format!("tool '{}' parameters", name));
+        }
+
+        // Specifically check get_load_rule_tool
+        let load_rule = get_load_rule_tool(Path::new(""), None);
+        assert_no_cyrillic(&load_rule.function.description, "load_rule description");
+        check_json_descriptions(&load_rule.function.parameters, "load_rule parameters");
+    }
+
+    #[tokio::test]
+    async fn test_advance_task_failure_does_not_abort_loop_and_shows_available_stages() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_adv_fail_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+
+        let (boards_cfg, _) = make_test_board(&base);
+        crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
+
+        let task = make_test_task("CVH-089", "dev", "test-board");
+        crate::commands::tasks::save_tasks_to_disk(&base, &[task]).await.expect("save task");
+
+        let abort_flag = Arc::new(AtomicBool::new(false));
+        let policy = ToolPolicyConfig::default();
+        let tool_ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("dev"),
+            role: Some("developer"),
+            abort_handle: Arc::clone(&abort_flag),
+            tool_policy: &policy,
+            task_id: Some("CVH-089"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        // 1. Direct tool execution with non-existent target stage returns error with available stages
+        let err = execute_tool(&tool_ctx, "advance_task", &serde_json::json!({
+            "stage_id": "non_existent_stage"
+        }))
+        .await
+        .expect_err("non existent stage must return Err");
+        let err_msg = err.to_string();
+        assert!(err_msg.contains("Target stage 'non_existent_stage' not found in columns"));
+        assert!(err_msg.contains("Available stages:"));
+        assert!(err_msg.contains("dev"));
+        assert!(err_msg.contains("ready"));
+
+        // 2. In run_agent_loop, a failed advance_task must NOT trip abort_flag and must continue to next turn
+        // Turn 1 calls advance_task with invalid stage -> fails
+        // Turn 2 outputs self-correction text
+        let sse_stream = "data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_adv_fail","function":{"name":"advance_task","arguments":"{\"stage_id\":\"non_existent_stage\"}"}}]}}]}
+
+data: [DONE]
+
+data: {"choices":[{"delta":{"content":"Understood, available stages are dev, review, ready. Retrying."}}]}
+
+data: [DONE]
+
+";
+        let request_counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let (base_url, server_handle) = start_mock_sse_server(sse_stream, Arc::clone(&request_counter)).await;
+
+        let config = AgentSessionConfig {
+            repo_root: base.clone(),
+            worktree_path: base.clone(),
+            role: "developer".to_string(),
+            stage_id: "dev".to_string(),
+            task_id: "CVH-089".to_string(),
+            task_title: "Test task".to_string(),
+            task_description: "Advance failure test".to_string(),
+            handover_summary: None,
+            steer_prompt: None,
+            steer_images: None,
+            base_url,
+            api_key: None,
+            model: "test-model".to_string(),
+            temperature: None,
+            reasoning_effort: None,
+            max_turns: 10,
+            app_handle: None,
+            context_window: None,
+        };
+
+        let loop_abort_flag = Arc::new(AtomicBool::new(false));
+        let events = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let events_clone = Arc::clone(&events);
+
+        let result = run_agent_loop(config, loop_abort_flag, move |ev| {
+            events_clone.lock().unwrap().push(ev);
+        })
+        .await
+        .expect("run_agent_loop must succeed on retry");
+
+        server_handle.abort();
+
+        // Must have made 2 requests to LLM (Turn 1 tool call failed, Turn 2 received tool response and responded)
+        assert_eq!(request_counter.load(Ordering::SeqCst), 2, "Expected 2 requests to LLM because advance_task error did not kill loop");
+        assert!(result.contains("Understood, available stages are dev, review, ready. Retrying."));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
     // -------------------------------------------------------------------------
     // e) Steer Agent Context Preservation & Tool Interruption Sanitization
     // -------------------------------------------------------------------------
