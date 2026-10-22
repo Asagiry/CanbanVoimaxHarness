@@ -32,6 +32,7 @@ Thumbs.db
 .tmp/
 *.log
 .xwin-cache/
+
 # CanbanVoimaxHarness Internal Runtime & Database
 .cvh/harness.db*
 .cvh/worktrees/
@@ -40,6 +41,9 @@ Thumbs.db
 .cvh/logs/
 .cvh/tasks/
 .cvh/tasks.json
+.cvh/task-sequence.json
+.cvh/settings/sequence.json
+.cvh/llm_debug.log
 .cvh/llm.json
 **/.cvh/llm.json
 

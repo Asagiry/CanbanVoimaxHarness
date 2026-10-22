@@ -653,7 +653,7 @@ export default function GitDiffSidebar({
   return (
     <aside
       style={{ width: `${isCollapsed ? 44 : sidebarWidth}px` }}
-      className={`relative shrink-0 border-l border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#090a0f] flex flex-col h-full text-[#171717] dark:text-[#f0f6fc] overflow-hidden select-none transition-colors ${
+      className={`relative shrink-0 mt-1 mr-1.5 rounded-tl-xl rounded-tr-xl border-t border-x border-[#ebebeb] dark:border-[#21262d] shadow-2xs bg-[#fafafa] dark:bg-[#090a0f] flex flex-col min-h-0 h-[calc(100%-0.25rem)] text-[#171717] dark:text-[#f0f6fc] overflow-hidden select-none transition-colors ${
         isResizing ? 'select-none' : 'transition-[width] duration-200 ease-out'
       } ${className || ''}`}
       aria-label={t('gitDiff.panelAria')}
@@ -726,7 +726,7 @@ export default function GitDiffSidebar({
         {!isCollapsed && (
           <div
             onMouseDown={handleMouseDown}
-            className="group/handle absolute top-0 bottom-0 left-0 w-2 -ml-1 cursor-col-resize z-30 flex items-center justify-center select-none"
+            className="group/handle absolute top-0 bottom-0 left-0 w-2 cursor-col-resize z-30 flex items-center justify-center select-none"
             aria-label="Изменить ширину панели Git Diff"
           >
             <div
