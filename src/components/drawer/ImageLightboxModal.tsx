@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from '../../stores/languageStore';
 import {
   X,
   ZoomIn,
@@ -18,9 +19,10 @@ export interface ImageLightboxModalProps {
 
 export default function ImageLightboxModal({
   src,
-  alt = 'Изображение',
+  alt,
   onClose,
 }: ImageLightboxModalProps) {
+  const { t } = useTranslation();
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -157,7 +159,7 @@ export default function ImageLightboxModal({
     }
   };
 
-  const displayName = alt || 'Изображение';
+  const displayName = alt || t('imageLightbox.defaultAlt');
 
   const modal = (
     <div
@@ -204,7 +206,7 @@ export default function ImageLightboxModal({
             onClick={handleZoomOut}
             disabled={zoom <= 0.5}
             className="p-1 rounded hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors cursor-pointer"
-            aria-label="Уменьшить (-)"
+            aria-label={t('imageLightbox.zoomOut')}
           >
             <ZoomOut className="w-3.5 h-3.5" />
           </button>
@@ -213,7 +215,7 @@ export default function ImageLightboxModal({
             type="button"
             onClick={handleReset}
             className="px-2 py-0.5 text-[11px] font-mono tabular-nums text-zinc-200 hover:text-white hover:bg-white/10 rounded transition-colors cursor-pointer"
-            aria-label="Сбросить масштаб (0)"
+            aria-label={t('imageLightbox.resetZoom')}
           >
             {Math.round(zoom * 100)}%
           </button>
@@ -223,7 +225,7 @@ export default function ImageLightboxModal({
             onClick={handleZoomIn}
             disabled={zoom >= 5}
             className="p-1 rounded hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors cursor-pointer"
-            aria-label="Увеличить (+)"
+            aria-label={t('imageLightbox.zoomIn')}
           >
             <ZoomIn className="w-3.5 h-3.5" />
           </button>
@@ -234,7 +236,7 @@ export default function ImageLightboxModal({
             type="button"
             onClick={handleReset}
             className="p-1 rounded hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
-            aria-label="По размеру экрана"
+            aria-label={t('imageLightbox.fitScreen')}
           >
             <Maximize2 className="w-3.5 h-3.5" />
           </button>
@@ -246,17 +248,17 @@ export default function ImageLightboxModal({
             type="button"
             onClick={handleCopy}
             className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-white/10 hover:bg-white/20 text-zinc-200 hover:text-white text-xs font-mono transition-colors cursor-pointer"
-            aria-label="Скопировать ссылку/данные изображения"
+            aria-label={t('imageLightbox.copyLink')}
           >
             {copied ? (
               <>
                 <Check className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="hidden sm:inline text-emerald-400">Скопировано</span>
+                <span className="hidden sm:inline text-emerald-400">{t('imageLightbox.copied')}</span>
               </>
             ) : (
               <>
                 <Copy className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Копировать</span>
+                <span className="hidden sm:inline">{t('imageLightbox.copy')}</span>
               </>
             )}
           </button>
@@ -265,7 +267,7 @@ export default function ImageLightboxModal({
             type="button"
             onClick={onClose}
             className="flex items-center space-x-1 p-1.5 rounded-full bg-white/10 hover:bg-rose-600/80 text-zinc-200 hover:text-white transition-colors cursor-pointer"
-            aria-label="Закрыть (Escape)"
+            aria-label={t('imageLightbox.close')}
           >
             <X className="w-4 h-4" />
           </button>
@@ -304,19 +306,19 @@ export default function ImageLightboxModal({
       {/* Footer Navigation / Help Hint */}
       <div className="px-4 py-2 bg-black/40 border-t border-white/5 flex items-center justify-between text-[11px] font-mono text-zinc-400 z-10 shrink-0">
         <div className="flex items-center space-x-3">
-          <span>Клик: {zoom === 1 ? 'зум 2x' : 'сброс'}</span>
+          <span>{t('imageLightbox.clickHint', { action: zoom === 1 ? t('imageLightbox.zoom2x') : t('imageLightbox.reset') })}</span>
           <span>•</span>
-          <span>Колесико: зум +/-</span>
+          <span>{t('imageLightbox.wheelHint')}</span>
           {zoom > 1 && (
             <>
               <span>•</span>
-              <span className="text-amber-400">Перетаскивание активно</span>
+              <span className="text-amber-400">{t('imageLightbox.dragActive')}</span>
             </>
           )}
         </div>
         <div className="flex items-center space-x-1 text-zinc-500">
           <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-[10px]">Esc</kbd>
-          <span>чтобы закрыть</span>
+          <span>{t('imageLightbox.closeHint')}</span>
         </div>
       </div>
     </div>

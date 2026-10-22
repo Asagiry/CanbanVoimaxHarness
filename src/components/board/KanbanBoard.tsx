@@ -456,7 +456,7 @@ export default function KanbanBoard() {
       console.warn(`[handleDragEnd] moveTask rejected for ${draggableId}, reverting state:`, err);
       setTasks(tasks);
       const msg = err instanceof Error ? err.message : String(err);
-      alert(`Не удалось переместить задачу:\n${msg}`);
+      alert(t('board.errMoveTask', { msg }));
     }
   };
 
@@ -510,7 +510,7 @@ export default function KanbanBoard() {
     const saved = await savePipelineConfig(next);
     if (!saved) {
       setColumns(prev);
-      setColumnsError('Не удалось сохранить порядок колонок. Изменения откачены.');
+      setColumnsError(t('board.errReorderRollback'));
     }
   };
 
@@ -584,7 +584,7 @@ export default function KanbanBoard() {
       // Кириллица преобразуется в латиницу автоматически (бэкенд принимает только [a-z0-9-]).
       const role = slugifyTitle(newAgentName);
       if (!role || role === 'column') {
-        setColumnFormError('Имя должно содержать буквы или цифры.');
+        setColumnFormError(t('board.errNameLettersOrDigits'));
         return;
       }
       try {
@@ -639,7 +639,7 @@ export default function KanbanBoard() {
     if (!saved) {
       setColumns(prev);
       useCortexStore.getState().syncStagesFromColumns(prev);
-      setColumnFormError('Не удалось сохранить колонку. Изменения откачены.');
+      setColumnFormError(t('board.errSaveColumnRollback'));
       return;
     }
     setNewColumnTitle('');
@@ -663,8 +663,12 @@ export default function KanbanBoard() {
     const doomedTasks = curTasks.filter((t) => t.columnId === columnId);
     const confirmed = window.confirm(
       doomedTasks.length === 0
-        ? `Удалить колонку «${col.title}»?`
-        : `Удалить колонку «${col.title}»? Задач в ней: ${doomedTasks.length}. Они будут перенесены в колонку «${neighbor.title}».`
+        ? t('board.confirmDeleteColumnEmpty', { title: col.title })
+        : t('board.confirmDeleteColumnWithTasks', {
+            title: col.title,
+            count: doomedTasks.length,
+            neighbor: neighbor.title,
+          })
     );
     if (!confirmed) return;
 
@@ -675,7 +679,7 @@ export default function KanbanBoard() {
     const saved = await savePipelineConfig(next);
     if (!saved) {
       curSetCols(prev);
-      setColumnsError('Не удалось сохранить удаление колонки. Изменения откачены.');
+      setColumnsError(t('board.errDeleteColumnRollback'));
       return;
     }
     for (const t of doomedTasks) {
@@ -988,7 +992,7 @@ export default function KanbanBoard() {
             type="button"
             onClick={() => setColumnsError(null)}
             className="p-1 rounded-md hover:bg-red-100 transition cursor-pointer"
-            title="Закрыть"
+            aria-label={t('common.close')}
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -1063,7 +1067,7 @@ export default function KanbanBoard() {
                     onMouseEnter={() => setHoveredTaskId(thread.subtaskId)}
                     onMouseLeave={() => setHoveredTaskId(null)}
                   >
-                    <title>{`Нить: ${thread.parentId} -> ${thread.subtaskId} (нажмите для открытия консоли подзадачи)`}</title>
+                    <title>{t('board.threadTitle', { parent: thread.parentId, subtask: thread.subtaskId })}</title>
                   </path>
 
                   {/* Node at parent */}

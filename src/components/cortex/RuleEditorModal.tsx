@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useCortexStore } from '../../stores/cortexStore';
+import { useTranslation } from '../../stores/languageStore';
 import {
   X,
   Save,
@@ -218,6 +219,7 @@ function renderMarkdownBlocks(content: string) {
 export default function RuleEditorModal() {
   const { activeFile, isEditorOpen, isSaving, saveFeedback, updateActiveFileContent, saveRules, closeEditor } =
     useCortexStore();
+  const { t } = useTranslation();
 
   const [previewMode, setPreviewMode] = useState(true);
 
@@ -268,11 +270,11 @@ export default function RuleEditorModal() {
             </span>
             {isHook && (
               <span className="px-1.5 py-0.5 rounded border border-[#ebebeb] dark:border-[#30363d] bg-[#f4f4f5] dark:bg-[#21262d] text-[10px] font-mono text-[#666666] dark:text-[#8b949e] shrink-0">
-                хук
+                {t('ruleEditor.hookBadge')}
               </span>
             )}
             {activeFile.isDirty && (
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" title="Несохраненные изменения" />
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" title={t('cortex.unsavedChanges')} />
             )}
             <span className="text-[11px] text-[#8f8f8f] dark:text-[#8b949e] font-mono hidden sm:inline truncate max-w-xs">
               {activeFile.path}
@@ -290,26 +292,26 @@ export default function RuleEditorModal() {
             <button
               onClick={() => setPreviewMode(!previewMode)}
               className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] transition cursor-pointer"
-              title="Переключить режим предпросмотра"
+              title={t('ruleEditor.togglePreview')}
             >
               {previewMode ? <Edit3 className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e]" /> : <Eye className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e]" />}
-              <span>{previewMode ? 'Правка' : 'Просмотр'}</span>
+              <span>{previewMode ? t('ruleEditor.edit') : t('ruleEditor.preview')}</span>
             </button>
 
             <button
               onClick={() => saveRules()}
               disabled={isSaving}
               className="flex items-center space-x-1 px-3 py-1 rounded-md text-xs font-mono bg-[#171717] dark:bg-[#238636] hover:bg-[#262626] dark:hover:bg-[#2ea043] text-white font-medium transition cursor-pointer shadow-xs disabled:opacity-50"
-              title="Сохранить (Ctrl+S)"
+              title={t('ruleEditor.saveHint')}
             >
               <Save className="h-3.5 w-3.5" />
-              <span>{isSaving ? 'Сохранение...' : 'Сохранить'}</span>
+              <span>{isSaving ? t('common.saving') : t('common.save')}</span>
             </button>
 
             <button
               onClick={closeEditor}
               className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer"
-              aria-label="Закрыть"
+              aria-label={t('common.close')}
             >
               <X className="h-4 w-4" />
             </button>
@@ -333,7 +335,7 @@ export default function RuleEditorModal() {
                 onChange={(e) => updateActiveFileContent(e.target.value)}
                 spellCheck={false}
                 className="flex-1 w-full h-full p-2.5 bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] font-mono text-xs leading-5 resize-none focus:outline-hidden selection:bg-[#e5e5e5] dark:selection:bg-[#264f78]"
-                placeholder="Код хука, инструкции или правила роли..."
+                placeholder={t('ruleEditor.placeholder')}
               />
             </div>
           ) : (
@@ -348,9 +350,9 @@ export default function RuleEditorModal() {
         {/* Editor Footer */}
         <div className="flex items-center justify-between border-t border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#161b22] px-4 py-1.5 text-[10px] text-[#666666] dark:text-[#8b949e] font-mono">
           <div className="flex items-center space-x-3">
-            <span>Этап: <strong className="text-[#171717] dark:text-[#f0f6fc] uppercase">{activeFile.stageId}</strong></span>
-            <span>Строк: <strong className="text-[#171717] dark:text-[#f0f6fc] tabular-nums">{lineCount}</strong></span>
-            <span>Слов: <strong className="text-[#171717] dark:text-[#f0f6fc] tabular-nums">{wordCount}</strong></span>
+            <span>{t('ruleEditor.stage')} <strong className="text-[#171717] dark:text-[#f0f6fc] uppercase">{activeFile.stageId}</strong></span>
+            <span>{t('ruleEditor.lines')} <strong className="text-[#171717] dark:text-[#f0f6fc] tabular-nums">{lineCount}</strong></span>
+            <span>{t('ruleEditor.words')} <strong className="text-[#171717] dark:text-[#f0f6fc] tabular-nums">{wordCount}</strong></span>
           </div>
           <span>UTF-8</span>
         </div>

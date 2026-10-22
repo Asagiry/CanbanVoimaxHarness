@@ -164,7 +164,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
     setRenameSaving(false);
     if (!saved) {
       setColumns(prev);
-      setRenameError('Не удалось сохранить. Изменения откачены.');
+      setRenameError(t('columnMenu.saveErrorRollback'));
       return;
     }
     onClose();
@@ -208,7 +208,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
       // Кириллица преобразуется в латиницу автоматически (бэкенд принимает только [a-z0-9-]).
       const role = slugifyTitle(newAgentName);
       if (!role || role === 'column') {
-        setPersonaError('Имя должно содержать буквы или цифры.');
+        setPersonaError(t('columnMenu.errNameLettersOrDigits'));
         return;
       }
       try {
@@ -264,7 +264,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
     if (!saved) {
       setColumns(prev);
       useCortexStore.getState().syncStagesFromColumns(prev);
-      setPersonaError('Не удалось сохранить. Изменения откачены.');
+      setPersonaError(t('columnMenu.saveErrorRollback'));
       return;
     }
     onClose();
@@ -290,7 +290,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
     setScriptSaving(false);
     if (!saved) {
       setColumns(prev);
-      setScriptError('Не удалось сохранить. Изменения откачены.');
+      setScriptError(t('columnMenu.saveErrorRollback'));
       return;
     }
     onClose();
@@ -364,7 +364,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
 
       {mode === 'rename' && (
         <div className="px-3 py-2">
-          <div className="text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">Новое название</div>
+          <div className="text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">{t('columnMenu.newTitle')}</div>
           <input
             type="text"
             autoFocus
@@ -389,7 +389,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
               onClick={() => setMode('main')}
               className="px-2.5 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer text-[#171717] dark:text-[#f0f6fc]"
             >
-              Отмена
+              {t('common.cancel')}
             </button>
             <button
               type="button"
@@ -397,7 +397,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
               onClick={() => void handleSaveRename()}
               className="px-3 py-1.5 rounded-md bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-default border border-transparent dark:border-[#30363d]"
             >
-              Сохранить
+              {t('common.save')}
             </button>
           </div>
         </div>
@@ -405,8 +405,10 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
 
       {mode === 'persona' && (
         <div className="px-3 py-2">
-          <div className="text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">Агент колонки</div>
-          <div className="mb-1.5 text-[#8f8f8f] dark:text-[#8b949e]">Текущий: {column.persona ?? 'не назначен'}</div>
+          <div className="text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">{t('columnMenu.agentColumn')}</div>
+          <div className="mb-1.5 text-[#8f8f8f] dark:text-[#8b949e]">
+            {t('columnMenu.currentAgent', { agent: column.persona ?? t('columnMenu.notAssigned') })}
+          </div>
           {usePersonaSelect ? (
             <PersonaSelect
               value={isNewAgentSelected ? NEW_AGENT_OPTION : selectedPersona}
@@ -429,7 +431,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
               autoFocus
               value={selectedPersona}
               onChange={(e) => setSelectedPersona(e.target.value)}
-              placeholder={personasLoading ? 'Загрузка агентов...' : 'developer'}
+              placeholder={personasLoading ? t('board.loadingAgents') : 'developer'}
               className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#6e7681] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#161b22] font-mono transition"
             />
           )}
@@ -440,19 +442,20 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
                 autoFocus
                 value={newAgentName}
                 onChange={(e) => setNewAgentName(e.target.value)}
-                placeholder="Имя нового агента"
+                placeholder={t('board.newAgentNamePlaceholder')}
                 className="mt-1.5 w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#6e7681] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#161b22] font-mono transition"
               />
               {newAgentName.trim() !== '' ? (
                 <div className="mt-1 text-[10px] font-mono text-[#8f8f8f]">
-                  Роль:{' '}
-                  {slugifyTitle(newAgentName) === 'column'
-                    ? '— нужны буквы или цифры —'
-                    : slugifyTitle(newAgentName)}
+                  {t('columnMenu.roleNameHint', {
+                    role: slugifyTitle(newAgentName) === 'column'
+                      ? t('columnMenu.lettersOrDigitsRequired')
+                      : slugifyTitle(newAgentName)
+                  })}
                 </div>
               ) : (
                 <div className="mt-1 text-[10px] text-[#8f8f8f]">
-                  Кириллица преобразуется в латиницу автоматически
+                  {t('columnMenu.translitHint')}
                 </div>
               )}
             </>
@@ -468,7 +471,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
               onClick={() => setMode('main')}
               className="px-2.5 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] transition cursor-pointer"
             >
-              Назад
+              {t('common.back')}
             </button>
             <button
               type="button"
@@ -476,7 +479,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
               onClick={() => void handleSavePersona()}
               className="px-3 py-1.5 rounded-md bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-default border border-transparent dark:border-[#30363d]"
             >
-              Сохранить
+              {t('common.save')}
             </button>
           </div>
         </div>
@@ -484,12 +487,12 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
 
       {mode === 'script' && (
         <div className="px-3 py-2">
-          <div className="text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">Скрипт перехода</div>
+          <div className="text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">{t('columnMenu.transitionScript')}</div>
           <div
             className="mb-1.5 text-[#8f8f8f] dark:text-[#8b949e] truncate font-mono text-[10px]"
-            title={column.onEnterScript ?? 'не задан'}
+            title={column.onEnterScript ?? t('columnMenu.notSet')}
           >
-            Текущий: {column.onEnterScript ?? 'не задан'}
+            {t('columnMenu.currentScript', { script: column.onEnterScript ?? t('columnMenu.notSet') })}
           </div>
           <input
             type="text"
@@ -506,7 +509,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
             className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#6e7681] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#161b22] font-mono text-xs transition"
           />
           <div className="mt-1 text-[10px] text-[#8f8f8f] dark:text-[#8b949e]">
-            Запускается при входе задачи (.bat, .ps1, .py, .sh)
+            {t('columnMenu.scriptHint')}
           </div>
           {scriptError && (
             <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
@@ -519,7 +522,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
               onClick={() => setMode('main')}
               className="px-2.5 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] transition cursor-pointer"
             >
-              Назад
+              {t('common.back')}
             </button>
             <button
               type="button"
@@ -527,7 +530,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
               onClick={() => void handleSaveScript()}
               className="px-3 py-1.5 rounded-md bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-default border border-transparent dark:border-[#30363d]"
             >
-              Сохранить
+              {t('common.save')}
             </button>
           </div>
         </div>
