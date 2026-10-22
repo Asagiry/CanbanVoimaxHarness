@@ -30,6 +30,7 @@ pub fn normalize_tool_name(name: &str) -> &str {
         "str_replace" => "edit_file",
         "ask_user" => "question",
         "create_tasks" => "create_task",
+        "list_subagents" => "subagent_list",
         "move_task" | "move_task_stage" | "advance_stage" | "next_stage" => "advance_task",
         other => other,
     }
@@ -1070,7 +1071,7 @@ pub fn agent_allows_tool(allowed: Option<&[String]>, tool_name: &str) -> bool {
                 let norm = normalize_tool_name(t);
                 norm == canonical
                     || t == tool_name
-                    || ((canonical == "subagent_bg" || canonical == "collect_subagent")
+                    || ((canonical == "subagent_bg" || canonical == "collect_subagent" || canonical == "subagent_list")
                         && (norm == "subagent" || norm == "subagent_bg"))
             })
         }
@@ -1200,7 +1201,7 @@ pub const DEFAULT_CVH_DEV_PERSONA_MD: &str = r#"---
 name: cvh-dev
 description: Use PROACTIVELY when setting up or repairing boards, pipelines, personas, or hooks.
 model: inherit
-tools: [read_file, write_file, edit_file, glob, grep, execute_command, web_search, web_fetch, todo_write, subagent, subagent_bg, collect_subagent, question, advance_task]
+tools: [read_file, write_file, edit_file, glob, grep, execute_command, web_search, web_fetch, todo_write, subagent, subagent_bg, collect_subagent, subagent_list, question, advance_task]
 scope: gated-writes
 activation: on-enter dev runs run_agent(taskId)
 ---
@@ -1878,6 +1879,7 @@ pub const CANONICAL_TOOLS: &[&str] = &[
     "subagent",
     "subagent_bg",
     "collect_subagent",
+    "subagent_list",
     "todo_write",
     "advance_task",
     "move_task",
@@ -1927,6 +1929,7 @@ pub fn default_global_tools() -> HashMap<String, bool> {
     map.insert("subagent".to_string(), true);
     map.insert("subagent_bg".to_string(), true);
     map.insert("collect_subagent".to_string(), true);
+    map.insert("subagent_list".to_string(), true);
     map.insert("todo_write".to_string(), true);
     map.insert("advance_task".to_string(), true);
     map.insert("reject_task".to_string(), true);
@@ -1956,6 +1959,7 @@ impl Default for ToolPolicyConfig {
         review_map.insert("subagent".to_string(), true);
         review_map.insert("subagent_bg".to_string(), true);
         review_map.insert("collect_subagent".to_string(), true);
+        review_map.insert("subagent_list".to_string(), true);
         review_map.insert("todo_write".to_string(), true);
         review_map.insert("advance_task".to_string(), true);
         review_map.insert("reject_task".to_string(), true);
@@ -1980,6 +1984,7 @@ impl Default for ToolPolicyConfig {
         dev_map.insert("subagent".to_string(), true);
         dev_map.insert("subagent_bg".to_string(), true);
         dev_map.insert("collect_subagent".to_string(), true);
+        dev_map.insert("subagent_list".to_string(), true);
         dev_map.insert("todo_write".to_string(), true);
         dev_map.insert("advance_task".to_string(), true);
         dev_map.insert("reject_task".to_string(), true);
@@ -2003,6 +2008,7 @@ impl Default for ToolPolicyConfig {
         retro_map.insert("subagent".to_string(), true);
         retro_map.insert("subagent_bg".to_string(), true);
         retro_map.insert("collect_subagent".to_string(), true);
+        retro_map.insert("subagent_list".to_string(), true);
         retro_map.insert("todo_write".to_string(), true);
         retro_map.insert("advance_task".to_string(), true);
         retro_map.insert("reject_task".to_string(), true);
@@ -2063,7 +2069,7 @@ pub fn is_tool_allowed(
     // Hierarchical Subagent Policy:
     // If checking 'subagent', 'subagent_bg', or 'collect_subagent':
     // The master switch 'subagent' must be allowed first!
-    if canonical == "subagent" || canonical == "subagent_bg" || canonical == "collect_subagent" {
+    if canonical == "subagent" || canonical == "subagent_bg" || canonical == "collect_subagent" || canonical == "subagent_list" {
         let master_global = policy_lookup(&policy.global_enabled, "subagent").unwrap_or(true);
         if !master_global {
             return false;
@@ -2095,7 +2101,7 @@ pub fn is_tool_allowed(
             return true;
         }
 
-        if canonical == "subagent_bg" || canonical == "collect_subagent" {
+        if canonical == "subagent_bg" || canonical == "collect_subagent" || canonical == "subagent_list" {
             let bg_global = policy_lookup(&policy.global_enabled, "subagent_bg").unwrap_or(true);
             if !bg_global {
                 return false;

@@ -633,6 +633,20 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
             }),
         ),
         ToolDefinition::function(
+            "subagent_list",
+            "List all background and synchronous subagents for the current task with their status (running, completed, aborted), role, title, steps, and subagent_id for collection.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "status_filter": {
+                        "type": "string",
+                        "enum": ["all", "running", "completed", "aborted"],
+                        "description": "Optional status filter ('all', 'running', 'completed', or 'aborted'). Defaults to 'all'."
+                    }
+                }
+            }),
+        ),
+        ToolDefinition::function(
             "todo_write",
             "Record and update task plan list to show progress (max 20 items). Add todos with status pending | in_progress | completed.",
             serde_json::json!({
@@ -995,6 +1009,7 @@ pub async fn maybe_spill_output(
     if canonical == "subagent"
         || canonical == "subagent_bg"
         || canonical == "collect_subagent"
+        || canonical == "subagent_list"
         || canonical == "load_rule"
         || canonical == "get_task_history"
     {
@@ -1691,6 +1706,7 @@ pub struct SubagentRetryInfo {
     pub report: Option<String>,
     pub is_bg: bool,
     pub duration_ms: Option<f64>,
+    pub steps: usize,
 }
 
 pub type SubagentSessionInfo = SubagentRetryInfo;
@@ -1914,6 +1930,7 @@ pub fn canonical_tool_name(tool_name: &str) -> &str {
         "str_replace" => "edit_file",
         "ask_user" => "question",
         "create_tasks" => "create_task",
+        "list_subagents" => "subagent_list",
         "move_task" | "move_task_stage" | "advance_stage" | "next_stage" => "advance_task",
         other => other,
     }
@@ -2076,7 +2093,13 @@ pub async fn execute_tool(
 
             let lines: Vec<&str> = content.lines().collect();
             let start = offset.saturating_sub(1);
+            if start >= lines.len() {
+                return Ok("(File is empty or offset out of range)\n".to_string());
+            }
             let end = (start + limit).min(lines.len());
+            if start > end {
+                return Ok("(File is empty or offset out of range)\n".to_string());
+            }
 
             let mut output = String::new();
             for (idx, line) in lines[start..end].iter().enumerate() {
@@ -2295,6 +2318,7 @@ pub async fn execute_tool(
                 report: None,
                 is_bg: false,
                 duration_ms: None,
+                steps: 0,
             };
 
             let session = SubagentSession {
@@ -2445,6 +2469,7 @@ pub async fn execute_tool(
                 report: None,
                 is_bg: true,
                 duration_ms: None,
+                steps: 0,
             };
 
             let session = SubagentSession {
@@ -2598,6 +2623,185 @@ pub async fn execute_tool(
 
 ")
             }
+        }
+
+        "subagent_list" => {
+            let status_filter = args
+                .get("status_filter")
+                .and_then(|v| v.as_str())
+                .unwrap_or("all")
+                .trim()
+                .to_lowercase();
+
+            let target_task_id = ctx.task_id.unwrap_or("");
+            let mut list: Vec<serde_json::Value> = Vec::new();
+            let mut seen_ids = std::collections::HashSet::new();
+
+            // 1. Scan in-memory SUBAGENT_SESSIONS
+            {
+                let sessions = SUBAGENT_SESSIONS.lock().await;
+                for (sid, sess) in sessions.iter() {
+                    let info = sess.retry_info.lock().await;
+                    if !target_task_id.is_empty() {
+                        let matches_parent = info.parent_task_id == target_task_id
+                            || sid.starts_with(&format!("{}.", target_task_id))
+                            || sid.starts_with(target_task_id);
+                        if !matches_parent {
+                            continue;
+                        }
+                    }
+
+                    let raw_status = if sess.abort_handle.load(Ordering::SeqCst) || info.status == "aborted" {
+                        "aborted"
+                    } else if info.status == "error" {
+                        "error"
+                    } else if info.status == "finished" || info.status == "completed" {
+                        "completed"
+                    } else if info.status == "running" {
+                        "running"
+                    } else {
+                        info.status.as_str()
+                    };
+
+                    let norm_status = match raw_status {
+                        "finished" => "completed",
+                        s => s,
+                    };
+
+                    let matches_filter = match status_filter.as_str() {
+                        "all" | "" => true,
+                        "running" => norm_status == "running",
+                        "completed" => norm_status == "completed",
+                        "aborted" => norm_status == "aborted",
+                        "error" => norm_status == "error",
+                        f => norm_status == f,
+                    };
+
+                    if matches_filter {
+                        let mut item = serde_json::json!({
+                            "subagent_id": &info.subagent_id,
+                            "title": &info.title,
+                            "role": &info.role,
+                            "status": norm_status,
+                            "steps": info.steps,
+                        });
+                        if let Some(dur) = info.duration_ms {
+                            item["duration_ms"] = serde_json::json!(dur.round() as u64);
+                        }
+                        list.push(item);
+                    }
+                    seen_ids.insert(info.subagent_id.clone());
+                    seen_ids.insert(sid.clone());
+                }
+            }
+
+            // 2. Check SQLite dialog_items for persisted subagents not in active sessions
+            if !target_task_id.is_empty() {
+                if let Ok(dialog_keys) = crate::db::list_subagent_dialog_keys(&ctx.repo_root, target_task_id) {
+                    for key in dialog_keys {
+                        let sub_id = if key.contains(":sub:") {
+                            key.rsplit(":sub:").next().unwrap_or(&key).to_string()
+                        } else {
+                            key.clone()
+                        };
+
+                        if seen_ids.contains(&sub_id) || seen_ids.contains(&key) {
+                            continue;
+                        }
+
+                        if let Ok(items) = crate::db::load_dialog_items(&ctx.repo_root, &key) {
+                            if items.is_empty() {
+                                continue;
+                            }
+
+                            let mut title = "Subagent".to_string();
+                            let mut role = "general".to_string();
+                            let mut has_output = false;
+                            let mut has_error = false;
+                            let mut has_abort = false;
+                            let mut steps = 0;
+                            let mut duration_ms: Option<f64> = None;
+
+                            for it in &items {
+                                if it.item_type == "tool_call" {
+                                    steps += 1;
+                                }
+                                if it.item_type == "output" {
+                                    has_output = true;
+                                    if let Some(dur) = it.duration_ms {
+                                        duration_ms = Some(dur);
+                                    }
+                                    if let Some(ref c) = it.content {
+                                        if let Some(idx_sub) = c.find("Subagent [") {
+                                            let after = &c[idx_sub + 10..];
+                                            if let Some(idx_bracket) = after.find("] '") {
+                                                role = after[..idx_bracket].to_string();
+                                                let after_title = &after[idx_bracket + 3..];
+                                                if let Some(idx_quote) = after_title.find("' report:") {
+                                                    title = after_title[..idx_quote].to_string();
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                if it.item_type == "prompt" {
+                                    if let Some(ref tool_meta) = it.tool {
+                                        if let Some(t) = tool_meta.get("title").and_then(|v| v.as_str()) {
+                                            title = t.to_string();
+                                        }
+                                        if let Some(r) = tool_meta.get("role").and_then(|v| v.as_str()) {
+                                            role = r.to_string();
+                                        }
+                                    }
+                                }
+                                if it.item_type == "error" {
+                                    has_error = true;
+                                    if it.content.as_ref().map(|c| c.contains("aborted") || c.contains("прерван")).unwrap_or(false) {
+                                        has_abort = true;
+                                    }
+                                }
+                            }
+
+                            let norm_status = if has_abort {
+                                "aborted"
+                            } else if has_error {
+                                "error"
+                            } else if has_output {
+                                "completed"
+                            } else {
+                                "completed"
+                            };
+
+                            let matches_filter = match status_filter.as_str() {
+                                "all" | "" => true,
+                                "running" => norm_status == "running",
+                                "completed" => norm_status == "completed",
+                                "aborted" => norm_status == "aborted",
+                                "error" => norm_status == "error",
+                                f => norm_status == f,
+                            };
+
+                            if matches_filter {
+                                let mut item = serde_json::json!({
+                                    "subagent_id": &sub_id,
+                                    "title": &title,
+                                    "role": &role,
+                                    "status": norm_status,
+                                    "steps": steps,
+                                });
+                                if let Some(dur) = duration_ms {
+                                    item["duration_ms"] = serde_json::json!(dur.round() as u64);
+                                }
+                                list.push(item);
+                            }
+                            seen_ids.insert(sub_id);
+                            seen_ids.insert(key);
+                        }
+                    }
+                }
+            }
+
+            serde_json::to_string_pretty(&list)?
         }
 
         "todo_write" => {
@@ -3770,6 +3974,7 @@ pub fn run_inprocess_subagent(
             uuid::Uuid::new_v4().to_string().chars().take(4).collect::<String>()
         ),
     };
+    let is_bg_subagent = explicit_subagent_id.is_some();
     let raw_sub_id = explicit_subagent_id.unwrap_or_else(|| format!("{}.sub-{}", parent_id, subagent_suffix));
     let (subagent_id, subagent_dialog_id) = if raw_sub_id.contains(":sub:") {
         let after = raw_sub_id.rsplit(":sub:").next().unwrap_or(&raw_sub_id).to_string();
@@ -3796,6 +4001,7 @@ pub fn run_inprocess_subagent(
             t != "subagent"
                 && t != "subagent_bg"
                 && t != "collect_subagent"
+                && t != "subagent_list"
                 && t != "advance_task"
                 && t != "move_task"
                 && t != "move_task_stage"
@@ -3834,7 +4040,11 @@ pub fn run_inprocess_subagent(
         item_type: "prompt".to_string(),
         timestamp: chrono::Utc::now().to_rfc3339(),
         content: Some(prompt.to_string()),
-        tool: None,
+        tool: Some(serde_json::json!({
+            "title": &title,
+            "role": &role,
+            "is_bg": is_bg_subagent
+        })),
         duration_ms: None,
         images: None,
     };
@@ -3919,6 +4129,10 @@ pub fn run_inprocess_subagent(
 
     loop {
         sub_turn += 1;
+        if let Some((_, session)) = find_subagent_session(Some(&parent_id), &subagent_id).await {
+            let mut info = session.retry_info.lock().await;
+            info.steps = sub_turn;
+        }
         if ctx.abort_handle.load(Ordering::SeqCst) {
             break;
         }

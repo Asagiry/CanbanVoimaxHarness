@@ -18,6 +18,7 @@
     "subagent_sync": true,
     "reject_task": true,
     "collect_subagent": true,
+    "subagent_list": true,
     "web_fetch": true,
     "get_task_history": true,
     "create_task": true
@@ -26,6 +27,7 @@
     "dev": {
       "edit_file": true,
       "collect_subagent": true,
+      "subagent_list": true,
       "todo_write": true,
       "complete_task": true,
       "read_file": true,

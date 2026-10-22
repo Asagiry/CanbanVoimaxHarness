@@ -415,6 +415,7 @@ use super::*;
             report: None,
             is_bg: false,
             duration_ms: None,
+            steps: 0,
         };
 
         let session = SubagentSession::new(Some(tx1), retry_info);
@@ -1517,6 +1518,7 @@ use super::*;
                 report: None,
                 is_bg: true,
                 duration_ms: None,
+                steps: 0,
             },
         );
 
@@ -1536,6 +1538,7 @@ use super::*;
                 report: None,
                 is_bg: true,
                 duration_ms: None,
+                steps: 0,
             },
         );
 
@@ -2434,7 +2437,7 @@ line 2 again"
         allowed_policy.stage_overrides.insert("cvh-dev".to_string(), cvh_allowed);
         let cvh_dev_allowed_ctx = ToolContext {
             tool_policy: &allowed_policy,
-            ..cvh_dev_ctx
+            ..cvh_dev_ctx.clone()
         };
         let create_res = execute_tool(&cvh_dev_allowed_ctx, "create_task", &serde_json::json!({ "title": "Test Task" })).await;
         assert!(create_res.is_ok(), "create_task must succeed for cvh-dev when allowed by policy");
@@ -2450,7 +2453,7 @@ line 2 again"
         restricted_policy.global_enabled.insert("web_search".to_string(), false);
         let restricted_ctx = ToolContext {
             tool_policy: &restricted_policy,
-            ..cvh_dev_ctx
+            ..cvh_dev_ctx.clone()
         };
         let search_err = execute_tool(&restricted_ctx, "web_search", &serde_json::json!({ "query": "rust" }))
             .await
@@ -2748,7 +2751,7 @@ data: [DONE]
             for ch in text.chars() {
                 assert!(
                     !(('а'..='я').contains(&ch) || ('А'..='Я').contains(&ch) || ch == 'ё' || ch == 'Ё'),
-                    "Found Cyrillic character '{}' in {}: "{}"",
+                    "Found Cyrillic character '{}' in {}: \"{}\"",
                     ch,
                     context,
                     text
@@ -2836,7 +2839,7 @@ data: [DONE]
         // 2. In run_agent_loop, a failed advance_task must NOT trip abort_flag and must continue to next turn
         // Turn 1 calls advance_task with invalid stage -> fails
         // Turn 2 outputs self-correction text
-        let sse_stream = "data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_adv_fail","function":{"name":"advance_task","arguments":"{\"stage_id\":\"non_existent_stage\"}"}}]}}]}
+        let sse_stream = r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_adv_fail","function":{"name":"advance_task","arguments":"{\"stage_id\":\"non_existent_stage\"}"}}]}}]}
 
 data: [DONE]
 
@@ -2844,7 +2847,7 @@ data: {"choices":[{"delta":{"content":"Understood, available stages are dev, rev
 
 data: [DONE]
 
-";
+"#;
         let request_counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let (base_url, server_handle) = start_mock_sse_server(sse_stream, Arc::clone(&request_counter)).await;
 
@@ -3163,6 +3166,7 @@ data: [DONE]
             report: None,
             is_bg: true,
             duration_ms: None,
+            steps: 0,
         };
 
         let session = SubagentSession::new(Some(tx), info_bg);
@@ -3504,6 +3508,185 @@ Rule: Strictly isolated worktrees.",
             .await;
         assert!(err.is_err());
         assert!(err.unwrap_err().to_string().contains("not found"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_read_file_offset_out_of_range() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_read_oob_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dirs");
+
+        let flag = Arc::new(AtomicBool::new(false));
+        let policy = ToolPolicyConfig::default();
+        let tool_ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("dev"),
+            role: Some("developer"),
+            abort_handle: flag,
+            tool_policy: &policy,
+            task_id: Some("CVH-100"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        // Write a short file with 3 lines
+        let file_path = base.join("short.txt");
+        tokio::fs::write(&file_path, "line 1\nline 2\nline 3\n").await.expect("write");
+
+        // 1. Offset beyond line count (e.g. offset = 250, lines = 3)
+        // Must NOT panic, and must return informative string
+        let res = execute_tool(&tool_ctx, "read_file", &serde_json::json!({
+            "file_path": "short.txt",
+            "offset": 250,
+            "limit": 10
+        }))
+        .await
+        .expect("read_file beyond length must succeed without panic");
+
+        assert_eq!(res, "(File is empty or offset out of range)\n");
+
+        // 2. Empty file
+        let empty_path = base.join("empty.txt");
+        tokio::fs::write(&empty_path, "").await.expect("write empty");
+        let res_empty = execute_tool(&tool_ctx, "read_file", &serde_json::json!({
+            "file_path": "empty.txt",
+            "offset": 1
+        }))
+        .await
+        .expect("read_file empty must succeed without panic");
+
+        assert_eq!(res_empty, "(File is empty or offset out of range)\n");
+
+        // 3. Normal read
+        let res_normal = execute_tool(&tool_ctx, "read_file", &serde_json::json!({
+            "file_path": "short.txt",
+            "offset": 2,
+            "limit": 2
+        }))
+        .await
+        .expect("read normal");
+
+        assert!(res_normal.contains("2: line 2\n3: line 3\n"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_subagent_list() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_sublist_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dirs");
+
+        let flag = Arc::new(AtomicBool::new(false));
+        let policy = ToolPolicyConfig::default();
+        let tool_ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("dev"),
+            role: Some("developer"),
+            abort_handle: Arc::clone(&flag),
+            tool_policy: &policy,
+            task_id: Some("CVH-200"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        let sub_id1 = "CVH-200.sub-call_11111".to_string();
+        let sub_id2 = "CVH-200.sub-call_22222".to_string();
+        let (tx1, _rx1) = oneshot::channel();
+        let (tx2, _rx2) = oneshot::channel();
+
+        let session1 = SubagentSession::new(
+            Some(tx1),
+            SubagentRetryInfo {
+                parent_task_id: "CVH-200".to_string(),
+                subagent_id: sub_id1.clone(),
+                tool_call_id: Some("call_11111".to_string()),
+                title: "Backend Architecture Analysis".to_string(),
+                role: "developer".to_string(),
+                prompt: "Analyze backend".to_string(),
+                requested_tools: None,
+                ctx: tool_ctx.to_owned(),
+                status: "finished".to_string(),
+                last_error: None,
+                report: Some("All good".to_string()),
+                is_bg: true,
+                duration_ms: Some(77000.0),
+                steps: 5,
+            },
+        );
+
+        let session2 = SubagentSession::new(
+            Some(tx2),
+            SubagentRetryInfo {
+                parent_task_id: "CVH-200".to_string(),
+                subagent_id: sub_id2.clone(),
+                tool_call_id: Some("call_22222".to_string()),
+                title: "Frontend Styling".to_string(),
+                role: "artisan".to_string(),
+                prompt: "Style UI".to_string(),
+                requested_tools: None,
+                ctx: tool_ctx.to_owned(),
+                status: "running".to_string(),
+                last_error: None,
+                report: None,
+                is_bg: true,
+                duration_ms: None,
+                steps: 2,
+            },
+        );
+
+        {
+            let mut sessions = SUBAGENT_SESSIONS.lock().await;
+            sessions.insert(sub_id1.clone(), session1);
+            sessions.insert(sub_id2.clone(), session2);
+        }
+
+        // Test 1: list all
+        let all_res = execute_tool(&tool_ctx, "subagent_list", &serde_json::json!({}))
+            .await
+            .expect("subagent_list all");
+        let parsed_all: Vec<serde_json::Value> = serde_json::from_str(&all_res).expect("valid json");
+        assert!(parsed_all.iter().any(|s| s["subagent_id"] == sub_id1 && s["status"] == "completed" && s["duration_ms"] == 77000 && s["steps"] == 5));
+        assert!(parsed_all.iter().any(|s| s["subagent_id"] == sub_id2 && s["status"] == "running" && s["steps"] == 2));
+
+        // Test 2: filter running
+        let running_res = execute_tool(&tool_ctx, "subagent_list", &serde_json::json!({ "status_filter": "running" }))
+            .await
+            .expect("subagent_list running");
+        let parsed_running: Vec<serde_json::Value> = serde_json::from_str(&running_res).expect("valid json");
+        assert_eq!(parsed_running.len(), 1);
+        assert_eq!(parsed_running[0]["subagent_id"], sub_id2);
+        assert_eq!(parsed_running[0]["status"], "running");
+
+        // Test 3: filter completed
+        let completed_res = execute_tool(&tool_ctx, "subagent_list", &serde_json::json!({ "status_filter": "completed" }))
+            .await
+            .expect("subagent_list completed");
+        let parsed_completed: Vec<serde_json::Value> = serde_json::from_str(&completed_res).expect("valid json");
+        assert_eq!(parsed_completed.len(), 1);
+        assert_eq!(parsed_completed[0]["subagent_id"], sub_id1);
+        assert_eq!(parsed_completed[0]["status"], "completed");
+
+        // Cleanup in-memory sessions
+        {
+            let mut sessions = SUBAGENT_SESSIONS.lock().await;
+            sessions.remove(&sub_id1);
+            sessions.remove(&sub_id2);
+        }
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }

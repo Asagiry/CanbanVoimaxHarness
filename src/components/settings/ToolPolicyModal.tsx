@@ -627,7 +627,7 @@ export default function ToolPolicyModal() {
                                 <div className="flex items-start gap-1.5 text-left w-full">
                                   {isChild && (
                                     <span className="text-[#8f8f8f] dark:text-[#6e7681] font-mono text-xs select-none shrink-0 mt-0.5 leading-none">
-                                      {tool.id === 'collect_subagent' ? '└──' : '├──'}
+                                      {tool.id === 'subagent_list' ? '└──' : '├──'}
                                     </span>
                                   )}
                                   <div className="min-w-0 flex-1">
@@ -829,7 +829,7 @@ export default function ToolPolicyModal() {
                               >
                                 {isChild && (
                                   <span className="text-[#8f8f8f] dark:text-[#8b949e] font-mono text-xs select-none shrink-0 mt-0.5 leading-none">
-                                    {tool.id === 'collect_subagent' ? '└──' : '├──'}
+                                    {tool.id === 'subagent_list' ? '└──' : '├──'}
                                   </span>
                                 )}
                                 <ChevronDown

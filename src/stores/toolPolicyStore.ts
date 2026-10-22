@@ -334,6 +334,25 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     },
   },
   {
+    id: 'subagent_list',
+    name: 'subagent_list',
+    label: 'Список субагентов',
+    description: 'List all background and synchronous subagents for the current task with their status (running, completed, aborted), role, title, steps, and subagent_id for collection.',
+    category: 'agent',
+    tokenWeight: 200,
+    parentTool: 'subagent',
+    parameters: {
+      type: 'object',
+      properties: {
+        status_filter: {
+          type: 'string',
+          enum: ['all', 'running', 'completed', 'aborted'],
+          description: "Optional filter by status: 'all', 'running', 'completed', 'aborted'.",
+        },
+      },
+    },
+  },
+  {
     id: 'todo_write',
     name: 'todo_write',
     label: 'План выполнения',
@@ -536,6 +555,7 @@ const DEFAULT_GLOBAL: Record<string, boolean> = {
   subagent_sync: true,
   subagent_bg: true,
   collect_subagent: true,
+  subagent_list: true,
   todo_write: true,
   question: true,
   create_task: true,
@@ -569,6 +589,7 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     subagent_sync: true,
     subagent_bg: true,
     collect_subagent: true,
+    subagent_list: true,
     todo_write: true,
     question: true,
     create_task: false,
@@ -592,6 +613,7 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     subagent_sync: true,
     subagent_bg: true,
     collect_subagent: true,
+    subagent_list: true,
     todo_write: true,
     question: true,
     create_task: false,
@@ -615,6 +637,7 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, boolean>> = {
     subagent_sync: true,
     subagent_bg: true,
     collect_subagent: true,
+    subagent_list: true,
     todo_write: true,
     question: true,
     create_task: false,
@@ -719,7 +742,7 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
     const { globalEnabled, stageOverrides } = get();
 
     // Hierarchical rule for subagent sub-options
-    if (toolId === 'subagent_sync' || toolId === 'subagent_bg' || toolId === 'collect_subagent') {
+    if (toolId === 'subagent_sync' || toolId === 'subagent_bg' || toolId === 'collect_subagent' || toolId === 'subagent_list') {
       const masterGlobal = globalEnabled['subagent'] ?? true;
       if (!masterGlobal) return false;
       if (stageOrAgentId) {

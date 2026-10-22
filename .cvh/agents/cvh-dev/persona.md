@@ -2,7 +2,7 @@
 name: cvh-dev
 description: Use PROACTIVELY when setting up or repairing boards, pipelines, personas, or hooks.
 model: inherit
-tools: [execute_command, read_file, edit_file, write_file, glob, grep, web_search, web_fetch, subagent, subagent_bg, collect_subagent, todo_write, advance_task, move_task, reject_task, question, create_task, complete_task, list_tasks, get_task_history, load_rule]
+tools: [execute_command, read_file, edit_file, write_file, glob, grep, web_search, web_fetch, subagent, subagent_bg, collect_subagent, subagent_list, todo_write, advance_task, move_task, reject_task, question, create_task, complete_task, list_tasks, get_task_history, load_rule]
 scope: gated-writes
 activation: on-enter dev runs run_agent(taskId)
 ---
