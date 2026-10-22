@@ -372,7 +372,7 @@ pub fn is_valid_persona_role(role: &str) -> bool {
 
 pub fn persona_placeholder_template(role: &str, icon: &str, color: &str) -> String {
     format!(
-        "---\nname: {role}\nicon: {icon}\ncolor: {color}\n---\n\n# Роль: {role}\n\n> Этот файл создан автоматически командой `create_agent_persona`. Заполните его под свою персону — все секции ниже помечены TODO.\n\n## TODO: цель персоны\n\n- Опишите, за что отвечает эта персона и какие задачи решает.\n\n## TODO: стиль\n\n- Опишите стиль общения и работы: тон, детальность, формат ответов.\n\n## TODO: запреты\n\n- Перечислите, что персоне запрещено делать.\n\n## TODO: чеклист настройки\n\n- [ ] Заполнена цель персоны\n- [ ] Описан стиль\n- [ ] Перечислены запреты\n- [ ] Проверена работа персоны на тестовой задаче\n"
+        "---\nname: {role}\nicon: {icon}\ncolor: {color}\n---\n\n# Role Persona: {role}\n\nIdentity & Scope:\n- Core Mission: <describe the primary responsibility and objectives of this role>\n- Permitted Operations: <list allowed tools, inspection, and verification scopes>\n- Prohibitions: <list strict prohibitions, e.g. never write code without tests, never commit broken builds>\n\nGuidelines:\n- Work strictly inside the isolated git worktree.\n- State only what runtime sensors prove.\n"
     )
 }
 

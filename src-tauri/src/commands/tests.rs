@@ -89,14 +89,16 @@ use std::path::PathBuf;
     }
 
     #[test]
-    fn test_persona_placeholder_template_ru() {
+    fn test_persona_placeholder_template_en() {
         let t = persona_placeholder_template("reviewer", "ShieldCheck", "#a855f7");
         assert!(t.contains("name: reviewer"));
         assert!(t.contains("icon: ShieldCheck"));
         assert!(t.contains("color: #a855f7"));
-        assert!(t.contains("# Роль: reviewer"));
-        assert!(t.contains("TODO"));
-        assert!(t.contains("создан автоматически"));
+        assert!(t.contains("# Role Persona: reviewer"));
+        assert!(t.contains("Identity & Scope:"));
+        assert!(t.contains("Guidelines:"));
+        // Assert absence of Cyrillic characters (100% English invariant)
+        assert!(!t.chars().any(|c| ('\u{0400}'..='\u{04FF}').contains(&c)));
     }
 
     #[test]
@@ -220,7 +222,7 @@ use std::path::PathBuf;
         let content = tokio::fs::read_to_string(role_dir.join("persona.md"))
             .await
             .expect("read created file");
-        assert!(content.contains("# Роль: my-role"));
+        assert!(content.contains("# Role Persona: my-role"));
         assert!(role_dir.join("rules").is_dir(), "rules/ must exist");
         assert!(role_dir.join("hooks").is_dir(), "hooks/ must exist");
         let setting = tokio::fs::read_to_string(role_dir.join("setting"))

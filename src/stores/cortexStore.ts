@@ -423,21 +423,22 @@ function normalizeCortexFileName(rawName: string): { base: string; fileName: str
   return { base, fileName: `${base}.md` };
 }
 
-// Шаблон персоны на русском для отсутствующего .cvh/agents/<persona>.md
+// English persona template for missing .cvh/agents/<persona>.md (English-Only Invariant)
 function buildPersonaTemplate(personaName: string, stageTitle: string): string {
   return (
-    `# Роль: ${personaName} (${stageTitle})\n` +
+    `# Role Persona: ${personaName} (${stageTitle})\n` +
     `\n` +
-    `## Назначение\n` +
-    `Опишите здесь обязанности и границы ответственности агента.\n` +
+    `## Identity & Scope\n` +
+    `- Core Mission: <describe the primary responsibility and objectives of this role>\n` +
+    `- Permitted Operations: <list allowed tools, inspection, and verification scopes>\n` +
+    `- Prohibitions: <list strict prohibitions, e.g. never write code without tests, never commit broken builds>\n` +
     `\n` +
-    `## Инварианты\n` +
-    `- Работать только в рамках своей колонки пайплайна.\n` +
-    `- Не использовать заглушки и синтетические моки без необходимости.\n` +
-    `- Проверять результат реальными сенсорами перед сдачей.\n` +
+    `## Guidelines\n` +
+    `- Work strictly inside the isolated git worktree.\n` +
+    `- State only what runtime sensors prove.\n` +
     `\n` +
-    `## Сенсоры\n` +
-    `- npm run build\n`
+    `## Sensors\n` +
+    `- pnpm run build\n`
   );
 }
 
