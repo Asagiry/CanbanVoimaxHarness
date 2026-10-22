@@ -1395,7 +1395,7 @@ pub async fn ensure_cvh_dev_scaffold(repo_root: &Path) -> Result<(), anyhow::Err
 /// Automatically scaffold the minimal .cvh workspace structure if missing.
 /// Creates: empty `.cvh/agents/`, `.cvh/dialogs/`, `.cvh/worktrees/`,
 /// `.cvh/skills/`, `.cvh/settings/`, `.cvh/hooks/` and default
-/// config/pipeline/tasks/tool-policy files. Fresh scaffolds seed NO agents:
+/// config/pipeline/tool-policy files. Fresh scaffolds seed NO agents:
 /// `pipeline.json` holds only `backlog` (no persona, first) + `ready`
 /// (terminal, last); the first agent is created by the user via UI.
 pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
@@ -1481,13 +1481,7 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
     // so any newly scaffolded project immediately has these guides available on disk.
     ensure_cvh_dev_scaffold(repo_root).await?;
 
-    // 3. Default tasks.json if not present
-    let tasks_path = cvh_dir.join("tasks.json");
-    if !tasks_path.exists() {
-        atomic_write_file(&tasks_path, "[]").await?;
-    }
-
-    // 4. Default tool policy in settings/ if not present.
+    // 3. Default tool policy in settings/ if not present.
     // NOTE: this MUST be tool_policy_path() — the same single file that
     // load_tool_policies()/save_tool_policies() use (single canonical path,
     // no legacy fallbacks).
@@ -2473,8 +2467,7 @@ mod tests {
         assert!(cvh.join("dialogs").is_dir());
         assert!(cvh.join("worktrees").is_dir());
         assert!(cvh.join("config.json").is_file());
-        let tasks_raw = tokio::fs::read_to_string(cvh.join("tasks.json")).await.expect("tasks.json");
-        assert_eq!(tasks_raw.trim(), "[]");
+        assert!(!cvh.join("tasks.json").exists(), "tasks.json must not be scaffolded");
         assert!(tool_policy_path(&base_dir).is_file());
 
         let _ = tokio::fs::remove_dir_all(&base_dir).await;
