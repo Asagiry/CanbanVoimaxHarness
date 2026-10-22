@@ -1906,6 +1906,9 @@ pub const CANONICAL_TOOLS: &[&str] = &[
     "question",
     "create_task",
     "complete_task",
+    "list_tasks",
+    "get_task_history",
+    "load_rule",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1947,6 +1950,9 @@ pub fn default_global_tools() -> HashMap<String, bool> {
     map.insert("question".to_string(), true);
     map.insert("create_task".to_string(), true);
     map.insert("complete_task".to_string(), true);
+    map.insert("list_tasks".to_string(), true);
+    map.insert("get_task_history".to_string(), true);
+    map.insert("load_rule".to_string(), true);
     map
 }
 
@@ -1973,6 +1979,9 @@ impl Default for ToolPolicyConfig {
         review_map.insert("question".to_string(), true);
         review_map.insert("create_task".to_string(), false);
         review_map.insert("complete_task".to_string(), false);
+        review_map.insert("list_tasks".to_string(), true);
+        review_map.insert("get_task_history".to_string(), true);
+        review_map.insert("load_rule".to_string(), true);
         stage_overrides.insert("review".to_string(), review_map);
 
         // Dev stage: code editing, bash, search, fetch, subagent, todo_write enabled; card tools enabled for orchestrator tasks in dev
@@ -1994,6 +2003,9 @@ impl Default for ToolPolicyConfig {
         dev_map.insert("question".to_string(), true);
         dev_map.insert("create_task".to_string(), true);
         dev_map.insert("complete_task".to_string(), true);
+        dev_map.insert("list_tasks".to_string(), true);
+        dev_map.insert("get_task_history".to_string(), true);
+        dev_map.insert("load_rule".to_string(), true);
         stage_overrides.insert("dev".to_string(), dev_map);
 
         // Retro stage: audit and ledger logging enabled; search, fetch, subagent, todo enabled; edit/task-creation disabled
@@ -2014,6 +2026,9 @@ impl Default for ToolPolicyConfig {
         retro_map.insert("question".to_string(), true);
         retro_map.insert("create_task".to_string(), false);
         retro_map.insert("complete_task".to_string(), false);
+        retro_map.insert("list_tasks".to_string(), true);
+        retro_map.insert("get_task_history".to_string(), true);
+        retro_map.insert("load_rule".to_string(), true);
         stage_overrides.insert("retro".to_string(), retro_map);
 
         // Backlog stage: orchestration enabled

@@ -686,7 +686,127 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
                 "required": ["summary"]
             }),
         ),
+        ToolDefinition::function(
+            "list_tasks",
+            "Получить компактный реестр последних задач с доски для анализа, ретроспективы или аудита качества.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "description": "Максимальное количество задач (по умолчанию 20, максимум 50)"
+                    },
+                    "stage_id": {
+                        "type": "string",
+                        "description": "Опциональный фильтр по этапу/колонке (например, 'ready', 'dev')"
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Опциональный текстовый поиск по title, id или handover_summary"
+                    }
+                }
+            }),
+        ),
+        ToolDefinition::function(
+            "get_task_history",
+            "Получить подробную хронологию выполнения задачи (исходное описание, последовательность вызовов инструментов с кодами ошибок, вердикт и финальный ответ) для глубокого аудита качества.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "task_id": {
+                        "type": "string",
+                        "description": "ID задачи (например 'CVH-042' или 'CVH-042.1')"
+                    },
+                    "include_tool_outputs": {
+                        "type": "boolean",
+                        "description": "По умолчанию false. Если true — выводит сжатые результаты выполнения инструментов."
+                    }
+                },
+                "required": ["task_id"]
+            }),
+        ),
+        get_load_rule_tool(Path::new(""), None),
     ]
+}
+
+pub fn get_available_rules(repo_root: &Path, role: Option<&str>) -> Vec<String> {
+    let mut rules = Vec::new();
+    let mut dirs_to_scan = Vec::new();
+
+    if let Some(r) = role.filter(|s| !s.trim().is_empty()) {
+        dirs_to_scan.push(repo_root.join(".cvh").join("agents").join(r).join("rules"));
+    }
+    dirs_to_scan.push(repo_root.join(".cvh").join("rules"));
+
+    for d in &dirs_to_scan {
+        if d.is_dir() {
+            if let Ok(entries) = std::fs::read_dir(d) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("md") {
+                        if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                            rules.push(stem.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if rules.is_empty() {
+        let agents_base = repo_root.join(".cvh").join("agents");
+        if agents_base.is_dir() {
+            if let Ok(entries) = std::fs::read_dir(&agents_base) {
+                for entry in entries.flatten() {
+                    let r_dir = entry.path().join("rules");
+                    if r_dir.is_dir() {
+                        if let Ok(r_entries) = std::fs::read_dir(&r_dir) {
+                            for re in r_entries.flatten() {
+                                let path = re.path();
+                                if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("md") {
+                                    if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                                        rules.push(stem.to_string());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    rules.sort();
+    rules.dedup();
+    rules
+}
+
+pub fn get_load_rule_tool(repo_root: &Path, role: Option<&str>) -> ToolDefinition {
+    let available_rules = get_available_rules(repo_root, role);
+    let rule_prop = if !available_rules.is_empty() {
+        serde_json::json!({
+            "type": "string",
+            "description": "Загрузить стандарт, архитектурный инвариант или гайдлайн проекта по конкретной теме.",
+            "enum": available_rules
+        })
+    } else {
+        serde_json::json!({
+            "type": "string",
+            "description": "Загрузить стандарт, архитектурный инвариант или гайдлайн проекта по конкретной теме."
+        })
+    };
+
+    ToolDefinition::function(
+        "load_rule",
+        "Загрузить стандарт, архитектурный инвариант или гайдлайн проекта по конкретной теме.",
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "rule": rule_prop
+            },
+            "required": ["rule"]
+        }),
+    )
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -718,7 +838,14 @@ pub async fn load_custom_tools(repo_root: &Path) -> Vec<CustomToolConfig> {
 }
 
 pub async fn get_all_tools(repo_root: &Path) -> Vec<ToolDefinition> {
+    get_all_tools_for_role(repo_root, None).await
+}
+
+pub async fn get_all_tools_for_role(repo_root: &Path, role: Option<&str>) -> Vec<ToolDefinition> {
     let mut tools = get_standard_tools();
+    if let Some(pos) = tools.iter().position(|t| t.function.name == "load_rule") {
+        tools[pos] = get_load_rule_tool(repo_root, role);
+    }
     let mut custom_tools = load_custom_tools(repo_root).await;
     // Deterministic order: filesystem read_dir order is OS-dependent.
     // Sort custom tools by name so merged list is stable (final active list
@@ -742,8 +869,13 @@ pub async fn maybe_spill_output(
     output: String,
 ) -> Result<String> {
     let canonical = canonical_tool_name(tool_name);
-    // Subagent reports must NEVER be truncated or spilled! Parent agent requires full synthesized report.
-    if canonical == "subagent" || canonical == "subagent_bg" || canonical == "collect_subagent" {
+    // Subagent reports and rule/audit outputs must NEVER be truncated or spilled!
+    if canonical == "subagent"
+        || canonical == "subagent_bg"
+        || canonical == "collect_subagent"
+        || canonical == "load_rule"
+        || canonical == "get_task_history"
+    {
         return Ok(output);
     }
 
@@ -1663,6 +1795,38 @@ pub fn canonical_tool_name(tool_name: &str) -> &str {
         "move_task" | "move_task_stage" | "advance_stage" | "next_stage" => "advance_task",
         other => other,
     }
+}
+
+pub async fn get_stage_personas(repo_root: &Path) -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    if let Ok(boards_cfg) = crate::config::load_boards_config(repo_root).await {
+        for b in boards_cfg.boards {
+            for c in b.columns {
+                if let Some(p) = c.persona {
+                    map.insert(c.id, p);
+                }
+            }
+        }
+    }
+    if let Ok(pipeline) = crate::config::load_pipeline_config(repo_root).await {
+        for c in pipeline.columns {
+            if let Some(p) = c.persona {
+                map.entry(c.id).or_insert(p);
+            }
+        }
+    }
+    map
+}
+
+pub fn resolve_task_role(stage_id: &str, personas: &HashMap<String, String>) -> String {
+    personas.get(stage_id).cloned().unwrap_or_else(|| {
+        match stage_id {
+            "dev" => "developer".to_string(),
+            "review" => "reviewer".to_string(),
+            "retro" => "retro-verifier".to_string(),
+            other => other.to_string(),
+        }
+    })
 }
 
 /// Executes a tool within the safe boundary of `worktree_dir` with zero-trust policy checks
@@ -3120,6 +3284,260 @@ pub async fn execute_tool(
             }))?
         }
 
+        "list_tasks" => {
+            let mut tasks = crate::db::db_get_all_tasks(repo_root)
+                .map_err(|e| anyhow::anyhow!("Failed to read tasks from database: {}", e))?;
+
+            if let Some(target_stage) = args.get("stage_id").and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()) {
+                let target = target_stage.trim();
+                tasks.retain(|t| t.stage_id.eq_ignore_ascii_case(target));
+            }
+
+            if let Some(q) = args.get("query").and_then(|v| v.as_str()).map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty()) {
+                tasks.retain(|t| {
+                    t.id.to_lowercase().contains(&q)
+                        || t.title.to_lowercase().contains(&q)
+                        || t.handover_summary.as_ref().map(|h| h.to_lowercase().contains(&q)).unwrap_or(false)
+                });
+            }
+
+            // Sort by updated_at / created_at (fresh first)
+            tasks.sort_by(|a, b| {
+                let time_b = if b.updated_at > 0 { b.updated_at } else { b.created_at };
+                let time_a = if a.updated_at > 0 { a.updated_at } else { a.created_at };
+                time_b.cmp(&time_a)
+            });
+
+            let limit = args
+                .get("limit")
+                .and_then(|v| v.as_u64())
+                .map(|v| (v as usize).clamp(1, 50))
+                .unwrap_or(20);
+
+            tasks.truncate(limit);
+
+            let personas = get_stage_personas(repo_root).await;
+
+            #[derive(Serialize)]
+            struct CompactTaskItem {
+                id: String,
+                title: String,
+                stage_id: String,
+                status: String,
+                role: String,
+                priority: String,
+                handover_summary: Option<String>,
+                updated_at: i64,
+            }
+
+            let compact_list: Vec<CompactTaskItem> = tasks
+                .into_iter()
+                .map(|t| {
+                    let role = resolve_task_role(&t.stage_id, &personas);
+                    let status = t.status.unwrap_or_else(|| "idle".to_string());
+                    let priority = t.priority.unwrap_or_else(|| "medium".to_string());
+                    let updated_at = if t.updated_at > 0 { t.updated_at } else { t.created_at };
+                    CompactTaskItem {
+                        id: t.id,
+                        title: t.title,
+                        stage_id: t.stage_id,
+                        status,
+                        role,
+                        priority,
+                        handover_summary: t.handover_summary,
+                        updated_at,
+                    }
+                })
+                .collect();
+
+            serde_json::to_string_pretty(&compact_list)?
+        }
+
+        "get_task_history" => {
+            let target_task_id = args
+                .get("task_id")
+                .or_else(|| args.get("taskId"))
+                .and_then(|v| v.as_str())
+                .context("Missing required parameter 'task_id'")?;
+            let include_tool_outputs = args
+                .get("include_tool_outputs")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+
+            let maybe_task = crate::db::db_get_task(repo_root, target_task_id)
+                .map_err(|e| anyhow::anyhow!("Database error loading task '{}': {}", target_task_id, e))?;
+
+            let task = maybe_task.ok_or_else(|| anyhow::anyhow!("Task '{}' not found", target_task_id))?;
+            let items = crate::db::load_dialog_items(repo_root, &task.id)
+                .unwrap_or_default();
+
+            let personas = get_stage_personas(repo_root).await;
+            let role = resolve_task_role(&task.stage_id, &personas);
+            let status = task.status.as_deref().unwrap_or("idle");
+            let mut report = String::new();
+            report.push_str(&format!(
+                "# Task History: {} - {} (Этап: {}, Статус: {}, Роль: {})\n\n",
+                task.id, task.title, task.stage_id, status, role
+            ));
+
+            report.push_str("## Initial Objective:\n");
+            let desc = task.description.trim();
+            if desc.is_empty() {
+                report.push_str("(No description provided)\n\n");
+            } else {
+                report.push_str(desc);
+                report.push_str("\n\n");
+            }
+
+            report.push_str("## Execution Steps:\n");
+            let mut step_num = 1;
+            let mut last_terminal_text: Option<String> = None;
+
+            for it in &items {
+                match it.item_type.as_str() {
+                    "steer" | "system" | "prompt" => {
+                        let content = it.content.as_deref().unwrap_or("").trim();
+                        if !content.is_empty() {
+                            report.push_str(&format!("- Шаг {} [User Steer / System]: {}\n", step_num, content));
+                            step_num += 1;
+                        }
+                    }
+                    "tool" => {
+                        let (tool_name, params_str, status_str, duration, error_snippet, output_snippet) = if let Some(ref t) = it.tool {
+                            let name = t.get("toolName").or_else(|| t.get("name")).and_then(|v| v.as_str()).unwrap_or("unknown");
+                            let params = t.get("params").or_else(|| t.get("arguments")).cloned().unwrap_or_else(|| serde_json::json!({}));
+                            let params_str = serde_json::to_string(&params).unwrap_or_else(|_| "{}".to_string());
+                            let status = t.get("status").and_then(|v| v.as_str()).unwrap_or("success");
+                            let duration = t.get("durationMs").and_then(|v| v.as_f64()).or(it.duration_ms).unwrap_or(0.0);
+                            let err = t.get("stderr").or_else(|| t.get("error")).and_then(|v| v.as_str())
+                                .or_else(|| if status == "failed" { it.content.as_deref() } else { None })
+                                .unwrap_or("none");
+                            let out = t.get("stdout").or_else(|| t.get("result")).and_then(|v| v.as_str())
+                                .or_else(|| it.content.as_deref());
+                            (name, params_str, status, duration, err, out)
+                        } else {
+                            ("unknown", "{}".to_string(), "unknown", it.duration_ms.unwrap_or(0.0), "none", it.content.as_deref())
+                        };
+
+                        report.push_str(&format!(
+                            "- Шаг {} [Tool {}]: params: {}, status: {}, duration: {:.0}ms, error: {}.\n",
+                            step_num, tool_name, params_str, status_str, duration, error_snippet
+                        ));
+
+                        if include_tool_outputs {
+                            if let Some(out) = output_snippet {
+                                let trimmed = out.trim();
+                                if !trimmed.is_empty() {
+                                    let compacted = if trimmed.chars().count() > 300 {
+                                        format!("{}... [compacted]", trimmed.chars().take(300).collect::<String>())
+                                    } else {
+                                        trimmed.to_string()
+                                    };
+                                    report.push_str(&format!("  Output: {}\n", compacted));
+                                }
+                            }
+                        }
+                        step_num += 1;
+                        if let Some(ref c) = it.content {
+                            if !c.trim().is_empty() {
+                                last_terminal_text = Some(c.trim().to_string());
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            if step_num == 1 {
+                report.push_str("(No execution steps recorded)\n");
+            }
+            report.push('\n');
+
+            report.push_str("## Handover & Terminal Response:\n");
+            let handover = task.handover_summary.as_deref().filter(|s| !s.trim().is_empty()).unwrap_or("None");
+            report.push_str(&format!("- Handover Summary: {}\n", handover));
+
+            let verdict_text = match (task.verdict.as_deref(), last_terminal_text.as_deref()) {
+                (Some(v), Some(out)) => format!("[{}] {}", v, out),
+                (Some(v), None) => format!("[{}]", v),
+                (None, Some(out)) => out.to_string(),
+                (None, None) => "None".to_string(),
+            };
+            report.push_str(&format!("- Final Output / Verdict: {}\n", verdict_text));
+
+            report
+        }
+
+        "load_rule" => {
+            let rule_raw = args
+                .get("rule")
+                .or_else(|| args.get("name"))
+                .and_then(|v| v.as_str())
+                .context("Missing required parameter 'rule'")?;
+
+            if rule_raw.contains("..") || rule_raw.contains(':') || rule_raw.starts_with('/') || rule_raw.starts_with('\\') {
+                bail!("Invalid rule name '{}': path traversal characters are forbidden", rule_raw);
+            }
+
+            let rule_clean = rule_raw.strip_suffix(".md").unwrap_or(rule_raw);
+            let role = ctx.role.unwrap_or("general");
+
+            // Look for rule in prioritized order:
+            // 1) repo_root/.cvh/agents/<role>/rules/<rule>.md
+            // 2) repo_root/.cvh/rules/<rule>.md
+            // 3) repo_root/.cvh/agents/<role>/rules/<rule>
+            let mut candidates = vec![
+                repo_root.join(".cvh").join("agents").join(role).join("rules").join(format!("{}.md", rule_clean)),
+                repo_root.join(".cvh").join("rules").join(format!("{}.md", rule_clean)),
+                repo_root.join(".cvh").join("agents").join(role).join("rules").join(rule_raw),
+            ];
+
+            // If running in an isolated worktree or test dir:
+            if worktree_dir != repo_root {
+                candidates.push(worktree_dir.join(".cvh").join("agents").join(role).join("rules").join(format!("{}.md", rule_clean)));
+                candidates.push(worktree_dir.join(".cvh").join("rules").join(format!("{}.md", rule_clean)));
+                candidates.push(worktree_dir.join(".cvh").join("agents").join(role).join("rules").join(rule_raw));
+            }
+
+            // Fallback: search across any agents' rules directory
+            let agents_base = repo_root.join(".cvh").join("agents");
+            if agents_base.is_dir() {
+                if let Ok(entries) = std::fs::read_dir(&agents_base) {
+                    for entry in entries.flatten() {
+                        let path = entry.path().join("rules").join(format!("{}.md", rule_clean));
+                        if !candidates.contains(&path) {
+                            candidates.push(path);
+                        }
+                    }
+                }
+            }
+
+            let mut content = None;
+            for cand in candidates {
+                if cand.is_file() {
+                    match tokio::fs::read_to_string(&cand).await {
+                        Ok(text) => {
+                            content = Some(text);
+                            break;
+                        }
+                        Err(e) => {
+                            bail!("Failed to read rule file at {:?}: {}", cand, e);
+                        }
+                    }
+                }
+            }
+
+            if let Some(text) = content {
+                text
+            } else {
+                bail!(
+                    "Rule '{}' not found in .cvh/agents/{}/rules or .cvh/rules",
+                    rule_raw,
+                    role
+                )
+            }
+        }
+
         custom_tool => {
             let custom_tools = load_custom_tools(repo_root).await;
             if let Some(ct) = custom_tools.into_iter().find(|t| t.name == custom_tool) {
@@ -3207,7 +3625,7 @@ pub fn run_inprocess_subagent(
         .or_else(|| subagent_id.rfind(".sub-").map(|pos| subagent_id[(pos + 5)..].to_string()));
 
     // 1. Tool filtering (If tools is omitted, defaults to ALL tools available to the parent agent!)
-    let all_tools = get_all_tools(&ctx.repo_root).await;
+    let all_tools = get_all_tools_for_role(&ctx.repo_root, Some(&role)).await;
     let base_tools: Vec<String> = match requested_tools {
         Some(t) if !t.is_empty() => t,
         _ => all_tools.iter().map(|t| t.function.name.clone()).collect(),
@@ -3268,7 +3686,7 @@ pub fn run_inprocess_subagent(
     );
 
     // 4. Resolve schemas for allowed subagent tools
-    let all_tools = get_all_tools(&ctx.repo_root).await;
+    let all_tools = get_all_tools_for_role(&ctx.repo_root, Some(&role)).await;
     let mut active_sub_tool_defs: Vec<ToolDefinition> = all_tools
         .into_iter()
         .filter(|t| effective_sub_tools.contains(&t.function.name))
@@ -4796,7 +5214,7 @@ where
     let agent_setting = load_agent_setting(&config.repo_root, &config.role).await;
     let agent_allowed = agent_setting.allowed_tools.clone();
 
-    let all_tools = get_all_tools(&config.repo_root).await;
+    let all_tools = get_all_tools_for_role(&config.repo_root, Some(&config.role)).await;
     let is_orch = config.role.to_lowercase().contains("orchestrat")
         || config.role.to_lowercase().contains("оркестрат")
         || config.stage_id.to_lowercase().contains("orchestrat")

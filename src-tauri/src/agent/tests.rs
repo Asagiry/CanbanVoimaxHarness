@@ -2899,4 +2899,320 @@ data: [DONE]
         assert!(deserialized.is_bg);
     }
 
+    #[tokio::test]
+    async fn test_tool_list_tasks() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_list_tasks_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dirs");
+        crate::db::init_db(&base).expect("init db");
+
+        let task1 = Task {
+            id: "CVH-101".to_string(),
+            title: "Optimize compiler sensor".to_string(),
+            description: "Deep compiler optimizations".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("running".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            handover_summary: Some("Compiler partially optimized".to_string()),
+            cover_image: None,
+            attachments: None,
+            todos: None,
+            priority: Some("high".to_string()),
+            tags: None,
+            current_tokens: None,
+            skip_worktree: None,
+            created_at: 1000,
+            updated_at: 2000,
+        };
+
+        let task2 = Task {
+            id: "CVH-102".to_string(),
+            title: "Audit security invariants".to_string(),
+            description: "Review token leaks".to_string(),
+            stage_id: "review".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: Some("APPROVED".to_string()),
+            custom_flow: None,
+            status: Some("idle".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            handover_summary: Some("Security invariants verified".to_string()),
+            cover_image: None,
+            attachments: None,
+            todos: None,
+            priority: Some("medium".to_string()),
+            tags: None,
+            current_tokens: None,
+            skip_worktree: None,
+            created_at: 1000,
+            updated_at: 3000,
+        };
+
+        crate::db::db_upsert_task(&base, &task1).expect("upsert task1");
+        crate::db::db_upsert_task(&base, &task2).expect("upsert task2");
+
+        let policy = ToolPolicyConfig::default();
+        let abort_flag = Arc::new(AtomicBool::new(false));
+        let ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("dev"),
+            role: Some("developer"),
+            abort_handle: Arc::clone(&abort_flag),
+            tool_policy: &policy,
+            task_id: Some("CVH-101"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        // 1. List all tasks (default limit, sorted newest updated_at first)
+        let res_str = execute_tool(&ctx, "list_tasks", &serde_json::json!({})).await.expect("list_tasks");
+        let parsed: Vec<serde_json::Value> = serde_json::from_str(&res_str).expect("parse json");
+        assert_eq!(parsed.len(), 2);
+        // CVH-102 has updated_at 3000, CVH-101 has 2000 -> CVH-102 should be first
+        assert_eq!(parsed[0]["id"], "CVH-102");
+        assert_eq!(parsed[0]["stage_id"], "review");
+        assert_eq!(parsed[0]["status"], "idle");
+        assert_eq!(parsed[0]["role"], "reviewer");
+        assert_eq!(parsed[1]["id"], "CVH-101");
+        assert_eq!(parsed[1]["stage_id"], "dev");
+        assert_eq!(parsed[1]["role"], "developer");
+
+        // 2. Filter by stage_id
+        let res_dev = execute_tool(&ctx, "list_tasks", &serde_json::json!({ "stage_id": "dev" })).await.expect("list_tasks stage");
+        let parsed_dev: Vec<serde_json::Value> = serde_json::from_str(&res_dev).expect("parse json");
+        assert_eq!(parsed_dev.len(), 1);
+        assert_eq!(parsed_dev[0]["id"], "CVH-101");
+
+        // 3. Filter by query
+        let res_q = execute_tool(&ctx, "list_tasks", &serde_json::json!({ "query": "security" })).await.expect("list_tasks query");
+        let parsed_q: Vec<serde_json::Value> = serde_json::from_str(&res_q).expect("parse json");
+        assert_eq!(parsed_q.len(), 1);
+        assert_eq!(parsed_q[0]["id"], "CVH-102");
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_tool_get_task_history() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_task_hist_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dirs");
+        crate::db::init_db(&base).expect("init db");
+
+        let task = Task {
+            id: "CVH-201".to_string(),
+            title: "Implement task inspection tools".to_string(),
+            description: "Add list_tasks, get_task_history, and load_rule tools for agents.".to_string(),
+            stage_id: "review".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: Some("APPROVED".to_string()),
+            custom_flow: None,
+            status: Some("idle".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            handover_summary: Some("Tools implemented and verified with sensors.".to_string()),
+            cover_image: None,
+            attachments: None,
+            todos: None,
+            priority: Some("high".to_string()),
+            tags: None,
+            current_tokens: None,
+            skip_worktree: None,
+            created_at: 1000,
+            updated_at: 2000,
+        };
+        crate::db::db_upsert_task(&base, &task).expect("upsert task");
+
+        let dialog_items = vec![
+            ActivityItem {
+                id: "item-1".to_string(),
+                item_type: "steer".to_string(),
+                timestamp: "10:00:00".to_string(),
+                content: Some("Follow AGENTS.md invariants strictly.".to_string()),
+                tool: None,
+                duration_ms: None,
+                images: None,
+            },
+            ActivityItem {
+                id: "item-2".to_string(),
+                item_type: "tool".to_string(),
+                timestamp: "10:00:05".to_string(),
+                content: None,
+                tool: Some(serde_json::json!({
+                    "id": "tc-1",
+                    "toolName": "read_file",
+                    "params": { "file_path": "src-tauri/src/agent.rs" },
+                    "status": "success",
+                    "durationMs": 42.0,
+                    "stdout": "pub fn get_standard_tools() -> Vec<ToolDefinition> { ... }"
+                })),
+                duration_ms: Some(42.0),
+                images: None,
+            },
+            ActivityItem {
+                id: "item-3".to_string(),
+                item_type: "tool".to_string(),
+                timestamp: "10:00:10".to_string(),
+                content: None,
+                tool: Some(serde_json::json!({
+                    "id": "tc-2",
+                    "toolName": "execute_command",
+                    "params": { "command": "cargo check" },
+                    "status": "failed",
+                    "durationMs": 150.0,
+                    "stderr": "error[E0425]: cannot find value 'load_rule'"
+                })),
+                duration_ms: Some(150.0),
+                images: None,
+            },
+            ActivityItem {
+                id: "item-4".to_string(),
+                item_type: "output".to_string(),
+                timestamp: "10:00:15".to_string(),
+                content: Some("Fixed load_rule and verified check successfully.".to_string()),
+                tool: None,
+                duration_ms: None,
+                images: None,
+            },
+        ];
+        crate::db::append_dialog_items(&base, "CVH-201", &dialog_items).expect("append dialog");
+
+        let policy = ToolPolicyConfig::default();
+        let abort_flag = Arc::new(AtomicBool::new(false));
+        let ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("review"),
+            role: Some("reviewer"),
+            abort_handle: Arc::clone(&abort_flag),
+            tool_policy: &policy,
+            task_id: Some("CVH-201"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        let report = execute_tool(
+            &ctx,
+            "get_task_history",
+            &serde_json::json!({ "task_id": "CVH-201", "include_tool_outputs": true }),
+        )
+        .await
+        .expect("get_task_history");
+        assert!(report.contains("# Task History: CVH-201 - Implement task inspection tools (Этап: review, Статус: idle, Роль: reviewer)"));
+        assert!(report.contains("## Initial Objective:\nAdd list_tasks, get_task_history, and load_rule tools for agents."));
+        assert!(report.contains("## Execution Steps:"));
+        assert!(report.contains("Шаг 1 [User Steer / System]: Follow AGENTS.md invariants strictly."));
+        assert!(report.contains(r#"Шаг 2 [Tool read_file]: params: {"file_path":"src-tauri/src/agent.rs"}, status: success, duration: 42ms, error: none."#));
+        assert!(report.contains("Output: pub fn get_standard_tools()"));
+        assert!(report.contains(r#"Шаг 3 [Tool execute_command]: params: {"command":"cargo check"}, status: failed, duration: 150ms, error: error[E0425]: cannot find value 'load_rule'."#));
+        assert!(report.contains("## Handover & Terminal Response:"));
+        assert!(report.contains("- Handover Summary: Tools implemented and verified with sensors."));
+        assert!(report.contains("- Final Output / Verdict: [APPROVED] Fixed load_rule and verified check successfully."));
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_tool_load_rule() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_load_rule_{}", uuid::Uuid::new_v4()));
+        let dev_rules = base.join(".cvh").join("agents").join("developer").join("rules");
+        let shared_rules = base.join(".cvh").join("rules");
+        tokio::fs::create_dir_all(&dev_rules).await.expect("dev rules dir");
+        tokio::fs::create_dir_all(&shared_rules).await.expect("shared rules dir");
+
+        tokio::fs::write(
+            dev_rules.join("rust.md"),
+            "# Rust Guidelines
+Rule: Never use naked unwrap.",
+        )
+        .await
+        .expect("write rust rule");
+
+        tokio::fs::write(
+            shared_rules.join("architecture.md"),
+            "# Architecture Invariants
+Rule: Strictly isolated worktrees.",
+        )
+        .await
+        .expect("write arch rule");
+
+        // 1. Check get_available_rules collects both
+        let available = get_available_rules(&base, Some("developer"));
+        assert!(available.contains(&"rust".to_string()));
+        assert!(available.contains(&"architecture".to_string()));
+
+        // 2. Check get_load_rule_tool contains enum
+        let tool_def = get_load_rule_tool(&base, Some("developer"));
+        let enum_vals = tool_def.function.parameters["properties"]["rule"]["enum"].as_array().expect("enum array");
+        let enum_strs: Vec<&str> = enum_vals.iter().filter_map(|v| v.as_str()).collect();
+        assert!(enum_strs.contains(&"rust"));
+        assert!(enum_strs.contains(&"architecture"));
+
+        let policy = ToolPolicyConfig::default();
+        let abort_flag = Arc::new(AtomicBool::new(false));
+        let ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("dev"),
+            role: Some("developer"),
+            abort_handle: Arc::clone(&abort_flag),
+            tool_policy: &policy,
+            task_id: Some("CVH-301"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        // 3. Load role-specific rule
+        let rust_content = execute_tool(&ctx, "load_rule", &serde_json::json!({ "rule": "rust" }))
+            .await
+            .expect("load rust rule");
+        assert!(rust_content.contains("Never use naked unwrap"));
+
+        // 4. Load shared rule
+        let arch_content = execute_tool(&ctx, "load_rule", &serde_json::json!({ "rule": "architecture" }))
+            .await
+            .expect("load arch rule");
+        assert!(arch_content.contains("Strictly isolated worktrees"));
+
+        // 5. Non-existent rule returns error
+        let err = execute_tool(&ctx, "load_rule", &serde_json::json!({ "rule": "non_existent" }))
+            .await;
+        assert!(err.is_err());
+        assert!(err.unwrap_err().to_string().contains("not found"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
 
