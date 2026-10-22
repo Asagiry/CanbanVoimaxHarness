@@ -18,6 +18,7 @@ import {
   Minimize2,
   Layers,
   Zap,
+  Users,
 } from 'lucide-react';
 
 interface ToolExecutionCardProps {
@@ -375,8 +376,6 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       (p) => p.role.toLowerCase() === rawRole.toLowerCase()
     );
     const roleBadgeStyle = getRoleBadgeStyle(rawRole, persona?.color);
-    const isRunning = tool.status === 'running';
-    const isSuccess = tool.status === 'success';
     const displayTitle = formatSubagentDisplayTitle(title);
 
     const subagentNumber = (() => {
@@ -385,11 +384,65 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       return map.get(subagentId) ?? map.get(tool.id) ?? (toolIdToSubagentId[subagentId] ? map.get(toolIdToSubagentId[subagentId]) : null) ?? 1;
     })();
 
+    // Find subagent in storeSubagents
+    const list = storeSubagents[activeTaskId || ''] || [];
+    const sub = list.find(
+      (s) =>
+        s.id === subagentId ||
+        s.toolCallId === tool.id ||
+        (toolIdToSubagentId[tool.id] && s.id === toolIdToSubagentId[tool.id]) ||
+        (s.toolCallId && s.toolCallId === subagentId)
+    );
+
+    // Compute effective status for sync vs background subagent
+    let effectiveStatus: 'running' | 'success' | 'aborted' | 'error';
+    if (isBg) {
+      if (sub) {
+        if (sub.status === 'running') {
+          effectiveStatus = 'running';
+        } else if (sub.status === 'finished' || (sub.status as string) === 'done') {
+          effectiveStatus = 'success';
+        } else if (sub.status === 'stopped' || (sub.status as string) === 'aborted') {
+          effectiveStatus = 'aborted';
+        } else if (sub.status === 'error' || (sub.status as string) === 'failed') {
+          effectiveStatus = 'error';
+        } else {
+          effectiveStatus = 'running';
+        }
+      } else {
+        if (tool.status === 'failed' || (tool.status as string) === 'error') {
+          effectiveStatus = 'error';
+        } else {
+          // Tool spawn finished, subagent is running in background until subagent:finished
+          effectiveStatus = 'running';
+        }
+      }
+    } else {
+      // Sync subagent
+      if (tool.status === 'running') {
+        effectiveStatus = 'running';
+      } else if (tool.status === 'failed' || (tool.status as string) === 'error') {
+        effectiveStatus = 'error';
+      } else if (sub && (sub.status === 'stopped' || (sub.status as string) === 'aborted')) {
+        effectiveStatus = 'aborted';
+      } else if (sub && (sub.status === 'error' || (sub.status as string) === 'failed')) {
+        effectiveStatus = 'error';
+      } else if (sub && sub.status === 'running') {
+        effectiveStatus = 'running';
+      } else if (tool.status === 'success') {
+        effectiveStatus = 'success';
+      } else {
+        effectiveStatus = 'error';
+      }
+    }
+
+    const isRunning = effectiveStatus === 'running';
+    const isSuccess = effectiveStatus === 'success';
+    const isAborted = effectiveStatus === 'aborted';
+
     const subDurationText = (() => {
       if (isRunning) return null;
-      if (toolName === 'subagent_bg') {
-        const list = storeSubagents[activeTaskId || ''] || [];
-        const sub = list.find((s) => s.id === subagentId || s.toolCallId === tool.id);
+      if (isBg) {
         if (sub?.durationMs && (!sub.isBg || sub.durationMs >= 1000)) {
           return formatDurationCompact(sub.durationMs);
         }
@@ -435,13 +488,21 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
           <div className="flex items-center space-x-2 shrink-0">
             {isRunning ? (
               <div className="flex items-center space-x-1.5">
-                <span className="inline-flex rounded-full h-2 w-2 bg-emerald-500 shrink-0" />
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
                 <span className="text-[11px] font-mono text-[#15803d] dark:text-[#7ee787]">Выполняется</span>
               </div>
             ) : isSuccess ? (
               <div className="flex items-center space-x-1.5">
                 <Check className="h-3.5 w-3.5 text-[#15803d] dark:text-[#7ee787] stroke-[2.5]" />
                 <span className="text-[11px] font-mono font-medium text-[#15803d] dark:text-[#7ee787]">Готово</span>
+              </div>
+            ) : isAborted ? (
+              <div className="flex items-center space-x-1.5">
+                <X className="h-3.5 w-3.5 text-[#d97706] dark:text-[#f59e0b] stroke-[2.5]" />
+                <span className="text-[11px] font-mono font-medium text-[#d97706] dark:text-[#f59e0b]">Прервано</span>
               </div>
             ) : (
               <div className="flex items-center space-x-1.5">
@@ -472,22 +533,86 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
   // Collect subagent interactive card
   if (toolName === 'collect_subagent') {
-    const subagentIdParam =
-      (params?.subagent_id as string) ||
-      (Array.isArray(params?.subagent_ids) ? (params.subagent_ids as string[]).join(', ') : '') ||
-      '';
+    const rawIds: string[] = [];
+    const extractIds = (val: unknown) => {
+      if (!val) return;
+      if (Array.isArray(val)) {
+        for (const item of val) {
+          if (typeof item === 'string' && item.trim()) rawIds.push(item.trim());
+        }
+      } else if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (!trimmed) return;
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+          try {
+            const parsed = JSON.parse(trimmed);
+            if (Array.isArray(parsed)) {
+              for (const item of parsed) {
+                if (typeof item === 'string' && item.trim()) rawIds.push(item.trim());
+              }
+              return;
+            }
+          } catch {}
+        }
+        trimmed.split(',').forEach((s) => {
+          const part = s.trim();
+          if (part) rawIds.push(part);
+        });
+      }
+    };
+
+    extractIds(params?.subagent_ids);
+    extractIds(params?.subagent_id);
+    extractIds(params?.ids);
+
+    const uniqueIds = Array.from(new Set(rawIds));
+
+    const orderMap = activeTaskId
+      ? getSubagentOrderMap(activeTaskId, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks)
+      : new Map<string, number>();
+
+    const formatIdLabel = (id: string, index: number): string => {
+      let num: number | undefined = orderMap.get(id);
+      if (num === undefined && toolIdToSubagentId[id]) {
+        num = orderMap.get(toolIdToSubagentId[id]);
+      }
+      if (num === undefined && activeTaskId) {
+        const list = storeSubagents[activeTaskId] || [];
+        const found = list.find((s) => s.id === id || s.toolCallId === id);
+        if (found) {
+          num = orderMap.get(found.id) ?? (found.toolCallId ? orderMap.get(found.toolCallId) : undefined);
+        }
+      }
+      if (num === undefined) {
+        const match = id.match(/(?:call_|subagent_|sub-|_|#)(\d+)$/i);
+        if (match) {
+          num = parseInt(match[1], 10);
+        }
+      }
+      if (num === undefined || isNaN(num)) {
+        num = index + 1;
+      }
+      return `субагент #${num}`;
+    };
+
+    const displayBadgeText =
+      uniqueIds.length > 0
+        ? uniqueIds.map((id, idx) => formatIdLabel(id, idx)).join(', ')
+        : 'все субагенты';
+
     const isRunning = tool.status === 'running';
     const isSuccess = tool.status === 'success';
+    const firstSubagentId = uniqueIds[0];
 
     return (
       <div
         onClick={() => {
-          if (subagentIdParam && !subagentIdParam.includes(',')) {
-            openSubagent(subagentIdParam, `Субагент ${subagentIdParam}`, 'general', '');
+          if (uniqueIds.length === 1 && firstSubagentId) {
+            openSubagent(firstSubagentId, formatIdLabel(firstSubagentId, 0), 'general', '');
           }
         }}
         className={`group rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] hover:bg-[#f9f9f9] dark:hover:bg-[#1c2128] p-3 shadow-xs transition-all duration-150 select-none my-2 ${
-          subagentIdParam && !subagentIdParam.includes(',')
+          uniqueIds.length === 1
             ? 'cursor-pointer hover:border-[#171717]/40 dark:hover:border-[#30363d]'
             : 'cursor-default'
         }`}
@@ -506,15 +631,18 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
               collect_subagent
             </span>
 
-            <span className="font-mono text-[11px] text-[#71717a] dark:text-[#8b949e] px-1.5 py-0.2 rounded bg-[#f4f4f5] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] truncate">
-              {subagentIdParam ? subagentIdParam.replace(/(?:[A-Za-z0-9_-]+\.)?sub-call_\d+/g, 'субагент') : 'все субагенты'}
+            <span className="font-mono text-[11px] text-[#71717a] dark:text-[#8b949e] px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] truncate">
+              {displayBadgeText}
             </span>
           </div>
 
           <div className="flex items-center space-x-2 shrink-0">
             {isRunning ? (
               <div className="flex items-center space-x-1.5">
-                <span className="inline-flex rounded-full h-2 w-2 bg-emerald-500 shrink-0" />
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
                 <span className="text-[11px] font-mono text-[#15803d] dark:text-[#7ee787]">Ожидание отчета</span>
               </div>
             ) : isSuccess ? (
@@ -529,7 +657,9 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
               </div>
             )}
 
-            <ChevronRight className="h-4 w-4 text-[#8f8f8f] group-hover:text-[#171717] dark:group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
+            {uniqueIds.length === 1 && (
+              <ChevronRight className="h-4 w-4 text-[#8f8f8f] group-hover:text-[#171717] dark:group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
+            )}
           </div>
         </div>
 
@@ -539,6 +669,219 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             {tool.stdout}
           </div>
         )}
+      </div>
+    );
+  }
+
+  // Subagent list interactive card (subagent_list or list_subagents)
+  if (toolName === 'subagent_list' || toolName === 'list_subagents') {
+    const isRunning = tool.status === 'running';
+    const isSuccess = tool.status === 'success';
+
+    const orderMap = activeTaskId
+      ? getSubagentOrderMap(activeTaskId, storeSubagents, toolExecutions, toolIdToSubagentId, boardTasks)
+      : new Map<string, number>();
+
+    // Parse discovered subagents from stdout or fallback to storeSubagents
+    const discoveredList: Array<{
+      id: string;
+      number: number;
+      title: string;
+      role: string;
+      status: string;
+      durationMs?: number;
+      isBg?: boolean;
+    }> = [];
+
+    if (tool.stdout) {
+      try {
+        const parsed = JSON.parse(tool.stdout);
+        const items = Array.isArray(parsed)
+          ? parsed
+          : Array.isArray(parsed?.subagents)
+          ? parsed.subagents
+          : Array.isArray(parsed?.items)
+          ? parsed.items
+          : null;
+
+        if (items) {
+          items.forEach((item: any, idx: number) => {
+            const sid = (item.id || item.subagent_id || `sub-${idx + 1}`) as string;
+            const mappedNum = orderMap.get(sid) ?? orderMap.get(toolIdToSubagentId[sid]) ?? (idx + 1);
+            discoveredList.push({
+              id: sid,
+              number: mappedNum,
+              title: (item.title || item.name || item.prompt?.slice(0, 50) || `Субагент #${mappedNum}`) as string,
+              role: (item.role || 'general') as string,
+              status: (item.status || 'finished') as string,
+              durationMs: typeof item.duration_ms === 'number' ? item.duration_ms : typeof item.durationMs === 'number' ? item.durationMs : undefined,
+              isBg: Boolean(item.is_bg || item.isBg),
+            });
+          });
+        }
+      } catch {}
+    }
+
+    // If stdout did not yield items, fallback to current storeSubagents for active task
+    if (discoveredList.length === 0 && activeTaskId) {
+      const known = storeSubagents[activeTaskId] || [];
+      known.forEach((sub, idx) => {
+        const mappedNum = orderMap.get(sub.id) ?? orderMap.get(sub.toolCallId || '') ?? (idx + 1);
+        discoveredList.push({
+          id: sub.id,
+          number: mappedNum,
+          title: sub.title || `Субагент #${mappedNum}`,
+          role: sub.role || 'general',
+          status: sub.status,
+          durationMs: sub.durationMs,
+          isBg: sub.isBg,
+        });
+      });
+    }
+
+    const durationText = formatDurationCompact(tool.durationMs);
+
+    return (
+      <div className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] p-3 shadow-xs my-2 select-none">
+        <div className="flex items-center justify-between gap-2.5">
+          <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
+            <div className="relative shrink-0 flex items-center justify-center">
+              <Users className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+            </div>
+
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase border border-purple-200 dark:border-purple-800/60 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 shrink-0">
+              СПИСОК
+            </span>
+
+            <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] shrink-0">
+              subagent_list
+            </span>
+
+            <span className="font-mono text-[11px] text-[#71717a] dark:text-[#8b949e] px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] truncate">
+              всего: {discoveredList.length}
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-2 shrink-0">
+            {isRunning ? (
+              <div className="flex items-center space-x-1.5">
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+                <span className="text-[11px] font-mono text-[#15803d] dark:text-[#7ee787]">Поиск</span>
+              </div>
+            ) : isSuccess ? (
+              <div className="flex items-center space-x-1.5">
+                <Check className="h-3.5 w-3.5 text-[#15803d] dark:text-[#7ee787] stroke-[2.5]" />
+                <span className="text-[11px] font-mono font-medium text-[#15803d] dark:text-[#7ee787]">
+                  {discoveredList.length > 0 ? `Найдено: ${discoveredList.length}` : 'Список получен'}
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-1.5">
+                <X className="h-3.5 w-3.5 text-[#dc2626] dark:text-[#ff7b72] stroke-[2.5]" />
+                <span className="text-[11px] font-mono font-medium text-[#dc2626] dark:text-[#ff7b72]">Ошибка</span>
+              </div>
+            )}
+
+            {durationText && (
+              <span className="font-mono text-[#71717a] dark:text-[#8b949e] shrink-0 tabular-nums text-[11px]">
+                {durationText}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Subagent Compact Rows */}
+        {discoveredList.length > 0 ? (
+          <div className="mt-2.5 pt-2 border-t border-[#f4f4f5] dark:border-[#21262d] space-y-1.5">
+            {discoveredList.map((sub, idx) => {
+              const persona = agentPersonas.find(
+                (p) => p.role.toLowerCase() === (sub.role || '').toLowerCase()
+              );
+              const roleBadgeStyle = getRoleBadgeStyle(sub.role, persona?.color);
+              const displaySubTitle = formatSubagentDisplayTitle(sub.title || `Субагент #${sub.number}`);
+              const subIsRunning = sub.status === 'running';
+              const subIsSuccess = sub.status === 'finished' || sub.status === 'done' || (sub.status as string) === 'success';
+              const subIsAborted = sub.status === 'stopped' || sub.status === 'aborted';
+
+              return (
+                <div
+                  key={sub.id || idx}
+                  onClick={() => {
+                    if (sub.id) openSubagent(sub.id, sub.title, sub.role, '');
+                  }}
+                  className="group flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#21262d] hover:border-[#171717]/40 dark:hover:border-[#30363d] cursor-pointer transition-colors text-xs"
+                >
+                  <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
+                    <span className="font-mono font-bold text-[10px] text-[#71717a] dark:text-[#8b949e] shrink-0">
+                      #{sub.number}
+                    </span>
+
+                    <span
+                      style={roleBadgeStyle}
+                      className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold uppercase tracking-wider border shrink-0 select-none"
+                    >
+                      {formatSubagentRoleDisplay(sub.role, sub.number)}
+                    </span>
+
+                    <span className="font-sans font-medium text-[11px] text-[#171717] dark:text-[#f0f6fc] group-hover:text-[#000000] dark:group-hover:text-white transition-colors truncate">
+                      {displaySubTitle}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center space-x-2 shrink-0">
+                    {subIsRunning ? (
+                      <div className="flex items-center space-x-1">
+                        <span className="relative flex h-1.5 w-1.5 shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+                        </span>
+                        <span className="text-[10px] font-mono text-[#15803d] dark:text-[#7ee787]">
+                          Выполняется
+                        </span>
+                      </div>
+                    ) : subIsSuccess ? (
+                      <div className="flex items-center space-x-1">
+                        <Check className="h-3 w-3 text-[#15803d] dark:text-[#7ee787] stroke-[2.5]" />
+                        <span className="text-[10px] font-mono font-medium text-[#15803d] dark:text-[#7ee787]">
+                          Готово
+                        </span>
+                      </div>
+                    ) : subIsAborted ? (
+                      <div className="flex items-center space-x-1">
+                        <X className="h-3 w-3 text-[#d97706] dark:text-[#f59e0b] stroke-[2.5]" />
+                        <span className="text-[10px] font-mono font-medium text-[#d97706] dark:text-[#f59e0b]">
+                          Прервано
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-1">
+                        <X className="h-3 w-3 text-[#dc2626] dark:text-[#ff7b72] stroke-[2.5]" />
+                        <span className="text-[10px] font-mono font-medium text-[#dc2626] dark:text-[#ff7b72]">
+                          Ошибка
+                        </span>
+                      </div>
+                    )}
+
+                    {sub.durationMs ? (
+                      <span className="font-mono text-[10px] text-[#8f8f8f] dark:text-[#8b949e] tabular-nums">
+                        {formatDurationCompact(sub.durationMs)}
+                      </span>
+                    ) : null}
+
+                    <ChevronRight className="h-3.5 w-3.5 text-[#8f8f8f] group-hover:text-[#171717] dark:group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : !isRunning ? (
+          <div className="mt-2 pt-2 border-t border-[#f4f4f5] dark:border-[#21262d] text-[11px] font-mono text-[#8f8f8f] dark:text-[#8b949e]">
+            Субагенты не обнаружены
+          </div>
+        ) : null}
       </div>
     );
   }
