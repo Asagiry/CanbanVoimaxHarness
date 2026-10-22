@@ -2,11 +2,16 @@
 
 Authoritative rules for `.cvh/hooks/` and column lifecycle scripts.
 
-## 1. Lifecycle Triggers
+## 1. Lifecycle Triggers & Worktree Governance
 Columns declare transition hooks in their column configuration:
 - `hooks.on_enter`: Triggered when a card enters the stage.
 - `hooks.on_finish`: Triggered when an agent finishes execution in the stage.
-- Built-in hook: `"builtin:create_worktree"` automatically provisions an isolated git worktree upon entering backlog.
+- **Hook-Driven Worktree Provisioning**:
+  - Built-in hook: `"builtin:create_worktree"` automatically provisions an isolated git worktree at `worktrees/<task-slug>` upon entering `backlog` (or another designated intake column) and checks out a feature branch.
+  - Worktree creation is managed exclusively by stage lifecycle hooks, rather than hardcoded side-effects.
+- **"Отключить хук бэклога" (Skip Backlog Hook Checkbox)**:
+  - In the Task Creation dialog, the checkbox **"Отключить хук бэклога"** (`skipWorktree: true` / `skip_worktree: true`) instructs the backend to bypass execution of the backlog's transition hook (`builtin:create_worktree`).
+  - When checked, the task card is placed in backlog without creating an isolated worktree directory or git feature branch, allowing lightweight administrative tasks to execute directly in the repository root or defer worktree setup.
 
 ## 2. Supported Formats
 Hook runner supports `.bat`, `.cmd`, `.ps1`, `.py`, `.sh`, and native binaries.
