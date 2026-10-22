@@ -31,13 +31,18 @@ export default function ImageLightboxModal({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Lock body scroll while lightbox is open (§ 2.13 Viewport Overlay Invariant)
+  // Lock body scroll while lightbox is open (§ 2.13) & cleanup timers (§ 2.14)
   useEffect(() => {
     const origOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = origOverflow;
+      if (copyTimerRef.current) {
+        clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -133,7 +138,13 @@ export default function ImageLightboxModal({
     try {
       await navigator.clipboard.writeText(src);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copyTimerRef.current) {
+        clearTimeout(copyTimerRef.current);
+      }
+      copyTimerRef.current = setTimeout(() => {
+        setCopied(false);
+        copyTimerRef.current = null;
+      }, 2000);
     } catch (err) {
       console.error('Failed to copy image source:', err);
     }
@@ -193,7 +204,7 @@ export default function ImageLightboxModal({
             onClick={handleZoomOut}
             disabled={zoom <= 0.5}
             className="p-1 rounded hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors cursor-pointer"
-            title="Уменьшить (-)"
+            aria-label="Уменьшить (-)"
           >
             <ZoomOut className="w-3.5 h-3.5" />
           </button>
@@ -202,7 +213,7 @@ export default function ImageLightboxModal({
             type="button"
             onClick={handleReset}
             className="px-2 py-0.5 text-[11px] font-mono tabular-nums text-zinc-200 hover:text-white hover:bg-white/10 rounded transition-colors cursor-pointer"
-            title="Сбросить масштаб (0)"
+            aria-label="Сбросить масштаб (0)"
           >
             {Math.round(zoom * 100)}%
           </button>
@@ -212,7 +223,7 @@ export default function ImageLightboxModal({
             onClick={handleZoomIn}
             disabled={zoom >= 5}
             className="p-1 rounded hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors cursor-pointer"
-            title="Увеличить (+)"
+            aria-label="Увеличить (+)"
           >
             <ZoomIn className="w-3.5 h-3.5" />
           </button>
@@ -223,7 +234,7 @@ export default function ImageLightboxModal({
             type="button"
             onClick={handleReset}
             className="p-1 rounded hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
-            title="По размеру экрана"
+            aria-label="По размеру экрана"
           >
             <Maximize2 className="w-3.5 h-3.5" />
           </button>
@@ -235,7 +246,7 @@ export default function ImageLightboxModal({
             type="button"
             onClick={handleCopy}
             className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-white/10 hover:bg-white/20 text-zinc-200 hover:text-white text-xs font-mono transition-colors cursor-pointer"
-            title="Скопировать ссылку/данные изображения"
+            aria-label="Скопировать ссылку/данные изображения"
           >
             {copied ? (
               <>
@@ -254,7 +265,7 @@ export default function ImageLightboxModal({
             type="button"
             onClick={onClose}
             className="flex items-center space-x-1 p-1.5 rounded-full bg-white/10 hover:bg-rose-600/80 text-zinc-200 hover:text-white transition-colors cursor-pointer"
-            title="Закрыть (Escape)"
+            aria-label="Закрыть (Escape)"
           >
             <X className="w-4 h-4" />
           </button>

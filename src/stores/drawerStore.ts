@@ -482,15 +482,24 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       // synchronize tool call info into that existing question item rather than duplicating feed!
       if (tool.toolName === 'question' || tool.toolName === 'ask_user') {
         const qParamId = (tool.params as Record<string, unknown> | undefined)?.questionId as string | undefined;
-        const qIndex = existingFeed.findIndex(
-          (f) =>
+        let qIndex = -1;
+        for (let i = existingFeed.length - 1; i >= 0; i--) {
+          const f = existingFeed[i];
+          if (
             (f.type === 'question' &&
-              (!qParamId ||
-                (f.tool?.params as Record<string, unknown> | undefined)?.questionId === qParamId ||
-                f.tool?.id === qParamId)) ||
+              ((qParamId &&
+                ((f.tool?.params as Record<string, unknown> | undefined)?.questionId === qParamId ||
+                  f.tool?.id === qParamId)) ||
+                (!qParamId &&
+                  f.tool?.status === 'running' &&
+                  !(f.tool?.params as Record<string, unknown> | undefined)?.callId))) ||
             f.id === `q-${tool.id}` ||
             f.tool?.id === tool.id
-        );
+          ) {
+            qIndex = i;
+            break;
+          }
+        }
 
         if (qIndex !== -1) {
           const prev = existingFeed[qIndex];
@@ -1430,20 +1439,33 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       const existingFeed = state.activityFeed[taskId] || [];
 
       // Check if there is already an item for this question or matching running tool call (§ 2.20 & Question Dedup)
-      const existingExactIndex = existingFeed.findIndex(
-        (f) =>
+      let existingExactIndex = -1;
+      for (let i = existingFeed.length - 1; i >= 0; i--) {
+        const f = existingFeed[i];
+        if (
           f.id === itemId ||
           f.tool?.id === questionId ||
           (f.tool?.params as Record<string, unknown> | undefined)?.questionId === questionId
-      );
+        ) {
+          existingExactIndex = i;
+          break;
+        }
+      }
 
-      const existingToolIndex = existingFeed.findIndex(
-        (f) =>
+      let existingToolIndex = -1;
+      for (let i = existingFeed.length - 1; i >= 0; i--) {
+        const f = existingFeed[i];
+        if (
           f.type === 'tool' &&
           (f.tool?.toolName === 'question' || f.tool?.toolName === 'ask_user') &&
+          f.tool?.status === 'running' &&
           (!(f.tool?.params as Record<string, unknown> | undefined)?.questionId ||
             (f.tool?.params as Record<string, unknown> | undefined)?.questionId === questionId)
-      );
+        ) {
+          existingToolIndex = i;
+          break;
+        }
+      }
 
       const targetIndex = existingExactIndex !== -1 ? existingExactIndex : existingToolIndex;
 
