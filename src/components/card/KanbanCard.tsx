@@ -189,12 +189,14 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                 ? undefined
                 : `${assignedAgentColor}50`,
             }}
-            className={`group relative mb-2 rounded-md border p-3 cursor-pointer select-none transition duration-150 active:scale-[0.99] ${
+            className={`group relative mb-2 rounded-md border p-3 select-none ${
               snapshot.isDragging
-                ? 'border-[#171717] dark:border-[#30363d] shadow-md bg-white dark:bg-[#161b22] z-40'
-                : isHighlighted
-                ? 'border-[#8b5cf6] shadow-md ring-1 ring-[#8b5cf6]/40 bg-white dark:bg-[#161b22]'
-                : 'border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] hover:border-[#d4d4d8] dark:hover:border-[#30363d] shadow-xs'
+                ? 'scale-[1.02] rotate-[1.5deg] shadow-2xl ring-1 ring-black/10 dark:ring-white/20 cursor-grabbing z-50 border-[#171717] dark:border-[#30363d] bg-white dark:bg-[#161b22]'
+                : `transition-transform duration-100 ease-out cursor-pointer active:scale-[0.99] ${
+                    isHighlighted
+                      ? 'border-[#8b5cf6] shadow-md ring-1 ring-[#8b5cf6]/40 bg-white dark:bg-[#161b22]'
+                      : 'border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] hover:border-[#d4d4d8] dark:hover:border-[#30363d] shadow-xs'
+                  }`
             }`}
           >
             {/* Header: ID, Parent link & Concise Status */}
