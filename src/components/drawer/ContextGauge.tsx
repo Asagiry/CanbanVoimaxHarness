@@ -120,10 +120,9 @@ export default function ContextGauge({
     };
   }, [feed]);
 
+  const baseCompacted = tokenOverride ?? taskCurrentTokens ?? latestCompactedTokens;
   const effectiveCompactedTokens =
-    tokenOverride ??
-    taskCurrentTokens ??
-    (latestCompactedTokens !== undefined ? latestCompactedTokens + postCompactionTokens : undefined);
+    baseCompacted !== undefined ? baseCompacted + postCompactionTokens : undefined;
 
   const resolvedCompactTokens = effectiveCompactedTokens;
 
