@@ -2346,21 +2346,6 @@ pub async fn execute_tool(
                         db_task.updated_at = chrono::Utc::now().timestamp_millis();
                         let _ = crate::db::db_upsert_task(repo_root, &db_task);
                     }
-
-                    let tasks_path = repo_root.join(".cvh").join("tasks.json");
-                    if tasks_path.exists() {
-                        if let Ok(content) = tokio::fs::read_to_string(&tasks_path).await {
-                            if let Ok(mut tasks) = serde_json::from_str::<Vec<Task>>(&content) {
-                                if let Some(target_task) = tasks.iter_mut().find(|t| t.id == tid) {
-                                    target_task.todos = Some(parsed_todos.clone());
-                                    target_task.updated_at = chrono::Utc::now().timestamp_millis();
-                                    if let Ok(serialized) = serde_json::to_string_pretty(&tasks) {
-                                        let _ = crate::config::atomic_write_file(&tasks_path, &serialized).await;
-                                    }
-                                }
-                            }
-                        }
-                    }
                 }
             }
 
