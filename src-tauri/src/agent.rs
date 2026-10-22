@@ -121,6 +121,8 @@ pub enum AgentEvent {
         cache_hit_rate: f32,
         duration_ms: f64,
         tps: f32,
+        system_tokens: u64,
+        tool_tokens: u64,
     },
     Compacted {
         saved_chars: usize,
@@ -694,13 +696,13 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "create_task",
-            "Декомпозировать требования и создать новую карточку задачи на Канбан-доске. Привязывает созданную задачу к текущей родительской карточке оркестратора (parent_id = current_task_id).",
+            "Декомпозировать требования и создать новую карточку задачи на Канбан-доске.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
                     "title": { "type": "string", "description": "Краткое и емкое название задачи" },
                     "description": { "type": "string", "description": "Полные технические требования, критерии приёмки и файлы" },
-                    "column_id": { "type": "string", "description": "Целевая колонка (по умолчанию 'dev' или первая рабочая колонка)" },
+                    "column_id": { "type": "string", "description": "Целевая колонка (по умолчанию 'backlog')" },
                     "board_id": { "type": "string", "description": "Целевая доска (по умолчанию доска текущей задачи)" },
                     "tags": {
                         "type": "array",
@@ -711,6 +713,14 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
                         "type": "string",
                         "enum": ["low", "medium", "high"],
                         "description": "Приоритет задачи: low, medium, high"
+                    },
+                    "is_subtask": {
+                        "type": "boolean",
+                        "description": "Whether to create this as a subtask of the current task. Default is false (standalone root task)."
+                    },
+                    "parent_id": {
+                        "type": "string",
+                        "description": "Explicit parent task ID if creating a subtask."
                     }
                 },
                 "required": ["title", "description"]
@@ -730,7 +740,7 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
                             "properties": {
                                 "title": { "type": "string", "description": "Краткое и емкое название задачи" },
                                 "description": { "type": "string", "description": "Полные технические требования, критерии приёмки и файлы" },
-                                "column_id": { "type": "string", "description": "Целевая колонка (по умолчанию 'dev' или первая рабочая колонка)" },
+                                "column_id": { "type": "string", "description": "Целевая колонка (по умолчанию 'backlog')" },
                                 "board_id": { "type": "string", "description": "Целевая доска (по умолчанию доска текущей задачи)" },
                                 "tags": {
                                     "type": "array",
@@ -741,6 +751,14 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
                                     "type": "string",
                                     "enum": ["low", "medium", "high"],
                                     "description": "Приоритет задачи: low, medium, high"
+                                },
+                                "is_subtask": {
+                                    "type": "boolean",
+                                    "description": "Whether to create this as a subtask of the current task. Default is false (standalone root task)."
+                                },
+                                "parent_id": {
+                                    "type": "string",
+                                    "description": "Explicit parent task ID if creating a subtask."
                                 }
                             },
                             "required": ["title", "description"]
@@ -752,7 +770,7 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "complete_task",
-            "Завершить задачу и перевести её в финальную колонку Готово (ready/done). Доступно оркестратору и Copilot.",
+            "Завершить задачу и перевести её в финальную колонку Готово (ready/done). Записывает вердикт APPROVED и итоговое саммари.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -933,6 +951,13 @@ pub async fn get_all_tools_for_role(repo_root: &Path, role: Option<&str>) -> Vec
             &ct.description,
             ct.parameters,
         ));
+    }
+    if let Ok(tool_policy) = crate::config::load_tool_policies(repo_root).await {
+        for tool in &mut tools {
+            if let Some(custom_desc) = tool_policy.tool_descriptions.get(&tool.function.name) {
+                tool.function.description = custom_desc.clone();
+            }
+        }
     }
     tools
 }
@@ -2965,6 +2990,8 @@ pub async fn execute_tool(
                 tags: Option<Vec<String>>,
                 priority: Option<String>,
                 model: Option<String>,
+                is_subtask: Option<bool>,
+                parent_id: Option<String>,
             }
 
             let mut inputs = Vec::new();
@@ -3017,6 +3044,17 @@ pub async fn execute_tool(
                         .map(str::trim)
                         .filter(|s| !s.is_empty())
                         .map(str::to_string);
+                    let is_subtask = item
+                        .get("is_subtask")
+                        .or_else(|| item.get("isSubtask"))
+                        .and_then(|v| v.as_bool());
+                    let parent_id = item
+                        .get("parent_id")
+                        .or_else(|| item.get("parentId"))
+                        .and_then(|v| v.as_str())
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .map(str::to_string);
 
                     inputs.push(TaskInput {
                         title,
@@ -3026,6 +3064,8 @@ pub async fn execute_tool(
                         tags,
                         priority,
                         model,
+                        is_subtask,
+                        parent_id,
                     });
                 }
             } else {
@@ -3072,6 +3112,17 @@ pub async fn execute_tool(
                     .map(str::trim)
                     .filter(|s| !s.is_empty())
                     .map(str::to_string);
+                let is_subtask = args
+                    .get("is_subtask")
+                    .or_else(|| args.get("isSubtask"))
+                    .and_then(|v| v.as_bool());
+                let parent_id = args
+                    .get("parent_id")
+                    .or_else(|| args.get("parentId"))
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string);
 
                 inputs.push(TaskInput {
                     title,
@@ -3081,6 +3132,8 @@ pub async fn execute_tool(
                     tags,
                     priority,
                     model,
+                    is_subtask,
+                    parent_id,
                 });
             }
 
@@ -3089,8 +3142,11 @@ pub async fn execute_tool(
             let boards_cfg = crate::config::load_boards_config(repo_root).await.ok();
 
             let mut created_results = Vec::new();
+            let mut autorun_task_ids = Vec::new();
             let now = chrono::Utc::now().timestamp_millis();
             let mut next_num = crate::commands::tasks::allocate_next_task_num(repo_root, &tasks).await;
+
+            let pipe_cols = crate::config::load_pipeline_config(repo_root).await.ok().map(|p| p.columns);
 
             for input in inputs {
                 while tasks.iter().any(|t| t.id == format!("CVH-{:03}", next_num)) {
@@ -3115,29 +3171,42 @@ pub async fn execute_tool(
                     bc.boards.iter().find(|b| b.id == effective_board_id).map(|b| b.columns.clone())
                 });
 
-                // Resolve column (defaults to "dev" or active board's first actionable column)
+                // Resolve column (defaults to "backlog" or target board's backlog column)
                 let effective_column_id = if let Some(ref cid) = input.column_id {
                     cid.clone()
                 } else if let Some(ref cols) = target_board_cols {
-                    if let Some(dev_col) = cols.iter().find(|c| crate::commands::tasks::stage_id_matches(&c.id, "dev")) {
-                        dev_col.id.clone()
-                    } else if let Some(first_act) = cols.iter().find(|c| {
-                        !crate::commands::tasks::stage_id_matches(&c.id, "backlog")
-                            && c.terminal != Some(true)
-                            && !crate::commands::tasks::stage_id_matches(&c.id, "ready")
-                            && !crate::commands::tasks::stage_id_matches(&c.id, "done")
-                    }) {
-                        first_act.id.clone()
-                    } else if cols.len() > 1 {
-                        cols[1].id.clone()
+                    if let Some(backlog_col) = cols.iter().find(|c| crate::commands::tasks::stage_id_matches(&c.id, "backlog")) {
+                        backlog_col.id.clone()
                     } else if let Some(first) = cols.first() {
                         first.id.clone()
                     } else {
-                        "dev".to_string()
+                        "backlog".to_string()
                     }
                 } else {
-                    "dev".to_string()
+                    "backlog".to_string()
                 };
+
+                let is_subtask = input.is_subtask.unwrap_or(false);
+                let parent_id = if is_subtask {
+                    input.parent_id.or_else(|| task_id.map(str::to_string))
+                } else {
+                    input.parent_id
+                };
+
+                let target_col = target_board_cols.as_ref().and_then(|cols| {
+                    cols.iter().find(|c| c.id == effective_column_id)
+                }).or_else(|| {
+                    pipe_cols.as_ref().and_then(|cols| cols.iter().find(|c| c.id == effective_column_id))
+                });
+
+                let is_backlog = crate::commands::tasks::stage_id_matches(&effective_column_id, "backlog");
+                let should_autorun = !is_backlog && target_col.map(|c| {
+                    c.auto_run == Some(true) || c.persona.is_some()
+                }).unwrap_or(false);
+
+                if should_autorun {
+                    autorun_task_ids.push(new_id.clone());
+                }
 
                 let new_task = Task {
                     id: new_id.clone(),
@@ -3151,7 +3220,7 @@ pub async fn execute_tool(
                     custom_flow: None,
                     status: Some("idle".to_string()),
                     model: input.model.or_else(|| current_task_opt.as_ref().and_then(|ct| ct.model.clone())),
-                    parent_id: task_id.map(|s| s.to_string()),
+                    parent_id,
                     subtask_index: None,
                     waiting_for_subtask_id: None,
                     handover_summary: None,
@@ -3194,6 +3263,9 @@ pub async fn execute_tool(
             // Emit tasks:updated via Tauri AppHandle
             if let Some(app) = ctx.app_handle.as_ref() {
                 let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+                for auto_tid in autorun_task_ids {
+                    let _ = app.emit("agent:autorun", serde_json::json!({ "taskId": &auto_tid }));
+                }
             }
 
             // Record dialog activity in SQLite
@@ -5400,7 +5472,7 @@ where
         (
             0,
             vec![
-                ChatMessage::system(system_prompt).with_cache_control(crate::llm::CacheControl::ephemeral()),
+                ChatMessage::system(system_prompt.clone()).with_cache_control(crate::llm::CacheControl::ephemeral()),
                 ChatMessage::user(initial_user_prompt).with_cache_control(crate::llm::CacheControl::ephemeral()),
             ],
         )
@@ -5472,6 +5544,45 @@ where
                     }));
                 }
             }
+        }
+    }
+
+    // 5b. Guard against Gemini HTTP 400 "Requests ending with a model turn are not supported"
+    // when resuming a task without a steer prompt.
+    if messages.last().map(|m| m.role == Role::Assistant).unwrap_or(false) {
+        let stage_name = if let Ok(pipe) = crate::config::load_pipeline_config(&config.repo_root).await {
+            pipe.columns
+                .into_iter()
+                .find(|c| c.id == config.stage_id)
+                .map(|c| c.title)
+                .unwrap_or_else(|| config.stage_id.clone())
+        } else {
+            config.stage_id.clone()
+        };
+
+        let resume_msg = format!(
+            "### [ВОЗОБНОВЛЕНИЕ ЗАДАЧИ / TASK RESUMED]
+Задача перемещена на этап '{}' (роль: {}). Жди указа Человека.",
+            stage_name, config.role
+        );
+        messages.push(ChatMessage::user(resume_msg.clone()));
+
+        // Persist to SQLite dialog_items so history retains it
+        let resume_item = crate::db::ActivityItem {
+            id: uuid::Uuid::new_v4().to_string(),
+            item_type: "steer".to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            content: Some(resume_msg),
+            tool: None,
+            duration_ms: None,
+            images: None,
+        };
+        let _ = crate::db::append_dialog_items(&config.repo_root, &config.task_id, std::slice::from_ref(&resume_item));
+        if let Some(app) = config.app_handle.as_ref() {
+            let _ = app.emit("task:dialog", serde_json::json!({
+                "taskId": config.task_id,
+                "item": resume_item,
+            }));
         }
     }
 
@@ -5648,11 +5759,33 @@ where
             prefix_hash
         );
 
+        // Safety guard: guarantee request never ends with an Assistant turn (Gemini HTTP 400).
+        if messages.last().map(|m| m.role == Role::Assistant).unwrap_or(false) {
+            let stage_name = if let Ok(pipe) = crate::config::load_pipeline_config(&config.repo_root).await {
+                pipe.columns
+                    .into_iter()
+                    .find(|c| c.id == config.stage_id)
+                    .map(|c| c.title)
+                    .unwrap_or_else(|| config.stage_id.clone())
+            } else {
+                config.stage_id.clone()
+            };
+            let resume_msg = format!(
+                "### [ВОЗОБНОВЛЕНИЕ ЗАДАЧИ / TASK RESUMED]
+Задача перемещена на этап '{}' (роль: {}). Жди указа Человека.",
+                stage_name, config.role
+            );
+            messages.push(ChatMessage::user(resume_msg));
+        }
+
         let tools: Option<Vec<crate::llm::ToolDefinition>> = if active_tools.is_empty() {
             None
         } else {
             Some(active_tools.clone())
         };
+
+        let system_tokens = compactor::estimate_text_tokens(&system_prompt) as u64;
+        let tool_tokens = compactor::estimate_tools_tokens(&tools) as u64;
 
         let req = OpenAIChatRequest {
             model: config.model.clone(),
@@ -5819,6 +5952,8 @@ Messages count: {}
                         cache_hit_rate,
                         duration_ms,
                         tps,
+                        system_tokens,
+                        tool_tokens,
                     });
                 }
                 StreamChunk::Done => break,
@@ -5861,6 +5996,8 @@ Messages count: {}
                 cache_hit_rate: 0.0,
                 duration_ms,
                 tps,
+                system_tokens,
+                tool_tokens,
             });
         }
 

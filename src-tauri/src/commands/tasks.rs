@@ -2876,6 +2876,8 @@ pub async fn run_agent(
                     cache_hit_rate,
                     duration_ms,
                     tps,
+                    system_tokens,
+                    tool_tokens,
                 } => {
                     let _ = app_inner.emit(
                         "agent:telemetry",
@@ -2888,6 +2890,8 @@ pub async fn run_agent(
                             "cacheHitRate": cache_hit_rate,
                             "durationMs": duration_ms,
                             "tps": tps,
+                            "systemTokens": system_tokens,
+                            "toolTokens": tool_tokens,
                         }),
                     );
 

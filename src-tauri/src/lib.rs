@@ -88,6 +88,7 @@ pub fn run() {
             get_task_git_diff,
             get_tool_policies,
             save_tool_policies,
+            get_tool_definitions,
             list_custom_tools,
             save_custom_tool,
             delete_custom_tool,
