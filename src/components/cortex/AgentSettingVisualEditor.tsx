@@ -1,34 +1,12 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from '../../stores/languageStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import {
   Bot,
-  Cpu,
   Thermometer,
-  Layers,
   Maximize2,
-  Wrench,
-  CheckCircle2,
-  ShieldCheck,
-  Search,
-  Check,
   AlertTriangle,
   Code2,
-  Terminal,
-  FileText,
-  Edit3,
-  FileCode,
-  Compass,
-  Globe,
-  Download,
-  CheckSquare,
-  ArrowRight,
-  RotateCcw,
-  HelpCircle,
-  PlusSquare,
-  List,
-  History,
-  BookOpen,
 } from 'lucide-react';
 
 export interface AgentSettingVisualEditorProps {
@@ -42,172 +20,16 @@ interface ParsedSetting {
   temperature: number;
   contextWindow: number;
   maxTokens: number;
-  allowedTools: string[] | null;
+  hasAllowedTools: boolean;
+  allowedToolsKey?: string;
+  allowedTools?: unknown;
   rawExtra: Record<string, unknown>;
 }
 
-interface ToolDefinition {
-  name: string;
-  label: string;
-  description: string;
-  category: string;
-  icon: React.ComponentType<{ className?: string }>;
-}
-
-const CANONICAL_TOOLS: ToolDefinition[] = [
-  {
-    name: 'execute_command',
-    label: 'Команды терминала',
-    description: 'Выполнение команд в изолированном worktree',
-    category: 'system',
-    icon: Terminal,
-  },
-  {
-    name: 'read_file',
-    label: 'Чтение файла',
-    description: 'Чтение текстовых файлов UTF-8 с пагинацией строк',
-    category: 'fs',
-    icon: FileText,
-  },
-  {
-    name: 'edit_file',
-    label: 'Целевое редактирование',
-    description: 'Точечная замена строк и блоков кода (str_replace)',
-    category: 'fs',
-    icon: Edit3,
-  },
-  {
-    name: 'write_file',
-    label: 'Запись файла',
-    description: 'Атомарная запись полного содержимого файла',
-    category: 'fs',
-    icon: FileCode,
-  },
-  {
-    name: 'glob',
-    label: 'Поиск по маске',
-    description: 'Поиск файлов по glob-паттерну в репозитории',
-    category: 'fs',
-    icon: Compass,
-  },
-  {
-    name: 'grep',
-    label: 'Поиск по тексту',
-    description: 'Поиск по регулярным выражениям с номерами строк',
-    category: 'fs',
-    icon: Search,
-  },
-  {
-    name: 'web_search',
-    label: 'Поиск в сети',
-    description: 'Поиск документации и внешних решений в сети',
-    category: 'web',
-    icon: Globe,
-  },
-  {
-    name: 'web_fetch',
-    label: 'Загрузка веб-страниц',
-    description: 'Загрузка HTML/страниц с преобразованием в Markdown',
-    category: 'web',
-    icon: Download,
-  },
-  {
-    name: 'subagent',
-    label: 'Вызов субагентов',
-    description: 'Синхронный запуск специализированного дочернего агента',
-    category: 'agent',
-    icon: Bot,
-  },
-  {
-    name: 'subagent_bg',
-    label: 'Фоновый субагент',
-    description: 'Асинхронный запуск субагента в фоне',
-    category: 'agent',
-    icon: Cpu,
-  },
-  {
-    name: 'collect_subagent',
-    label: 'Собрать субагентов',
-    description: 'Ожидание отчётов фоновых субагентов без поллинга',
-    category: 'agent',
-    icon: Layers,
-  },
-  {
-    name: 'todo_write',
-    label: 'План выполнения',
-    description: 'Фиксация и обновление тактического чек-листа шагов',
-    category: 'agent',
-    icon: CheckSquare,
-  },
-  {
-    name: 'advance_task',
-    label: 'Передать этап',
-    description: 'Передача задачи на следующий этап с эстафетой',
-    category: 'workflow',
-    icon: ArrowRight,
-  },
-  {
-    name: 'reject_task',
-    label: 'Вернуть на доработку',
-    description: 'Возврат задачи на предыдущий этап с замечаниями',
-    category: 'workflow',
-    icon: RotateCcw,
-  },
-  {
-    name: 'question',
-    label: 'Вопрос пользователю',
-    description: 'Интерактивный вопрос оператору в интерфейсе',
-    category: 'interactive',
-    icon: HelpCircle,
-  },
-  {
-    name: 'create_task',
-    label: 'Создать задачу',
-    description: 'Создание карточки задачи на Канбан-доске',
-    category: 'orchestration',
-    icon: PlusSquare,
-  },
-  {
-    name: 'complete_task',
-    label: 'Завершить задачу',
-    description: 'Финализация задачи и перевод в статус Готово',
-    category: 'orchestration',
-    icon: CheckCircle2,
-  },
-  {
-    name: 'list_tasks',
-    label: 'Реестр задач',
-    description: 'Компактный список задач с Канбан-доски',
-    category: 'workflow',
-    icon: List,
-  },
-  {
-    name: 'get_task_history',
-    label: 'История задачи',
-    description: 'Пошаговый рентген выполнения задачи',
-    category: 'workflow',
-    icon: History,
-  },
-  {
-    name: 'load_rule',
-    label: 'Загрузка правил',
-    description: 'Динамическая JIT-загрузка стандартов проекта',
-    category: 'system',
-    icon: BookOpen,
-  },
-];
-
-const MODEL_PRESETS = [
-  { id: 'inherit', label: 'inherit', desc: 'глобальные' },
-  { id: 'gemini-3.8-flash-high', label: 'gemini-3.8-flash-high', desc: 'Google' },
-  { id: 'claude-3-7-sonnet', label: 'claude-3-7-sonnet', desc: 'Anthropic' },
-  { id: 'deepseek-chat', label: 'deepseek-chat', desc: 'DeepSeek' },
-];
-
 const CONTEXT_CHIPS = [
   { value: 128000, label: '128K' },
-  { value: 200000, label: '200K' },
-  { value: 1000000, label: '1M' },
+  { value: 256000, label: '256K' },
+  { value: 384000, label: '384K' },
 ];
 
 const MAX_TOKENS_CHIPS = [
@@ -244,11 +66,11 @@ function parseSettingJson(raw: string): { parsed: ParsedSetting; error: string |
     const maxTokens =
       typeof rawMt === 'number' && !isNaN(rawMt) && rawMt > 0 ? Math.round(rawMt) : 8192;
 
-    const rawTools = obj.allowedTools ?? obj.allowed_tools;
-    let allowedTools: string[] | null = null;
-    if (Array.isArray(rawTools)) {
-      allowedTools = rawTools.map((t) => String(t).trim()).filter(Boolean);
-    }
+    const hasAllowedTools = 'allowedTools' in obj || 'allowed_tools' in obj;
+    const allowedToolsKey = 'allowedTools' in obj ? 'allowedTools' : ('allowed_tools' in obj ? 'allowed_tools' : undefined);
+    const allowedTools = hasAllowedTools
+      ? (obj.allowedTools !== undefined ? obj.allowedTools : obj.allowed_tools)
+      : undefined;
 
     const rawExtra: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(obj)) {
@@ -274,6 +96,8 @@ function parseSettingJson(raw: string): { parsed: ParsedSetting; error: string |
         temperature,
         contextWindow,
         maxTokens,
+        hasAllowedTools,
+        allowedToolsKey,
         allowedTools,
         rawExtra,
       },
@@ -286,7 +110,9 @@ function parseSettingJson(raw: string): { parsed: ParsedSetting; error: string |
         temperature: 0.2,
         contextWindow: 200000,
         maxTokens: 8192,
-        allowedTools: null,
+        hasAllowedTools: false,
+        allowedToolsKey: undefined,
+        allowedTools: undefined,
         rawExtra: {},
       },
       error: err instanceof Error ? err.message : String(err),
@@ -308,7 +134,11 @@ function serializeSetting(parsed: ParsedSetting): string {
   output.temperature = Number(parsed.temperature.toFixed(2));
   output.contextWindow = parsed.contextWindow;
   output.maxTokens = parsed.maxTokens;
-  output.allowedTools = parsed.allowedTools;
+
+  // Сохраняем исходное значение allowedTools, если оно уже присутствовало в файле, не навязывая изменений
+  if (parsed.hasAllowedTools) {
+    output[parsed.allowedToolsKey || 'allowedTools'] = parsed.allowedTools;
+  }
 
   for (const [key, val] of Object.entries(parsed.rawExtra)) {
     if (key !== '_comment') {
@@ -326,6 +156,7 @@ export default function AgentSettingVisualEditor({
 }: AgentSettingVisualEditorProps) {
   const { t } = useTranslation();
   const availableModels = useSettingsStore((s) => s.availableModels);
+  const settingsModel = useSettingsStore((s) => s.settings.model);
 
   const lastEmittedRef = useRef<string>(content);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -334,11 +165,12 @@ export default function AgentSettingVisualEditor({
   const [temperature, setTemperature] = useState<number>(0.2);
   const [contextWindow, setContextWindow] = useState<number>(200000);
   const [maxTokens, setMaxTokens] = useState<number>(8192);
-  const [isRestricted, setIsRestricted] = useState<boolean>(false);
-  const [allowedTools, setAllowedTools] = useState<string[]>([]);
+  const [allowedToolsData, setAllowedToolsData] = useState<{
+    has: boolean;
+    key?: string;
+    value?: unknown;
+  }>({ has: false });
   const [rawExtra, setRawExtra] = useState<Record<string, unknown>>({});
-
-  const [toolSearch, setToolSearch] = useState<string>('');
 
   // Синхронизация при изменении внешнего content
   useEffect(() => {
@@ -355,15 +187,12 @@ export default function AgentSettingVisualEditor({
     setTemperature(parsed.temperature);
     setContextWindow(parsed.contextWindow);
     setMaxTokens(parsed.maxTokens);
+    setAllowedToolsData({
+      has: parsed.hasAllowedTools,
+      key: parsed.allowedToolsKey,
+      value: parsed.allowedTools,
+    });
     setRawExtra(parsed.rawExtra);
-
-    if (parsed.allowedTools === null) {
-      setIsRestricted(false);
-      setAllowedTools(CANONICAL_TOOLS.map((t) => t.name));
-    } else {
-      setIsRestricted(true);
-      setAllowedTools(parsed.allowedTools);
-    }
 
     lastEmittedRef.current = content;
   }, [content]);
@@ -380,15 +209,12 @@ export default function AgentSettingVisualEditor({
     setTemperature(parsed.temperature);
     setContextWindow(parsed.contextWindow);
     setMaxTokens(parsed.maxTokens);
+    setAllowedToolsData({
+      has: parsed.hasAllowedTools,
+      key: parsed.allowedToolsKey,
+      value: parsed.allowedTools,
+    });
     setRawExtra(parsed.rawExtra);
-
-    if (parsed.allowedTools === null) {
-      setIsRestricted(false);
-      setAllowedTools(CANONICAL_TOOLS.map((t) => t.name));
-    } else {
-      setIsRestricted(true);
-      setAllowedTools(parsed.allowedTools);
-    }
     lastEmittedRef.current = content;
   }, []);
 
@@ -398,8 +224,6 @@ export default function AgentSettingVisualEditor({
     nextTemp: number,
     nextCw: number,
     nextMt: number,
-    nextRestricted: boolean,
-    nextTools: string[],
     nextExtra: Record<string, unknown>
   ) => {
     const nextSetting: ParsedSetting = {
@@ -407,7 +231,9 @@ export default function AgentSettingVisualEditor({
       temperature: nextTemp,
       contextWindow: nextCw,
       maxTokens: nextMt,
-      allowedTools: nextRestricted ? nextTools : null,
+      hasAllowedTools: allowedToolsData.has,
+      allowedToolsKey: allowedToolsData.key,
+      allowedTools: allowedToolsData.value,
       rawExtra: nextExtra,
     };
     const serialized = serializeSetting(nextSetting);
@@ -417,102 +243,54 @@ export default function AgentSettingVisualEditor({
 
   const handleModelChange = (newModel: string) => {
     setModel(newModel);
-    emitChanges(newModel, temperature, contextWindow, maxTokens, isRestricted, allowedTools, rawExtra);
+    emitChanges(newModel, temperature, contextWindow, maxTokens, rawExtra);
   };
 
   const handleTemperatureChange = (newTemp: number) => {
     const clamped = Math.max(0, Math.min(1, Number(newTemp.toFixed(2))));
     setTemperature(clamped);
-    emitChanges(model, clamped, contextWindow, maxTokens, isRestricted, allowedTools, rawExtra);
+    emitChanges(model, clamped, contextWindow, maxTokens, rawExtra);
   };
 
   const handleContextWindowChange = (newCw: number) => {
     const val = Math.max(1000, newCw);
     setContextWindow(val);
-    emitChanges(model, temperature, val, maxTokens, isRestricted, allowedTools, rawExtra);
+    emitChanges(model, temperature, val, maxTokens, rawExtra);
   };
 
   const handleMaxTokensChange = (newMt: number) => {
     const val = Math.max(256, newMt);
     setMaxTokens(val);
-    emitChanges(model, temperature, contextWindow, val, isRestricted, allowedTools, rawExtra);
+    emitChanges(model, temperature, contextWindow, val, rawExtra);
   };
 
-  const handleToggleRestricted = (restricted: boolean) => {
-    setIsRestricted(restricted);
-    let tools = allowedTools;
-    if (restricted && tools.length === 0) {
-      tools = CANONICAL_TOOLS.map((t) => t.name);
-      setAllowedTools(tools);
+  // Динамический список моделей: строго 'inherit', затем settings.model и availableModels
+  const dynamicModels = useMemo(() => {
+    const list: string[] = ['inherit'];
+    const seen = new Set<string>(['inherit']);
+
+    if (settingsModel && typeof settingsModel === 'string') {
+      const trimmed = settingsModel.trim();
+      if (trimmed && !seen.has(trimmed)) {
+        list.push(trimmed);
+        seen.add(trimmed);
+      }
     }
-    emitChanges(model, temperature, contextWindow, maxTokens, restricted, tools, rawExtra);
-  };
 
-  const handleToggleTool = (toolName: string) => {
-    const isCurrentlyActive = allowedTools.includes(toolName);
-    const updated = isCurrentlyActive
-      ? allowedTools.filter((t) => t !== toolName)
-      : [...allowedTools, toolName];
-
-    setAllowedTools(updated);
-    emitChanges(model, temperature, contextWindow, maxTokens, isRestricted, updated, rawExtra);
-  };
-
-  const handleSelectAllTools = () => {
-    const all = allTools.map((t) => t.name);
-    setAllowedTools(all);
-    emitChanges(model, temperature, contextWindow, maxTokens, isRestricted, all, rawExtra);
-  };
-
-  const handleClearAllTools = () => {
-    setAllowedTools([]);
-    emitChanges(model, temperature, contextWindow, maxTokens, isRestricted, [], rawExtra);
-  };
-
-  // Список всех уникальных моделей для выпадающего списка
-  const allAvailableModels = useMemo(() => {
-    const set = new Set<string>();
-    for (const p of MODEL_PRESETS) {
-      if (p.id !== 'inherit') set.add(p.id);
-    }
     if (Array.isArray(availableModels)) {
       for (const m of availableModels) {
-        if (m) set.add(m);
+        if (typeof m === 'string') {
+          const trimmed = m.trim();
+          if (trimmed && !seen.has(trimmed)) {
+            list.push(trimmed);
+            seen.add(trimmed);
+          }
+        }
       }
     }
-    return Array.from(set);
-  }, [availableModels]);
 
-  // Объединяем стандартные инструменты и любые кастомные из allowedTools
-  const allTools = useMemo<ToolDefinition[]>(() => {
-    const existing = new Set(CANONICAL_TOOLS.map((t) => t.name));
-    const extras: ToolDefinition[] = [];
-    for (const name of allowedTools) {
-      if (!existing.has(name)) {
-        extras.push({
-          name,
-          label: name,
-          description: 'Пользовательский инструмент',
-          category: 'custom',
-          icon: Wrench,
-        });
-        existing.add(name);
-      }
-    }
-    return [...CANONICAL_TOOLS, ...extras];
-  }, [allowedTools]);
-
-  // Фильтрация инструментов по поиску
-  const filteredTools = useMemo(() => {
-    if (!toolSearch.trim()) return allTools;
-    const q = toolSearch.toLowerCase().trim();
-    return allTools.filter(
-      (t) =>
-        t.name.toLowerCase().includes(q) ||
-        t.label.toLowerCase().includes(q) ||
-        t.description.toLowerCase().includes(q)
-    );
-  }, [toolSearch, allTools]);
+    return list;
+  }, [availableModels, settingsModel]);
 
   if (parseError) {
     return (
@@ -577,7 +355,7 @@ export default function AgentSettingVisualEditor({
                 className="w-full px-3 py-1.5 rounded-md border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] font-mono text-xs focus:outline-hidden focus:border-[#6366f1] dark:focus:border-[#818cf8] transition"
               />
               <datalist id="model-options">
-                {allAvailableModels.map((m) => (
+                {dynamicModels.map((m) => (
                   <option key={m} value={m} />
                 ))}
               </datalist>
@@ -596,23 +374,23 @@ export default function AgentSettingVisualEditor({
 
           {/* Быстрые бейджи модели */}
           <div className="flex flex-wrap gap-1.5 pt-1">
-            {MODEL_PRESETS.map((preset) => {
+            {dynamicModels.map((item) => {
               const isSelected =
-                preset.id === 'inherit'
+                item === 'inherit'
                   ? isModelInherit
-                  : model.toLowerCase() === preset.id.toLowerCase();
+                  : model.toLowerCase() === item.toLowerCase();
               return (
                 <button
-                  key={preset.id}
+                  key={item}
                   type="button"
-                  onClick={() => handleModelChange(preset.id)}
+                  onClick={() => handleModelChange(item)}
                   className={`px-2.5 py-1 rounded text-xs font-mono transition cursor-pointer flex items-center space-x-1 border ${
                     isSelected
                       ? 'border-[#6366f1] bg-[#6366f1]/10 text-[#6366f1] dark:text-[#818cf8] font-semibold'
                       : 'border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#0d1117] text-[#666666] dark:text-[#8b949e] hover:border-[#d4d4d8] dark:hover:border-[#484f58] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
                   }`}
                 >
-                  <span>{preset.label}</span>
+                  <span>{item}</span>
                 </button>
               );
             })}
@@ -788,154 +566,6 @@ export default function AgentSettingVisualEditor({
             </p>
           </div>
         </div>
-      </section>
-
-      {/* СЕКЦИЯ 3: РАЗРЕШЕННЫЕ ИНСТРУМЕНТЫ */}
-      <section className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-[#fdfdfd] dark:bg-[#161b22]/70 p-4 space-y-4 shadow-2xs">
-        <div className="flex items-center justify-between border-b border-[#ebebeb] dark:border-[#21262d] pb-2.5">
-          <div className="flex items-center space-x-2">
-            <Wrench className="h-4 w-4 text-[#f59e0b]" />
-            <h2 className="text-xs font-bold font-mono uppercase tracking-wider text-[#171717] dark:text-[#f0f6fc]">
-              {t('ruleEditor.toolsSection')}
-            </h2>
-          </div>
-
-          {isRestricted && (
-            <span className="font-mono text-[11px] text-[#666666] dark:text-[#8b949e] tabular-nums">
-              {t('ruleEditor.toolsCount', {
-                active: allowedTools.length,
-                total: allTools.length,
-              })}
-            </span>
-          )}
-        </div>
-
-        {/* Переключатель: Все разрешены / Ограничить набор */}
-        <div className="flex items-center rounded-lg border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#0d1117] p-1 text-xs font-mono">
-          <button
-            type="button"
-            onClick={() => handleToggleRestricted(false)}
-            className={`flex-1 py-1.5 px-3 rounded-md transition cursor-pointer flex items-center justify-center space-x-1.5 ${
-              !isRestricted
-                ? 'bg-[#171717] text-white dark:bg-[#238636] font-medium shadow-2xs'
-                : 'text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
-            }`}
-          >
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            <span>{t('ruleEditor.toolsAll')}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleToggleRestricted(true)}
-            className={`flex-1 py-1.5 px-3 rounded-md transition cursor-pointer flex items-center justify-center space-x-1.5 ${
-              isRestricted
-                ? 'bg-[#171717] text-white dark:bg-[#238636] font-medium shadow-2xs'
-                : 'text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
-            }`}
-          >
-            <ShieldCheck className="h-3.5 w-3.5" />
-            <span>{t('ruleEditor.toolsRestricted')}</span>
-          </button>
-        </div>
-
-        {!isRestricted ? (
-          <div className="p-3 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9fb] dark:bg-[#0d1117] flex items-center space-x-2.5 text-xs text-[#666666] dark:text-[#8b949e]">
-            <Check className="h-4 w-4 text-[#10b981] shrink-0" />
-            <span>{t('ruleEditor.toolsAllNotice')}</span>
-          </div>
-        ) : (
-          <div className="space-y-3 pt-1">
-            {/* Панель действий: поиск + кнопки "Выбрать все" / "Очистить все" */}
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="relative flex-1 min-w-[180px]">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e]" />
-                <input
-                  type="text"
-                  value={toolSearch}
-                  onChange={(e) => setToolSearch(e.target.value)}
-                  placeholder={t('ruleEditor.toolsSearch')}
-                  className="w-full pl-8 pr-2.5 py-1 rounded-md border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] font-mono text-xs focus:outline-hidden focus:border-[#6366f1] dark:focus:border-[#818cf8]"
-                />
-              </div>
-
-              <div className="flex items-center space-x-1.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={handleSelectAllTools}
-                  className="px-2.5 py-1 rounded text-xs font-mono border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#0d1117] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] transition cursor-pointer"
-                >
-                  {t('ruleEditor.toolsSelectAll')}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleClearAllTools}
-                  className="px-2.5 py-1 rounded text-xs font-mono border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#0d1117] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#666666] dark:text-[#8b949e] hover:text-[#ef4444] dark:hover:text-[#f87171] transition cursor-pointer"
-                >
-                  {t('ruleEditor.toolsClearAll')}
-                </button>
-              </div>
-            </div>
-
-            {/* Компактная сетка тулов */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[300px] overflow-y-auto pr-1">
-              {filteredTools.map((tool) => {
-                const isEnabled = allowedTools.includes(tool.name);
-                const IconComponent = tool.icon;
-
-                return (
-                  <div
-                    key={tool.name}
-                    onClick={() => handleToggleTool(tool.name)}
-                    className={`flex items-center justify-between p-2.5 rounded-lg border transition-all cursor-pointer select-none ${
-                      isEnabled
-                        ? 'border-[#171717]/20 dark:border-[#388bfd]/40 bg-white dark:bg-[#0d1117] shadow-2xs'
-                        : 'border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9fb] dark:bg-[#161b22]/40 opacity-60 hover:opacity-90'
-                    } hover:border-[#171717]/40 dark:hover:border-[#58a6ff]/60`}
-                  >
-                    <div className="flex items-center space-x-2.5 min-w-0 pr-2">
-                      <div
-                        className={`p-1.5 rounded-md shrink-0 ${
-                          isEnabled
-                            ? 'bg-[#f4f4f5] dark:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc]'
-                            : 'bg-[#ebebeb] dark:bg-[#1c2128] text-[#8f8f8f] dark:text-[#6e7681]'
-                        }`}
-                      >
-                        <IconComponent className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center space-x-1.5">
-                          <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] truncate">
-                            {tool.name}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-[#666666] dark:text-[#8b949e] truncate leading-tight">
-                          {tool.label}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Тумблер переключателя */}
-                    <div
-                      role="switch"
-                      aria-checked={isEnabled}
-                      className={`relative w-8 h-4.5 rounded-full transition-colors shrink-0 ${
-                        isEnabled
-                          ? 'bg-[#171717] dark:bg-[#238636]'
-                          : 'bg-[#e4e4e7] dark:bg-[#30363d]'
-                      }`}
-                    >
-                      <span
-                        className={`absolute top-0.5 h-3.5 w-3.5 rounded-full bg-white dark:bg-[#0d1117] shadow-xs transition-transform ${
-                          isEnabled ? 'translate-x-3.5' : 'translate-x-0.5'
-                        }`}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </section>
     </div>
   );
