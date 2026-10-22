@@ -768,7 +768,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       status: 'running',
       params: {
         taskId,
-        title: 'Сжатие контекста...',
+        title: 'Оптимизация контекста',
       },
     };
 
@@ -776,7 +776,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       id: toolId,
       type: 'tool',
       timestamp,
-      content: 'Сжатие контекста...',
+      content: 'Оптимизация контекста',
       tool: optimisticTool,
     };
 

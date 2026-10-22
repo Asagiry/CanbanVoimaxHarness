@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { DrawerActivityItem } from '../../stores/drawerStore';
 import { MarkdownContent } from './DrawerActivityStream';
+import { useTranslation } from '../../stores/languageStore';
 import {
   ChevronRight,
   ChevronDown,
@@ -14,6 +15,7 @@ interface CompactedContextCardProps {
 }
 
 export default function CompactedContextCard({ activity }: CompactedContextCardProps) {
+  const { t, language } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -35,7 +37,18 @@ export default function CompactedContextCard({ activity }: CompactedContextCardP
     : String(savedTokens);
 
   const pluralMsg =
-    count === 1 ? 'сообщение' : count > 1 && count < 5 ? 'сообщения' : 'сообщений';
+    language === 'ru'
+      ? (() => {
+          const mod10 = Math.abs(count) % 10;
+          const mod100 = Math.abs(count) % 100;
+          if (mod100 >= 11 && mod100 <= 19) return 'сообщений';
+          if (mod10 === 1) return 'сообщение';
+          if (mod10 >= 2 && mod10 <= 4) return 'сообщения';
+          return 'сообщений';
+        })()
+      : count === 1
+      ? 'message'
+      : 'messages';
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -69,14 +82,18 @@ export default function CompactedContextCard({ activity }: CompactedContextCardP
           )}
 
           <div className="flex items-center space-x-2 text-xs font-medium font-sans truncate">
-            <span className="text-[#0d0d0d] dark:text-[#f0f6fc] font-semibold">Контекст сжат</span>
-            <span className="text-[#8f8f8f] dark:text-[#6e7681]">·</span>
-            <span className="text-[#4d4d4d] dark:text-[#8b949e]">
-              Сжато <span className="font-mono tabular-nums text-[#0d0d0d] dark:text-[#f0f6fc]">{count}</span> {pluralMsg}
+            <span className="text-[#0d0d0d] dark:text-[#f0f6fc] font-semibold">
+              {t('drawer.contextCompacted')}
             </span>
             <span className="text-[#8f8f8f] dark:text-[#6e7681]">·</span>
-            <span className="font-mono tabular-nums text-[#4d4d4d] dark:text-[#8b949e] text-[11px] bg-[#f4f4f5] dark:bg-[#161b22] px-1.5 py-0.5 rounded border border-[#ebebeb] dark:border-[#30363d]">
-              ~{formattedTokens} токенов
+            <span className="text-[#4d4d4d] dark:text-[#8b949e]">
+              {language === 'ru' ? 'Сжато' : 'Compacted'}{' '}
+              <span className="font-mono tabular-nums text-[#0d0d0d] dark:text-[#f0f6fc]">{count}</span>{' '}
+              {pluralMsg}
+            </span>
+            <span className="text-[#8f8f8f] dark:text-[#6e7681]">·</span>
+            <span className="font-mono tabular-nums text-[#15803d] dark:text-[#7ee787] text-[11px] bg-[#ecfdf5] dark:bg-[#12281e] px-1.5 py-0.5 rounded border border-[#a7f3d0] dark:border-[#238636] font-medium">
+              {t('drawer.freedTokens', { tokens: formattedTokens })}
             </span>
           </div>
         </div>
@@ -87,7 +104,7 @@ export default function CompactedContextCard({ activity }: CompactedContextCardP
               type="button"
               onClick={handleCopy}
               className="flex items-center space-x-1 px-2 py-0.5 text-[10px] font-mono text-[#666666] dark:text-[#8b949e] hover:text-[#0d0d0d] dark:hover:text-[#f0f6fc] bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] rounded transition cursor-pointer"
-              title="Скопировать отчет сжатия"
+              aria-label="Скопировать отчет сжатия"
             >
               {copied ? (
                 <>
