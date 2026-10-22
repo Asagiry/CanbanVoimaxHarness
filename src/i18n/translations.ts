@@ -354,6 +354,23 @@ export const translations = {
     'tools.get_task_history.label': 'Task History',
     'tools.get_task_history.description': 'Detailed step-by-step X-ray of task execution (requirements, tools, errors, verdict).',
 
+    // Tool card status & badges
+    'tools.status.running': 'Running',
+    'tools.status.done': 'Done',
+    'tools.status.aborted': 'Aborted',
+    'tools.status.error': 'Error',
+    'tools.collect.badge': 'COLLECT',
+    'tools.collect.waiting': 'Waiting for report',
+    'tools.collect.received': 'Report received',
+    'tools.collect.error': 'Collection error',
+    'tools.collect.all': 'all subagents',
+    'tools.subagent_list.badge': 'LIST',
+    'tools.subagent_list.total': 'total: {count}',
+    'tools.subagent_list.search': 'Searching',
+    'tools.subagent_list.found': 'Found: {count}',
+    'tools.subagent_list.received': 'List received',
+    'tools.subagent_list.notFound': 'No subagents found',
+
     // Tool Parameters
     'toolParam.max_lines.label': 'Read line limit per call',
     'toolParam.max_lines.unit': 'lines',
@@ -873,6 +890,23 @@ export const translations = {
     'tools.list_tasks.description': 'Компактный реестр последних задач с Канбан-доски для аудита и аналитики.',
     'tools.get_task_history.label': 'История задачи',
     'tools.get_task_history.description': 'Подробный пошаговый рентген выполнения задачи (ТЗ, тулы, ошибки, вердикт).',
+
+    // Tool card status & badges
+    'tools.status.running': 'Выполняется',
+    'tools.status.done': 'Готово',
+    'tools.status.aborted': 'Прервано',
+    'tools.status.error': 'Ошибка',
+    'tools.collect.badge': 'СБОР',
+    'tools.collect.waiting': 'Ожидание отчета',
+    'tools.collect.received': 'Отчет получен',
+    'tools.collect.error': 'Ошибка сбора',
+    'tools.collect.all': 'все субагенты',
+    'tools.subagent_list.badge': 'СПИСОК',
+    'tools.subagent_list.total': 'всего: {count}',
+    'tools.subagent_list.search': 'Поиск',
+    'tools.subagent_list.found': 'Найдено: {count}',
+    'tools.subagent_list.received': 'Список получен',
+    'tools.subagent_list.notFound': 'Субагенты не обнаружены',
 
     // Tool Parameters
     'toolParam.max_lines.label': 'Лимит чтения строк за раз',

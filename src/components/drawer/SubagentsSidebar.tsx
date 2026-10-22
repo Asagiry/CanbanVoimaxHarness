@@ -61,7 +61,7 @@ export function formatSubagentRoleDisplay(
   return isRu ? 'СУБАГЕНТ' : 'SUBAGENT';
 }
 
-function formatDuration(ms?: number, isRunning?: boolean): string {
+export function formatDuration(ms?: number, isRunning?: boolean): string {
   if (ms === undefined || ms === null || !Number.isFinite(ms) || ms < 0) {
     return isRunning ? '0s' : '—';
   }
@@ -73,7 +73,7 @@ function formatDuration(ms?: number, isRunning?: boolean): string {
   return `${mins}m ${secs}s`;
 }
 
-function formatSteps(count: number, lang: Language = 'en'): string {
+export function formatSteps(count: number, lang: Language = 'en'): string {
   if (lang === 'en') {
     return count === 1 ? '1 step' : `${count} steps`;
   }
@@ -410,7 +410,7 @@ export default function SubagentsSidebar({
   return (
     <aside
       style={{ width: `${isCollapsed ? 44 : sidebarWidth}px` }}
-      className={`relative shrink-0 border-r border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] flex flex-col min-h-0 h-full overflow-hidden select-none transition-colors ${
+      className={`relative shrink-0 mt-1 ml-1.5 rounded-tl-xl rounded-tr-xl border-t border-x border-[#ebebeb] dark:border-[#21262d] shadow-2xs bg-white dark:bg-[#0d1117] flex flex-col min-h-0 h-[calc(100%-0.25rem)] overflow-hidden select-none transition-colors ${
         isResizing ? 'select-none' : 'transition-[width] duration-200 ease-out'
       } ${className || ''}`}
       aria-label={t('subagents.panelAria')}
@@ -451,7 +451,7 @@ export default function SubagentsSidebar({
         {!isCollapsed && (
           <div
             onMouseDown={handleMouseDown}
-            className="group/handle absolute top-0 bottom-0 right-0 w-2 -mr-1 cursor-col-resize z-30 flex items-center justify-center select-none"
+            className="group/handle absolute top-0 bottom-0 right-0 w-2 cursor-col-resize z-30 flex items-center justify-center select-none"
             aria-label={t('subagents.panelAria')}
           >
             <div
