@@ -3443,8 +3443,8 @@ pub async fn execute_tool(
                             if let Some(out) = output_snippet {
                                 let trimmed = out.trim();
                                 if !trimmed.is_empty() {
-                                    let compacted = if trimmed.len() > 300 {
-                                        format!("{}... [compacted]", &trimmed[..300])
+                                    let compacted = if trimmed.chars().count() > 300 {
+                                        format!("{}... [compacted]", trimmed.chars().take(300).collect::<String>())
                                     } else {
                                         trimmed.to_string()
                                     };
@@ -3489,6 +3489,10 @@ pub async fn execute_tool(
                 .or_else(|| args.get("name"))
                 .and_then(|v| v.as_str())
                 .context("Missing required parameter 'rule'")?;
+
+            if rule_raw.contains("..") || rule_raw.contains(':') || rule_raw.starts_with('/') || rule_raw.starts_with('\\') {
+                bail!("Invalid rule name '{}': path traversal characters are forbidden", rule_raw);
+            }
 
             let rule_clean = rule_raw.strip_suffix(".md").unwrap_or(rule_raw);
             let role = ctx.role.unwrap_or("general");
