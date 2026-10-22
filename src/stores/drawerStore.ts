@@ -477,6 +477,57 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       const existing = state.toolExecutions[taskId] || [];
       const existingFeed = state.activityFeed[taskId] || [];
 
+      // Obeying § 2.20 & Question Tool Dedup:
+      // If tool is question/ask_user and there is already an existing question item in feed,
+      // synchronize tool call info into that existing question item rather than duplicating feed!
+      if (tool.toolName === 'question' || tool.toolName === 'ask_user') {
+        const qParamId = (tool.params as Record<string, unknown> | undefined)?.questionId as string | undefined;
+        const qIndex = existingFeed.findIndex(
+          (f) =>
+            (f.type === 'question' &&
+              (!qParamId ||
+                (f.tool?.params as Record<string, unknown> | undefined)?.questionId === qParamId ||
+                f.tool?.id === qParamId)) ||
+            f.id === `q-${tool.id}` ||
+            f.tool?.id === tool.id
+        );
+
+        if (qIndex !== -1) {
+          const prev = existingFeed[qIndex];
+          const updatedFeed = [...existingFeed];
+          updatedFeed[qIndex] = {
+            ...prev,
+            tool: {
+              ...prev.tool,
+              ...tool,
+              id: prev.tool?.id || tool.id,
+              toolName: 'question',
+              params: {
+                ...((tool.params as Record<string, unknown>) || {}),
+                ...((prev.tool?.params as Record<string, unknown>) || {}),
+                callId: tool.id,
+              },
+            },
+          };
+
+          const toolExists = existing.some((t) => t.id === tool.id);
+          const updatedTools = toolExists
+            ? existing.map((t) => (t.id === tool.id ? { ...t, ...tool } : t))
+            : [tool, ...existing];
+
+          return {
+            toolExecutions: {
+              ...state.toolExecutions,
+              [taskId]: updatedTools,
+            },
+            activityFeed: {
+              ...state.activityFeed,
+              [taskId]: updatedFeed,
+            },
+          };
+        }
+      }
+
       const feedItem: DrawerActivityItem = {
         id: tool.id,
         type: 'tool',
@@ -534,7 +585,13 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
 
       const existingFeed = state.activityFeed[taskId] || [];
       const updatedFeed = existingFeed.map((item) => {
-        if (item.type === 'tool' && (item.id === toolId || item.tool?.id === toolId)) {
+        if (
+          (item.type === 'tool' || item.type === 'question') &&
+          (item.id === toolId ||
+            item.tool?.id === toolId ||
+            (item.tool?.params as Record<string, unknown> | undefined)?.callId === toolId ||
+            (item.tool?.params as Record<string, unknown> | undefined)?.questionId === toolId)
+        ) {
           return {
             ...item,
             tool: item.tool ? { ...item.tool, ...partial } : undefined,
@@ -989,9 +1046,48 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
               : state.tokenOverrides;
 
             if (currentFeed.length === 0 || items.length >= currentFeed.length || hasCompacted) {
-              // Deduplicate adjacent identical steer / user messages
+              // Deduplicate questions and adjacent identical steer / user messages (§ 2.20 & Question Dedup)
               const dedupedItems: DrawerActivityItem[] = [];
+              const loadedQuestionIds = new Set<string>();
+              const loadedQuestionTexts = new Set<string>();
+
               for (const item of items) {
+                if (item.type === 'question') {
+                  const qParams = item.tool?.params as Record<string, unknown> | undefined;
+                  const qId = (qParams?.questionId as string) || item.tool?.id || item.id;
+                  if (qId) loadedQuestionIds.add(qId);
+                  if (item.id?.startsWith('q-')) loadedQuestionIds.add(item.id.replace(/^q-/, ''));
+                  const callId = qParams?.callId as string | undefined;
+                  if (callId) loadedQuestionIds.add(callId);
+                  if (item.content?.trim()) loadedQuestionTexts.add(item.content.trim());
+                  if (typeof qParams?.text === 'string' && qParams.text.trim()) {
+                    loadedQuestionTexts.add(qParams.text.trim());
+                  }
+                }
+              }
+
+              for (const item of items) {
+                // Deduplicate tool question calls when matching question item already exists in SQLite history
+                if (
+                  item.type === 'tool' &&
+                  (item.tool?.toolName === 'question' || item.tool?.toolName === 'ask_user')
+                ) {
+                  const tParams = item.tool?.params as Record<string, unknown> | undefined;
+                  const tId = item.tool?.id || item.id;
+                  const qId = tParams?.questionId as string | undefined;
+                  const callId = tParams?.callId as string | undefined;
+                  const txt = ((typeof tParams?.text === 'string' ? tParams.text : '') || item.content || '').trim();
+
+                  if (
+                    (tId && (loadedQuestionIds.has(tId) || loadedQuestionIds.has(`q-${tId}`))) ||
+                    (qId && loadedQuestionIds.has(qId)) ||
+                    (callId && loadedQuestionIds.has(callId)) ||
+                    (txt && loadedQuestionTexts.has(txt))
+                  ) {
+                    continue; // Suppress duplicate tool call
+                  }
+                }
+
                 const prev = dedupedItems[dedupedItems.length - 1];
                 if (
                   prev &&
@@ -1332,8 +1428,86 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
 
     set((state) => {
       const existingFeed = state.activityFeed[taskId] || [];
-      if (existingFeed.some((f) => f.id === itemId || f.tool?.id === questionId)) {
-        return state;
+
+      // Check if there is already an item for this question or matching running tool call (§ 2.20 & Question Dedup)
+      const existingExactIndex = existingFeed.findIndex(
+        (f) =>
+          f.id === itemId ||
+          f.tool?.id === questionId ||
+          (f.tool?.params as Record<string, unknown> | undefined)?.questionId === questionId
+      );
+
+      const existingToolIndex = existingFeed.findIndex(
+        (f) =>
+          f.type === 'tool' &&
+          (f.tool?.toolName === 'question' || f.tool?.toolName === 'ask_user') &&
+          (!(f.tool?.params as Record<string, unknown> | undefined)?.questionId ||
+            (f.tool?.params as Record<string, unknown> | undefined)?.questionId === questionId)
+      );
+
+      const targetIndex = existingExactIndex !== -1 ? existingExactIndex : existingToolIndex;
+
+      if (targetIndex !== -1) {
+        // Synchronize in-place into a single 'question' activity item!
+        const prev = existingFeed[targetIndex];
+        const updatedItem: DrawerActivityItem = {
+          ...prev,
+          id: itemId,
+          type: 'question',
+          timestamp: prev.timestamp || timeStr,
+          content: question.text || prev.content,
+          tool: {
+            ...prev.tool,
+            id: questionId,
+            toolName: 'question',
+            timestamp: prev.tool?.timestamp || prev.timestamp || timeStr,
+            durationMs: prev.tool?.durationMs || 0,
+            status: prev.tool?.status || 'running',
+            params: {
+              ...((prev.tool?.params as Record<string, unknown>) || {}),
+              taskId,
+              questionId,
+              callId: prev.tool?.id, // retain original call ID for tool_result routing
+              text: question.text,
+              options: question.options,
+              multiple: question.multiple,
+            },
+          },
+        };
+
+        const updatedFeed = [...existingFeed];
+        updatedFeed[targetIndex] = updatedItem;
+
+        // Also update toolExecutions to reflect question parameters
+        const existingTools = state.toolExecutions[taskId] || [];
+        const updatedTools = existingTools.map((t) => {
+          if (t.id === prev.tool?.id || t.id === questionId) {
+            return {
+              ...t,
+              params: {
+                ...((t.params as Record<string, unknown>) || {}),
+                taskId,
+                questionId,
+                callId: t.id,
+                text: question.text,
+                options: question.options,
+                multiple: question.multiple,
+              },
+            };
+          }
+          return t;
+        });
+
+        return {
+          activityFeed: {
+            ...state.activityFeed,
+            [taskId]: updatedFeed,
+          },
+          toolExecutions: {
+            ...state.toolExecutions,
+            [taskId]: updatedTools,
+          },
+        };
       }
 
       const item: DrawerActivityItem = {
@@ -1379,7 +1553,11 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
       const updatedFeed = existingFeed.map((item) => {
         if (
           item.id === `q-${questionId}` ||
-          (item.tool && (item.tool.id === questionId || item.tool.params?.questionId === questionId))
+          item.id === questionId ||
+          (item.tool &&
+            (item.tool.id === questionId ||
+              (item.tool.params as Record<string, unknown> | undefined)?.questionId === questionId ||
+              (item.tool.params as Record<string, unknown> | undefined)?.callId === questionId))
         ) {
           const prevParams = (item.tool?.params as Record<string, unknown>) || {};
           return {

@@ -1,10 +1,11 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import type { KanbanTask } from '../../types';
 import type { DrawerActivityItem } from '../../stores/drawerStore';
 import ToolExecutionCard from './ToolExecutionCard';
 import ThinkingCard, { formatDurationCompact } from './ThinkingCard';
 import QuestionPromptCard from './QuestionPromptCard';
 import CompactedContextCard from './CompactedContextCard';
+import ImageLightboxModal from './ImageLightboxModal';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import { useTranslation } from '../../stores/languageStore';
@@ -27,8 +28,11 @@ import {
   CheckCircle2,
   Circle,
   Clock,
+  ZoomIn,
 } from 'lucide-react';
 import { formatSubagentDisplayTitle } from './SubagentsSidebar';
+
+export const LightboxContext = React.createContext<((src: string, alt?: string) => void) | null>(null);
 
 // Inline Markdown Parser Types & Helpers
 interface InlineTextNode {
@@ -207,7 +211,16 @@ function formatInline(text: string, prefix = 'inl'): React.ReactNode[] {
 }
 
 // Lightweight Markdown Renderer for streaming assistant output
-export function MarkdownContent({ content }: { content?: string }) {
+export function MarkdownContent({
+  content,
+  onImageClick,
+}: {
+  content?: string;
+  onImageClick?: (src: string, alt?: string) => void;
+}) {
+  const contextOnImageClick = React.useContext(LightboxContext);
+  const handleImageClick = onImageClick || contextOnImageClick;
+
   const elements = useMemo(() => {
     const cleanContent = (content ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     const lines = cleanContent.split('\n');
@@ -352,13 +365,18 @@ export function MarkdownContent({ content }: { content?: string }) {
       // Image line: ![alt](url)
       const imgMatch = line.trim().match(/^!\[(.*?)\]\((.*?)\)$/);
       if (imgMatch) {
+        const imgSrc = imgMatch[2];
+        const imgAlt = imgMatch[1] || 'Image';
         result.push(
-          <div key={`img-${index}`} className="my-2 rounded-lg overflow-hidden border border-[#ebebeb] dark:border-[#21262d] max-w-lg bg-[#f4f4f5] dark:bg-[#161b22] shadow-xs">
+          <div
+            key={`img-${index}`}
+            onClick={() => handleImageClick?.(imgSrc, imgAlt)}
+            className="my-2 rounded-lg overflow-hidden border border-[#ebebeb] dark:border-[#21262d] max-w-lg bg-[#f4f4f5] dark:bg-[#161b22] shadow-xs group cursor-zoom-in"
+          >
             <img
-              src={imgMatch[2]}
-              alt={imgMatch[1] || 'Image'}
-              className="w-full max-h-80 object-contain cursor-pointer"
-              onClick={() => window.open(imgMatch[2], '_blank')}
+              src={imgSrc}
+              alt={imgAlt}
+              className="w-full max-h-80 object-contain cursor-zoom-in group-hover:scale-[1.01] transition-transform duration-200"
             />
           </div>
         );
@@ -728,9 +746,95 @@ export default function DrawerActivityStream({
   const nearBottomRef = useRef(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Image Lightbox state & handlers (§ 2.13 Viewport Overlay & Image Lightbox Invariant)
+  const [lightboxImage, setLightboxImage] = useState<{ src: string; alt?: string } | null>(null);
+
+  const handleOpenLightbox = useCallback((src: string, alt?: string) => {
+    setLightboxImage({ src, alt });
+  }, []);
+
+  const handleContainerClick = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'IMG') {
+      const img = target as HTMLImageElement;
+      if (img.src && !img.closest('button') && !img.classList.contains('no-lightbox')) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleOpenLightbox(img.src, img.alt || '');
+      }
+    }
+  }, [handleOpenLightbox]);
+
+  // Obeying § 2.20 & Question Tool Dedup:
+  // If unifiedActivities contains both a 'question' item and a duplicate 'tool' call for that question,
+  // guarantee that EXACTLY ONE interactive QuestionPromptCard is rendered per question!
+  const displayActivities = useMemo(() => {
+    const list = unifiedActivities || [];
+    const questionItems = list.filter((a) => a?.type === 'question');
+    if (questionItems.length === 0) return list;
+
+    const questionSignatures = new Set<string>();
+    for (const q of questionItems) {
+      if (q.id) questionSignatures.add(q.id);
+      if (q.id?.startsWith('q-')) questionSignatures.add(q.id.replace(/^q-/, ''));
+      const qParams = q.tool?.params as Record<string, unknown> | undefined;
+      const qId = qParams?.questionId as string | undefined;
+      if (qId) questionSignatures.add(qId);
+      const callId = qParams?.callId as string | undefined;
+      if (callId) questionSignatures.add(callId);
+      if (q.tool?.id) questionSignatures.add(q.tool.id);
+      if (q.content?.trim()) questionSignatures.add(`txt:${q.content.trim()}`);
+      if (typeof qParams?.text === 'string' && qParams.text.trim()) {
+        questionSignatures.add(`txt:${qParams.text.trim()}`);
+      }
+    }
+
+    const seenQuestionIds = new Set<string>();
+
+    return list.filter((activity) => {
+      if (activity?.type === 'question') {
+        const qParams = activity.tool?.params as Record<string, unknown> | undefined;
+        const qId =
+          (qParams?.questionId as string | undefined) ||
+          activity.tool?.id ||
+          activity.id;
+        if (qId) {
+          if (seenQuestionIds.has(qId)) return false;
+          seenQuestionIds.add(qId);
+        }
+        return true;
+      }
+
+      if (
+        activity?.type === 'tool' &&
+        (activity.tool?.toolName === 'question' || activity.tool?.toolName === 'ask_user')
+      ) {
+        const tParams = activity.tool?.params as Record<string, unknown> | undefined;
+        const tId = activity.tool?.id || activity.id;
+        const qId = (tParams?.questionId as string | undefined) || '';
+        const callId = (tParams?.callId as string | undefined) || '';
+        const text = (
+          (typeof tParams?.text === 'string' ? tParams.text : '') ||
+          activity.content ||
+          ''
+        ).trim();
+
+        if (
+          (tId && (questionSignatures.has(tId) || questionSignatures.has(`q-${tId}`))) ||
+          (qId && questionSignatures.has(qId)) ||
+          (callId && questionSignatures.has(callId)) ||
+          (text && questionSignatures.has(`txt:${text}`))
+        ) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [unifiedActivities]);
+
   // Pre-compute elapsed duration for each activity item
   const activityDurations = useMemo(() => {
-    const list = unifiedActivities || [];
+    const list = displayActivities || [];
     const res: (number | undefined)[] = new Array(list.length);
     for (let i = 0; i < list.length; i++) {
       const act = list[i];
@@ -765,7 +869,7 @@ export default function DrawerActivityStream({
       }
     }
     return res;
-  }, [unifiedActivities, isRunning]);
+  }, [displayActivities, isRunning]);
 
   const toggleOutput = (id: string) => {
     setCollapsedOutputs((prev) => {
@@ -823,7 +927,7 @@ export default function DrawerActivityStream({
     } else {
       setShowNewButton(true);
     }
-  }, [unifiedActivities]);
+  }, [displayActivities]);
 
   // Auto-scroll down during thinking/token streaming (with user scroll-up protection)
   useEffect(() => {
@@ -841,6 +945,7 @@ export default function DrawerActivityStream({
   }, []);
 
   return (
+    <LightboxContext.Provider value={handleOpenLightbox}>
     <div className="relative flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] dark:bg-[#090a0f] overflow-hidden transition-colors">
       {/* Warning Banner on agent run error */}
       {runError && (
@@ -873,7 +978,12 @@ export default function DrawerActivityStream({
       )}
 
       {/* Main Unified Activity Feed Scrollable Area */}
-      <div ref={scrollRef} onScroll={handleFeedScroll} className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6">
+      <div
+        ref={scrollRef}
+        onScroll={handleFeedScroll}
+        onClick={handleContainerClick}
+        className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6"
+      >
         <div className="max-w-4xl mx-auto space-y-3.5">
           {activeSubagentId ? (
             /* Subagent Atomic Objective Card */
@@ -943,7 +1053,7 @@ export default function DrawerActivityStream({
         )}
 
           {/* Unified Chronological Activity Stream */}
-          {(unifiedActivities ?? []).map((activity, idx) => {
+          {(displayActivities ?? []).map((activity, idx) => {
             const key = activity?.id ?? `activity-${idx}`;
 
             // e) Interactive Question Prompt Card (Human-in-the-Loop)
@@ -973,7 +1083,7 @@ export default function DrawerActivityStream({
 
             // b) Live Streaming Thinking Block
             if (activity?.type === 'thought') {
-              const isLastActivity = idx === ((unifiedActivities?.length ?? 1) - 1);
+              const isLastActivity = idx === ((displayActivities?.length ?? 1) - 1);
               return (
                 <ThinkingCard
                   key={key}
@@ -1019,14 +1129,19 @@ export default function DrawerActivityStream({
                       {images.map((imgUrl, i) => (
                         <div
                           key={i}
-                          className="relative rounded-lg overflow-hidden border border-[#ebebeb] dark:border-[#21262d] max-w-[240px] max-h-40 bg-[#f4f4f5] dark:bg-[#161b22] shadow-xs"
+                          onClick={() => handleOpenLightbox(imgUrl, `${t('drawer.attachImage')} ${i + 1}`)}
+                          className="relative rounded-lg overflow-hidden border border-[#ebebeb] dark:border-[#21262d] max-w-[240px] max-h-40 bg-[#f4f4f5] dark:bg-[#161b22] shadow-xs group cursor-zoom-in"
                         >
                           <img
                             src={imgUrl}
                             alt={`${t('drawer.attachImage')} ${i + 1}`}
-                            className="w-full h-full max-h-40 object-cover hover:opacity-90 transition-opacity cursor-pointer"
-                            onClick={() => window.open(imgUrl, '_blank')}
+                            className="w-full h-full max-h-40 object-cover group-hover:scale-105 transition-transform duration-200 cursor-zoom-in"
                           />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none">
+                            <span className="p-1 rounded-full bg-black/60 text-white shadow-xs">
+                              <ZoomIn className="w-3.5 h-3.5" />
+                            </span>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1067,15 +1182,15 @@ export default function DrawerActivityStream({
             }
 
             // c) Assistant Response: True Final Response vs Intermediate Step Commentary
-            const isFinal = isFinalResponseItem(activity, idx, unifiedActivities ?? [], isRunning);
+            const isFinal = isFinalResponseItem(activity, idx, displayActivities ?? [], isRunning);
 
             const hasNearbyTodoWrite = (() => {
               const windowSize = 3;
               const start = Math.max(0, idx - windowSize);
-              const end = Math.min((unifiedActivities?.length ?? 0) - 1, idx + windowSize);
+              const end = Math.min((displayActivities?.length ?? 0) - 1, idx + windowSize);
               for (let i = start; i <= end; i++) {
                 if (i === idx) continue;
-                const act = unifiedActivities[i];
+                const act = displayActivities[i];
                 if (act?.type === 'tool') {
                   const tName = act.tool?.toolName || (act.tool as any)?.name || (act.tool as any)?.tool;
                   if (tName === 'todo_write') return true;
@@ -1092,11 +1207,11 @@ export default function DrawerActivityStream({
 
               const windowSize = 2;
               const start = Math.max(0, idx - windowSize);
-              const end = Math.min((unifiedActivities?.length ?? 0) - 1, idx + windowSize);
+              const end = Math.min((displayActivities?.length ?? 0) - 1, idx + windowSize);
 
               for (let i = start; i <= end; i++) {
                 if (i === idx) continue;
-                const act = unifiedActivities[i];
+                const act = displayActivities[i];
                 if (act?.type === 'tool') {
                   const tName = act.tool?.toolName || (act.tool as any)?.name || (act.tool as any)?.tool;
                   if (tName === 'advance_task' || tName === 'move_task' || tName === 'reject_task') {
@@ -1125,7 +1240,7 @@ export default function DrawerActivityStream({
                 }
               }
 
-              for (const act of unifiedActivities) {
+              for (const act of displayActivities) {
                 if (act?.type === 'tool') {
                   const tName = act.tool?.toolName || (act.tool as any)?.name || (act.tool as any)?.tool;
                   if (tName === 'advance_task' || tName === 'move_task' || tName === 'reject_task') {
@@ -1215,6 +1330,16 @@ export default function DrawerActivityStream({
           <span>{t('drawer.scrollToNew')}</span>
         </button>
       )}
+
+      {/* Obeying § 2.13 Viewport Overlay & Image Lightbox Invariants */}
+      {lightboxImage && (
+        <ImageLightboxModal
+          src={lightboxImage.src}
+          alt={lightboxImage.alt}
+          onClose={() => setLightboxImage(null)}
+        />
+      )}
     </div>
+    </LightboxContext.Provider>
   );
 }
