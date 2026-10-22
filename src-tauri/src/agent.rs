@@ -436,7 +436,7 @@ pub async fn compile_primed_system_prompt_with_tools(
         matches!(t.as_str(), "read_file" | "write_file" | "edit_file" | "execute_command" | "glob" | "grep")
     });
     let has_subagents = resolved_tools.iter().any(|t| {
-        matches!(t.as_str(), "subagent" | "subagent_bg")
+        matches!(t.as_str(), "subagent" | "subagent_bg" | "collect_subagent")
     });
 
     let mut tool_sections = Vec::new();
@@ -463,6 +463,9 @@ pub async fn compile_primed_system_prompt_with_tools(
         }
         if resolved_tools.iter().any(|t| t == "subagent_bg") {
             sub_mandate.push_str("- If you use `subagent_bg` for background execution, you MUST call `collect_subagent` with the returned `subagent_id` to wait for and consume the subagent's report before taking subsequent actions or finishing the task. Never fire-and-forget background subagents without collecting them.\n");
+        }
+        if resolved_tools.iter().any(|t| t == "collect_subagent" || t == "subagent_bg") {
+            sub_mandate.push_str("- Single-Action Collection: When invoking 'collect_subagent', you MUST invoke it as the ONLY tool call in that turn. Do NOT batch file reads or other tools alongside collect_subagent; wait to consume and analyze the received reports before planning next steps.\n");
         }
         tool_sections.push(sub_mandate.trim().to_string());
     }
@@ -2566,6 +2569,33 @@ pub async fn execute_tool(
                             continue;
                         }
                         Err(_) => {
+                            // 1. Check SUBAGENT_SESSIONS for completed report or aborted status
+                            if let Some((_, session)) = find_subagent_session(task_id, &resolved_id).await {
+                                let info = session.retry_info.lock().await;
+                                if let Some(ref rep) = info.report {
+                                    let mut sessions = SUBAGENT_SESSIONS.lock().await;
+                                    sessions.remove(&resolved_id);
+                                    collected_reports.push((resolved_id, rep.clone()));
+                                    continue;
+                                }
+                                if info.status == "aborted" || session.abort_handle.load(Ordering::SeqCst) {
+                                    let mut sessions = SUBAGENT_SESSIONS.lock().await;
+                                    sessions.remove(&resolved_id);
+                                    collected_reports.push((resolved_id, "[Субагент прерван пользователем / Subagent aborted by user]".to_string()));
+                                    continue;
+                                }
+                            }
+
+                            // 2. Check SQLite dialog_items for persisted subagent output report
+                            if let Some(db_report) = find_subagent_report_from_db(repo_root, task_id, &resolved_id)
+                                .or_else(|| find_subagent_report_from_db(repo_root, task_id, subagent_id))
+                            {
+                                let mut sessions = SUBAGENT_SESSIONS.lock().await;
+                                sessions.remove(&resolved_id);
+                                collected_reports.push((resolved_id, db_report));
+                                continue;
+                            }
+
                             let is_aborted = if let Some((_, session)) = find_subagent_session(task_id, &resolved_id).await {
                                 let info = session.retry_info.lock().await;
                                 info.status == "aborted" || session.abort_handle.load(Ordering::SeqCst)
@@ -2592,6 +2622,12 @@ pub async fn execute_tool(
                     }
                     if info.status == "aborted" || session.abort_handle.load(Ordering::SeqCst) {
                         collected_reports.push((resolved_id, "[Субагент прерван пользователем / Subagent aborted by user]".to_string()));
+                        continue;
+                    }
+                    if let Some(db_report) = find_subagent_report_from_db(repo_root, task_id, &resolved_id)
+                        .or_else(|| find_subagent_report_from_db(repo_root, task_id, subagent_id))
+                    {
+                        collected_reports.push((resolved_id, db_report));
                         continue;
                     }
                     if info.status == "error" {
@@ -4077,7 +4113,11 @@ pub fn run_inprocess_subagent(
         Working directory: {}
         Task Title: {}
         Allowed Tools: {:?}
-        Invariants: Do not attempt to move kanban stages or spawn nested subagents.         Execute the task thoroughly and verify results.         When done, output your comprehensive final report.",
+        Invariants:
+        - Do not attempt to move kanban stages or spawn nested subagents.
+        - Single-Action Collection: When invoking 'collect_subagent', you MUST invoke it as the ONLY tool call in that turn. Do NOT batch file reads or other tools alongside collect_subagent; wait to consume and analyze the received reports before planning next steps.
+        - Execute the task thoroughly and verify results.
+        - When done, output your comprehensive final report.",
         role,
         persona_content.as_deref().unwrap_or("You are a specialized autonomous subagent."),
         ctx.worktree_dir.to_string_lossy(),
@@ -5844,10 +5884,32 @@ pub fn reconstruct_messages_from_dialog(
             "tool" => {
                 if let Some(ref tool_val) = item.tool {
                     let call_id = tool_val.get("id").and_then(|v| v.as_str()).unwrap_or(&item.id);
-                    let name = tool_val.get("name").and_then(|v| v.as_str()).unwrap_or("unknown_tool");
-                    let args = tool_val.get("arguments").and_then(|v| v.as_str()).unwrap_or("{}");
+
+                    // 1. Имя инструмента: проверяем 'name', затем 'toolName', затем алиасы
+                    let name = tool_val
+                        .get("name")
+                        .or_else(|| tool_val.get("toolName"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown_tool");
+
+                    // 2. Аргументы: поддерживаем и строку 'arguments', и объект 'params'
+                    let args = if let Some(args_str) = tool_val.get("arguments").and_then(|v| v.as_str()) {
+                        args_str.to_string()
+                    } else if let Some(params_val) = tool_val.get("params") {
+                        if params_val.is_string() {
+                            params_val.as_str().unwrap().to_string()
+                        } else {
+                            serde_json::to_string(params_val).unwrap_or_else(|_| "{}".to_string())
+                        }
+                    } else {
+                        "{}".to_string()
+                    };
+
+                    // 3. Результат: проверяем 'result', 'stdout', 'output' или item.content
                     let result = tool_val
                         .get("result")
+                        .or_else(|| tool_val.get("stdout"))
+                        .or_else(|| tool_val.get("output"))
                         .and_then(|v| v.as_str())
                         .or(item.content.as_deref())
                         .unwrap_or("");
@@ -5857,7 +5919,7 @@ pub fn reconstruct_messages_from_dialog(
                         call_type: "function".to_string(),
                         function: crate::llm::FunctionCall {
                             name: name.to_string(),
-                            arguments: args.to_string(),
+                            arguments: args,
                         },
                     };
                     messages.push(ChatMessage::assistant(None, Some(vec![tc])));
