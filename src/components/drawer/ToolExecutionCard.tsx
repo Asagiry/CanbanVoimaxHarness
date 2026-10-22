@@ -19,6 +19,7 @@ import {
   Layers,
   Zap,
   Users,
+  FolderDown,
 } from 'lucide-react';
 
 interface ToolExecutionCardProps {
@@ -619,9 +620,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
       >
         <div className="flex items-center justify-between gap-2.5">
           <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
-            <span className="text-[#171717] dark:text-[#58a6ff] shrink-0 font-mono text-sm leading-none select-none">
-              ▼
-            </span>
+            <FolderDown className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0 select-none" />
 
             <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase border border-sky-200 dark:border-sky-800/60 bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 shrink-0">
               СБОР
