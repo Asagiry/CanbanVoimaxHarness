@@ -133,7 +133,7 @@ interface CortexState {
   closeEditor: () => void;
 }
 
-export type CortexHookMoment = 'on_enter' | 'on_finish';
+export type CortexHookMoment = 'on_enter' | 'on_leave' | 'on_finish';
 export type CortexHookExt = 'bat' | 'ps1' | 'py' | 'sh';
 
 // Персона из бэкенда (`list_agent_personas` → `[{role, hasPrompt}]`,
@@ -567,9 +567,9 @@ export const useCortexStore = create<CortexState>((set, get) => ({
       const settingsId = `${col.id}-settings`;
       const prevPersona = prevFileById.get(personaId);
       const prevSettings = prevFileById.get(settingsId);
-      // Хуки колонки (on_enter/on_finish) как узлы типа hook
+      // Хуки колонки (on_enter/on_leave) как узлы типа hook
       const hookMoments = Object.entries(col.hooks ?? {})
-        .filter(([moment]) => moment === 'on_enter' || moment === 'on_finish')
+        .filter(([moment]) => moment === 'on_enter' || moment === 'on_leave' || moment === 'on_finish' || moment === 'on_exit')
         .sort(([a], [b]) => a.localeCompare(b));
       const hookFiles = hookMoments.map(([moment, target]) => {
         const hookId = `${col.id}-hook-${moment}`;
@@ -1266,8 +1266,8 @@ export const useCortexStore = create<CortexState>((set, get) => ({
       // Хук: имя файла кодирует момент срабатывания.
       const moment: CortexHookMoment = opts?.hookMoment ?? 'on_enter';
       const ext: CortexHookExt = opts?.hookExt ?? 'bat';
-      if (moment !== 'on_enter' && moment !== 'on_finish') {
-        throw new Error('Момент хука: on_enter или on_finish');
+      if (moment !== 'on_enter' && moment !== 'on_leave' && moment !== 'on_finish') {
+        throw new Error('Момент хука: on_enter или on_leave');
       }
       if (ext !== 'bat' && ext !== 'ps1' && ext !== 'py' && ext !== 'sh') {
         throw new Error('Расширение хука: .bat, .ps1, .py или .sh');

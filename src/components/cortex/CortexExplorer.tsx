@@ -39,6 +39,7 @@ import type { CortexAgentFile, CortexAgentStage } from '../../types';
 
 function hookMomentOf(fileName: string): CortexHookMoment | null {
   if (fileName.startsWith('on_enter')) return 'on_enter';
+  if (fileName.startsWith('on_leave')) return 'on_leave';
   if (fileName.startsWith('on_finish')) return 'on_finish';
   return null;
 }
@@ -1409,11 +1410,11 @@ function NewCortexFileForm({
               <input
                 type="radio"
                 name={`cortex-moment-${stage.stageId}`}
-                checked={hookMoment === 'on_finish'}
-                onChange={() => setHookMoment('on_finish')}
+                checked={hookMoment === 'on_leave'}
+                onChange={() => setHookMoment('on_leave')}
                 className="accent-[#171717] dark:accent-[#f0f6fc]"
               />
-              <span>on_finish</span>
+              <span>on_leave</span>
             </label>
           </div>
           <label className="flex items-center gap-1.5 text-[11px] font-mono text-[#4d4d4d] dark:text-[#c9d1d9]">
