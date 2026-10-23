@@ -1189,13 +1189,21 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
     if (!feed || feed.length === 0) return;
 
     // Resolve target SQLite taskId:
-    // If this taskId is an active subagent or matches a known subagent, ensure it's saved under {parent_id}:sub:{subagent_id}
+    // If this taskId is a board task, targetDbTaskId is ALWAYS taskId (never save under {parent_id}:sub:{subagent_id})!
     let targetDbTaskId = taskId;
-    const parentTaskId = state.activeTaskId;
-    if (parentTaskId && !taskId.includes(':sub:') && !taskId.startsWith('copilot:')) {
-      const resolvedSub = state.toolIdToSubagentId[taskId] || (state.activeSubagentId === taskId ? taskId : null);
-      if (resolvedSub) {
-        targetDbTaskId = resolvedSub.includes(':sub:') ? resolvedSub : `${parentTaskId}:sub:${resolvedSub}`;
+    const isBoardTask = useBoardStore.getState().tasks.some((t) => t.id === taskId);
+    if (!isBoardTask) {
+      const parentTaskId = state.activeTaskId;
+      if (parentTaskId && !taskId.includes(':sub:') && !taskId.startsWith('copilot:')) {
+        const resolvedSub = state.toolIdToSubagentId[taskId] || (state.activeSubagentId === taskId ? taskId : null);
+        if (resolvedSub) {
+          const isResolvedBoardTask = useBoardStore.getState().tasks.some((t) => t.id === resolvedSub);
+          if (!isResolvedBoardTask) {
+            targetDbTaskId = resolvedSub.includes(':sub:') ? resolvedSub : `${parentTaskId}:sub:${resolvedSub}`;
+          } else {
+            targetDbTaskId = resolvedSub;
+          }
+        }
       }
     }
 

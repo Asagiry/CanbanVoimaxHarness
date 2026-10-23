@@ -3,15 +3,14 @@ import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import type { SubagentInfo, ToolExecution, KanbanTask } from '../../types';
-import AgentIcon from '../common/AgentIcon';
 import {
-  getDeterministicAgentIcon,
   getRoleBadgeStyle,
   getRoleActiveCardStyle,
 } from '../../lib/agentPalette';
 import {
   Bot,
   Clock,
+  GitBranch,
   Layers,
   PanelLeftClose,
   PanelLeftOpen,
@@ -172,27 +171,25 @@ function getSubagentsForTask(
   }
 
   // 3. Subtasks on the Kanban board
-  const childTasks = (boardTasks || []).filter((t) => t.parentId === taskId);
+  const childTasks = (boardTasks || []).filter((t) => t.parentId === taskId || (t.id.startsWith(taskId + '.') && !t.parentId));
   for (const child of childTasks) {
-    if (!map.has(child.id)) {
-      const childCreated = (child as any).createdAt ? Number((child as any).createdAt) : undefined;
-      const isReviewSubtask = child.title.toLowerCase().includes('ревью') || child.title.toLowerCase().includes('review');
-      const childStageId = (child as any).stageId || child.columnId;
-      const col = (cols || []).find((c) => c.id === childStageId);
-      const resolvedRole = isReviewSubtask ? 'reviewer' : (col?.persona || 'developer');
-      map.set(child.id, {
-        id: child.id,
-        parentTaskId: taskId,
-        title: child.title,
-        role: resolvedRole,
-        prompt: child.description || '',
-        status: child.status === 'running' ? 'running' : child.status === 'done' ? 'finished' : 'finished',
-        createdAt: childCreated,
-        durationMs: child.totalElapsed ? child.totalElapsed * 1000 : undefined,
-        stepsCount: (child.todos || []).length,
-        isBoardSubtask: true,
-      });
-    }
+    const childCreated = (child as any).createdAt ? Number((child as any).createdAt) : undefined;
+    const isReviewSubtask = child.title.toLowerCase().includes('ревью') || child.title.toLowerCase().includes('review');
+    const childStageId = (child as any).stageId || child.columnId;
+    const col = (cols || []).find((c) => c.id === childStageId);
+    const resolvedRole = isReviewSubtask ? 'reviewer' : (col?.persona || 'developer');
+    map.set(child.id, {
+      id: child.id,
+      parentTaskId: taskId,
+      title: child.title,
+      role: resolvedRole,
+      prompt: child.description || '',
+      status: child.status === 'running' ? 'running' : child.status === 'done' ? 'finished' : 'finished',
+      createdAt: childCreated,
+      durationMs: child.totalElapsed ? child.totalElapsed * 1000 : undefined,
+      stepsCount: (child.todos || []).length,
+      isBoardSubtask: true,
+    });
   }
 
   const rawList = Array.from(map.values());
@@ -307,6 +304,7 @@ export default function SubagentsSidebar({
     activeSubagentId,
     openSubagent,
     closeSubagent,
+    openDrawer,
     toolExecutions,
     activityFeed,
     toolIdToSubagentId,
@@ -406,6 +404,14 @@ export default function SubagentsSidebar({
       };
     });
   }, [taskId, storeSubagents, toolExecutions, toolIdToSubagentId, activityFeed, boardTasks, columns]);
+
+  const boardSubtasks = useMemo(() => {
+    return allSubagents.filter((sub) => Boolean(sub.isBoardSubtask || boardTasks.some((t) => t.id === sub.id)));
+  }, [allSubagents, boardTasks]);
+
+  const inProcessSubagents = useMemo(() => {
+    return allSubagents.filter((sub) => !sub.isBoardSubtask && !boardTasks.some((t) => t.id === sub.id));
+  }, [allSubagents, boardTasks]);
 
   const hasRunningSubagents = allSubagents.some((s) => s.status === 'running');
   const [now, setNow] = useState(() => Date.now());
@@ -508,214 +514,337 @@ export default function SubagentsSidebar({
         </div>
 
         {/* Subagents List */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
-        {allSubagents.length === 0 ? (
-          <div className="flex-1" />
-        ) : (
-          allSubagents.map((sub, idx) => {
-            const isActive =
-              activeSubagentId === sub.id ||
-              (sub.toolCallId && activeSubagentId === sub.toolCallId) ||
-              (toolIdToSubagentId[activeSubagentId || ''] === sub.id);
-            const matchedPersona = agentPersonas.find(
-              (p) => p.role.toLowerCase() === (sub.role || '').toLowerCase()
-            );
-            const personaIcon = matchedPersona?.icon || (matchedPersona ? 'Bot' : getDeterministicAgentIcon(sub.role));
-            const roleBadgeStyle = getRoleBadgeStyle(sub.role, matchedPersona?.color);
-            const activeCardStyle = getRoleActiveCardStyle(sub.role, matchedPersona?.color);
-            const subIndex = orderMap.get(sub.id) ?? (sub.toolCallId ? orderMap.get(sub.toolCallId) : null) ?? (idx + 1);
-            const isBoardSubtask = Boolean(sub.isBoardSubtask || boardTasks.some((t) => t.id === sub.id));
-            const roleDisplay = formatSubagentRoleDisplay(sub.role, subIndex, isBoardSubtask, language);
-
-            return (
-              <div
-                key={sub.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => {
-                  if (isActive) {
-                    closeSubagent();
-                  } else {
-                    openSubagent(sub.id, sub.title, sub.role, sub.prompt);
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    if (isActive) closeSubagent();
-                    else openSubagent(sub.id, sub.title, sub.role, sub.prompt);
-                  }
-                }}
-                className={`group relative rounded-lg border p-2.5 transition-all duration-150 cursor-pointer select-none text-left ${
-                  isActive
-                    ? 'shadow-xs'
-                    : 'bg-white dark:bg-[#0d1117] border-[#ebebeb] dark:border-[#21262d] hover:bg-[#fafafa] dark:hover:bg-[#161b22] hover:border-[#d4d4d8] dark:hover:border-[#30363d]'
-                }`}
-                style={isActive ? activeCardStyle : undefined}
-              >
-                {/* Card Top Row: Role Icon + Role Badge + Status */}
-                <div className="flex items-center justify-between gap-1.5 mb-1.5">
-                  <div className="flex items-center space-x-1.5 min-w-0 flex-wrap gap-y-1">
-                    {sub.isBg ? (
-                      <div className="relative shrink-0 flex items-center justify-center">
-                        <Layers className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
-                        <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-purple-500 ring-1 ring-white dark:ring-[#0d1117]" />
-                      </div>
-                    ) : isBoardSubtask ? (
-                      <AgentIcon name={personaIcon} className="h-3.5 w-3.5 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
-                    ) : (
-                      <div className="relative shrink-0 flex items-center justify-center">
-                        <Zap className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 fill-sky-500/20" />
-                        <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-sky-500 ring-1 ring-white dark:ring-[#0d1117]" />
-                      </div>
-                    )}
-                    <span
-                      style={roleBadgeStyle}
-                      className="px-2 py-0.5 rounded text-[11px] font-mono font-bold tracking-wider uppercase border shrink-0 select-none"
-                    >
-                      {roleDisplay}
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
+          {allSubagents.length === 0 ? (
+            <div className="flex-1" />
+          ) : (
+            <>
+              {/* 1. Board Subtasks Section */}
+              {boardSubtasks.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between px-1 pt-0.5 pb-0.5">
+                    <span className="text-[11px] font-mono uppercase tracking-wider text-[#71717a] dark:text-[#8b949e] font-semibold">
+                      {t('subagents.boardSubtasks')}
+                    </span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-[#e4e4e7] dark:bg-[#21262d] text-[#52525b] dark:text-[#8b949e] font-medium">
+                      {boardSubtasks.length}
                     </span>
                   </div>
+                  {boardSubtasks.map((sub) => {
+                    const matchedPersona = agentPersonas.find(
+                      (p) => p.role.toLowerCase() === (sub.role || '').toLowerCase()
+                    );
+                    const roleBadgeStyle = getRoleBadgeStyle(sub.role, matchedPersona?.color);
+                    const stageBadge = (sub.role || 'developer').toUpperCase();
 
-                  {/* Status Indicator & Granular Stop Button */}
-                  <div className="shrink-0 flex items-center space-x-1">
-                    {sub.status === 'running' ? (
-                      <>
-                        <span className="flex items-center justify-center h-5 w-5" title="Выполняется">
-                          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0 ring-2 ring-emerald-500/20" />
-                        </span>
-                        <button
-                          type="button"
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            try {
-                              const { invoke } = await import('@tauri-apps/api/core');
-                              await invoke('abort_agent', { taskId: sub.id });
-                              useDrawerStore.getState().setActiveAgentTask(sub.id, false);
-                              useDrawerStore.getState().updateSubagentStatus(sub.id, 'stopped', 'Прервано пользователем');
-                              const boardTask = useBoardStore.getState().tasks.find((t) => t.id === sub.id);
-                              if (boardTask) {
-                                useBoardStore.getState().updateTask(sub.id, { status: 'paused', isTimerRunning: false });
-                              }
-                              const tools = useDrawerStore.getState().toolExecutions[sub.id] || [];
-                              for (const t of tools) {
-                                if (t.status === 'running') {
-                                  useDrawerStore.getState().updateToolExecution(sub.id, t.id, {
-                                    status: 'failed',
-                                    stderr: 'Прервано пользователем',
-                                  });
-                                }
-                              }
-                            } catch (err) {
-                              console.warn('Failed to abort subagent', sub.id, err);
-                            }
-                          }}
-                          className="flex items-center justify-center h-5 w-5 rounded text-[#dc2626] dark:text-[#ff7b72] hover:bg-[#fef2f2] dark:hover:bg-[#3b1219] border border-[#fecaca] dark:border-[#da3633] transition cursor-pointer shrink-0"
-                          aria-label="Остановить субагента"
-                        >
-                          <Square className="h-2.5 w-2.5 fill-current shrink-0" />
-                        </button>
-                      </>
-                    ) : sub.status === 'error' || sub.status === 'stopped' ? (
-                      <span className="flex items-center justify-center h-5 w-5" title={sub.status === 'stopped' ? 'Остановлен' : 'Ошибка'}>
-                        <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
-                      </span>
-                    ) : (
-                      <span className="flex items-center justify-center h-5 w-5" title="Завершено">
-                        <span className="h-2 w-2 rounded-full bg-[#a1a1aa] dark:bg-[#52525b] shrink-0" />
-                      </span>
-                    )}
+                    return (
+                      <div
+                        key={sub.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => {
+                          closeSubagent();
+                          openDrawer(sub.id);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            closeSubagent();
+                            openDrawer(sub.id);
+                          }
+                        }}
+                        className="group relative rounded-lg border p-2.5 transition-all duration-150 cursor-pointer select-none text-left bg-white dark:bg-[#0d1117] border-[#ebebeb] dark:border-[#21262d] hover:bg-[#fafafa] dark:hover:bg-[#161b22] hover:border-[#d4d4d8] dark:hover:border-[#30363d]"
+                      >
+                        {/* Top row: GitBranch + Stage Badge + Task ID + Status */}
+                        <div className="flex items-center justify-between gap-1.5 mb-1.5">
+                          <div className="flex items-center space-x-1.5 min-w-0 flex-wrap gap-y-1">
+                            <GitBranch className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400 shrink-0" />
+                            <span
+                              style={roleBadgeStyle}
+                              className="px-2 py-0.5 rounded text-[11px] font-mono font-bold tracking-wider uppercase border shrink-0 select-none"
+                            >
+                              {stageBadge}
+                            </span>
+                            <span className="font-mono text-[11px] font-semibold text-[#52525b] dark:text-[#8b949e]">
+                              {sub.id}
+                            </span>
+                          </div>
+
+                          <div className="shrink-0 flex items-center space-x-1">
+                            {sub.status === 'running' ? (
+                              <>
+                                <span className="flex items-center justify-center h-5 w-5" title={language === 'ru' ? 'Выполняется' : 'Running'}>
+                                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0 ring-2 ring-emerald-500/20" />
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try {
+                                      const { invoke } = await import('@tauri-apps/api/core');
+                                      await invoke('abort_agent', { taskId: sub.id });
+                                      useDrawerStore.getState().setActiveAgentTask(sub.id, false);
+                                      useDrawerStore.getState().updateSubagentStatus(sub.id, 'stopped', 'Прервано пользователем');
+                                      const boardTask = useBoardStore.getState().tasks.find((t) => t.id === sub.id);
+                                      if (boardTask) {
+                                        useBoardStore.getState().updateTask(sub.id, { status: 'paused', isTimerRunning: false });
+                                      }
+                                    } catch (err) {
+                                      console.warn('Failed to abort board subtask', sub.id, err);
+                                    }
+                                  }}
+                                  className="flex items-center justify-center h-5 w-5 rounded text-[#dc2626] dark:text-[#ff7b72] hover:bg-[#fef2f2] dark:hover:bg-[#3b1219] border border-[#fecaca] dark:border-[#da3633] transition cursor-pointer shrink-0"
+                                  aria-label={t('subagents.stop')}
+                                >
+                                  <Square className="h-2.5 w-2.5 fill-current shrink-0" />
+                                </button>
+                              </>
+                            ) : sub.status === 'error' || sub.status === 'stopped' ? (
+                              <span className="flex items-center justify-center h-5 w-5" title={sub.status === 'stopped' ? 'Остановлен' : 'Ошибка'}>
+                                <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
+                              </span>
+                            ) : (
+                              <span className="flex items-center justify-center h-5 w-5" title={language === 'ru' ? 'Завершено' : 'Completed'}>
+                                <span className="h-2 w-2 rounded-full bg-[#a1a1aa] dark:bg-[#52525b] shrink-0" />
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Title */}
+                        <div className="font-sans font-medium text-xs text-[#171717] dark:text-[#f0f6fc] group-hover:text-black dark:group-hover:text-white transition-colors line-clamp-2 leading-snug mb-2">
+                          {sub.title}
+                        </div>
+
+                        {/* Footer: Duration + Steps */}
+                        <div className="flex items-center justify-between text-[11px] font-mono text-[#71717a] dark:text-[#8b949e] pt-1.5 border-t border-[#f4f4f5] dark:border-[#21262d]/60">
+                          <div className="flex items-center space-x-2">
+                            <div className="flex items-center space-x-1" title={language === 'ru' ? 'Время выполнения' : 'Execution duration'}>
+                              <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
+                              <span className="tabular-nums">
+                                {formatDuration(sub.durationMs, sub.status === 'running')}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-1" title={language === 'ru' ? 'Шаги подзадачи' : 'Subtask steps'}>
+                              <Layers className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
+                              <span className="tabular-nums">{formatSteps(sub.stepsCount || 0, language)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* 2. In-Process Subagents Section */}
+              {inProcessSubagents.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between px-1 pt-2 pb-0.5">
+                    <span className="text-[11px] font-mono uppercase tracking-wider text-[#71717a] dark:text-[#8b949e] font-semibold">
+                      {t('subagents.inProcess')}
+                    </span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-[#e4e4e7] dark:bg-[#21262d] text-[#52525b] dark:text-[#8b949e] font-medium">
+                      {inProcessSubagents.length}
+                    </span>
                   </div>
-                </div>
+                  {inProcessSubagents.map((sub, idx) => {
+                    const isActive =
+                      activeSubagentId === sub.id ||
+                      (sub.toolCallId && activeSubagentId === sub.toolCallId) ||
+                      (toolIdToSubagentId[activeSubagentId || ''] === sub.id);
+                    const matchedPersona = agentPersonas.find(
+                      (p) => p.role.toLowerCase() === (sub.role || '').toLowerCase()
+                    );
+                    const roleBadgeStyle = getRoleBadgeStyle(sub.role, matchedPersona?.color);
+                    const activeCardStyle = getRoleActiveCardStyle(sub.role, matchedPersona?.color);
+                    const subIndex = orderMap.get(sub.id) ?? (sub.toolCallId ? orderMap.get(sub.toolCallId) : null) ?? (idx + 1);
+                    const roleDisplay = formatSubagentRoleDisplay(sub.role, subIndex, false, language);
 
-                {/* Subagent Title */}
-                <div className="font-sans font-medium text-xs text-[#171717] dark:text-[#f0f6fc] group-hover:text-black dark:group-hover:text-white transition-colors line-clamp-2 leading-snug mb-2">
-                  {formatSubagentDisplayTitle(sub.title, language)}
-                </div>
+                    return (
+                      <div
+                        key={sub.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => {
+                          if (isActive) {
+                            closeSubagent();
+                          } else {
+                            openSubagent(sub.id, sub.title, sub.role, sub.prompt);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            if (isActive) closeSubagent();
+                            else openSubagent(sub.id, sub.title, sub.role, sub.prompt);
+                          }
+                        }}
+                        className={`group relative rounded-lg border p-2.5 transition-all duration-150 cursor-pointer select-none text-left ${
+                          isActive
+                            ? 'shadow-xs'
+                            : 'bg-white dark:bg-[#0d1117] border-[#ebebeb] dark:border-[#21262d] hover:bg-[#fafafa] dark:hover:bg-[#161b22] hover:border-[#d4d4d8] dark:hover:border-[#30363d]'
+                        }`}
+                        style={isActive ? activeCardStyle : undefined}
+                      >
+                        {/* Card Top Row: Role Icon + Role Badge + Status */}
+                        <div className="flex items-center justify-between gap-1.5 mb-1.5">
+                          <div className="flex items-center space-x-1.5 min-w-0 flex-wrap gap-y-1">
+                            {sub.isBg ? (
+                              <div className="relative shrink-0 flex items-center justify-center">
+                                <Layers className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+                                <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-purple-500 ring-1 ring-white dark:ring-[#0d1117]" />
+                              </div>
+                            ) : (
+                              <div className="relative shrink-0 flex items-center justify-center">
+                                <Zap className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 fill-sky-500/20" />
+                                <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-sky-500 ring-1 ring-white dark:ring-[#0d1117]" />
+                              </div>
+                            )}
+                            <span
+                              style={roleBadgeStyle}
+                              className="px-2 py-0.5 rounded text-[11px] font-mono font-bold tracking-wider uppercase border shrink-0 select-none"
+                            >
+                              {roleDisplay}
+                            </span>
+                          </div>
 
-                {/* Card Footer: Metrics (Duration + Steps + Execution Mode) */}
-                <div className="flex items-center justify-between text-[11px] font-mono text-[#71717a] dark:text-[#8b949e] pt-1.5 border-t border-[#f4f4f5] dark:border-[#21262d]/60">
-                  <div className="flex items-center space-x-2">
-                    <div
-                      className="flex items-center space-x-1"
-                      title={language === 'ru' ? 'Время выполнения' : 'Execution duration'}
-                    >
-                      <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
-                      <span className="tabular-nums">
-                        {(() => {
-                          const isSubRunning = sub.status === 'running';
-                          if (isSubRunning) {
-                            // Real elapsed from sub.createdAt to now for running subagents
-                            const liveMs = sub.createdAt && sub.createdAt > 0
-                              ? Math.max(0, now - sub.createdAt)
-                              : 0;
-                            return formatDuration(liveMs, true);
-                          }
-                          // For completed subagents: real durationMs or finish - start difference
-                          let finalMs = sub.durationMs;
-                          // Guard against 181ms spawn duration on bg subagents
-                          if (sub.isBg && finalMs !== undefined && finalMs < 1000 && sub.createdAt) {
-                            if (sub.finishedAt) {
-                              finalMs = Math.max(0, sub.finishedAt - sub.createdAt);
-                            } else {
-                              finalMs = undefined;
-                            }
-                          }
-                          if (!finalMs && sub.createdAt && sub.finishedAt) {
-                            finalMs = Math.max(0, sub.finishedAt - sub.createdAt);
-                          }
-                          if (!finalMs && sub.createdAt) {
-                            const feed = activityFeed[sub.id] || (sub.toolCallId ? activityFeed[sub.toolCallId] : []) || [];
-                            let feedDuration = 0;
-                            for (const it of feed) {
-                              if (it.durationMs && it.durationMs > 0) feedDuration += it.durationMs;
-                            }
-                            if (feedDuration > 0) {
-                              finalMs = feedDuration;
-                            }
-                          }
-                          return formatDuration(finalMs, false);
-                        })()}
-                      </span>
-                    </div>
-                    <div
-                      className="flex items-center space-x-1"
-                      title={language === 'ru' ? 'Шаги субагента' : 'Subagent steps'}
-                    >
-                      <Layers className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
-                      <span className="tabular-nums">{formatSteps(sub.stepsCount || 0, language)}</span>
-                    </div>
-                  </div>
+                          {/* Status Indicator & Granular Stop Button */}
+                          <div className="shrink-0 flex items-center space-x-1">
+                            {sub.status === 'running' ? (
+                              <>
+                                <span className="flex items-center justify-center h-5 w-5" title={language === 'ru' ? 'Выполняется' : 'Running'}>
+                                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0 ring-2 ring-emerald-500/20" />
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try {
+                                      const { invoke } = await import('@tauri-apps/api/core');
+                                      await invoke('abort_agent', { taskId: sub.id });
+                                      useDrawerStore.getState().setActiveAgentTask(sub.id, false);
+                                      useDrawerStore.getState().updateSubagentStatus(sub.id, 'stopped', 'Прервано пользователем');
+                                      const tools = useDrawerStore.getState().toolExecutions[sub.id] || [];
+                                      for (const t of tools) {
+                                        if (t.status === 'running') {
+                                          useDrawerStore.getState().updateToolExecution(sub.id, t.id, {
+                                            status: 'failed',
+                                            stderr: 'Прервано пользователем',
+                                          });
+                                        }
+                                      }
+                                    } catch (err) {
+                                      console.warn('Failed to abort subagent', sub.id, err);
+                                    }
+                                  }}
+                                  className="flex items-center justify-center h-5 w-5 rounded text-[#dc2626] dark:text-[#ff7b72] hover:bg-[#fef2f2] dark:hover:bg-[#3b1219] border border-[#fecaca] dark:border-[#da3633] transition cursor-pointer shrink-0"
+                                  aria-label={t('subagents.stop')}
+                                >
+                                  <Square className="h-2.5 w-2.5 fill-current shrink-0" />
+                                </button>
+                              </>
+                            ) : sub.status === 'error' || sub.status === 'stopped' ? (
+                              <span className="flex items-center justify-center h-5 w-5" title={sub.status === 'stopped' ? 'Остановлен' : 'Ошибка'}>
+                                <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
+                              </span>
+                            ) : (
+                              <span className="flex items-center justify-center h-5 w-5" title={language === 'ru' ? 'Завершено' : 'Completed'}>
+                                <span className="h-2 w-2 rounded-full bg-[#a1a1aa] dark:bg-[#52525b] shrink-0" />
+                              </span>
+                            )}
+                          </div>
+                        </div>
 
-                  {/* Mode Label & Tooltip */}
-                  {!isBoardSubtask && (
-                    <div
-                      className="flex items-center space-x-1 text-[10px] shrink-0"
-                      title={
-                        sub.isBg
-                          ? (language === 'ru' ? 'Фоновый субагент (параллельный поток)' : 'Background subagent (parallel flow)')
-                          : (language === 'ru' ? 'Синхронный вызов (прямой вызов)' : 'Synchronous call (direct call)')
-                      }
-                    >
-                      {sub.isBg ? (
-                        <span className="inline-flex items-center gap-1 font-sans font-medium text-purple-600 dark:text-purple-400">
-                          <span className="h-1.5 w-1.5 rounded-full bg-purple-500 shrink-0" />
-                          <span>{language === 'ru' ? 'Фоновый субагент' : 'Background agent'}</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 font-sans font-medium text-sky-600 dark:text-sky-400">
-                          <span className="h-1.5 w-1.5 rounded-full bg-sky-500 shrink-0" />
-                          <span>{language === 'ru' ? 'Синхронный вызов' : 'Synchronous call'}</span>
-                        </span>
-                      )}
-                    </div>
-                  )}
+                        {/* Subagent Title */}
+                        <div className="font-sans font-medium text-xs text-[#171717] dark:text-[#f0f6fc] group-hover:text-black dark:group-hover:text-white transition-colors line-clamp-2 leading-snug mb-2">
+                          {formatSubagentDisplayTitle(sub.title, language)}
+                        </div>
+
+                        {/* Card Footer: Metrics (Duration + Steps + Execution Mode) */}
+                        <div className="flex items-center justify-between text-[11px] font-mono text-[#71717a] dark:text-[#8b949e] pt-1.5 border-t border-[#f4f4f5] dark:border-[#21262d]/60">
+                          <div className="flex items-center space-x-2">
+                            <div
+                              className="flex items-center space-x-1"
+                              title={language === 'ru' ? 'Время выполнения' : 'Execution duration'}
+                            >
+                              <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
+                              <span className="tabular-nums">
+                                {(() => {
+                                  const isSubRunning = sub.status === 'running';
+                                  if (isSubRunning) {
+                                    // Real elapsed from sub.createdAt to now for running subagents
+                                    const liveMs = sub.createdAt && sub.createdAt > 0
+                                      ? Math.max(0, now - sub.createdAt)
+                                      : 0;
+                                    return formatDuration(liveMs, true);
+                                  }
+                                  // For completed subagents: real durationMs or finish - start difference
+                                  let finalMs = sub.durationMs;
+                                  // Guard against 181ms spawn duration on bg subagents
+                                  if (sub.isBg && finalMs !== undefined && finalMs < 1000 && sub.createdAt) {
+                                    if (sub.finishedAt) {
+                                      finalMs = Math.max(0, sub.finishedAt - sub.createdAt);
+                                    } else {
+                                      finalMs = undefined;
+                                    }
+                                  }
+                                  if (!finalMs && sub.createdAt && sub.finishedAt) {
+                                    finalMs = Math.max(0, sub.finishedAt - sub.createdAt);
+                                  }
+                                  if (!finalMs && sub.createdAt) {
+                                    const feed = activityFeed[sub.id] || (sub.toolCallId ? activityFeed[sub.toolCallId] : []) || [];
+                                    let feedDuration = 0;
+                                    for (const it of feed) {
+                                      if (it.durationMs && it.durationMs > 0) feedDuration += it.durationMs;
+                                    }
+                                    if (feedDuration > 0) {
+                                      finalMs = feedDuration;
+                                    }
+                                  }
+                                  return formatDuration(finalMs, false);
+                                })()}
+                              </span>
+                            </div>
+                            <div
+                              className="flex items-center space-x-1"
+                              title={language === 'ru' ? 'Шаги субагента' : 'Subagent steps'}
+                            >
+                              <Layers className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
+                              <span className="tabular-nums">{formatSteps(sub.stepsCount || 0, language)}</span>
+                            </div>
+                          </div>
+
+                          {/* Mode Label & Tooltip */}
+                          <div
+                            className="flex items-center space-x-1 text-[10px] shrink-0"
+                            title={
+                              sub.isBg
+                                ? (language === 'ru' ? 'Фоновый субагент (параллельный поток)' : 'Background subagent (parallel flow)')
+                                : (language === 'ru' ? 'Синхронный вызов (прямой вызов)' : 'Synchronous call (direct call)')
+                            }
+                          >
+                            {sub.isBg ? (
+                              <span className="inline-flex items-center gap-1 font-sans font-medium text-purple-600 dark:text-purple-400">
+                                <span className="h-1.5 w-1.5 rounded-full bg-purple-500 shrink-0" />
+                                <span>{language === 'ru' ? 'Фоновый субагент' : 'Background agent'}</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 font-sans font-medium text-sky-600 dark:text-sky-400">
+                                <span className="h-1.5 w-1.5 rounded-full bg-sky-500 shrink-0" />
+                                <span>{language === 'ru' ? 'Синхронный вызов' : 'Synchronous call'}</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
-            );
-          })
-        )}
-      </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </aside>
   );

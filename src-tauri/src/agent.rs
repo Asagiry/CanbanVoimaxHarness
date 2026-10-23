@@ -6059,6 +6059,14 @@ pub fn reconstruct_messages_from_dialog(
 
     for item in items {
         match item.item_type.as_str() {
+            "summary" => {
+                if let Some(ref c) = item.content {
+                    let trimmed = c.trim();
+                    if !trimmed.is_empty() {
+                        messages.push(ChatMessage::user(trimmed));
+                    }
+                }
+            }
             "steer" => {
                 if let Some(ref c) = item.content {
                     let trimmed = c.trim();
