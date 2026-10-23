@@ -1,4 +1,4 @@
-# Guide: Agent Personas and Modular Rules
+# Guide: Agent Personas and Modular Rules (agents.md)
 
 Authoritative rules for `.cvh/agents/<role>/`.
 
@@ -6,17 +6,14 @@ Authoritative rules for `.cvh/agents/<role>/`.
 All agent definitions reside in dedicated directories under `.cvh/agents/<role>/`:
 ```text
 .cvh/agents/<role>/
-├── persona.md       # Primary persona prompt with YAML frontmatter (or agent.md)
-├── setting          # JSON settings ({ "model": "gemini-3.8-flash-high", "context_window": 128000, "temperature": 0.2, "max_tokens": 8192 })
-└── rules/           # Modular rule files loaded during zero-turn priming
-    ├── rule1.md
-    └── ...
+├── persona.md       # Primary persona prompt with YAML frontmatter
+└── setting          # JSON settings ({ "model": "gemini-3.8-flash-high", "temperature": 0.2, ... })
 ```
 Flat persona files (`.cvh/agents/<role>.md`) are deprecated and ignored.
 
 ### 1.1 Invariant: 1 Persona = Exactly 1 Directory
 - **1 Persona = 1 Directory**: Exactly one directory `.cvh/agents/<persona>/` per persona role.
-- **No Column ID Duplication**: Never create duplicate persona directories based on column IDs. For example, if a column has `id: "review"` and `persona: "reviewer"`, create strictly `.cvh/agents/reviewer/`, never `.cvh/agents/review/`.
+- **No Column ID Duplication**: Never create duplicate persona directories based on column IDs. For example, if a column has `id: "plan"` and `persona: "planner"`, create strictly `.cvh/agents/planner/`, never `.cvh/agents/plan/`.
 - **Reusable Personas**: Multiple pipeline columns across different boards can reference the same `persona` without directory duplication.
 
 ### 1.2 Ironclad 1:1 Invariants
@@ -24,18 +21,16 @@ Flat persona files (`.cvh/agents/<role>.md`) are deprecated and ignored.
    `column.persona` in `.cvh/boards.json` and `.cvh/pipeline.json` MUST STRICTLY MATCH:
    - The directory name `.cvh/agents/<role>/`
    - The frontmatter `name: <role>` inside `.cvh/agents/<role>/persona.md`
-   Any mismatch breaks role resolution, file mapping, and runtime agent dispatch.
-
 2. **stageOverrides.<stage_id> strictly matches column.id**:
-   `stageOverrides.<stage_id>` in `.cvh/settings/tool-policy.json` MUST STRICTLY MATCH `column.id` in `boards.json` and `pipeline.json`.
+   `stageOverrides.<stage_id>` in `.cvh/settings/tool-policy.json` MUST STRICTLY MATCH each `column.id` in `boards.json` and `pipeline.json`.
 
 ---
 
-## 2. Инвариант пассивных стадий intake & completion (backlog и ready)
-- `backlog` — стадия постановки и накопления задач (Intake). Здесь задачи ждут, пока их возьмут в работу.
-- `ready` — терминальная стадия завершения (Done / Delivery). Здесь задачи полностью готовы.
-- В `backlog` и в `ready` СТРОГО ЗАПРЕЩЕНО назначать персоны агентов (СТРОГО `persona: null`, `autoRun: null`).
-- Никаких ботов в беклоге и готово! Агенты (разработчики, ревьюеры) работают ИСКЛЮЧИТЕЛЬНО на промежуточных стадиях пайплайна (`dev`, `review`).
+## 2. Invariant: Passive Stages Intake & Completion (backlog and ready)
+- `backlog`: Intake stage (index 0). Strictly `persona: null`, `autoRun: null`.
+- `ready`: Terminal delivery stage (final index, `terminal: true`). Strictly `persona: null`, `autoRun: null`.
+- Agents operate EXCLUSIVELY on intermediate pipeline stages (`plan`, `dev`, `review`, `retro`).
+- The `ready` stage must NEVER have an `on_leave` hook.
 
 ---
 
@@ -46,44 +41,55 @@ Every `persona.md` must start with clean YAML frontmatter:
 name: <role>
 description: Use PROACTIVELY when <trigger conditions>
 model: inherit
-tools: [read_file, glob, grep, execute_command, edit_file, write_file, move_task, advance_task, todo_write, question, subagent, subagent_bg, collect_subagent, web_search, web_fetch]
-scope: gated-writes
+tools: [read_file, glob, grep, ...]
+scope: <scope-name>
 activation: on-enter <column-id> runs run_agent(<task-id>)
+icon: <LucideIconName>
+color: <HexColor>
 ---
 ```
 
 ---
 
-## 4. Strict Role Scope Invariant
+## 4. Role Scope & Operational Boundaries
 
-### 4.1 Role Boundaries
-- **Developer (`developer`)**:
-  - Autonomous software engineer working inside isolated git worktree (`worktrees/<task-slug>`).
-  - Implements requirements, runs ground-truth sensors (`cargo check`, `npm run build`), updates architectural rules (`rules-sync`), commits atomically, and hands off via `advance_task(summary)`.
-- **Reviewer (`reviewer`)**:
-  - Ultra-strict code auditor and gatekeeper.
-  - Audits sensor results, rule freshness, code quality, and security.
-  - Upon approval, merges feature branch to `main` and pushes to remote, then advances to `ready`.
-  - Upon rejection, issues `reject_task(reason)` with actionable change requests back to `dev`.
-- **CVH-Dev (`cvh-dev`)**:
-  - Harness router and infrastructure architect. Configures `.cvh/` (boards, pipelines, personas, rules, hooks, tool-policies).
-  - Absolute ban on `create_task`, `create_tasks`, `complete_task`.
+### 4.1 Planner (`planner` / `architect`)
+- Software Architect & Technical Solution Planner.
+- Operates on the `plan` stage.
+- Allowed tools: ONLY reading and planning (`read_file`, `glob`, `grep`, `web_search`, `web_fetch`, `todo_write`, `advance_task`, `load_rule`).
+- Code editing tools (`edit_file`, `write_file`, `execute_command`) are STRICTLY FORBIDDEN.
+- Prepares actionable implementation checklists and hands off to the developer via `advance_task(summary)`.
+
+### 4.2 Developer (`developer`)
+- Autonomous Lead Software Engineer.
+- Operates on the `dev` stage inside an isolated git worktree (`worktrees/<task-slug>`).
+- Implements code, runs Turbo Sensors (`cargo check`, `npm run build`), updates modular rules simultaneously, and commits atomically.
+- Hands off to review via `advance_task(summary)`.
+
+### 4.3 Reviewer (`reviewer`)
+- Ultra-Strict Code Auditor & Release Authority.
+- Operates on the `review` stage.
+- Audits sensor proofs, rule freshness, code invariants, and anti-slop.
+- Code editing tools (`edit_file`, `write_file`) are STRICTLY FORBIDDEN.
+- Merges to `main` upon approval.
+- Routes approved tasks: immediately approved -> `ready`; approved after rejections -> `retro`.
+- Rejects defect-laden tasks via `reject_task(reason)` back to `dev`.
+
+### 4.4 Retro (`retro`)
+- Continuous Improvement & Rule Evolution Specialist.
+- Operates on the `retro` stage when a task required revisions after review rejection.
+- Inspects task chronology via `get_task_history`, performs contrastive trajectory analysis, and updates `.cvh/rules/<topic>.md`.
+- Advances task to `ready` via `advance_task(summary)`.
 
 ---
 
 ## 5. Relay Handoff Protocol
-When transitioning stages via `advance_task(summary)`, the summary is injected as `### [ЭСТАФЕТА ПАЙПЛАЙНА / RELAY HANDOFF]` into the next agent's prompt, guaranteeing 100% memory priming with zero turn degradation.
+When transitioning stages via `advance_task(summary)`, the summary is injected as:
+`### [ЭСТАФЕТА ПАЙПЛАЙНА / RELAY HANDOFF]`
+into the next agent's prompt, guaranteeing 100% memory priming with zero turn degradation.
 
 ---
 
-## 6. Two-Level Tool Policy Matrix (AND-Semantics)
-- Global Switches: `.cvh/settings/tool-policy.json` (`globalEnabled`).
-- Stage Overrides: `stageOverrides.<stage_id>`.
-- `effective(tool, stage) = globalEnabled[tool] && stageOverride[stage][tool]`.
-- If a tool is globally disabled, a stage cannot re-enable it.
-
----
-
-## 7. Progressive Disclosure
-- Keep `persona.md` concise and focused.
-- Offload domain-specific architectural guides to modular files in `.cvh/rules/*.md` and `.cvh/agents/<role>/rules/*.md`.
+## 6. Progressive Disclosure & Dynamic Rules
+- Keep `persona.md` compact, focused on role identity, constraints, and execution workflow.
+- Domain guidelines and technical invariants are decoupled into modular rules in `.cvh/rules/*.md` and loaded dynamically via `load_rule("<topic>")`.

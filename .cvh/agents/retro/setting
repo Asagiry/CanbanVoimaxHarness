@@ -1,0 +1,6 @@
+{
+  "model": "gemini-3.8-flash-high",
+  "temperature": 0.2,
+  "contextWindow": 384000,
+  "maxTokens": 8192
+}

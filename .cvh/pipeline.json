@@ -1,7 +1,6 @@
 {
   "id": "development",
   "title": "CanbanVoimaxHarness",
-  "activeBoardId": "development",
   "toolPermissions": null,
   "columns": [
     {
@@ -22,9 +21,40 @@
         "web_search",
         "web_fetch"
       ],
-      "hooks": {},
+      "hooks": {
+        "on_leave": ".cvh/hooks/create_worktree.bat"
+      },
       "routes": null,
       "autoRun": null,
+      "terminal": null
+    },
+    {
+      "id": "plan",
+      "title": "Planning",
+      "color": "#3b82f6",
+      "icon": "Compass",
+      "persona": "planner",
+      "onEnterScript": null,
+      "modelOverride": "gemini-3.8-flash-high",
+      "reasoningEffort": null,
+      "temperature": 0.2,
+      "gatekeeperSensor": null,
+      "allowedTools": [
+        "read_file",
+        "glob",
+        "grep",
+        "web_search",
+        "web_fetch",
+        "todo_write",
+        "advance_task",
+        "load_rule",
+        "list_tasks",
+        "get_task_history",
+        "question"
+      ],
+      "hooks": {},
+      "routes": null,
+      "autoRun": true,
       "terminal": null
     },
     {
@@ -84,10 +114,6 @@
         "advance_task",
         "reject_task",
         "question",
-        "subagent",
-        "subagent_bg",
-        "collect_subagent",
-        "subagent_list",
         "list_tasks",
         "get_task_history",
         "web_search",
@@ -97,10 +123,40 @@
         "on_leave": ".cvh/hooks/on_review_finish.bat"
       },
       "routes": {
-        "on_approved": "ready",
-        "on_approved_with_caveats": "ready",
-        "on_changes_requested": "dev"
+        "on_changes_requested": "dev",
+        "on_approved_after_changes": "retro",
+        "on_approved": "ready"
       },
+      "autoRun": true,
+      "terminal": null
+    },
+    {
+      "id": "retro",
+      "title": "Retro",
+      "color": "#ec4899",
+      "icon": "RotateCcw",
+      "persona": "retro",
+      "onEnterScript": null,
+      "modelOverride": "gemini-3.8-flash-high",
+      "reasoningEffort": null,
+      "temperature": 0.2,
+      "gatekeeperSensor": null,
+      "allowedTools": [
+        "read_file",
+        "write_file",
+        "edit_file",
+        "glob",
+        "grep",
+        "load_rule",
+        "todo_write",
+        "advance_task",
+        "list_tasks",
+        "get_task_history",
+        "web_search",
+        "web_fetch"
+      ],
+      "hooks": {},
+      "routes": null,
       "autoRun": true,
       "terminal": null
     },
@@ -151,9 +207,40 @@
             "web_search",
             "web_fetch"
           ],
-          "hooks": {},
+          "hooks": {
+            "on_leave": ".cvh/hooks/create_worktree.bat"
+          },
           "routes": null,
           "autoRun": null,
+          "terminal": null
+        },
+        {
+          "id": "plan",
+          "title": "Planning",
+          "color": "#3b82f6",
+          "icon": "Compass",
+          "persona": "planner",
+          "onEnterScript": null,
+          "modelOverride": "gemini-3.8-flash-high",
+          "reasoningEffort": null,
+          "temperature": 0.2,
+          "gatekeeperSensor": null,
+          "allowedTools": [
+            "read_file",
+            "glob",
+            "grep",
+            "web_search",
+            "web_fetch",
+            "todo_write",
+            "advance_task",
+            "load_rule",
+            "list_tasks",
+            "get_task_history",
+            "question"
+          ],
+          "hooks": {},
+          "routes": null,
+          "autoRun": true,
           "terminal": null
         },
         {
@@ -213,10 +300,6 @@
             "advance_task",
             "reject_task",
             "question",
-            "subagent",
-            "subagent_bg",
-            "collect_subagent",
-            "subagent_list",
             "list_tasks",
             "get_task_history",
             "web_search",
@@ -226,10 +309,40 @@
             "on_leave": ".cvh/hooks/on_review_finish.bat"
           },
           "routes": {
-            "on_approved": "ready",
-            "on_approved_with_caveats": "ready",
-            "on_changes_requested": "dev"
+            "on_changes_requested": "dev",
+            "on_approved_after_changes": "retro",
+            "on_approved": "ready"
           },
+          "autoRun": true,
+          "terminal": null
+        },
+        {
+          "id": "retro",
+          "title": "Retro",
+          "color": "#ec4899",
+          "icon": "RotateCcw",
+          "persona": "retro",
+          "onEnterScript": null,
+          "modelOverride": "gemini-3.8-flash-high",
+          "reasoningEffort": null,
+          "temperature": 0.2,
+          "gatekeeperSensor": null,
+          "allowedTools": [
+            "read_file",
+            "write_file",
+            "edit_file",
+            "glob",
+            "grep",
+            "load_rule",
+            "todo_write",
+            "advance_task",
+            "list_tasks",
+            "get_task_history",
+            "web_search",
+            "web_fetch"
+          ],
+          "hooks": {},
+          "routes": null,
           "autoRun": true,
           "terminal": null
         },
@@ -257,6 +370,82 @@
           "terminal": true
         }
       ]
+    },
+    {
+      "id": "nastroyka",
+      "name": "Настройка",
+      "columns": [
+        {
+          "id": "backlog",
+          "title": "Backlog",
+          "color": "#64748b",
+          "icon": "Inbox",
+          "persona": null,
+          "onEnterScript": null,
+          "modelOverride": null,
+          "reasoningEffort": null,
+          "temperature": null,
+          "gatekeeperSensor": null,
+          "allowedTools": [
+            "read_file",
+            "glob",
+            "grep",
+            "web_search",
+            "web_fetch"
+          ],
+          "hooks": {},
+          "routes": null,
+          "autoRun": null,
+          "terminal": null
+        },
+        {
+          "id": "dev",
+          "title": "CVH Development",
+          "color": "#6366f1",
+          "icon": "Cpu",
+          "persona": "cvh-dev",
+          "onEnterScript": null,
+          "modelOverride": null,
+          "reasoningEffort": null,
+          "temperature": 0.2,
+          "gatekeeperSensor": null,
+          "allowedTools": [
+            "execute_command",
+            "read_file",
+            "edit_file",
+            "write_file",
+            "glob",
+            "grep",
+            "web_search"
+          ],
+          "hooks": {},
+          "routes": null,
+          "autoRun": null,
+          "terminal": null
+        },
+        {
+          "id": "ready",
+          "title": "Ready",
+          "color": "#10b981",
+          "icon": "CheckCircle2",
+          "persona": null,
+          "onEnterScript": null,
+          "modelOverride": null,
+          "reasoningEffort": null,
+          "temperature": null,
+          "gatekeeperSensor": null,
+          "allowedTools": [
+            "read_file",
+            "glob",
+            "grep"
+          ],
+          "hooks": {},
+          "routes": null,
+          "autoRun": null,
+          "terminal": true
+        }
+      ]
     }
-  ]
+  ],
+  "activeBoardId": "development"
 }

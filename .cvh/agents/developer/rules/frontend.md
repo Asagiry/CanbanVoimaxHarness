@@ -1,16 +1,16 @@
-# Frontend Architecture & UI Invariants (React 19, Tailwind v4, Zustand)
+# Frontend Architecture & UI Invariants (React 19, Tailwind v4, Zustand 5, TypeScript)
 
-This guide documents the authoritative frontend architecture of **CanbanVoimaxHarness (CVH)** located in `src/`.
+This guide documents the authoritative frontend engineering standards and UI invariants of **CanbanVoimaxHarness (CVH)** located in `src/`.
 
 ---
 
-## 1. Core Technologies & Dependencies
+## 1. Core Stack & Runtime Architecture
 
-- **React 19.0.0**: Functional components, React 19 Concurrent Mode & StrictMode. Global error capture in `main.tsx` forwards renderer exceptions to Tauri via `log_ui_error`.
-- **Vite 6.0.0**: Bundler with path alias `@` -> `./src`. Custom chunking strategy (`vendor-react`, `vendor-dnd`, `vendor-icons`, `vendor-tauri`). Server watch ignores `.cvh/`, `worktrees/`, and `src-tauri/` to prevent reload loops during autonomous agent writes.
-- **Tailwind CSS v4 (`@tailwindcss/vite` 4.0.0)**: Built-in `@theme` configuration in `src/index.css`. Zero separate config files. Strict CSS variable tokens for the dual design system.
+- **React 19.0.0**: Functional components, React 19 Concurrent Mode & `StrictMode`. Global error boundary in `main.tsx` forwards renderer exceptions to Tauri via `log_ui_error`.
+- **Vite 6.0.0**: High-speed bundler with path alias `@` -> `./src`. Vendor chunking strategy (`vendor-react`, `vendor-dnd`, `vendor-icons`, `vendor-tauri`). Server watch ignores `.cvh/`, `worktrees/`, and `src-tauri/` to eliminate reload loops during agent writes.
+- **Tailwind CSS v4 (`@tailwindcss/vite` 4.0.0)**: Built-in `@theme` configuration directly in `src/index.css`. Zero separate config files.
 - **Zustand 5.0.3 (`zustand`, `zustand/react/shallow`)**: Multi-store decoupled architecture. Synchronous reads via `Store.getState()`.
-- **Drag & Drop (`@hello-pangea/dnd` 18.0.1)**: Multi-droppable board columns and column reordering.
+- **Drag & Drop (`@hello-pangea/dnd` 18.0.1)**: Multi-droppable Kanban board columns and card reordering.
 - **Desktop IPC (`@tauri-apps/api` 2.2.0)**: Asynchronous command invocation (`invoke`) and bidirectional event streaming (`listen`).
 
 ---
@@ -20,7 +20,7 @@ This guide documents the authoritative frontend architecture of **CanbanVoimaxHa
 ### 2.1 Dual Design System: Light Paper & Obsidian Dark
 - **Light Mode (Vercel & ChatGPT Paper Aesthetic)**:
   - Page Canvas: `#fafafa`, Elevated Cards: `#ffffff`, Sidebar: `#f9f9f9`.
-  - Near-black typography: `#171717` (headings, primary labels), `#4d4d4d` (body).
+  - High-contrast typography: `#171717` (headings, primary labels), `#4d4d4d` (body).
   - Hairline dividers: `#ebebeb` and `#d4d4d8` (1px subtle separation; zero blurry shadows).
   - Copilot Sidecar (`CopilotDock`): Strictly paper aesthetic with ink typography.
 - **Dark Mode (Obsidian Console Aesthetic)**:
@@ -41,33 +41,35 @@ This guide documents the authoritative frontend architecture of **CanbanVoimaxHa
 
 ---
 
-## 3. State Management & Event Streaming Invariants
+## 3. State Management & React 19 Performance Discipline
 
-### 3.1 Store Responsibilities
-- `boardStore`: Boards, pipeline columns, and tasks. Optimistic updates with authoritative fallback.
-- `drawerStore`: Activity feed, live streaming, token telemetry, context compaction, and subagent sessions.
-- `copilotStore`: Docked AI peer architect stream and markdown rendering.
-- `cortexStore`: Agent persona and rule filesystem tree.
-- `toolPolicyStore`: Two-level tool permission matrix.
-- `projectStore` & `settingsStore`: Active repo paths and LLM endpoints.
-
-### 3.2 Optimistic Updates & Concurrency Guard
-- In `@hello-pangea/dnd`, `handleDragEnd` must **synchronously** update `tasks` via `setTasks(nextTasks)` before awaiting the asynchronous `move_task_stage()` IPC call.
-- Retain a pre-drag snapshot to revert state if the backend rejects the transition (e.g. gatekeeper sensor failure).
-
-### 3.3 Event Streaming & Micro-Batching
-- `agent:thought` and `agent:output` chunks are buffered in memory and flushed to Zustand every **150ms** (`TEXT_FLUSH_MS`) to prevent UI lag.
-- **Chronology Preservation Guard**: When a tool execution (`agent:tool_call`), user question (`agent:question`), or turn starts, `flushTask(taskId)` is executed **synchronously before registering the tool**, ensuring thought text always precedes tool cards.
-
-### 3.4 React 19 & Zustand Performance Discipline
+### 3.1 Zustand `useShallow` Invariant
 - When selecting arrays or objects from stores, **always wrap selectors in `useShallow`**:
   ```tsx
+  import { useShallow } from "zustand/react/shallow";
+
   const subtasks = useBoardStore(
     useShallow((s) => s.tasks.filter((t) => t.parentId === task.id))
   );
   ```
-- Returning new arrays without `useShallow` triggers infinite re-render loops.
-- Use `React.memo` on high-density cards (`KanbanCard`, `ThinkingCard`, `ToolExecutionCard`).
+- **CRITICAL**: Returning new arrays or objects without `useShallow` triggers infinite re-render loops and UI freezes.
 
-### 3.5 Dual Runtime Compatibility (Tauri IPC vs. Web Mode)
-- All calls to `@tauri-apps/api` must be guarded with `try / catch` or dynamic imports so that Vite previews and unit tests execute without crashing.
+### 3.2 Optimistic Updates & Authoritative Rollback
+- In `@hello-pangea/dnd`, `handleDragEnd` must **synchronously** update `tasks` via `setTasks(nextTasks)` to preserve DOM node continuity.
+- Retain a pre-drag snapshot to cleanly revert state if the backend rejects the transition (e.g. gatekeeper sensor failure or WIP limit).
+
+### 3.3 Event Streaming & Micro-Batching
+- `agent:thought` and `agent:output` chunks are buffered in memory and flushed to Zustand every **150ms** (`TEXT_FLUSH_MS`) to prevent UI lag.
+- **Chronology Preservation Guard**: When a tool execution (`agent:tool_call`), user question (`agent:question`), or turn ends, `flushTask(taskId)` is executed **synchronously before registering the tool**, ensuring thought text always precedes tool cards.
+
+### 3.4 Memoization on High-Density Cards
+- Wrap high-frequency components (`KanbanCard`, `ThinkingCard`, `ToolExecutionCard`) in `React.memo` with shallow comparators.
+
+---
+
+## 4. TypeScript Strict Standards
+
+- **Strict Mode**: `strict: true`, `noUnusedLocals: true`, `noUnusedParameters: true`.
+- **Avoid `any`**: Use `unknown` for untrusted input and narrow it with type guards.
+- **Named Interfaces**: Export explicit interfaces for component props, data models, and IPC payloads.
+- **Sensor Check**: Verify frontend integrity via `npx tsc --noEmit` (must exit 0 with 0 errors).
