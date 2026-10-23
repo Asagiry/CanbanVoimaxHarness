@@ -1216,7 +1216,7 @@ use std::path::PathBuf;
         assert_eq!(t1.stage_id, "ready");
         assert_eq!(t1.status.as_deref(), Some("done"));
 
-        // 2. Board switch scenario:
+        // 2. Board switch scenario (Ironclad Board Preservation Invariant):
         // Seed task 2 on dev-board in stage dev
         let task2 = Task {
             id: "CVH-002".to_string(),
@@ -1246,19 +1246,20 @@ use std::path::PathBuf;
         };
         save_tasks_to_disk(&base, &[t1.clone(), task2]).await.expect("save task2");
 
-        // Now active board switches to kanban-board
+        // Now active board switches to kanban-board, but task 2 belongs to dev-board.
         boards_cfg.active_board_id = "kanban-board".to_string();
         crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards switch");
 
-        // Advance task 2: active board changed -> task finalizes to terminal column ('done') on kanban-board
+        // Advance task 2: active board changed -> task MUST strictly preserve its board_id ('dev-board')
+        // and advance to terminal column ('ready') on dev-board without hopping to kanban-board!
         let adv_switch_res = internal_advance_task(&base, "CVH-002", "Summary after board switch", None).await.expect("advance task2 switch");
         assert!(adv_switch_res.contains("УСПЕШНО"));
-        assert!(adv_switch_res.contains("финализирована"));
+        assert!(adv_switch_res.contains("завершена"));
 
         let loaded2 = load_tasks_from_disk(&base).await;
         let t2 = loaded2.iter().find(|t| t.id == "CVH-002").unwrap();
-        assert_eq!(t2.board_id.as_deref(), Some("kanban-board"));
-        assert_eq!(t2.stage_id, "done");
+        assert_eq!(t2.board_id.as_deref(), Some("dev-board"), "Task must strictly preserve dev-board despite active board switch");
+        assert_eq!(t2.stage_id, "ready");
         assert_eq!(t2.status.as_deref(), Some("done"));
 
         let _ = tokio::fs::remove_dir_all(&base).await;
@@ -2417,6 +2418,84 @@ Write code.
         .expect("move to dev on complex");
         assert_eq!(m4.stage_id, "dev");
         assert_eq!(m4.board_id.as_deref(), Some("complex"), "Must stay on complex board");
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_multi_board_pipeline_routing_and_board_preservation() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_test_routing_preservation_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("create .cvh");
+
+        // Boards: 'development' (active) and 'nastroyka' (Setup)
+        let boards_json = serde_json::json!({
+            "activeBoardId": "development",
+            "boards": [
+                {
+                    "id": "development",
+                    "name": "CanbanVoimaxHarness",
+                    "columns": [
+                        { "id": "backlog", "title": "Backlog", "persona": null, "hooks": {} },
+                        { "id": "dev", "title": "Dev", "persona": "cvh-dev", "hooks": {} },
+                        { "id": "ready", "title": "Ready", "persona": null, "terminal": true, "hooks": {} }
+                    ]
+                },
+                {
+                    "id": "nastroyka",
+                    "name": "Setup",
+                    "columns": [
+                        { "id": "backlog", "title": "Backlog", "persona": null, "hooks": {} },
+                        { "id": "dev", "title": "CVH Development", "persona": "developer", "hooks": {} },
+                        { "id": "ready", "title": "Ready", "persona": null, "terminal": true, "hooks": {} }
+                    ]
+                }
+            ]
+        });
+        tokio::fs::write(base.join(".cvh").join("boards.json"), serde_json::to_string(&boards_json).unwrap())
+            .await
+            .expect("write boards.json");
+
+        // Seed task CVH-011 on board 'nastroyka' in stage 'dev'
+        let task = Task {
+            id: "CVH-011".to_string(),
+            title: "Setup Task".to_string(),
+            description: "Test board preservation during advance".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("nastroyka".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("running".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            handover_summary: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: Some(true),
+            created_at: 0,
+            updated_at: 0,
+            todos: None,
+            attachments: None,
+            cover_image: None,
+        };
+        save_tasks_to_disk(&base, &[task]).await.expect("save task");
+
+        // Advance task CVH-011: active board is 'development', but task is on 'nastroyka'
+        let adv_res = internal_advance_task(&base, "CVH-011", "Task completed on nastroyka board", None)
+            .await
+            .expect("advance task");
+        assert!(adv_res.contains("УСПЕШНО"));
+
+        let loaded = load_tasks_from_disk(&base).await;
+        let t = loaded.iter().find(|t| t.id == "CVH-011").unwrap();
+        // Task MUST preserve its board 'nastroyka' and MUST NOT hop to 'development'
+        assert_eq!(t.board_id.as_deref(), Some("nastroyka"), "Task must stay on 'nastroyka' board!");
+        assert_eq!(t.stage_id, "ready");
+        assert_eq!(t.status.as_deref(), Some("done"));
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }

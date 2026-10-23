@@ -837,7 +837,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       const backendTask = await invoke<any>('move_task_stage', {
         taskId: resolvedTaskId,
         targetStageId,
-        boardId: activeBoardId,
+        boardId: task.boardId || activeBoardId,
       });
       if (backendTask && typeof backendTask.id === 'string') {
         const mapped = mapBackendTaskToKanban(backendTask);
@@ -859,7 +859,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         const merged: KanbanTask = {
           ...mapped,
           columnId: targetStageId,
-          boardId: activeBoardId || mapped.boardId || prev.boardId || 'development',
+          boardId: mapped.boardId || prev.boardId || task.boardId || activeBoardId || 'development',
           persona: targetColDef?.persona || prev.persona,
           verdict: backendTask.verdict ? mapped.verdict : prev.verdict,
           verdictNote: prev.verdictNote,

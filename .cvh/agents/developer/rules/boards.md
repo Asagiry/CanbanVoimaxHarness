@@ -59,3 +59,10 @@ The canonical autonomous engineering pipeline follows this sequential order:
 ## 7. Board Reconfiguration & Role Scope
 - **Preserving Execution Context**: When modifying boards, never delete an active board or column that contains currently running tasks.
 - **Preserving Existing Tasks**: When restructuring boards, existing task records in SQLite retain their identifiers and are reassigned deterministically.
+
+---
+
+## 8. Ironclad Board Preservation Invariant
+- **Strict Board Isolation**: Tasks MUST strictly preserve their `board_id` across `advance_task`, agent loop completion, and UI moves. Cross-board hopping is forbidden.
+- **Autonomous Progression Scope**: `advance_task` and agent finalization MUST advance tasks through columns belonging to the task's own board (`task.board_id`). Tasks must never be abducted to another board simply because the user switched tabs or changed `active_board_id`.
+- **UI Drag & Drop**: Moving tasks in the UI preserves `task.boardId` unless explicitly re-assigned.

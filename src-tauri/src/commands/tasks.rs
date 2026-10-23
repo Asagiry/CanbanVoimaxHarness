@@ -2463,80 +2463,6 @@ pub async fn internal_advance_task_to_stage(
         .ok_or_else(|| format!("Task {} not found", task_id))?;
 
     let boards_cfg = load_boards_config(root).await.ok();
-    let active_board_id = boards_cfg
-        .as_ref()
-        .map(|b| b.active_board_id.clone())
-        .unwrap_or_else(|| "development".to_string());
-
-    // Check if active board changed during task execution (only if target_stage_override is None and task is top-level)
-    let board_switched = target_stage_override.is_none()
-        && current_task.parent_id.is_none()
-        && current_task
-            .board_id
-            .as_deref()
-            .is_some_and(|b| b != active_board_id);
-
-    if board_switched {
-        let target_board = boards_cfg.as_ref().and_then(|bc| {
-            bc.boards.iter().find(|b| b.id == active_board_id).cloned()
-        });
-
-        let target_columns = match target_board {
-            Some(ref b) => b.columns.clone(),
-            None => {
-                let pipeline = load_pipeline_config(root)
-                    .await
-                    .map_err(|e| e.to_string())?;
-                pipeline.columns
-            }
-        };
-
-        let terminal_col = target_columns
-            .iter()
-            .find(|c| {
-                c.terminal == Some(true)
-                    || stage_id_matches(&c.id, "ready")
-                    || stage_id_matches(&c.id, "done")
-            })
-            .cloned()
-            .or_else(|| target_columns.last().cloned())
-            .ok_or_else(|| format!("Target board '{}' has no columns", active_board_id))?;
-
-        let updated_task = internal_move_task_stage(
-            root,
-            task_id,
-            &terminal_col.id,
-            Some("APPROVED".to_string()),
-            Some("done".to_string()),
-            Some(summary.to_string()),
-            app_handle,
-            true, // is_autonomous_advance
-            Some(active_board_id.clone()),
-        )
-        .await?;
-
-        let summary_content = format!(
-            "### Саммари финализации (смена доски -> {}): {}\n\n{}",
-            active_board_id, terminal_col.title, summary
-        );
-        let _ = append_task_dialog_activity(
-            root,
-            task_id,
-            "summary",
-            &summary_content,
-            app_handle,
-        )
-        .await;
-
-        return Ok(format!(
-            "УСПЕШНО: Задача {} финализирована на активной доске '{}' в терминальной колонке '{}' ({}), статус: {}",
-            task_id,
-            active_board_id,
-            terminal_col.id,
-            terminal_col.title,
-            updated_task.status.as_deref().unwrap_or("done")
-        ));
-    }
 
     // Normal progression within same board or fallback boards
     let columns = {
@@ -3288,10 +3214,6 @@ pub async fn run_agent(
     let app = app_handle.clone();
     let root_task = root.clone();
     let abort_flag_task = Arc::clone(&abort_flag);
-    let initial_active_board_id = {
-        let boards_cfg = load_boards_config(&root).await.ok();
-        boards_cfg.map(|b| b.active_board_id)
-    };
 
     let handle = tokio::spawn(async move {
         let app_inner = app.clone();
@@ -3479,44 +3401,15 @@ pub async fn run_agent(
 
                 let mut tasks = load_tasks_from_disk(&root_task).await;
                 if let Some(task_idx) = tasks.iter().position(|t| t.id == tid) {
-                    let is_waiting_subtask = tasks[task_idx].status.as_deref() == Some("waiting_subtask")
-                        || tasks[task_idx].waiting_for_subtask_id.is_some();
-                    let is_done = tasks[task_idx].status.as_deref() == Some("done");
-
-                    let end_boards_cfg = load_boards_config(&root_task).await.ok();
-                    let end_active_board_id = end_boards_cfg.as_ref().map(|b| b.active_board_id.clone());
-                    let board_switched = !is_waiting_subtask && !is_done && (
-                        initial_active_board_id.is_some()
-                            && end_active_board_id.is_some()
-                            && initial_active_board_id != end_active_board_id
-                    );
-
-                    let mut task_moved = false;
                     let mut task_changed = false;
 
-                    if let (true, Some(active_id)) = (board_switched, end_active_board_id) {
-                        let target_board = end_boards_cfg.as_ref().and_then(|bc| {
-                            bc.boards.iter().find(|b| b.id == active_id).cloned()
-                        });
-                        let terminal_col_id = target_board.as_ref().and_then(|b| {
-                            b.columns.iter().find(|c| c.terminal == Some(true) || stage_id_matches(&c.id, "ready") || stage_id_matches(&c.id, "done")).map(|c| c.id.clone())
-                                .or_else(|| b.columns.last().map(|c| c.id.clone()))
-                        }).unwrap_or_else(|| "ready".to_string());
-
-                        tasks[task_idx].board_id = Some(active_id);
-                        tasks[task_idx].stage_id = terminal_col_id;
-                        tasks[task_idx].status = Some("done".to_string());
-                        tasks[task_idx].updated_at = Utc::now().timestamp_millis();
-                        task_moved = true;
-                        task_changed = true;
-                    } else if tasks[task_idx].status.as_deref() == Some("running") {
+                    if tasks[task_idx].status.as_deref() == Some("running") {
                         tasks[task_idx].status = Some("idle".to_string());
                         tasks[task_idx].updated_at = Utc::now().timestamp_millis();
                         task_changed = true;
                     }
 
                     if task_changed {
-                        let updated_task = tasks[task_idx].clone();
                         let _ = save_tasks_to_disk(&root_task, &tasks).await;
                         if let Some(state_ref) = app.try_state::<AppState>() {
                             if let Ok(mut guard) = state_ref.tasks.lock() {
@@ -3524,17 +3417,6 @@ pub async fn run_agent(
                             }
                         }
                         let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
-                        if task_moved {
-                            let _ = app.emit(
-                                "task:moved",
-                                serde_json::json!({
-                                    "taskId": tid,
-                                    "stageId": updated_task.stage_id,
-                                    "status": updated_task.status,
-                                    "task": updated_task
-                                }),
-                            );
-                        }
                     }
                 }
             }

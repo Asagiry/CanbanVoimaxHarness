@@ -2700,13 +2700,49 @@ line 2 again"
 
         let handle = tokio::spawn(async move {
             while let Ok((mut socket, _)) = listener.accept().await {
-                counter.fetch_add(1, Ordering::SeqCst);
+                let req_num = counter.fetch_add(1, Ordering::SeqCst);
                 tokio::spawn(async move {
+                    let mut data = Vec::new();
                     let mut buf = [0u8; 4096];
-                    let _ = socket.read(&mut buf).await;
+                    let mut content_length = 0;
+                    let mut header_len = 0;
+                    loop {
+                        let n = socket.read(&mut buf).await.unwrap_or(0);
+                        if n == 0 {
+                            break;
+                        }
+                        data.extend_from_slice(&buf[..n]);
+                        if header_len == 0 {
+                            if let Some(pos) = data.windows(4).position(|w| w == b"\r\n\r\n") {
+                                header_len = pos + 4;
+                                let headers_str = String::from_utf8_lossy(&data[..header_len]);
+                                for line in headers_str.lines() {
+                                    if let Some(val) = line.to_lowercase().strip_prefix("content-length:") {
+                                        content_length = val.trim().parse::<usize>().unwrap_or(0);
+                                    }
+                                }
+                            }
+                        }
+                        if header_len > 0 && data.len() >= header_len + content_length {
+                            break;
+                        }
+                    }
+
+                    let chunks: Vec<&str> = sse_payload
+                        .split("data: [DONE]")
+                        .map(|s| s.trim())
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                    let response_payload = if chunks.len() > 1 {
+                        let chunk = chunks.get(req_num).unwrap_or(chunks.last().unwrap());
+                        format!("{}\n\ndata: [DONE]\n\n", chunk)
+                    } else {
+                        sse_payload.to_string()
+                    };
+
                     let body = format!(
                         "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n{}",
-                        sse_payload
+                        response_payload
                     );
                     let _ = socket.write_all(body.as_bytes()).await;
                     let _ = socket.flush().await;
