@@ -40,6 +40,17 @@ export function formatSubagentDisplayTitle(title?: string | null, lang?: Languag
   return title;
 }
 
+function getSubagentRoleLabel(role: string, isRu: boolean): string {
+  const r = role.trim().toLowerCase();
+  if (r === 'architect') return isRu ? 'АРХИТЕКТОР' : 'ARCHITECT';
+  if (r === 'developer' || r === 'dev') return isRu ? 'РАЗРАБОТЧИК' : 'DEVELOPER';
+  if (r === 'reviewer' || r === 'review') return isRu ? 'РЕВЬЮЕР' : 'REVIEWER';
+  if (r === 'scout') return isRu ? 'СКАУТ' : 'SCOUT';
+  if (r === 'explorer') return isRu ? 'ИССЛЕДОВАТЕЛЬ' : 'EXPLORER';
+  if (r === 'cvh-dev') return 'CVH-DEV';
+  return role.trim().toUpperCase();
+}
+
 export function formatSubagentRoleDisplay(
   role?: string | null,
   subIndex?: number,
@@ -49,16 +60,20 @@ export function formatSubagentRoleDisplay(
   const isRu = lang === 'ru';
   if (isBoardSubtask) {
     const r = (role || '').trim().toLowerCase();
-    if (r === 'reviewer' || r === 'review') return isRu ? 'РЕВЬЮЕР' : 'REVIEWER';
-    if (r === 'developer' || r === 'dev') return isRu ? 'РАЗРАБОТЧИК' : 'DEVELOPER';
-    if (r === 'cvh-dev') return 'CVH-DEV';
-    if (role && r !== 'general') return role.toUpperCase();
+    if (role && r && r !== 'general') {
+      return getSubagentRoleLabel(role, isRu);
+    }
     return isRu ? 'ПОДЗАДАЧА' : 'SUBTASK';
   }
+
+  const r = (role || '').trim().toLowerCase();
+  const hasRole = Boolean(role && r && r !== 'general');
+  const baseName = hasRole ? getSubagentRoleLabel(role!, isRu) : (isRu ? 'СУБАГЕНТ' : 'SUBAGENT');
+
   if (subIndex != null) {
-    return isRu ? `СУБАГЕНТ #${subIndex}` : `SUBAGENT #${subIndex}`;
+    return `${baseName} #${subIndex}`;
   }
-  return isRu ? 'СУБАГЕНТ' : 'SUBAGENT';
+  return baseName;
 }
 
 export function formatDuration(ms?: number, isRunning?: boolean): string {
