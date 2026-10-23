@@ -23,7 +23,7 @@ Authoritative frontend audit checklist for the **Reviewer** persona in CanbanVoi
 
 ## 3. Dual Design System Fidelity (Light Paper / Obsidian Dark)
 - **Rule**: UI components must strictly adhere to either Vercel Light Paper (`#fafafa`, `#171717`, `#ebebeb`) or Obsidian Dark (`#090a0f`, `#0d1117`, `#21262d`, `#f0f6fc`).
-- **Audit**: Reject arbitrary neon gradients, random purple accent chips, or unstandardized shadows.
+- **Audit**: Reject arbitrary neon gradients, random purple accent chips, or unstandardized shadows. Relational task families use standardized bidirectional hover glow (`ring-2 ring-[#8b5cf6]/50 bg-purple-50/20 dark:bg-[#1c1b29]`).
 
 ---
 

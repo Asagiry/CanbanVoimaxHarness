@@ -26,6 +26,7 @@ Authoritative frontend engineering standards and UI invariants of **CanbanVoimax
   - Background: `#090a0f`, Surface: `#0d1117`, Card: `#161b22`, Border: `#21262d`, Text: `#f0f6fc`, Muted: `#8b949e`.
   - Circular reveal transition originating from theme toggle coordinates via View Transitions API.
 - **Tabular Numerics**: Apply `.tabular-nums` across all timers, token telemetry, TPS counters, and duration pills to eliminate layout jitter.
+- **Bidirectional Subtask Illumination**: Hovering a parent or subtask card highlights the entire task family (parent, child subtasks, sibling subtasks) with `ring-2 ring-[#8b5cf6]/50 bg-purple-50/20 dark:bg-[#1c1b29]` for clear relational context without visual clutter.
 
 ### 2.2 Viewport, Zoom & Layout Invariants
 - **Zoom Isolation**: Canvas zoom (`useUiZoom`, Ctrl+Wheel or Ctrl+Plus/Minus) applies transforms exclusively to the workspace container (`rootStyle`).

@@ -47,7 +47,7 @@ export const translations = {
     'status.done': 'Done',
     'status.blocked': 'Blocked',
     'status.waitingReview': 'Review',
-    'status.waitingSubtask': 'Waiting for subtask {id}',
+    'status.waitingSubtask': 'Waiting for subtask',
     'status.error': 'Error',
 
     // Priorities
@@ -99,7 +99,6 @@ export const translations = {
     'board.columnDragTitle': 'Drag to reorder columns. Right click for column actions',
     'board.confirmDeleteColumnEmpty': 'Delete column "{title}"?',
     'board.confirmDeleteColumnWithTasks': 'Delete column "{title}"? Tasks in it: {count}. They will be moved to column "{neighbor}".',
-    'board.threadTitle': 'Thread: {parent} -> {subtask} (click to open subtask console)',
     'board.errMoveTask': 'Failed to move task:\n{msg}',
     'board.errReorderRollback': 'Failed to save column order. Changes rolled back.',
     'board.errNameLettersOrDigits': 'Name must contain letters or digits.',
@@ -592,7 +591,7 @@ export const translations = {
     'status.done': 'Готово',
     'status.blocked': 'Блок',
     'status.waitingReview': 'Ревью',
-    'status.waitingSubtask': 'Ждем подзадачу {id}',
+    'status.waitingSubtask': 'Ждем подзадачу',
     'status.error': 'Ошибка',
 
     // Priorities
@@ -644,7 +643,6 @@ export const translations = {
     'board.columnDragTitle': 'Перетащите для смены порядка колонок. Правая кнопка — действия с колонкой',
     'board.confirmDeleteColumnEmpty': 'Удалить колонку «{title}»?',
     'board.confirmDeleteColumnWithTasks': 'Удалить колонку «{title}»? Задач в ней: {count}. Они будут перенесены в колонку «{neighbor}».',
-    'board.threadTitle': 'Нить: {parent} -> {subtask} (нажмите для открытия консоли подзадачи)',
     'board.errMoveTask': 'Не удалось переместить задачу:\n{msg}',
     'board.errReorderRollback': 'Не удалось сохранить порядок колонок. Изменения откачены.',
     'board.errNameLettersOrDigits': 'Имя должно содержать буквы или цифры.',
