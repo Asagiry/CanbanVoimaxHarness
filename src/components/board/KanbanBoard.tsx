@@ -208,7 +208,6 @@ export default function KanbanBoard() {
   // New task form fields
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
-  const [skipBacklogHook, setSkipBacklogHook] = useState(false);
 
   // New column inline form fields
   const [isAddColumnOpen, setIsAddColumnOpen] = useState(false);
@@ -519,7 +518,6 @@ export default function KanbanBoard() {
   const handleOpenAddTask = () => {
     setNewTitle('');
     setNewDescription('');
-    setSkipBacklogHook(false);
     setSelectedModel(settings.model || (availableModels.length > 0 ? availableModels[0] : 'gemini-3.8-flash-high'));
     setIsNewTaskModalOpen(true);
   };
@@ -535,8 +533,6 @@ export default function KanbanBoard() {
       description: newDescription.trim() || undefined,
       stageId: targetColumnId,
       boardId: activeBoardId || 'development',
-      skip_backlog_hook: skipBacklogHook,
-      skipWorktree: skipBacklogHook,
       model: selectedModel,
     });
     if (!created) return;
@@ -1242,18 +1238,6 @@ export default function KanbanBoard() {
                   ))}
                 </select>
               </div>
-
-              <label className="flex items-center space-x-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={skipBacklogHook}
-                  onChange={(e) => setSkipBacklogHook(e.target.checked)}
-                  className="h-3.5 w-3.5 accent-[#171717] dark:accent-[#8b949e] cursor-pointer"
-                />
-                <span className="font-sans text-xs text-[#4d4d4d] dark:text-[#c9d1d9]">
-                  {t('newTask.skipBacklogHook')}
-                </span>
-              </label>
 
               <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#ebebeb] dark:border-[#21262d]">
                 <button

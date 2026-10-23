@@ -94,9 +94,6 @@ interface BoardState {
     description?: string;
     stageId?: string;
     boardId?: string;
-    skipWorktree?: boolean;
-    skip_backlog_hook?: boolean;
-    skipBacklogHook?: boolean;
     model?: string;
   }) => Promise<KanbanTask | null>;
   createSubtask: (parentId: string, targetColumnId?: string) => Promise<KanbanTask | null>;
@@ -1022,7 +1019,6 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       input.stageId ||
       (state.columns.some((c) => c.id === 'backlog') ? 'backlog' : (state.columns[0]?.id ?? 'backlog'));
     const boardId = input.boardId || state.activeBoardId || 'development';
-    const skipBacklogHook = Boolean(input.skip_backlog_hook ?? input.skipBacklogHook ?? input.skipWorktree ?? false);
     const title = input.title.trim();
     if (!title) return null;
     const description = input.description?.trim() || '';
@@ -1031,7 +1027,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       'INFO',
       'BOARD_STORE',
       `addTask: initiated for title="${title}"`,
-      JSON.stringify({ targetColumnId, boardId, skipBacklogHook, model: input.model })
+      JSON.stringify({ targetColumnId, boardId, model: input.model })
     );
 
     // BACKEND-AUTHORITATIVE TASK CREATION:
@@ -1043,9 +1039,6 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         description,
         stageId: targetColumnId,
         boardId,
-        skipWorktree: skipBacklogHook,
-        skipBacklogHook,
-        skip_backlog_hook: skipBacklogHook,
         model: input.model || undefined,
       });
 
