@@ -1135,7 +1135,7 @@ use super::*;
             call_id: None,
         };
 
-        // 1. Advance from backlog -> dev
+        // 1. Advance from backlog -> creates dev subtask CVH-060.1
         let res1 = execute_tool(&tool_ctx, "advance_task", &serde_json::json!({ "summary": "Started dev work" }))
             .await
             .expect("advance backlog -> dev");
@@ -1143,36 +1143,47 @@ use super::*;
 
         let tasks1 = crate::commands::tasks::load_tasks_from_disk(&base).await;
         let t1 = tasks1.iter().find(|t| t.id == "CVH-060").expect("find task");
-        assert_eq!(t1.stage_id, "dev");
+        assert_eq!(t1.stage_id, "backlog", "Parent must remain in backlog");
+        assert_eq!(t1.status.as_deref(), Some("waiting_subtask"));
+        assert_eq!(t1.waiting_for_subtask_id.as_deref(), Some("CVH-060.1"));
 
-        // 2. Advance from dev -> review creates review subtask CVH-060.1 (§ 2.2)
-        let res2 = execute_tool(&tool_ctx, "advance_task", &serde_json::json!({ "summary": "Implemented feature" }))
+        let sub1 = tasks1.iter().find(|t| t.id == "CVH-060.1").expect("find dev subtask");
+        assert_eq!(sub1.stage_id, "dev", "Subtask must be in dev stage");
+
+        // 2. Advance subtask CVH-060.1 -> creates review subtask CVH-060.2 (§ 2.2)
+        let res2 = execute_tool(&tool_ctx, "advance_task", &serde_json::json!({ "task_id": "CVH-060.1", "summary": "Implemented feature" }))
             .await
             .expect("advance dev -> review");
         assert!(res2.contains("УСПЕШНО"), "got: {}", res2);
 
         let tasks2 = crate::commands::tasks::load_tasks_from_disk(&base).await;
         let t2 = tasks2.iter().find(|t| t.id == "CVH-060").expect("find parent task");
-        assert_eq!(t2.stage_id, "dev", "Parent must remain in dev");
+        assert_eq!(t2.stage_id, "backlog", "Parent must remain in backlog");
         assert_eq!(t2.status.as_deref(), Some("waiting_subtask"));
-        assert_eq!(t2.waiting_for_subtask_id.as_deref(), Some("CVH-060.1"));
+        assert_eq!(t2.waiting_for_subtask_id.as_deref(), Some("CVH-060.2"));
 
-        let sub2 = tasks2.iter().find(|t| t.id == "CVH-060.1").expect("find review subtask");
+        let sub1_done = tasks2.iter().find(|t| t.id == "CVH-060.1").expect("find dev subtask");
+        assert_eq!(sub1_done.status.as_deref(), Some("done"));
+
+        let sub2 = tasks2.iter().find(|t| t.id == "CVH-060.2").expect("find review subtask");
         assert_eq!(sub2.stage_id, "review", "Subtask must be in review stage");
 
-        // 3. Advance subtask from review -> ready (terminal)
-        let res3 = execute_tool(&tool_ctx, "advance_task", &serde_json::json!({ "task_id": "CVH-060.1", "summary": "Review approved" }))
+        // 3. Advance subtask CVH-060.2 from review -> ready (terminal)
+        let res3 = execute_tool(&tool_ctx, "advance_task", &serde_json::json!({ "task_id": "CVH-060.2", "summary": "Review approved" }))
             .await
             .expect("advance review -> ready");
         assert!(res3.contains("УСПЕШНО"), "got: {}", res3);
 
         let tasks3 = crate::commands::tasks::load_tasks_from_disk(&base).await;
-        let sub3 = tasks3.iter().find(|t| t.id == "CVH-060.1").expect("find subtask");
-        assert_eq!(sub3.stage_id, "ready");
-        assert_eq!(sub3.status.as_deref(), Some("done"));
+        let t3 = tasks3.iter().find(|t| t.id == "CVH-060").expect("find parent task");
+        assert_eq!(t3.stage_id, "ready");
+        assert_eq!(t3.status.as_deref(), Some("done"));
+
+        let sub2_done = tasks3.iter().find(|t| t.id == "CVH-060.2").expect("find subtask");
+        assert_eq!(sub2_done.status.as_deref(), Some("done"));
 
         // 4. Boundary error: Advance when already in terminal ready stage must fail
-        let res_err = execute_tool(&tool_ctx, "advance_task", &serde_json::json!({ "task_id": "CVH-060.1" }))
+        let res_err = execute_tool(&tool_ctx, "advance_task", &serde_json::json!({ "task_id": "CVH-060" }))
             .await
             .expect_err("advance from terminal column must fail");
         assert!(res_err.to_string().contains("уже находится на последнем этапе пайплайна"), "got: {}", res_err);

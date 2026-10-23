@@ -1374,14 +1374,15 @@ STDERR: {}",
 #[derive(Debug, Default)]
 pub struct ParentAdvanceResult {
     pub moved_events: Vec<serde_json::Value>,
+    pub created_tasks: Vec<Task>,
     pub autorun_task_ids: Vec<String>,
 }
 
-/// Propagates advancement of completed/terminal subtasks up the hierarchy to parent tasks,
-/// advancing them past the subtask column into the next pipeline stage (§ 2.2, § 2.7 & § 2.22).
-/// Supports multi-stage pipelines (e.g. 5 columns) and arbitrary subtask nesting.
+/// Propagates advancement of completed/terminal subtasks up the hierarchy to parent tasks (§ 2.2 & § 2.7).
+/// Universal relay progression: if next stage is non-terminal, parent spawns next isolated child subtask;
+/// if next stage is terminal (ready/done), parent moves to ready with status done.
 pub fn propagate_parent_subtask_advance(
-    tasks: &mut [Task],
+    tasks: &mut Vec<Task>,
     completed_subtask_id: &str,
     subtask_source_stage: &str,
     verdict: Option<&str>,
@@ -1389,10 +1390,17 @@ pub fn propagate_parent_subtask_advance(
     pipeline: Option<&crate::config::PipelineConfig>,
 ) -> ParentAdvanceResult {
     let mut moved_events = Vec::new();
+    let mut created_tasks = Vec::new();
     let mut autorun_task_ids = Vec::new();
 
     let mut current_child_id = completed_subtask_id.to_string();
     let mut current_source_stage = subtask_source_stage.to_string();
+
+    // 1. Ensure the completed subtask has status "done"
+    if let Some(sub_idx) = tasks.iter().position(|t| task_id_matches(&t.id, completed_subtask_id)) {
+        tasks[sub_idx].status = Some("done".to_string());
+        tasks[sub_idx].updated_at = Utc::now().timestamp_millis();
+    }
 
     while let Some(parent_idx) = tasks.iter().position(|t| {
         t.waiting_for_subtask_id.as_deref() == Some(&current_child_id)
@@ -1402,10 +1410,16 @@ pub fn propagate_parent_subtask_advance(
                     .find(|sub| sub.id == current_child_id)
                     .and_then(|sub| sub.parent_id.as_deref())
                     == Some(&t.id))
+            || tasks
+                .iter()
+                .find(|sub| sub.id == current_child_id)
+                .and_then(|sub| sub.parent_id.as_deref())
+                == Some(&t.id)
     }) {
         let parent_id = tasks[parent_idx].id.clone();
         let old_parent_stage = tasks[parent_idx].stage_id.clone();
         let parent_board_id = tasks[parent_idx].board_id.clone();
+        let parent_title = tasks[parent_idx].title.clone();
 
         // Resolve columns for parent task's board
         let cols = {
@@ -1424,7 +1438,7 @@ pub fn propagate_parent_subtask_advance(
         };
 
         // Find the next stage for the parent task:
-        // Look up index of the subtask's source stage (e.g. "review"):
+        // Look up index of the subtask's source stage (e.g. "dev" or "review"):
         let sub_stage_idx = cols
             .iter()
             .position(|c| stage_id_matches(&c.id, &current_source_stage))
@@ -1485,51 +1499,113 @@ pub fn propagate_parent_subtask_advance(
             || stage_id_matches(&next_col.id, "ready")
             || stage_id_matches(&next_col.id, "done");
 
-        tasks[parent_idx].waiting_for_subtask_id = None;
-        tasks[parent_idx].stage_id = next_col.id.clone();
-        tasks[parent_idx].verdict = Some(verdict.unwrap_or("APPROVED").to_string());
-        tasks[parent_idx].updated_at = Utc::now().timestamp_millis();
-
         if is_terminal {
+            tasks[parent_idx].waiting_for_subtask_id = None;
+            tasks[parent_idx].stage_id = next_col.id.clone();
+            tasks[parent_idx].verdict = Some(verdict.unwrap_or("APPROVED").to_string());
             tasks[parent_idx].status = Some("done".to_string());
+            tasks[parent_idx].updated_at = Utc::now().timestamp_millis();
+
             // Also mark any child subtasks of this parent as done so they collapse into parent (§ 3)
             for sub in tasks.iter_mut() {
                 if sub.parent_id.as_deref() == Some(&parent_id) {
                     sub.status = Some("done".to_string());
                 }
             }
-        } else {
-            let has_autorun = next_col.persona.is_some() || next_col.auto_run == Some(true);
-            tasks[parent_idx].status = Some(if has_autorun { "running".to_string() } else { "idle".to_string() });
-            if has_autorun {
-                autorun_task_ids.push(parent_id.clone());
-            }
-        }
 
-        let parent_clone = tasks[parent_idx].clone();
-        moved_events.push(serde_json::json!({
-            "taskId": parent_id,
-            "fromStage": old_parent_stage,
-            "toStage": &next_col.id,
-            "stageId": &next_col.id,
-            "status": parent_clone.status,
-            "verdict": parent_clone.verdict,
-            "task": &parent_clone
-        }));
+            let parent_clone = tasks[parent_idx].clone();
+            moved_events.push(serde_json::json!({
+                "taskId": parent_id,
+                "fromStage": old_parent_stage,
+                "toStage": &next_col.id,
+                "stageId": &next_col.id,
+                "status": parent_clone.status,
+                "verdict": parent_clone.verdict,
+                "task": &parent_clone
+            }));
 
-        // If parent task also advanced to a terminal column, check if grandparent was waiting on it!
-        if is_terminal {
+            // If parent task also advanced to a terminal column, check if grandparent was waiting on it!
             current_child_id = parent_id;
             current_source_stage = next_col.id;
         } else {
-            // Parent advanced to a non-terminal intermediate stage (e.g. 'retro'):
-            // Grandparent remains waiting, stop recursion.
+            // Next stage is not terminal -> universal progression spawns next isolated child subtask!
+            let next_subtask_idx = get_next_subtask_index(tasks, &parent_id);
+            let new_subtask_id = format!("{}.{}", parent_id, next_subtask_idx);
+            let now = Utc::now().timestamp_millis();
+
+            tasks[parent_idx].waiting_for_subtask_id = Some(new_subtask_id.clone());
+            tasks[parent_idx].status = Some("waiting_subtask".to_string());
+            tasks[parent_idx].updated_at = now;
+
+            let has_autorun = next_col.persona.is_some() || next_col.auto_run == Some(true);
+            let subtask_status = if has_autorun { "running" } else { "idle" };
+
+            let parent_wt = tasks[parent_idx].worktree_path.clone();
+            let parent_branch = tasks[parent_idx].branch.clone();
+            let parent_model = tasks[parent_idx].model.clone();
+            let parent_skip_wt = tasks[parent_idx].skip_worktree;
+            let parent_priority = tasks[parent_idx].priority.clone();
+
+            let new_subtask = Task {
+                id: new_subtask_id.clone(),
+                title: format!("{} ({})", parent_title, next_col.title),
+                description: format!(
+                    "### Подзадача этапа: {}
+Родительская задача: {}
+
+{}",
+                    next_col.title, parent_id, tasks[parent_idx].description
+                ),
+                stage_id: next_col.id.clone(),
+                board_id: tasks[parent_idx].board_id.clone(),
+                worktree_path: parent_wt,
+                branch: parent_branch,
+                verdict: None,
+                custom_flow: None,
+                status: Some(subtask_status.to_string()),
+                model: parent_model.or_else(|| next_col.model_override.clone()),
+                parent_id: Some(parent_id.clone()),
+                subtask_index: Some(next_subtask_idx),
+                waiting_for_subtask_id: None,
+                handover_summary: None,
+                cover_image: None,
+                attachments: None,
+                todos: None,
+                priority: parent_priority,
+                tags: None,
+                current_tokens: None,
+                skip_worktree: parent_skip_wt,
+                created_at: now,
+                updated_at: now,
+            };
+
+            if has_autorun {
+                autorun_task_ids.push(new_subtask_id.clone());
+            }
+
+            let parent_clone = tasks[parent_idx].clone();
+            moved_events.push(serde_json::json!({
+                "taskId": parent_id,
+                "fromStage": &old_parent_stage,
+                "toStage": &old_parent_stage,
+                "stageId": &old_parent_stage,
+                "status": "waiting_subtask",
+                "waitingForSubtaskId": &new_subtask_id,
+                "verdict": parent_clone.verdict,
+                "task": &parent_clone
+            }));
+
+            created_tasks.push(new_subtask.clone());
+            tasks.push(new_subtask);
+
+            // Parent is now waiting on the newly created subtask; break recursion
             break;
         }
     }
 
     ParentAdvanceResult {
         moved_events,
+        created_tasks,
         autorun_task_ids,
     }
 }
@@ -2224,6 +2300,7 @@ pub async fn internal_move_task_stage(
 
     // Relational symmetry (§ 2.7 & § 2.22):
     let mut parent_moved_events: Vec<serde_json::Value> = Vec::new();
+    let mut parent_created_tasks: Vec<Task> = Vec::new();
     let mut parent_autorun_ids: Vec<String> = Vec::new();
 
     if verdict.as_deref() == Some("CHANGES_REQUESTED") {
@@ -2265,6 +2342,7 @@ pub async fn internal_move_task_stage(
             pipeline_opt.as_ref(),
         );
         parent_moved_events = parent_res.moved_events;
+        parent_created_tasks = parent_res.created_tasks;
         parent_autorun_ids = parent_res.autorun_task_ids;
     }
 
@@ -2280,6 +2358,10 @@ pub async fn internal_move_task_stage(
             }
         }
     }
+    for ctask in &parent_created_tasks {
+        let _ = crate::db::db_upsert_task(root, ctask);
+    }
+
     if let Err(e) = save_tasks_to_disk(root, &tasks).await {
         crate::logger::cvh_log(
             Some(root),
@@ -2314,6 +2396,10 @@ pub async fn internal_move_task_stage(
                 "task": &updated
             }),
         );
+        for ctask in &parent_created_tasks {
+            let _ = app.emit("task:created", serde_json::json!({ "task": ctask }));
+            let _ = app.emit("task:updated", serde_json::json!({ "task": ctask }));
+        }
         for p_event in &parent_moved_events {
             let _ = app.emit("task:moved", p_event);
             if let Some(ptask) = p_event.get("task") {
@@ -2587,13 +2673,131 @@ pub async fn internal_advance_task_to_stage(
         }
     };
 
-    // Review Subtask Hierarchy (§ 2.2):
-    // When a task advances to an audit/review column, the root parent card remains pinned in its active stage
-    // while an isolated child subtask (<task-id>.<subtask-index>, e.g. CVH-012.1) executes the review persona.
-    let is_review = is_review_column(&target_col);
+    // Universal Relay Progression (§ 2.2 & § 2.7):
+    let is_terminal = target_col.terminal == Some(true)
+        || stage_id_matches(&target_col.id, "ready")
+        || stage_id_matches(&target_col.id, "done");
 
-    if is_review {
-        // Strict guard against duplicate subtasks (§ 1):
+    if let Some(ref pid) = current_task.parent_id {
+        // CASE A: The task calling advance_task is a child subtask (e.g. CVH-009.1)
+        let subtask_id = current_task.id.clone();
+        let parent_id = pid.clone();
+
+        // 1. Mark this subtask as done
+        let mut tasks = load_tasks_from_disk(root).await;
+        if let Some(sub) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
+            sub.status = Some("done".to_string());
+            sub.updated_at = Utc::now().timestamp_millis();
+            let _ = crate::db::db_upsert_task(root, sub);
+        }
+        if let Some(app) = app_handle {
+            if let Some(state_ref) = app.try_state::<AppState>() {
+                if let Ok(mut guard) = state_ref.tasks.lock() {
+                    if let Some(sub) = guard.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
+                        sub.status = Some("done".to_string());
+                        sub.updated_at = Utc::now().timestamp_millis();
+                    }
+                }
+            }
+        }
+        let _ = save_tasks_to_disk(root, &tasks).await;
+        if let Some(app) = app_handle {
+            if let Some(sub) = tasks.iter().find(|t| task_id_matches(&t.id, &subtask_id)) {
+                let _ = app.emit("task:updated", serde_json::json!({ "task": sub }));
+                let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+            }
+        }
+
+        let sub_summary_content = format!(
+            "### Саммари этапа {}: {}\n\n{}",
+            current_task.stage_id, current_task.title, summary
+        );
+        let _ = append_task_dialog_activity(root, &subtask_id, "summary", &sub_summary_content, app_handle).await;
+
+        let parent_task = tasks
+            .iter()
+            .find(|t| task_id_matches(&t.id, &parent_id))
+            .cloned()
+            .ok_or_else(|| format!("Parent task {} not found", parent_id))?;
+
+        if is_terminal {
+            let updated_parent = internal_move_task_stage(
+                root,
+                &parent_id,
+                &target_col.id,
+                Some("APPROVED".to_string()),
+                Some("done".to_string()),
+                Some(summary.to_string()),
+                app_handle,
+                true,
+                None,
+            )
+            .await?;
+
+            let mut final_tasks = load_tasks_from_disk(root).await;
+            for t in final_tasks.iter_mut() {
+                if t.parent_id.as_deref() == Some(&parent_id) {
+                    t.status = Some("done".to_string());
+                    t.updated_at = Utc::now().timestamp_millis();
+                    let _ = crate::db::db_upsert_task(root, t);
+                }
+            }
+            let _ = save_tasks_to_disk(root, &final_tasks).await;
+            if let Some(app) = app_handle {
+                let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &final_tasks }));
+            }
+
+            let parent_summary_content = format!(
+                "### Саммари финализации задачи {}: {}\n\n{}",
+                parent_id, target_col.title, summary
+            );
+            let _ = append_task_dialog_activity(root, &parent_id, "summary", &parent_summary_content, app_handle).await;
+
+            return Ok(format!(
+                "УСПЕШНО: Задача {} завершена в терминальной колонке '{}' ({}), статус: {}",
+                parent_id,
+                target_col.id,
+                target_col.title,
+                updated_parent.status.as_deref().unwrap_or("done")
+            ));
+        } else {
+            let next_subtask = internal_create_subtask(
+                root,
+                &parent_id,
+                Some(&target_col.id),
+                Some(&format!("{} ({})", parent_task.title, target_col.title)),
+                Some(summary),
+                app_handle,
+            )
+            .await?;
+
+            let next_subtask_id = next_subtask.id.clone();
+            let parent_summary_content = format!(
+                "### Саммари этапа (передано на {} {}):\n\n{}",
+                next_subtask_id, target_col.title, summary
+            );
+            let _ = append_task_dialog_activity(root, &parent_id, "summary", &parent_summary_content, app_handle).await;
+
+            let next_sub_summary_content = format!(
+                "### Саммари предыдущего этапа ({}) для {}:\n\n{}",
+                subtask_id, target_col.title, summary
+            );
+            let _ = append_task_dialog_activity(root, &next_subtask_id, "summary", &next_sub_summary_content, app_handle).await;
+
+            return Ok(format!(
+                "УСПЕШНО: Создана подзадача {} ({}) для задачи {}",
+                next_subtask_id, target_col.title, parent_id
+            ));
+        }
+    }
+
+    // CASE B: The task calling advance_task is a root parent task (e.g. CVH-009)
+    if !is_terminal {
+        // Universal subtask progression (§ 2.2):
+        // Parent task remains pinned in its current stage while an isolated child subtask
+        // (<parent-id>.<subtask-index>, e.g. CVH-009.1) is created in the target stage.
+
+        // Strict guard against duplicate subtasks:
         if let Some(ref existing_sub_id) = current_task.waiting_for_subtask_id {
             if let Some(existing_sub) = tasks.iter().find(|t| task_id_matches(&t.id, existing_sub_id)) {
                 if existing_sub.status.as_deref() != Some("done") {
@@ -2607,7 +2811,7 @@ pub async fn internal_advance_task_to_stage(
                         ),
                     );
                     return Ok(format!(
-                        "Подзадача ревью {} уже активна для задачи {}",
+                        "Подзадача {} уже активна для задачи {}",
                         existing_sub_id, task_id
                     ));
                 }
@@ -2628,7 +2832,7 @@ pub async fn internal_advance_task_to_stage(
                 ),
             );
             return Ok(format!(
-                "Подзадача ревью {} уже выполняется в колонке {}",
+                "Подзадача {} уже выполняется в колонке {}",
                 existing_sub.id, target_col.title
             ));
         }
@@ -2637,7 +2841,7 @@ pub async fn internal_advance_task_to_stage(
             root,
             task_id,
             Some(&target_col.id),
-            Some(&format!("{} (Ревью)", current_task.title)),
+            Some(&format!("{} ({})", current_task.title, target_col.title)),
             Some(summary),
             app_handle,
         )
@@ -2645,9 +2849,8 @@ pub async fn internal_advance_task_to_stage(
 
         let subtask_id = subtask.id.clone();
 
-        // Record handover summary in dialog_items under parent and subtask:
         let parent_summary_content = format!(
-            "### Саммари этапа (передано на ревью {}): {}\n\n{}",
+            "### Саммари этапа (передано на {} {}):\n\n{}",
             subtask_id, target_col.title, summary
         );
         let _ = append_task_dialog_activity(
@@ -2660,8 +2863,8 @@ pub async fn internal_advance_task_to_stage(
         .await;
 
         let subtask_summary_content = format!(
-            "### Саммари родительской задачи ({}) для ревью:\n\n{}",
-            task_id, summary
+            "### Саммари родительской задачи ({}) для {}:\n\n{}",
+            task_id, target_col.title, summary
         );
         let _ = append_task_dialog_activity(
             root,
@@ -2673,27 +2876,18 @@ pub async fn internal_advance_task_to_stage(
         .await;
 
         return Ok(format!(
-            "УСПЕШНО: Создана подзадача ревью {} для задачи {}",
-            subtask_id, task_id
+            "УСПЕШНО: Создана подзадача {} ({}) для задачи {}",
+            subtask_id, target_col.title, task_id
         ));
     }
 
-    // Target stage is not review (e.g. normal column or ready/done):
-    let is_terminal = target_col.terminal == Some(true)
-        || stage_id_matches(&target_col.id, "ready")
-        || stage_id_matches(&target_col.id, "done");
-    let status_override = if is_terminal {
-        Some("done".to_string())
-    } else {
-        None
-    };
-
+    // Terminal column advance for parent task:
     let updated_task = internal_move_task_stage(
         root,
         task_id,
         &target_col.id,
         Some("APPROVED".to_string()),
-        status_override,
+        Some("done".to_string()),
         Some(summary.to_string()),
         app_handle,
         true, // is_autonomous_advance
@@ -2712,13 +2906,12 @@ pub async fn internal_advance_task_to_stage(
     .await;
 
     Ok(format!(
-        "УСПЕШНО: Задача {} переведена на этап '{}' ({}), статус: {}",
+        "УСПЕШНО: Задача {} завершена в терминальной колонке '{}' ({}), статус: {}",
         task_id,
         target_col.id,
         target_col.title,
-        updated_task.status.as_deref().unwrap_or("idle")
-    ))
-}
+        updated_task.status.as_deref().unwrap_or("done")
+    ))}
 
 #[tauri::command]
 pub async fn advance_task(

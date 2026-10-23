@@ -1221,6 +1221,29 @@ export default function DrawerActivityStream({
               if (!explanationText) return true;
               const expLower = explanationText.toLowerCase();
 
+              // Suppress repeated duplicate Agent Explanation cards if content is identical to previous agent message in stream
+              for (let i = idx - 1; i >= 0; i--) {
+                const act = displayActivities[i];
+                if (act?.type === 'output' || !act?.type) {
+                  const prevText = (act.content || '').trim();
+                  if (prevText) {
+                    if (prevText === explanationText || prevText.toLowerCase() === expLower) {
+                      return true;
+                    }
+                    break;
+                  }
+                }
+              }
+              for (let i = idx - 1; i >= Math.max(0, idx - 5); i--) {
+                const act = displayActivities[i];
+                if (act?.type === 'output' || !act?.type) {
+                  const prevText = (act.content || '').trim();
+                  if (prevText && (prevText === explanationText || prevText.toLowerCase() === expLower)) {
+                    return true;
+                  }
+                }
+              }
+
               const windowSize = 2;
               const start = Math.max(0, idx - windowSize);
               const end = Math.min((displayActivities?.length ?? 0) - 1, idx + windowSize);

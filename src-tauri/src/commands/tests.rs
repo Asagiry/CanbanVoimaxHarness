@@ -1754,7 +1754,7 @@ Write code.
         .await
         .expect("internal_advance_task must succeed");
 
-        assert!(adv_res.contains("УСПЕШНО: Создана подзадача ревью CVH-100.1 для задачи CVH-100"));
+        assert!(adv_res.contains("УСПЕШНО: Создана подзадача CVH-100.1"));
 
         let loaded = load_tasks_from_disk(&base).await;
         assert_eq!(loaded.len(), 2, "Must contain parent and child subtask");
@@ -1769,7 +1769,7 @@ Write code.
         assert_eq!(subtask.subtask_index, Some(1));
         assert_eq!(subtask.stage_id, "review", "Subtask must be in target review column");
         assert_eq!(subtask.status.as_deref(), Some("running"), "Target has persona 'reviewer', status must be 'running'");
-        assert_eq!(subtask.title, "Implement Review Subtask (Ревью)");
+        assert_eq!(subtask.title, "Implement Review Subtask (Review)");
         assert_eq!(subtask.description, "Handover: implemented feature and tests");
         assert_eq!(subtask.handover_summary.as_deref(), Some("Handover: implemented feature and tests"));
         assert_eq!(subtask.worktree_path.as_deref(), Some("C:\\fake\\worktree"));
@@ -1972,7 +1972,7 @@ Write code.
         let adv_res = internal_advance_task(&base, "CVH-200", "Handover to review", None)
             .await
             .expect("advance to review subtask");
-        assert!(adv_res.contains("УСПЕШНО: Создана подзадача ревью CVH-200.1 для задачи CVH-200"));
+        assert!(adv_res.contains("УСПЕШНО: Создана подзадача CVH-200.1"));
 
         let loaded = load_tasks_from_disk(&base).await;
         let p1 = loaded.iter().find(|t| t.id == "CVH-200").unwrap();
@@ -2000,15 +2000,18 @@ Write code.
 
         let loaded2 = load_tasks_from_disk(&base).await;
         let p2 = loaded2.iter().find(|t| t.id == "CVH-200").unwrap();
-        assert_eq!(p2.stage_id, "retro", "Parent must advance to 'retro' stage after review approval in 5-stage pipeline");
-        assert_eq!(p2.status.as_deref(), Some("running"), "Retro has persona 'retro-verifier', status must be running");
-        assert_eq!(p2.waiting_for_subtask_id, None, "Parent must no longer wait for subtask");
-        assert_eq!(p2.verdict.as_deref(), Some("APPROVED"));
+        assert_eq!(p2.stage_id, "dev", "Parent stays pinned in dev stage");
+        assert_eq!(p2.status.as_deref(), Some("waiting_subtask"), "Parent status is waiting_subtask");
+        assert_eq!(p2.waiting_for_subtask_id.as_deref(), Some("CVH-200.2"), "Parent waits for CVH-200.2 in retro");
 
-        // 3. Now advance parent from retro to ready:
-        let move_parent_ready = internal_move_task_stage(
+        let s2 = loaded2.iter().find(|t| t.id == "CVH-200.2").unwrap();
+        assert_eq!(s2.stage_id, "retro", "Subtask CVH-200.2 is in retro stage");
+        assert_eq!(s2.status.as_deref(), Some("running"));
+
+        // 3. Now advance subtask CVH-200.2 from retro to ready:
+        let move_retro_ready = internal_move_task_stage(
             &base,
-            "CVH-200",
+            "CVH-200.2",
             "ready",
             Some("APPROVED".to_string()),
             Some("done".to_string()),
@@ -2018,9 +2021,9 @@ Write code.
             None,
         )
         .await
-        .expect("move parent to ready");
-        assert_eq!(move_parent_ready.stage_id, "ready");
-        assert_eq!(move_parent_ready.status.as_deref(), Some("done"));
+        .expect("move retro subtask to ready");
+        assert_eq!(move_retro_ready.stage_id, "ready");
+        assert_eq!(move_retro_ready.status.as_deref(), Some("done"));
 
         let loaded3 = load_tasks_from_disk(&base).await;
         let p3 = loaded3.iter().find(|t| t.id == "CVH-200").unwrap();
