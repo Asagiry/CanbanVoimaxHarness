@@ -54,8 +54,8 @@ Authoritative backend engineering standards and architectural invariants of **Ca
 - Windows commands executed via `cmd.exe` use `/D /S /C "chcp 65001 >nul && <command>"` for consistent UTF-8 encoding.
 
 ### 2.6 Task Attachments & Vision LLM Pipeline (`src-tauri/src/commands/tasks.rs`, `agent.rs`)
-- **Tauri IPC Command**: `create_task` accepts optional `attachments: Option<Vec<String>>`, passed through `internal_create_task` and persisted in SQLite `tasks.attachments` as serialized JSON array.
-- **LLM Vision Context**: `AgentSessionConfig` carries `task_attachments: Option<Vec<String>>`. When starting turn 0, if attachments are present, the initial user prompt is packaged via `ChatMessage::user_with_images(initial_user_prompt, atts)`. Reconstructed SQLite dialogue contexts also maintain vision attachments on `messages[1]`.
+- **Tauri IPC Command & Synchronization**: `create_task` and `save_tasks` preserve `attachments`. `save_tasks` defensively guards disk attachments and metadata (`attachments`, `cover_image`, `handover_summary`) from being overwritten by stale `None` values. Subtasks automatically inherit attachments from their parent task.
+- **LLM Vision Context**: `AgentSessionConfig` carries `task_attachments: Option<Vec<String>>`. When starting turn 0, if attachments are present, the initial user prompt explicitly notifies the model (`[ВЛОЖЕНИЯ К ЗАДАЧЕ / ATTACHMENTS]: Прикреплено N изображений...`) and packages images via `ChatMessage::user_with_images(initial_user_prompt, atts)`. Both in-memory contexts and reconstructed SQLite dialogue contexts maintain vision attachments on `messages[1]`.
 
 ---
 

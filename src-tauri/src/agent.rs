@@ -6419,6 +6419,15 @@ where
         config.task_description.trim()
     ));
 
+    if let Some(ref atts) = config.task_attachments {
+        if !atts.is_empty() {
+            initial_user_prompt.push_str(&format!(
+                "\n\n[ВЛОЖЕНИЯ К ЗАДАЧЕ / ATTACHMENTS]: Прикреплено {} изображений/скриншотов. Внимательно изучи их при выполнении задачи.",
+                atts.len()
+            ));
+        }
+    }
+
     // 1. Check if an existing in-memory context already exists for this task_id
     let in_memory_context = if let Some(ref app) = config.app_handle {
         if let Some(state) = app.try_state::<crate::commands::AppState>() {
@@ -6456,11 +6465,18 @@ where
     };
 
     // 3. Adopt existing messages or initialize fresh 2-message array
-    let (starting_turn, mut messages) = if let Some((cur_turn, msgs)) = in_memory_context {
+    let (starting_turn, mut messages) = if let Some((cur_turn, mut msgs)) = in_memory_context {
         eprintln!(
             "CVH [agent]: Adopting existing in-memory context ({} messages, turn {}) for task {}",
             msgs.len(), cur_turn, config.task_id
         );
+        if let Some(ref atts) = config.task_attachments {
+            if !atts.is_empty() && msgs.len() >= 2 && msgs[1].role == Role::User && !msgs[1].has_images() {
+                let text = msgs[1].text_content().unwrap_or(&initial_user_prompt).to_string();
+                msgs[1] = ChatMessage::user_with_images(text, atts.clone())
+                    .with_cache_control(crate::llm::CacheControl::ephemeral());
+            }
+        }
         (cur_turn, msgs)
     } else if let Some((cur_turn, mut msgs)) = sqlite_context {
         eprintln!(

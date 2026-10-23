@@ -42,6 +42,7 @@ Authoritative frontend engineering standards and UI invariants of **CanbanVoimax
 - **Clipboard Image Pasting**: Supports pasting screenshots/images from clipboard across English (`Ctrl+V`) and Cyrillic (`Ctrl+М`) keyboard layouts, with `navigator.clipboard.read()` fallback when focus is outside text inputs. Native text pasting into inputs/textarea is preserved when only text is in clipboard.
 - **Client-Side Compression**: Pasted and attached images are compressed via `compressImageFile(file, 1568, 0.85)` before storage or IPC transfer.
 - **Lightbox & Previews**: Attached thumbnails support removal and click-to-preview via `ImageLightboxModal`.
+- **Drawer Attachments & Subagent Gallery**: `DrawerActivityStream` displays image attachment galleries in both `Task Objective Card` and `Subagent Atomic Objective Card`, automatically resolving effective attachments from the parent task if the subtask has none. In addition, `boardStore.ts` and `drawerStore.ts` guarantee attachment arrays and images are never lost during background synchronization or dialogue deduplication.
 
 ---
 
