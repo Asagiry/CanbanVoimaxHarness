@@ -368,11 +368,22 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const setHoveredTaskId = useBoardStore((s) => s.setHoveredTaskId);
   const columns = useBoardStore((s) => s.columns);
   const { language, t } = useTranslation();
-  const isHighlighted = useBoardStore((s) =>
-    s.hoveredTaskId === task.id ||
-    (Boolean(task.waitingForSubtaskId) && s.hoveredTaskId === task.waitingForSubtaskId) ||
-    (Boolean(task.parentId) && s.hoveredTaskId === task.parentId)
-  );
+  const isHighlighted = useBoardStore((s) => {
+    const hId = s.hoveredTaskId;
+    if (!hId) return false;
+    if (hId === task.id) return true;
+    if (task.parentId && hId === task.parentId) return true;
+    if (task.waitingForSubtaskId && hId === task.waitingForSubtaskId) return true;
+    const hoveredTask = s.tasks.find((t) => t.id === hId);
+    if (!hoveredTask) return false;
+    // Parent of hovered task
+    if (hoveredTask.parentId === task.id) return true;
+    // Sibling subtask sharing the same parent
+    if (task.parentId && hoveredTask.parentId && task.parentId === hoveredTask.parentId) return true;
+    // Subtask that hovered task is currently waiting for
+    if (hoveredTask.waitingForSubtaskId === task.id) return true;
+    return false;
+  });
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [isSubtasksOpen, setIsSubtasksOpen] = useState(false);
@@ -454,9 +465,10 @@ function KanbanCard({ task, index }: KanbanCardProps) {
             if (task.waitingForSubtaskId) openDrawer(task.waitingForSubtaskId);
           }}
           className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#d97706] dark:text-[#f59e0b] bg-[#fefce8] dark:bg-[#161b22] border border-[#fef08a] dark:border-[#30363d] hover:border-[#f59e0b] transition cursor-pointer"
+          title={task.waitingForSubtaskId ? `${t('status.waitingSubtask')}: ${task.waitingForSubtaskId}` : undefined}
         >
           <span className="h-1.5 w-1.5 rounded-full bg-[#f59e0b]" />
-          <span>{t('status.waitingSubtask', { id: task.waitingForSubtaskId || '' })}</span>
+          <span>{t('status.waitingSubtask')}</span>
         </button>
       );
     }
@@ -537,7 +549,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                 ? 'scale-[1.02] rotate-[1.5deg] shadow-2xl ring-1 ring-black/10 dark:ring-white/20 cursor-grabbing z-50 border-[#171717] dark:border-[#30363d] bg-white dark:bg-[#161b22]'
                 : `transition-transform duration-100 ease-out cursor-pointer active:scale-[0.99] ${
                     isHighlighted
-                      ? 'border-[#8b5cf6] shadow-md ring-1 ring-[#8b5cf6]/40 bg-white dark:bg-[#161b22]'
+                      ? 'border-[#8b5cf6] shadow-md ring-2 ring-[#8b5cf6]/50 bg-purple-50/20 dark:bg-[#1c1b29]'
                       : 'border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] hover:border-[#d4d4d8] dark:hover:border-[#30363d] shadow-xs'
                   }`
             }`}
