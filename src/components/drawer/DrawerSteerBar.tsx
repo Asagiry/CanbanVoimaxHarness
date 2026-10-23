@@ -84,9 +84,7 @@ export default function DrawerSteerBar({
     (p) => p.role.toLowerCase() === taskPersona.toLowerCase()
   );
   const parentLimit = parentMatchedPersona?.contextWindow || (taskPersona.toLowerCase() === 'cvh-dev' ? 200000 : 128000);
-  const effectiveLimit = activeSubagentId
-    ? (matchedPersona?.contextWindow || parentLimit)
-    : (matchedPersona?.contextWindow || parentLimit);
+  const effectiveLimit = matchedPersona?.contextWindow || parentLimit;
 
   // Reset input and attachments on task switch
   useEffect(() => {
