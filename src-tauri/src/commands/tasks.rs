@@ -1999,40 +1999,61 @@ pub async fn internal_move_task_stage(
         match col_from_board {
             Some(c) => c,
             None => {
-                let terminal_fallback = effective_board.as_ref().and_then(|b| {
-                    b.columns.iter().find(|c| c.terminal == Some(true) || stage_id_matches(&c.id, "ready") || stage_id_matches(&c.id, "done")).cloned()
-                        .or_else(|| b.columns.last().cloned())
-                });
-                if let Some(term) = terminal_fallback {
-                    term
-                } else {
-                    let pipeline = load_pipeline_config(root)
-                        .await
-                        .map_err(|e| format!("Failed to load pipeline: {}", e))?;
-                    pipeline
-                        .columns
-                        .iter()
-                        .find(|c| stage_id_matches(&c.id, target_stage_id))
-                        .cloned()
-                        .or_else(|| {
-                            pipeline
-                                .columns
-                                .iter()
-                                .find(|c| {
+                let pipeline = load_pipeline_config(root)
+                    .await
+                    .unwrap_or_else(|_| crate::config::default_pipeline_config());
+                let col_from_pipeline = pipeline
+                    .columns
+                    .iter()
+                    .find(|c| stage_id_matches(&c.id, target_stage_id))
+                    .cloned();
+
+                match col_from_pipeline {
+                    Some(c) => c,
+                    None => {
+                        let is_explicit_terminal_request = target_stage_id.trim().is_empty()
+                            || stage_id_matches(target_stage_id, "ready")
+                            || stage_id_matches(target_stage_id, "done")
+                            || stage_id_matches(target_stage_id, "terminal");
+
+                        let terminal_opt = if is_explicit_terminal_request {
+                            effective_board.as_ref().and_then(|b| {
+                                b.columns.iter().find(|c| c.terminal == Some(true) || stage_id_matches(&c.id, "ready") || stage_id_matches(&c.id, "done")).cloned()
+                                    .or_else(|| b.columns.last().cloned())
+                            }).or_else(|| {
+                                pipeline.columns.iter().find(|c| {
                                     c.terminal == Some(true)
                                         || stage_id_matches(&c.id, "ready")
                                         || stage_id_matches(&c.id, "done")
-                                })
-                                .cloned()
-                        })
-                        .ok_or_else(|| {
-                            let available_stages: Vec<&str> = pipeline.columns.iter().map(|c| c.id.as_str()).collect();
-                            format!(
-                                "Target stage '{}' not found in pipeline or board. Available stages: {:?}",
+                                }).cloned()
+                            })
+                        } else {
+                            None
+                        };
+
+                        if let Some(term) = terminal_opt {
+                            term
+                        } else {
+                            let mut available_stages: Vec<String> = Vec::new();
+                            if let Some(ref b) = effective_board {
+                                for c in &b.columns {
+                                    if !available_stages.contains(&c.id) {
+                                        available_stages.push(c.id.clone());
+                                    }
+                                }
+                            }
+                            for c in &pipeline.columns {
+                                if !available_stages.contains(&c.id) {
+                                    available_stages.push(c.id.clone());
+                                }
+                            }
+                            return Err(format!(
+                                "Target stage '{}' not found in active board or pipeline columns. Available: {:?}",
                                 target_stage_id,
                                 available_stages
-                            )
-                        })?
+                            ));
+                        }
+                    }
                 }
             }
         }

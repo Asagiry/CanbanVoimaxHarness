@@ -51,7 +51,7 @@ if exist "%WT_DIR%" (
 )
 
 REM Standard CVH output protocol: runtime captures these lines to assign task.worktree_path and task.branch
-echo CVH_WORKTREE=%WT_DIR%
+echo CVH_WORKTREE=worktrees/%SLUG%
 echo CVH_BRANCH=%BRANCH%
 echo [CVH Worktree Hook] Worktree successfully initialized.
 exit /b 0

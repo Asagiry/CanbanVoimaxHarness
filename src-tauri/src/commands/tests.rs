@@ -1004,6 +1004,11 @@ use std::path::PathBuf;
         let mut task3 = task_with_wt("CVH-003", None);
         apply_worktree_from_hook_stdout(&mut task3, "plain log, no markers\n");
         assert!(task3.worktree_path.is_none());
+
+        // Windows backslashes in CVH_WORKTREE are normalized to forward slashes
+        let mut task4 = task_with_wt("CVH-004", None);
+        apply_worktree_from_hook_stdout(&mut task4, "CVH_WORKTREE=worktrees\\CVH-004\n");
+        assert_eq!(task4.worktree_path.as_deref(), Some("worktrees/CVH-004"));
     }
 
     #[tokio::test]
@@ -3079,6 +3084,248 @@ Write code.
         assert_eq!(parent_after.stage_id, "ready");
         assert_eq!(parent_after.status.as_deref(), Some("done"));
         assert_eq!(parent_after.waiting_for_subtask_id, None, "Parent waiting_for_subtask_id must be None after advance to ready");
+
+        let _ = tokio::fs::remove_dir_all(&tmp).await;
+    }
+
+    #[tokio::test]
+    async fn test_move_task_to_plan_stage_autorun_and_running_status() {
+        let tmp = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("tmp")
+            .join(format!("cvh_test_plan_autorun_{}", uuid::Uuid::new_v4()));
+        let _ = tokio::fs::create_dir_all(&tmp).await;
+
+        // Scaffold minimal boards.json with development board containing backlog, plan (persona planner), dev, and ready
+        let boards_cfg = serde_json::json!({
+            "active_board_id": "development",
+            "boards": [
+                {
+                    "id": "development",
+                    "name": "Разработка",
+                    "columns": [
+                        { "id": "backlog", "title": "Бэклог", "auto_run": false },
+                        { "id": "plan", "title": "Планирование", "persona": "planner", "auto_run": true },
+                        { "id": "dev", "title": "В работе", "persona": "cvh-dev", "auto_run": true },
+                        { "id": "ready", "title": "Готово", "terminal": true }
+                    ]
+                }
+            ]
+        });
+        let boards_path = tmp.join(".cvh").join("boards.json");
+        let _ = tokio::fs::create_dir_all(tmp.join(".cvh")).await;
+        tokio::fs::write(&boards_path, serde_json::to_string_pretty(&boards_cfg).unwrap())
+            .await
+            .expect("write boards.json");
+
+        // Create task in backlog
+        let task = internal_create_task(
+            &tmp,
+            "Plan Task".to_string(),
+            "Move to plan test".to_string(),
+            "backlog".to_string(),
+            Some("development".to_string()),
+            Some(true),
+            None,
+            Some("CVH-101".to_string()),
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("create task");
+
+        assert_eq!(task.stage_id, "backlog");
+        assert_ne!(task.status.as_deref(), Some("running"));
+
+        // Move task to 'plan' column
+        let moved = internal_move_task_stage(
+            &tmp,
+            "CVH-101",
+            "plan",
+            None,
+            None,
+            None,
+            None,
+            false,
+            Some("development".to_string()),
+        )
+        .await
+        .expect("move task to plan must succeed");
+
+        assert_eq!(moved.stage_id, "plan", "Task must move to 'plan'");
+        assert_ne!(moved.stage_id, "ready", "Task must NEVER falsely move to 'ready'");
+        assert_eq!(
+            moved.status.as_deref(),
+            Some("running"),
+            "Task moving to stage with persona 'planner' and auto_run=true must enter 'running' status!"
+        );
+        assert_ne!(moved.status.as_deref(), Some("done"), "Task status must NOT be 'done'");
+
+        let _ = tokio::fs::remove_dir_all(&tmp).await;
+    }
+
+    #[tokio::test]
+    async fn test_move_task_to_plan_from_pipeline_when_not_in_board() {
+        let tmp = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("tmp")
+            .join(format!("cvh_test_plan_pipeline_{}", uuid::Uuid::new_v4()));
+        let _ = tokio::fs::create_dir_all(&tmp).await;
+        let _ = tokio::fs::create_dir_all(tmp.join(".cvh")).await;
+
+        // Boards config does NOT contain 'plan' column
+        let boards_cfg = serde_json::json!({
+            "active_board_id": "development",
+            "boards": [
+                {
+                    "id": "development",
+                    "name": "Разработка",
+                    "columns": [
+                        { "id": "backlog", "title": "Бэклог", "auto_run": false },
+                        { "id": "dev", "title": "В работе", "persona": "cvh-dev", "auto_run": true },
+                        { "id": "ready", "title": "Готово", "terminal": true }
+                    ]
+                }
+            ]
+        });
+        tokio::fs::write(
+            tmp.join(".cvh").join("boards.json"),
+            serde_json::to_string_pretty(&boards_cfg).unwrap(),
+        )
+        .await
+        .expect("write boards.json");
+
+        // Pipeline config DOES contain 'plan' column
+        let pipeline_cfg = serde_json::json!({
+            "id": "development",
+            "title": "Pipeline",
+            "columns": [
+                { "id": "backlog", "title": "Бэклог" },
+                { "id": "plan", "title": "Планирование", "persona": "planner", "auto_run": true },
+                { "id": "dev", "title": "В работе", "persona": "cvh-dev", "auto_run": true },
+                { "id": "ready", "title": "Готово", "terminal": true }
+            ]
+        });
+        tokio::fs::write(
+            tmp.join(".cvh").join("pipeline.json"),
+            serde_json::to_string_pretty(&pipeline_cfg).unwrap(),
+        )
+        .await
+        .expect("write pipeline.json");
+
+        let _task = internal_create_task(
+            &tmp,
+            "Pipeline Plan Task".to_string(),
+            "Move to plan from pipeline".to_string(),
+            "backlog".to_string(),
+            Some("development".to_string()),
+            Some(true),
+            None,
+            Some("CVH-102".to_string()),
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("create task");
+
+        // Move task to 'plan' column which only exists in pipeline.json
+        let moved = internal_move_task_stage(
+            &tmp,
+            "CVH-102",
+            "plan",
+            None,
+            None,
+            None,
+            None,
+            false,
+            Some("development".to_string()),
+        )
+        .await
+        .expect("move task to plan from pipeline must succeed");
+
+        assert_eq!(moved.stage_id, "plan", "Task must move to 'plan' from pipeline");
+        assert_ne!(moved.stage_id, "ready", "Task must NEVER falsely fall back to 'ready'");
+        assert_eq!(moved.status.as_deref(), Some("running"));
+
+        let _ = tokio::fs::remove_dir_all(&tmp).await;
+    }
+
+    #[tokio::test]
+    async fn test_move_task_to_non_existent_stage_returns_error_not_ready() {
+        let tmp = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("tmp")
+            .join(format!("cvh_test_non_existent_{}", uuid::Uuid::new_v4()));
+        let _ = tokio::fs::create_dir_all(&tmp).await;
+        let _ = tokio::fs::create_dir_all(tmp.join(".cvh")).await;
+
+        let boards_cfg = serde_json::json!({
+            "active_board_id": "development",
+            "boards": [
+                {
+                    "id": "development",
+                    "name": "Разработка",
+                    "columns": [
+                        { "id": "backlog", "title": "Бэклог" },
+                        { "id": "dev", "title": "В работе" },
+                        { "id": "ready", "title": "Готово", "terminal": true }
+                    ]
+                }
+            ]
+        });
+        tokio::fs::write(
+            tmp.join(".cvh").join("boards.json"),
+            serde_json::to_string_pretty(&boards_cfg).unwrap(),
+        )
+        .await
+        .expect("write boards.json");
+
+        let _task = internal_create_task(
+            &tmp,
+            "NonExistent Stage Task".to_string(),
+            "Move to non_existent".to_string(),
+            "backlog".to_string(),
+            Some("development".to_string()),
+            Some(true),
+            None,
+            Some("CVH-103".to_string()),
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("create task");
+
+        // Attempt move to 'non_existent' column
+        let res = internal_move_task_stage(
+            &tmp,
+            "CVH-103",
+            "non_existent",
+            None,
+            None,
+            None,
+            None,
+            false,
+            Some("development".to_string()),
+        )
+        .await;
+
+        assert!(res.is_err(), "Moving to non-existent stage must fail!");
+        let err = res.unwrap_err();
+        assert!(
+            err.contains("Target stage 'non_existent' not found in active board or pipeline columns. Available:"),
+            "Error message must specify available stages and not silently fall back to ready! Got: {}",
+            err
+        );
+
+        // Verify task on disk is still in backlog and NOT in ready / done
+        let loaded = load_tasks_from_disk(&tmp).await;
+        let t = loaded.iter().find(|t| t.id == "CVH-103").expect("task exists");
+        assert_eq!(t.stage_id, "backlog", "Task must remain in backlog");
+        assert_ne!(t.stage_id, "ready", "Task must NEVER be placed into ready");
+        assert_ne!(t.status.as_deref(), Some("done"), "Task status must NOT be done");
 
         let _ = tokio::fs::remove_dir_all(&tmp).await;
     }
