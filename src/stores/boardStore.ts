@@ -95,6 +95,7 @@ interface BoardState {
     stageId?: string;
     boardId?: string;
     model?: string;
+    attachments?: string[];
   }) => Promise<KanbanTask | null>;
   createSubtask: (parentId: string, targetColumnId?: string) => Promise<KanbanTask | null>;
   deleteTask: (taskId: string) => Promise<void>;
@@ -1040,6 +1041,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         stageId: targetColumnId,
         boardId,
         model: input.model || undefined,
+        attachments: input.attachments && input.attachments.length > 0 ? input.attachments : undefined,
       });
 
       if (backendTask && typeof backendTask.id === 'string') {

@@ -53,6 +53,10 @@ This guide documents the authoritative backend engineering standards and archite
 - **Safe Command Formatting**: Windows shell commands MUST use `quote_windows_path()` and `quote_windows_arg()` to prevent shell syntax breakage from spaces, parentheses `()`, and ampersands `&`.
 - Windows commands executed via `cmd.exe` use `/D /S /C "chcp 65001 >nul && <command>"` for consistent UTF-8 encoding.
 
+### 2.6 Task Attachments & Vision LLM Pipeline (`src-tauri/src/commands/tasks.rs`, `agent.rs`)
+- **Tauri IPC Command**: `create_task` accepts optional `attachments: Option<Vec<String>>`, passed through `internal_create_task` and persisted in SQLite `tasks.attachments` as serialized JSON array.
+- **LLM Vision Context**: `AgentSessionConfig` carries `task_attachments: Option<Vec<String>>`. When starting turn 0, if attachments are present, the initial user prompt is packaged via `ChatMessage::user_with_images(initial_user_prompt, atts)`. Reconstructed SQLite dialogue contexts also maintain vision attachments on `messages[1]`.
+
 ---
 
 ## 3. Rust Systems Coding Standards

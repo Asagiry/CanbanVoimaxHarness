@@ -29,6 +29,7 @@ import {
   Circle,
   Clock,
   ZoomIn,
+  Paperclip,
 } from 'lucide-react';
 import { formatSubagentDisplayTitle } from './SubagentsSidebar';
 
@@ -1026,6 +1027,34 @@ export default function DrawerActivityStream({
                 <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed whitespace-pre-wrap select-text font-sans">
                   {getCleanPrompt(task.description, task.title)}
                 </div>
+
+                {/* Task Attachments Gallery */}
+                {task.attachments && task.attachments.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-[#ebebeb] dark:border-[#21262d]">
+                    <div className="text-[11px] font-mono font-medium text-[#666666] dark:text-[#8b949e] mb-2 flex items-center gap-1.5">
+                      <Paperclip className="h-3 w-3" />
+                      <span>{t('newTask.attachmentsLabel')} ({task.attachments.length})</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {task.attachments.map((att, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => handleOpenLightbox(att, `Attachment ${idx + 1}`)}
+                          className="relative group rounded-md overflow-hidden border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22] cursor-pointer hover:border-[#171717] dark:hover:border-[#f0f6fc] transition shadow-2xs"
+                        >
+                          <img
+                            src={att}
+                            alt={`Attachment ${idx + 1}`}
+                            className="h-20 w-28 object-cover transition-transform group-hover:scale-105"
+                          />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-opacity opacity-0 group-hover:opacity-100">
+                            <ZoomIn className="h-4 w-4 text-white drop-shadow-md" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
           {/* a2) Relay Handoff Card */}

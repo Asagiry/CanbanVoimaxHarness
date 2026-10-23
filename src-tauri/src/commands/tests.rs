@@ -2634,6 +2634,7 @@ Write code.
             Some("CVH-005".to_string()),
             None,
             None,
+            None,
         )
         .await
         .expect("internal_create_task must succeed with explicit task_id");
@@ -2656,6 +2657,7 @@ Write code.
             "backlog".to_string(),
             Some("development".to_string()),
             Some(true),
+            None,
             None,
             None,
             None,
@@ -2710,6 +2712,7 @@ Write code.
             Some(true),
             None,
             Some("CVH-005".to_string()),
+            None,
             None,
             None,
         )

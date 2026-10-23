@@ -71,6 +71,9 @@ export const translations = {
     'newTask.descLabel': 'Description',
     'newTask.descPlaceholder': 'Details and task requirements...',
     'newTask.modelLabel': 'Agent Model',
+    'newTask.attachmentsLabel': 'Attachments',
+    'newTask.pasteHint': 'Paste image from clipboard (Ctrl+V / Ctrl+М) or attach file',
+    'newTask.removeAttachment': 'Remove image',
 
     // Kanban Board & Columns
     'board.searchPlaceholder': 'Search...',
@@ -613,6 +616,9 @@ export const translations = {
     'newTask.descLabel': 'Описание',
     'newTask.descPlaceholder': 'Детали и требования к задаче...',
     'newTask.modelLabel': 'Модель агента',
+    'newTask.attachmentsLabel': 'Вложения',
+    'newTask.pasteHint': 'Вставьте скриншот из буфера (Ctrl+V / Ctrl+М) или выберите файл',
+    'newTask.removeAttachment': 'Удалить изображение',
 
     // Kanban Board & Columns
     'board.searchPlaceholder': 'Поиск...',

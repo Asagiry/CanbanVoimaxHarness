@@ -39,6 +39,13 @@ This guide documents the authoritative frontend engineering standards and UI inv
 - **Parent-Subtask Connectors**: Dynamic cubic Bezier curves connect subtasks to parent cards across columns with hover highlighting and `ResizeObserver`.
 - **Context Menu Suppression**: Custom React portals (`TaskContextMenu`, `ColumnContextMenu`) replace default WebView2 context menus, while native menus are preserved in editable elements (`isEditableElement`).
 
+### 2.3 Task Creation Modal & Vision Attachments
+- **Modal Viewport Standards**: New Task Modal is stretched to `w-[620px] max-w-[95vw] max-h-[90vh]` with flex column layout (`flex flex-col min-h-0 overflow-y-auto space-y-4`).
+- **Description Textarea**: Sized to `rows={6} min-h-[130px] resize-y` with relaxed typography (`leading-relaxed font-sans`).
+- **Clipboard Image Pasting**: Supports pasting screenshots/images from clipboard across English (`Ctrl+V`) and Cyrillic (`Ctrl+М`) keyboard layouts, with `navigator.clipboard.read()` fallback when focus is outside text inputs. Native text pasting into inputs/textarea is preserved when only text is in clipboard.
+- **Client-Side Compression**: Pasted and attached images are compressed via `compressImageFile(file, 1568, 0.85)` before storage or IPC transfer.
+- **Lightbox & Previews**: Attached thumbnails support removal and click-to-preview via `ImageLightboxModal`.
+
 ---
 
 ## 3. State Management & React 19 Performance Discipline

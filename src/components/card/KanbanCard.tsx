@@ -6,7 +6,7 @@ import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useTranslation, Language } from '../../stores/languageStore';
 import { useShallow } from 'zustand/react/shallow';
-import { GitBranch, CornerUpLeft, ChevronDown, MessageSquare, GitFork, Check, X, Loader2, Terminal } from 'lucide-react';
+import { GitBranch, CornerUpLeft, ChevronDown, MessageSquare, GitFork, Check, X, Loader2, Terminal, Paperclip } from 'lucide-react';
 import TaskContextMenu from './TaskContextMenu';
 import { getDeterministicAgentColor } from '../../lib/agentPalette';
 
@@ -591,17 +591,28 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                   </span>
                 </div>
               ) : null}
-              {(task.createdAt || currentTotalElapsed > 0) && (
-                <div className="mt-1 flex items-center gap-1 font-mono text-[10px] text-[#8f8f8f] dark:text-[#8b949e] tabular-nums whitespace-nowrap">
-                  {task.createdAt ? (
-                    <span>{t('card.created', { date: formatCardDate(task.createdAt) })}</span>
-                  ) : null}
-                  {task.createdAt && currentTotalElapsed > 0 ? <span>·</span> : null}
-                  {currentTotalElapsed > 0 ? (
-                    <span>
-                      {t('card.elapsed', { time: formatStageDuration(currentTotalElapsed, language) })}
+              {(task.createdAt || currentTotalElapsed > 0 || (task.attachments && task.attachments.length > 0)) && (
+                <div className="mt-1 flex items-center justify-between gap-1 font-mono text-[10px] text-[#8f8f8f] dark:text-[#8b949e] tabular-nums whitespace-nowrap">
+                  <div className="flex items-center gap-1 min-w-0 truncate">
+                    {task.createdAt ? (
+                      <span>{t('card.created', { date: formatCardDate(task.createdAt) })}</span>
+                    ) : null}
+                    {task.createdAt && currentTotalElapsed > 0 ? <span>·</span> : null}
+                    {currentTotalElapsed > 0 ? (
+                      <span>
+                        {t('card.elapsed', { time: formatStageDuration(currentTotalElapsed, language) })}
+                      </span>
+                    ) : null}
+                  </div>
+                  {task.attachments && task.attachments.length > 0 && (
+                    <span
+                      className="inline-flex items-center gap-0.5 text-[10px] font-mono text-[#666666] dark:text-[#8b949e] shrink-0"
+                      title={t('newTask.attachmentsLabel')}
+                    >
+                      <Paperclip className="h-2.5 w-2.5 shrink-0" />
+                      <span>{task.attachments.length}</span>
                     </span>
-                  ) : null}
+                  )}
                 </div>
               )}
             </div>

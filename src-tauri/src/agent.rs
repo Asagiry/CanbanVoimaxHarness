@@ -5697,6 +5697,7 @@ pub struct AgentSessionConfig {
     pub task_title: String,
     pub task_description: String,
     pub handover_summary: Option<String>,
+    pub task_attachments: Option<Vec<String>>,
     pub steer_prompt: Option<String>,
     pub steer_images: Option<Vec<String>>,
     pub base_url: String,
@@ -6318,18 +6319,34 @@ where
             msgs.len(), cur_turn, config.task_id
         );
         (cur_turn, msgs)
-    } else if let Some((cur_turn, msgs)) = sqlite_context {
+    } else if let Some((cur_turn, mut msgs)) = sqlite_context {
         eprintln!(
             "CVH [agent]: Adopting reconstructed SQLite dialogue context ({} messages) for task {}",
             msgs.len(), config.task_id
         );
+        if let Some(ref atts) = config.task_attachments {
+            if !atts.is_empty() && msgs.len() >= 2 && msgs[1].role == Role::User && !msgs[1].has_images() {
+                let text = msgs[1].text_content().unwrap_or(&initial_user_prompt).to_string();
+                msgs[1] = ChatMessage::user_with_images(text, atts.clone())
+                    .with_cache_control(crate::llm::CacheControl::ephemeral());
+            }
+        }
         (cur_turn, msgs)
     } else {
+        let initial_user_msg = if let Some(ref atts) = config.task_attachments {
+            if !atts.is_empty() {
+                ChatMessage::user_with_images(initial_user_prompt, atts.clone())
+            } else {
+                ChatMessage::user(initial_user_prompt)
+            }
+        } else {
+            ChatMessage::user(initial_user_prompt)
+        };
         (
             0,
             vec![
                 ChatMessage::system(system_prompt.clone()).with_cache_control(crate::llm::CacheControl::ephemeral()),
-                ChatMessage::user(initial_user_prompt).with_cache_control(crate::llm::CacheControl::ephemeral()),
+                initial_user_msg.with_cache_control(crate::llm::CacheControl::ephemeral()),
             ],
         )
     };

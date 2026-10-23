@@ -571,6 +571,7 @@ pub async fn create_task(
     skip_backlog_hook: Option<bool>,
     model: Option<String>,
     task_id: Option<String>,
+    attachments: Option<Vec<String>>,
     app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Task, String> {
@@ -595,6 +596,7 @@ pub async fn create_task(
         effective_skip,
         model,
         task_id,
+        attachments,
         Some(&app_handle),
         Some(state.inner()),
     )
@@ -611,6 +613,7 @@ pub async fn internal_create_task(
     skip_worktree: Option<bool>,
     model: Option<String>,
     task_id: Option<String>,
+    attachments: Option<Vec<String>>,
     app_handle: Option<&AppHandle>,
     state: Option<&AppState>,
 ) -> Result<Task, String> {
@@ -671,7 +674,7 @@ pub async fn internal_create_task(
         waiting_for_subtask_id: None,
         handover_summary: None,
         cover_image: None,
-        attachments: None,
+        attachments,
         todos: None,
         priority: None,
         tags: None,
@@ -3272,6 +3275,7 @@ pub async fn run_agent(
         task_title: task.title.clone(),
         task_description: initial_description,
         handover_summary: task.handover_summary.clone(),
+        task_attachments: task.attachments.clone(),
         steer_prompt,
         steer_images: images.clone(),
         base_url,
