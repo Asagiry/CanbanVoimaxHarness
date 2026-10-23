@@ -464,7 +464,8 @@ export default function AgentConsoleDrawer() {
     const mainText = trimmed || (images.length > 0 ? 'Изображение прикреплено' : '');
 
     setActiveAgentTask(task.id, true);
-    if (activeSubagentId) {
+    const isSubagentABoardTask = Boolean(activeSubagentId && useBoardStore.getState().tasks.some((t) => t.id === activeSubagentId));
+    if (activeSubagentId && !isSubagentABoardTask) {
       setActiveAgentTask(activeSubagentId, true);
       // Append user steer message into subagent feed
       appendOutput(activeSubagentId, mainText, 'user', imageUrls.length > 0 ? imageUrls : undefined);

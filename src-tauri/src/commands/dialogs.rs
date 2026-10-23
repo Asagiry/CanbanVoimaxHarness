@@ -177,12 +177,16 @@ pub async fn list_subagents(
         return Ok(Vec::new());
     }
 
+    let disk_tasks = crate::commands::tasks::load_tasks_from_disk(&root).await;
     let mut result_map: std::collections::HashMap<String, SubagentSummary> = std::collections::HashMap::new();
 
     // 1. In-memory sessions from SUBAGENT_SESSIONS
     {
         let sessions = crate::agent::SUBAGENT_SESSIONS.lock().await;
         for (sub_id, session) in sessions.iter() {
+            if disk_tasks.iter().any(|t| t.id == *sub_id) {
+                continue;
+            }
             let info = session.retry_info.lock().await;
             if info.parent_task_id == p_trim {
                 let summary = SubagentSummary {
@@ -251,6 +255,9 @@ pub async fn list_subagents(
     if let Ok(keys) = crate::db::list_subagent_dialog_keys(&root, p_trim) {
         for key in keys {
             let raw_sub_id = key.strip_prefix(&format!("{}:sub:", p_trim)).unwrap_or(&key).to_string();
+            if disk_tasks.iter().any(|t| t.id == raw_sub_id) {
+                continue;
+            }
             let items = crate::db::load_dialog_items(&root, &key).unwrap_or_default();
             let steps_count = items.len();
 
@@ -359,7 +366,10 @@ pub async fn list_subagents(
         }
     }
 
-    let mut list: Vec<SubagentSummary> = result_map.into_values().collect();
+    let mut list: Vec<SubagentSummary> = result_map
+        .into_values()
+        .filter(|s| !disk_tasks.iter().any(|t| t.id == s.id))
+        .collect();
     list.sort_by(|a, b| a.id.cmp(&b.id));
     Ok(list)
 }

@@ -212,6 +212,8 @@ export const translations = {
 
     // Subagents Sidebar
     'subagents.title': 'Subagents',
+    'subagents.boardSubtasks': 'Board Subtasks',
+    'subagents.inProcess': 'Subagents',
     'subagents.panelAria': 'Subagents panel',
     'subagents.expandPanel': 'Expand subagents panel',
     'subagents.collapsePanel': 'Collapse subagents panel',
@@ -748,6 +750,8 @@ export const translations = {
 
     // Subagents Sidebar
     'subagents.title': 'Субагенты',
+    'subagents.boardSubtasks': 'Подзадачи на доске',
+    'subagents.inProcess': 'Субагенты',
     'subagents.panelAria': 'Панель субагентов',
     'subagents.expandPanel': 'Развернуть панель субагентов',
     'subagents.collapsePanel': 'Скрыть панель субагентов',

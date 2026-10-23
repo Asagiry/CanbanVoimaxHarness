@@ -2727,12 +2727,6 @@ pub async fn internal_advance_task_to_stage(
             );
             let _ = append_task_dialog_activity(root, &parent_id, "summary", &parent_summary_content, app_handle).await;
 
-            let next_sub_summary_content = format!(
-                "### Саммари предыдущего этапа ({}) для {}:\n\n{}",
-                subtask_id, target_col.title, summary
-            );
-            let _ = append_task_dialog_activity(root, &next_subtask_id, "summary", &next_sub_summary_content, app_handle).await;
-
             return Ok(format!(
                 "УСПЕШНО: Создана подзадача {} ({}) для задачи {}",
                 next_subtask_id, target_col.title, parent_id
@@ -2807,19 +2801,6 @@ pub async fn internal_advance_task_to_stage(
             task_id,
             "summary",
             &parent_summary_content,
-            app_handle,
-        )
-        .await;
-
-        let subtask_summary_content = format!(
-            "### Саммари родительской задачи ({}) для {}:\n\n{}",
-            task_id, target_col.title, summary
-        );
-        let _ = append_task_dialog_activity(
-            root,
-            &subtask_id,
-            "summary",
-            &subtask_summary_content,
             app_handle,
         )
         .await;

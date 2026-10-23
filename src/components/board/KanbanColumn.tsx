@@ -49,7 +49,6 @@ function KanbanColumn({
     ? tasks.filter((t) => !t.parentId)
     : tasks.filter((t) => {
         if (!t.parentId) return true;
-        if (t.status === 'done') return false;
         if (doneParentIds && doneParentIds.has(t.parentId)) return false;
         return true;
       });

@@ -6,7 +6,7 @@ import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useTranslation, Language } from '../../stores/languageStore';
 import { useShallow } from 'zustand/react/shallow';
-import { GitBranch, ChevronDown, MessageSquare, GitFork, Check, X, Loader2, Terminal } from 'lucide-react';
+import { GitBranch, CornerUpLeft, ChevronDown, MessageSquare, GitFork, Check, X, Loader2, Terminal } from 'lucide-react';
 import TaskContextMenu from './TaskContextMenu';
 import { getDeterministicAgentColor } from '../../lib/agentPalette';
 
@@ -560,7 +560,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                     className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#6366f1] dark:text-[#a5b4fc] bg-[#eef2ff] dark:bg-[#312e81]/40 border border-[#c7d2fe] dark:border-[#4338ca] hover:bg-[#e0e7ff] dark:hover:bg-[#3730a3]/50 transition cursor-pointer"
                     title={t('card.parentTask', { id: task.parentId })}
                   >
-                    <GitBranch className="h-2.5 w-2.5 text-[#6366f1] dark:text-[#a5b4fc]" />
+                    <CornerUpLeft className="h-2.5 w-2.5 text-[#6366f1] dark:text-[#a5b4fc]" />
                     <span>{task.parentId}</span>
                   </button>
                 )}
@@ -585,8 +585,9 @@ function KanbanCard({ task, index }: KanbanCardProps) {
               )}
               {task.branch ? (
                 <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
-                  <span className="truncate text-[#8f8f8f] dark:text-[#8b949e] min-w-0">
-                    {task.branch}
+                  <span className="inline-flex items-center gap-1 truncate text-[#8f8f8f] dark:text-[#8b949e] min-w-0">
+                    <GitBranch className="h-2.5 w-2.5 shrink-0" />
+                    <span className="truncate">{task.branch}</span>
                   </span>
                 </div>
               ) : null}
