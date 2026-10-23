@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, memo } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, memo } from 'react';
+import { createPortal } from 'react-dom';
 import { Draggable } from '@hello-pangea/dnd';
 import { KanbanTask, TaskStatus, HookExecutionState } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
@@ -59,12 +60,17 @@ interface CardHookNodeProps {
   state?: HookExecutionState;
   stageTitle?: string;
   taskId: string;
+  isDragging?: boolean;
 }
 
-function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle }: CardHookNodeProps) {
+function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle, isDragging }: CardHookNodeProps) {
   const [isHovered, setIsHovered] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
   const [now, setNow] = useState(Date.now());
   const timerRef = useRef<number | null>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const hideTimerRef = useRef<number | null>(null);
 
   const status = state?.status ?? 'idle';
 
@@ -85,6 +91,15 @@ function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle }
     };
   }, [status]);
 
+  useEffect(() => {
+    return () => {
+      if (hideTimerRef.current) {
+        clearTimeout(hideTimerRef.current);
+        hideTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const elapsedSec = state?.startedAt
     ? Math.max(0, ((status === 'running' ? now : (state.startedAt + (state.durationMs ?? 0))) - state.startedAt) / 1000)
     : 0;
@@ -93,6 +108,118 @@ function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle }
   const stderr = state?.stderr?.trim() ?? '';
   const errorText = state?.error?.trim() || stderr;
   const hasOutput = stdout.length > 0 || stderr.length > 0;
+
+  const updatePosition = () => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const popoverWidth = 320;
+    const popoverHeight = popoverRef.current?.offsetHeight ?? 260;
+
+    let left: number;
+    if (side === 'right') {
+      left = rect.left - popoverWidth - 8;
+      if (left < 8) {
+        left = rect.right + 8;
+      }
+    } else {
+      left = rect.right + 8;
+      if (left + popoverWidth > window.innerWidth - 8) {
+        left = rect.left - popoverWidth - 8;
+      }
+    }
+    left = Math.max(8, Math.min(left, window.innerWidth - popoverWidth - 8));
+
+    let top = rect.top + rect.height / 2 - popoverHeight / 2;
+    top = Math.max(8, Math.min(top, window.innerHeight - popoverHeight - 8));
+
+    setCoords({ top, left });
+  };
+
+  useLayoutEffect(() => {
+    if (isHovered) {
+      updatePosition();
+    }
+  }, [isHovered, stdout, stderr, errorText]);
+
+  // Close immediately when card is being dragged
+  useEffect(() => {
+    if (isDragging && isHovered) {
+      if (hideTimerRef.current) {
+        clearTimeout(hideTimerRef.current);
+        hideTimerRef.current = null;
+      }
+      setIsHovered(false);
+    }
+  }, [isDragging, isHovered]);
+
+  // Close on window/column scroll, resize, or pointerdown outside
+  useEffect(() => {
+    if (!isHovered) return;
+
+    const handleClose = () => {
+      if (hideTimerRef.current) {
+        clearTimeout(hideTimerRef.current);
+        hideTimerRef.current = null;
+      }
+      setIsHovered(false);
+    };
+
+    const handlePointerDown = (e: PointerEvent) => {
+      if (popoverRef.current?.contains(e.target as Node)) {
+        return;
+      }
+      if (triggerRef.current?.contains(e.target as Node)) {
+        return;
+      }
+      handleClose();
+    };
+
+    window.addEventListener('scroll', handleClose, { capture: true, passive: true });
+    window.addEventListener('resize', handleClose);
+    window.addEventListener('pointerdown', handlePointerDown);
+
+    return () => {
+      window.removeEventListener('scroll', handleClose, { capture: true });
+      window.removeEventListener('resize', handleClose);
+      window.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, [isHovered]);
+
+  const handleMouseEnter = () => {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+    updatePosition();
+    setIsHovered(true);
+  };
+
+  const handleMouseLeave = () => {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+    }
+    hideTimerRef.current = window.setTimeout(() => {
+      setIsHovered(false);
+      hideTimerRef.current = null;
+    }, 100);
+  };
+
+  const handlePopoverMouseEnter = () => {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  };
+
+  const handlePopoverMouseLeave = () => {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+    }
+    hideTimerRef.current = window.setTimeout(() => {
+      setIsHovered(false);
+      hideTimerRef.current = null;
+    }, 100);
+  };
 
   const nodeColorClass = (() => {
     switch (status) {
@@ -109,32 +236,41 @@ function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle }
   })();
 
   const sidePosClass = side === 'left' ? '-left-2' : '-right-2';
-  const popoverPosClass = side === 'left' ? 'left-5' : 'right-5';
 
   return (
-    <div
-      className={`absolute top-1/2 -translate-y-1/2 ${sidePosClass} z-30 flex items-center justify-center`}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {/* Circle Node */}
+    <>
       <div
-        className={`w-4 h-4 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-110 ${nodeColorClass}`}
-        title={`${side === 'left' ? 'on_enter' : 'on_leave'}: ${hookName}`}
+        className={`absolute top-1/2 -translate-y-1/2 ${sidePosClass} z-30 flex items-center justify-center`}
+        onClick={(e) => e.stopPropagation()}
       >
-        {status === 'running' && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
-        {status === 'success' && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-        {status === 'failed' && <X className="w-2.5 h-2.5 stroke-[3]" />}
-        {status === 'idle' && (
-          <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 dark:bg-neutral-500" />
-        )}
+        {/* Circle Node Trigger */}
+        <div
+          ref={triggerRef}
+          className={`w-4 h-4 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-110 ${nodeColorClass}`}
+          title={`${side === 'left' ? 'on_enter' : 'on_leave'}: ${hookName}`}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          {status === 'running' && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
+          {status === 'success' && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+          {status === 'failed' && <X className="w-2.5 h-2.5 stroke-[3]" />}
+          {status === 'idle' && (
+            <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 dark:bg-neutral-500" />
+          )}
+        </div>
       </div>
 
-      {/* Hover Popover */}
-      {isHovered && (
+      {/* Hover Popover via Portal */}
+      {isHovered && coords && typeof document !== 'undefined' && createPortal(
         <div
-          className={`absolute top-1/2 -translate-y-1/2 ${popoverPosClass} w-72 sm:w-80 bg-white dark:bg-[#161b22] border border-neutral-200 dark:border-[#30363d] rounded-lg shadow-2xl p-3 z-50 text-left cursor-default select-text pointer-events-auto`}
+          ref={popoverRef}
+          className="fixed z-[9999] w-80 shadow-2xl rounded-lg border border-neutral-200 dark:border-[#30363d] bg-white dark:bg-[#161b22] p-3 text-left cursor-default select-text pointer-events-auto"
+          style={{
+            top: `${coords.top}px`,
+            left: `${coords.left}px`,
+          }}
+          onMouseEnter={handlePopoverMouseEnter}
+          onMouseLeave={handlePopoverMouseLeave}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
@@ -215,9 +351,10 @@ function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle }
                 : 'Скрипт выполнится автоматически при выходе из этой стадии.'}
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
 
@@ -563,6 +700,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                 state={effectiveLeftState}
                 stageTitle={taskColumn?.title || task.columnId}
                 taskId={task.id}
+                isDragging={snapshot.isDragging}
               />
             )}
 
@@ -575,6 +713,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                 state={effectiveRightState}
                 stageTitle={taskColumn?.title || task.columnId}
                 taskId={task.id}
+                isDragging={snapshot.isDragging}
               />
             )}
           </div>
