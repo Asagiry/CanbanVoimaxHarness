@@ -69,4 +69,5 @@ This guide documents the authoritative backend architecture of **CanbanVoimaxHar
 - **Sensors**: Always verify changes using `cargo check --manifest-path src-tauri/Cargo.toml`.
 - **Zero Naked Unwraps**: Never use `.unwrap()` or `.expect()` in production paths. Use strongly typed errors with `Result<T, AppError>` or `anyhow::Context`.
 - **Clippy Debt**: Code must pass `cargo clippy` without warnings.
-- **Clean Imports & Ponytail Minimalism**: No unused crates, no dead code, no placeholder mocks.
+- **Clean Imports & Ponytail Minimalism**: No unused crates, no dead code, no placeholder mocks. Правило минимального диффа и запрета лишних зависимостей: [.cvh/rules/ponytail.md](ponytail.md).
+- **Technical Anti-Slop**: Стандарты лаконичной технической речи и запрета шаблонного шума в логах и сообщениях коммитов: [.cvh/rules/antislop.md](antislop.md).

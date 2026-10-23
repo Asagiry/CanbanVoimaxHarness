@@ -71,3 +71,10 @@ This guide documents the authoritative frontend architecture of **CanbanVoimaxHa
 
 ### 3.5 Dual Runtime Compatibility (Tauri IPC vs. Web Mode)
 - All calls to `@tauri-apps/api` must be guarded with `try / catch` or dynamic imports so that Vite previews and unit tests execute without crashing.
+
+---
+
+## 4. Anti-Slop & Ponytail UI Guidelines
+
+- **Визуальная чистота (UI Anti-Slop)**: Запрет градиентного шума, выравнивание типографики и строгие монохромные акценты зафиксированы в [.cvh/rules/antislop.md](antislop.md).
+- **Минимальный дифф и отсутствие лишних npm-пакетов (Ponytail)**: Запрет спекулятивных абстракций и неизменяемых оберток зафиксирован в [.cvh/rules/ponytail.md](ponytail.md).
