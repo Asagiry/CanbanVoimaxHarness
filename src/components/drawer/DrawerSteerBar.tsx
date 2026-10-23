@@ -4,8 +4,10 @@ import ContextGauge from './ContextGauge';
 import TaskTodoWidget from './TaskTodoWidget';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
+import { useCortexStore } from '../../stores/cortexStore';
 import { useTranslation } from '../../stores/languageStore';
 import { getRoleBadgeStyle } from '../../lib/agentPalette';
+import AgentIcon from '../common/AgentIcon';
 import { getSubagentOrderMap, formatSubagentRoleDisplay } from './SubagentsSidebar';
 import { compressImageFile } from '../../lib/imageCompression';
 import {
@@ -64,11 +66,27 @@ export default function DrawerSteerBar({
     return boardTasks.some((t) => t.id === activeSubagentId);
   }, [activeSubagentId, boardTasks]);
 
+  const boards = useBoardStore((s) => s.boards);
   const columns = useBoardStore((s) => s.columns);
-  const currentColumn = columns.find((c) => c.id === task.columnId);
-  const activePersona = activeSubagentRole || currentColumn?.persona || 'developer';
+  const taskBoard = boards.find((b) => b.id === task.boardId);
+  const taskColumn = taskBoard?.columns.find((c) => c.id === task.columnId) || columns.find((c) => c.id === task.columnId);
+  const taskPersona = task.persona || taskColumn?.persona || 'developer';
+  const activePersona = activeSubagentRole || taskPersona;
   const effectiveGaugeTaskId = activeSubagentId || task.id;
   const effectiveGaugePersona = activeSubagentId ? (activeSubagentRole || 'general') : activePersona;
+
+  const agentPersonas = useCortexStore((s) => s.agentPersonas);
+  const matchedPersona = agentPersonas.find(
+    (p) => p.role.toLowerCase() === activePersona.toLowerCase()
+  );
+
+  const parentMatchedPersona = agentPersonas.find(
+    (p) => p.role.toLowerCase() === taskPersona.toLowerCase()
+  );
+  const parentLimit = parentMatchedPersona?.contextWindow || (taskPersona.toLowerCase() === 'cvh-dev' ? 200000 : 128000);
+  const effectiveLimit = activeSubagentId
+    ? (matchedPersona?.contextWindow || parentLimit)
+    : (matchedPersona?.contextWindow || parentLimit);
 
   // Reset input and attachments on task switch
   useEffect(() => {
@@ -285,8 +303,8 @@ export default function DrawerSteerBar({
                 <TaskTodoWidget task={task} align="left" />
               )}
 
-              {/* Sleek Subagent Badge */}
-              {activeSubagentId && (
+              {/* Sleek Subagent Badge or Active Agent Badge */}
+              {activeSubagentId ? (
                 <div className="flex items-center space-x-1 shrink-0">
                   <span
                     style={getRoleBadgeStyle(activeSubagentRole)}
@@ -295,6 +313,14 @@ export default function DrawerSteerBar({
                     {formatSubagentRoleDisplay(activeSubagentRole, subagentNumber || 1, isBoardSubtask, language)}
                   </span>
                 </div>
+              ) : (
+                <span
+                  style={getRoleBadgeStyle(activePersona, matchedPersona?.color)}
+                  className="px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider border uppercase shrink-0 select-none flex items-center gap-1.5"
+                >
+                  <AgentIcon name={matchedPersona?.icon} className="h-3 w-3" />
+                  <span>{activePersona.toUpperCase()}</span>
+                </span>
               )}
             </div>
 
@@ -361,7 +387,7 @@ export default function DrawerSteerBar({
 
         {/* Elegant Telemetry Status Line (Кэш, TPS, Контекст) */}
         <div className="flex items-center justify-center">
-          <ContextGauge taskId={effectiveGaugeTaskId} persona={effectiveGaugePersona} turns={turns} />
+          <ContextGauge taskId={effectiveGaugeTaskId} persona={effectiveGaugePersona} turns={turns} contextWindow={effectiveLimit} />
         </div>
       </div>
     </footer>

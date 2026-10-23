@@ -1990,7 +1990,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             Object.keys(tool.params).length > 0 && renderToolParams(params)
           )}
 
-          {tool.stdout && (
+          {!isReadOp && tool.stdout && (
             <div>
               <span className="text-[10px] text-[#666666] dark:text-[#8b949e] block mb-1">
                 Вывод команды
