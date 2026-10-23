@@ -2773,7 +2773,7 @@ data: [DONE]
 
         // 1. Result should indicate success
         assert!(result.contains("УСПЕШНО"), "got: {}", result);
-        assert!(result.contains("ревью") || result.contains("review"), "got: {}", result);
+        assert!(result.to_lowercase().contains("review") || result.contains("ревью"), "got: {}", result);
 
         // 2. Only 1 request was sent to the LLM (zero extra turns)
         assert_eq!(request_counter.load(Ordering::SeqCst), 1, "Expected exactly 1 request to LLM, no extra turns");

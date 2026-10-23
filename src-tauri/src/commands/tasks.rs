@@ -1444,40 +1444,7 @@ pub fn propagate_parent_subtask_advance(
             .position(|c| stage_id_matches(&c.id, &current_source_stage))
             .or_else(|| cols.iter().position(|c| stage_id_matches(&c.id, &old_parent_stage)));
 
-        let is_source_review = stage_id_matches(&current_source_stage, "review")
-            || sub_stage_idx
-                .and_then(|idx| cols.get(idx))
-                .map(is_review_column)
-                .unwrap_or(false);
-
-        let next_col_opt = if is_source_review {
-            let retro_col = cols.iter().find(|c| stage_id_matches(&c.id, "retro"));
-            let ready_col = cols.iter().find(|c| {
-                c.terminal == Some(true)
-                    || stage_id_matches(&c.id, "ready")
-                    || stage_id_matches(&c.id, "done")
-            });
-
-            // Review routing invariant: if approved immediately on first attempt -> ready;
-            // if there were changes requested / remarks -> retro for learning capture.
-            let had_changes_requested = tasks[parent_idx].verdict.as_deref() == Some("CHANGES_REQUESTED")
-                || tasks.iter().any(|t| t.parent_id.as_deref() == Some(&parent_id) && t.verdict.as_deref() == Some("CHANGES_REQUESTED"))
-                || tasks.iter().filter(|t| t.parent_id.as_deref() == Some(&parent_id)).count() > 1;
-
-            if had_changes_requested && retro_col.is_some() {
-                retro_col.cloned()
-            } else if ready_col.is_some() {
-                ready_col.cloned()
-            } else if let Some(idx) = sub_stage_idx {
-                if idx + 1 < cols.len() {
-                    Some(cols[idx + 1].clone())
-                } else {
-                    cols.last().cloned()
-                }
-            } else {
-                cols.last().cloned()
-            }
-        } else if let Some(idx) = sub_stage_idx {
+        let next_col_opt = if let Some(idx) = sub_stage_idx {
             if idx + 1 < cols.len() {
                 Some(cols[idx + 1].clone())
             } else {
@@ -2652,25 +2619,7 @@ pub async fn internal_advance_task_to_stage(
             ));
         }
 
-        let is_curr_review = is_review_column(&columns[curr_idx]);
-        if is_curr_review {
-            let retro_col = columns.iter().find(|c| stage_id_matches(&c.id, "retro"));
-            let ready_col = columns.iter().find(|c| {
-                c.terminal == Some(true)
-                    || stage_id_matches(&c.id, "ready")
-                    || stage_id_matches(&c.id, "done")
-            });
-            let had_changes_requested = current_task.verdict.as_deref() == Some("CHANGES_REQUESTED");
-            if had_changes_requested && retro_col.is_some() {
-                retro_col.cloned().unwrap()
-            } else if ready_col.is_some() {
-                ready_col.cloned().unwrap()
-            } else {
-                columns[curr_idx + 1].clone()
-            }
-        } else {
-            columns[curr_idx + 1].clone()
-        }
+        columns[curr_idx + 1].clone()
     };
 
     // Universal Relay Progression (§ 2.2 & § 2.7):
