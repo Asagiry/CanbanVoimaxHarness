@@ -23,9 +23,7 @@
             "web_search",
             "web_fetch"
           ],
-          "hooks": {
-            "on_enter": "builtin:create_worktree"
-          },
+          "hooks": {},
           "routes": null,
           "autoRun": null,
           "terminal": null
@@ -97,7 +95,7 @@
             "web_fetch"
           ],
           "hooks": {
-            "on_finish": ".cvh/hooks/on_review_finish.bat"
+            "on_leave": ".cvh/hooks/on_review_finish.bat"
           },
           "routes": {
             "on_approved": "ready",

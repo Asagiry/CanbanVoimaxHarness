@@ -1,6 +1,10 @@
-# Rule: Hooks and Transition Scripts
-Refer to `.cvh/rules/hooks.md`. Load via `load_rule("hooks")`.
+# Правило: Скрипты перехода и хуки жизненного цикла
+Смотри `.cvh/rules/hooks.md`. Загрузка через `load_rule("hooks")`.
 
-- Lifecycle hooks: `hooks.on_enter`, `hooks.on_finish`.
-- Injected env: `CVH_TASK_ID`, `CVH_TASK_TITLE`, `CVH_WORKTREE_PATH`, `CVH_BRANCH`, `CVH_STAGE_ID`, `CVH_VERDICT`.
-- Gatekeeper sensors block transitions on non-zero exit code.
+- Хуки жизненного цикла: `hooks.on_enter` (вход в стадию), `hooks.on_leave` (выход из стадии).
+- Исполняемые скрипты: файлы в `.cvh/hooks/` (`.bat`, `.cmd`, `.ps1`, `.sh`, `.py`).
+- Переменные окружения: `CVH_TASK_ID`, `CVH_TASK_TITLE`, `CVH_WORKTREE_PATH`, `CVH_BRANCH`, `CVH_STAGE_ID`, `CVH_VERDICT`.
+- Протокол стандартного вывода: строки `CVH_WORKTREE=<path>` и `CVH_BRANCH=<branch>` связываются с карточкой задачи.
+- Механизм отклонения: ненулевой код возврата отменяет переход, записывает лог ошибки в диалог SQLite как steer-сообщение, переводит карточку в статус `idle` с вердиктом `CHANGES_REQUESTED` и запускает `agent:autorun`.
+- Сенсор перехода (`gatekeeperSensor`): предварительная валидация команды внутри ворктри перед перемещением карточки.
+- Инвариант терминальной стадии (`ready` / `terminal: true`): разрешен только хук `on_enter`. Хук `on_leave` строго запрещен и бессмысленен.

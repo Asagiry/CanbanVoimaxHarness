@@ -1,34 +1,73 @@
-# Guide: Transition Scripts and Lifecycle Hooks
+# Руководство: Скрипты перехода и хуки жизненного цикла
 
-Authoritative rules for `.cvh/hooks/` and column lifecycle scripts.
+Правила для `.cvh/hooks/` и скриптов жизненного цикла колонок.
 
-## 1. Lifecycle Triggers & Worktree Governance
-Columns declare transition hooks in their column configuration:
-- `hooks.on_enter`: Triggered when a card enters the stage.
-- `hooks.on_finish`: Triggered when an agent finishes execution in the stage.
-- **Hook-Driven Worktree Provisioning**:
-  - Built-in hook: `"builtin:create_worktree"` automatically provisions an isolated git worktree at `worktrees/<task-slug>` upon entering `backlog` (or another designated intake column) and checks out a feature branch.
-  - Worktree creation is managed exclusively by stage lifecycle hooks, rather than hardcoded side-effects.
-- **"Отключить хук бэклога" (Skip Backlog Hook Checkbox)**:
-  - In the Task Creation dialog, the checkbox **"Отключить хук бэклога"** (`skipWorktree: true` / `skip_worktree: true`) instructs the backend to bypass execution of the backlog's transition hook (`builtin:create_worktree`).
-  - When checked, the task card is placed in backlog without creating an isolated worktree directory or git feature branch, allowing lightweight administrative tasks to execute directly in the repository root or defer worktree setup.
+## 1. Точки вызова хуков
+Колонки объявляют хуки перехода в конфигурации (`boards.json` и `pipeline.json`) внутри объекта `hooks`:
+- `hooks.on_enter`: срабатывает при входе карточки в стадию.
+- `hooks.on_leave`: срабатывает при выходе карточки из стадии.
 
-## 2. Supported Formats
-Hook runner supports `.bat`, `.cmd`, `.ps1`, `.py`, `.sh`, and native binaries.
+Все хуки — это реальные исполняемые файлы (`.bat`, `.cmd`, `.ps1`, `.sh`, `.py`) в каталоге `.cvh/hooks/` или в директории агента.
 
-## 3. Injected Environment Variables
-All hook processes receive the full task execution context:
-- `CVH_TASK_ID`: Unique task identifier (e.g. `CVH-042`).
-- `CVH_TASK_TITLE`: Human-readable task title.
-- `CVH_WORKTREE_PATH`: Absolute path to the isolated worktree directory.
-- `CVH_BRANCH`: Feature branch name (`feat/<task-slug>`).
-- `CVH_STAGE_ID`: Target stage identifier.
-- `CVH_VERDICT`: Reviewer verdict when leaving review (`APPROVED`, `APPROVED_WITH_CAVEATS`, `CHANGES_REQUESTED`).
+## 2. Протокол стандартного вывода для ворктри и веток
+Если скрипт хука подготавливает ворктри или ветку git, он выводит в стандартный вывод:
+```text
+CVH_WORKTREE=<путь_к_директории>
+CVH_BRANCH=<имя_ветки>
+```
+Рантайм CVH считывает эти строки из вывода хука и сохраняет их в карточке задачи в полях `worktree_path` и `branch`.
 
-## 4. Gatekeeper Sensors
-Columns may define `gatekeeperSensor` (e.g. `cargo check` or `pnpm run build`).
-Gatekeeper sensors execute inside `CVH_WORKTREE_PATH` before any card advance. If exit code != 0, transition is blocked.
+Пример скрипта создания ворктри (`.cvh/hooks/create_worktree.bat`):
+```bat
+@echo off
+set "WT_DIR=worktrees\%CVH_TASK_ID%"
+set "BRANCH=feat/%CVH_TASK_ID%"
+if not exist "%WT_DIR%" (
+    git worktree add -b "%BRANCH%" "%WT_DIR%" HEAD || exit /b 1
+)
+echo CVH_WORKTREE=%WT_DIR%
+echo CVH_BRANCH=%BRANCH%
+exit /b 0
+```
 
-## 5. Reviewer Auto-Merge & Push Hooks
-- When a task leaves `review` with verdict `APPROVED` or enters `ready`, lifecycle hooks (`on_finish` or `on_enter`) execute in the main repository root.
-- The hook inspects `CVH_VERDICT`, merges `CVH_BRANCH` into `main`, and pushes to remote `origin/main`.
+Пример скрипта создания ворктри (`.cvh/hooks/create_worktree.sh`):
+```bash
+#!/usr/bin/env bash
+set -e
+WT_DIR="worktrees/${CVH_TASK_ID}"
+BRANCH="feat/${CVH_TASK_ID}"
+if [ ! -d "$WT_DIR" ]; then
+    git worktree add -b "$BRANCH" "$WT_DIR" HEAD
+fi
+echo "CVH_WORKTREE=$WT_DIR"
+echo "CVH_BRANCH=$BRANCH"
+exit 0
+```
+
+## 3. Переменные окружения контекста задачи
+Каждый скрипт получает контекст задачи через системные переменные окружения:
+- `CVH_TASK_ID`: идентификатор задачи (например, `CVH-042`).
+- `CVH_TASK_TITLE`: заголовок карточки задачи.
+- `CVH_WORKTREE_PATH`: абсолютный путь к ворктри задачи (если задан).
+- `CVH_BRANCH`: целевая git-ветка задачи.
+- `CVH_STAGE_ID`: идентификатор стадии перехода.
+- `CVH_VERDICT`: вердикт проверки при выходе из стадии ревью (`APPROVED`, `APPROVED_WITH_CAVEATS`, `CHANGES_REQUESTED`).
+
+## 4. Механизм отклонения перехода
+Если скрипт хука возвращает ненулевой код выхода (`exit code != 0`):
+1. Переход карточки отменяется. Задача остается в исходной стадии.
+2. Лог ошибки (`stderr` или `stdout`) сохраняется в историю SQLite диалога задачи как steer-сообщение (`### [ОТКЛОНЕНО ХУКОМ / HOOK REJECTED: ...]`).
+3. Карточка переводится в статус `idle`, а вердикт устанавливается в `CHANGES_REQUESTED`.
+4. Если у колонки настроен агент (`persona`) или активен флаг `autoRun`, рантайм автоматически инициирует событие `agent:autorun` с текстом ошибки в качестве директивы для немедленного исправления.
+
+## 5. Сенсор контроля перехода
+Колонка может объявлять свойство `gatekeeperSensor` (например, `cargo check` или `pnpm exec tsc --noEmit`).
+- Сенсор выполняется внутри `CVH_WORKTREE_PATH` перед переходом карточки в целевую стадию.
+- При ненулевом коде возврата переход блокируется.
+- При первичном переходе из `backlog` в первую рабочую стадию или при пустом ворктри запуск сенсора пропускается.
+
+## 6. Инвариант терминальной стадии
+- Стадия `ready` (или любая с флагом `terminal: true`) является финальной точкой пайплайна.
+- Задачи, попавшие в `ready`, считаются полностью завершенными.
+- На терминальной стадии разрешен только хук `on_enter` (например, слияние ветки в main, удаление ворктри, сборка релиза).
+- Хук `on_leave` на стадии `ready` строго запрещен и бессмысленен: из терминальной стадии карточки дальше никуда не переходят.

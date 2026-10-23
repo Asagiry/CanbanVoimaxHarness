@@ -31,7 +31,15 @@ Flat persona files (`.cvh/agents/<role>.md`) are deprecated and ignored.
 
 ---
 
-## 2. Persona YAML Frontmatter
+## 2. Инвариант пассивных стадий intake & completion (backlog и ready)
+- `backlog` — стадия постановки и накопления задач (Intake). Здесь задачи ждут, пока их возьмут в работу.
+- `ready` — терминальная стадия завершения (Done / Delivery). Здесь задачи полностью готовы.
+- В `backlog` и в `ready` СТРОГО ЗАПРЕЩЕНО назначать персоны агентов (СТРОГО `persona: null`, `autoRun: null`).
+- Никаких ботов в беклоге и готово! Агенты (разработчики, ревьюеры) работают ИСКЛЮЧИТЕЛЬНО на промежуточных стадиях пайплайна (`dev`, `review`).
+
+---
+
+## 3. Persona YAML Frontmatter
 Every `persona.md` must start with clean YAML frontmatter:
 ```yaml
 ---
@@ -46,9 +54,9 @@ activation: on-enter <column-id> runs run_agent(<task-id>)
 
 ---
 
-## 3. Strict Role Scope Invariant
+## 4. Strict Role Scope Invariant
 
-### 3.1 Role Boundaries
+### 4.1 Role Boundaries
 - **Developer (`developer`)**:
   - Autonomous software engineer working inside isolated git worktree (`worktrees/<task-slug>`).
   - Implements requirements, runs ground-truth sensors (`cargo check`, `npm run build`), updates architectural rules (`rules-sync`), commits atomically, and hands off via `advance_task(summary)`.
@@ -63,12 +71,12 @@ activation: on-enter <column-id> runs run_agent(<task-id>)
 
 ---
 
-## 4. Relay Handoff Protocol
+## 5. Relay Handoff Protocol
 When transitioning stages via `advance_task(summary)`, the summary is injected as `### [ЭСТАФЕТА ПАЙПЛАЙНА / RELAY HANDOFF]` into the next agent's prompt, guaranteeing 100% memory priming with zero turn degradation.
 
 ---
 
-## 5. Two-Level Tool Policy Matrix (AND-Semantics)
+## 6. Two-Level Tool Policy Matrix (AND-Semantics)
 - Global Switches: `.cvh/settings/tool-policy.json` (`globalEnabled`).
 - Stage Overrides: `stageOverrides.<stage_id>`.
 - `effective(tool, stage) = globalEnabled[tool] && stageOverride[stage][tool]`.
@@ -76,6 +84,6 @@ When transitioning stages via `advance_task(summary)`, the summary is injected a
 
 ---
 
-## 6. Progressive Disclosure
+## 7. Progressive Disclosure
 - Keep `persona.md` concise and focused.
 - Offload domain-specific architectural guides to modular files in `.cvh/rules/*.md` and `.cvh/agents/<role>/rules/*.md`.

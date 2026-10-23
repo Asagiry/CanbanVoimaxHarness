@@ -1,24 +1,30 @@
-# Guide: Boards and Pipelines Configuration
+# Руководство: Конфигурация досок и пайплайнов
 
-Authoritative rules for `.cvh/boards.json` and `.cvh/pipeline.json`.
+Правила для `.cvh/boards.json` и `.cvh/pipeline.json`.
 
-## 1. Boards as Application Control Plane
-In CanbanVoimaxHarness, the Kanban board IS the runtime control plane.
-Columns represent autonomous stages. Moving a card triggers stage automations and agents.
+## 1. Доски как панель управления приложением
+В CanbanVoimaxHarness доска является средой управления исполнением.
+Колонки представляют автономные стадии. Перемещение карточки инициирует автоматизацию и запуск агентов.
 
-## 2. Canonical Ordering Invariant
-- **Backlog**: id `"backlog"` MUST ALWAYS exist at index 0 (the first column, intake).
-- **Ready**: id `"ready"` (with `terminal: true`) MUST ALWAYS exist at the final index (completion).
-- **Middle stages**: Preserve relative pipeline order (e.g. `dev` -> `review` -> `qa`).
-- **Immutable Anchors**: Deleting `backlog` or `ready` is strictly prohibited on all boards. If omitted in an input payload, the harness backend (`normalize_columns`) automatically re-injects them.
+## 2. Канонический порядок стадий
+- **Backlog**: идентификатор `"backlog"` обязан находиться на позиции с индексом 0 (первая колонка, входящие задачи).
+- **Ready**: идентификатор `"ready"` (с флагом `terminal: true`) обязан находиться на финальной позиции (завершение задач).
+- **Промежуточные стадии**: сохраняют относительный порядок пайплайна (`dev` -> `review` -> `qa`).
+- **Неизменяемые якоря**: удаление стадий `backlog` и `ready` запрещено на всех досках. При их отсутствии в конфигурации бэкенд (`normalize_columns`) восстанавливает их автоматически.
 
-## 3. Board Self-Healing Subsystem Invariant
-- **Autonomous Task Healing**: The Rust desktop backend implements dynamic self-healing (`heal_task_board_and_column` and `heal_tasks` in `src-tauri/src/commands/tasks.rs`).
-- **Orphaned Board Resolution**: If a task's `board_id` is missing, empty, or references a deleted board, the harness dynamically heals it to `active_board_id` (or the first existing board, or `"development"`).
-- **Orphaned Column Resolution**: If a task's `stage_id` does not exist within its target board's columns, the harness dynamically heals it to the board's first column (typically `"backlog"`).
-- **Execution Points**: Healing executes autonomously on task loading (`load_tasks`), board deletion, board switching, and task imports, ensuring zero orphaned task crashes.
+## 3. Инвариант пассивных стадий intake & completion (backlog и ready)
+- `backlog` — стадия постановки и накопления задач (Intake). Здесь задачи ждут, пока их возьмут в работу.
+- `ready` — терминальная стадия завершения (Done / Delivery). Здесь задачи полностью готовы.
+- В `backlog` и в `ready` СТРОГО ЗАПРЕЩЕНО назначать персоны агентов (СТРОГО `persona: null`, `autoRun: null`).
+- Никаких ботов в беклоге и готово! Агенты (разработчики, ревьюеры) работают ИСКЛЮЧИТЕЛЬНО на промежуточных стадиях пайплайна (`dev`, `review`).
 
-## 4. Configuration Files
+## 4. Подсистема самовосстановления досок
+- **Автономное восстановление задач**: бэкенд реализует динамическое восстановление (`heal_task_board_and_column` и `heal_tasks` в `src-tauri/src/commands/tasks.rs`).
+- **Разрешение отсутствующих досок**: если `board_id` задачи отсутствует или указывает на удаленную доску, рантайм назначает задачу на `active_board_id` (или первую доступную доску).
+- **Разрешение отсутствующих колонок**: если `stage_id` задачи отсутствует среди колонок целевой доски, задача перемещается в первую колонку доски (`backlog`).
+- **Точки выполнения**: восстановление выполняется при загрузке задач (`load_tasks`), удалении доски, переключении досок и импорте.
+
+## 5. Конфигурационные файлы
 - `.cvh/boards.json`:
   ```json
   {
@@ -33,29 +39,34 @@ Columns represent autonomous stages. Moving a card triggers stage automations an
   }
   ```
 - `.cvh/pipeline.json`:
-  Mirrors the active board's columns and lifecycle settings.
-  Stage properties: `id`, `title`, `persona`, `gatekeeperSensor`, `allowedTools`, `terminal`, `hooks`, `routes`.
+  Отражает колонки активной доски и параметры жизненного цикла.
+  Свойства колонки: `id`, `title`, `persona`, `gatekeeperSensor`, `allowedTools`, `terminal`, `hooks`, `routes`.
 
-## 5. Worktree Management via Stage Hooks
-- **Hook-Driven Worktree Lifecycle**: Worktree creation is not an immutable hardcoded board side-effect. It is governed declaratively by column lifecycle hooks (`hooks.on_enter`), specifically `"builtin:create_worktree"` on the `backlog` column.
-- **"Отключить хук бэклога" (Skip Backlog Hook)**: When creating a task in the UI, the checkbox titled **"Отключить хук бэклога"** (`skipWorktree: true`) disables the backlog hook execution for that task. This prevents automatic worktree and branch provisioning, enabling lightweight administrative tasks or direct root-level execution.
+## 6. Проектирование хуков и изоляция ворктри
+- **Декларативное управление через конфигурацию**: поведение хуков и изоляция ворктри полностью определяются структурой доски (`boards.json` и `pipeline.json`). Встроенных жестко зашитых хуков не существует.
+- **Доски с изоляцией ворктри**: для задач, требующих изолированного рабочего каталога git, на соответствующей стадии настраивается хук `on_leave` или `on_enter` со скриптом из `.cvh/hooks/`, который создает каталог ворктри и ветку, возвращая пути через протокол стандартного вывода (`CVH_WORKTREE=<path>`, `CVH_BRANCH=<branch>`).
+- **Простые доски без ворктри**: для легких задач, административных процессов или досок без файловой изоляции объект `hooks` оставляется пустым `{}`. Агенты и задачи работают напрямую в корневом каталоге без создания временных ворктри и веток.
 
-## 6. Persona Mapping Invariant: 1 Persona = Exactly 1 Directory
-- **Single Source of Truth**: Exactly 1 persona corresponds to 1 directory under `.cvh/agents/<persona>/`.
-- **Decoupled Column IDs and Personas**: Columns define stages (`id`), while `persona` defines the autonomous agent role executing in that stage.
-- **No Duplication by Column ID**: Never create duplicate persona directories based on column IDs. For example, if a column has `id: "review"` and `persona: "reviewer"`, create strictly `.cvh/agents/reviewer/`, never `.cvh/agents/review/`. Multiple columns can reference the same persona without duplicating directories.
+## 7. Инвариант терминальной стадии (ready / done)
+- Стадия `ready` (или любая колонка с `terminal: true`) является финальной точкой пайплайна.
+- Задачи, переведенные в `ready`, считаются полностью завершенными.
+- На терминальной стадии разрешен исключительно хук `on_enter` (например, слияние ветки в main, удаление ворктри, сборка релиза).
+- Хук `on_leave` на стадии `ready` строго запрещен и бессмысленен: из терминальной стадии карточки дальше никуда не переходят.
 
-## 7. Ironclad 1:1 Invariants
-- **column.persona strictly matches directory name & frontmatter name**:
-  `column.persona` in `boards.json` and `pipeline.json` MUST STRICTLY MATCH the directory name `.cvh/agents/<role>/` and frontmatter `name: <role>`.
-- **stageOverrides.<stage_id> strictly matches column.id**:
-  `stageOverrides.<stage_id>` in `.cvh/settings/tool-policy.json` MUST STRICTLY MATCH `column.id` in `boards.json` and `pipeline.json`.
+## 8. Соответствие персон: 1 персона = ровно 1 директория
+- **Единый источник правды**: ровно одна персона соответствует одной директории в `.cvh/agents/<persona>/`.
+- **Разделение идентификаторов колонок и персон**: колонка задает стадию (`id`), а `persona` задает роль автономного агента на этой стадии.
+- **Запрет дублирования**: запрещено создавать дублирующие директории персон под идентификаторы колонок. Несколько колонок могут ссылаться на одну персону.
 
-## 8. Board Reconfiguration & Strict Role Scope Invariants
-- **Preserve Running Context**: When creating, renaming, or modifying boards in `.cvh/boards.json` or `.cvh/pipeline.json`, NEVER delete the board or column where your current task is running.
-- **Task Preservation**: If creating or restructuring boards, ensure all existing tasks in SQLite WAL (`.cvh/harness.db`) have their `boardId` cleanly preserved or mapped to intended boards.
-- **Strict Role Scope**: `cvh-dev` configures and repairs infrastructure; `cvh-dev` does NOT create or complete operational task cards on the board (reserved for Root Orchestrator and Copilot).
+## 9. Инварианты строгого соответствия 1:1
+- **column.persona строго совпадает с именем директории и frontmatter**: `column.persona` в `boards.json` и `pipeline.json` обязана совпадать с именем директории `.cvh/agents/<role>/` и полем `name: <role>` во frontmatter `persona.md`.
+- **stageOverrides.<stage_id> строго совпадает с column.id**: секция переопределений в `.cvh/settings/tool-policy.json` обязана совпадать с `column.id` в `boards.json` и `pipeline.json`.
 
-## 9. Sidecar Copilot Multi-Board Integration
-- The **Sidecar Copilot Dock** (`CopilotDock.tsx`, `copilot:meta-chat`) loads full multi-board and column topology dynamically on every user turn via `compile_copilot_system_prompt`.
-- Copilot is empowered to decompose requirements into new task cards across any board or column using `create_task` / `create_tasks`, while `cvh-dev` remains strictly scoped to infrastructure maintenance.
+## 10. Реконфигурация досок и границы ответственности ролей
+- **Сохранение рабочего контекста**: при создании, переименовании или изменении досок запрещено удалять доску или колонку, в которой выполняется текущая активная задача.
+- **Сохранение задач**: при реструктуризации досок идентификаторы `boardId` существующих задач в SQLite сохраняются либо явно переназначаются.
+- **Границы ответственности**: `cvh-dev` настраивает и восстанавливает инфраструктуру; `cvh-dev` не создает и не закрывает пользовательские карточки задач на доске.
+
+## 11. Интеграция сайдкара Copilot
+- Сайдкар Copilot (`CopilotDock.tsx`, диалог `copilot:meta-chat`) загружает топологию всех досок и колонок динамически при компиляции системного промпта.
+- Copilot уполномочен декомпозировать требования в новые карточки задач на любых досках, тогда как `cvh-dev` сфокусирован на поддержке конфигурации.
