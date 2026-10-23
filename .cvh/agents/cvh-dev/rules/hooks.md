@@ -37,3 +37,16 @@ Every hook execution receives the task's context via system environment variable
 ## 4. Gatekeeper Sensors
 Columns may define `gatekeeperSensor` (e.g. `cargo check` or `npm run build`).
 Gatekeeper sensors execute inside `CVH_WORKTREE_PATH` before any card advance. If exit code != 0, transition is blocked.
+
+---
+
+## 5. Hook Execution on `advance_task` & Subtask Handover Protocol
+During autonomous transitions via `advance_task`:
+1. **Hook Sequence Enforcement**:
+   - `on_leave` / `on_exit` hook of current stage is executed.
+   - `gatekeeperSensor` of target stage is executed.
+   - `on_enter` hook of target stage is executed.
+   - If any hook/sensor fails, the transition is blocked immediately: NO new subtasks are created, verdict is set to `CHANGES_REQUESTED`, status is kept `running` (if column has persona/autorun), and error details are injected into task dialog and autorun prompt.
+2. **Generic Rejection Handover (Zero Card Duplication)**:
+   - When a review subtask rejects via `reject_task(reason)`, the reviewing subtask stays in its column with `idle` status and `CHANGES_REQUESTED`, while the developer subtask in `dev` is reactivated with `running` status and rejection details.
+   - When the developer calls `advance_task(summary)`, CVH identifies the existing subtask in the target column, marks developer subtask `done`, reactivates the target subtask with `running` status and `handover_prompt`, without generating duplicate subtask cards (`CVH-X.3`).

@@ -1408,6 +1408,208 @@ use super::*;
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
 
+    #[tokio::test]
+    async fn test_advance_task_hook_failure_aborts_subtask_creation() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_hook_fail_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+
+        let (mut boards_cfg, _) = make_test_board(&base);
+        #[cfg(target_os = "windows")]
+        let hook_filename = "fail_hook.bat";
+        #[cfg(not(target_os = "windows"))]
+        let hook_filename = "fail_hook.sh";
+
+        let hook_path = base.join(hook_filename);
+        #[cfg(target_os = "windows")]
+        tokio::fs::write(&hook_path, "@echo off\r\necho Hook check failed: sensor error\r\nexit /b 1\r\n").await.unwrap();
+        #[cfg(not(target_os = "windows"))]
+        {
+            tokio::fs::write(&hook_path, "#!/bin/sh\necho 'Hook check failed: sensor error'\nexit 1\n").await.unwrap();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&hook_path, std::fs::Permissions::from_mode(0o755));
+            }
+        }
+
+        if let Some(board) = boards_cfg.boards.iter_mut().find(|b| b.id == "test-board") {
+            if let Some(col) = board.columns.iter_mut().find(|c| c.id == "review") {
+                col.hooks.insert("on_enter".to_string(), hook_filename.to_string());
+            }
+        }
+        crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
+
+        // Seed task in 'dev' stage
+        let task = make_test_task("CVH-080", "dev", "test-board");
+        crate::commands::tasks::save_tasks_to_disk(&base, &[task]).await.expect("save task");
+
+        let flag = Arc::new(AtomicBool::new(false));
+        let policy = ToolPolicyConfig::default();
+        let tool_ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("dev"),
+            role: Some("developer"),
+            abort_handle: Arc::clone(&flag),
+            tool_policy: &policy,
+            task_id: Some("CVH-080"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        // Advance task towards review
+        let err = execute_tool(&tool_ctx, "advance_task", &serde_json::json!({
+            "summary": "Handover to review"
+        }))
+        .await
+        .expect_err("Advance must fail because on_enter hook failed");
+
+        assert!(err.to_string().contains("отклонил переход") || err.to_string().contains("HOOK REJECTED") || err.to_string().contains("Hook check failed"), "got: {}", err);
+
+        // Verify task state: NO new subtasks created, task stays in 'dev', verdict is CHANGES_REQUESTED
+        let tasks = crate::commands::tasks::load_tasks_from_disk(&base).await;
+        assert_eq!(tasks.len(), 1, "No subtask must be created when hook rejects!");
+        let t = tasks.iter().find(|t| t.id == "CVH-080").unwrap();
+        assert_eq!(t.stage_id, "dev");
+        assert_eq!(t.verdict.as_deref(), Some("CHANGES_REQUESTED"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_rejection_and_advance_resumes_existing_subtask_without_duplication() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_dup_res_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+
+        let (boards_cfg, _) = make_test_board(&base);
+        crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
+
+        // 1. Seed parent task and first subtask CVH-090.1 in 'dev'
+        let mut parent = make_test_task("CVH-090", "dev", "test-board");
+        parent.waiting_for_subtask_id = Some("CVH-090.1".to_string());
+        parent.status = Some("waiting_subtask".to_string());
+
+        let mut sub1 = make_test_task("CVH-090.1", "dev", "test-board");
+        sub1.parent_id = Some("CVH-090".to_string());
+        sub1.subtask_index = Some(1);
+        sub1.status = Some("running".to_string());
+
+        crate::commands::tasks::save_tasks_to_disk(&base, &[parent, sub1]).await.expect("save tasks");
+
+        let flag = Arc::new(AtomicBool::new(false));
+        let policy = ToolPolicyConfig::default();
+
+        // 2. Developer in CVH-090.1 calls advance_task -> creates CVH-090.2 in 'review'
+        let dev_ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("dev"),
+            role: Some("developer"),
+            abort_handle: Arc::clone(&flag),
+            tool_policy: &policy,
+            task_id: Some("CVH-090.1"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        let adv1 = execute_tool(&dev_ctx, "advance_task", &serde_json::json!({
+            "summary": "Initial implementation finished"
+        }))
+        .await
+        .expect("advance_task for CVH-090.1 must succeed");
+        assert!(adv1.contains("CVH-090.2"));
+
+        let tasks_after_adv1 = crate::commands::tasks::load_tasks_from_disk(&base).await;
+        assert_eq!(tasks_after_adv1.len(), 3, "Parent + CVH-090.1 + CVH-090.2");
+        let sub2 = tasks_after_adv1.iter().find(|t| t.id == "CVH-090.2").expect("subtask 2 exists");
+        assert_eq!(sub2.stage_id, "review");
+
+        // 3. Reviewer in CVH-090.2 rejects the task
+        let rev_ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("review"),
+            role: Some("reviewer"),
+            abort_handle: Arc::clone(&flag),
+            tool_policy: &policy,
+            task_id: Some("CVH-090.2"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        let rej_res = execute_tool(&rev_ctx, "reject_task", &serde_json::json!({
+            "reason": "Fix bug in line 42"
+        }))
+        .await
+        .expect("reject_task must succeed");
+
+        assert!(rej_res.contains("ОТКЛОНЕНО"));
+        assert!(rej_res.contains("CVH-090.1"));
+
+        // Verify state after rejection:
+        // CVH-090.2 remains in 'review' with status idle and CHANGES_REQUESTED
+        // CVH-090.1 is reactivated in 'dev' with status running and CHANGES_REQUESTED
+        // Parent CVH-090 is waiting for CVH-090.1
+        let tasks_after_rej = crate::commands::tasks::load_tasks_from_disk(&base).await;
+        assert_eq!(tasks_after_rej.len(), 3, "No tasks added during rejection");
+
+        let p_rej = tasks_after_rej.iter().find(|t| t.id == "CVH-090").unwrap();
+        let s1_rej = tasks_after_rej.iter().find(|t| t.id == "CVH-090.1").unwrap();
+        let s2_rej = tasks_after_rej.iter().find(|t| t.id == "CVH-090.2").unwrap();
+
+        assert_eq!(p_rej.waiting_for_subtask_id.as_deref(), Some("CVH-090.1"));
+        assert_eq!(s1_rej.stage_id, "dev");
+        assert_eq!(s1_rej.status.as_deref(), Some("running"));
+        assert_eq!(s1_rej.verdict.as_deref(), Some("CHANGES_REQUESTED"));
+        assert_eq!(s2_rej.stage_id, "review");
+        assert_eq!(s2_rej.status.as_deref(), Some("idle"));
+        assert_eq!(s2_rej.verdict.as_deref(), Some("CHANGES_REQUESTED"));
+
+        // 4. Developer fixes bug in CVH-090.1 and calls advance_task again!
+        let adv2 = execute_tool(&dev_ctx, "advance_task", &serde_json::json!({
+            "summary": "Fixed bug in line 42 and added regression test"
+        }))
+        .await
+        .expect("second advance_task must succeed");
+
+        assert!(adv2.contains("Возобновлена существующая подзадача CVH-090.2"));
+
+        // 5. CRITICAL INVARIANT: Verify that CVH-090.3 was NOT created!
+        let tasks_final = crate::commands::tasks::load_tasks_from_disk(&base).await;
+        assert_eq!(tasks_final.len(), 3, "CVH-090.3 must NOT be created! CVH-090.2 must be reused!");
+
+        let s1_fin = tasks_final.iter().find(|t| t.id == "CVH-090.1").unwrap();
+        let s2_fin = tasks_final.iter().find(|t| t.id == "CVH-090.2").unwrap();
+        let p_fin = tasks_final.iter().find(|t| t.id == "CVH-090").unwrap();
+
+        assert_eq!(s1_fin.status.as_deref(), Some("done"));
+        assert_eq!(s2_fin.stage_id, "review");
+        assert_eq!(s2_fin.status.as_deref(), Some("running"));
+        assert_eq!(s2_fin.verdict, None, "Previous verdict must be cleared on resumption");
+        assert_eq!(s2_fin.handover_summary.as_deref(), Some("Fixed bug in line 42 and added regression test"));
+        assert_eq!(p_fin.waiting_for_subtask_id.as_deref(), Some("CVH-090.2"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
     // -------------------------------------------------------------------------
     // b) Subagents & Delegation: synchronous subagent, subagent_bg & collect
     // -------------------------------------------------------------------------

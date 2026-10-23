@@ -103,7 +103,7 @@ interface BoardState {
   toggleTimer: (taskId: string) => void;
   tickTimers: () => void;
   promoteTaskToNextStage: (taskId: string) => void;
-  runTaskAgent: (taskId: string) => Promise<void>;
+  runTaskAgent: (taskId: string, prompt?: string) => Promise<void>;
 }
 
 function getTasksStorageKey(): string {
@@ -1225,7 +1225,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     }
   },
 
-  runTaskAgent: async (taskId) => {
+  runTaskAgent: async (taskId, prompt) => {
     const { tasks, columns, moveTask } = get();
     const task = tasks.find(
       (t) => t.id === taskId || t.id.trim().toLowerCase() === taskId.trim().toLowerCase()
@@ -1257,7 +1257,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       set({ tasks: updatedTasks });
       persistTasksToLocalStorage(updatedTasks);
       await syncTasksBackend(updatedTasks);
-      await triggerRunAgent(resolvedTaskId);
+      await triggerRunAgent(resolvedTaskId, prompt);
     } else {
       // Task sits in a non-agent column: move to the FIRST column with a persona or autoRun
       // (moveTask auto-runs the agent on entry).
