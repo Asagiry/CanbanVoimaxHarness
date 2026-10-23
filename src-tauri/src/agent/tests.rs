@@ -3375,6 +3375,108 @@ data: [DONE]
         ));
     }
 
+    #[tokio::test]
+    async fn test_exploratory_subagents_different_prompts_not_duplicates() {
+        let parent_id = "CVH-EXPLORE-101";
+
+        let (tx1, _rx1) = oneshot::channel();
+        let ctx1 = OwnedToolContext {
+            repo_root: PathBuf::from("."),
+            worktree_dir: PathBuf::from("."),
+            stage_id: Some("dev".to_string()),
+            role: Some("architect".to_string()),
+            abort_handle: Arc::new(AtomicBool::new(false)),
+            tool_policy: ToolPolicyConfig::default(),
+            task_id: Some(parent_id.to_string()),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: Some("call_arch_1".to_string()),
+        };
+
+        let sid1 = format!("{}.sub-call_arch_1", parent_id);
+        let prompt1 = "Investigate harness2.0...";
+        let info1 = SubagentRetryInfo {
+            parent_task_id: parent_id.to_string(),
+            subagent_id: sid1.clone(),
+            tool_call_id: Some("call_arch_1".to_string()),
+            title: "Investigate harness2.0".to_string(),
+            role: "architect".to_string(),
+            prompt: prompt1.to_string(),
+            requested_tools: None,
+            ctx: ctx1,
+            status: "running".to_string(),
+            last_error: None,
+            report: None,
+            is_bg: true,
+            duration_ms: None,
+            steps: 0,
+        };
+
+        let session1 = SubagentSession::new(Some(tx1), info1);
+        {
+            let mut sessions = SUBAGENT_SESSIONS.lock().await;
+            sessions.insert(sid1.clone(), session1);
+        }
+
+        // Subagents #2 and #3 have the SAME role ("architect"), but DIFFERENT prompts:
+        // #2: "Investigate backend rules and AGENTS.md..."
+        // #3: "Investigate frontend rules..."
+        let prompt2 = "Investigate backend rules and AGENTS.md...";
+        let prompt3 = "Investigate frontend rules...";
+
+        assert!(!are_subagent_prompts_duplicate(prompt1, prompt2));
+        assert!(!are_subagent_prompts_duplicate(prompt1, prompt3));
+        assert!(!are_subagent_prompts_duplicate(prompt2, prompt3));
+
+        // Deduplication check across sessions for subagent #2:
+        let mut is_dup_2 = false;
+        let mut reused_id_2 = None;
+        {
+            let sessions = SUBAGENT_SESSIONS.lock().await;
+            for (sid, sess) in sessions.iter() {
+                let info = sess.retry_info.lock().await;
+                if info.parent_task_id == parent_id
+                    && (info.status == "running" || info.status == "finished")
+                {
+                    if info.role.eq_ignore_ascii_case("architect")
+                        && are_subagent_prompts_duplicate(&info.prompt, prompt2)
+                    {
+                        is_dup_2 = true;
+                        reused_id_2 = Some(sid.clone());
+                        break;
+                    }
+                }
+            }
+        }
+
+        assert!(!is_dup_2, "Architect subagent #2 with different prompt must NOT be considered duplicate");
+        assert!(reused_id_2.is_none());
+
+        // Each parallel subagent receives its own distinct ID
+        let sid2 = format!("{}.sub-call_arch_2", parent_id);
+        let sid3 = format!("{}.sub-call_arch_3", parent_id);
+        assert_ne!(sid1, sid2);
+        assert_ne!(sid2, sid3);
+        assert_ne!(sid1, sid3);
+
+        // Also verify explorer role with distinct prompts
+        assert!(!are_subagent_prompts_duplicate(
+            "Explore backend database schema",
+            "Explore frontend Tailwind styles"
+        ));
+
+        // Cleanup test session
+        {
+            let mut sessions = SUBAGENT_SESSIONS.lock().await;
+            sessions.remove(&sid1);
+        }
+    }
+
     #[test]
     fn test_is_exploratory_role() {
         assert!(is_exploratory_role("explorer"));

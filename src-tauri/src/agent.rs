@@ -1913,6 +1913,7 @@ pub fn are_subagent_prompts_duplicate(p1: &str, p2: &str) -> bool {
 
 /// Determines if a subagent role is an exploratory/architect/researcher persona
 /// subject to single-turn or in-flight deduplication.
+#[allow(dead_code)]
 pub fn is_exploratory_role(role: &str) -> bool {
     let r = role.trim().to_lowercase();
     r == "explorer"
@@ -2270,17 +2271,14 @@ pub async fn execute_tool(
 
             let parent_id = ctx.task_id.unwrap_or("unknown");
 
-            let is_this_exploratory = is_exploratory_role(role);
-
             // Deduplication check across sessions:
-            // If an identical or exploratory subagent already completed with report, return it.
+            // If an identical subagent already completed with report, return it.
             {
                 let sessions = SUBAGENT_SESSIONS.lock().await;
                 for sess in sessions.values() {
                     let info = sess.retry_info.lock().await;
                     if info.parent_task_id == parent_id {
-                        let is_dup = (info.role.eq_ignore_ascii_case(role) && are_subagent_prompts_duplicate(&info.prompt, prompt))
-                            || (is_this_exploratory && is_exploratory_role(&info.role));
+                        let is_dup = info.role.eq_ignore_ascii_case(role) && are_subagent_prompts_duplicate(&info.prompt, prompt);
 
                         if is_dup && info.status == "finished" {
                             if let Some(ref rep) = info.report {
@@ -2417,10 +2415,8 @@ pub async fn execute_tool(
             });
 
             let parent_id = ctx.task_id.unwrap_or("unknown");
-            let is_this_exploratory = is_exploratory_role(role);
 
             // Deduplication check across sessions: if an identical subagent is already actively running or finished, reuse it.
-            // Or if an exploratory subagent is already running or finished for this parent, do not spawn another clone!
             {
                 let sessions = SUBAGENT_SESSIONS.lock().await;
                 for (sid, sess) in sessions.iter() {
@@ -2428,15 +2424,14 @@ pub async fn execute_tool(
                     if info.parent_task_id == parent_id
                         && (info.status == "running" || info.status == "finished")
                     {
-                        let is_dup = (info.role.eq_ignore_ascii_case(role) && are_subagent_prompts_duplicate(&info.prompt, prompt))
-                            || (is_this_exploratory && is_exploratory_role(&info.role));
+                        let is_dup = info.role.eq_ignore_ascii_case(role) && are_subagent_prompts_duplicate(&info.prompt, prompt);
 
                         if is_dup {
                             eprintln!("CVH [agent]: Reusing existing subagent {} (role: '{}') for duplicate subagent_bg request", sid, info.role);
                             return Ok(serde_json::to_string(&serde_json::json!({
                                 "subagent_id": sid,
                                 "status": &info.status,
-                                "note": format!("Reused existing {} subagent to prevent duplicate exploration", info.role)
+                                "note": format!("Reused existing {} subagent to prevent duplicate subagent_bg execution", info.role)
                             }))?);
                         }
                     }
@@ -6980,11 +6975,8 @@ Messages count: {}
                     .unwrap_or("")
                     .trim();
 
-                let is_this_exploratory = is_exploratory_role(role);
-
                 if let Some(prev) = executed_subagents_in_turn.iter().find(|p| {
-                    (p.role.eq_ignore_ascii_case(role) && are_subagent_prompts_duplicate(&p.prompt, prompt))
-                        || (is_this_exploratory && is_exploratory_role(&p.role))
+                    p.role.eq_ignore_ascii_case(role) && are_subagent_prompts_duplicate(&p.prompt, prompt)
                 }) {
                     eprintln!(
                         "CVH [agent]: Deduplicated subagent call '{}' (role: '{}') in turn {} (matches earlier call '{}' with role '{}')",
