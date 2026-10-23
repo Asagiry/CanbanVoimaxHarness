@@ -966,6 +966,7 @@ use std::path::PathBuf;
         let _ = tokio::fs::remove_dir_all(&empty_base).await;
     }
 
+    #[allow(dead_code)]
     fn hook_col(id: &str, on_enter: Option<&str>) -> PipelineColumn {
         let mut col = test_col(id);
         if let Some(v) = on_enter {

@@ -1801,13 +1801,28 @@ pub async fn internal_move_task_stage(
                             ).await;
 
                             // Update task state on failure: card stays in source stage
+                            let scol_has_autorun = scol.persona.is_some() || scol.auto_run == Some(true);
                             current_task.verdict = Some("CHANGES_REQUESTED".to_string());
-                            current_task.status = Some("idle".to_string());
+                            current_task.status = if scol_has_autorun {
+                                Some("running".to_string())
+                            } else {
+                                Some("idle".to_string())
+                            };
                             current_task.updated_at = Utc::now().timestamp_millis();
                             let failed_task = current_task.clone();
+                            let _ = crate::db::db_upsert_task(root, &failed_task);
                             save_tasks_to_disk(root, &tasks).await.map_err(|e| e.to_string())?;
 
                             if let Some(app) = app_handle {
+                                if let Some(state_ref) = app.try_state::<AppState>() {
+                                    if let Ok(mut guard) = state_ref.tasks.lock() {
+                                        if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &failed_task.id)) {
+                                            t.verdict = failed_task.verdict.clone();
+                                            t.status = failed_task.status.clone();
+                                            t.updated_at = failed_task.updated_at;
+                                        }
+                                    }
+                                }
                                 let _ = app.emit("task:moved", serde_json::json!({
                                     "task": &failed_task,
                                     "rejected": true,
@@ -1817,9 +1832,8 @@ pub async fn internal_move_task_stage(
                                     "taskId": failed_task.id,
                                     "task": &failed_task
                                 }));
-                                let _ = app.emit("tasks:updated", ());
+                                let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
 
-                                let scol_has_autorun = scol.persona.is_some() || scol.auto_run == Some(true);
                                 if scol_has_autorun {
                                     let _ = app.emit("agent:autorun", serde_json::json!({
                                         "taskId": failed_task.id,
@@ -1873,13 +1887,28 @@ pub async fn internal_move_task_stage(
                             app_handle,
                         ).await;
 
+                        let scol_has_autorun = scol.persona.is_some() || scol.auto_run == Some(true);
                         current_task.verdict = Some("CHANGES_REQUESTED".to_string());
-                        current_task.status = Some("idle".to_string());
+                        current_task.status = if scol_has_autorun {
+                            Some("running".to_string())
+                        } else {
+                            Some("idle".to_string())
+                        };
                         current_task.updated_at = Utc::now().timestamp_millis();
                         let failed_task = current_task.clone();
+                        let _ = crate::db::db_upsert_task(root, &failed_task);
                         save_tasks_to_disk(root, &tasks).await.map_err(|e| e.to_string())?;
 
                         if let Some(app) = app_handle {
+                            if let Some(state_ref) = app.try_state::<AppState>() {
+                                if let Ok(mut guard) = state_ref.tasks.lock() {
+                                    if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &failed_task.id)) {
+                                        t.verdict = failed_task.verdict.clone();
+                                        t.status = failed_task.status.clone();
+                                        t.updated_at = failed_task.updated_at;
+                                    }
+                                }
+                            }
                             let _ = app.emit("task:moved", serde_json::json!({
                                 "task": &failed_task,
                                 "rejected": true,
@@ -1889,7 +1918,14 @@ pub async fn internal_move_task_stage(
                                 "taskId": failed_task.id,
                                 "task": &failed_task
                             }));
-                            let _ = app.emit("tasks:updated", ());
+                            let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+
+                            if scol_has_autorun {
+                                let _ = app.emit("agent:autorun", serde_json::json!({
+                                    "taskId": failed_task.id,
+                                    "prompt": steer_content
+                                }));
+                            }
                         }
 
                         return Err(format!("Хук on_leave '{}' ошибка исполнения: {}", hook_rel, err_details));
@@ -2049,6 +2085,60 @@ pub async fn internal_move_task_stage(
                     &format!("Gatekeeper sensor '{}' REJECTED transition for task '{}' (exit code: {:?})", sensor_cmd, current_task.id, sensor_res.exit_code),
                     Some(&details),
                 );
+
+                let steer_content = format!(
+                    "### [ОТКЛОНЕНО СЕНСОРОМ / SENSOR REJECTED: {}]\n\nGatekeeper-сенсор целевой колонки '{}' завершился с ошибкой (код {:?}).\n\n**Лог ошибки:**\n```\n{}\n```\n\nИсправь указанную ошибку.",
+                    sensor_cmd, canonical_target_stage_id, sensor_res.exit_code, details
+                );
+                let _ = append_task_dialog_activity(
+                    root,
+                    &current_task.id,
+                    "steer",
+                    &steer_content,
+                    app_handle,
+                ).await;
+
+                let scol_has_autorun = source_col.as_ref().map(|c| c.persona.is_some() || c.auto_run == Some(true)).unwrap_or(false);
+                current_task.verdict = Some("CHANGES_REQUESTED".to_string());
+                current_task.status = if scol_has_autorun {
+                    Some("running".to_string())
+                } else {
+                    Some("idle".to_string())
+                };
+                current_task.updated_at = Utc::now().timestamp_millis();
+                let failed_task = current_task.clone();
+                let _ = crate::db::db_upsert_task(root, &failed_task);
+                save_tasks_to_disk(root, &tasks).await.map_err(|e| e.to_string())?;
+
+                if let Some(app) = app_handle {
+                    if let Some(state_ref) = app.try_state::<AppState>() {
+                        if let Ok(mut guard) = state_ref.tasks.lock() {
+                            if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &failed_task.id)) {
+                                t.verdict = failed_task.verdict.clone();
+                                t.status = failed_task.status.clone();
+                                t.updated_at = failed_task.updated_at;
+                            }
+                        }
+                    }
+                    let _ = app.emit("task:moved", serde_json::json!({
+                        "task": &failed_task,
+                        "rejected": true,
+                        "reason": details
+                    }));
+                    let _ = app.emit("task:updated", serde_json::json!({
+                        "taskId": failed_task.id,
+                        "task": &failed_task
+                    }));
+                    let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+
+                    if scol_has_autorun {
+                        let _ = app.emit("agent:autorun", serde_json::json!({
+                            "taskId": failed_task.id,
+                            "prompt": steer_content
+                        }));
+                    }
+                }
+
                 return Err(format!(
                     "Gatekeeper Sensor '{}' rejected transition (Exit code: {:?}):{}",
                     sensor_cmd, sensor_res.exit_code, details
@@ -2128,13 +2218,28 @@ pub async fn internal_move_task_stage(
                         ).await;
 
                         // Task stays in source stage!
+                        let scol_has_autorun = source_col.as_ref().map(|c| c.persona.is_some() || c.auto_run == Some(true)).unwrap_or(false);
                         current_task.verdict = Some("CHANGES_REQUESTED".to_string());
-                        current_task.status = Some("idle".to_string());
+                        current_task.status = if scol_has_autorun {
+                            Some("running".to_string())
+                        } else {
+                            Some("idle".to_string())
+                        };
                         current_task.updated_at = Utc::now().timestamp_millis();
                         let failed_task = current_task.clone();
+                        let _ = crate::db::db_upsert_task(root, &failed_task);
                         save_tasks_to_disk(root, &tasks).await.map_err(|e| e.to_string())?;
 
                         if let Some(app) = app_handle {
+                            if let Some(state_ref) = app.try_state::<AppState>() {
+                                if let Ok(mut guard) = state_ref.tasks.lock() {
+                                    if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &failed_task.id)) {
+                                        t.verdict = failed_task.verdict.clone();
+                                        t.status = failed_task.status.clone();
+                                        t.updated_at = failed_task.updated_at;
+                                    }
+                                }
+                            }
                             let _ = app.emit("task:moved", serde_json::json!({
                                 "task": &failed_task,
                                 "rejected": true,
@@ -2144,15 +2249,13 @@ pub async fn internal_move_task_stage(
                                 "taskId": failed_task.id,
                                 "task": &failed_task
                             }));
-                            let _ = app.emit("tasks:updated", ());
+                            let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
 
-                            if let Some(ref scol) = source_col {
-                                if scol.persona.is_some() || scol.auto_run == Some(true) {
-                                    let _ = app.emit("agent:autorun", serde_json::json!({
-                                        "taskId": failed_task.id,
-                                        "prompt": steer_content
-                                    }));
-                                }
+                            if scol_has_autorun {
+                                let _ = app.emit("agent:autorun", serde_json::json!({
+                                    "taskId": failed_task.id,
+                                    "prompt": steer_content
+                                }));
                             }
                         }
 
@@ -2201,13 +2304,28 @@ pub async fn internal_move_task_stage(
                         app_handle,
                     ).await;
 
+                    let scol_has_autorun = source_col.as_ref().map(|c| c.persona.is_some() || c.auto_run == Some(true)).unwrap_or(false);
                     current_task.verdict = Some("CHANGES_REQUESTED".to_string());
-                    current_task.status = Some("idle".to_string());
+                    current_task.status = if scol_has_autorun {
+                        Some("running".to_string())
+                    } else {
+                        Some("idle".to_string())
+                    };
                     current_task.updated_at = Utc::now().timestamp_millis();
                     let failed_task = current_task.clone();
+                    let _ = crate::db::db_upsert_task(root, &failed_task);
                     save_tasks_to_disk(root, &tasks).await.map_err(|e| e.to_string())?;
 
                     if let Some(app) = app_handle {
+                        if let Some(state_ref) = app.try_state::<AppState>() {
+                            if let Ok(mut guard) = state_ref.tasks.lock() {
+                                if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &failed_task.id)) {
+                                    t.verdict = failed_task.verdict.clone();
+                                    t.status = failed_task.status.clone();
+                                    t.updated_at = failed_task.updated_at;
+                                }
+                            }
+                        }
                         let _ = app.emit("task:moved", serde_json::json!({
                             "task": &failed_task,
                             "rejected": true,
@@ -2217,7 +2335,14 @@ pub async fn internal_move_task_stage(
                             "taskId": failed_task.id,
                             "task": &failed_task
                         }));
-                        let _ = app.emit("tasks:updated", ());
+                        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+
+                        if scol_has_autorun {
+                            let _ = app.emit("agent:autorun", serde_json::json!({
+                                "taskId": failed_task.id,
+                                "prompt": steer_content
+                            }));
+                        }
                     }
 
                     return Err(format!("Хук on_enter '{}' ошибка исполнения: {}", hook_rel, err_details));
@@ -2458,6 +2583,66 @@ pub async fn internal_advance_task(
     internal_advance_task_to_stage(root, task_id, None, summary, app_handle).await
 }
 
+async fn handle_advance_hook_or_sensor_rejection(
+    root: &Path,
+    task_id: &str,
+    scol: Option<&crate::config::PipelineColumn>,
+    steer_content: &str,
+    error_msg: String,
+    app_handle: Option<&AppHandle>,
+) -> Result<String, String> {
+    let _ = append_task_dialog_activity(
+        root,
+        task_id,
+        "steer",
+        steer_content,
+        app_handle,
+    )
+    .await;
+
+    let mut tasks = load_tasks_from_disk(root).await;
+    let scol_has_autorun = scol.map(|c| c.persona.is_some() || c.auto_run == Some(true)).unwrap_or(true);
+    let updated_status = if scol_has_autorun {
+        Some("running".to_string())
+    } else {
+        Some("idle".to_string())
+    };
+
+    let mut failed_task = None;
+    if let Some(t) = tasks.iter_mut().find(|t| task_id_matches(&t.id, task_id)) {
+        t.verdict = Some("CHANGES_REQUESTED".to_string());
+        t.status = updated_status.clone();
+        t.updated_at = Utc::now().timestamp_millis();
+        let _ = crate::db::db_upsert_task(root, t);
+        failed_task = Some(t.clone());
+    }
+    let _ = save_tasks_to_disk(root, &tasks).await;
+
+    if let Some(app) = app_handle {
+        if let Some(state_ref) = app.try_state::<AppState>() {
+            if let Ok(mut guard) = state_ref.tasks.lock() {
+                if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, task_id)) {
+                    t.verdict = Some("CHANGES_REQUESTED".to_string());
+                    t.status = updated_status.clone();
+                    t.updated_at = Utc::now().timestamp_millis();
+                }
+            }
+        }
+        if let Some(ref ft) = failed_task {
+            let _ = app.emit("task:updated", serde_json::json!({ "taskId": ft.id, "task": ft }));
+        }
+        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+        if scol_has_autorun {
+            let _ = app.emit("agent:autorun", serde_json::json!({
+                "taskId": task_id,
+                "prompt": steer_content,
+            }));
+        }
+    }
+
+    Err(error_msg)
+}
+
 pub async fn internal_advance_task_to_stage(
     root: &Path,
     task_id: &str,
@@ -2468,9 +2653,10 @@ pub async fn internal_advance_task_to_stage(
     let root_resolved = resolve_actual_repo_root(root);
     let root = &root_resolved;
     let tasks = load_tasks_from_disk(root).await;
-    let current_task = tasks
+    let mut current_task = tasks
         .iter()
         .find(|t| task_id_matches(&t.id, task_id))
+        .cloned()
         .ok_or_else(|| format!("Task {} not found", task_id))?;
 
     let boards_cfg = load_boards_config(root).await.ok();
@@ -2638,41 +2824,305 @@ pub async fn internal_advance_task_to_stage(
         || stage_id_matches(&target_col.id, "ready")
         || stage_id_matches(&target_col.id, "done");
 
-    if let Some(ref pid) = current_task.parent_id {
-        // CASE A: The task calling advance_task is a child subtask (e.g. CVH-009.1)
-        let subtask_id = current_task.id.clone();
-        let parent_id = pid.clone();
+    let source_col = columns
+        .iter()
+        .find(|c| stage_id_matches(&c.id, &current_task.stage_id))
+        .cloned();
 
-        // 1. Mark this subtask as done
-        let mut tasks = load_tasks_from_disk(root).await;
-        if let Some(sub) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
-            sub.status = Some("done".to_string());
-            sub.updated_at = Utc::now().timestamp_millis();
-            let _ = crate::db::db_upsert_task(root, sub);
-        }
-        if let Some(app) = app_handle {
-            if let Some(state_ref) = app.try_state::<AppState>() {
-                if let Ok(mut guard) = state_ref.tasks.lock() {
-                    if let Some(sub) = guard.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
-                        sub.status = Some("done".to_string());
-                        sub.updated_at = Utc::now().timestamp_millis();
+    // 1. Check and execute on_leave / on_exit hook of source stage
+    if let Some(ref sc) = source_col {
+        if let Some(hook_rel) = sc.hooks.get("on_leave").or_else(|| sc.hooks.get("on_exit")) {
+            let hook_path = crate::config::resolve_hook_path(root, sc.persona.as_deref(), hook_rel);
+            if hook_path.exists() {
+                if let Some(app) = app_handle {
+                    let _ = app.emit("hook:start", serde_json::json!({
+                        "taskId": current_task.id,
+                        "stageId": sc.id,
+                        "hookType": "on_leave",
+                        "hookName": hook_rel
+                    }));
+                }
+                let ctx = HookContext {
+                    task_id: current_task.id.clone(),
+                    task_title: current_task.title.clone(),
+                    worktree_path: current_task.worktree_path.clone().unwrap_or_default(),
+                    branch: current_task.branch.clone().unwrap_or_default(),
+                    verdict: current_task.verdict.clone(),
+                    stage_id: Some(sc.id.clone()),
+                    board_id: current_task.board_id.clone(),
+                    extra_env: HashMap::new(),
+                };
+                let hook_res = execute_hook(&hook_path, root, &ctx, None).await;
+                match hook_res {
+                    Ok(res) => {
+                        if !res.success {
+                            let err_details = if !res.stderr.trim().is_empty() {
+                                res.stderr.trim().to_string()
+                            } else if !res.stdout.trim().is_empty() {
+                                res.stdout.trim().to_string()
+                            } else {
+                                format!("Exit code {:?}", res.exit_code)
+                            };
+                            if let Some(app) = app_handle {
+                                let _ = app.emit("hook:finish", serde_json::json!({
+                                    "taskId": current_task.id,
+                                    "stageId": sc.id,
+                                    "hookType": "on_leave",
+                                    "success": false,
+                                    "exitCode": res.exit_code,
+                                    "stdout": res.stdout,
+                                    "stderr": res.stderr,
+                                    "error": err_details
+                                }));
+                            }
+                            let steer_content = format!(
+                                "### [ОТКЛОНЕНО ХУКОМ / HOOK REJECTED: {}]\n\nХук на выходе из колонки '{}' завершился с ошибкой (код {:?}).\n\n**Лог ошибки:**\n```\n{}\n```\n\nИсправь указанную ошибку.",
+                                hook_rel, sc.id, res.exit_code, err_details
+                            );
+                            let err_msg = format!("Хук on_leave '{}' отклонил переход (Exit code: {:?}):\n{}", hook_rel, res.exit_code, err_details);
+                            return handle_advance_hook_or_sensor_rejection(
+                                root,
+                                task_id,
+                                Some(sc),
+                                &steer_content,
+                                err_msg,
+                                app_handle,
+                            ).await;
+                        }
+                        if let Some(app) = app_handle {
+                            let _ = app.emit("hook:finish", serde_json::json!({
+                                "taskId": current_task.id,
+                                "stageId": sc.id,
+                                "hookType": "on_leave",
+                                "success": true,
+                                "exitCode": res.exit_code,
+                                "stdout": res.stdout,
+                                "stderr": res.stderr
+                            }));
+                        }
+                        apply_worktree_from_hook_stdout(&mut current_task, &res.stdout);
+                    }
+                    Err(e) => {
+                        let err_details = e.to_string();
+                        if let Some(app) = app_handle {
+                            let _ = app.emit("hook:finish", serde_json::json!({
+                                "taskId": current_task.id,
+                                "stageId": sc.id,
+                                "hookType": "on_leave",
+                                "success": false,
+                                "exitCode": None::<i32>,
+                                "stdout": "",
+                                "stderr": err_details,
+                                "error": err_details
+                            }));
+                        }
+                        let steer_content = format!(
+                            "### [ОТКЛОНЕНО ХУКОМ / HOOK REJECTED: {}]\n\nОшибка запуска хука на выходе из колонки '{}': {}\n\nИсправь указанную ошибку.",
+                            hook_rel, sc.id, err_details
+                        );
+                        let err_msg = format!("Хук on_leave '{}' ошибка исполнения: {}", hook_rel, err_details);
+                        return handle_advance_hook_or_sensor_rejection(
+                            root,
+                            task_id,
+                            Some(sc),
+                            &steer_content,
+                            err_msg,
+                            app_handle,
+                        ).await;
                     }
                 }
             }
         }
-        let _ = save_tasks_to_disk(root, &tasks).await;
-        if let Some(app) = app_handle {
-            if let Some(sub) = tasks.iter().find(|t| task_id_matches(&t.id, &subtask_id)) {
-                let _ = app.emit("task:updated", serde_json::json!({ "task": sub }));
-                let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+    }
+
+    // 2. Check and execute gatekeeper sensor of target column
+    if let Some(sensor_cmd) = &target_col.gatekeeper_sensor {
+        let wt_path = current_task
+            .worktree_path
+            .as_deref()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| root.to_path_buf());
+        crate::logger::cvh_log(
+            Some(root),
+            "INFO",
+            "GATEKEEPER",
+            &format!("Executing gatekeeper sensor '{}' for task '{}' in {:?}", sensor_cmd, current_task.id, wt_path),
+        );
+        let sensor_res = execute_sensor_command(sensor_cmd, &wt_path, None).await;
+        match sensor_res {
+            Ok(res) => {
+                if !res.success {
+                    let stdout_trim = res.stdout.trim();
+                    let stderr_trim = res.stderr.trim();
+                    let mut details = String::new();
+                    if !stdout_trim.is_empty() {
+                        details.push_str(&format!("\n--- STDOUT ---\n{}", stdout_trim));
+                    }
+                    if !stderr_trim.is_empty() {
+                        details.push_str(&format!("\n--- STDERR ---\n{}", stderr_trim));
+                    }
+                    if details.is_empty() {
+                        details = "\n(No stdout/stderr produced by sensor command)".to_string();
+                    }
+                    crate::logger::cvh_log_with_details(
+                        Some(root),
+                        "WARN",
+                        "GATEKEEPER",
+                        &format!("Gatekeeper sensor '{}' REJECTED advance for task '{}' (exit code: {:?})", sensor_cmd, current_task.id, res.exit_code),
+                        Some(&details),
+                    );
+                    let steer_content = format!(
+                        "### [ОТКЛОНЕНО СЕНСОРОМ / SENSOR REJECTED: {}]\n\nGatekeeper-сенсор целевой колонки '{}' завершился с ошибкой (код {:?}).\n\n**Лог ошибки:**\n```\n{}\n```\n\nИсправь указанную ошибку.",
+                        sensor_cmd, target_col.id, res.exit_code, details
+                    );
+                    let err_msg = format!("Gatekeeper Sensor '{}' rejected transition (Exit code: {:?}):{}", sensor_cmd, res.exit_code, details);
+                    return handle_advance_hook_or_sensor_rejection(
+                        root,
+                        task_id,
+                        source_col.as_ref(),
+                        &steer_content,
+                        err_msg,
+                        app_handle,
+                    ).await;
+                }
+                crate::logger::cvh_log(
+                    Some(root),
+                    "INFO",
+                    "GATEKEEPER",
+                    &format!("Gatekeeper sensor '{}' PASSED for task '{}'", sensor_cmd, current_task.id),
+                );
+            }
+            Err(e) => {
+                let err_details = e.to_string();
+                let steer_content = format!(
+                    "### [ОТКЛОНЕНО СЕНСОРОМ / SENSOR REJECTED: {}]\n\nОшибка исполнения gatekeeper-сенсора целевой колонки '{}': {}\n\nИсправь указанную ошибку.",
+                    sensor_cmd, target_col.id, err_details
+                );
+                let err_msg = format!("Gatekeeper Sensor '{}' execution failed: {}", sensor_cmd, err_details);
+                return handle_advance_hook_or_sensor_rejection(
+                    root,
+                    task_id,
+                    source_col.as_ref(),
+                    &steer_content,
+                    err_msg,
+                    app_handle,
+                ).await;
             }
         }
+    }
 
-        let sub_summary_content = format!(
-            "### Саммари этапа {}: {}\n\n{}",
-            current_task.stage_id, current_task.title, summary
+    // 3. Check and execute on_enter hook of target column
+    if let Some(hook_rel) = target_col.hooks.get("on_enter").cloned() {
+        let hook_path = crate::config::resolve_hook_path(
+            root,
+            target_col.persona.as_deref(),
+            &hook_rel,
         );
-        let _ = append_task_dialog_activity(root, &subtask_id, "summary", &sub_summary_content, app_handle).await;
+        if hook_path.exists() {
+            if let Some(app) = app_handle {
+                let _ = app.emit("hook:start", serde_json::json!({
+                    "taskId": current_task.id,
+                    "stageId": target_col.id,
+                    "hookType": "on_enter",
+                    "hookName": hook_rel
+                }));
+            }
+            let ctx = HookContext {
+                task_id: current_task.id.clone(),
+                task_title: current_task.title.clone(),
+                worktree_path: current_task.worktree_path.clone().unwrap_or_default(),
+                branch: current_task.branch.clone().unwrap_or_default(),
+                verdict: current_task.verdict.clone(),
+                stage_id: Some(target_col.id.clone()),
+                board_id: current_task.board_id.clone(),
+                extra_env: HashMap::new(),
+            };
+            let hook_res = execute_hook(&hook_path, root, &ctx, None).await;
+            match hook_res {
+                Ok(res) => {
+                    if !res.success {
+                        let err_details = if !res.stderr.trim().is_empty() {
+                            res.stderr.trim().to_string()
+                        } else if !res.stdout.trim().is_empty() {
+                            res.stdout.trim().to_string()
+                        } else {
+                            format!("Exit code {:?}", res.exit_code)
+                        };
+                        if let Some(app) = app_handle {
+                            let _ = app.emit("hook:finish", serde_json::json!({
+                                "taskId": current_task.id,
+                                "stageId": target_col.id,
+                                "hookType": "on_enter",
+                                "success": false,
+                                "exitCode": res.exit_code,
+                                "stdout": res.stdout,
+                                "stderr": res.stderr,
+                                "error": err_details
+                            }));
+                        }
+                        let steer_content = format!(
+                            "### [ОТКЛОНЕНО ХУКОМ / HOOK REJECTED: {}]\n\nХук на входе в колонку '{}' завершился с ошибкой (код {:?}).\n\n**Лог ошибки:**\n```\n{}\n```\n\nИсправь указанную ошибку.",
+                            hook_rel, target_col.id, res.exit_code, err_details
+                        );
+                        let err_msg = format!("Хук on_enter '{}' целевой колонки '{}' отклонил переход (Exit code: {:?}):\n{}", hook_rel, target_col.id, res.exit_code, err_details);
+                        return handle_advance_hook_or_sensor_rejection(
+                            root,
+                            task_id,
+                            source_col.as_ref(),
+                            &steer_content,
+                            err_msg,
+                            app_handle,
+                        ).await;
+                    }
+                    if let Some(app) = app_handle {
+                        let _ = app.emit("hook:finish", serde_json::json!({
+                            "taskId": current_task.id,
+                            "stageId": target_col.id,
+                            "hookType": "on_enter",
+                            "success": true,
+                            "exitCode": res.exit_code,
+                            "stdout": res.stdout,
+                            "stderr": res.stderr
+                        }));
+                    }
+                    apply_worktree_from_hook_stdout(&mut current_task, &res.stdout);
+                }
+                Err(e) => {
+                    let err_details = e.to_string();
+                    if let Some(app) = app_handle {
+                        let _ = app.emit("hook:finish", serde_json::json!({
+                            "taskId": current_task.id,
+                            "stageId": target_col.id,
+                            "hookType": "on_enter",
+                            "success": false,
+                            "exitCode": None::<i32>,
+                            "stdout": "",
+                            "stderr": err_details,
+                            "error": err_details
+                        }));
+                    }
+                    let steer_content = format!(
+                        "### [ОТКЛОНЕНО ХУКОМ / HOOK REJECTED: {}]\n\nОшибка запуска хука на входе в колонку '{}': {}\n\nИсправь указанную ошибку.",
+                        hook_rel, target_col.id, err_details
+                    );
+                    let err_msg = format!("Хук on_enter '{}' целевой колонки '{}' ошибка исполнения: {}", hook_rel, target_col.id, err_details);
+                    return handle_advance_hook_or_sensor_rejection(
+                        root,
+                        task_id,
+                        source_col.as_ref(),
+                        &steer_content,
+                        err_msg,
+                        app_handle,
+                    ).await;
+                }
+            }
+        }
+    }
+
+    if let Some(ref pid) = current_task.parent_id {
+        // CASE A: The task calling advance_task is a child subtask (e.g. CVH-009.1)
+        let subtask_id = current_task.id.clone();
+        let parent_id = pid.clone();
 
         let parent_task = tasks
             .iter()
@@ -2681,6 +3131,37 @@ pub async fn internal_advance_task_to_stage(
             .ok_or_else(|| format!("Parent task {} not found", parent_id))?;
 
         if is_terminal {
+            // 1. Mark this subtask as done
+            let mut tasks = load_tasks_from_disk(root).await;
+            if let Some(sub) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
+                sub.status = Some("done".to_string());
+                sub.updated_at = Utc::now().timestamp_millis();
+                let _ = crate::db::db_upsert_task(root, sub);
+            }
+            if let Some(app) = app_handle {
+                if let Some(state_ref) = app.try_state::<AppState>() {
+                    if let Ok(mut guard) = state_ref.tasks.lock() {
+                        if let Some(sub) = guard.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
+                            sub.status = Some("done".to_string());
+                            sub.updated_at = Utc::now().timestamp_millis();
+                        }
+                    }
+                }
+            }
+            let _ = save_tasks_to_disk(root, &tasks).await;
+            if let Some(app) = app_handle {
+                if let Some(sub) = tasks.iter().find(|t| task_id_matches(&t.id, &subtask_id)) {
+                    let _ = app.emit("task:updated", serde_json::json!({ "task": sub }));
+                    let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+                }
+            }
+
+            let sub_summary_content = format!(
+                "### Саммари этапа {}: {}\n\n{}",
+                current_task.stage_id, current_task.title, summary
+            );
+            let _ = append_task_dialog_activity(root, &subtask_id, "summary", &sub_summary_content, app_handle).await;
+
             let updated_parent = internal_move_task_stage(
                 root,
                 &parent_id,
@@ -2721,40 +3202,161 @@ pub async fn internal_advance_task_to_stage(
                 updated_parent.status.as_deref().unwrap_or("done")
             ));
         } else {
-            let next_subtask = internal_create_subtask(
-                root,
-                &parent_id,
-                Some(&target_col.id),
-                Some(&format!("{} ({})", parent_task.title, target_col.title)),
-                Some(summary),
-                app_handle,
-            )
-            .await?;
+            let mut tasks = load_tasks_from_disk(root).await;
+            let existing_target_sub = tasks
+                .iter()
+                .filter(|t| {
+                    t.parent_id.as_deref().is_some_and(|p| task_id_matches(p, &parent_id))
+                        && stage_id_matches(&t.stage_id, &target_col.id)
+                        && !task_id_matches(&t.id, &subtask_id)
+                        && (t.verdict.as_deref() == Some("CHANGES_REQUESTED") || t.status.as_deref() != Some("done"))
+                })
+                .max_by_key(|t| (t.subtask_index.unwrap_or(0), t.created_at))
+                .cloned();
 
-            let next_subtask_id = next_subtask.id.clone();
-            let parent_summary_content = format!(
-                "### Саммари этапа (передано на {} {}):\n\n{}",
-                next_subtask_id, target_col.title, summary
-            );
-            let _ = append_task_dialog_activity(root, &parent_id, "summary", &parent_summary_content, app_handle).await;
+            if let Some(existing_sub) = existing_target_sub {
+                let target_has_autorun = target_col.persona.is_some() || target_col.auto_run == Some(true);
+                let next_status = if target_has_autorun { "running" } else { "idle" };
 
-            return Ok(format!(
-                "УСПЕШНО: Создана подзадача {} ({}) для задачи {}",
-                next_subtask_id, target_col.title, parent_id
-            ));
+                // 1. Mark current subtask as done
+                if let Some(sub) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
+                    sub.status = Some("done".to_string());
+                    sub.updated_at = Utc::now().timestamp_millis();
+                    let _ = crate::db::db_upsert_task(root, sub);
+                }
+
+                // 2. Update parent task waiting_for_subtask_id
+                if let Some(parent) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &parent_id)) {
+                    parent.waiting_for_subtask_id = Some(existing_sub.id.clone());
+                    parent.status = Some("waiting_subtask".to_string());
+                    parent.updated_at = Utc::now().timestamp_millis();
+                    let _ = crate::db::db_upsert_task(root, parent);
+                }
+
+                // 3. Reactivate existing target subtask
+                if let Some(target_sub) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &existing_sub.id)) {
+                    target_sub.status = Some(next_status.to_string());
+                    target_sub.verdict = None;
+                    target_sub.handover_summary = Some(summary.to_string());
+                    target_sub.updated_at = Utc::now().timestamp_millis();
+                    let _ = crate::db::db_upsert_task(root, target_sub);
+                }
+
+                let _ = save_tasks_to_disk(root, &tasks).await;
+                if let Some(app) = app_handle {
+                    if let Some(state_ref) = app.try_state::<AppState>() {
+                        if let Ok(mut guard) = state_ref.tasks.lock() {
+                            *guard = tasks.clone();
+                        }
+                    }
+                }
+
+                let sub_summary_content = format!(
+                    "### Саммари этапа {}: {}\n\n{}",
+                    current_task.stage_id, current_task.title, summary
+                );
+                let _ = append_task_dialog_activity(root, &subtask_id, "summary", &sub_summary_content, app_handle).await;
+
+                let parent_summary_content = format!(
+                    "### Саммари этапа (передано на {} {}):\n\n{}",
+                    existing_sub.id, target_col.title, summary
+                );
+                let _ = append_task_dialog_activity(root, &parent_id, "summary", &parent_summary_content, app_handle).await;
+
+                let handover_prompt = format!(
+                    "### [ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]\n\nЗамечания исправлены. Отчет исполнителя:\n{}",
+                    summary
+                );
+                let _ = append_task_dialog_activity(root, &existing_sub.id, "steer", &handover_prompt, app_handle).await;
+
+                if let Some(app) = app_handle {
+                    if let Some(sub) = tasks.iter().find(|t| task_id_matches(&t.id, &subtask_id)) {
+                        let _ = app.emit("task:updated", serde_json::json!({ "task": sub }));
+                    }
+                    if let Some(parent) = tasks.iter().find(|t| task_id_matches(&t.id, &parent_id)) {
+                        let _ = app.emit("task:updated", serde_json::json!({ "task": parent }));
+                    }
+                    if let Some(target_sub) = tasks.iter().find(|t| task_id_matches(&t.id, &existing_sub.id)) {
+                        let _ = app.emit("task:updated", serde_json::json!({ "task": target_sub }));
+                    }
+                    let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+
+                    if target_has_autorun {
+                        let _ = app.emit("agent:autorun", serde_json::json!({
+                            "taskId": existing_sub.id,
+                            "prompt": handover_prompt,
+                        }));
+                    }
+                }
+
+                return Ok(format!(
+                    "УСПЕШНО: Возобновлена существующая подзадача {} ({}) для задачи {}",
+                    existing_sub.id, target_col.title, parent_id
+                ));
+            } else {
+                // 1. Mark this subtask as done
+                if let Some(sub) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
+                    sub.status = Some("done".to_string());
+                    sub.updated_at = Utc::now().timestamp_millis();
+                    let _ = crate::db::db_upsert_task(root, sub);
+                }
+                if let Some(app) = app_handle {
+                    if let Some(state_ref) = app.try_state::<AppState>() {
+                        if let Ok(mut guard) = state_ref.tasks.lock() {
+                            if let Some(sub) = guard.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
+                                sub.status = Some("done".to_string());
+                                sub.updated_at = Utc::now().timestamp_millis();
+                            }
+                        }
+                    }
+                }
+                let _ = save_tasks_to_disk(root, &tasks).await;
+                if let Some(app) = app_handle {
+                    if let Some(sub) = tasks.iter().find(|t| task_id_matches(&t.id, &subtask_id)) {
+                        let _ = app.emit("task:updated", serde_json::json!({ "task": sub }));
+                        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+                    }
+                }
+
+                let sub_summary_content = format!(
+                    "### Саммари этапа {}: {}\n\n{}",
+                    current_task.stage_id, current_task.title, summary
+                );
+                let _ = append_task_dialog_activity(root, &subtask_id, "summary", &sub_summary_content, app_handle).await;
+
+                let next_subtask = internal_create_subtask(
+                    root,
+                    &parent_id,
+                    Some(&target_col.id),
+                    Some(&format!("{} ({})", parent_task.title, target_col.title)),
+                    Some(summary),
+                    app_handle,
+                )
+                .await?;
+
+                let next_subtask_id = next_subtask.id.clone();
+                let parent_summary_content = format!(
+                    "### Саммари этапа (передано на {} {}):\n\n{}",
+                    next_subtask_id, target_col.title, summary
+                );
+                let _ = append_task_dialog_activity(root, &parent_id, "summary", &parent_summary_content, app_handle).await;
+
+                return Ok(format!(
+                    "УСПЕШНО: Создана подзадача {} ({}) для задачи {}",
+                    next_subtask_id, target_col.title, parent_id
+                ));
+            }
         }
     }
 
     // CASE B: The task calling advance_task is a root parent task (e.g. CVH-009)
     if !is_terminal {
-        // Universal subtask progression (§ 2.2):
-        // Parent task remains pinned in its current stage while an isolated child subtask
-        // (<parent-id>.<subtask-index>, e.g. CVH-009.1) is created in the target stage.
-
-        // Strict guard against duplicate subtasks:
+        // Strict guard against duplicate subtasks when subtask is already running:
         if let Some(ref existing_sub_id) = current_task.waiting_for_subtask_id {
             if let Some(existing_sub) = tasks.iter().find(|t| task_id_matches(&t.id, existing_sub_id)) {
-                if existing_sub.status.as_deref() != Some("done") {
+                if existing_sub.status.as_deref() != Some("done")
+                    && existing_sub.verdict.as_deref() != Some("CHANGES_REQUESTED")
+                {
                     crate::logger::cvh_log(
                         Some(root),
                         "WARN",
@@ -2775,6 +3377,7 @@ pub async fn internal_advance_task_to_stage(
             t.parent_id.as_deref().is_some_and(|p| task_id_matches(p, task_id))
                 && stage_id_matches(&t.stage_id, &target_col.id)
                 && t.status.as_deref() != Some("done")
+                && t.verdict.as_deref() != Some("CHANGES_REQUESTED")
         }) {
             crate::logger::cvh_log(
                 Some(root),
@@ -2788,6 +3391,80 @@ pub async fn internal_advance_task_to_stage(
             return Ok(format!(
                 "Подзадача {} уже выполняется в колонке {}",
                 existing_sub.id, target_col.title
+            ));
+        }
+
+        let existing_target_sub = tasks
+            .iter()
+            .filter(|t| {
+                t.parent_id.as_deref().is_some_and(|p| task_id_matches(p, task_id))
+                    && stage_id_matches(&t.stage_id, &target_col.id)
+                    && (t.verdict.as_deref() == Some("CHANGES_REQUESTED") || t.status.as_deref() != Some("done"))
+            })
+            .max_by_key(|t| (t.subtask_index.unwrap_or(0), t.created_at))
+            .cloned();
+
+        if let Some(existing_sub) = existing_target_sub {
+            let target_has_autorun = target_col.persona.is_some() || target_col.auto_run == Some(true);
+            let next_status = if target_has_autorun { "running" } else { "idle" };
+
+            let mut tasks = load_tasks_from_disk(root).await;
+            if let Some(parent) = tasks.iter_mut().find(|t| task_id_matches(&t.id, task_id)) {
+                parent.waiting_for_subtask_id = Some(existing_sub.id.clone());
+                parent.status = Some("waiting_subtask".to_string());
+                parent.updated_at = Utc::now().timestamp_millis();
+                let _ = crate::db::db_upsert_task(root, parent);
+            }
+
+            if let Some(target_sub) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &existing_sub.id)) {
+                target_sub.status = Some(next_status.to_string());
+                target_sub.verdict = None;
+                target_sub.handover_summary = Some(summary.to_string());
+                target_sub.updated_at = Utc::now().timestamp_millis();
+                let _ = crate::db::db_upsert_task(root, target_sub);
+            }
+
+            let _ = save_tasks_to_disk(root, &tasks).await;
+            if let Some(app) = app_handle {
+                if let Some(state_ref) = app.try_state::<AppState>() {
+                    if let Ok(mut guard) = state_ref.tasks.lock() {
+                        *guard = tasks.clone();
+                    }
+                }
+            }
+
+            let parent_summary_content = format!(
+                "### Саммари этапа (передано на {} {}):\n\n{}",
+                existing_sub.id, target_col.title, summary
+            );
+            let _ = append_task_dialog_activity(root, task_id, "summary", &parent_summary_content, app_handle).await;
+
+            let handover_prompt = format!(
+                "### [ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]\n\nЗамечания исправлены. Отчет исполнителя:\n{}",
+                summary
+            );
+            let _ = append_task_dialog_activity(root, &existing_sub.id, "steer", &handover_prompt, app_handle).await;
+
+            if let Some(app) = app_handle {
+                if let Some(parent) = tasks.iter().find(|t| task_id_matches(&t.id, task_id)) {
+                    let _ = app.emit("task:updated", serde_json::json!({ "task": parent }));
+                }
+                if let Some(target_sub) = tasks.iter().find(|t| task_id_matches(&t.id, &existing_sub.id)) {
+                    let _ = app.emit("task:updated", serde_json::json!({ "task": target_sub }));
+                }
+                let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+
+                if target_has_autorun {
+                    let _ = app.emit("agent:autorun", serde_json::json!({
+                        "taskId": existing_sub.id,
+                        "prompt": handover_prompt,
+                    }));
+                }
+            }
+
+            return Ok(format!(
+                "УСПЕШНО: Возобновлена существующая подзадача {} ({}) для задачи {}",
+                existing_sub.id, target_col.title, task_id
             ));
         }
 

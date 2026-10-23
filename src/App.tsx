@@ -495,10 +495,11 @@ export default function App() {
         });
         unlisteners.push(uTasksUpdated);
 
-        const uAutoRun = await listen<{ taskId?: string }>('agent:autorun', (event) => {
+        const uAutoRun = await listen<{ taskId?: string; prompt?: string }>('agent:autorun', (event) => {
           const tid = event.payload?.taskId;
+          const prompt = event.payload?.prompt;
           if (tid) {
-            void runTaskAgent(tid);
+            void runTaskAgent(tid, prompt);
           }
         });
         unlisteners.push(uAutoRun);

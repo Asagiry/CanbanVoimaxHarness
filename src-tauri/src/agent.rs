@@ -3071,59 +3071,186 @@ pub async fn execute_tool(
                 bail!("Запрещено возвращать задачу из первой рабочей стадии назад в бэклог. Задача должна быть доработана или закрыта.");
             }
 
-            let rejection_summary = format!("ОТКЛОНЕНО РЕВЬЮ: {}", reason);
-
-            // 2. Execute move_task_stage logic with status 'idle', verdict 'CHANGES_REQUESTED', and handover_summary
-            let updated_task = crate::commands::internal_move_task_stage(
-                repo_root,
-                task_id,
-                &prev_col.id,
-                Some("CHANGES_REQUESTED".to_string()),
-                Some("idle".to_string()),
-                Some(rejection_summary),
-                ctx.app_handle.as_ref(),
-                true, // is_autonomous_advance
-                None,
-            )
-            .await
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
-
-            // 3. Save rejection reason to task dialog/history
             let reject_content = format!(
                 "### Задача возвращена на этап: {}\n\n**Причина отклонения:**\n{}",
                 prev_col.title,
                 reason
             );
-            let _ = crate::commands::append_task_dialog_activity(
-                repo_root,
-                task_id,
-                "reject",
-                &reject_content,
-                ctx.app_handle.as_ref(),
-            )
-            .await;
 
-            // Emit task:moved with reject marker and reason
-            if let Some(app) = ctx.app_handle.as_ref() {
-                let _ = app.emit("task:moved", serde_json::json!({
-                    "taskId": task_id,
-                    "toStage": prev_col.id,
-                    "stageId": prev_col.id,
-                    "status": "idle",
-                    "rejected": true,
-                    "reason": reason,
-                    "verdict": "CHANGES_REQUESTED",
-                    "task": &updated_task,
-                }));
+            // If current task is a subtask, find the previous subtask in prev_col and reactivate it
+            let subtask_rejection = if let Some(ref pid) = current_task.parent_id {
+                let prev_subtask_opt = tasks
+                    .iter()
+                    .filter(|t| {
+                        t.parent_id.as_deref().is_some_and(|p| crate::commands::task_id_matches(p, pid))
+                            && crate::commands::stage_id_matches(&t.stage_id, &prev_col.id)
+                            && !crate::commands::task_id_matches(&t.id, task_id)
+                    })
+                    .max_by_key(|t| (t.subtask_index.unwrap_or(0), t.created_at))
+                    .cloned();
+
+                if let Some(prev_sub) = prev_subtask_opt {
+                    let mut mut_tasks = tasks.clone();
+                    let prev_col_has_autorun = prev_col.persona.is_some() || prev_col.auto_run == Some(true);
+                    let prev_status = if prev_col_has_autorun { "running" } else { "idle" };
+
+                    // 1. Reactivate prev_subtask in prev_col
+                    if let Some(ps) = mut_tasks.iter_mut().find(|t| crate::commands::task_id_matches(&t.id, &prev_sub.id)) {
+                        ps.status = Some(prev_status.to_string());
+                        ps.verdict = Some("CHANGES_REQUESTED".to_string());
+                        ps.handover_summary = Some(format!("ОТКЛОНЕНО: {}", reason));
+                        ps.updated_at = chrono::Utc::now().timestamp_millis();
+                        let _ = crate::db::db_upsert_task(repo_root, ps);
+                    }
+
+                    // 2. Keep rejecting subtask in its stage with status idle and verdict CHANGES_REQUESTED
+                    if let Some(cs) = mut_tasks.iter_mut().find(|t| crate::commands::task_id_matches(&t.id, task_id)) {
+                        cs.status = Some("idle".to_string());
+                        cs.verdict = Some("CHANGES_REQUESTED".to_string());
+                        cs.updated_at = chrono::Utc::now().timestamp_millis();
+                        let _ = crate::db::db_upsert_task(repo_root, cs);
+                    }
+
+                    // 3. Update parent task waiting_for_subtask_id
+                    if let Some(p) = mut_tasks.iter_mut().find(|t| crate::commands::task_id_matches(&t.id, pid)) {
+                        p.waiting_for_subtask_id = Some(prev_sub.id.clone());
+                        p.status = Some("waiting_subtask".to_string());
+                        p.updated_at = chrono::Utc::now().timestamp_millis();
+                        let _ = crate::db::db_upsert_task(repo_root, p);
+                    }
+
+                    // Save to disk and AppState
+                    let _ = crate::commands::save_tasks_to_disk(repo_root, &mut_tasks).await;
+                    if let Some(app) = ctx.app_handle.as_ref() {
+                        if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+                            if let Ok(mut guard) = state_ref.tasks.lock() {
+                                *guard = mut_tasks.clone();
+                            }
+                        }
+                    }
+
+                    // Append dialog activities
+                    let _ = crate::commands::append_task_dialog_activity(
+                        repo_root,
+                        task_id,
+                        "reject",
+                        &reject_content,
+                        ctx.app_handle.as_ref(),
+                    )
+                    .await;
+
+                    let _ = crate::commands::append_task_dialog_activity(
+                        repo_root,
+                        &prev_sub.id,
+                        "steer",
+                        &reject_content,
+                        ctx.app_handle.as_ref(),
+                    )
+                    .await;
+
+                    // Emit events
+                    if let Some(app) = ctx.app_handle.as_ref() {
+                        if let Some(cs) = mut_tasks.iter().find(|t| crate::commands::task_id_matches(&t.id, task_id)) {
+                            let _ = app.emit("task:updated", serde_json::json!({ "task": cs }));
+                        }
+                        if let Some(ps) = mut_tasks.iter().find(|t| crate::commands::task_id_matches(&t.id, &prev_sub.id)) {
+                            let _ = app.emit("task:updated", serde_json::json!({ "task": ps }));
+                            let _ = app.emit("task:moved", serde_json::json!({
+                                "taskId": ps.id,
+                                "toStage": prev_col.id,
+                                "stageId": prev_col.id,
+                                "status": prev_status,
+                                "rejected": true,
+                                "reason": reason,
+                                "verdict": "CHANGES_REQUESTED",
+                                "task": ps,
+                            }));
+                        }
+                        if let Some(p) = mut_tasks.iter().find(|t| crate::commands::task_id_matches(&t.id, pid)) {
+                            let _ = app.emit("task:updated", serde_json::json!({ "task": p }));
+                        }
+                        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &mut_tasks }));
+
+                        if prev_col_has_autorun {
+                            let _ = app.emit("agent:autorun", serde_json::json!({
+                                "taskId": prev_sub.id,
+                                "prompt": reject_content,
+                            }));
+                        }
+                    }
+
+                    Some(format!(
+                        "ОТКЛОНЕНО: Задача {} возвращена на этап '{}' ({}) к подзадаче {} по причине: {}",
+                        task_id,
+                        prev_col.title,
+                        prev_col.id,
+                        prev_sub.id,
+                        reason
+                    ))
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            if let Some(res_str) = subtask_rejection {
+                res_str
+            } else {
+                // Fallback for single tasks or subtasks without previous subtask
+                let rejection_summary = format!("ОТКЛОНЕНО РЕВЬЮ: {}", reason);
+                let updated_task = crate::commands::internal_move_task_stage(
+                    repo_root,
+                    task_id,
+                    &prev_col.id,
+                    Some("CHANGES_REQUESTED".to_string()),
+                    Some("idle".to_string()),
+                    Some(rejection_summary),
+                    ctx.app_handle.as_ref(),
+                    true, // is_autonomous_advance
+                    None,
+                )
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+                let _ = crate::commands::append_task_dialog_activity(
+                    repo_root,
+                    task_id,
+                    "reject",
+                    &reject_content,
+                    ctx.app_handle.as_ref(),
+                )
+                .await;
+
+                // Emit task:moved with reject marker and reason
+                if let Some(app) = ctx.app_handle.as_ref() {
+                    let _ = app.emit("task:moved", serde_json::json!({
+                        "taskId": task_id,
+                        "toStage": prev_col.id,
+                        "stageId": prev_col.id,
+                        "status": "idle",
+                        "rejected": true,
+                        "reason": reason,
+                        "verdict": "CHANGES_REQUESTED",
+                        "task": &updated_task,
+                    }));
+                    let prev_has_autorun = prev_col.persona.is_some() || prev_col.auto_run == Some(true);
+                    if prev_has_autorun {
+                        let _ = app.emit("agent:autorun", serde_json::json!({
+                            "taskId": task_id,
+                            "prompt": reject_content,
+                        }));
+                    }
+                }
+
+                format!(
+                    "ОТКЛОНЕНО: Задача {} возвращена на этап '{}' ({}) по причине: {}",
+                    task_id,
+                    prev_col.title,
+                    prev_col.id,
+                    reason
+                )
             }
-
-            format!(
-                "ОТКЛОНЕНО: Задача {} возвращена на этап '{}' ({}) по причине: {}",
-                task_id,
-                prev_col.title,
-                prev_col.id,
-                reason
-            )
         }
 
         "question" => {
