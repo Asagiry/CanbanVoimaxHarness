@@ -25,5 +25,7 @@
   "context_window": 200000,
   "maxTokens": 8192,
   "model": "gemini-3.8-flash-high",
-  "temperature": 0.2
+  "temperature": 0.2,
+  "icon": "Cpu",
+  "color": "#6366f1"
 }

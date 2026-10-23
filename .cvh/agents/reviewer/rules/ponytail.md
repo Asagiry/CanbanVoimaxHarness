@@ -1,56 +1,51 @@
-# Правило JIT: Минимальный дифф и предотвращение оверинжиниринга (ponytail.md)
+# JIT Rule: Minimal Surgical Diff and Over-Engineering Prevention (ponytail.md)
 
-Правило фиксирует инженерный регламент Ponytail для CanbanVoimaxHarness: достижение результата кратчайшим путем, исключение архитектурного балласта и сохранение системной надежности.
-
----
-
-## 1. Инвариант минимального изменения (1–3 строки)
-
-- Если дефект или задача решается правкой 1–3 строк в существующем файле, решение вносится строго по месту.
-- Запрещено создавать новые файлы классов, контекстов, хуков, утилит или сервисов, если логика естественным образом дополняет существующий компонент.
-- Создание нового файла или модуля требует обоснования превышения пределов ответственности текущего файла.
+This rule establishes the Ponytail engineering discipline for CanbanVoimaxHarness: achieving requirements via the shortest reliable path, eliminating architectural baggage, and preserving system robustness.
 
 ---
 
-## 2. Запрет необоснованных зависимостей
+## 1. Minimal Diff Invariant (1–3 Lines)
+- If a bug or feature can be resolved by editing 1–3 lines in an existing file, implement the solution strictly in place.
+- Do not create new classes, contexts, custom hooks, helper modules, or service layers if the logic naturally belongs inside an existing component.
+- Creating a new file requires explicit justification that the responsibility exceeds the existing file's boundary.
 
-- Запрещено добавлять сторонние crates в `src-tauri/Cargo.toml` или npm-пакеты в `package.json` без явного согласования.
-- Все типовые операции реализуются через:
-  - Стандартную библиотеку Rust, Tokio, Tauri API, rusqlite, serde.
+---
+
+## 2. Ban on Unwarranted Dependencies
+- Do not add external crates to `src-tauri/Cargo.toml` or npm packages to `package.json` without explicit approval.
+- Standard capabilities must rely on:
+  - Rust standard library, Tokio, Tauri API, rusqlite, serde.
   - React 19, Zustand, Tailwind CSS v4, Lucide Icons.
-- Если функция реализуется алгоритмом в 10–20 строк, недопустимо подключать внешнюю библиотеку ради одного вызова.
+- If a utility can be implemented in 10–20 lines of clean code, do not install a third-party dependency for a single function call.
 
 ---
 
-## 3. Запрет спекулятивного усложнения (Zero Future-Proofing)
-
-- Код пишется исключительно под текущие требования задачи.
-- Запрещено:
-  - Создавать абстрактные фабрики, трейты с единственной реализацией и транзитные интерфейсы-прокладки.
-  - Добавлять неиспользуемые аргументы функций "на перспективу".
-  - Вводить флаги конфигурации, переключатели и сценарии ветвления для гипотетических будущих расширений.
-  - Оборачивать типы в многослойные дженерики без практической необходимости.
+## 3. Ban on Speculative Abstractions (Zero Future-Proofing)
+- Author code strictly for current task requirements.
+- Strictly prohibited:
+  - Abstract factories, single-implementation traits, and pass-through interfaces.
+  - Unused function arguments added "for future flexibility".
+  - Speculative configuration flags, switches, and branching scenarios for unassigned requirements.
+  - Wrapping concrete types in complex multi-layer generics without immediate necessity.
 
 ---
 
-## 4. Сохранение системной строгости и надежности
-
-Упрощение кода по принципу Ponytail касается исключительно структуры решений, но не отменяет требований к надежности:
+## 4. Preservation of System Robustness
+Ponytail simplification governs solution structure, never compromising runtime reliability:
 - **Rust Backend**:
-  - Строгая обработка ошибок через `Result<T, AppError>`. Полный запрет `.unwrap()` и `.expect()` в рабочих путях.
-  - Сохранение атомарности транзакций SQLite в режиме WAL.
-  - Контроль дочерних процессов и корректная очистка ресурсов Tokio.
+  - Strongly typed error handling via `Result<T, AppError>`. Zero `.unwrap()` or `.expect()` in production paths.
+  - SQLite WAL transaction boundaries with atomic transactions.
+  - Supervised child process management with clean Tokio resource cleanup.
 - **React Frontend**:
-  - Обязательное использование `useShallow` для селекторов Zustand при выборке объектов и массивов.
-  - Сохранение очистки таймеров и подписок в `useEffect`.
-  - Моноширинные шрифты `tabular-nums` для динамических числовых данных.
+  - Mandatory `useShallow` on Zustand store selectors returning arrays or objects.
+  - Clean timer and subscription teardowns in `useEffect`.
+  - Monospace `.tabular-nums` on dynamic telemetry and timers.
 
 ---
 
-## 5. Предкоммитный чеклист
-
-Перед передачей задачи на этап аудита:
-- [ ] Проверен вывод `git diff`: отсутствуют ли случайные форматирования и правки чужого кода?
-- [ ] Можно ли сократить число измененных файлов без ущерба для архитектуры?
-- [ ] Не добавлены ли лишние зависимости в манифесты проекта?
-- [ ] Все ли добавленные поля, типы и функции имеют реальные точки вызова?
+## 5. Pre-Commit Verification Checklist
+Before submitting code to the Review stage:
+- [ ] Has `git diff` been inspected for accidental formatting changes or unintended edits?
+- [ ] Can the count of modified files be minimized without architectural harm?
+- [ ] Have any unwarranted dependencies been introduced into manifests?
+- [ ] Does every newly added type, function, or field have active call sites?

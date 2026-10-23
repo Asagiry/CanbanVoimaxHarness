@@ -1,40 +1,40 @@
-# Правило JIT: Стандарт чистоты интерфейса и лаконичной речи (antislop.md)
+# Rule: UI Visual Cleanliness & Technical Prose Standards (antislop.md)
 
-Правило объединяет требования к визуальной чистоте компонентов UI (таксономия 35 признаков AI-Slop) и строгой лаконичности технических формулировок в кодовой базе CanbanVoimaxHarness.
-
----
-
-## 1. Визуальные инварианты интерфейса (UI Anti-Slop / kill-ai-slop)
-
-### 1.1 Цветовая палитра и акценты
-- **Запрет градиентного шума**: Запрещены переходы между фиолетовым и индиго (`from-indigo-500 to-purple-600`), радужные рамки и фоновые цветные пятна (`blur-3xl`).
-- **Единый доминантный акцент**: В каждом представлении используется ровно один смысловой акцентный цвет для основного действия.
-- **Текстовая контрастность**: Запрещен градиентный текст (`bg-clip-text text-transparent`). Текст оформляется сплошным цветом высокой контрастности: `#171717` / `#4d4d4d` в светлой теме и `#f0f6fc` / `#8b949e` в темной теме.
-
-### 1.2 Геометрия и плотность компоновки
-- **Сдержанные скругления**: Стандартные радиусы `rounded-md` (6px) или `rounded-lg` (8px). Запрещены гипертрофированные скругления `rounded-3xl` и избыточный `backdrop-blur`.
-- **Четкие границы вместо размытых теней**: Разделение блоков осуществляется тонкими линиями толщиной 1px (`#ebebeb` / `#d4d4d8` для светлой темы, `#21262d` / `#30363d` для темной темы). Тени `shadow-2xl` допустимы исключительно у контекстных меню и диалогов.
-- **Моноширинная телеметрия**: Все таймеры, счетчики токенов, значения скорости генерации и миллисекунды выводятся с обязательным классом `tabular-nums`.
-
-### 1.3 Индикаторы и пиктограммы
-- **Запрет цветных подложек под иконками**: Иконки Lucide отрисовываются как самостоятельные векторные знаки без цветных плашек (`bg-blue-100`) под ними.
-- **Отказ от инфляции бейджей**: Не оборачивать обычные текстовые метки в цветные пилюли ("✨ New", "🔥 Popular"). Бейдж используется строго для бинарных статусов активности или вердиктов.
-- **Запрет эмодзи в элементах управления**: Имена колонок, системные кнопки и заголовки задач не содержат эмодзи.
+Authoritative guidelines uniting visual cleanliness standards (the 35-tell AI-Slop taxonomy) and strict technical prose discipline across CanbanVoimaxHarness.
 
 ---
 
-## 2. Инварианты технической речи и документации (Prose Anti-Slop)
+## 1. Visual UI Invariants (UI Anti-Slop / kill-ai-slop)
 
-### 2.1 Активный залог и субъект действия
-- Каждое утверждение указывает конкретного исполнителя: "Бэкенд фиксирует транзакцию", "Ревьюер отклоняет коммит".
-- Запрещено наделять неодушевленные сущности волей: формулировки вроде "логика приняла решение" или "код стремится к упрощению" недопустимы.
+### 1.1 Color Palette & Restrained Accents
+- **Ban on Gradient Clutter**: Strictly forbid multi-color gradient transitions (e.g., `#6366f1` to `#a855f7`), rainbow border wrappers, and atmospheric blur blobs (`blur-3xl`).
+- **Single Dominant Accent**: Each view utilizes exactly one semantic accent color for primary interactive triggers.
+- **High-Contrast Solid Text**: Forbid gradient text (`bg-clip-text text-transparent`). Render all text with high-contrast solids: `#171717` / `#4d4d4d` in Light Paper mode and `#f0f6fc` / `#8b949e` in Obsidian Dark mode.
 
-### 2.2 Запрещенные речевые штампы
-- Запрещены вводные словесные конструкции: "Следует отметить", "Нельзя не заметить", "Как известно", "В современном мире".
-- Запрещены шаблонные бинарные противопоставления: "Это не просто инструмент, это платформа". Формулируется сразу суть: "Инструмент выполняет маршрутизацию задач".
-- Запрещены маркетинговые слова-заполнители: `game changer`, `paradigm shift`, `streamline`, `delve`, `foster`, `leverage`, `robust`, `supercharge`.
+### 1.2 Geometry & Layout Density
+- **Restrained Corner Radii**: Use standard radii `rounded-md` (6px) or `rounded-lg` (8px). Forbid exaggerated `rounded-3xl` bubble cards and excessive `backdrop-blur`.
+- **Crisp Hairline Dividers**: Separate blocks with subtle 1px borders (`#ebebeb` / `#d4d4d8` for Light mode, `#21262d` / `#30363d` for Dark mode). Heavy shadows (`shadow-2xl`) are permitted exclusively on floating context menus and modal overlays.
+- **Monospace Telemetry Figures**: Apply `.tabular-nums` across all timers, token counts, TPS metrics, and duration pills to eliminate layout jitter.
 
-### 2.3 Структура отчетов и коммит-сообщений
-- **Прямой переход к фактам**: Первое предложение коммита или отчета содержит техническое изменение и затронутый компонент.
-- **Отказ от ложного пафоса**: Никаких финальных глубокомысленных обобщений или риторических концовок в технических секциях.
-- **Тест на переносимость**: Любое предложение, которое можно перенести в посторонний проект без потери информации, подлежит немедленному удалению.
+### 1.3 Indicators & Iconography
+- **No Tinted Background Squares on Icons**: Render Lucide vectors directly as clean monochrome strokes without pastel square chips (`bg-blue-100`) behind them.
+- **Ban on Badge Inflation**: Never wrap plain text in decorative pills ("✨ New", "🔥 Popular"). Use badges exclusively for binary execution statuses or audit verdicts.
+- **No Emojis in Controls**: Column headers, action buttons, tool descriptions, and task cards must never contain emojis (🚀, 💡, 🔥, ✨).
+
+---
+
+## 2. Technical Prose & Documentation Invariants (Prose Anti-Slop)
+
+### 2.1 Active Voice & Concrete Actors
+- Attribute every action to a concrete subject: "Backend commits the transaction", "Reviewer rejects the feature branch".
+- Never personify inanimate concepts: avoid phrases like "the code wants to be clean" or "the logic decided".
+
+### 2.2 Banned Filler & Fluff
+- Forbid conversational throat-clearing: "It is worth noting that", "Needless to say", "In today's fast-paced world".
+- Forbid synthetic contrasts: "It is not just a tool, it is an ecosystem". State the operational fact directly: "The engine dispatches Kanban tasks".
+- Forbid marketing buzzwords: `game changer`, `paradigm shift`, `streamline`, `delve`, `foster`, `leverage`, `robust`, `supercharge`, `tapestry`, `holistic`.
+
+### 2.3 Report & Commit Message Structure
+- **Direct Fact-First Delivery**: The first sentence of any commit or handover summary must name the exact technical modification and affected component.
+- **No False Grandeur**: Cease writing rhetorical conclusions, philosophical summaries, or congratulatory sign-offs.
+- **Portability Test**: Any sentence that could be copied into an unrelated project without losing technical meaning must be pruned immediately.

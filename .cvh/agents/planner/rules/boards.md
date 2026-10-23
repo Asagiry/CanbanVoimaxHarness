@@ -1,46 +1,61 @@
-# Руководство: Конфигурация досок и пайплайнов (boards.md)
+# Guide: Boards and Pipelines Configuration (boards.md)
 
-Правила для `.cvh/boards.json` и `.cvh/pipeline.json`.
+Authoritative rules for `.cvh/boards.json` and `.cvh/pipeline.json`.
 
-## 1. Доски как панель управления приложением
-В CanbanVoimaxHarness доска является средой управления исполнением.
-Колонки представляют автономные стадии. Перемещение карточки инициирует автоматизацию и запуск агентов.
+---
 
-## 2. Канонический порядок стадий
-Канонический автономный пайплайн разработки включает следующие стадии:
+## 1. The Kanban Board as Application Control Plane
+In CanbanVoimaxHarness, the Kanban board is the runtime execution environment.
+Columns represent autonomous execution stages. Moving a task card triggers automated hooks and initiates agent execution loops.
+
+---
+
+## 2. Canonical Stage Sequence
+The canonical autonomous engineering pipeline follows this sequential order:
 ```text
-[Backlog] -> [Planning] -> [Developer] -> [Review] -> [Retro] -> [Ready]
- (index 0)     (plan)        (dev)       (review)    (retro)   (terminal)
+[Backlog] ──► [Planning] ──► [Developer] ──► [Review] ──┬──(Approved immediately)──────► [Ready]
+ (index 0)       (plan)         (dev)       (review)    │                                (terminal)
+                                                        └──(Approved after changes)──► [Retro] ────┘
+                                                                                        (retro)
 ```
-- **Backlog**: идентификатор `"backlog"` обязан находиться на позиции с индексом 0 (входящие задачи).
-- **Planning (`plan`)**: планирование, архитектурная проработка, составление чек-листа задач (агент `planner`).
-- **Developer (`dev`)**: реализация кода в изолированном ворктри, запуск сенсоров, синхронизация правил (агент `developer`).
-- **Review (`review`)**: строгий аудит по 7 критериям Harness2.0 и 6 гейтам (агент `reviewer`).
-- **Retro (`retro`)**: анализ траектории исполнения и ошибок, если задача не прошла ревью с первого раза, улучшение правил в `.cvh/rules/` (агент `retro`).
-- **Ready**: идентификатор `"ready"` (с флагом `terminal: true`) обязан находиться на финальной позиции.
-- **Неизменяемые якоря**: удаление стадий `backlog` и `ready` запрещено на всех досках. При их отсутствии в конфигурации бэкенд (`normalize_columns`) восстанавливает их автоматически.
+- **Backlog**: ID `"backlog"` must always reside at index 0 (incoming tasks).
+- **Planning (`plan`)**: Architecture, requirements decomposition, and implementation checklist planning (agent `planner`).
+- **Developer (`dev`)**: Implementation inside an isolated git worktree, ground-truth sensors, rule synchronization (agent `developer`).
+- **Review (`review`)**: Strict Harness2.0 Blind Selection audit across 7 criteria and 6 mandatory gates (agent `reviewer`).
+- **Retro (`retro`)**: Execution trajectory analysis when tasks required fixes after review rejection; rule evolution in `.cvh/rules/` (agent `retro`).
+- **Ready**: ID `"ready"` (with `terminal: true`) must reside at the final position.
+- **Immutable Anchors**: Removing `backlog` or `ready` is forbidden across all boards. If omitted, the backend normalization routine (`normalize_pipeline_columns`) restores them automatically.
 
-## 3. Инвариант пассивных стадий intake & completion (backlog и ready)
-- `backlog` — стадия постановки и накопления задач (Intake). Здесь задачи ждут, пока их возьмут в работу.
-- `ready` — терминальная стадия завершения (Done / Delivery). Здесь задачи полностью готовы.
-- В `backlog` и в `ready` СТРОГО ЗАПРЕЩЕНО назначать персоны агентов (СТРОГО `persona: null`, `autoRun: null`).
-- Никаких ботов в беклоге и готово! Агенты работают ИСКЛЮЧИТЕЛЬНО на промежуточных стадиях пайплайна (`plan`, `dev`, `review`, `retro`).
-- На стадии `ready` СТРОГО ЗАПРЕЩЕН хук `on_leave`. Разрешен исключительно `on_enter` (например, для проверки слияния ветки).
+---
 
-## 4. Маршрутизация после этапа Review (Routing Invariant)
-- **Approved сразу (с первой попытки)**: задача идет напрямую в `ready`.
-- **Approved после замечаний (`CHANGES_REQUESTED`)**: если задача отклонялась на ревью и дорабатывалась разработчиком, после финального одобрения карточка направляется в `retro` для фиксации выводов и обновления правил.
-- **Из стадии `retro`**: после фиксации урока и обновления правил агент ретро переводит карточку в `ready`.
+## 3. Passive Stages Invariant (backlog and ready)
+- `backlog`: Intake and accumulation stage. Tasks wait here until selected for work.
+- `ready`: Terminal delivery stage (`terminal: true`). Tasks here are fully verified, merged, and completed.
+- **Strict Bot Ban**: Both `backlog` and `ready` MUST have `persona: null` and `autoRun: null`. No autonomous agents ever run in backlog or ready.
+- **Terminal Exit Ban**: The `ready` stage must NEVER define an `on_leave` hook. Only `on_enter` is permitted (e.g., verifying remote push).
 
-## 5. Подсистема самовосстановления досок
-- **Автономное восстановление задач**: бэкенд реализует динамическое восстановление (`heal_task_board_and_column` и `heal_tasks` в `src-tauri/src/commands/tasks.rs`).
-- **Разрешение отсутствующих досок**: если `board_id` задачи отсутствует или указывает на удаленную доску, рантайм назначает задачу на `active_board_id` (или первую доступную доску).
-- **Разрешение отсутствующих колонок**: если `stage_id` задачи отсутствует среди колонок целевой доски, задача перемещается в первую колонку доски (`backlog`).
+---
 
-## 6. Инварианты строгого соответствия 1:1
-- **column.persona строго совпадает с именем директории и frontmatter**: `column.persona` в `boards.json` и `pipeline.json` обязана совпадать с именем директории `.cvh/agents/<role>/` и полем `name: <role>` во frontmatter `persona.md`.
-- **stageOverrides.<stage_id> строго совпадает с column.id**: секция переопределений в `.cvh/settings/tool-policy.json` обязана содержать ключи, в точности совпадающие с `column.id` всех колонок доски.
+## 4. Post-Review Routing Invariant
+- **Approved Immediately (First Attempt)**: When a task passes review on its initial submission without prior rejections (`CHANGES_REQUESTED`), it advances directly to `ready`.
+- **Approved After Revisions**: When a task previously received `CHANGES_REQUESTED` and required developer revisions, approval routes the card to `retro` to record root-cause learnings and evolve rules.
+- **From Retro Stage**: Once the lesson is codified in `.cvh/rules/`, the Retro agent advances the card to `ready`.
 
-## 7. Реконфигурация досок и границы ответственности ролей
-- **Сохранение рабочего контекста**: при создании, переименовании или изменении досок запрещено удалять доску или колонку, в которой выполняется текущая активная задача.
-- **Сохранение задач**: при реструктуризации досок идентификаторы `boardId` существующих задач в SQLite сохраняются либо явно переназначаются.
+---
+
+## 5. Self-Healing Multi-Board State
+- **Autonomous Task Healing**: The backend implements automatic recovery (`heal_task_board_and_column` and `heal_tasks` in `src-tauri/src/commands/tasks.rs`).
+- **Orphaned Board Resolution**: If `task.board_id` is missing or references a non-existent board, the runtime reassigns the task to `active_board_id` (or the first available board).
+- **Orphaned Column Resolution**: If `task.stage_id` does not exist on the target board, the task is safely moved to the board's intake column (`backlog`).
+
+---
+
+## 6. Strict 1:1 Mapping Invariants
+- **`column.persona` strictly matches directory and frontmatter**: `column.persona` in `boards.json` and `pipeline.json` MUST strictly match the directory name `.cvh/agents/<role>/` and the `name: <role>` field in `persona.md` frontmatter.
+- **`stageOverrides.<stage_id>` strictly matches `column.id`**: The override section in `.cvh/settings/tool-policy.json` MUST contain keys matching every `column.id` across boards.
+
+---
+
+## 7. Board Reconfiguration & Role Scope
+- **Preserving Execution Context**: When modifying boards, never delete an active board or column that contains currently running tasks.
+- **Preserving Existing Tasks**: When restructuring boards, existing task records in SQLite retain their identifiers and are reassigned deterministically.

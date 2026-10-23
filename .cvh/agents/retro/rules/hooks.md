@@ -1,23 +1,27 @@
-# Руководство: Скрипты перехода и хуки жизненного цикла
+# Guide: Lifecycle Hooks and Transition Scripts (hooks.md)
 
-Правила для `.cvh/hooks/` и скриптов жизненного цикла колонок.
+Authoritative rules for `.cvh/hooks/` and column lifecycle scripts.
 
-## 1. Точки вызова хуков
-Колонки объявляют хуки перехода в конфигурации (`boards.json` и `pipeline.json`) внутри объекта `hooks`:
-- `hooks.on_enter`: срабатывает при входе карточки в стадию.
-- `hooks.on_leave`: срабатывает при выходе карточки из стадии.
+---
 
-Все хуки — это реальные исполняемые файлы (`.bat`, `.cmd`, `.ps1`, `.sh`, `.py`) в каталоге `.cvh/hooks/` или в директории агента.
+## 1. Hook Invocation Triggers
+Columns declare transition hooks in configuration (`boards.json` and `pipeline.json`) within the `hooks` object:
+- `hooks.on_enter`: Executes when a task enters the stage.
+- `hooks.on_leave`: Executes when a task exits the stage.
 
-## 2. Протокол стандартного вывода для ворктри и веток
-Если скрипт хука подготавливает ворктри или ветку git, он выводит в стандартный вывод:
+All hooks are executable scripts (`.bat`, `.cmd`, `.ps1`, `.sh`, `.py`) located in `.cvh/hooks/` or inside an agent's directory.
+
+---
+
+## 2. Standard Output Protocol for Worktrees & Git Branches
+When a hook script prepares or switches a git worktree or branch, it outputs the following key-value pairs to `stdout`:
 ```text
-CVH_WORKTREE=<путь_к_директории>
-CVH_BRANCH=<имя_ветки>
+CVH_WORKTREE=<worktree_relative_or_absolute_path>
+CVH_BRANCH=<git_branch_name>
 ```
-Рантайм CVH считывает эти строки из вывода хука и сохраняет их в карточке задачи в полях `worktree_path` и `branch`.
+The CVH runtime intercepts these lines from hook stdout and writes them directly to the task card's `worktree_path` and `branch` fields in SQLite.
 
-Пример скрипта создания ворктри (`.cvh/hooks/create_worktree.bat`):
+### Worktree Creation Script Example (`.cvh/hooks/create_worktree.bat`):
 ```bat
 @echo off
 set "WT_DIR=worktrees\%CVH_TASK_ID%"
@@ -30,7 +34,7 @@ echo CVH_BRANCH=%BRANCH%
 exit /b 0
 ```
 
-Пример скрипта создания ворктри (`.cvh/hooks/create_worktree.sh`):
+### Worktree Creation Script Example (`.cvh/hooks/create_worktree.sh`):
 ```bash
 #!/usr/bin/env bash
 set -e
@@ -44,30 +48,37 @@ echo "CVH_BRANCH=$BRANCH"
 exit 0
 ```
 
-## 3. Переменные окружения контекста задачи
-Каждый скрипт получает контекст задачи через системные переменные окружения:
-- `CVH_TASK_ID`: идентификатор задачи (например, `CVH-042`).
-- `CVH_TASK_TITLE`: заголовок карточки задачи.
-- `CVH_WORKTREE_PATH`: абсолютный путь к ворктри задачи (если задан).
-- `CVH_BRANCH`: целевая git-ветка задачи.
-- `CVH_STAGE_ID`: идентификатор стадии перехода.
-- `CVH_VERDICT`: вердикт проверки при выходе из стадии ревью (`APPROVED`, `APPROVED_WITH_CAVEATS`, `CHANGES_REQUESTED`).
+---
 
-## 4. Механизм отклонения перехода
-Если скрипт хука возвращает ненулевой код выхода (`exit code != 0`):
-1. Переход карточки отменяется. Задача остается в исходной стадии.
-2. Лог ошибки (`stderr` или `stdout`) сохраняется в историю SQLite диалога задачи как steer-сообщение (`### [ОТКЛОНЕНО ХУКОМ / HOOK REJECTED: ...]`).
-3. Карточка переводится в статус `idle`, а вердикт устанавливается в `CHANGES_REQUESTED`.
-4. Если у колонки настроен агент (`persona`) или активен флаг `autoRun`, рантайм автоматически инициирует событие `agent:autorun` с текстом ошибки в качестве директивы для немедленного исправления.
+## 3. Injected Task Context Environment Variables
+Every hook execution receives the task's context via system environment variables:
+- `CVH_TASK_ID`: Unique task identifier (e.g. `CVH-042`).
+- `CVH_TASK_TITLE`: Title of the task card.
+- `CVH_WORKTREE_PATH`: Absolute or relative path to the task's worktree.
+- `CVH_BRANCH`: Target git feature branch.
+- `CVH_STAGE_ID`: Target stage identifier.
+- `CVH_VERDICT`: Verdict emitted during review exit (`APPROVED`, `APPROVED_WITH_CAVEATS`, `CHANGES_REQUESTED`).
 
-## 5. Сенсор контроля перехода
-Колонка может объявлять свойство `gatekeeperSensor` (например, `cargo check` или `pnpm exec tsc --noEmit`).
-- Сенсор выполняется внутри `CVH_WORKTREE_PATH` перед переходом карточки в целевую стадию.
-- При ненулевом коде возврата переход блокируется.
-- При первичном переходе из `backlog` в первую рабочую стадию или при пустом ворктри запуск сенсора пропускается.
+---
 
-## 6. Инвариант терминальной стадии
-- Стадия `ready` (или любая с флагом `terminal: true`) является финальной точкой пайплайна.
-- Задачи, попавшие в `ready`, считаются полностью завершенными.
-- На терминальной стадии разрешен только хук `on_enter` (например, слияние ветки в main, удаление ворктри, сборка релиза).
-- Хук `on_leave` на стадии `ready` строго запрещен и бессмысленен: из терминальной стадии карточки дальше никуда не переходят.
+## 4. Hook Rejection Mechanism
+When a hook script returns a non-zero exit code (`exit code != 0`):
+1. The transition is aborted immediately; the task remains pinned in the source stage.
+2. The error log (`stderr` or `stdout`) is recorded into SQLite task dialog history as a steer message (`### [HOOK REJECTED: ...]`).
+3. The task status resets to `idle`, and its verdict is set to `CHANGES_REQUESTED`.
+4. If the column configures an agent (`persona`) or has `autoRun: true`, the runtime triggers an `agent:autorun` event directing the agent to fix the defect.
+
+---
+
+## 5. Gatekeeper Sensor Checks
+A column may declare a `gatekeeperSensor` command (e.g. `.cvh/hooks/gatekeeper_sensor.bat` or `cargo check`).
+- The sensor executes strictly inside `CVH_WORKTREE_PATH` before moving a card into the target stage.
+- If the sensor exits non-zero, the transition is blocked.
+- Sensor execution is automatically skipped on initial moves from `backlog` into the first working stage, or when the worktree is empty.
+
+---
+
+## 6. Terminal Stage Invariants
+- The `ready` stage (or any column with `terminal: true`) represents the delivery endpoint.
+- Only an `on_enter` hook is permitted (e.g. verifying remote push, cleaning artifacts).
+- An `on_leave` hook on a terminal stage is strictly forbidden and rejected by configuration normalizers.

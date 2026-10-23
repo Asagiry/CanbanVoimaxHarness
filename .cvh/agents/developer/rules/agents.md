@@ -24,6 +24,23 @@ Flat persona files (`.cvh/agents/<role>.md`) are deprecated and ignored.
 2. **stageOverrides.<stage_id> strictly matches column.id**:
    `stageOverrides.<stage_id>` in `.cvh/settings/tool-policy.json` MUST STRICTLY MATCH each `column.id` in `boards.json` and `pipeline.json`.
 
+### 1.3 Agent Settings and Customization (`setting`)
+Each agent directory `.cvh/agents/<role>/setting` contains JSON configuration without extension:
+```json
+{
+  "model": "gemini-3.8-flash-high",
+  "temperature": 0.2,
+  "context_window": 200000,
+  "max_tokens": 8192,
+  "icon": "Cpu",
+  "color": "#6366f1"
+}
+```
+- **Priority & Precedence**: Values defined in `setting` (`icon`, `color`, `model`, `temperature`, `context_window`) take precedence over YAML frontmatter defaults.
+- **Bi-directional Synchronization**: Changing the icon or color in `setting` automatically synchronizes with `persona.md` YAML frontmatter, and vice versa.
+- **Color Invariants**: Gray (`#64748b`, `#6b7280`) and green (`#10b981`, `#22c55e`) colors are strictly reserved for system stages `backlog` and `ready` and forbidden for agents. Agents select colors from `AGENT_PALETTE`.
+- **SVG Icon Pack**: Agents select icons from canonical 18-icon pack `AGENT_ICONS` (`Bot`, `Brain`, `Cpu`, `Code2`, `ShieldCheck`, `Sparkles`, `History`, `Terminal`, `Zap`, `Flame`, `Radar`, `Workflow`, `Boxes`, `Wrench`, `Rocket`, `Compass`, `Crosshair`, `Layers`).
+
 ---
 
 ## 2. Invariant: Passive Stages Intake & Completion (backlog and ready)
@@ -85,7 +102,7 @@ color: <HexColor>
 
 ## 5. Relay Handoff Protocol
 When transitioning stages via `advance_task(summary)`, the summary is injected as:
-`### [ЭСТАФЕТА ПАЙПЛАЙНА / RELAY HANDOFF]`
+`### [RELAY HANDOFF]`
 into the next agent's prompt, guaranteeing 100% memory priming with zero turn degradation.
 
 ---
