@@ -1,2 +1,9 @@
-# Rule: Boards and Pipelines Invariants
-Refer to `.cvh/rules/boards.md`. Load via `load_rule("boards")`.
+# Правило: Инварианты досок и пайплайнов
+Смотри `.cvh/rules/boards.md`. Загрузка через `load_rule("boards")`.
+
+- Канонический порядок: `backlog` на позиции 0, `ready` на финальной позиции (`terminal: true`).
+- Проектирование хуков и изоляция ворктри: задаются декларативно в `boards.json` и `pipeline.json`.
+- Инвариант терминальной стадии (`ready` / `terminal: true`): разрешен только `on_enter`; `on_leave` запрещен и бессмысленен.
+- Инвариант 1:1: `column.persona` строго совпадает с директорией `.cvh/agents/<role>/` и `name` в `persona.md`.
+- `stageOverrides.<stage_id>` строго совпадает с `column.id`.
+- Динамическое самовосстановление защищает от осиротевших задач при смене или удалении досок.
