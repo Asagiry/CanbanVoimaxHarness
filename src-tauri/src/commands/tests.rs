@@ -2826,3 +2826,259 @@ Write code.
 
         let _ = tokio::fs::remove_dir_all(&tmp).await;
     }
+
+    #[tokio::test]
+    async fn test_terminal_task_clears_waiting_for_subtask_and_heal_tasks_cleans_stale_subtasks() {
+        let tmp = PathBuf::from("target").join(format!("cvh_heal_subtasks_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&tmp).await.expect("test dir");
+
+        let bcfg = crate::config::BoardsConfig {
+            active_board_id: "development".to_string(),
+            boards: vec![crate::config::BoardDef {
+                id: "development".to_string(),
+                name: "Development".to_string(),
+                columns: vec![
+                    crate::config::PipelineColumn {
+                        id: "backlog".to_string(),
+                        title: "Backlog".to_string(),
+                        color: None,
+                        icon: None,
+                        persona: None,
+                        on_enter_script: None,
+                        context_window: None,
+                        model_override: None,
+                        reasoning_effort: None,
+                        temperature: None,
+                        gatekeeper_sensor: None,
+                        allowed_tools: None,
+                        hooks: HashMap::new(),
+                        routes: None,
+                        auto_run: None,
+                        terminal: None,
+                    },
+                    crate::config::PipelineColumn {
+                        id: "dev".to_string(),
+                        title: "Dev".to_string(),
+                        color: None,
+                        icon: None,
+                        persona: Some("developer".to_string()),
+                        on_enter_script: None,
+                        context_window: None,
+                        model_override: None,
+                        reasoning_effort: None,
+                        temperature: None,
+                        gatekeeper_sensor: None,
+                        allowed_tools: None,
+                        hooks: HashMap::new(),
+                        routes: None,
+                        auto_run: Some(true),
+                        terminal: None,
+                    },
+                    crate::config::PipelineColumn {
+                        id: "ready".to_string(),
+                        title: "Ready".to_string(),
+                        color: None,
+                        icon: None,
+                        persona: None,
+                        on_enter_script: None,
+                        context_window: None,
+                        model_override: None,
+                        reasoning_effort: None,
+                        temperature: None,
+                        gatekeeper_sensor: None,
+                        allowed_tools: None,
+                        hooks: HashMap::new(),
+                        routes: None,
+                        auto_run: None,
+                        terminal: Some(true),
+                    },
+                ],
+            }],
+        };
+
+        let mut tasks = vec![
+            Task {
+                id: "CVH-500".to_string(),
+                title: "Parent in ready".to_string(),
+                description: String::new(),
+                stage_id: "ready".to_string(),
+                board_id: Some("development".to_string()),
+                worktree_path: None,
+                branch: None,
+                verdict: None,
+                custom_flow: None,
+                status: Some("done".to_string()),
+                model: None,
+                parent_id: None,
+                subtask_index: None,
+                waiting_for_subtask_id: Some("CVH-500.1".to_string()),
+                handover_summary: None,
+                cover_image: None,
+                attachments: None,
+                todos: None,
+                priority: None,
+                tags: None,
+                current_tokens: None,
+                skip_worktree: Some(true),
+                created_at: 0,
+                updated_at: 0,
+            },
+            Task {
+                id: "CVH-500.1".to_string(),
+                title: "Completed subtask".to_string(),
+                description: String::new(),
+                stage_id: "dev".to_string(),
+                board_id: Some("development".to_string()),
+                worktree_path: None,
+                branch: None,
+                verdict: None,
+                custom_flow: None,
+                status: Some("done".to_string()),
+                model: None,
+                parent_id: Some("CVH-500".to_string()),
+                subtask_index: Some(1),
+                waiting_for_subtask_id: None,
+                handover_summary: None,
+                cover_image: None,
+                attachments: None,
+                todos: None,
+                priority: None,
+                tags: None,
+                current_tokens: None,
+                skip_worktree: Some(true),
+                created_at: 0,
+                updated_at: 0,
+            },
+            Task {
+                id: "CVH-501".to_string(),
+                title: "Parent with completed child".to_string(),
+                description: String::new(),
+                stage_id: "dev".to_string(),
+                board_id: Some("development".to_string()),
+                worktree_path: None,
+                branch: None,
+                verdict: None,
+                custom_flow: None,
+                status: Some("waiting_subtask".to_string()),
+                model: None,
+                parent_id: None,
+                subtask_index: None,
+                waiting_for_subtask_id: Some("CVH-501.1".to_string()),
+                handover_summary: None,
+                cover_image: None,
+                attachments: None,
+                todos: None,
+                priority: None,
+                tags: None,
+                current_tokens: None,
+                skip_worktree: Some(true),
+                created_at: 0,
+                updated_at: 0,
+            },
+            Task {
+                id: "CVH-501.1".to_string(),
+                title: "Subtask 501.1".to_string(),
+                description: String::new(),
+                stage_id: "dev".to_string(),
+                board_id: Some("development".to_string()),
+                worktree_path: None,
+                branch: None,
+                verdict: None,
+                custom_flow: None,
+                status: Some("done".to_string()),
+                model: None,
+                parent_id: Some("CVH-501".to_string()),
+                subtask_index: Some(1),
+                waiting_for_subtask_id: None,
+                handover_summary: None,
+                cover_image: None,
+                attachments: None,
+                todos: None,
+                priority: None,
+                tags: None,
+                current_tokens: None,
+                skip_worktree: Some(true),
+                created_at: 0,
+                updated_at: 0,
+            },
+        ];
+
+        // 1. Verify heal_tasks cleans up waiting_for_subtask_id
+        let healed = heal_tasks(&mut tasks, &bcfg);
+        assert!(healed, "heal_tasks must return true when tasks are modified");
+
+        assert_eq!(tasks[0].waiting_for_subtask_id, None, "Terminal parent must have waiting_for_subtask_id None");
+        assert_eq!(tasks[0].status.as_deref(), Some("done"));
+
+        assert_eq!(tasks[2].waiting_for_subtask_id, None, "Parent with completed child must have waiting_for_subtask_id cleared");
+        assert_eq!(tasks[2].status.as_deref(), Some("idle"), "Status must revert from waiting_subtask to idle");
+
+        // 2. Verify subtask advance to terminal via internal_advance_task_to_stage clears parent waiting_for_subtask_id
+        crate::config::save_boards_config(&tmp, &bcfg).await.expect("save boards");
+        let parent_active = Task {
+            id: "CVH-600".to_string(),
+            title: "Active Parent".to_string(),
+            description: String::new(),
+            stage_id: "dev".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("waiting_subtask".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: Some("CVH-600.1".to_string()),
+            handover_summary: None,
+            cover_image: None,
+            attachments: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: Some(true),
+            created_at: 0,
+            updated_at: 0,
+        };
+        let child_active = Task {
+            id: "CVH-600.1".to_string(),
+            title: "Child in dev".to_string(),
+            description: String::new(),
+            stage_id: "dev".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("running".to_string()),
+            model: None,
+            parent_id: Some("CVH-600".to_string()),
+            subtask_index: Some(1),
+            waiting_for_subtask_id: None,
+            handover_summary: None,
+            cover_image: None,
+            attachments: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: Some(true),
+            created_at: 0,
+            updated_at: 0,
+        };
+        save_tasks_to_disk(&tmp, &[parent_active, child_active]).await.expect("save active tasks");
+
+        let adv_res = internal_advance_task_to_stage(&tmp, "CVH-600.1", Some("ready"), "Child finished", None)
+            .await
+            .expect("advance child to ready");
+        assert!(adv_res.contains("УСПЕШНО"));
+
+        let loaded = load_tasks_from_disk(&tmp).await;
+        let parent_after = loaded.iter().find(|t| t.id == "CVH-600").expect("parent CVH-600");
+        assert_eq!(parent_after.stage_id, "ready");
+        assert_eq!(parent_after.status.as_deref(), Some("done"));
+        assert_eq!(parent_after.waiting_for_subtask_id, None, "Parent waiting_for_subtask_id must be None after advance to ready");
+
+        let _ = tokio::fs::remove_dir_all(&tmp).await;
+    }

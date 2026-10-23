@@ -34,3 +34,9 @@ Authoritative backend audit checklist for the **Reviewer** persona in CanbanVoim
 ## 5. Safe Windows Quoting for Process Spawning
 - **Rule**: All child process spawns in `hooks.rs` or `git.rs` must use `quote_windows_path()` and `quote_windows_arg()`.
 - **Audit**: Check command line construction. Naked string interpolation like `format!("cmd /c {}", path)` is forbidden due to path spaces and special characters (`()`, `&`).
+
+---
+
+## 6. Terminal Stage Cleansing & Relational Subtask Invariant
+- **Rule**: Any task entering a terminal stage (`ready`, `done`) or with status `done` must have `waiting_for_subtask_id` set to `None`. Subtasks marked `done` must never leave parent tasks in `waiting_subtask` or with stale `waiting_for_subtask_id`.
+- **Audit**: Inspect transitions in `tasks.rs` and `boardStore.ts`. Ensure `heal_tasks`, `save_tasks`, and `internal_move_task_stage` clear `waiting_for_subtask_id` and never resurrect completed subtasks.

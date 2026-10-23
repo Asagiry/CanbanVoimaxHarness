@@ -456,7 +456,12 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   };
 
   const getStatusBadge = (status: TaskStatus) => {
-    if (task.waitingForSubtaskId || status === 'waiting_subtask') {
+    const waitingSub = task.waitingForSubtaskId
+      ? useBoardStore.getState().tasks.find((t) => t.id === task.waitingForSubtaskId)
+      : null;
+    const isSubActive = waitingSub ? waitingSub.status !== 'done' && waitingSub.columnId !== 'ready' : true;
+
+    if (!isDone && status !== 'done' && isSubActive && (task.waitingForSubtaskId || status === 'waiting_subtask')) {
       return (
         <button
           type="button"

@@ -57,6 +57,12 @@ Authoritative backend engineering standards and architectural invariants of **Ca
 - **Tauri IPC Command & Synchronization**: `create_task` and `save_tasks` preserve `attachments`. `save_tasks` defensively guards disk attachments and metadata (`attachments`, `cover_image`, `handover_summary`) from being overwritten by stale `None` values. Subtasks automatically inherit attachments from their parent task.
 - **LLM Vision Context**: `AgentSessionConfig` carries `task_attachments: Option<Vec<String>>`. When starting turn 0, if attachments are present, the initial user prompt explicitly notifies the model (`[ВЛОЖЕНИЯ К ЗАДАЧЕ / ATTACHMENTS]: Прикреплено N изображений...`) and packages images via `ChatMessage::user_with_images(initial_user_prompt, atts)`. Both in-memory contexts and reconstructed SQLite dialogue contexts maintain vision attachments on `messages[1]`.
 
+### 2.7 Relational Subtask Invariants & Terminal Stage Cleansing (`src-tauri/src/commands/tasks.rs`)
+- **Waiting for Subtask Lifecycle**: `waiting_for_subtask_id` is set ONLY while an active child subtask is running or awaiting changes.
+- **Terminal Stage Cleansing**: Whenever a task or its subtask moves to a terminal stage (`ready`, `done`, or column with `terminal: true`) or status becomes `done`, `waiting_for_subtask_id` MUST be cleared to `None`, and status cannot remain `waiting_subtask`.
+- **Self-Healing Invariant (`heal_tasks`)**: `heal_tasks` dynamically audits all tasks on load. Any terminal task or parent whose referenced subtask is completed or missing automatically has `waiting_for_subtask_id` cleared to `None` and status reset from `waiting_subtask` to `done` or `idle`.
+- **Defensive Synchronization (`save_tasks`)**: `save_tasks` only preserves `waiting_for_subtask_id` from disk if the referenced subtask is actively in-progress (non-done). Completed or terminal tasks never resurrect stale subtask IDs.
+
 ---
 
 ## 3. Rust Systems Coding Standards

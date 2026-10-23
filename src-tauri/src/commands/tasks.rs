@@ -65,7 +65,7 @@ pub fn heal_task_board_and_column(task: &mut Task, config: &crate::config::Board
     modified
 }
 
-/// Heals all tasks against the given BoardsConfig.
+/// Heals all tasks against the given BoardsConfig and enforces relational subtask invariants.
 /// Returns true if any task was modified.
 pub fn heal_tasks(tasks: &mut [Task], config: &crate::config::BoardsConfig) -> bool {
     let mut any_modified = false;
@@ -74,6 +74,39 @@ pub fn heal_tasks(tasks: &mut [Task], config: &crate::config::BoardsConfig) -> b
             any_modified = true;
         }
     }
+
+    // Relational subtask and terminal status self-healing (§ 2.2, § 2.7 & § 3):
+    let active_task_ids: HashSet<String> = tasks
+        .iter()
+        .filter(|t| t.status.as_deref() != Some("done"))
+        .map(|t| t.id.clone())
+        .collect();
+
+    for t in tasks.iter_mut() {
+        let is_terminal = stage_id_matches(&t.stage_id, "ready")
+            || stage_id_matches(&t.stage_id, "done")
+            || t.status.as_deref() == Some("done");
+
+        if is_terminal {
+            if t.waiting_for_subtask_id.is_some() {
+                t.waiting_for_subtask_id = None;
+                any_modified = true;
+            }
+            if t.status.as_deref() == Some("waiting_subtask") {
+                t.status = Some("done".to_string());
+                any_modified = true;
+            }
+        } else if let Some(ref sub_id) = t.waiting_for_subtask_id {
+            if !active_task_ids.contains(sub_id) {
+                t.waiting_for_subtask_id = None;
+                if t.status.as_deref() == Some("waiting_subtask") {
+                    t.status = Some("idle".to_string());
+                }
+                any_modified = true;
+            }
+        }
+    }
+
     any_modified
 }
 
@@ -341,15 +374,30 @@ pub async fn save_tasks(tasks: Vec<Task>, state: State<'_, AppState>) -> Result<
 
     for t in &mut merged_tasks {
         if let Some(dt) = disk_tasks.iter().find(|d| d.id == t.id) {
-            if dt.status.as_deref() == Some("waiting_subtask") && t.status.as_deref() != Some("waiting_subtask") {
+            let is_term = stage_id_matches(&t.stage_id, "ready")
+                || stage_id_matches(&t.stage_id, "done")
+                || t.status.as_deref() == Some("done");
+
+            if is_term {
+                t.waiting_for_subtask_id = None;
+                if t.status.as_deref() == Some("waiting_subtask") {
+                    t.status = Some("done".to_string());
+                }
+            } else if dt.status.as_deref() == Some("waiting_subtask") && t.status.as_deref() != Some("waiting_subtask") {
                 if let Some(ref sub_id) = dt.waiting_for_subtask_id {
                     if active_sub_ids.contains(sub_id) {
                         t.status = Some("waiting_subtask".to_string());
                         t.waiting_for_subtask_id = Some(sub_id.clone());
+                    } else {
+                        t.waiting_for_subtask_id = None;
                     }
                 }
             } else if dt.waiting_for_subtask_id.is_some() && t.waiting_for_subtask_id.is_none() {
-                t.waiting_for_subtask_id = dt.waiting_for_subtask_id.clone();
+                if let Some(ref sub_id) = dt.waiting_for_subtask_id {
+                    if active_sub_ids.contains(sub_id) {
+                        t.waiting_for_subtask_id = Some(sub_id.clone());
+                    }
+                }
             }
             if t.attachments.is_none() && dt.attachments.is_some() {
                 t.attachments = dt.attachments.clone();
@@ -2393,6 +2441,9 @@ pub async fn internal_move_task_stage(
     } else {
         current_task.status = Some("idle".to_string());
     }
+    if is_terminal_col || current_task.status.as_deref() == Some("done") {
+        current_task.waiting_for_subtask_id = None;
+    }
     current_task.updated_at = Utc::now().timestamp_millis();
 
     let updated = current_task.clone();
@@ -2403,6 +2454,11 @@ pub async fn internal_move_task_stage(
     if is_terminal_col && parent_id_opt.is_none() {
         let cur_id = updated.id.clone();
         for t in tasks.iter_mut() {
+            if task_id_matches(&t.id, &cur_id) {
+                t.waiting_for_subtask_id = None;
+                t.status = Some("done".to_string());
+                t.updated_at = Utc::now().timestamp_millis();
+            }
             if t.parent_id.as_deref() == Some(&cur_id) {
                 t.status = Some("done".to_string());
                 t.updated_at = Utc::now().timestamp_millis();
@@ -3186,6 +3242,13 @@ pub async fn internal_advance_task_to_stage(
 
             let mut final_tasks = load_tasks_from_disk(root).await;
             for t in final_tasks.iter_mut() {
+                if task_id_matches(&t.id, &parent_id) {
+                    t.waiting_for_subtask_id = None;
+                    t.status = Some("done".to_string());
+                    t.stage_id = target_col.id.clone();
+                    t.updated_at = Utc::now().timestamp_millis();
+                    let _ = crate::db::db_upsert_task(root, t);
+                }
                 if t.parent_id.as_deref() == Some(&parent_id) {
                     t.status = Some("done".to_string());
                     t.updated_at = Utc::now().timestamp_millis();
@@ -3194,6 +3257,14 @@ pub async fn internal_advance_task_to_stage(
             }
             let _ = save_tasks_to_disk(root, &final_tasks).await;
             if let Some(app) = app_handle {
+                if let Some(state_ref) = app.try_state::<AppState>() {
+                    if let Ok(mut guard) = state_ref.tasks.lock() {
+                        *guard = final_tasks.clone();
+                    }
+                }
+                if let Some(parent) = final_tasks.iter().find(|t| task_id_matches(&t.id, &parent_id)) {
+                    let _ = app.emit("task:updated", serde_json::json!({ "task": parent }));
+                }
                 let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &final_tasks }));
             }
 
@@ -4204,6 +4275,7 @@ pub async fn run_agent(
                         tasks[task_idx].board_id = Some(active_id);
                         tasks[task_idx].stage_id = terminal_col_id;
                         tasks[task_idx].status = Some("done".to_string());
+                        tasks[task_idx].waiting_for_subtask_id = None;
                         tasks[task_idx].updated_at = Utc::now().timestamp_millis();
                         task_moved = true;
                         task_changed = true;

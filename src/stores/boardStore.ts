@@ -243,6 +243,11 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
     ? col.persona
     : (rawPersona ?? (col?.persona || fallbackPersona));
 
+  const isTerminalTask = columnId === 'ready' || status === 'done';
+  const effectiveWaitingForSubtaskId = isTerminalTask
+    ? undefined
+    : (raw.waitingForSubtaskId ?? raw.waiting_for_subtask_id ?? undefined);
+
   return {
     id: raw.id,
     title: typeof raw.title === 'string' && raw.title.trim() !== '' ? raw.title : raw.id,
@@ -257,7 +262,7 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
     persona: effectivePersona,
     branch,
     worktreePath,
-    status,
+    status: isTerminalTask && status === 'waiting_subtask' ? ('done' as TaskStatus) : status,
     activeStageDuration,
     stageDurations,
     totalElapsed,
@@ -270,7 +275,7 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
     model: raw.model || undefined,
     parentId: raw.parentId ?? raw.parent_id ?? undefined,
     subtaskIndex: raw.subtaskIndex ?? raw.subtask_index ?? undefined,
-    waitingForSubtaskId: raw.waitingForSubtaskId ?? raw.waiting_for_subtask_id ?? undefined,
+    waitingForSubtaskId: effectiveWaitingForSubtaskId,
     todos: Array.isArray(raw.todos)
       ? raw.todos.map((item: any, idx: number) => ({
           id: typeof item?.id === 'string' && item.id.trim() !== '' ? item.id : `todo-${idx + 1}`,
@@ -331,6 +336,7 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
     const backendPayload = tasks.map((t) => {
       const hasBoard = boards.some((b) => b.id === t.boardId);
       const effectiveBoardId = hasBoard ? t.boardId : fallbackBoardId;
+      const isTerminalTask = t.columnId === 'ready' || t.status === 'done';
       return {
         id: t.id,
         title: t.title,
@@ -341,11 +347,11 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
         branch: t.branch,
         verdict: t.verdict === 'NONE' ? null : t.verdict,
         customFlow: t.customFlow,
-        status: t.status,
+        status: isTerminalTask && t.status === 'waiting_subtask' ? 'done' : t.status,
         model: t.model,
         parentId: t.parentId ?? null,
         subtaskIndex: t.subtaskIndex ?? null,
-        waitingForSubtaskId: t.waitingForSubtaskId ?? null,
+        waitingForSubtaskId: isTerminalTask ? null : (t.waitingForSubtaskId ?? null),
         // NOTE: todos MUST be included — otherwise every sync wipes the plan
         // the agent saved via todo_write (backend save_tasks replaces the file).
         todos: Array.isArray(t.todos)
@@ -884,6 +890,11 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           isTimerRunning: mapped.status === 'running',
           returnsCount: isRework ? prev.returnsCount + 1 : prev.returnsCount,
         };
+        const isTerminalMove = targetStageId === 'ready' || targetColDef?.terminal === true;
+        if (isTerminalMove) {
+          merged.waitingForSubtaskId = undefined;
+          merged.status = 'done';
+        }
         const updatedTasks = get().tasks.map((t) =>
           t.id === resolvedTaskId || t.id.trim().toLowerCase() === resolvedTaskId.trim().toLowerCase() ? merged : t
         );
@@ -992,7 +1003,16 @@ export const useBoardStore = create<BoardState>((set, get) => ({
             }
             return t;
           })
-        : updatedTasks;
+        : updatedTasks.map((t) => {
+            if (t.id === mapped.id && (t.columnId === 'ready' || t.status === 'done')) {
+              return {
+                ...t,
+                waitingForSubtaskId: undefined,
+                status: t.status === 'waiting_subtask' ? ('done' as TaskStatus) : t.status,
+              };
+            }
+            return t;
+          });
 
       persistTasksToLocalStorage(finalTasks);
       return { tasks: finalTasks };
@@ -1015,8 +1035,31 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       }
       return mapBackendTaskToKanban(raw);
     });
-    set({ tasks: mapped });
-    persistTasksToLocalStorage(mapped);
+
+    // Relational symmetry cleanup: clear stale waitingForSubtaskId
+    const cleanedTasks = mapped.map((t) => {
+      const isTerminal = t.columnId === 'ready' || t.status === 'done';
+      if (isTerminal) {
+        if (t.waitingForSubtaskId || t.status === 'waiting_subtask') {
+          return { ...t, waitingForSubtaskId: undefined, status: 'done' as TaskStatus };
+        }
+        return t;
+      }
+      if (t.waitingForSubtaskId) {
+        const sub = mapped.find((s) => s.id === t.waitingForSubtaskId);
+        if (!sub || sub.status === 'done' || sub.columnId === 'ready') {
+          return {
+            ...t,
+            waitingForSubtaskId: undefined,
+            status: t.status === 'waiting_subtask' ? ('idle' as TaskStatus) : t.status,
+          };
+        }
+      }
+      return t;
+    });
+
+    set({ tasks: cleanedTasks });
+    persistTasksToLocalStorage(cleanedTasks);
   },
 
   addTask: async (input) => {

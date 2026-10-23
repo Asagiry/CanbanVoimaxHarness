@@ -63,6 +63,10 @@ Authoritative frontend engineering standards and UI invariants of **CanbanVoimax
 - `agent:thought` and `agent:output` chunks are buffered in memory and flushed to Zustand every **150ms** (`TEXT_FLUSH_MS`) to prevent UI lag.
 - When a tool execution (`agent:tool_call`), user question (`agent:question`), or turn ends, `flushTask(taskId)` is executed **synchronously before registering the tool**, ensuring thought text always precedes tool cards.
 
+### 3.3 Relational Subtask Status & Terminal Badge Discipline (`KanbanCard.tsx`, `boardStore.ts`)
+- **Status Badge Guard**: `KanbanCard.tsx` only renders the 'Waiting for subtask' badge if the card is NOT in `ready`/done (`!isDone && status !== 'done'`) AND the referenced subtask is actually active (`status !== 'done'`). Completed tasks always render the green completed badge.
+- **Store Mapping & Relational Symmetry**: `mapBackendTaskToKanban`, `setBackendTasks`, and `upsertBackendTask` enforce that terminal tasks or tasks whose subtask has finished clear `waitingForSubtaskId` to `undefined` and never allow stale waiting badges to persist.
+
 ---
 
 ## 4. TypeScript Strict Standards

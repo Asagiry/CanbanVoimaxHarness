@@ -67,7 +67,7 @@
       "modelOverride": "gemini-3.8-flash-high",
       "reasoningEffort": null,
       "temperature": 0.2,
-      "gatekeeperSensor": ".cvh/hooks/gatekeeper_sensor.bat",
+      "gatekeeperSensor": "call .cvh\\hooks\\gatekeeper_sensor.bat",
       "allowedTools": [
         "execute_command",
         "read_file",
@@ -103,7 +103,7 @@
       "modelOverride": "gemini-3.8-flash-high",
       "reasoningEffort": null,
       "temperature": 0.1,
-      "gatekeeperSensor": ".cvh/hooks/gatekeeper_sensor.bat",
+      "gatekeeperSensor": "call .cvh\\hooks\\gatekeeper_sensor.bat",
       "allowedTools": [
         "read_file",
         "glob",
@@ -124,8 +124,8 @@
       },
       "routes": {
         "on_approved_after_changes": "retro",
-        "on_approved": "ready",
-        "on_changes_requested": "dev"
+        "on_changes_requested": "dev",
+        "on_approved": "ready"
       },
       "autoRun": true,
       "terminal": null
@@ -253,7 +253,7 @@
           "modelOverride": "gemini-3.8-flash-high",
           "reasoningEffort": null,
           "temperature": 0.2,
-          "gatekeeperSensor": ".cvh/hooks/gatekeeper_sensor.bat",
+          "gatekeeperSensor": "call .cvh\\hooks\\gatekeeper_sensor.bat",
           "allowedTools": [
             "execute_command",
             "read_file",
@@ -289,7 +289,7 @@
           "modelOverride": "gemini-3.8-flash-high",
           "reasoningEffort": null,
           "temperature": 0.1,
-          "gatekeeperSensor": ".cvh/hooks/gatekeeper_sensor.bat",
+          "gatekeeperSensor": "call .cvh\\hooks\\gatekeeper_sensor.bat",
           "allowedTools": [
             "read_file",
             "glob",
@@ -310,8 +310,8 @@
           },
           "routes": {
             "on_approved_after_changes": "retro",
-            "on_approved": "ready",
-            "on_changes_requested": "dev"
+            "on_changes_requested": "dev",
+            "on_approved": "ready"
           },
           "autoRun": true,
           "terminal": null
