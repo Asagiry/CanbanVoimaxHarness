@@ -6,6 +6,7 @@ import {
   BACKLOG_COLOR,
   READY_COLOR,
   getDeterministicAgentColor,
+  getDeterministicAgentIcon,
   isAllowedAgentColor,
 } from '../lib/agentPalette';
 
@@ -223,12 +224,16 @@ function buildHookTemplate(
 
 // Минимальный русский шаблон настроек для `.cvh/agents/<role>/setting` (JSON без расширения)
 function buildSettingTemplate(role: string, stageTitle: string): string {
+  const icon = getDeterministicAgentIcon(role);
+  const color = getDeterministicAgentColor(role);
   return (
     `{\n` +
     `  "_comment": "Настройки агента ${role} (${stageTitle})",\n` +
     `  "model": null,\n` +
     `  "temperature": 0.2,\n` +
-    `  "context_window": 128000\n` +
+    `  "context_window": 128000,\n` +
+    `  "icon": "${icon}",\n` +
+    `  "color": "${color}"\n` +
     `}\n`
   );
 }
@@ -850,8 +855,30 @@ export const useCortexStore = create<CortexState>((set, get) => ({
     }
     set({ agentPersonas: personas, agentStages: nextStages, fileMissing: prunedMissing });
 
-    // Реактивно синхронизировать колонки сразу при загрузке агентов (иконка и цвет персоны)
-    get().syncStagesFromColumns(useBoardStore.getState().columns);
+    // Синхронизировать колонки активной доски с обновленными персонами (иконка и цвет персоны)
+    const boardState = useBoardStore.getState();
+    const currentCols = boardState.columns;
+    let colsChanged = false;
+    const nextCols = currentCols.map((col) => {
+      if (!col.persona) return col;
+      const matched = personas.find((p) => p.role === col.persona?.trim());
+      if (!matched) return col;
+      const newIcon = matched.icon || col.icon;
+      const newColor = matched.color || col.color;
+      if (col.icon !== newIcon || col.color !== newColor) {
+        colsChanged = true;
+        return { ...col, icon: newIcon, color: newColor };
+      }
+      return col;
+    });
+
+    if (colsChanged) {
+      boardState.setColumns(nextCols);
+      void boardState.saveCurrentBoard(nextCols);
+    }
+
+    // Реактивно синхронизировать колонки в дереве Cortex
+    get().syncStagesFromColumns(nextCols);
   },
 
   syncAgentPersonas: async () => {

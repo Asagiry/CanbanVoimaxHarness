@@ -373,7 +373,7 @@
     },
     {
       "id": "nastroyka",
-      "name": "Настройка",
+      "name": "Setup",
       "columns": [
         {
           "id": "backlog",

@@ -93,18 +93,26 @@ Your mission is to implement robust features across the Rust/Tauri v2 desktop ba
   - `APPROVED_WITH_CAVEATS`: Мелкие некритичные замечания.
   - `CHANGES_REQUESTED`: Найдены баги, нарушения инвариантов или регрессии.
 
-### 2.4 SVG-иконки персон (Persona Icons)
-Каждый агент связывается с наглядной векторной SVG-иконкой:
-- Указывается в YAML frontmatter `persona.md`:
-  ```yaml
-  ---
-  icon: ShieldCheck
-  ---
+### 2.4 Кастомизация агентов: SVG-иконки и цвета (Setting & Persona)
+Каждый агент связывается с наглядной векторной SVG-иконкой и акцентным цветом:
+- **Двусторонняя синхронизация**: Настройка может производиться как через YAML frontmatter `persona.md`, так и через конфигурационный файл `setting` (`.cvh/agents/<role>/setting`), а также через визуальный редактор Cortex Explorer (`AgentSettingVisualEditor.tsx`):
+  ```json
+  {
+    "model": "gemini-3.8-flash-high",
+    "temperature": 0.2,
+    "context_window": 200000,
+    "max_tokens": 8192,
+    "icon": "Cpu",
+    "color": "#6366f1"
+  }
   ```
-  или в файле `setting` в поле `"icon": "Code2"`.
-- Канонические поддерживаемые иконки (из библиотеки Lucide Icons):
-  `Bot`, `Brain`, `Cpu`, `Code2`, `ShieldCheck`, `Sparkles`, `Terminal`, `Zap`, `Flame`, `Radar`, `Workflow`, `Boxes`, `Wrench`, `Rocket`, `Compass`, `Crosshair`, `Layers`, `Inbox`, `ListTodo`, `CheckCircle2`, `User`.
-- Бэкенд автоматически извлекает и синхронизирует иконки через IPC-команды `list_agent_personas`, `read_persona_icon_from_dir` и сохраняет их в frontmatter при обновлении в UI.
+- **Приоритет `setting` над `persona.md`**: Бэкенд на Rust (`read_persona_icon_from_dir`, `read_persona_color_from_dir`) в первую очередь проверяет значения `icon` и `color` из `setting`. При изменении в `setting` через Cortex или UI, новые значения автоматически записываются и в frontmatter `persona.md`, и обновляют колонки на доске.
+- **Канонический пак из 18 SVG-иконок (`AGENT_ICONS`)**:
+  `Bot`, `Brain`, `Cpu`, `Code2`, `ShieldCheck`, `Sparkles`, `History`, `Terminal`, `Zap`, `Flame`, `Radar`, `Workflow`, `Boxes`, `Wrench`, `Rocket`, `Compass`, `Crosshair`, `Layers`.
+- **Каноническая палитра цветов (`AGENT_PALETTE`)**:
+  `#f59e0b`, `#a855f7`, `#0284c7`, `#3b82f6`, `#6366f1`, `#14b8a6`, `#ec4899`, `#f97316`, `#06b6d4`, `#8b5cf6`.
+- **Инвариант зарезервированных цветов**: Серый (`#64748b`, `#6b7280`) и зеленый (`#10b981`, `#22c55e`) цвета навсегда зарезервированы за стадиями `backlog` и `ready` и строго запрещены для назначения агентам.
+- **Интерактивный Live Preview**: В визуальном редакторе `AgentSettingVisualEditor` в реальном времени отображается бейдж с выбранной иконкой, цветом роли и полупрозрачным фоном согласно `getRoleBadgeStyle`.
 
 ---
 

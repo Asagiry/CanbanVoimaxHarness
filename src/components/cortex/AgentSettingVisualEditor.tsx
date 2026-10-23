@@ -1,16 +1,29 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from '../../stores/languageStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useCortexStore } from '../../stores/cortexStore';
 import {
   Bot,
   Thermometer,
   Maximize2,
   AlertTriangle,
   Code2,
+  Palette,
+  Check,
 } from 'lucide-react';
+import AgentIcon from '../common/AgentIcon';
+import {
+  AGENT_PALETTE,
+  AGENT_ICONS,
+  getDeterministicAgentColor,
+  getDeterministicAgentIcon,
+  getRoleBadgeStyle,
+  isAllowedAgentColor,
+} from '../../lib/agentPalette';
 
 export interface AgentSettingVisualEditorProps {
   content: string;
+  role?: string;
   onChange: (newContent: string) => void;
   onSwitchToCode?: () => void;
 }
@@ -23,6 +36,8 @@ interface ParsedSetting {
   hasAllowedTools: boolean;
   allowedToolsKey?: string;
   allowedTools?: unknown;
+  icon?: string;
+  color?: string;
   rawExtra: Record<string, unknown>;
 }
 
@@ -72,6 +87,9 @@ function parseSettingJson(raw: string): { parsed: ParsedSetting; error: string |
       ? (obj.allowedTools !== undefined ? obj.allowedTools : obj.allowed_tools)
       : undefined;
 
+    const icon = typeof obj.icon === 'string' && obj.icon.trim() ? obj.icon.trim() : undefined;
+    const color = typeof obj.color === 'string' && obj.color.trim() ? obj.color.trim() : undefined;
+
     const rawExtra: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(obj)) {
       if (
@@ -84,6 +102,8 @@ function parseSettingJson(raw: string): { parsed: ParsedSetting; error: string |
           'max_tokens',
           'allowedTools',
           'allowed_tools',
+          'icon',
+          'color',
         ].includes(key)
       ) {
         rawExtra[key] = val;
@@ -99,6 +119,8 @@ function parseSettingJson(raw: string): { parsed: ParsedSetting; error: string |
         hasAllowedTools,
         allowedToolsKey,
         allowedTools,
+        icon,
+        color,
         rawExtra,
       },
       error: null,
@@ -113,6 +135,8 @@ function parseSettingJson(raw: string): { parsed: ParsedSetting; error: string |
         hasAllowedTools: false,
         allowedToolsKey: undefined,
         allowedTools: undefined,
+        icon: undefined,
+        color: undefined,
         rawExtra: {},
       },
       error: err instanceof Error ? err.message : String(err),
@@ -140,6 +164,13 @@ function serializeSetting(parsed: ParsedSetting): string {
     output[parsed.allowedToolsKey || 'allowedTools'] = parsed.allowedTools;
   }
 
+  if (parsed.icon) {
+    output.icon = parsed.icon;
+  }
+  if (parsed.color) {
+    output.color = parsed.color;
+  }
+
   for (const [key, val] of Object.entries(parsed.rawExtra)) {
     if (key !== '_comment') {
       output[key] = val;
@@ -151,12 +182,28 @@ function serializeSetting(parsed: ParsedSetting): string {
 
 export default function AgentSettingVisualEditor({
   content,
+  role,
   onChange,
   onSwitchToCode,
 }: AgentSettingVisualEditorProps) {
   const { t } = useTranslation();
   const availableModels = useSettingsStore((s) => s.availableModels);
   const settingsModel = useSettingsStore((s) => s.settings.model);
+  const agentPersonas = useCortexStore((s) => s.agentPersonas);
+
+  const assignedPersona = useMemo(() => {
+    return role ? agentPersonas.find((p) => p.role === role) : undefined;
+  }, [role, agentPersonas]);
+
+  const resolveFallbackIcon = (parsedIcon?: string) => {
+    return parsedIcon || assignedPersona?.icon || (role ? getDeterministicAgentIcon(role) : 'Bot');
+  };
+
+  const resolveFallbackColor = (parsedColor?: string) => {
+    if (parsedColor && isAllowedAgentColor(parsedColor)) return parsedColor;
+    if (assignedPersona?.color && isAllowedAgentColor(assignedPersona.color)) return assignedPersona.color;
+    return role ? getDeterministicAgentColor(role) : '#6366f1';
+  };
 
   const lastEmittedRef = useRef<string>(content);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -170,6 +217,14 @@ export default function AgentSettingVisualEditor({
     key?: string;
     value?: unknown;
   }>({ has: false });
+  const [icon, setIcon] = useState<string>(() => {
+    const { parsed } = parseSettingJson(content);
+    return resolveFallbackIcon(parsed.icon);
+  });
+  const [color, setColor] = useState<string>(() => {
+    const { parsed } = parseSettingJson(content);
+    return resolveFallbackColor(parsed.color);
+  });
   const [rawExtra, setRawExtra] = useState<Record<string, unknown>>({});
 
   // Синхронизация при изменении внешнего content
@@ -192,10 +247,12 @@ export default function AgentSettingVisualEditor({
       key: parsed.allowedToolsKey,
       value: parsed.allowedTools,
     });
+    setIcon(resolveFallbackIcon(parsed.icon));
+    setColor(resolveFallbackColor(parsed.color));
     setRawExtra(parsed.rawExtra);
 
     lastEmittedRef.current = content;
-  }, [content]);
+  }, [content, assignedPersona, role]);
 
   // Первоначальный разбор при монтировании
   useEffect(() => {
@@ -214,6 +271,8 @@ export default function AgentSettingVisualEditor({
       key: parsed.allowedToolsKey,
       value: parsed.allowedTools,
     });
+    setIcon(resolveFallbackIcon(parsed.icon));
+    setColor(resolveFallbackColor(parsed.color));
     setRawExtra(parsed.rawExtra);
     lastEmittedRef.current = content;
   }, []);
@@ -224,6 +283,8 @@ export default function AgentSettingVisualEditor({
     nextTemp: number,
     nextCw: number,
     nextMt: number,
+    nextIcon: string | undefined,
+    nextColor: string | undefined,
     nextExtra: Record<string, unknown>
   ) => {
     const nextSetting: ParsedSetting = {
@@ -234,6 +295,8 @@ export default function AgentSettingVisualEditor({
       hasAllowedTools: allowedToolsData.has,
       allowedToolsKey: allowedToolsData.key,
       allowedTools: allowedToolsData.value,
+      icon: nextIcon,
+      color: nextColor,
       rawExtra: nextExtra,
     };
     const serialized = serializeSetting(nextSetting);
@@ -243,25 +306,36 @@ export default function AgentSettingVisualEditor({
 
   const handleModelChange = (newModel: string) => {
     setModel(newModel);
-    emitChanges(newModel, temperature, contextWindow, maxTokens, rawExtra);
+    emitChanges(newModel, temperature, contextWindow, maxTokens, icon, color, rawExtra);
   };
 
   const handleTemperatureChange = (newTemp: number) => {
     const clamped = Math.max(0, Math.min(1, Number(newTemp.toFixed(2))));
     setTemperature(clamped);
-    emitChanges(model, clamped, contextWindow, maxTokens, rawExtra);
+    emitChanges(model, clamped, contextWindow, maxTokens, icon, color, rawExtra);
   };
 
   const handleContextWindowChange = (newCw: number) => {
     const val = Math.max(1000, newCw);
     setContextWindow(val);
-    emitChanges(model, temperature, val, maxTokens, rawExtra);
+    emitChanges(model, temperature, val, maxTokens, icon, color, rawExtra);
   };
 
   const handleMaxTokensChange = (newMt: number) => {
     const val = Math.max(256, newMt);
     setMaxTokens(val);
-    emitChanges(model, temperature, contextWindow, val, rawExtra);
+    emitChanges(model, temperature, contextWindow, val, icon, color, rawExtra);
+  };
+
+  const handleIconChange = (newIcon: string) => {
+    setIcon(newIcon);
+    emitChanges(model, temperature, contextWindow, maxTokens, newIcon, color, rawExtra);
+  };
+
+  const handleColorChange = (newColor: string) => {
+    if (!isAllowedAgentColor(newColor)) return;
+    setColor(newColor);
+    emitChanges(model, temperature, contextWindow, maxTokens, icon, newColor, rawExtra);
   };
 
   // Динамический список моделей: строго 'inherit', затем settings.model и availableModels
@@ -322,7 +396,111 @@ export default function AgentSettingVisualEditor({
 
   return (
     <div className="w-full h-full overflow-y-auto px-5 py-4 space-y-5 font-sans select-none text-[#171717] dark:text-[#f0f6fc]">
-      {/* СЕКЦИЯ 1: МОДЕЛЬ И ТЕМПЕРАТУРА */}
+      {/* СЕКЦИЯ 1: КАСТОМИЗАЦИЯ АГЕНТА (ИКОНКА И ЦВЕТ) */}
+      <section className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-[#fdfdfd] dark:bg-[#161b22]/70 p-4 space-y-4 shadow-2xs">
+        <div className="flex items-center justify-between border-b border-[#ebebeb] dark:border-[#21262d] pb-2.5">
+          <div className="flex items-center space-x-2">
+            <Palette className="h-4 w-4" style={{ color }} />
+            <h2 className="text-xs font-bold font-mono uppercase tracking-wider text-[#171717] dark:text-[#f0f6fc]">
+              {t('ruleEditor.customizationSection')}
+            </h2>
+          </div>
+
+          {/* Live Preview бейдж */}
+          <div className="flex items-center space-x-2">
+            <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e]">
+              {t('ruleEditor.previewLabel')}:
+            </span>
+            <div
+              className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium border transition-colors shadow-2xs"
+              style={getRoleBadgeStyle(role, color)}
+            >
+              <AgentIcon name={icon} className="h-3.5 w-3.5 shrink-0" style={{ color }} />
+              <span className="truncate max-w-[120px]">{role || 'agent'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Палитра цветов */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc] flex items-center space-x-1.5">
+              <span>{t('ruleEditor.colorLabel')}</span>
+            </label>
+            <span className="text-[10px] font-mono font-semibold text-[#666666] dark:text-[#8b949e] px-1.5 py-0.5 rounded bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d]">
+              {color}
+            </span>
+          </div>
+
+          <div className="p-2.5 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#0d1117] space-y-2">
+            <div className="flex flex-wrap gap-2 items-center">
+              {AGENT_PALETTE.map((c) => {
+                const isSelected = color.toLowerCase() === c.toLowerCase();
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => handleColorChange(c)}
+                    title={c}
+                    className={`h-7 w-7 rounded-full transition-transform cursor-pointer flex items-center justify-center shadow-2xs ${
+                      isSelected
+                        ? 'scale-110 ring-2 ring-offset-2 ring-[#171717] dark:ring-[#f0f6fc]'
+                        : 'hover:scale-105'
+                    }`}
+                    style={{ backgroundColor: c }}
+                  >
+                    {isSelected && <Check className="h-3.5 w-3.5 text-white drop-shadow-sm" />}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[10px] font-sans text-[#8f8f8f] dark:text-[#8b949e] leading-tight">
+              {t('cortex.colorNotice')}
+            </p>
+          </div>
+        </div>
+
+        {/* Сетка SVG иконок */}
+        <div className="space-y-2 pt-2 border-t border-[#f4f4f5] dark:border-[#21262d]">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc] flex items-center space-x-1.5">
+              <span>{t('ruleEditor.iconLabel')}</span>
+            </label>
+            <span className="text-[10px] font-mono font-semibold text-[#666666] dark:text-[#8b949e] px-1.5 py-0.5 rounded bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d]">
+              [{icon}]
+            </span>
+          </div>
+
+          <div className="p-2 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#0d1117]">
+            <div className="grid grid-cols-6 sm:grid-cols-9 gap-1.5 max-h-36 overflow-y-auto p-1">
+              {AGENT_ICONS.map((ic) => {
+                const isSelected = icon === ic;
+                return (
+                  <button
+                    key={ic}
+                    type="button"
+                    onClick={() => handleIconChange(ic)}
+                    title={ic}
+                    className={`flex flex-col items-center justify-center p-2 rounded-md transition cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#f4f4f5] dark:bg-[#21262d] border-2 border-[#171717] dark:border-[#f0f6fc] shadow-2xs'
+                        : 'hover:bg-[#f9f9fb] dark:hover:bg-[#161b22] border border-transparent text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
+                    }`}
+                  >
+                    <AgentIcon
+                      name={ic}
+                      className="h-4 w-4"
+                      style={{ color: isSelected ? color : undefined }}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* СЕКЦИЯ 2: МОДЕЛЬ И ТЕМПЕРАТУРА */}
       <section className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-[#fdfdfd] dark:bg-[#161b22]/70 p-4 space-y-4 shadow-2xs">
         <div className="flex items-center space-x-2 border-b border-[#ebebeb] dark:border-[#21262d] pb-2.5">
           <Bot className="h-4 w-4 text-[#6366f1] dark:text-[#818cf8]" />
@@ -464,7 +642,7 @@ export default function AgentSettingVisualEditor({
         </div>
       </section>
 
-      {/* СЕКЦИЯ 2: ЛИМИТЫ КОНТЕКСТА И ТОКЕНОВ */}
+      {/* СЕКЦИЯ 3: ЛИМИТЫ КОНТЕКСТА И ТОКЕНОВ */}
       <section className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-[#fdfdfd] dark:bg-[#161b22]/70 p-4 space-y-4 shadow-2xs">
         <div className="flex items-center space-x-2 border-b border-[#ebebeb] dark:border-[#21262d] pb-2.5">
           <Maximize2 className="h-4 w-4 text-[#10b981] dark:text-[#34d399]" />

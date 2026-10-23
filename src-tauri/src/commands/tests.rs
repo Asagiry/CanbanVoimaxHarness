@@ -203,6 +203,63 @@ use std::path::PathBuf;
     }
 
     #[tokio::test]
+    async fn test_agent_setting_icon_color_priority_and_sync() {
+        let base = PathBuf::from("target").join(format!("cvh_setting_sync_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        let agents_dir = base.join(".cvh").join("agents");
+        let test_role_dir = agents_dir.join("test-sync-agent");
+        tokio::fs::create_dir_all(&test_role_dir).await.expect("role dir");
+
+        // 1. Initial persona.md with icon "Wrench" and color "#0284c7"
+        let persona_content = "---\nname: test-sync-agent\nicon: Wrench\ncolor: #0284c7\n---\n# Test Agent";
+        tokio::fs::write(test_role_dir.join("persona.md"), persona_content)
+            .await
+            .expect("write persona.md");
+
+        // 2. Initial setting with overriding icon "Flame" and color "#f97316"
+        let setting_content = r##"{
+  "model": "gemini-3.8-flash-high",
+  "context_window": 200000,
+  "icon": "Flame",
+  "color": "#f97316"
+}"##;
+        tokio::fs::write(test_role_dir.join("setting"), setting_content)
+            .await
+            .expect("write setting");
+
+        // 3. list_agent_personas_in must prioritize setting over persona.md
+        let listed = list_agent_personas_in(&base).await;
+        let info = listed.iter().find(|p| p.role == "test-sync-agent").expect("found agent");
+        assert_eq!(info.icon.as_deref(), Some("Flame"), "setting icon must override persona.md");
+        assert_eq!(info.color.as_deref(), Some("#f97316"), "setting color must override persona.md");
+
+        // 4. save_persona_icon must update persona.md AND sync into setting file
+        save_persona_icon(&test_role_dir, "Sparkles").await.expect("save icon");
+        let updated_persona = tokio::fs::read_to_string(test_role_dir.join("persona.md"))
+            .await
+            .expect("read persona");
+        assert_eq!(extract_persona_icon_from_text(&updated_persona), Some("Sparkles".to_string()));
+        let updated_setting = tokio::fs::read_to_string(test_role_dir.join("setting"))
+            .await
+            .expect("read setting");
+        assert_eq!(extract_persona_icon_from_json(&updated_setting), Some("Sparkles".to_string()));
+
+        // 5. save_persona_color must update persona.md AND sync into setting file
+        save_persona_color(&test_role_dir, "#a855f7").await.expect("save color");
+        let updated_persona2 = tokio::fs::read_to_string(test_role_dir.join("persona.md"))
+            .await
+            .expect("read persona");
+        assert_eq!(extract_persona_color_from_text(&updated_persona2), Some("#a855f7".to_string()));
+        let updated_setting2 = tokio::fs::read_to_string(test_role_dir.join("setting"))
+            .await
+            .expect("read setting");
+        assert_eq!(extract_persona_color_from_json(&updated_setting2), Some("#a855f7".to_string()));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
     async fn test_create_persona_placeholder_in_tmp_dir() {
         let base =
             PathBuf::from("target").join(format!("cvh_persona_{}", uuid::Uuid::new_v4()));
@@ -234,6 +291,8 @@ use std::path::PathBuf;
         assert_eq!(parsed_setting.context_window, Some(200000));
         assert_eq!(parsed_setting.temperature, Some(0.2));
         assert_eq!(parsed_setting.max_tokens, Some(8192));
+        assert!(parsed_setting.icon.is_some(), "created setting must have icon");
+        assert!(parsed_setting.color.is_some(), "created setting must have color");
 
         // duplicate → Err mentioning существование
         let dup = create_agent_persona_file(&base, "my-role").await;

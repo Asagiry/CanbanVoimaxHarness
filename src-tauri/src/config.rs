@@ -962,12 +962,14 @@ pub async fn save_llm_settings_to_disk(repo_root: &Path, settings: &LlmSettings)
 //                       {model?, temperature?, context_window?, allowed_tools?}
 // ============================================================================
 
-pub const DEFAULT_AGENT_SETTING_JSON: &str = r#"{
+pub const DEFAULT_AGENT_SETTING_JSON: &str = r##"{
   "model": "gemini-3.8-flash-high",
   "context_window": 200000,
   "temperature": 0.2,
-  "max_tokens": 8192
-}"#;
+  "max_tokens": 8192,
+  "icon": "Cpu",
+  "color": "#6366f1"
+}"##;
 
 /// Per-agent overrides stored in `.cvh/agents/<role>/setting` (JSON, no
 /// extension). All fields optional; a missing/broken file falls back to
@@ -984,6 +986,10 @@ pub struct AgentSetting {
     pub max_tokens: Option<u64>,
     #[serde(default, alias = "allowedTools")]
     pub allowed_tools: Option<Vec<String>>,
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub color: Option<String>,
 }
 
 /// `<root>/.cvh/agents/<role>`
@@ -2494,10 +2500,10 @@ mod tests {
         let broken = load_agent_setting(&base, "dev").await;
         assert_eq!(broken, AgentSetting::default());
 
-        // Valid snake_case + camelCase aliases.
+        // Valid snake_case + camelCase aliases + icon/color.
         tokio::fs::write(
             dir.join("setting"),
-            r#"{"model": "m1", "temperature": 0.7, "contextWindow": 64000, "allowedTools": ["read_file", "bash"]}"#,
+            r##"{"model": "m1", "temperature": 0.7, "contextWindow": 64000, "allowedTools": ["read_file", "bash"], "icon": "Sparkles", "color": "#14b8a6"}"##,
         )
         .await
         .expect("seed valid");
@@ -2509,6 +2515,8 @@ mod tests {
             valid.allowed_tools,
             Some(vec!["read_file".to_string(), "bash".to_string()])
         );
+        assert_eq!(valid.icon.as_deref(), Some("Sparkles"));
+        assert_eq!(valid.color.as_deref(), Some("#14b8a6"));
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }

@@ -1,4 +1,6 @@
-use crate::commands::boards::list_agent_personas_in;
+use crate::commands::boards::{
+    insert_or_update_frontmatter_color, insert_or_update_frontmatter_icon, list_agent_personas_in,
+};
 use crate::commands::state::AppState;
 use crate::config::{atomic_write_file, load_boards_config, load_pipeline_config};
 use serde::{Deserialize, Serialize};
@@ -230,6 +232,43 @@ pub async fn save_cortex_file(
         .map_err(|e| format!("Failed to save cortex file {:?}: {}", target, e))?;
 
     let norm_path = path.replace('\\', "/");
+
+    // Двусторонняя синхронизация icon и color в persona.md при сохранении setting агента
+    if norm_path.ends_with("/setting") && (norm_path.contains(".cvh/agents/") || norm_path.contains("/agents/")) {
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+            if let Some(val_obj) = val.as_object() {
+                let icon_opt = val_obj.get("icon").and_then(|v| v.as_str()).map(|s| s.trim()).filter(|s| !s.is_empty());
+                let color_opt = val_obj.get("color").and_then(|v| v.as_str()).map(|s| s.trim()).filter(|s| !s.is_empty());
+
+                if icon_opt.is_some() || color_opt.is_some() {
+                    if let Some(parent) = target.parent() {
+                        let persona_md = parent.join("persona.md");
+                        let agent_md = parent.join("agent.md");
+                        let target_persona = if persona_md.exists() {
+                            Some(persona_md)
+                        } else if agent_md.exists() {
+                            Some(agent_md)
+                        } else {
+                            Some(persona_md)
+                        };
+
+                        if let Some(p_path) = target_persona {
+                            let p_content = tokio::fs::read_to_string(&p_path).await.unwrap_or_default();
+                            let mut updated = p_content;
+                            if let Some(icon) = icon_opt {
+                                updated = insert_or_update_frontmatter_icon(&updated, icon);
+                            }
+                            if let Some(color) = color_opt {
+                                updated = insert_or_update_frontmatter_color(&updated, color);
+                            }
+                            let _ = atomic_write_file(&p_path, &updated).await;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     if norm_path.ends_with("boards.json") {
         if let Ok(bc) = load_boards_config(&root).await {
             let _ = app.emit(

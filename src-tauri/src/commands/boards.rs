@@ -12,7 +12,7 @@ use tauri::{AppHandle, Emitter, State};
 /// Канонический пак имен SVG-иконок для агентов
 pub const AGENT_ICONS: &[&str] = &[
     "Bot", "Brain", "Cpu", "Code2", "ShieldCheck", "Sparkles",
-    "Terminal", "Zap", "Flame", "Radar", "Workflow", "Boxes",
+    "History", "Terminal", "Zap", "Flame", "Radar", "Workflow", "Boxes",
     "Wrench", "Rocket", "Compass", "Crosshair", "Layers",
 ];
 
@@ -99,9 +99,15 @@ pub fn extract_persona_icon_from_json(content: &str) -> Option<String> {
     None
 }
 
-/// Считывает иконку персоны из каталога (persona.md -> agent.md -> persona.json -> setting).
+/// Считывает иконку персоны из каталога (setting -> persona.md -> agent.md -> persona.json).
 /// Для встроенного агента `cvh-dev` по умолчанию возвращает "Cpu".
 pub async fn read_persona_icon_from_dir(role_dir: &Path, role: &str) -> Option<String> {
+    let setting_file = role_dir.join("setting");
+    if let Ok(content) = tokio::fs::read_to_string(&setting_file).await {
+        if let Some(icon) = extract_persona_icon_from_json(&content) {
+            return Some(icon);
+        }
+    }
     let persona_file = role_dir.join("persona.md");
     if let Ok(content) = tokio::fs::read_to_string(&persona_file).await {
         if let Some(icon) = extract_persona_icon_from_text(&content) {
@@ -116,12 +122,6 @@ pub async fn read_persona_icon_from_dir(role_dir: &Path, role: &str) -> Option<S
     }
     let json_file = role_dir.join("persona.json");
     if let Ok(content) = tokio::fs::read_to_string(&json_file).await {
-        if let Some(icon) = extract_persona_icon_from_json(&content) {
-            return Some(icon);
-        }
-    }
-    let setting_file = role_dir.join("setting");
-    if let Ok(content) = tokio::fs::read_to_string(&setting_file).await {
         if let Some(icon) = extract_persona_icon_from_json(&content) {
             return Some(icon);
         }
@@ -160,7 +160,7 @@ pub fn insert_or_update_frontmatter_icon(content: &str, icon: &str) -> String {
     format!("---\nicon: {}\n---\n\n{}", icon, content)
 }
 
-/// Сохраняет иконку персоны в `persona.md` (или `agent.md`).
+/// Сохраняет иконку персоны в `persona.md` (или `agent.md`) и синхронизирует в `setting`.
 pub async fn save_persona_icon(role_dir: &Path, icon: &str) -> Result<(), String> {
     let persona_file = role_dir.join("persona.md");
     let agent_file = role_dir.join("agent.md");
@@ -189,6 +189,23 @@ pub async fn save_persona_icon(role_dir: &Path, icon: &str) -> Result<(), String
             .await
             .map_err(|e| format!("Не удалось записать {}: {}", target_file.display(), e))?;
     }
+
+    // Двусторонняя синхронизация с файлом setting, если он существует
+    let setting_file = role_dir.join("setting");
+    if setting_file.exists() {
+        if let Ok(content) = tokio::fs::read_to_string(&setting_file).await {
+            let mut val: serde_json::Value = serde_json::from_str(&content)
+                .unwrap_or_else(|_| serde_json::json!({}));
+            if !val.is_object() {
+                val = serde_json::json!({});
+            }
+            val["icon"] = serde_json::json!(icon);
+            if let Ok(pretty) = serde_json::to_string_pretty(&val) {
+                let _ = atomic_write_file(&setting_file, &pretty).await;
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -223,9 +240,15 @@ pub fn extract_persona_color_from_json(content: &str) -> Option<String> {
     None
 }
 
-/// Считывает цвет персоны из каталога (persona.md -> agent.md -> persona.json -> setting).
+/// Считывает цвет персоны из каталога (setting -> persona.md -> agent.md -> persona.json).
 /// Для встроенного агента `cvh-dev` по умолчанию возвращает "#6366f1".
 pub async fn read_persona_color_from_dir(role_dir: &Path, role: &str) -> Option<String> {
+    let setting_file = role_dir.join("setting");
+    if let Ok(content) = tokio::fs::read_to_string(&setting_file).await {
+        if let Some(color) = extract_persona_color_from_json(&content) {
+            return Some(color);
+        }
+    }
     let persona_file = role_dir.join("persona.md");
     if let Ok(content) = tokio::fs::read_to_string(&persona_file).await {
         if let Some(color) = extract_persona_color_from_text(&content) {
@@ -240,12 +263,6 @@ pub async fn read_persona_color_from_dir(role_dir: &Path, role: &str) -> Option<
     }
     let json_file = role_dir.join("persona.json");
     if let Ok(content) = tokio::fs::read_to_string(&json_file).await {
-        if let Some(color) = extract_persona_color_from_json(&content) {
-            return Some(color);
-        }
-    }
-    let setting_file = role_dir.join("setting");
-    if let Ok(content) = tokio::fs::read_to_string(&setting_file).await {
         if let Some(color) = extract_persona_color_from_json(&content) {
             return Some(color);
         }
@@ -284,7 +301,7 @@ pub fn insert_or_update_frontmatter_color(content: &str, color: &str) -> String 
     format!("---\ncolor: {}\n---\n\n{}", color, content)
 }
 
-/// Сохраняет цвет персоны в `persona.md` (или `agent.md`).
+/// Сохраняет цвет персоны в `persona.md` (или `agent.md`) и синхронизирует в `setting`.
 pub async fn save_persona_color(role_dir: &Path, color: &str) -> Result<(), String> {
     let persona_file = role_dir.join("persona.md");
     let agent_file = role_dir.join("agent.md");
@@ -313,6 +330,23 @@ pub async fn save_persona_color(role_dir: &Path, color: &str) -> Result<(), Stri
             .await
             .map_err(|e| format!("Не удалось записать {}: {}", target_file.display(), e))?;
     }
+
+    // Двусторонняя синхронизация с файлом setting, если он существует
+    let setting_file = role_dir.join("setting");
+    if setting_file.exists() {
+        if let Ok(content) = tokio::fs::read_to_string(&setting_file).await {
+            let mut val: serde_json::Value = serde_json::from_str(&content)
+                .unwrap_or_else(|_| serde_json::json!({}));
+            if !val.is_object() {
+                val = serde_json::json!({});
+            }
+            val["color"] = serde_json::json!(color);
+            if let Ok(pretty) = serde_json::to_string_pretty(&val) {
+                let _ = atomic_write_file(&setting_file, &pretty).await;
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -739,7 +773,17 @@ pub async fn create_agent_persona_file(root: &Path, role: &str) -> Result<String
         .map_err(|e| format!("Не удалось создать персону '{}': {}", role, e))?;
     let setting_path = role_dir.join("setting");
     if !setting_path.exists() {
-        atomic_write_file(&setting_path, crate::config::DEFAULT_AGENT_SETTING_JSON)
+        let setting_obj = serde_json::json!({
+            "model": "gemini-3.8-flash-high",
+            "context_window": 200000,
+            "temperature": 0.2,
+            "max_tokens": 8192,
+            "icon": chosen_icon,
+            "color": chosen_color,
+        });
+        let pretty = serde_json::to_string_pretty(&setting_obj)
+            .unwrap_or_else(|_| crate::config::DEFAULT_AGENT_SETTING_JSON.to_string());
+        atomic_write_file(&setting_path, &pretty)
             .await
             .map_err(|e| format!("Не удалось создать setting для персоны '{}': {}", role, e))?;
     }

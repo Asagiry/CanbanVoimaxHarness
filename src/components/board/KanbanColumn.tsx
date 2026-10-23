@@ -36,7 +36,7 @@ function KanbanColumn({
   const assignedPersona = useCortexStore((s) =>
     column.persona ? s.agentPersonas.find((p) => p.role === column.persona) : undefined
   );
-  const effectiveIcon = column.icon || assignedPersona?.icon || 'Layers';
+  const effectiveIcon = (column.persona ? assignedPersona?.icon : column.icon) || column.icon || assignedPersona?.icon || 'Layers';
   const isDoneColumn = Boolean(
     column.terminal ||
     column.id === 'ready' ||

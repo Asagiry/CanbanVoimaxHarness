@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useCortexStore } from '../../stores/cortexStore';
 import { useTranslation } from '../../stores/languageStore';
 import AgentSettingVisualEditor from './AgentSettingVisualEditor';
@@ -229,6 +229,16 @@ export default function RuleEditorModal() {
 
   const isSettings = activeFile?.type === 'settings';
 
+  const activeRole = useMemo(() => {
+    if (!activeFile) return undefined;
+    if (activeFile.stageId?.startsWith('agent:')) {
+      return activeFile.stageId.slice(6);
+    }
+    const match = activeFile.path?.match(/\.cvh\/agents\/([^/\\]+)/);
+    if (match) return match[1];
+    return activeFile.stageId;
+  }, [activeFile]);
+
   // По умолчанию открываем файл: если settings -> visual, иначе previewMode -> true
   useEffect(() => {
     if (activeFile) {
@@ -359,6 +369,7 @@ export default function RuleEditorModal() {
             settingsTab === 'visual' ? (
               <AgentSettingVisualEditor
                 content={activeFile.content}
+                role={activeRole}
                 onChange={updateActiveFileContent}
                 onSwitchToCode={() => setSettingsTab('code')}
               />
