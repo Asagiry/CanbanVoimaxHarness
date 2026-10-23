@@ -39,6 +39,14 @@ This guide documents the authoritative frontend engineering standards and UI inv
 - **Parent-Subtask Connectors**: Dynamic cubic Bezier curves connect subtasks to parent cards across columns with hover highlighting and `ResizeObserver`.
 - **Context Menu Suppression**: Custom React portals (`TaskContextMenu`, `ColumnContextMenu`) replace default WebView2 context menus, while native menus are preserved in editable elements (`isEditableElement`).
 
+### 2.3 Markdown Rendering & Typography Invariants
+- **Universal Markdown Rendering**: All rich-text surfaces (Agent final responses, Task Goal / Objectives, Relay Handoff context summaries, Subagent instructions, User Steer messages, and Copilot user/assistant messages) MUST be rendered through `MarkdownContent` rather than unformatted `whitespace-pre-wrap` containers.
+- **Markdown Feature Parity**:
+  - **Inline Formatting**: Inline code (`` `code` ``), bold (`**bold**`), italic (`*italic*` / `_italic_`), links (`[label](url)` with secure `javascript:` sanitization and external target).
+  - **Block Formatting**: Fenced code blocks with language headers, GFM tables with column alignment, blockquotes (`> quote`), thematic breaks (`---`), headings (`#` through `####`), and numbered lists.
+  - **Task Checkboxes**: GFM-style list checkboxes (`- [ ]`, `- [x]`, `* [ ]`, `* [x]`) rendered with visual checkbox indicators (green completed badge with check icon + strike-through text for `[x]`, subtle outline for `[ ]`).
+  - **Bubble Invariant (`variant="user"`)**: In dark user chat bubbles (e.g. Copilot), `MarkdownContent` accepts `variant="user"` providing high-contrast text (`text-white`), semi-transparent code/pre containers (`bg-white/15`, `bg-black/40`), light checkboxes, and pastel violet links (`text-violet-300`).
+
 ---
 
 ## 3. State Management & React 19 Performance Discipline

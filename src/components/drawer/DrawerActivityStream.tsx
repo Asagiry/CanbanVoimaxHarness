@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ChevronRight,
   CornerDownRight,
+  Check,
   CheckCheck,
   User,
   AlertTriangle,
@@ -51,7 +52,12 @@ interface InlineItalicNode {
   type: 'italic';
   children: InlineNode[];
 }
-type InlineNode = InlineTextNode | InlineCodeNode | InlineBoldNode | InlineItalicNode;
+interface InlineLinkNode {
+  type: 'link';
+  text: string;
+  url: string;
+}
+type InlineNode = InlineTextNode | InlineCodeNode | InlineBoldNode | InlineItalicNode | InlineLinkNode;
 
 function isValidInlineCode(code: string): boolean {
   if (!code || code.length > 120) return false;
@@ -96,6 +102,24 @@ function parseInlineTokens(text: string, depth = 0): InlineNode[] {
       textBuf += text[i];
       i++;
       continue;
+    }
+
+    // Link: [label](url)
+    if (text[i] === '[') {
+      const closeBracket = text.indexOf(']', i + 1);
+      if (closeBracket !== -1 && text[closeBracket + 1] === '(') {
+        const closeParen = text.indexOf(')', closeBracket + 2);
+        if (closeParen !== -1) {
+          const label = text.slice(i + 1, closeBracket);
+          const url = text.slice(closeBracket + 2, closeParen);
+          if (label.length > 0 && url.length > 0 && !label.includes('\n') && !url.includes('\n')) {
+            flushText();
+            nodes.push({ type: 'link', text: label, url });
+            i = closeParen + 1;
+            continue;
+          }
+        }
+      }
     }
 
     // 2. Bold: **text** or __text__
@@ -197,6 +221,20 @@ function renderInlineNodes(nodes: InlineNode[], prefix: string): React.ReactNode
             {renderInlineNodes(node.children, `${key}-i`)}
           </em>
         );
+      case 'link': {
+        const isDangerous = /^\s*javascript:/i.test(node.url);
+        return (
+          <a
+            key={key}
+            href={isDangerous ? '#' : node.url}
+            target="_blank"
+            rel="noreferrer"
+            className="text-[#7c3aed] dark:text-[#a78bfa] underline hover:underline cursor-pointer"
+          >
+            {node.text}
+          </a>
+        );
+      }
       case 'text':
       default:
         return node.text;
@@ -223,6 +261,7 @@ export function MarkdownContent({
 
   const elements = useMemo(() => {
     const cleanContent = (content ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    if (!cleanContent.trim()) return null;
     const lines = cleanContent.split('\n');
     const result: React.ReactNode[] = [];
     let inCodeBlock = false;
@@ -383,6 +422,20 @@ export function MarkdownContent({
         continue;
       }
 
+      // Blockquotes
+      if (trimmedLine.startsWith('>')) {
+        const quoteText = trimmedLine.replace(/^>+\s*/, '');
+        result.push(
+          <blockquote
+            key={`quote-${index}`}
+            className="my-1.5 pl-3 border-l-2 border-[#7c3aed]/50 dark:border-[#7c3aed]/40 text-[#4d4d4d] dark:text-[#c9d1d9] italic text-sm leading-relaxed bg-[#fbfaff] dark:bg-[#1e1b4b]/20 py-1 pr-2 rounded-r"
+          >
+            {formatInline(quoteText, `quote-${index}`)}
+          </blockquote>
+        );
+        continue;
+      }
+
       // Headings
       if (trimmedLine.startsWith('#### ')) {
         result.push(
@@ -424,12 +477,34 @@ export function MarkdownContent({
         const bulletMatch = line.match(bulletRegex)!;
         const indent = bulletMatch[1].length;
         const mlClass = indent >= 4 ? 'ml-8' : indent >= 2 ? 'ml-6' : 'ml-4';
-        result.push(
-          <div key={`bullet-${index}`} className={`${mlClass} text-sm leading-relaxed text-[#171717] dark:text-[#f0f6fc] flex items-start gap-2`}>
-            <span className="text-[#666666] dark:text-[#8b949e] select-none shrink-0 leading-relaxed">•</span>
-            <span className="flex-1 min-w-0">{formatInline(bulletMatch[3], `bullet-${index}`)}</span>
-          </div>
-        );
+        const taskCheckboxMatch = bulletMatch[3].match(/^\[([ xX])\]\s*(.*)$/);
+        if (taskCheckboxMatch) {
+          const isChecked = taskCheckboxMatch[1].toLowerCase() === 'x';
+          const taskText = taskCheckboxMatch[2];
+          result.push(
+            <div key={`task-${index}`} className={`${mlClass} text-sm leading-relaxed flex items-start gap-2 my-0.5`}>
+              <span className="shrink-0 mt-1 select-none">
+                {isChecked ? (
+                  <span className="w-3.5 h-3.5 rounded bg-emerald-500 text-white flex items-center justify-center">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </span>
+                ) : (
+                  <span className="w-3.5 h-3.5 rounded border border-[#a1a1aa] dark:border-[#52525b] block bg-transparent" />
+                )}
+              </span>
+              <span className={`flex-1 min-w-0 ${isChecked ? 'line-through text-[#8f8f8f] dark:text-[#8b949e]' : 'text-[#171717] dark:text-[#f0f6fc]'}`}>
+                {formatInline(taskText, `task-${index}`)}
+              </span>
+            </div>
+          );
+        } else {
+          result.push(
+            <div key={`bullet-${index}`} className={`${mlClass} text-sm leading-relaxed text-[#171717] dark:text-[#f0f6fc] flex items-start gap-2`}>
+              <span className="text-[#666666] dark:text-[#8b949e] select-none shrink-0 leading-relaxed">•</span>
+              <span className="flex-1 min-w-0">{formatInline(bulletMatch[3], `bullet-${index}`)}</span>
+            </div>
+          );
+        }
       } else if (line.trim() === '') {
         result.push(<div key={index} className="h-1.5" />);
       } else {
@@ -463,6 +538,7 @@ export function MarkdownContent({
     return result;
   }, [content]);
 
+  if (!elements) return null;
   return <div className="space-y-1 select-text font-sans">{elements}</div>;
 }
 
@@ -1004,8 +1080,8 @@ export default function DrawerActivityStream({
                   </span>
                 </div>
               </div>
-              <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed whitespace-pre-wrap select-text font-sans bg-[#fafafa] dark:bg-[#161b22] p-3 rounded-md border border-[#ebebeb] dark:border-[#30363d]">
-                {activeSubagentPrompt || t('drawer.subagentInstruction')}
+              <div className="bg-[#fafafa] dark:bg-[#161b22] p-3 rounded-md border border-[#ebebeb] dark:border-[#30363d]">
+                <MarkdownContent content={activeSubagentPrompt || t('drawer.subagentInstruction')} />
               </div>
             </div>
           ) : (
@@ -1023,9 +1099,7 @@ export default function DrawerActivityStream({
                     {t('drawer.taskObjective')}
                   </span>
                 </div>
-                <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed whitespace-pre-wrap select-text font-sans">
-                  {getCleanPrompt(task.description, task.title)}
-                </div>
+                <MarkdownContent content={getCleanPrompt(task.description, task.title)} />
               </div>
 
           {/* a2) Relay Handoff Card */}
@@ -1042,9 +1116,7 @@ export default function DrawerActivityStream({
                   {t('drawer.relayHandoff')}
                 </span>
               </div>
-              <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed whitespace-pre-wrap select-text font-sans">
-                {task.handoverSummary}
-              </div>
+              <MarkdownContent content={task.handoverSummary} />
             </div>
           )}
 
@@ -1162,9 +1234,7 @@ export default function DrawerActivityStream({
                       ))}
                     </div>
                   )}
-                  <p className="text-sm text-[#171717] dark:text-[#f0f6fc] whitespace-pre-wrap select-text leading-relaxed font-sans">
-                    {activity?.content ?? ''}
-                  </p>
+                  <MarkdownContent content={activity?.content ?? ''} />
                 </div>
               );
             }
