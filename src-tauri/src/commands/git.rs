@@ -1,7 +1,7 @@
 use crate::agent::Task;
 use crate::commands::state::AppState;
 use crate::commands::tasks::load_tasks_from_disk;
-use crate::git::{create_worktree, delete_branch, remove_worktree};
+use crate::git::{delete_branch, remove_worktree};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -10,22 +10,6 @@ use tokio::process::Command;
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-
-/// Маркер встроенного создания worktree на старте (on_enter).
-/// Значение `col.hooks["on_enter"]`, при котором бэкенд сам вызывает
-/// `create_worktree` вместо запуска shell-хука.
-pub const BUILTIN_CREATE_WORKTREE_MARKER: &str = "builtin:create_worktree";
-
-/// Явный builtin-маркер в `col.hooks["on_enter"]`.
-pub fn is_builtin_worktree_hook(col: &crate::config::PipelineColumn) -> bool {
-    col.hooks.get("on_enter").map(|s| s.as_str()) == Some(BUILTIN_CREATE_WORKTREE_MARKER)
-}
-
-/// Нужен ли builtin на старте для колонки:
-/// строго явный маркер `builtin:create_worktree` в `col.hooks["on_enter"]`.
-pub fn should_builtin_on_enter(col: &crate::config::PipelineColumn) -> bool {
-    is_builtin_worktree_hook(col)
-}
 
 pub fn task_has_worktree(task: &Task) -> bool {
     task.worktree_path
@@ -36,7 +20,7 @@ pub fn task_has_worktree(task: &Task) -> bool {
 
 /// Парсинг stdout хука формата `CVH_WORKTREE=<path>` (+ опционально
 /// `CVH_BRANCH=<branch>`): пишется в task.worktree_path (+branch если пуст).
-/// Общая для on_enter и on_finish.
+/// Используется для on_enter и on_leave.
 pub fn apply_worktree_from_hook_stdout(task: &mut Task, stdout: &str) {
     for line in stdout.lines() {
         let t = line.trim();
@@ -54,103 +38,6 @@ pub fn apply_worktree_from_hook_stdout(task: &mut Task, stdout: &str) {
                 .unwrap_or(true);
             if !v.is_empty() && branch_empty {
                 task.branch = Some(v.to_string());
-            }
-        }
-    }
-}
-
-/// Чистое решение «нужен ли builtin сейчас»: skip-флаг и уже имеющийся
-/// worktree (в т.ч. данный shell-хуком через stdout) отключают builtin.
-pub fn needs_builtin_worktree(
-    col: &crate::config::PipelineColumn,
-    task: &Task,
-    skip_worktree: bool,
-) -> bool {
-    if skip_worktree {
-        return false;
-    }
-    if task_has_worktree(task) {
-        return false;
-    }
-    should_builtin_on_enter(col)
-}
-
-/// Best-effort builtin: `create_worktree(root, lowercase(task.id), "HEAD")`
-/// + branch `feat/<slug>` если пуст. Ошибки только варнят в лог.
-pub async fn ensure_builtin_worktree(root: &Path, task: &mut Task) {
-    if root.as_os_str().is_empty() || !root.exists() {
-        return;
-    }
-    // Check if root is actually a git repository before attempting worktree allocation
-    let is_git_repo = root.join(".git").exists() || {
-        let mut cmd = Command::new("git");
-        cmd.current_dir(root).args(["rev-parse", "--is-inside-work-tree"]);
-        #[cfg(windows)]
-        cmd.creation_flags(CREATE_NO_WINDOW);
-        match cmd.output().await {
-            Ok(o) => o.status.success(),
-            Err(_) => false,
-        }
-    };
-    if !is_git_repo {
-        eprintln!(
-            "CVH [builtin_worktree]: Root {:?} is not a git repository; skipping worktree provisioning for task '{}'",
-            root, task.id
-        );
-        return;
-    }
-
-    if let Some(ref p) = task.worktree_path {
-        let pb = Path::new(p.trim());
-        let abs = if pb.is_absolute() {
-            pb.to_path_buf()
-        } else {
-            root.join(pb)
-        };
-        if abs.exists() {
-            return;
-        }
-    }
-    let slug = task.id.to_lowercase();
-    let candidates = [
-        root.join(".cvh").join("worktrees").join(&slug),
-        root.join("worktrees").join(&slug),
-    ];
-    for cand in &candidates {
-        if cand.exists() {
-            task.worktree_path = Some(cand.to_string_lossy().to_string());
-            if task.branch.as_deref().unwrap_or("").trim().is_empty() {
-                task.branch = Some(format!("feat/{}", slug));
-            }
-            return;
-        }
-    }
-
-    match create_worktree(root, &slug, "HEAD").await {
-        Ok(wt_abs) => {
-            task.worktree_path = Some(wt_abs.to_string_lossy().to_string());
-            let branch_empty = task
-                .branch
-                .as_deref()
-                .map(|s| s.trim().is_empty())
-                .unwrap_or(true);
-            if branch_empty {
-                task.branch = Some(format!("feat/{}", slug));
-            }
-        }
-        Err(e) => {
-            eprintln!(
-                "CVH [builtin_worktree]: creation failed for {}: {}",
-                task.id, e
-            );
-            for cand in &candidates {
-                if cand.exists() {
-                    task.worktree_path = Some(cand.to_string_lossy().to_string());
-                    break;
-                }
-            }
-            if task.branch.as_deref().unwrap_or("").trim().is_empty() {
-                task.branch = Some(format!("feat/{}", slug));
             }
         }
     }

@@ -1305,8 +1305,14 @@ Authoritative rules for `.cvh/hooks/` and column lifecycle scripts.
 ## 1. Lifecycle Triggers
 Columns declare transition hooks in their column configuration:
 - `hooks.on_enter`: Triggered when a card enters the stage.
-- `hooks.on_finish`: Triggered when an agent finishes execution in the stage.
-- Built-in hook: `"builtin:create_worktree"` automatically provisions an isolated git worktree upon entering backlog.
+- `hooks.on_leave`: Triggered when a card leaves the stage.
+
+## 2. Worktree & Branch Protocol (Pure Script Governance)
+Hook scripts are real executable files configured in `.cvh/hooks/`.
+If a hook outputs lines in stdout:
+- `CVH_WORKTREE=<path>`: Automatically assigns the task's worktree path.
+- `CVH_BRANCH=<branch>`: Automatically assigns the task's git branch name.
+If a hook exits with non-zero code, the transition is rejected, a steer message with the error log is recorded into task dialogue, and any active agent in the stage is autorun to address the failure.
 
 ## 2. Supported Formats
 Hook runner supports `.bat`, `.cmd`, `.ps1`, `.py`, `.sh`, and native binaries.
@@ -1423,19 +1429,9 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
     }
 
     // 2. pipeline.json if not present (minimal 3 columns: backlog -> dev -> ready).
-    // Если корень — git-репо (.git есть), backlog сразу получает
-    // hooks {"on_enter": "builtin:create_worktree"}; иначе hooks {}.
     let pipeline_path = cvh_dir.join("pipeline.json");
     let initial_columns = if !pipeline_path.exists() {
-        let mut minimal_pipeline = minimal_pipeline_config();
-        if repo_root.join(".git").exists() {
-            if let Some(backlog) = minimal_pipeline.columns.iter_mut().find(|c| c.id == "backlog") {
-                backlog.hooks.insert(
-                    "on_enter".to_string(),
-                    "builtin:create_worktree".to_string(),
-                );
-            }
-        }
+        let minimal_pipeline = minimal_pipeline_config();
         atomic_write_file(&pipeline_path, &serde_json::to_string_pretty(&minimal_pipeline)?).await?;
         minimal_pipeline.columns
     } else {

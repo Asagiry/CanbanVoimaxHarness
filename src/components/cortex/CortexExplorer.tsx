@@ -1217,7 +1217,7 @@ function HooksFolderBlock({
       {isOpen && files.length > 0 && (
         <div className="pl-4 space-y-0.5 border-l border-[#ebebeb] dark:border-[#21262d] ml-2">
           {files.map((hookFile) => {
-            const isBuiltin = hookFile.path === 'builtin:create_worktree' || hookFile.path.startsWith('builtin:');
+            const isBuiltin = hookFile.path.startsWith('builtin:');
             return (
               <FileTreeItem
                 key={hookFile.id}

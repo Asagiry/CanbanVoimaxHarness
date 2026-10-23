@@ -1,9 +1,6 @@
 use crate::agent::{run_agent_loop, AgentEvent, AgentSessionConfig, Task};
 use crate::commands::dialogs::append_task_dialog_activity;
-use crate::commands::git::{
-    apply_worktree_from_hook_stdout, ensure_builtin_worktree, needs_builtin_worktree,
-    BUILTIN_CREATE_WORKTREE_MARKER,
-};
+use crate::commands::git::apply_worktree_from_hook_stdout;
 use crate::commands::state::{ActiveAgentHandle, AppState};
 use crate::config::{
     atomic_write_file, get_app_config_dir, load_boards_config, load_llm_settings,
@@ -739,51 +736,109 @@ pub async fn internal_create_task(
         };
         if let Some(col) = col_opt {
             trigger_column_on_enter_script(&col, &new_task, &stage_id, None, root).await;
-            let hook_rel_opt = col.hooks.get("on_enter").cloned();
-            match hook_rel_opt {
-                Some(hook_rel) if hook_rel == BUILTIN_CREATE_WORKTREE_MARKER => {
-                    // Built-in marker: shell is not launched, handled by builtin below
-                }
-                Some(hook_rel) => {
-                    let hook_path = crate::config::resolve_hook_path(
-                        root,
-                        col.persona.as_deref(),
-                        &hook_rel,
-                    );
-                    if hook_path.exists() {
-                        let ctx = HookContext {
-                            task_id: task_id.clone(),
-                            task_title: title.clone(),
-                            worktree_path: new_task.worktree_path.clone().unwrap_or_default(),
-                            branch: new_task.branch.clone().unwrap_or_default(),
-                            verdict: None,
-                            stage_id: Some(stage_id.clone()),
-                            board_id: Some(effective_board_id.clone()),
-                            extra_env: HashMap::new(),
-                        };
-                        match execute_hook(&hook_path, root, &ctx, None).await {
-                            Ok(res) => {
-                                if !res.success {
-                                    eprintln!(
-                                        "CVH [on_enter]: hook {:?} failed for new task {} (exit code {:?}):\nSTDOUT: {}\nSTDERR: {}",
-                                        hook_path, task_id, res.exit_code, res.stdout, res.stderr
-                                    );
+            if let Some(hook_rel) = col.hooks.get("on_enter").cloned() {
+                let hook_path = crate::config::resolve_hook_path(
+                    root,
+                    col.persona.as_deref(),
+                    &hook_rel,
+                );
+                if hook_path.exists() {
+                    if let Some(app) = app_handle {
+                        let _ = app.emit("hook:start", serde_json::json!({
+                            "taskId": task_id,
+                            "stageId": stage_id,
+                            "hookType": "on_enter",
+                            "hookName": hook_rel
+                        }));
+                    }
+                    let ctx = HookContext {
+                        task_id: task_id.clone(),
+                        task_title: title.clone(),
+                        worktree_path: new_task.worktree_path.clone().unwrap_or_default(),
+                        branch: new_task.branch.clone().unwrap_or_default(),
+                        verdict: None,
+                        stage_id: Some(stage_id.clone()),
+                        board_id: Some(effective_board_id.clone()),
+                        extra_env: HashMap::new(),
+                    };
+                    match execute_hook(&hook_path, root, &ctx, None).await {
+                        Ok(res) => {
+                            if !res.success {
+                                let err_details = if !res.stderr.trim().is_empty() {
+                                    res.stderr.trim().to_string()
+                                } else if !res.stdout.trim().is_empty() {
+                                    res.stdout.trim().to_string()
+                                } else {
+                                    format!("Exit code {:?}", res.exit_code)
+                                };
+                                if let Some(app) = app_handle {
+                                    let _ = app.emit("hook:finish", serde_json::json!({
+                                        "taskId": task_id,
+                                        "stageId": stage_id,
+                                        "hookType": "on_enter",
+                                        "success": false,
+                                        "exitCode": res.exit_code,
+                                        "stdout": res.stdout,
+                                        "stderr": res.stderr,
+                                        "error": err_details
+                                    }));
+                                }
+                                let steer_content = format!(
+                                    "### [ОТКЛОНЕНО ХУКОМ / HOOK REJECTED: {}]\n\nХук завершился с ошибкой (код {:?}).\n\n**Лог ошибки:**\n```\n{}\n```\n\nИсправь указанную ошибку.",
+                                    hook_rel, res.exit_code, err_details
+                                );
+                                let _ = append_task_dialog_activity(
+                                    root,
+                                    &task_id,
+                                    "steer",
+                                    &steer_content,
+                                    app_handle,
+                                ).await;
+                                new_task.verdict = Some("CHANGES_REQUESTED".to_string());
+                            } else {
+                                if let Some(app) = app_handle {
+                                    let _ = app.emit("hook:finish", serde_json::json!({
+                                        "taskId": task_id,
+                                        "stageId": stage_id,
+                                        "hookType": "on_enter",
+                                        "success": true,
+                                        "exitCode": res.exit_code,
+                                        "stdout": res.stdout,
+                                        "stderr": res.stderr
+                                    }));
                                 }
                                 apply_worktree_from_hook_stdout(&mut new_task, &res.stdout);
                             }
-                            Err(e) => {
-                                eprintln!(
-                                    "CVH [on_enter]: error executing hook {:?} for new task {}: {}",
-                                    hook_path, task_id, e
-                                );
+                        }
+                        Err(e) => {
+                            let err_details = e.to_string();
+                            if let Some(app) = app_handle {
+                                let _ = app.emit("hook:finish", serde_json::json!({
+                                    "taskId": task_id,
+                                    "stageId": stage_id,
+                                    "hookType": "on_enter",
+                                    "success": false,
+                                    "exitCode": None::<i32>,
+                                    "stdout": "",
+                                    "stderr": err_details,
+                                    "error": err_details
+                                }));
                             }
+                            let steer_content = format!(
+                                "### [ОТКЛОНЕНО ХУКОМ / HOOK REJECTED: {}]\n\nОшибка запуска хука: {}\n\nИсправь указанную ошибку.",
+                                hook_rel, err_details
+                            );
+                            let _ = append_task_dialog_activity(
+                                root,
+                                &task_id,
+                                "steer",
+                                &steer_content,
+                                app_handle,
+                            ).await;
+                            new_task.verdict = Some("CHANGES_REQUESTED".to_string());
                         }
                     }
                 }
-                None => {}
-            }
-            if needs_builtin_worktree(&col, &new_task, false) {
-                ensure_builtin_worktree(root, &mut new_task).await;
             }
         }
     }
@@ -1595,13 +1650,21 @@ pub async fn internal_move_task_stage(
     };
 
     if let Some(ref scol) = source_col {
-        if let Some(hook_rel) = scol.hooks.get("on_finish").or_else(|| scol.hooks.get("on_leave")) {
+        if let Some(hook_rel) = scol.hooks.get("on_leave").or_else(|| scol.hooks.get("on_exit")) {
             let hook_path = crate::config::resolve_hook_path(
                 root,
                 scol.persona.as_deref(),
                 hook_rel,
             );
             if hook_path.exists() {
+                if let Some(app) = app_handle {
+                    let _ = app.emit("hook:start", serde_json::json!({
+                        "taskId": current_task.id,
+                        "stageId": scol.id,
+                        "hookType": "on_leave",
+                        "hookName": hook_rel
+                    }));
+                }
                 let ctx = HookContext {
                     task_id: current_task.id.clone(),
                     task_title: current_task.title.clone(),
@@ -1612,21 +1675,137 @@ pub async fn internal_move_task_stage(
                     board_id: current_task.board_id.clone(),
                     extra_env: HashMap::new(),
                 };
-                match execute_hook(&hook_path, root, &ctx, None).await {
+                let hook_res = execute_hook(&hook_path, root, &ctx, None).await;
+                match hook_res {
                     Ok(res) => {
                         if !res.success {
-                            eprintln!(
-                                "CVH [on_finish]: hook {:?} failed for task {} leaving stage {} (exit code {:?}):\nSTDOUT: {}\nSTDERR: {}",
-                                hook_path, current_task.id, scol.id, res.exit_code, res.stdout, res.stderr
+                            let err_details = if !res.stderr.trim().is_empty() {
+                                res.stderr.trim().to_string()
+                            } else if !res.stdout.trim().is_empty() {
+                                res.stdout.trim().to_string()
+                            } else {
+                                format!("Exit code {:?}", res.exit_code)
+                            };
+
+                            if let Some(app) = app_handle {
+                                let _ = app.emit("hook:finish", serde_json::json!({
+                                    "taskId": current_task.id,
+                                    "stageId": scol.id,
+                                    "hookType": "on_leave",
+                                    "success": false,
+                                    "exitCode": res.exit_code,
+                                    "stdout": res.stdout,
+                                    "stderr": res.stderr,
+                                    "error": err_details
+                                }));
+                            }
+
+                            // Steer message to task dialogue
+                            let steer_content = format!(
+                                "### [ОТКЛОНЕНО ХУКОМ / HOOK REJECTED: {}]\n\nХук завершился с ошибкой (код {:?}).\n\n**Лог ошибки:**\n```\n{}\n```\n\nИсправь указанную ошибку.",
+                                hook_rel, res.exit_code, err_details
                             );
+                            let _ = append_task_dialog_activity(
+                                root,
+                                &current_task.id,
+                                "steer",
+                                &steer_content,
+                                app_handle,
+                            ).await;
+
+                            // Update task state on failure: card stays in source stage
+                            current_task.verdict = Some("CHANGES_REQUESTED".to_string());
+                            current_task.status = Some("idle".to_string());
+                            current_task.updated_at = Utc::now().timestamp_millis();
+                            let failed_task = current_task.clone();
+                            save_tasks_to_disk(root, &tasks).await.map_err(|e| e.to_string())?;
+
+                            if let Some(app) = app_handle {
+                                let _ = app.emit("task:moved", serde_json::json!({
+                                    "task": &failed_task,
+                                    "rejected": true,
+                                    "reason": err_details
+                                }));
+                                let _ = app.emit("task:updated", serde_json::json!({
+                                    "taskId": failed_task.id,
+                                    "task": &failed_task
+                                }));
+                                let _ = app.emit("tasks:updated", ());
+
+                                let scol_has_autorun = scol.persona.is_some() || scol.auto_run == Some(true);
+                                if scol_has_autorun {
+                                    let _ = app.emit("agent:autorun", serde_json::json!({
+                                        "taskId": failed_task.id,
+                                        "prompt": steer_content
+                                    }));
+                                }
+                            }
+
+                            return Err(format!(
+                                "Хук on_leave '{}' отклонил переход (Exit code: {:?}):\n{}",
+                                hook_rel, res.exit_code, err_details
+                            ));
+                        }
+
+                        if let Some(app) = app_handle {
+                            let _ = app.emit("hook:finish", serde_json::json!({
+                                "taskId": current_task.id,
+                                "stageId": scol.id,
+                                "hookType": "on_leave",
+                                "success": true,
+                                "exitCode": res.exit_code,
+                                "stdout": res.stdout,
+                                "stderr": res.stderr
+                            }));
                         }
                         apply_worktree_from_hook_stdout(current_task, &res.stdout);
                     }
                     Err(e) => {
-                        eprintln!(
-                            "CVH [on_finish]: error executing hook {:?} for task {}: {}",
-                            hook_path, current_task.id, e
+                        let err_details = e.to_string();
+                        if let Some(app) = app_handle {
+                            let _ = app.emit("hook:finish", serde_json::json!({
+                                "taskId": current_task.id,
+                                "stageId": scol.id,
+                                "hookType": "on_leave",
+                                "success": false,
+                                "exitCode": None::<i32>,
+                                "stdout": "",
+                                "stderr": err_details,
+                                "error": err_details
+                            }));
+                        }
+                        let steer_content = format!(
+                            "### [ОТКЛОНЕНО ХУКОМ / HOOK REJECTED: {}]\n\nОшибка запуска хука: {}\n\nИсправь указанную ошибку.",
+                            hook_rel, err_details
                         );
+                        let _ = append_task_dialog_activity(
+                            root,
+                            &current_task.id,
+                            "steer",
+                            &steer_content,
+                            app_handle,
+                        ).await;
+
+                        current_task.verdict = Some("CHANGES_REQUESTED".to_string());
+                        current_task.status = Some("idle".to_string());
+                        current_task.updated_at = Utc::now().timestamp_millis();
+                        let failed_task = current_task.clone();
+                        save_tasks_to_disk(root, &tasks).await.map_err(|e| e.to_string())?;
+
+                        if let Some(app) = app_handle {
+                            let _ = app.emit("task:moved", serde_json::json!({
+                                "task": &failed_task,
+                                "rejected": true,
+                                "reason": err_details
+                            }));
+                            let _ = app.emit("task:updated", serde_json::json!({
+                                "taskId": failed_task.id,
+                                "task": &failed_task
+                            }));
+                            let _ = app.emit("tasks:updated", ());
+                        }
+
+                        return Err(format!("Хук on_leave '{}' ошибка исполнения: {}", hook_rel, err_details));
                     }
                 }
             }
@@ -1695,10 +1874,7 @@ pub async fn internal_move_task_stage(
         }
     }
 
-    // Worktree allocation: driven strictly by the configurable hook (builtin:create_worktree)
-    if needs_builtin_worktree(&target_col, current_task, false) {
-        ensure_builtin_worktree(root, current_task).await;
-    }
+
 
     // Gatekeeper Sensor Verification: do not block initial move from backlog to first actionable stage or new/empty worktree
     if let Some(sensor_cmd) = &target_col.gatekeeper_sensor {
@@ -1801,45 +1977,166 @@ pub async fn internal_move_task_stage(
     }
 
     // Trigger on_enter hook if configured
-    let target_hook_rel = target_col.hooks.get("on_enter").cloned();
-    match target_hook_rel {
-        Some(hook_rel) if hook_rel == BUILTIN_CREATE_WORKTREE_MARKER => {
-            // Builtin only
-        }
-        Some(hook_rel) => {
-            let hook_path = crate::config::resolve_hook_path(
-                root,
-                target_col.persona.as_deref(),
-                &hook_rel,
-            );
-            if hook_path.exists() {
-                let ctx = HookContext {
-                    task_id: current_task.id.clone(),
-                    task_title: current_task.title.clone(),
-                    worktree_path: current_task.worktree_path.clone().unwrap_or_default(),
-                    branch: current_task.branch.clone().unwrap_or_default(),
-                    verdict: verdict.clone().or_else(|| current_task.verdict.clone()),
-                    stage_id: Some(canonical_target_stage_id.clone()),
-                    board_id: current_task.board_id.clone(),
-                    extra_env: HashMap::new(),
-                };
-                let hook_res = execute_hook(&hook_path, root, &ctx, None)
-                    .await
-                    .map_err(|e| format!("Stage transition hook failed: {}", e))?;
+    if let Some(hook_rel) = target_col.hooks.get("on_enter").cloned() {
+        let hook_path = crate::config::resolve_hook_path(
+            root,
+            target_col.persona.as_deref(),
+            &hook_rel,
+        );
+        if hook_path.exists() {
+            if let Some(app) = app_handle {
+                let _ = app.emit("hook:start", serde_json::json!({
+                    "taskId": current_task.id,
+                    "stageId": canonical_target_stage_id,
+                    "hookType": "on_enter",
+                    "hookName": hook_rel
+                }));
+            }
+            let ctx = HookContext {
+                task_id: current_task.id.clone(),
+                task_title: current_task.title.clone(),
+                worktree_path: current_task.worktree_path.clone().unwrap_or_default(),
+                branch: current_task.branch.clone().unwrap_or_default(),
+                verdict: verdict.clone().or_else(|| current_task.verdict.clone()),
+                stage_id: Some(canonical_target_stage_id.clone()),
+                board_id: current_task.board_id.clone(),
+                extra_env: HashMap::new(),
+            };
+            let hook_res = execute_hook(&hook_path, root, &ctx, None).await;
+            match hook_res {
+                Ok(res) => {
+                    if !res.success {
+                        let err_details = if !res.stderr.trim().is_empty() {
+                            res.stderr.trim().to_string()
+                        } else if !res.stdout.trim().is_empty() {
+                            res.stdout.trim().to_string()
+                        } else {
+                            format!("Exit code {:?}", res.exit_code)
+                        };
 
-                if !hook_res.success {
-                    return Err(format!(
-                        "Stage transition hook rejected transition (Exit code: {:?}):\n{}",
-                        hook_res.exit_code, hook_res.stderr
-                    ));
+                        if let Some(app) = app_handle {
+                            let _ = app.emit("hook:finish", serde_json::json!({
+                                "taskId": current_task.id,
+                                "stageId": canonical_target_stage_id,
+                                "hookType": "on_enter",
+                                "success": false,
+                                "exitCode": res.exit_code,
+                                "stdout": res.stdout,
+                                "stderr": res.stderr,
+                                "error": err_details
+                            }));
+                        }
+
+                        // Steer message to task dialogue
+                        let steer_content = format!(
+                            "### [ОТКЛОНЕНО ХУКОМ / HOOK REJECTED: {}]\n\nХук на входе в колонку '{}' завершился с ошибкой (код {:?}).\n\n**Лог ошибки:**\n```\n{}\n```\n\nИсправь указанную ошибку.",
+                            hook_rel, canonical_target_stage_id, res.exit_code, err_details
+                        );
+                        let _ = append_task_dialog_activity(
+                            root,
+                            &current_task.id,
+                            "steer",
+                            &steer_content,
+                            app_handle,
+                        ).await;
+
+                        // Task stays in source stage!
+                        current_task.verdict = Some("CHANGES_REQUESTED".to_string());
+                        current_task.status = Some("idle".to_string());
+                        current_task.updated_at = Utc::now().timestamp_millis();
+                        let failed_task = current_task.clone();
+                        save_tasks_to_disk(root, &tasks).await.map_err(|e| e.to_string())?;
+
+                        if let Some(app) = app_handle {
+                            let _ = app.emit("task:moved", serde_json::json!({
+                                "task": &failed_task,
+                                "rejected": true,
+                                "reason": err_details
+                            }));
+                            let _ = app.emit("task:updated", serde_json::json!({
+                                "taskId": failed_task.id,
+                                "task": &failed_task
+                            }));
+                            let _ = app.emit("tasks:updated", ());
+
+                            if let Some(ref scol) = source_col {
+                                if scol.persona.is_some() || scol.auto_run == Some(true) {
+                                    let _ = app.emit("agent:autorun", serde_json::json!({
+                                        "taskId": failed_task.id,
+                                        "prompt": steer_content
+                                    }));
+                                }
+                            }
+                        }
+
+                        return Err(format!(
+                            "Хук on_enter '{}' отклонил переход (Exit code: {:?}):\n{}",
+                            hook_rel, res.exit_code, err_details
+                        ));
+                    }
+
+                    if let Some(app) = app_handle {
+                        let _ = app.emit("hook:finish", serde_json::json!({
+                            "taskId": current_task.id,
+                            "stageId": canonical_target_stage_id,
+                            "hookType": "on_enter",
+                            "success": true,
+                            "exitCode": res.exit_code,
+                            "stdout": res.stdout,
+                            "stderr": res.stderr
+                        }));
+                    }
+                    apply_worktree_from_hook_stdout(current_task, &res.stdout);
                 }
-                apply_worktree_from_hook_stdout(current_task, &hook_res.stdout);
+                Err(e) => {
+                    let err_details = e.to_string();
+                    if let Some(app) = app_handle {
+                        let _ = app.emit("hook:finish", serde_json::json!({
+                            "taskId": current_task.id,
+                            "stageId": canonical_target_stage_id,
+                            "hookType": "on_enter",
+                            "success": false,
+                            "exitCode": None::<i32>,
+                            "stdout": "",
+                            "stderr": err_details,
+                            "error": err_details
+                        }));
+                    }
+                    let steer_content = format!(
+                        "### [ОТКЛОНЕНО ХУКОМ / HOOK REJECTED: {}]\n\nОшибка запуска входного хука: {}\n\nИсправь указанную ошибку.",
+                        hook_rel, err_details
+                    );
+                    let _ = append_task_dialog_activity(
+                        root,
+                        &current_task.id,
+                        "steer",
+                        &steer_content,
+                        app_handle,
+                    ).await;
+
+                    current_task.verdict = Some("CHANGES_REQUESTED".to_string());
+                    current_task.status = Some("idle".to_string());
+                    current_task.updated_at = Utc::now().timestamp_millis();
+                    let failed_task = current_task.clone();
+                    save_tasks_to_disk(root, &tasks).await.map_err(|e| e.to_string())?;
+
+                    if let Some(app) = app_handle {
+                        let _ = app.emit("task:moved", serde_json::json!({
+                            "task": &failed_task,
+                            "rejected": true,
+                            "reason": err_details
+                        }));
+                        let _ = app.emit("task:updated", serde_json::json!({
+                            "taskId": failed_task.id,
+                            "task": &failed_task
+                        }));
+                        let _ = app.emit("tasks:updated", ());
+                    }
+
+                    return Err(format!("Хук on_enter '{}' ошибка исполнения: {}", hook_rel, err_details));
+                }
             }
         }
-        None => {}
-    }
-    if needs_builtin_worktree(&target_col, current_task, false) {
-        ensure_builtin_worktree(root, current_task).await;
     }
 
     // Trigger on_enter_script if configured on target column

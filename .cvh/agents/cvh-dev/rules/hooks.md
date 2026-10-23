@@ -2,29 +2,61 @@
 
 Authoritative rules for `.cvh/hooks/` and column lifecycle scripts.
 
-## 1. Lifecycle Triggers & Worktree Governance
-Columns declare transition hooks in their column configuration:
-- `hooks.on_enter`: Triggered when a card enters the stage.
-- `hooks.on_finish`: Triggered when an agent finishes execution in the stage.
-- **Hook-Driven Worktree Provisioning**:
-  - Built-in hook: `"builtin:create_worktree"` automatically provisions an isolated git worktree at `worktrees/<task-slug>` upon entering `backlog` (or another designated intake column) and checks out a feature branch.
-  - Worktree creation is managed exclusively by stage lifecycle hooks, rather than hardcoded side-effects.
-- **"Отключить хук бэклога" (Skip Backlog Hook Checkbox)**:
-  - In the Task Creation dialog, the checkbox **"Отключить хук бэклога"** (`skipWorktree: true` / `skip_worktree: true`) instructs the backend to bypass execution of the backlog's transition hook (`builtin:create_worktree`).
-  - When checked, the task card is placed in backlog without creating an isolated worktree directory or git feature branch, allowing lightweight administrative tasks to execute directly in the repository root or defer worktree setup.
+## 1. Lifecycle Triggers
+Columns declare transition hooks in `pipeline.json` or `boards.json` under `columns[].hooks`:
+- `hooks.on_enter`: Triggered when a card enters the column.
+- `hooks.on_leave`: Triggered when a card leaves the column.
 
-## 2. Supported Formats
-Hook runner supports `.bat`, `.cmd`, `.ps1`, `.py`, `.sh`, and native binaries.
+Никаких встроенных хардкодов: все хуки — это реальные скрипты (`.bat`, `.cmd`, `.ps1`, `.sh`, `.py`) в `.cvh/hooks/` или в каталоге агента.
+
+## 2. Worktree & Branch Protocol (Stdout-протокол)
+Если скрипт хука создает git worktree или переключает ветку, он выводит в stdout:
+```text
+CVH_WORKTREE=<absolute_or_relative_path>
+CVH_BRANCH=<branch_name>
+```
+Бэкенд CVH автоматически парсит эти строки из stdout хука и сохраняет в свойства карточки задачи (`task.worktree_path` и `task.branch`).
+
+Пример скрипта создания ворктри (`.cvh/hooks/create_worktree.bat`):
+```bat
+@echo off
+set "WT_DIR=worktrees\%CVH_TASK_ID%"
+set "BRANCH=feat/%CVH_TASK_ID%"
+if not exist "%WT_DIR%" (
+    git worktree add -b "%BRANCH%" "%WT_DIR%" HEAD || exit /b 1
+)
+echo CVH_WORKTREE=%WT_DIR%
+echo CVH_BRANCH=%BRANCH%
+exit /b 0
+```
+
+Пример скрипта на Bash (`.cvh/hooks/create_worktree.sh`):
+```bash
+#!/usr/bin/env bash
+set -e
+WT_DIR="worktrees/${CVH_TASK_ID}"
+BRANCH="feat/${CVH_TASK_ID}"
+if [ ! -d "$WT_DIR" ]; then
+    git worktree add -b "$BRANCH" "$WT_DIR" HEAD
+fi
+echo "CVH_WORKTREE=$WT_DIR"
+echo "CVH_BRANCH=$BRANCH"
+exit 0
+```
 
 ## 3. Injected Environment Variables
-All hook processes receive the full task execution context:
-- `CVH_TASK_ID`: Unique task identifier (e.g. `CVH-042`).
-- `CVH_TASK_TITLE`: Human-readable task title.
-- `CVH_WORKTREE_PATH`: Absolute path to the isolated worktree directory.
-- `CVH_BRANCH`: Feature branch name (`feat/<task-slug>`).
-- `CVH_STAGE_ID`: Target stage identifier.
-- `CVH_VERDICT`: Reviewer verdict when leaving review (`APPROVED`, `APPROVED_WITH_CAVEATS`, `CHANGES_REQUESTED`).
+Каждый хук получает полный контекст задачи через переменные окружения:
+- `CVH_TASK_ID`: Идентификатор задачи (например, `CVH-042`).
+- `CVH_TASK_TITLE`: Заголовок задачи.
+- `CVH_WORKTREE_PATH`: Текущий путь к ворктри задачи (если назначен).
+- `CVH_BRANCH`: Текущая ветка задачи.
+- `CVH_STAGE_ID`: Идентификатор стадии перехода.
+- `CVH_VERDICT`: Вердикт ревью (`APPROVED`, `APPROVED_WITH_CAVEATS`, `CHANGES_REQUESTED`).
 
-## 4. Gatekeeper Sensors
-Columns may define `gatekeeperSensor` (e.g. `cargo check` or `pnpm run build`).
-Gatekeeper sensors execute inside `CVH_WORKTREE_PATH` before any card advance. If exit code != 0, transition is blocked.
+## 4. Reject Механизм при ошибке хука
+Если скрипт хука завершается с ненулевым кодом выхода (`exit code != 0`):
+1. Переход карточки отменяется (REJECT). Карточка остается в исходной колонке.
+2. Лог ошибки из `stderr` / `stdout` записывается в SQLite диалог задачи как директива `steer`.
+3. Вердикт карточки выставляется в `CHANGES_REQUESTED`.
+4. Если у колонки настроен агент (persona) или auto_run, агент автоматически просыпается с сообщением об ошибке и немедленно приступает к её исправлению.
+5. На карточке у соответствующей ноды хука загорается красный крестик ✕, при наведении отображается окно с логом ошибки.

@@ -524,11 +524,9 @@ export const useCortexStore = create<CortexState>((set, get) => ({
         (col.id === 'backlog' || col.id === 'ready' || col.terminal === true);
       const dir = cortexAgentDir(col.persona ?? '', col.id);
       if (isSystemNode) {
-        // Хуки колонки (on_enter/on_finish) как узлы типа hook.
-        // Маркер `builtin:create_worktree` хранится в path — проводник
-        // покажет бейдж «встроенный» и не будет открывать файл.
+        // Хуки колонки (on_enter/on_leave) как узлы типа hook.
         const hookMoments = Object.entries(col.hooks ?? {})
-          .filter(([moment]) => moment === 'on_enter' || moment === 'on_finish')
+          .filter(([moment]) => moment === 'on_enter' || moment === 'on_leave')
           .sort(([a], [b]) => a.localeCompare(b));
         const hookFiles = hookMoments.map(([moment, target]) => {
           const hookId = `${col.id}-hook-${moment}`;
@@ -720,7 +718,7 @@ export const useCortexStore = create<CortexState>((set, get) => ({
     const nextMissing: Record<string, boolean> = {};
     for (const st of boardStages) {
       for (const f of st.files) {
-        if (f.path === 'builtin:create_worktree' || f.path.startsWith('builtin:')) continue;
+        if (f.path.startsWith('builtin:')) continue;
         if (prevMissing[f.id]) nextMissing[f.id] = true;
       }
     }
@@ -976,7 +974,7 @@ export const useCortexStore = create<CortexState>((set, get) => ({
       if (!file) continue;
 
       // 1. Встроенные хуки (builtin:create_worktree и др.)
-      if (file.path.startsWith('builtin:') || file.path === 'builtin:create_worktree') {
+      if (file.path.startsWith('builtin:')) {
         const content =
           file.content && file.content.trim().length > 0
             ? file.content

@@ -1,11 +1,11 @@
-import { useState, memo } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 import { Draggable } from '@hello-pangea/dnd';
-import { KanbanTask, TaskStatus } from '../../types';
+import { KanbanTask, TaskStatus, HookExecutionState } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useTranslation, Language } from '../../stores/languageStore';
 import { useShallow } from 'zustand/react/shallow';
-import { GitBranch, ChevronDown, MessageSquare, GitFork } from 'lucide-react';
+import { GitBranch, ChevronDown, MessageSquare, GitFork, Check, X, Loader2, Terminal } from 'lucide-react';
 import TaskContextMenu from './TaskContextMenu';
 import { getDeterministicAgentColor } from '../../lib/agentPalette';
 
@@ -52,6 +52,175 @@ function formatTimerMMSS(totalSeconds: number): string {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
+interface CardHookNodeProps {
+  side: 'left' | 'right';
+  hookType: 'on_enter' | 'on_leave';
+  hookName: string;
+  state?: HookExecutionState;
+  stageTitle?: string;
+  taskId: string;
+}
+
+function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle }: CardHookNodeProps) {
+  const [isHovered, setIsHovered] = useState(false);
+  const [now, setNow] = useState(Date.now());
+  const timerRef = useRef<number | null>(null);
+
+  const status = state?.status ?? 'idle';
+
+  useEffect(() => {
+    if (status === 'running') {
+      timerRef.current = window.setInterval(() => {
+        setNow(Date.now());
+      }, 250);
+    } else if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [status]);
+
+  const elapsedSec = state?.startedAt
+    ? Math.max(0, ((status === 'running' ? now : (state.startedAt + (state.durationMs ?? 0))) - state.startedAt) / 1000)
+    : 0;
+
+  const stdout = state?.stdout?.trim() ?? '';
+  const stderr = state?.stderr?.trim() ?? '';
+  const errorText = state?.error?.trim() || stderr;
+  const hasOutput = stdout.length > 0 || stderr.length > 0;
+
+  const nodeColorClass = (() => {
+    switch (status) {
+      case 'running':
+        return 'bg-amber-500 text-black border-2 border-white dark:border-[#0d1117] animate-pulse shadow-md';
+      case 'success':
+        return 'bg-emerald-500 text-white border-2 border-white dark:border-[#0d1117] shadow-md';
+      case 'failed':
+        return 'bg-rose-500 text-white border-2 border-white dark:border-[#0d1117] shadow-md';
+      case 'idle':
+      default:
+        return 'bg-white dark:bg-[#161b22] border border-neutral-300 dark:border-neutral-600 hover:border-amber-400 dark:hover:border-amber-400 shadow-xs';
+    }
+  })();
+
+  const sidePosClass = side === 'left' ? '-left-2' : '-right-2';
+  const popoverPosClass = side === 'left' ? 'left-5' : 'right-5';
+
+  return (
+    <div
+      className={`absolute top-1/2 -translate-y-1/2 ${sidePosClass} z-30 flex items-center justify-center`}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Circle Node */}
+      <div
+        className={`w-4 h-4 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-110 ${nodeColorClass}`}
+        title={`${side === 'left' ? 'on_enter' : 'on_leave'}: ${hookName}`}
+      >
+        {status === 'running' && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
+        {status === 'success' && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+        {status === 'failed' && <X className="w-2.5 h-2.5 stroke-[3]" />}
+        {status === 'idle' && (
+          <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 dark:bg-neutral-500" />
+        )}
+      </div>
+
+      {/* Hover Popover */}
+      {isHovered && (
+        <div
+          className={`absolute top-1/2 -translate-y-1/2 ${popoverPosClass} w-72 sm:w-80 bg-white dark:bg-[#161b22] border border-neutral-200 dark:border-[#30363d] rounded-lg shadow-2xl p-3 z-50 text-left cursor-default select-text pointer-events-auto`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between gap-1.5 pb-2 border-b border-neutral-100 dark:border-[#21262d]">
+            <span className="text-[10px] font-mono font-medium text-neutral-500 dark:text-neutral-400">
+              {side === 'left' ? 'Входной хук (on_enter)' : 'Выходной хук (on_leave)'}
+            </span>
+            <div className="flex items-center gap-1">
+              {status === 'running' && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800">
+                  <Loader2 className="w-2.5 h-2.5 animate-spin text-amber-600 dark:text-amber-400" />
+                  <span>{elapsedSec.toFixed(1)}s</span>
+                </span>
+              )}
+              {status === 'success' && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
+                  <Check className="w-2.5 h-2.5 stroke-[2.5]" />
+                  <span>Успех {state?.durationMs ? `${(state.durationMs / 1000).toFixed(2)}s` : ''}</span>
+                </span>
+              )}
+              {status === 'failed' && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800">
+                  <X className="w-2.5 h-2.5 stroke-[2.5]" />
+                  <span>Ошибка {state?.exitCode != null ? `(код ${state.exitCode})` : ''}</span>
+                </span>
+              )}
+              {status === 'idle' && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono text-neutral-600 dark:text-neutral-400 bg-neutral-100 dark:bg-[#0d1117] border border-neutral-200 dark:border-[#30363d]">
+                  Готов к запуску
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Hook name */}
+          <div className="mt-2 text-xs font-mono font-semibold text-neutral-900 dark:text-[#f0f6fc] truncate" title={hookName}>
+            {hookName}
+          </div>
+
+          {stageTitle && (
+            <div className="text-[10px] text-neutral-500 dark:text-neutral-400 font-mono mt-0.5">
+              Стадия: {stageTitle}
+            </div>
+          )}
+
+          {/* Error description if failed */}
+          {status === 'failed' && errorText.length > 0 && (
+            <div className="mt-2 p-2 rounded bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 text-[11px] font-mono text-rose-800 dark:text-rose-300 whitespace-pre-wrap break-words max-h-32 overflow-y-auto leading-relaxed">
+              <div className="font-semibold text-rose-900 dark:text-rose-200 mb-1 flex items-center gap-1">
+                <span>⛔ Отклонено хуком:</span>
+              </div>
+              {errorText}
+            </div>
+          )}
+
+          {/* Terminal log output */}
+          {hasOutput ? (
+            <div className="mt-2.5">
+              <div className="flex items-center justify-between text-[10px] font-mono text-neutral-500 dark:text-neutral-400 mb-1">
+                <span className="flex items-center gap-1">
+                  <Terminal className="w-3 h-3" />
+                  <span>Лог терминала</span>
+                </span>
+                <span className="text-[9px]">
+                  {stdout.length > 0 ? 'stdout' : ''} {stderr.length > 0 ? 'stderr' : ''}
+                </span>
+              </div>
+              <div className="p-2 rounded bg-[#0d1117] border border-[#30363d] font-mono text-[10px] text-[#c9d1d9] leading-tight max-h-40 overflow-y-auto whitespace-pre-wrap break-all select-text">
+                {stdout || stderr}
+              </div>
+            </div>
+          ) : (
+            <div className="mt-2 text-[11px] text-neutral-500 dark:text-neutral-400 font-sans leading-snug">
+              {status === 'running'
+                ? 'Выполняется скрипт жизненного цикла стадии...'
+                : side === 'left'
+                ? 'Скрипт выполнится автоматически при входе в эту стадию.'
+                : 'Скрипт выполнится автоматически при выходе из этой стадии.'}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface KanbanCardProps {
   task: KanbanTask;
   index: number;
@@ -87,6 +256,40 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const subtasks = useBoardStore(
     useShallow((s) => (isDone ? s.tasks.filter((t) => t.parentId === task.id) : []))
   );
+
+  // Hook nodes data
+  const taskHooks = useBoardStore(useShallow((s) => s.hookStates[task.id]));
+
+  const enterHookName = taskColumn?.hooks?.['on_enter'];
+  const enterHookState = taskHooks?.on_enter;
+
+  const leaveHookName =
+    taskColumn?.hooks?.['on_leave'] ||
+    taskColumn?.hooks?.['on_exit'] ||
+    taskColumn?.hooks?.['on_finish'];
+  const leaveHookState = taskHooks?.on_leave;
+
+  // If this task recently transitioned into this stage via an on_leave hook from previous column,
+  // show that transition result on the left (entry) node if this column has no separate on_enter hook.
+  const isTransitionHookFromResult =
+    !enterHookState &&
+    leaveHookState &&
+    leaveHookState.stageId !== task.columnId;
+
+  const effectiveLeftState = enterHookState || (isTransitionHookFromResult ? leaveHookState : undefined);
+  const effectiveLeftHookName =
+    enterHookName ||
+    effectiveLeftState?.hookName ||
+    (isTransitionHookFromResult ? leaveHookState?.hookName : undefined);
+  const hasLeftHook = Boolean(enterHookName || effectiveLeftState);
+
+  // Right node: exit hook from this column
+  const hasRightHook = Boolean(
+    leaveHookName || (leaveHookState && leaveHookState.stageId === task.columnId)
+  );
+  const effectiveRightState =
+    leaveHookState && leaveHookState.stageId === task.columnId ? leaveHookState : undefined;
+  const effectiveRightHookName = leaveHookName || effectiveRightState?.hookName;
 
   const isRunning = task.status === 'running';
   const stageStart = task.stageEnteredAt;
@@ -349,6 +552,30 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                   </div>
                 )}
               </div>
+            )}
+
+            {/* Left Edge Hook Node (on_enter / transition result) */}
+            {hasLeftHook && effectiveLeftHookName && (
+              <CardHookNode
+                side="left"
+                hookType="on_enter"
+                hookName={effectiveLeftHookName}
+                state={effectiveLeftState}
+                stageTitle={taskColumn?.title || task.columnId}
+                taskId={task.id}
+              />
+            )}
+
+            {/* Right Edge Hook Node (on_leave / exit) */}
+            {hasRightHook && effectiveRightHookName && (
+              <CardHookNode
+                side="right"
+                hookType="on_leave"
+                hookName={effectiveRightHookName}
+                state={effectiveRightState}
+                stageTitle={taskColumn?.title || task.columnId}
+                taskId={task.id}
+              />
             )}
           </div>
         )}

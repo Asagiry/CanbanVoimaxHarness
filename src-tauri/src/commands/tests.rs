@@ -925,43 +925,7 @@ use std::path::PathBuf;
     }
 
     #[test]
-    fn test_builtin_marker_detected() {
-        let col = hook_col("dev", Some("builtin:create_worktree"));
-        assert!(is_builtin_worktree_hook(&col));
-        assert!(should_builtin_on_enter(&col));
-        let plain = hook_col("dev", Some(".cvh/hooks/on_enter_dev.bat"));
-        assert!(!is_builtin_worktree_hook(&plain));
-        assert!(!should_builtin_on_enter(&plain));
-    }
-
-    #[test]
-    fn test_backlog_default_without_explicit_on_enter() {
-        // Without explicit on_enter hook, backlog does NOT create a builtin worktree (no hardcoding!)
-        let col = hook_col("backlog", None);
-        assert!(!should_builtin_on_enter(&col));
-        // Explicit builtin marker enables builtin worktree
-        let col_builtin = hook_col("backlog", Some("builtin:create_worktree"));
-        assert!(should_builtin_on_enter(&col_builtin));
-        // Explicit shell hook is not builtin
-        let col_shell = hook_col("backlog", Some(".cvh/hooks/custom.sh"));
-        assert!(!should_builtin_on_enter(&col_shell));
-        // Non-backlog without hook is not builtin
-        let ready = hook_col("ready", None);
-        assert!(!should_builtin_on_enter(&ready));
-    }
-
-    #[test]
-    fn test_skip_flag_disables_builtin() {
-        let col = hook_col("backlog", Some("builtin:create_worktree"));
-        let task = task_with_wt("CVH-001", None);
-        assert!(needs_builtin_worktree(&col, &task, false));
-        assert!(!needs_builtin_worktree(&col, &task, true));
-    }
-
-    #[test]
-    fn test_shell_priority_existing_worktree_skips_builtin() {
-        let col = hook_col("backlog", Some("builtin:create_worktree"));
-        // Shell дал путь через stdout → worktree уже есть → builtin скипается.
+    fn test_apply_worktree_from_hook_stdout() {
         let mut task = task_with_wt("CVH-001", None);
         apply_worktree_from_hook_stdout(
             &mut task,
@@ -969,22 +933,22 @@ use std::path::PathBuf;
         );
         assert_eq!(task.worktree_path.as_deref(), Some("/tmp/wt-cvh-001"));
         assert_eq!(task.branch.as_deref(), Some("feat/cvh-001"));
-        assert!(!needs_builtin_worktree(&col, &task, false));
-        // CVH_BRANCH не затирает непустой branch.
+
+        // CVH_BRANCH does not overwrite existing non-empty branch
         let mut task2 = task_with_wt("CVH-002", None);
         task2.branch = Some("feat/keep".to_string());
         apply_worktree_from_hook_stdout(&mut task2, "CVH_BRANCH=feat/other");
         assert_eq!(task2.branch.as_deref(), Some("feat/keep"));
-        // Пустой stdout ничего не меняет → builtin всё ещё нужен.
+
+        // Plain stdout without markers leaves fields intact
         let mut task3 = task_with_wt("CVH-003", None);
         apply_worktree_from_hook_stdout(&mut task3, "plain log, no markers\n");
         assert!(task3.worktree_path.is_none());
-        assert!(needs_builtin_worktree(&col, &task3, false));
     }
 
     #[tokio::test]
     async fn test_scaffold_backlog_hook_with_and_without_git() {
-        // С .git → backlog получает builtin-маркер.
+        // Scaffold creates clean minimal pipeline with empty hooks (pure script governance)
         let with_git =
             PathBuf::from("target").join(format!("cvh_scaffold_git_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(with_git.join(".git")).await.expect("git dir");
@@ -995,18 +959,16 @@ use std::path::PathBuf;
         let pipe: crate::config::PipelineConfig =
             serde_json::from_str(&raw).expect("parse pipeline");
         let backlog = pipe.columns.iter().find(|c| c.id == "backlog").expect("backlog");
-        assert_eq!(
-            backlog.hooks.get("on_enter").map(|s| s.as_str()),
-            Some("builtin:create_worktree")
-        );
-        // Повторный скаффолд не затирает существующий pipeline.json.
+        assert!(backlog.hooks.is_empty());
+
+        // Repeated scaffold preserves existing pipeline.json
         crate::config::scaffold_cvh_project(&with_git).await.expect("rescaffold");
         let raw2 = tokio::fs::read_to_string(with_git.join(".cvh").join("pipeline.json"))
             .await
             .expect("reread");
         assert_eq!(raw, raw2);
 
-        // Без .git → hooks пустые.
+        // Without .git -> hooks empty
         let no_git =
             PathBuf::from("target").join(format!("cvh_scaffold_nogit_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&no_git).await.expect("plain dir");

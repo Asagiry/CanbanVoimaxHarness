@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { KanbanTask, PipelineColumn, PipelineConfig, TaskStatus, TaskVerdict, TaskPriority, BoardDef } from '../types';
+import { KanbanTask, PipelineColumn, PipelineConfig, TaskStatus, TaskVerdict, TaskPriority, BoardDef, TaskHookStates } from '../types';
 import { useProjectStore } from './projectStore';
 import { useDrawerStore } from './drawerStore';
 import { logEvent } from '../lib/logger';
@@ -61,8 +61,12 @@ interface BoardState {
   boards: BoardDef[];
   activeBoardId: string;
   isLoadingBoards: boolean;
+  hookStates: Record<string, TaskHookStates>;
 
   // Actions
+  setHookStart: (payload: { taskId: string; stageId: string; hookType: 'on_enter' | 'on_leave'; hookName: string }) => void;
+  setHookFinish: (payload: { taskId: string; stageId: string; hookType: 'on_enter' | 'on_leave'; success: boolean; exitCode?: number | null; stdout?: string; stderr?: string; error?: string }) => void;
+  clearHookState: (taskId: string, hookType?: 'on_enter' | 'on_leave') => void;
   setColumns: (columns: PipelineColumn[]) => void;
   setTasks: (tasks: KanbanTask[]) => void;
   setSelectedTaskId: (id: string | null) => void;
@@ -462,6 +466,79 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   boards: [DEFAULT_BOARD],
   activeBoardId: 'development',
   isLoadingBoards: false,
+  hookStates: {},
+
+  setHookStart: ({ taskId, stageId, hookType, hookName }) => {
+    set((state) => {
+      const prev = state.hookStates[taskId] || {};
+      return {
+        hookStates: {
+          ...state.hookStates,
+          [taskId]: {
+            ...prev,
+            [hookType]: {
+              hookName,
+              stageId,
+              hookType,
+              status: 'running',
+              startedAt: Date.now(),
+              stdout: '',
+              stderr: '',
+            },
+          },
+        },
+      };
+    });
+  },
+
+  setHookFinish: ({ taskId, stageId, hookType, success, exitCode, stdout, stderr, error }) => {
+    set((state) => {
+      const prev = state.hookStates[taskId] || {};
+      const existing = prev[hookType];
+      const startedAt = existing?.startedAt ?? Date.now();
+      const durationMs = Date.now() - startedAt;
+      return {
+        hookStates: {
+          ...state.hookStates,
+          [taskId]: {
+            ...prev,
+            [hookType]: {
+              hookName: existing?.hookName || hookType,
+              stageId,
+              hookType,
+              status: success ? 'success' : 'failed',
+              startedAt,
+              durationMs,
+              exitCode: exitCode ?? null,
+              stdout: stdout || '',
+              stderr: stderr || '',
+              error,
+            },
+          },
+        },
+      };
+    });
+  },
+
+  clearHookState: (taskId, hookType) => {
+    set((state) => {
+      if (!state.hookStates[taskId]) return state;
+      if (!hookType) {
+        const next = { ...state.hookStates };
+        delete next[taskId];
+        return { hookStates: next };
+      }
+      const prev = state.hookStates[taskId];
+      const nextTaskHooks = { ...prev };
+      delete nextTaskHooks[hookType];
+      return {
+        hookStates: {
+          ...state.hookStates,
+          [taskId]: nextTaskHooks,
+        },
+      };
+    });
+  },
 
   setColumns: (columns) => {
     const { activeBoardId, boards } = get();
@@ -1126,8 +1203,13 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       });
 
     const prevSelectedTaskId = get().selectedTaskId;
+    const nextHookStates = { ...get().hookStates };
+    for (const id of ids) {
+      delete nextHookStates[id];
+    }
     set({
       tasks: updatedTasks,
+      hookStates: nextHookStates,
       selectedTaskId: toDelete.has(prevSelectedTaskId ?? '') ? null : prevSelectedTaskId,
     });
     persistTasksToLocalStorage(updatedTasks);
@@ -1282,10 +1364,33 @@ export async function initBoardEventListeners(): Promise<() => void> {
       await useBoardStore.getState().loadBoards();
       await useBoardStore.getState().loadTasks();
     });
+    const uHookStart = await listen<any>('hook:start', (event) => {
+      const { taskId, stageId, hookType, hookName } = event.payload || {};
+      if (taskId && hookType) {
+        useBoardStore.getState().setHookStart({ taskId, stageId, hookType, hookName });
+      }
+    });
+    const uHookFinish = await listen<any>('hook:finish', (event) => {
+      const { taskId, stageId, hookType, success, exitCode, stdout, stderr, error } = event.payload || {};
+      if (taskId && hookType) {
+        useBoardStore.getState().setHookFinish({
+          taskId,
+          stageId,
+          hookType,
+          success: Boolean(success),
+          exitCode,
+          stdout,
+          stderr,
+          error,
+        });
+      }
+    });
     boardListenersInitialized = true;
     return () => {
       uBoards();
       uPipeline();
+      uHookStart();
+      uHookFinish();
       boardListenersInitialized = false;
     };
   } catch (e) {

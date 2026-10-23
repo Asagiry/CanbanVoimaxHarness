@@ -443,6 +443,31 @@ export default function App() {
         });
         unlisteners.push(uTaskMoved);
 
+        const uHookStart = await listen<any>('hook:start', (event) => {
+          const { taskId, stageId, hookType, hookName } = event.payload || {};
+          if (taskId && hookType) {
+            useBoardStore.getState().setHookStart({ taskId, stageId, hookType, hookName });
+          }
+        });
+        unlisteners.push(uHookStart);
+
+        const uHookFinish = await listen<any>('hook:finish', (event) => {
+          const { taskId, stageId, hookType, success, exitCode, stdout, stderr, error } = event.payload || {};
+          if (taskId && hookType) {
+            useBoardStore.getState().setHookFinish({
+              taskId,
+              stageId,
+              hookType,
+              success: Boolean(success),
+              exitCode,
+              stdout,
+              stderr,
+              error,
+            });
+          }
+        });
+        unlisteners.push(uHookFinish);
+
         const uTaskUpdated = await listen<any>('task:updated', (event) => {
           const { taskId, todos, task } = event.payload || {};
           if (taskId) {

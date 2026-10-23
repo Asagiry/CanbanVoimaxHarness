@@ -79,6 +79,24 @@ export interface PipelineColumn {
   routes?: Record<string, string>;
 }
 
+export interface HookExecutionState {
+  hookName: string;
+  stageId: string;
+  hookType: 'on_enter' | 'on_leave';
+  status: 'running' | 'success' | 'failed';
+  startedAt: number;
+  durationMs?: number;
+  exitCode?: number | null;
+  stdout?: string;
+  stderr?: string;
+  error?: string;
+}
+
+export interface TaskHookStates {
+  on_enter?: HookExecutionState;
+  on_leave?: HookExecutionState;
+}
+
 export interface PipelineConfig {
   id: string;
   title: string;
