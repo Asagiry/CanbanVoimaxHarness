@@ -33,7 +33,16 @@ export default function ContextGauge({
       .then(({ invoke }) => invoke<number>('get_task_context_window', { taskId, persona }))
       .then((cw) => {
         if (!cancelled && typeof cw === 'number' && cw > 0) {
-          setResolvedPersonaLimit(cw);
+          const pInfo = useCortexStore.getState().agentPersonas?.find(
+            (p) => p.role.toLowerCase() === (persona || '').toLowerCase()
+          );
+          if (pInfo?.contextWindow) {
+            setResolvedPersonaLimit(pInfo.contextWindow);
+          } else if (contextWindow && cw === 128000) {
+            setResolvedPersonaLimit(contextWindow);
+          } else {
+            setResolvedPersonaLimit(cw);
+          }
         }
       })
       .catch(() => {
@@ -44,16 +53,22 @@ export default function ContextGauge({
             (c) => c.id === taskId || c.id === useBoardStore.getState().tasks.find((t) => t.id === taskId)?.columnId
           )?.persona ||
           'developer';
-        const pInfo = useCortexStore.getState().agentPersonas?.find((p) => p.role === role);
-        if (!cancelled && pInfo?.contextWindow) {
-          setResolvedPersonaLimit(pInfo.contextWindow);
+        const pInfo = useCortexStore.getState().agentPersonas?.find(
+          (p) => p.role.toLowerCase() === role.toLowerCase()
+        );
+        if (!cancelled) {
+          if (pInfo?.contextWindow) {
+            setResolvedPersonaLimit(pInfo.contextWindow);
+          } else if (contextWindow) {
+            setResolvedPersonaLimit(contextWindow);
+          }
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [taskId, persona]);
+  }, [taskId, persona, contextWindow]);
 
   const effectiveLimit =
     contextWindow ||
