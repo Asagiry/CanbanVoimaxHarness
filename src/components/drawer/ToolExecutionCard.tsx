@@ -605,12 +605,8 @@ function CollectSubagentExecutionCard({ tool }: { tool: ToolExecution }) {
                   }}
                   className="group flex items-center justify-between gap-2.5 px-3 py-2 rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#21262d] hover:border-[#171717]/40 dark:hover:border-[#30363d] cursor-pointer transition-colors text-xs"
                 >
-                  {/* Left: Purple badge + Role icon & badge + Title */}
+                  {/* Left: Role icon & badge + Title */}
                   <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase border border-purple-200 dark:border-purple-800/60 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 shrink-0">
-                      {t('subagents.subagentWithNum', { index: sub.number })}
-                    </span>
-
                     {sub.isBg ? (
                       <div className="relative shrink-0 flex items-center justify-center">
                         <Layers className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
@@ -867,7 +863,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
               style={roleBadgeStyle}
               className="px-2 py-0.5 rounded text-[11px] font-mono font-bold tracking-wider border shrink-0 select-none uppercase"
             >
-              {formatSubagentRoleDisplay(rawRole, subagentNumber || 1)}
+              {formatSubagentRoleDisplay(rawRole, subagentNumber || 1, false, language)}
             </span>
 
             <span className="font-sans font-medium text-xs text-[#0d0d0d] dark:text-[#f0f6fc] group-hover:text-[#171717] dark:group-hover:text-white transition-colors truncate">
@@ -1070,13 +1066,21 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
                   className="group flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#21262d] hover:border-[#171717]/40 dark:hover:border-[#30363d] cursor-pointer transition-colors text-xs"
                 >
                   <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
-                    <span className="font-mono font-bold text-[10px] text-[#71717a] dark:text-[#8b949e] shrink-0">
-                      #{sub.number}
-                    </span>
+                    {sub.isBg ? (
+                      <div className="relative shrink-0 flex items-center justify-center">
+                        <Layers className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+                        <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-purple-500 ring-1 ring-white dark:ring-[#0d1117]" />
+                      </div>
+                    ) : (
+                      <div className="relative shrink-0 flex items-center justify-center">
+                        <Zap className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 fill-sky-500/20" />
+                        <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-sky-500 ring-1 ring-white dark:ring-[#0d1117]" />
+                      </div>
+                    )}
 
                     <span
                       style={roleBadgeStyle}
-                      className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold uppercase tracking-wider border shrink-0 select-none"
+                      className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider border shrink-0 select-none"
                     >
                       {formatSubagentRoleDisplay(sub.role, sub.number, false, language)}
                     </span>
