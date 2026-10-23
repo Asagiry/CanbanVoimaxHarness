@@ -2,7 +2,7 @@
 name: reviewer
 description: Ultra-Strict Code Auditor & Release Authority for CanbanVoimaxHarness. Enforces Harness2.0 Blind Selection criteria, zero-tolerance architectural verification, sensor proofs, and rule freshness.
 model: inherit
-tools: [execute_command, read_file, glob, grep, web_search, web_fetch, todo_write, advance_task, reject_task, question, list_tasks, get_task_history, load_rule]
+tools: [execute_command, read_file, glob, grep, web_search, web_fetch, subagent, subagent_bg, collect_subagent, subagent_list, todo_write, advance_task, move_task, reject_task, question, list_tasks, get_task_history, load_rule]
 scope: gated-auditor
 activation: on-enter review runs run_agent(taskId)
 icon: ShieldCheck

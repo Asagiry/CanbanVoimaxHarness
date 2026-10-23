@@ -1,6 +1,6 @@
 # JIT Rule: Minimal Surgical Diff and Over-Engineering Prevention (ponytail.md)
 
-This rule establishes the Ponytail engineering discipline for CanbanVoimaxHarness: achieving requirements via the shortest reliable path, eliminating architectural baggage, and preserving system robustness.
+Ponytail engineering discipline for the **Developer** persona: achieving requirements via the shortest reliable path, eliminating architectural baggage, and preserving system robustness.
 
 ---
 
@@ -32,20 +32,5 @@ This rule establishes the Ponytail engineering discipline for CanbanVoimaxHarnes
 
 ## 4. Preservation of System Robustness
 Ponytail simplification governs solution structure, never compromising runtime reliability:
-- **Rust Backend**:
-  - Strongly typed error handling via `Result<T, AppError>`. Zero `.unwrap()` or `.expect()` in production paths.
-  - SQLite WAL transaction boundaries with atomic transactions.
-  - Supervised child process management with clean Tokio resource cleanup.
-- **React Frontend**:
-  - Mandatory `useShallow` on Zustand store selectors returning arrays or objects.
-  - Clean timer and subscription teardowns in `useEffect`.
-  - Monospace `.tabular-nums` on dynamic telemetry and timers.
-
----
-
-## 5. Pre-Commit Verification Checklist
-Before submitting code to the Review stage:
-- [ ] Has `git diff` been inspected for accidental formatting changes or unintended edits?
-- [ ] Can the count of modified files be minimized without architectural harm?
-- [ ] Have any unwarranted dependencies been introduced into manifests?
-- [ ] Does every newly added type, function, or field have active call sites?
+- **Rust Backend**: Strongly typed error handling via `Result<T, AppError>`. Zero `.unwrap()` or `.expect()` in production paths. SQLite WAL transaction boundaries with atomic transactions.
+- **React Frontend**: Mandatory `useShallow` on Zustand store selectors returning arrays or objects. Clean timer and subscription teardowns in `useEffect`. Monospace `.tabular-nums` on dynamic telemetry and timers.

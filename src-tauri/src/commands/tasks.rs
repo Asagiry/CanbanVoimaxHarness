@@ -474,15 +474,23 @@ pub fn next_task_num(tasks: &[Task]) -> u32 {
 /// Increments monotonically: next_num = max(stored_seq, max_on_disk) + 1.
 /// Persists the incremented counter to disk immediately, preventing deleted ID reuse.
 pub async fn allocate_next_task_num(repo_root: &Path, tasks: &[Task]) -> u32 {
+    let max_on_disk = max_task_num_on_disk(tasks);
     match crate::db::db_allocate_next_task_num(repo_root) {
-        Ok(num) => num,
+        Ok(num) => {
+            if num <= max_on_disk {
+                let corrected = max_on_disk.saturating_add(1);
+                let _ = crate::db::db_update_task_sequence(repo_root, corrected);
+                corrected
+            } else {
+                num
+            }
+        }
         Err(e) => {
             eprintln!(
                 "CVH [allocate_next_task_num]: db_allocate_next_task_num warning: {}. Falling back to disk seq.",
                 e
             );
             let stored_seq = load_task_sequence(repo_root).await;
-            let max_on_disk = max_task_num_on_disk(tasks);
             let mut next_num = stored_seq.max(max_on_disk).saturating_add(1).max(1);
 
             while tasks.iter().any(|t| t.id == format!("CVH-{:03}", next_num)) {

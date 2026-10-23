@@ -1,6 +1,6 @@
 # Backend Architecture & Invariants (Rust 2021, Tauri v2, SQLite WAL)
 
-This guide documents the authoritative backend engineering standards and architectural invariants of **CanbanVoimaxHarness (CVH)** located in `src-tauri/`.
+Authoritative backend engineering standards and architectural invariants of **CanbanVoimaxHarness (CVH)** located in `src-tauri/`.
 
 ---
 
@@ -73,12 +73,3 @@ This guide documents the authoritative backend engineering standards and archite
   - Library modules use strongly typed enums with `thiserror::Error`.
   - Application command boundaries use `anyhow::Context` (`.with_context(|| format!("failed to ..."))?`).
 - **Async Runtime Safety**: Never run heavy synchronous CPU-bound loops or blocking disk I/O directly inside Tokio async tasks; wrap in `tokio::task::spawn_blocking`. Channels must be bounded (`tokio::sync::mpsc::channel(buffer)`).
-
----
-
-## 4. NASA Ground Truth Turbo Sensors
-
-- **Verification Mandate**: Changes must be verified against real compiler and linter sensors before handoff:
-  - `cargo check --manifest-path src-tauri/Cargo.toml` (0 errors).
-  - `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` (0 warnings).
-- **Anti-Mock Invariant**: Verify actual database writes, process spawns, and IPC contracts rather than purely synthetic in-memory mocks.

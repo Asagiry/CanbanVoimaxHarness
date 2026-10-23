@@ -1943,10 +1943,19 @@ pub fn canonical_tool_name(tool_name: &str) -> &str {
 pub async fn get_stage_personas(repo_root: &Path) -> HashMap<String, String> {
     let mut map = HashMap::new();
     if let Ok(boards_cfg) = crate::config::load_boards_config(repo_root).await {
-        for b in boards_cfg.boards {
-            for c in b.columns {
-                if let Some(p) = c.persona {
-                    map.insert(c.id, p);
+        if let Some(active) = boards_cfg.boards.iter().find(|b| b.id == boards_cfg.active_board_id) {
+            for c in &active.columns {
+                if let Some(ref p) = c.persona {
+                    map.insert(c.id.clone(), p.clone());
+                }
+            }
+        }
+        for b in &boards_cfg.boards {
+            if b.id != boards_cfg.active_board_id {
+                for c in &b.columns {
+                    if let Some(ref p) = c.persona {
+                        map.entry(c.id.clone()).or_insert_with(|| p.clone());
+                    }
                 }
             }
         }
@@ -3828,6 +3837,13 @@ pub async fn execute_tool(
                             }
                         }
                         step_num += 1;
+                        if let Some(ref c) = it.content {
+                            if !c.trim().is_empty() {
+                                last_terminal_text = Some(c.trim().to_string());
+                            }
+                        }
+                    }
+                    "output" | "assistant" | "response" => {
                         if let Some(ref c) = it.content {
                             if !c.trim().is_empty() {
                                 last_terminal_text = Some(c.trim().to_string());

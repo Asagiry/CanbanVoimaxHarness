@@ -3668,7 +3668,7 @@ data: [DONE]
         assert_eq!(parsed[0]["role"], "reviewer");
         assert_eq!(parsed[1]["id"], "CVH-101");
         assert_eq!(parsed[1]["stage_id"], "dev");
-        assert_eq!(parsed[1]["role"], "developer");
+        assert_eq!(parsed[1]["role"], "cvh-dev");
 
         // 2. Filter by stage_id
         let res_dev = execute_tool(&ctx, "list_tasks", &serde_json::json!({ "stage_id": "dev" })).await.expect("list_tasks stage");
@@ -3888,6 +3888,32 @@ Rule: Strictly isolated worktrees.",
         assert!(err.unwrap_err().to_string().contains("not found"));
 
         let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_role_specific_isolated_rules() {
+        println!("current_dir: {:?}", std::env::current_dir());
+        let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let repo_root = manifest_dir.parent().unwrap();
+        println!("repo_root: {:?}", repo_root);
+
+        let planner_rules = get_available_rules(repo_root, Some("planner"));
+        println!("planner_rules: {:?}", planner_rules);
+        assert_eq!(planner_rules, vec!["architecture", "decomposition", "scope-hygiene"]);
+
+        let dev_rules = get_available_rules(repo_root, Some("developer"));
+        assert_eq!(dev_rules, vec!["backend", "frontend", "ponytail", "rules-sync", "sensors"]);
+
+        let reviewer_rules = get_available_rules(repo_root, Some("reviewer"));
+        assert_eq!(reviewer_rules, vec!["backend-invariants", "frontend-invariants", "review-checklist", "verdict-routing"]);
+        assert!(!reviewer_rules.contains(&"boards".to_string()), "Reviewer must NOT have boards rule");
+        assert!(!reviewer_rules.contains(&"retro".to_string()), "Reviewer must NOT have retro rule");
+
+        let retro_rules = get_available_rules(repo_root, Some("retro"));
+        assert_eq!(retro_rules, vec!["reflection-methodology", "rule-evolution"]);
+
+        let cvh_dev_rules = get_available_rules(repo_root, Some("cvh-dev"));
+        assert_eq!(cvh_dev_rules, vec!["agents", "boards", "hooks", "tools"]);
     }
 
     #[tokio::test]

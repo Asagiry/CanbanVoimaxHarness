@@ -894,6 +894,29 @@ pub fn db_allocate_next_task_num(root: &Path) -> Result<u32, String> {
     Ok(next_num)
 }
 
+/// Explicitly updates or sets the sequence counter for task IDs in SQLite and disk files.
+pub fn db_update_task_sequence(root: &Path, val: u32) -> Result<(), String> {
+    let conn = init_db(root).map_err(|e| format!("Failed to open database: {}", e))?;
+    conn.execute(
+        "INSERT INTO sequences (name, current_val) VALUES ('task', ?1)
+         ON CONFLICT(name) DO UPDATE SET current_val = MAX(current_val, excluded.current_val)",
+        params![val as i64],
+    )
+    .map_err(|e| format!("Failed to update sequence: {}", e))?;
+
+    let settings_dir = root.join(".cvh").join("settings");
+    let _ = std::fs::create_dir_all(&settings_dir);
+    let seq_path = settings_dir.join("sequence.json");
+    if let Ok(content) = serde_json::to_string_pretty(&serde_json::json!({
+        "last_task_num": val
+    })) {
+        let _ = std::fs::write(&seq_path, &content);
+        let alt_path = root.join(".cvh").join("task-sequence.json");
+        let _ = std::fs::write(&alt_path, &content);
+    }
+    Ok(())
+}
+
 /// Atomically saves the checklist (todos) for a specific task.
 pub fn db_save_todos(root: &Path, task_id: &str, todos: &[TodoItem]) -> Result<(), String> {
     let mut conn = init_db(root).map_err(|e| format!("Failed to open database: {}", e))?;

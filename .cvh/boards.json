@@ -62,8 +62,8 @@
         {
           "id": "dev",
           "title": "Developer",
-          "color": "#6366f1",
-          "icon": "Bot",
+          "color": "#0284c7",
+          "icon": "Wrench",
           "persona": "developer",
           "onEnterScript": null,
           "modelOverride": "gemini-3.8-flash-high",
@@ -125,9 +125,9 @@
             "on_leave": ".cvh/hooks/on_review_finish.bat"
           },
           "routes": {
-            "on_changes_requested": "dev",
             "on_approved_after_changes": "retro",
-            "on_approved": "ready"
+            "on_approved": "ready",
+            "on_changes_requested": "dev"
           },
           "autoRun": true,
           "terminal": null

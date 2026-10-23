@@ -1837,12 +1837,10 @@ Write code.
         assert_eq!(subtask.model.as_deref(), Some("custom-model"));
         assert_eq!(subtask.priority.as_deref(), Some("high"));
 
-        // Verify SQLite dialog items contain handover summaries for both parent and child
+        // Verify SQLite dialog items contain handover summary on parent (deduplicated on subtask dialog to prevent phantom bubbles)
         let parent_dialog = crate::db::load_dialog_items(&base, "CVH-100").expect("load parent dialog");
         assert!(parent_dialog.iter().any(|d| d.content.as_deref().unwrap_or("").contains("Handover: implemented feature and tests")));
-
-        let subtask_dialog = crate::db::load_dialog_items(&base, "CVH-100.1").expect("load subtask dialog");
-        assert!(subtask_dialog.iter().any(|d| d.content.as_deref().unwrap_or("").contains("Handover: implemented feature and tests")));
+        assert_eq!(subtask.handover_summary.as_deref(), Some("Handover: implemented feature and tests"));
 
         // 1b. Verify subtask deduplication protection (§ 1):
         // Calling advance_task a second time must NOT create CVH-100.2!
@@ -2496,7 +2494,7 @@ Write code.
         assert_eq!(moved.status.as_deref(), Some("running"));
 
         // Step 3: Worktree completion completes late and updates worktree_path / branch
-        new_task.worktree_path = Some(".cvh/worktrees/cvh-101".to_string());
+        new_task.worktree_path = Some("worktrees/cvh-101".to_string());
         new_task.branch = Some("feat/cvh-101".to_string());
 
         let mut current_tasks = load_tasks_from_disk(&base).await;
@@ -2512,7 +2510,7 @@ Write code.
         let final_task = final_loaded.iter().find(|t| t.id == task_id).expect("task must exist on disk");
         assert_eq!(final_task.stage_id, "dev", "Stage must NOT be reverted to backlog!");
         assert_eq!(final_task.status.as_deref(), Some("running"));
-        assert_eq!(final_task.worktree_path.as_deref(), Some(".cvh/worktrees/cvh-101"));
+        assert_eq!(final_task.worktree_path.as_deref(), Some("worktrees/cvh-101"));
         assert_eq!(final_task.branch.as_deref(), Some("feat/cvh-101"));
 
         let _ = tokio::fs::remove_dir_all(&base).await;

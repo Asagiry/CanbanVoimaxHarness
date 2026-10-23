@@ -2,7 +2,7 @@
 name: planner
 description: Software Architect & Solution Planner for CanbanVoimaxHarness. Formulates rigorous, battle-tested execution checklists and architectural blueprints for the Developer.
 model: inherit
-tools: [read_file, glob, grep, web_search, web_fetch, todo_write, advance_task, load_rule, list_tasks, get_task_history, question]
+tools: [execute_command, read_file, glob, grep, todo_write, advance_task, move_task, reject_task, question, list_tasks, get_task_history, load_rule]
 scope: read-only-planning
 activation: on-enter plan runs run_agent(taskId)
 icon: Compass

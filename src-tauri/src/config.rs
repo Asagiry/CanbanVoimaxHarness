@@ -406,6 +406,7 @@ pub fn resolve_actual_repo_root(path: &Path) -> PathBuf {
     // 1. Traverse ancestors looking for .cvh (skipping binary/target dirs and app own codebase)
     for ancestor in path.ancestors() {
         if ancestor != path
+            && ancestor.parent().is_some()
             && !is_binary_or_target_dir(ancestor)
             && !is_app_own_directory(ancestor)
             && ancestor.join(".cvh").exists()
@@ -1385,7 +1386,7 @@ pub async fn ensure_cvh_dev_scaffold(repo_root: &Path) -> Result<(), anyhow::Err
 }
 
 /// Automatically scaffold the minimal .cvh workspace structure if missing.
-/// Creates: empty `.cvh/agents/`, `.cvh/dialogs/`, `.cvh/worktrees/`,
+/// Creates: empty `.cvh/agents/`, `.cvh/dialogs/`,
 /// `.cvh/skills/`, `.cvh/settings/`, `.cvh/hooks/` and default
 /// config/pipeline/tool-policy files. Fresh scaffolds seed NO agents:
 /// `pipeline.json` holds only `backlog` (no persona, first) + `ready`
@@ -1403,7 +1404,6 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
     let cvh_dir = repo_root.join(".cvh");
     let agents_dir = cvh_dir.join("agents");
     let dialogs_dir = cvh_dir.join("dialogs");
-    let worktrees_dir = cvh_dir.join("worktrees");
     let skills_dir = cvh_dir.join("skills");
     let settings_dir = cvh_dir.join("settings");
     let hooks_dir = cvh_dir.join("hooks");
@@ -1411,7 +1411,6 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
     tokio::fs::create_dir_all(&cvh_dir).await?;
     tokio::fs::create_dir_all(&agents_dir).await?;
     tokio::fs::create_dir_all(&dialogs_dir).await?;
-    tokio::fs::create_dir_all(&worktrees_dir).await?;
     tokio::fs::create_dir_all(&skills_dir).await?;
     tokio::fs::create_dir_all(&settings_dir).await?;
     tokio::fs::create_dir_all(&hooks_dir).await?;
@@ -2378,7 +2377,6 @@ mod tests {
         let cvh = base_dir.join(".cvh");
         assert!(cvh.exists());
         assert!(cvh.join("agents").is_dir());
-        assert!(cvh.join("worktrees").is_dir());
         assert!(cvh.join("skills").is_dir());
         assert!(cvh.join("settings").is_dir());
 
@@ -2477,7 +2475,6 @@ mod tests {
 
         // remaining scaffold files/dirs in place
         assert!(cvh.join("dialogs").is_dir());
-        assert!(cvh.join("worktrees").is_dir());
         assert!(cvh.join("config.json").is_file());
         assert!(!cvh.join("tasks.json").exists(), "tasks.json must not be scaffolded");
         assert!(tool_policy_path(&base_dir).is_file());
