@@ -351,6 +351,15 @@ pub async fn save_tasks(tasks: Vec<Task>, state: State<'_, AppState>) -> Result<
             } else if dt.waiting_for_subtask_id.is_some() && t.waiting_for_subtask_id.is_none() {
                 t.waiting_for_subtask_id = dt.waiting_for_subtask_id.clone();
             }
+            if t.attachments.is_none() && dt.attachments.is_some() {
+                t.attachments = dt.attachments.clone();
+            }
+            if t.cover_image.is_none() && dt.cover_image.is_some() {
+                t.cover_image = dt.cover_image.clone();
+            }
+            if t.handover_summary.is_none() && dt.handover_summary.is_some() {
+                t.handover_summary = dt.handover_summary.clone();
+            }
         }
     }
 
@@ -1041,7 +1050,7 @@ pub async fn internal_create_subtask(
         waiting_for_subtask_id: None,
         handover_summary: handover_summary.map(|s| s.to_string()),
         cover_image: None,
-        attachments: None,
+        attachments: tasks[parent_idx].attachments.clone(),
         todos: None,
         priority: tasks[parent_idx].priority.clone(),
         tags: None,
@@ -1547,7 +1556,7 @@ pub fn propagate_parent_subtask_advance(
                 waiting_for_subtask_id: None,
                 handover_summary: None,
                 cover_image: None,
-                attachments: None,
+                attachments: tasks[parent_idx].attachments.clone(),
                 todos: None,
                 priority: parent_priority,
                 tags: None,

@@ -385,6 +385,9 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         (lastFeedItem.type === 'steer' || lastFeedItem.type === 'user') &&
         lastFeedItem.content?.trim() === content.trim()
       ) {
+        if (images && images.length > 0) {
+          lastFeedItem.images = images;
+        }
         return state;
       }
 
@@ -1108,6 +1111,9 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
                 ) {
                   if (item.type === 'steer') {
                     prev.type = 'steer';
+                  }
+                  if (item.images && item.images.length > 0) {
+                    prev.images = item.images;
                   }
                   continue;
                 }

@@ -356,6 +356,11 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
             }))
           : null,
         currentTokens: typeof t.currentTokens === 'number' ? t.currentTokens : null,
+        attachments: t.attachments && t.attachments.length > 0 ? t.attachments : null,
+        coverImage: (t as any).coverImage ?? null,
+        handoverSummary: t.handoverSummary ?? null,
+        priority: t.priority ?? null,
+        tags: t.tags ?? null,
         createdAt: t.createdAt || Date.now(),
         updatedAt: Date.now(),
         skipWorktree: t.skipWorktree ?? false,
