@@ -1,8 +1,4 @@
 {
-  "model": "gemini-3.8-flash-high",
-  "temperature": 0.2,
-  "contextWindow": 200000,
-  "maxTokens": 8192,
   "allowedTools": [
     "execute_command",
     "read_file",
@@ -24,5 +20,10 @@
     "list_tasks",
     "get_task_history",
     "load_rule"
-  ]
+  ],
+  "contextWindow": 200000,
+  "context_window": 200000,
+  "maxTokens": 8192,
+  "model": "gemini-3.8-flash-high",
+  "temperature": 0.2
 }
