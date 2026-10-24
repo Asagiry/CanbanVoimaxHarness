@@ -272,7 +272,7 @@ function AccordionFileItem({ file, isExpanded, onToggle }: AccordionFileItemProp
             type="button"
             onClick={handleCopyPatch}
             className="p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb] dark:hover:bg-[#21262d] transition cursor-pointer"
-            title={copied ? t('gitDiff.patchCopied') : t('gitDiff.copyPatch')}
+            aria-label={copied ? t('gitDiff.patchCopied') : t('gitDiff.copyPatch')}
           >
             {copied ? (
               <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
@@ -793,7 +793,7 @@ export default function GitDiffSidebar({
                 type="button"
                 onClick={handleExpandAll}
                 className="p-1 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer"
-                title={t('gitDiff.expandAllTitle')}
+                aria-label={t('gitDiff.expandAllTitle')}
               >
                 <ChevronsUpDown className="h-3 w-3" />
               </button>
@@ -802,7 +802,7 @@ export default function GitDiffSidebar({
                 type="button"
                 onClick={handleCollapseAll}
                 className="p-1 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer"
-                title={t('gitDiff.collapseAllTitle')}
+                aria-label={t('gitDiff.collapseAllTitle')}
               >
                 <ChevronsDownUp className="h-3 w-3" />
               </button>
@@ -815,7 +815,7 @@ export default function GitDiffSidebar({
             onClick={fetchDiff}
             disabled={isLoading}
             className="p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] disabled:opacity-50 transition cursor-pointer"
-            title={t('gitDiff.refresh')}
+            aria-label={t('gitDiff.refresh')}
           >
             <RefreshCw
               className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin text-emerald-600' : ''}`}

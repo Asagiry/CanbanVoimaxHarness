@@ -783,7 +783,7 @@ export default function KanbanBoard() {
                         ? 'bg-[#171717] dark:bg-[#21262d] text-white shadow-xs'
                         : 'bg-[#f4f4f5] dark:bg-[#161b22] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] text-[#52525b] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
                     }`}
-                    title={t('board.boardTabTitle', { name: b.name })}
+                    aria-label={t('board.boardTabTitle', { name: b.name })}
                   >
                     <Layout className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate max-w-[140px]">{b.name}</span>
@@ -805,7 +805,7 @@ export default function KanbanBoard() {
           <button
             onClick={() => setIsCreateBoardModalOpen(true)}
             className="flex items-center space-x-1 px-2.5 py-1.5 rounded-md border border-dashed border-[#d4d4d8] dark:border-[#30363d] hover:border-[#171717] dark:hover:border-[#f0f6fc] text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] text-xs font-medium transition cursor-pointer select-none"
-            title={t('board.newBoardTitle')}
+            aria-label={t('board.newBoardTitle')}
           >
             <Plus className="h-3 w-3" />
             <span>{t('board.newBoard')}</span>
@@ -825,7 +825,7 @@ export default function KanbanBoard() {
             <button
               onClick={handleOpenAddColumn}
               className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] font-sans text-xs font-medium transition cursor-pointer active:scale-[0.99]"
-              title={t('board.addColumnTitle')}
+              aria-label={t('board.addColumnTitle')}
             >
               <Plus className="h-3.5 w-3.5" />
               <span>{t('board.addColumn')}</span>
@@ -833,7 +833,7 @@ export default function KanbanBoard() {
             <button
               onClick={handleOpenAddTask}
               className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white font-sans text-xs font-medium transition cursor-pointer shadow-xs active:scale-[0.99] border border-transparent dark:border-[#30363d]"
-              title={t('board.newTaskTitle')}
+              aria-label={t('board.newTaskTitle')}
             >
               <Plus className="h-3.5 w-3.5 text-white" />
               <span>{t('board.newTask')}</span>
@@ -917,7 +917,6 @@ export default function KanbanBoard() {
 
             <div
               className="flex items-center space-x-1.5 pb-2 text-[#8f8f8f] dark:text-[#8b949e]"
-              title={t('board.autoColorTitle')}
             >
               <span
                 className="h-4 w-4 rounded-full border border-[#ebebeb] dark:border-[#30363d]"
@@ -1042,7 +1041,7 @@ export default function KanbanBoard() {
                 type="button"
                 onClick={handleCloseAddTask}
                 className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
-                title={t('common.close')}
+                aria-label={t('common.close')}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -1136,7 +1135,7 @@ export default function KanbanBoard() {
                               handleRemoveAttachment(att.id);
                             }}
                             className="p-0.5 rounded text-[#8f8f8f] hover:text-[#ef4444] dark:hover:text-[#f87171] transition cursor-pointer"
-                            title={t('newTask.removeAttachment')}
+                            aria-label={t('newTask.removeAttachment')}
                           >
                             <X className="h-3 w-3" />
                           </button>

@@ -441,7 +441,7 @@ export default function AgentSettingVisualEditor({
                     key={c}
                     type="button"
                     onClick={() => handleColorChange(c)}
-                    title={c}
+                    aria-label={c}
                     className={`h-7 w-7 rounded-full transition-transform cursor-pointer flex items-center justify-center shadow-2xs ${
                       isSelected
                         ? 'scale-110 ring-2 ring-offset-2 ring-[#171717] dark:ring-[#f0f6fc]'
@@ -480,7 +480,7 @@ export default function AgentSettingVisualEditor({
                     key={ic}
                     type="button"
                     onClick={() => handleIconChange(ic)}
-                    title={ic}
+                    aria-label={ic}
                     className={`flex flex-col items-center justify-center p-2 rounded-md transition cursor-pointer ${
                       isSelected
                         ? 'bg-[#f4f4f5] dark:bg-[#21262d] border-2 border-[#171717] dark:border-[#f0f6fc] shadow-2xs'

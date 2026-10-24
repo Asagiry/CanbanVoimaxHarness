@@ -336,7 +336,7 @@ export default function RuleEditorModal() {
               <button
                 onClick={() => setPreviewMode(!previewMode)}
                 className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] transition cursor-pointer"
-                title={t('ruleEditor.togglePreview')}
+                aria-label={t('ruleEditor.togglePreview')}
               >
                 {previewMode ? <Edit3 className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e]" /> : <Eye className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e]" />}
                 <span>{previewMode ? t('ruleEditor.edit') : t('ruleEditor.preview')}</span>
@@ -347,7 +347,7 @@ export default function RuleEditorModal() {
               onClick={() => saveRules()}
               disabled={isSaving}
               className="flex items-center space-x-1 px-3 py-1 rounded-md text-xs font-mono bg-[#171717] dark:bg-[#238636] hover:bg-[#262626] dark:hover:bg-[#2ea043] text-white font-medium transition cursor-pointer shadow-xs disabled:opacity-50"
-              title={t('ruleEditor.saveHint')}
+              aria-label={t('ruleEditor.saveHint')}
             >
               <Save className="h-3.5 w-3.5" />
               <span>{isSaving ? t('common.saving') : t('common.save')}</span>

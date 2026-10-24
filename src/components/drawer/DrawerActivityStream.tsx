@@ -980,7 +980,7 @@ export default function DrawerActivityStream({
               type="button"
               onClick={onClearRunError}
               className="p-1 text-[#dc2626] dark:text-[#ff7b72] hover:text-[#991b1b] dark:hover:text-[#ffa198] rounded transition cursor-pointer"
-              title={t('drawer.closeNotification')}
+              aria-label={t('drawer.closeNotification')}
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -1439,7 +1439,7 @@ export default function DrawerActivityStream({
           type="button"
           onClick={scrollToBottom}
           className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-[#171717] hover:bg-[#262626] text-white text-xs font-medium font-sans shadow-md transition cursor-pointer active:scale-[0.98]"
-          title={t('drawer.scrollToNewTitle')}
+          aria-label={t('drawer.scrollToNewTitle')}
         >
           <ArrowDown className="h-3.5 w-3.5" />
           <span>{t('drawer.scrollToNew')}</span>

@@ -126,7 +126,7 @@ function KanbanColumn({
           e.stopPropagation();
           setMenuPos({ x: e.clientX, y: e.clientY });
         }}
-        title={
+        aria-label={
           isPinned
             ? t('board.columnPinnedTitle')
             : t('board.columnDragTitle')

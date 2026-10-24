@@ -20,7 +20,7 @@ reqwest = { version = "0.12", features = ["json", "stream"] }
 eventsource-stream = "0.2"
 futures-util = "0.3"
 anyhow = "1.0"
-thiserror = "1.0"
+thiserror = "2"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 tauri-plugin-dialog = "2"

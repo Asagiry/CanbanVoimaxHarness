@@ -574,15 +574,6 @@ export default function App() {
           </main>
         </div>
 
-        {/* Mind / Rule Editor Modal */}
-        <RuleEditorModal />
-
-        {/* Global Tool Policy Matrix Modal */}
-        <ToolPolicyModal />
-
-        {/* LLM Settings Modal */}
-        <SettingsModal />
-
         {/* Zoom Indicator Toast */}
         {showIndicator && (
           <div className="fixed bottom-4 right-4 z-50 flex items-center space-x-2 px-3 py-1.5 rounded-md bg-[#161b22] text-[#f0f6fc] border border-[#30363d] font-mono text-xs shadow-md transition-opacity duration-150 animate-in fade-in select-none">
@@ -598,6 +589,11 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {/* Modals rendered at root level outside zoom-scaled container to prevent position:fixed containment trap (§ 2.13) */}
+      <RuleEditorModal />
+      <ToolPolicyModal />
+      <SettingsModal />
 
       {/* Fullscreen Modal: Real-Time Agent Console (rendered at root level outside zoomed container to avoid position: fixed breakage and clipping) */}
       <ErrorBoundary scopeLabel="Консоль задачи" onClose={() => useDrawerStore.getState().closeDrawer()}>

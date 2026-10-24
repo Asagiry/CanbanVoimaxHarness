@@ -137,7 +137,7 @@ export default function SettingsModal() {
             <button
               onClick={closeSettings}
               className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
-              title={t('common.close')}
+              aria-label={t('common.close')}
             >
               <X className="h-4 w-4" />
             </button>
@@ -211,7 +211,7 @@ export default function SettingsModal() {
                   type="button"
                   onClick={() => setShowApiKey(!showApiKey)}
                   className="absolute right-2 p-1 text-[#666666] hover:text-[#171717] cursor-pointer"
-                  title={showApiKey ? t('settings.hideKey') : t('settings.showKey')}
+                  aria-label={showApiKey ? t('settings.hideKey') : t('settings.showKey')}
                 >
                   {showApiKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                 </button>
@@ -229,7 +229,7 @@ export default function SettingsModal() {
                   onClick={handleFetchModels}
                   disabled={isFetchingModels}
                   className="flex items-center space-x-1.5 text-[11px] font-sans font-medium text-[#171717] dark:text-[#f0f6fc] hover:text-[#4d4d4d] dark:hover:text-[#8b949e] disabled:opacity-50 transition cursor-pointer px-1.5 py-0.5 rounded-md hover:bg-[#f4f4f5] dark:hover:bg-[#161b22]"
-                  title={t('settings.fetchModels')}
+                  aria-label={t('settings.fetchModels')}
                 >
                   <RefreshCw className={`h-3 w-3 ${isFetchingModels ? 'animate-spin' : ''}`} />
                   <span>{isFetchingModels ? t('settings.fetching') : t('settings.fetchModels')}</span>
@@ -354,7 +354,7 @@ export default function SettingsModal() {
               <button
                 onClick={() => setIsChooseModelsModalOpen(false)}
                 className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
-                title={t('common.close')}
+                aria-label={t('common.close')}
               >
                 <X className="h-4 w-4" />
               </button>

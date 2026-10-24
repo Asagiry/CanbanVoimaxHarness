@@ -95,17 +95,16 @@ export default function Topbar() {
           onMouseDown={(e) => e.stopPropagation()}
           onClick={handleOpenFolderClick}
           className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#4d4d4d] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer font-sans text-xs"
-          title={t('topbar.selectProjectFolder')}
+          aria-label={t('topbar.selectProjectFolder')}
         >
           <FolderOpen className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e]" />
           <span>{t('topbar.openFolder')}</span>
         </button>
 
-        {/* Current folder indicator: read-only caption, full path in tooltip */}
+        {/* Current folder indicator: read-only caption */}
         {hasActiveProject && currentFolderName && (
           <span
             className="font-mono text-[11px] text-[#8f8f8f] dark:text-[#8b949e] truncate max-w-[220px] cursor-default"
-            title={activeProject.rootPath || activeProject.name}
           >
             {currentFolderName}
           </span>
@@ -120,7 +119,7 @@ export default function Topbar() {
             onMouseDown={(e) => e.stopPropagation()}
             onClick={openToolPolicyModal}
             className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#666666] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer"
-            title={t('topbar.toolPolicyTitle')}
+            aria-label={t('topbar.toolPolicyTitle')}
           >
             <Wrench className="h-3.5 w-3.5" />
           </button>
@@ -128,7 +127,7 @@ export default function Topbar() {
             onMouseDown={(e) => e.stopPropagation()}
             onClick={openSettings}
             className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#666666] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer"
-            title={t('topbar.llmSettings')}
+            aria-label={t('topbar.llmSettings')}
           >
             <Settings className="h-3.5 w-3.5" />
           </button>
@@ -140,7 +139,6 @@ export default function Topbar() {
             onMouseDown={(e) => e.stopPropagation()}
             onClick={toggleLanguage}
             className="px-2 py-1 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#666666] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer font-mono font-semibold text-[11px] select-none flex items-center space-x-1"
-            title={t('topbar.switchLanguage')}
             aria-label={t('topbar.switchLanguage')}
           >
             <span className={language === 'en' ? 'text-[#171717] dark:text-[#f0f6fc] font-bold' : 'text-[#8f8f8f] dark:text-[#6e7681]'}>
@@ -158,7 +156,6 @@ export default function Topbar() {
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => toggleThemeWithAnimation(e)}
             className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#666666] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer relative overflow-hidden group"
-            title={theme === 'dark' ? t('topbar.lightTheme') : t('topbar.darkTheme')}
             aria-label={t('topbar.switchTheme')}
           >
             <div className="relative h-3.5 w-3.5 flex items-center justify-center">

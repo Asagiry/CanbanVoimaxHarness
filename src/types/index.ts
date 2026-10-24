@@ -10,11 +10,6 @@ export type TaskStatus = 'idle' | 'running' | 'paused' | 'waiting_review' | 'wai
 
 export type TaskVerdict = 'NONE' | 'APPROVED' | 'APPROVED_WITH_CAVEATS' | 'CHANGES_REQUESTED';
 
-export interface FastTrackConfig {
-  noReview?: boolean;
-  noRetro?: boolean;
-}
-
 export interface BoardDef {
   id: string;
   name: string;
@@ -41,7 +36,6 @@ export interface KanbanTask {
   totalElapsed: number; // in seconds
   isTimerRunning: boolean;
   returnsCount: number;
-  fastTrack?: FastTrackConfig;
   customFlow?: string[];
   verdict?: TaskVerdict;
   verdictNote?: string;
