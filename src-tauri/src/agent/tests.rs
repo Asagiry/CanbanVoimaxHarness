@@ -510,6 +510,7 @@ use super::*;
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            position: None,
         };
         crate::commands::tasks::save_tasks_to_disk(&base, &[parent_task]).await.expect("save parent");
 
@@ -626,6 +627,7 @@ use super::*;
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            position: None,
         };
         crate::commands::tasks::save_tasks_to_disk(&base, &[regular_task]).await.expect("save regular task");
 
@@ -920,6 +922,7 @@ use super::*;
             handover_summary: None,
             attachments: None,
             cover_image: None,
+            position: None,
         };
         crate::commands::tasks::save_tasks_to_disk(&base, &[task]).await.expect("save task");
 
@@ -1096,6 +1099,7 @@ use super::*;
             handover_summary: None,
             attachments: None,
             cover_image: None,
+            position: None,
         }
     }
 
@@ -3807,6 +3811,7 @@ data: [DONE]
             skip_worktree: None,
             created_at: 1000,
             updated_at: 2000,
+            position: Some(0.0),
         };
 
         let task2 = Task {
@@ -3834,6 +3839,7 @@ data: [DONE]
             skip_worktree: None,
             created_at: 1000,
             updated_at: 3000,
+            position: Some(1.0),
         };
 
         crate::db::db_upsert_task(&base, &task1).expect("upsert task1");
@@ -3918,6 +3924,7 @@ data: [DONE]
             skip_worktree: None,
             created_at: 1000,
             updated_at: 2000,
+            position: Some(0.0),
         };
         crate::db::db_upsert_task(&base, &task).expect("upsert task");
 

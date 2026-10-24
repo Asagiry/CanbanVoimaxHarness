@@ -95,6 +95,8 @@ pub struct Task {
     pub created_at: i64,
     #[serde(rename = "updatedAt", alias = "updated_at", default)]
     pub updated_at: i64,
+    #[serde(default)]
+    pub position: Option<f64>,
 }
 
 pub type KanbanTask = Task;
@@ -1737,6 +1739,28 @@ pub static SUBAGENT_RECEIVERS: LazyLock<tokio::sync::Mutex<HashMap<String, Subag
 pub static SUBAGENT_SESSIONS: LazyLock<tokio::sync::Mutex<HashMap<String, SubagentSession>>> =
     LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
 
+/// Evicts completed, aborted, or failed subagent sessions from in-memory cache when capacity exceeds 30.
+pub async fn prune_subagent_sessions_cache() {
+    let mut sessions = SUBAGENT_SESSIONS.lock().await;
+    if sessions.len() <= 30 {
+        return;
+    }
+    let mut removable_keys = Vec::new();
+    for (key, sess) in sessions.iter() {
+        if let Ok(info) = sess.retry_info.try_lock() {
+            if info.status == "finished" || info.status == "aborted" || info.status == "failed" {
+                removable_keys.push(key.clone());
+            }
+        }
+    }
+    for k in removable_keys {
+        if sessions.len() <= 30 {
+            break;
+        }
+        sessions.remove(&k);
+    }
+}
+
 /// Robust subagent session finder: searches SUBAGENT_SESSIONS by exact ID, stripped `:sub:`,
 /// formatted `{parent}.sub-{id}`, or suffix matching `.sub-{tool_call_id}`.
 pub async fn find_subagent_session(
@@ -2341,6 +2365,7 @@ pub async fn execute_tool(
                 let mut sessions = SUBAGENT_SESSIONS.lock().await;
                 sessions.insert(subagent_id.clone(), session);
             }
+            prune_subagent_sessions_cache().await;
 
             let mut owned_ctx = ctx.to_owned();
             owned_ctx.abort_handle = Arc::clone(&sub_abort_handle);
@@ -2491,6 +2516,7 @@ pub async fn execute_tool(
                 let mut sessions = SUBAGENT_SESSIONS.lock().await;
                 sessions.insert(subagent_id.clone(), session);
             }
+            prune_subagent_sessions_cache().await;
 
             let mut owned_ctx = ctx.to_owned();
             owned_ctx.abort_handle = Arc::clone(&sub_abort_handle);
@@ -3623,6 +3649,7 @@ pub async fn execute_tool(
                     skip_worktree: None,
                     created_at: now,
                     updated_at: now,
+                    position: None,
                 };
 
                 tasks.push(new_task);
@@ -5212,6 +5239,7 @@ Subagent [{}] '{}' report:
             let _ = sender.send(report.clone());
         }
     }
+    prune_subagent_sessions_cache().await;
 
     if let Some(ref app) = ctx.app_handle {
         let _ = app.emit(
@@ -5855,38 +5883,43 @@ pub struct AgentSessionConfig {
 /// Checks if an opening tag candidate (<thinking> or <think>) at `pos` is a genuine model
 /// control tag rather than markdown inline code (`<thinking>`), code fence, or word substring.
 pub fn is_valid_opening_tag(buffer: &str, pos: usize, tag_len: usize) -> bool {
-    if pos + tag_len > buffer.len() {
+    if !buffer.is_char_boundary(pos) || !buffer.is_char_boundary(pos + tag_len) || pos + tag_len > buffer.len() {
         return false;
     }
 
     // 1. Check character immediately preceding the tag
     if pos > 0 {
-        let prev_char = buffer[..pos].chars().next_back().unwrap();
-        // If preceded by a backtick (e.g. `<thinking>` or ```<thinking>), it's markdown inline code or fence
-        if prev_char == '`' {
-            return false;
-        }
-        // If preceded by an alphanumeric char or underscore, it's inside an identifier/word (e.g. var<thinking>)
-        if prev_char.is_alphanumeric() || prev_char == '_' {
-            return false;
+        if let Some(prev_char) = buffer.get(..pos).and_then(|s| s.chars().next_back()) {
+            // If preceded by a backtick (e.g. `<thinking>` or ```<thinking>), it's markdown inline code or fence
+            if prev_char == '`' {
+                return false;
+            }
+            // If preceded by an alphanumeric char or underscore, it's inside an identifier/word (e.g. var<thinking>)
+            if prev_char.is_alphanumeric() || prev_char == '_' {
+                return false;
+            }
         }
     }
 
     // 2. Check character immediately following the tag
     if pos + tag_len < buffer.len() {
-        let next_char = buffer[pos + tag_len..].chars().next().unwrap();
-        // If immediately followed by a backtick (e.g. <thinking>`), it's markdown
-        if next_char == '`' {
-            return false;
+        if let Some(next_char) = buffer.get(pos + tag_len..).and_then(|s| s.chars().next()) {
+            // If immediately followed by a backtick (e.g. <thinking>`), it's markdown
+            if next_char == '`' {
+                return false;
+            }
         }
     }
 
     // 3. Check if inside unclosed inline backtick code on the current line
-    let line_start = buffer[..pos].rfind('\n').map(|p| p + 1).unwrap_or(0);
-    let line_before = &buffer[line_start..pos];
-    let backticks_before = line_before.chars().filter(|&c| c == '`').count();
-    if backticks_before % 2 == 1 {
-        return false;
+    if let Some(before) = buffer.get(..pos) {
+        let line_start = before.rfind('\n').map(|p| p + 1).unwrap_or(0);
+        if let Some(line_before) = before.get(line_start..) {
+            let backticks_before = line_before.chars().filter(|&c| c == '`').count();
+            if backticks_before % 2 == 1 {
+                return false;
+            }
+        }
     }
 
     true
@@ -5895,29 +5928,34 @@ pub fn is_valid_opening_tag(buffer: &str, pos: usize, tag_len: usize) -> bool {
 /// Checks if a closing tag candidate (</thinking> or </think>) at `pos` is a genuine model
 /// control tag rather than markdown inline code (`</thinking>`).
 pub fn is_valid_closing_tag(buffer: &str, pos: usize, tag_len: usize) -> bool {
-    if pos + tag_len > buffer.len() {
+    if !buffer.is_char_boundary(pos) || !buffer.is_char_boundary(pos + tag_len) || pos + tag_len > buffer.len() {
         return false;
     }
 
     if pos > 0 {
-        let prev_char = buffer[..pos].chars().next_back().unwrap();
-        if prev_char == '`' {
-            return false;
+        if let Some(prev_char) = buffer.get(..pos).and_then(|s| s.chars().next_back()) {
+            if prev_char == '`' {
+                return false;
+            }
         }
     }
 
     if pos + tag_len < buffer.len() {
-        let next_char = buffer[pos + tag_len..].chars().next().unwrap();
-        if next_char == '`' {
-            return false;
+        if let Some(next_char) = buffer.get(pos + tag_len..).and_then(|s| s.chars().next()) {
+            if next_char == '`' {
+                return false;
+            }
         }
     }
 
-    let line_start = buffer[..pos].rfind('\n').map(|p| p + 1).unwrap_or(0);
-    let line_before = &buffer[line_start..pos];
-    let backticks_before = line_before.chars().filter(|&c| c == '`').count();
-    if backticks_before % 2 == 1 {
-        return false;
+    if let Some(before) = buffer.get(..pos) {
+        let line_start = before.rfind('\n').map(|p| p + 1).unwrap_or(0);
+        if let Some(line_before) = before.get(line_start..) {
+            let backticks_before = line_before.chars().filter(|&c| c == '`').count();
+            if backticks_before % 2 == 1 {
+                return false;
+            }
+        }
     }
 
     true
@@ -5925,16 +5963,24 @@ pub fn is_valid_closing_tag(buffer: &str, pos: usize, tag_len: usize) -> bool {
 
 /// Helper to check if a potential partial tag prefix at `pos` could be a valid opening tag
 pub fn is_valid_partial_opening_tag(buffer: &str, pos: usize) -> bool {
+    if !buffer.is_char_boundary(pos) || pos > buffer.len() {
+        return false;
+    }
     if pos > 0 {
-        let prev_char = buffer[..pos].chars().next_back().unwrap();
-        if prev_char == '`' || prev_char.is_alphanumeric() || prev_char == '_' {
-            return false;
+        if let Some(prev_char) = buffer.get(..pos).and_then(|s| s.chars().next_back()) {
+            if prev_char == '`' || prev_char.is_alphanumeric() || prev_char == '_' {
+                return false;
+            }
         }
     }
-    let line_start = buffer[..pos].rfind('\n').map(|p| p + 1).unwrap_or(0);
-    let backticks_before = buffer[line_start..pos].chars().filter(|&c| c == '`').count();
-    if backticks_before % 2 == 1 {
-        return false;
+    if let Some(before) = buffer.get(..pos) {
+        let line_start = before.rfind('\n').map(|p| p + 1).unwrap_or(0);
+        if let Some(line_before) = before.get(line_start..) {
+            let backticks_before = line_before.chars().filter(|&c| c == '`').count();
+            if backticks_before % 2 == 1 {
+                return false;
+            }
+        }
     }
     true
 }
@@ -5966,8 +6012,12 @@ impl ThinkingStreamParser {
                 let mut earliest_open: Option<(usize, usize)> = None;
                 let mut search_pos = 0;
                 while search_pos < self.buffer.len() {
-                    let open_thinking = self.buffer[search_pos..].find("<thinking>").map(|p| search_pos + p);
-                    let open_think = self.buffer[search_pos..].find("<think>").map(|p| search_pos + p);
+                    let sub = match self.buffer.get(search_pos..) {
+                        Some(s) => s,
+                        None => break,
+                    };
+                    let open_thinking = sub.find("<thinking>").map(|p| search_pos + p);
+                    let open_think = sub.find("<think>").map(|p| search_pos + p);
 
                     let next_cand = match (open_thinking, open_think) {
                         (Some(pos1), Some(pos2)) => {
@@ -5984,14 +6034,15 @@ impl ThinkingStreamParser {
 
                     match next_cand {
                         Some((pos, tag_len)) => {
-                            let backticks_before = self.buffer[..pos].chars().filter(|&c| c == '`').count();
+                            let backticks_before = self.buffer.get(..pos).map(|s| s.chars().filter(|&c| c == '`').count()).unwrap_or(0);
                             let effective_in_backtick = (self.in_backtick as usize + backticks_before) % 2 == 1;
 
                             if !effective_in_backtick && is_valid_opening_tag(&self.buffer, pos, tag_len) {
                                 earliest_open = Some((pos, tag_len));
                                 break;
                             } else {
-                                search_pos = pos + 1;
+                                let advance = self.buffer.get(pos..).and_then(|s| s.chars().next()).map(|c| c.len_utf8()).unwrap_or(1);
+                                search_pos = pos + advance;
                             }
                         }
                         None => break,
@@ -6000,7 +6051,7 @@ impl ThinkingStreamParser {
 
                 if let Some((pos, tag_len)) = earliest_open {
                     if pos > 0 {
-                        let text = self.buffer[..pos].to_string();
+                        let text = self.buffer.get(..pos).unwrap_or("").to_string();
                         for c in text.chars() {
                             if c == '`' {
                                 self.in_backtick = !self.in_backtick;
@@ -6010,7 +6061,7 @@ impl ThinkingStreamParser {
                     }
                     self.in_thinking = true;
                     self.in_backtick = false;
-                    self.buffer = self.buffer[pos + tag_len..].to_string();
+                    self.buffer = self.buffer.get(pos + tag_len..).unwrap_or("").to_string();
                     continue;
                 }
 
@@ -6021,7 +6072,7 @@ impl ThinkingStreamParser {
                         for len in 1..tag.len() {
                             if self.buffer.ends_with(&tag[..len]) && len > partial_len {
                                 let pos = self.buffer.len() - len;
-                                let backticks_before = self.buffer[..pos].chars().filter(|&c| c == '`').count();
+                                let backticks_before = self.buffer.get(..pos).map(|s| s.chars().filter(|&c| c == '`').count()).unwrap_or(0);
                                 let effective_in_backtick = (self.in_backtick as usize + backticks_before) % 2 == 1;
                                 if !effective_in_backtick && is_valid_partial_opening_tag(&self.buffer, pos) {
                                     partial_len = len;
@@ -6033,15 +6084,15 @@ impl ThinkingStreamParser {
 
                 if partial_len > 0 {
                     let safe_len = self.buffer.len() - partial_len;
-                    if safe_len > 0 {
-                        let text = self.buffer[..safe_len].to_string();
+                    if safe_len > 0 && self.buffer.is_char_boundary(safe_len) {
+                        let text = self.buffer.get(..safe_len).unwrap_or("").to_string();
                         for c in text.chars() {
                             if c == '`' {
                                 self.in_backtick = !self.in_backtick;
                             }
                         }
                         outputs.push((false, text));
-                        self.buffer = self.buffer[safe_len..].to_string();
+                        self.buffer = self.buffer.get(safe_len..).unwrap_or("").to_string();
                     }
                     break;
                 } else {
@@ -6061,8 +6112,12 @@ impl ThinkingStreamParser {
                 let mut earliest_close: Option<(usize, usize)> = None;
                 let mut search_pos = 0;
                 while search_pos < self.buffer.len() {
-                    let close_thinking = self.buffer[search_pos..].find("</thinking>").map(|p| search_pos + p);
-                    let close_think = self.buffer[search_pos..].find("</think>").map(|p| search_pos + p);
+                    let sub = match self.buffer.get(search_pos..) {
+                        Some(s) => s,
+                        None => break,
+                    };
+                    let close_thinking = sub.find("</thinking>").map(|p| search_pos + p);
+                    let close_think = sub.find("</think>").map(|p| search_pos + p);
 
                     let next_cand = match (close_thinking, close_think) {
                         (Some(pos1), Some(pos2)) => {
@@ -6083,7 +6138,8 @@ impl ThinkingStreamParser {
                                 earliest_close = Some((pos, tag_len));
                                 break;
                             } else {
-                                search_pos = pos + 1;
+                                let advance = self.buffer.get(pos..).and_then(|s| s.chars().next()).map(|c| c.len_utf8()).unwrap_or(1);
+                                search_pos = pos + advance;
                             }
                         }
                         None => break,
@@ -6092,11 +6148,12 @@ impl ThinkingStreamParser {
 
                 if let Some((pos, tag_len)) = earliest_close {
                     if pos > 0 {
-                        outputs.push((true, self.buffer[..pos].to_string()));
+                        let text = self.buffer.get(..pos).unwrap_or("").to_string();
+                        outputs.push((true, text));
                     }
                     self.in_thinking = false;
                     self.in_backtick = false;
-                    self.buffer = self.buffer[pos + tag_len..].to_string();
+                    self.buffer = self.buffer.get(pos + tag_len..).unwrap_or("").to_string();
                     continue;
                 }
 
@@ -6115,9 +6172,10 @@ impl ThinkingStreamParser {
 
                 if partial_len > 0 {
                     let safe_len = self.buffer.len() - partial_len;
-                    if safe_len > 0 {
-                        outputs.push((true, self.buffer[..safe_len].to_string()));
-                        self.buffer = self.buffer[safe_len..].to_string();
+                    if safe_len > 0 && self.buffer.is_char_boundary(safe_len) {
+                        let text = self.buffer.get(..safe_len).unwrap_or("").to_string();
+                        outputs.push((true, text));
+                        self.buffer = self.buffer.get(safe_len..).unwrap_or("").to_string();
                     }
                     break;
                 } else {

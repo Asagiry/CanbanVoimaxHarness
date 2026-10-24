@@ -81,6 +81,7 @@ pub fn run() {
             update_task,
             delete_task,
             move_task_stage,
+            reorder_task,
             advance_task,
             run_agent,
             abort_agent,

@@ -289,6 +289,7 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
       ? raw.currentTokens
       : (typeof raw.current_tokens === 'number' ? raw.current_tokens : undefined),
     skipWorktree,
+    position: typeof raw.position === 'number' && Number.isFinite(raw.position) ? raw.position : undefined,
   };
 }
 
@@ -458,6 +459,7 @@ function mapBackendTaskToKanban(t: any): KanbanTask {
     subtaskIndex: undefined,
     waitingForSubtaskId: undefined,
     handoverSummary: undefined,
+    position: undefined,
   };
 }
 

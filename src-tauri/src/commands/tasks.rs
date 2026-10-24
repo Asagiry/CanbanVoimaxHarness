@@ -722,6 +722,12 @@ pub async fn internal_create_task(
     );
     let now = Utc::now().timestamp_millis();
 
+    let next_pos = tasks
+        .iter()
+        .filter(|t| t.stage_id == stage_id)
+        .filter_map(|t| t.position)
+        .fold(0.0f64, f64::max) + 1000.0;
+
     let mut new_task = Task {
         id: task_id.clone(),
         title: title.clone(),
@@ -747,6 +753,7 @@ pub async fn internal_create_task(
         skip_worktree: skip_worktree.or(Some(false)),
         created_at: now,
         updated_at: now,
+        position: Some(next_pos),
     };
 
     // RACE CONDITION PREVENTION (AGENTS.md):
@@ -1081,6 +1088,12 @@ pub async fn internal_create_subtask(
         "idle"
     };
 
+    let next_subtask_pos = tasks
+        .iter()
+        .filter(|t| t.stage_id == target_col.id)
+        .filter_map(|t| t.position)
+        .fold(0.0f64, f64::max) + 1000.0;
+
     let new_subtask = Task {
         id: subtask_id.clone(),
         title: subtask_title,
@@ -1106,6 +1119,7 @@ pub async fn internal_create_subtask(
         skip_worktree: parent_skip_wt,
         created_at: now,
         updated_at: now,
+        position: Some(next_subtask_pos),
     };
 
     let parent_task_clone = tasks[parent_idx].clone();
@@ -1287,6 +1301,13 @@ pub async fn delete_task(
         let mut guard = agent_entry.join_handle.lock().await;
         if let Some(handle) = guard.take() {
             handle.abort();
+        }
+    }
+
+    // Memory leak prevention: prune deleted task IDs and cascaded subtasks from agent_contexts
+    if let Ok(mut ctx_map) = state.agent_contexts.lock() {
+        for id in &to_delete {
+            ctx_map.remove(id);
         }
     }
 
@@ -1581,6 +1602,12 @@ pub fn propagate_parent_subtask_advance(
             let parent_skip_wt = tasks[parent_idx].skip_worktree;
             let parent_priority = tasks[parent_idx].priority.clone();
 
+            let next_subtask_pos = tasks
+                .iter()
+                .filter(|t| t.stage_id == next_col.id)
+                .filter_map(|t| t.position)
+                .fold(0.0f64, f64::max) + 1000.0;
+
             let new_subtask = Task {
                 id: new_subtask_id.clone(),
                 title: format!("{} ({})", parent_title, next_col.title),
@@ -1612,6 +1639,7 @@ pub fn propagate_parent_subtask_advance(
                 skip_worktree: parent_skip_wt,
                 created_at: now,
                 updated_at: now,
+                position: Some(next_subtask_pos),
             };
 
             if has_autorun {
@@ -2467,7 +2495,19 @@ pub async fn internal_move_task_stage(
     }
     current_task.updated_at = Utc::now().timestamp_millis();
 
-    let updated = current_task.clone();
+    if old_stage != canonical_target_stage_id {
+        let cur_id = tasks[task_idx].id.clone();
+        let max_pos = tasks
+            .iter()
+            .filter(|t| !task_id_matches(&t.id, &cur_id) && stage_id_matches(&t.stage_id, &canonical_target_stage_id))
+            .filter_map(|t| t.position)
+            .fold(0.0f64, f64::max);
+        tasks[task_idx].position = Some(max_pos + 1000.0);
+    } else if tasks[task_idx].position.is_none() {
+        tasks[task_idx].position = Some(0.0);
+    }
+
+    let updated = tasks[task_idx].clone();
     let _ = crate::db::db_upsert_task(root, &updated);
     let parent_id_opt = updated.parent_id.clone();
 
@@ -2658,6 +2698,86 @@ pub async fn move_task_stage(
         board_id,
     )
     .await
+}
+
+#[tauri::command]
+pub async fn reorder_task(
+    task_id: String,
+    target_stage_id: String,
+    new_index: usize,
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Task, String> {
+    let root = state.get_root();
+    let mut tasks = load_tasks_from_disk(&root).await;
+
+    let task_idx = tasks
+        .iter()
+        .position(|t| task_id_matches(&t.id, &task_id))
+        .ok_or_else(|| format!("Task {} not found", task_id))?;
+
+    let old_stage_id = tasks[task_idx].stage_id.clone();
+    let is_stage_change = !stage_id_matches(&old_stage_id, &target_stage_id);
+
+    if is_stage_change {
+        let _ = internal_move_task_stage(
+            &root,
+            &task_id,
+            &target_stage_id,
+            None,
+            None,
+            None,
+            Some(&app_handle),
+            false,
+            None,
+        )
+        .await?;
+        tasks = load_tasks_from_disk(&root).await;
+    }
+
+    let mut stage_tuples: Vec<(String, f64, i64)> = tasks
+        .iter()
+        .filter(|t| stage_id_matches(&t.stage_id, &target_stage_id) && !task_id_matches(&t.id, &task_id))
+        .map(|t| (t.id.clone(), t.position.unwrap_or(0.0), t.created_at))
+        .collect();
+
+    stage_tuples.sort_by(|a, b| {
+        a.1.partial_cmp(&b.1)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.2.cmp(&b.2))
+    });
+
+    let mut ordered_ids: Vec<String> = stage_tuples.into_iter().map(|(id, _, _)| id).collect();
+    let insert_pos = new_index.min(ordered_ids.len());
+    ordered_ids.insert(insert_pos, task_id.clone());
+
+    let now = Utc::now().timestamp_millis();
+    let mut updated_task = None;
+
+    for (idx, tid) in ordered_ids.iter().enumerate() {
+        let new_pos = (idx as f64) * 1000.0;
+        if let Some(t) = tasks.iter_mut().find(|t| task_id_matches(&t.id, tid)) {
+            t.position = Some(new_pos);
+            t.updated_at = now;
+            let _ = crate::db::db_upsert_task(&root, t);
+            if task_id_matches(&t.id, &task_id) {
+                updated_task = Some(t.clone());
+            }
+        }
+    }
+
+    save_tasks_to_disk(&root, &tasks).await?;
+
+    if let Ok(mut guard) = state.tasks.lock() {
+        *guard = tasks.clone();
+    }
+
+    let _ = app_handle.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+    if let Some(ref ut) = updated_task {
+        let _ = app_handle.emit("task:updated", serde_json::json!({ "taskId": ut.id, "task": ut }));
+    }
+
+    updated_task.ok_or_else(|| format!("Failed to reorder task {}", task_id))
 }
 
 pub async fn internal_advance_task(
