@@ -10,21 +10,16 @@ Columns represent autonomous execution stages. Moving a task card triggers autom
 
 ---
 
-## 2. Canonical Stage Sequence
-The canonical autonomous engineering pipeline follows this sequential order:
-```text
-[Backlog] ──► [Planning] ──► [Developer] ──► [Review] ──┬──(Approved immediately)──────► [Ready]
- (index 0)       (plan)         (dev)       (review)    │                                (terminal)
-                                                        └──(Approved after changes)──► [Retro] ────┘
-                                                                                        (retro)
-```
-- **Backlog**: ID `"backlog"` must always reside at index 0 (incoming tasks).
-- **Planning (`plan`)**: Architecture, requirements decomposition, static planning without checks (agent `planner`).
-- **Developer (`dev`)**: Implementation inside isolated git worktree, compiler sensors, rule synchronization (agent `developer`).
-- **Review (`review`)**: Strict Harness2.0 Blind Selection audit across 7 criteria and 6 mandatory gates (agent `reviewer`).
-- **Retro (`retro`)**: Execution trajectory analysis when tasks required fixes after review rejection; rule evolution (agent `retro`).
-- **Ready**: ID `"ready"` (with `terminal: true`) must reside at the final position.
-- **Immutable Anchors**: Removing `backlog` or `ready` is forbidden across all boards.
+## 2. Open, Project-Driven Control Plane Architecture
+CanbanVoimaxHarness is an open, domain-agnostic desktop agentic IDE and orchestration environment for ANY project type (Software Dev, 3D/Voxel Art, Content, Lean Kanban).
+The Kanban board is a dynamic control plane adaptable to arbitrary project workflows and multi-agent topologies.
+
+The ONLY structural invariants across all boards:
+1. **Intake Anchor**: First column (index 0, e.g. `backlog`), `persona: null`, `terminal: null`. Tasks wait here until selected for work.
+2. **Delivery Anchor**: Final column (e.g. `ready`), `persona: null`, `terminal: true`. Tasks entering this column are finalized deliverables.
+3. **Intermediate Execution Stages**: Completely arbitrary and defined by project requirements (any personas, models, tools, gatekeeper sensors, and routing hooks such as `routes.on_approved` / `routes.on_changes_requested`).
+
+Boards are configured in `.cvh/boards.json` and mirrored in `.cvh/pipeline.json`.
 
 ---
 

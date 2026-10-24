@@ -35,9 +35,3 @@ Authoritative frontend audit checklist for the **Reviewer** persona in CanbanVoi
 
 ## 5. Tabular Numerics for Metrics
 - **Rule**: Any dynamic numeric counter, timer, token pill, or TPS telemetry must use the `.tabular-nums` CSS class to eliminate visual layout jitter.
-
----
-
-## 6. Subtask Status Badge Guard & Terminal Integrity
-- **Rule**: Cards in terminal stages (`isDone`, `status === 'done'`) must never display `Waiting for subtask`. If `waitingForSubtaskId` is present on a task whose subtask is done or missing, the UI and stores must treat it as cleared and render the appropriate terminal badge.
-- **Audit**: Verify `KanbanCard.tsx` and `boardStore.ts` handle `waitingForSubtaskId` defensively.

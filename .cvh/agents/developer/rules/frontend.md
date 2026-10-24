@@ -36,13 +36,10 @@ Authoritative frontend engineering standards and UI invariants of **CanbanVoimax
   - **Strict Flexbox Rule**: Every container in this chain MUST use `flex flex-col min-h-0 min-w-0 overflow-hidden` to guarantee inner scrollbars function independently without blowing out viewport height.
 - **Progressive Card Loading (Virtualization)**: `KanbanColumn` uses `PAGE_SIZE = 10`. Only 10 cards are mounted initially; "Show more" loads subsequent slices.
 
-### 2.3 Task Creation Modal & Vision Attachments
-- **Modal Viewport Standards**: New Task Modal is stretched to `w-[620px] max-w-[95vw] max-h-[90vh]` with flex column layout (`flex flex-col min-h-0 overflow-y-auto space-y-4`).
-- **Description Textarea**: Sized to `rows={6} min-h-[130px] resize-y` with relaxed typography (`leading-relaxed font-sans`).
-- **Clipboard Image Pasting**: Supports pasting screenshots/images from clipboard across English (`Ctrl+V`) and Cyrillic (`Ctrl+М`) keyboard layouts, with `navigator.clipboard.read()` fallback when focus is outside text inputs. Native text pasting into inputs/textarea is preserved when only text is in clipboard.
-- **Client-Side Compression**: Pasted and attached images are compressed via `compressImageFile(file, 1568, 0.85)` before storage or IPC transfer.
-- **Lightbox & Previews**: Attached thumbnails support removal and click-to-preview via `ImageLightboxModal`.
-- **Drawer Attachments & Subagent Gallery**: `DrawerActivityStream` displays image attachment galleries in both `Task Objective Card` and `Subagent Atomic Objective Card`, automatically resolving effective attachments from the parent task if the subtask has none. In addition, `boardStore.ts` and `drawerStore.ts` guarantee attachment arrays and images are never lost during background synchronization or dialogue deduplication.
+### 2.3 Task Creation & Image Attachments
+- **Modal & Layout Bounding**: New Task dialog enforces responsive bounds (`max-w-[95vw] max-h-[90vh]`) with scrollable flex containment (`flex flex-col min-h-0 overflow-y-auto`).
+- **Clipboard & File Attachments**: Supports direct image pasting from clipboard with automatic client-side compression before storage or IPC transfer.
+- **Attachment Previews & Lightbox**: Interactive attachment thumbnails provide removal, click-to-preview lightbox modal, and attachment gallery presentation in drawer feeds.
 
 ---
 
@@ -62,10 +59,6 @@ Authoritative frontend engineering standards and UI invariants of **CanbanVoimax
 ### 3.2 Event Streaming & Micro-Batching
 - `agent:thought` and `agent:output` chunks are buffered in memory and flushed to Zustand every **150ms** (`TEXT_FLUSH_MS`) to prevent UI lag.
 - When a tool execution (`agent:tool_call`), user question (`agent:question`), or turn ends, `flushTask(taskId)` is executed **synchronously before registering the tool**, ensuring thought text always precedes tool cards.
-
-### 3.3 Relational Subtask Status & Terminal Badge Discipline (`KanbanCard.tsx`, `boardStore.ts`)
-- **Status Badge Guard**: `KanbanCard.tsx` only renders the 'Waiting for subtask' badge if the card is NOT in `ready`/done (`!isDone && status !== 'done'`) AND the referenced subtask is actually active (`status !== 'done'`). Completed tasks always render the green completed badge.
-- **Store Mapping & Relational Symmetry**: `mapBackendTaskToKanban`, `setBackendTasks`, and `upsertBackendTask` enforce that terminal tasks or tasks whose subtask has finished clear `waitingForSubtaskId` to `undefined` and never allow stale waiting badges to persist.
 
 ---
 

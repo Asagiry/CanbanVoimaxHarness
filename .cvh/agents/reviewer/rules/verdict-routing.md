@@ -16,7 +16,7 @@ If ANY of the 6 Gates fails or invariant is violated:
 1. Do NOT attempt to fix the code yourself (`edit_file` and `write_file` are strictly banned).
 2. Invoke `reject_task(reason)` immediately.
 3. The `reason` MUST contain:
-   - **Failed Gate**: State exactly which gate failed (e.g. `Gate 1: Rule Sync`, `Gate 2: Sensor Failure`, `Gate 3: Backend Invariant`).
+   - **Failed Gate**: State exactly which gate failed (e.g. `Gate 1: Rule Hygiene`, `Gate 2: Sensor Failure`, `Gate 3: Backend Invariant`).
    - **Concrete Evidence**: Exact file paths, line numbers, and compiler error snippets.
    - **Actionable Change Request**: Clear, unambiguous instructions detailing what the Developer must fix.
 4. For subtask pipelines, `reject_task` reactivates the previous developer subtask in `dev` with status `running` and rejection prompt, while the reviewer subtask remains preserved in `review` with status `idle` and verdict `CHANGES_REQUESTED`. When the developer finishes fixes and calls `advance_task`, the existing reviewer subtask is reactivated without card duplication. For single tasks without parent, the card routes back to `dev` with `CHANGES_REQUESTED`.

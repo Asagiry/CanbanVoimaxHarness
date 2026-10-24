@@ -54,4 +54,4 @@ Load modular guidelines dynamically using `load_rule("<rule>")`:
    The handover summary MUST detail:
    - Target files and exact modifications required.
    - Ground truth sensors to run (`cargo check`, `npx tsc --noEmit`).
-   - Architectural rules to update in `.cvh/rules/`.
+   - Architectural rules or contracts to update (only if universal architecture changes).
