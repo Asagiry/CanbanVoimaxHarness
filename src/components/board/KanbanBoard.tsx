@@ -35,7 +35,7 @@ export default function KanbanBoard() {
     searchQuery,
     setSearchQuery,
     setTasks,
-    moveTask,
+    reorderTask,
     addTask,
     tickTimers,
     setColumns,
@@ -138,23 +138,25 @@ export default function KanbanBoard() {
     if (type === 'COLUMN') {
       const sourceCol = columns[source.index];
       if (!sourceCol) return;
-      // Закреплены только backlog/ready/terminal по id/флагу (без привязки к индексу).
+      // Закреплены только intake/terminal по id/флагу/позиции.
       if (
+        sourceCol.isIntake ||
+        Boolean(sourceCol.terminal) ||
         sourceCol.id === 'backlog' ||
         sourceCol.id === 'ready' ||
-        Boolean(sourceCol.terminal)
+        source.index === 0 ||
+        source.index === columns.length - 1
       ) {
         return;
       }
-      // Бэклог строго первый.
+      // Intake строго первый.
       if (destination.index === 0) return;
 
       // Хвост закреплённых: первая terminal-колонка, иначе ready, иначе конец.
-      // Бэкенд нормализует ready-last по id — фронт совпадает до сейва.
       const terminalIdx = columns.findIndex((c) => Boolean(c.terminal));
       const readyIdx = columns.findIndex((c) => c.id === 'ready');
       const tailStart =
-        terminalIdx !== -1 ? terminalIdx : readyIdx !== -1 ? readyIdx : columns.length;
+        terminalIdx !== -1 ? terminalIdx : readyIdx !== -1 ? readyIdx : columns.length - 1;
       // Источник в хвосте быть не должен (закреплён выше), назначение в хвост — зажать.
       if (source.index >= tailStart) return;
       const maxDest = Math.max(1, tailStart - 1);
@@ -182,7 +184,7 @@ export default function KanbanBoard() {
       );
     };
 
-    const firstColId = columns[0]?.id ?? 'backlog';
+    const firstColId = columns.find((c) => c.isIntake)?.id ?? columns[0]?.id ?? 'backlog';
     const getColumnDisplayTasks = (targetColId: string) => {
       const isDone = isDoneCol(targetColId);
       const isFirst = targetColId === firstColId;
@@ -236,6 +238,16 @@ export default function KanbanBoard() {
       }
 
       setTasks(nextTasks);
+
+      // Backend-authoritative reordering: persist new index to SQLite position
+      try {
+        await reorderTask(draggableId, destColId, destIndex);
+      } catch (err: unknown) {
+        console.warn(`[handleDragEnd] reorderTask rejected for ${draggableId}, reverting state:`, err);
+        setTasks(tasks);
+        const msg = err instanceof Error ? err.message : String(err);
+        alert(t('board.errMoveTask', { msg }));
+      }
       return;
     }
 
@@ -298,12 +310,11 @@ export default function KanbanBoard() {
     // Synchronous state update guarantees smooth DnD transition
     setTasks(nextTasks);
 
-    // Backend-authoritative confirmation: if backend rejects (e.g. sensor or network error),
-    // safely revert local tasks state and notify the user.
+    // Backend-authoritative confirmation: reorder_task moves stage and updates SQLite position
     try {
-      await moveTask(draggableId, destColId, { force: true, sourceColumnId: sourceColId });
+      await reorderTask(draggableId, destColId, destIndex);
     } catch (err: unknown) {
-      console.warn(`[handleDragEnd] moveTask rejected for ${draggableId}, reverting state:`, err);
+      console.warn(`[handleDragEnd] reorderTask rejected for ${draggableId}, reverting state:`, err);
       setTasks(tasks);
       const msg = err instanceof Error ? err.message : String(err);
       alert(t('board.errMoveTask', { msg }));
@@ -327,8 +338,15 @@ export default function KanbanBoard() {
     const prev = columns;
     const sourceCol = prev[sourceIndex];
     if (!sourceCol) return;
-    // Закреплены только backlog/ready/terminal по id/флагу.
-    if (sourceCol.id === 'backlog' || sourceCol.id === 'ready' || Boolean(sourceCol.terminal)) {
+    // Закреплены только intake/terminal по id/флагу/индексу.
+    if (
+      sourceCol.isIntake ||
+      Boolean(sourceCol.terminal) ||
+      sourceCol.id === 'backlog' ||
+      sourceCol.id === 'ready' ||
+      sourceIndex === 0 ||
+      sourceIndex === prev.length - 1
+    ) {
       return;
     }
     if (destinationIndex <= 0) return;
@@ -337,22 +355,20 @@ export default function KanbanBoard() {
     const reordered = Array.from(prev);
     const [moved] = reordered.splice(sourceIndex, 1);
     if (!moved) return;
-    // Назначение в хвост закреплённых — зажать перед хвостом, нормализация ниже всё равно удержит ready последней.
+    // Назначение в хвост закреплённых — зажать перед хвостом.
     const terminalIdx = prev.findIndex((c) => Boolean(c.terminal));
     const readyIdx = prev.findIndex((c) => c.id === 'ready');
     const tailStart =
-      terminalIdx !== -1 ? terminalIdx : readyIdx !== -1 ? readyIdx : prev.length;
+      terminalIdx !== -1 ? terminalIdx : readyIdx !== -1 ? readyIdx : prev.length - 1;
     const maxDest = Math.max(1, tailStart - 1);
     const safeDest = Math.max(1, Math.min(destinationIndex, maxDest));
     reordered.splice(safeDest, 0, moved);
 
-    // backlog строго первая, ready строго последняя, остальные — в drop-порядке.
-    // Совпадает с бэкенд-нормализацией (backlog-first/ready-last по id) до сейва.
-    const prevLast = prev[prev.length - 1];
-    const backlog = reordered.find((c) => c.id === 'backlog') ?? prev[0];
-    const ready = reordered.find((c) => c.id === 'ready') ?? prevLast;
-    const middle = reordered.filter((c) => c.id !== backlog.id && c.id !== ready.id);
-    const next = [backlog, ...middle, ready];
+    // Intake строго первая, terminal строго последняя, остальные — в drop-порядке.
+    const intake = reordered.find((c) => c.isIntake || c.id === 'backlog') ?? prev[0];
+    const terminal = reordered.slice().reverse().find((c) => c.terminal || c.id === 'ready') ?? prev[prev.length - 1];
+    const middle = reordered.filter((c) => c.id !== intake.id && c.id !== terminal.id);
+    const next = [intake, ...middle, terminal];
 
     if (prev.length === next.length && prev.every((c, i) => c.id === next[i]?.id)) return;
 
@@ -494,7 +510,10 @@ export default function KanbanBoard() {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
-    const targetColumnId = columns.some((c) => c.id === 'backlog') ? 'backlog' : (columns[0]?.id ?? 'backlog');
+    const intakeCol = columns.find((c) => c.isIntake);
+    const targetColumnId =
+      intakeCol?.id ||
+      (columns.some((c) => c.id === 'backlog') ? 'backlog' : (columns[0]?.id ?? 'backlog'));
 
     const created = await addTask({
       title: newTitle.trim(),
@@ -617,12 +636,12 @@ export default function KanbanBoard() {
   };
 
   const handleDeleteColumn = useCallback(async (columnId: string) => {
-    if (columnId === 'backlog' || columnId === 'ready') return;
     const { columns: curCols, tasks: curTasks, setColumns: curSetCols, moveTask: curMoveTask } = useBoardStore.getState();
-    if (curCols.length <= 1) return;
     const idx = curCols.findIndex((c) => c.id === columnId);
     if (idx === -1) return;
     const col = curCols[idx];
+    if (col.isIntake || col.terminal || col.id === 'backlog' || col.id === 'ready' || idx === 0 || idx === curCols.length - 1) return;
+    if (curCols.length <= 1) return;
     const neighbor = curCols[idx - 1] ?? curCols[idx + 1] ?? null;
     if (!neighbor) return;
 
@@ -980,28 +999,25 @@ export default function KanbanBoard() {
         >
           <div className="flex items-start space-x-3.5 h-full min-w-max pb-1">
             {columns.map((column, index) => {
-              const firstColId = columns[0]?.id ?? 'backlog';
+              const firstColId = columns.find((c) => c.isIntake)?.id ?? columns[0]?.id ?? 'backlog';
               const isFirstColumn = column.id === firstColId;
               const columnTasks = filteredTasks.filter((t) => {
                 if (t.columnId === column.id) return true;
                 if (isFirstColumn) {
-                  // If a task's columnId doesn't match any column in the active board, fallback to the first column (backlog)
+                  // If a task's columnId doesn't match any column in the active board, fallback to the first column (intake)
                   const colExists = columns.some((c) => c.id === t.columnId);
                   return !colExists;
                 }
                 return false;
               });
-              // Закреплены только backlog/ready/terminal по id/флагу.
-              // index===0 — лишь fallback, когда id бэклога неизвестен (нет колонки backlog).
-              const pinnedById =
+              // Закреплены intake и terminal колонки (колонка 0 и последняя, либо по флагам)
+              const isPinned =
+                column.isIntake ||
+                Boolean(column.terminal) ||
                 column.id === 'backlog' ||
                 column.id === 'ready' ||
-                Boolean(column.terminal);
-              const isBacklogFallback =
-                index === 0 &&
-                !pinnedById &&
-                !columns.some((c) => c.id === 'backlog');
-              const isPinned = pinnedById || isBacklogFallback;
+                index === 0 ||
+                index === columns.length - 1;
 
               return (
                 <KanbanColumn

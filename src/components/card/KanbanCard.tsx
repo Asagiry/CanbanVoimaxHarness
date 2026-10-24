@@ -459,7 +459,10 @@ function KanbanCard({ task, index }: KanbanCardProps) {
     const waitingSub = task.waitingForSubtaskId
       ? useBoardStore.getState().tasks.find((t) => t.id === task.waitingForSubtaskId)
       : null;
-    const isSubActive = waitingSub ? waitingSub.status !== 'done' && waitingSub.columnId !== 'ready' : true;
+    const waitingSubCol = waitingSub ? columns.find((c) => c.id === waitingSub.columnId) : null;
+    const isSubActive = waitingSub
+      ? waitingSub.status !== 'done' && waitingSub.columnId !== 'ready' && !waitingSubCol?.terminal
+      : true;
 
     if (!isDone && status !== 'done' && isSubActive && (task.waitingForSubtaskId || status === 'waiting_subtask')) {
       return (

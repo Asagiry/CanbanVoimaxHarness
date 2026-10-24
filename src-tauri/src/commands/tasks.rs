@@ -85,7 +85,10 @@ pub fn heal_tasks(tasks: &mut [Task], config: &crate::config::BoardsConfig) -> b
     for t in tasks.iter_mut() {
         let is_terminal = stage_id_matches(&t.stage_id, "ready")
             || stage_id_matches(&t.stage_id, "done")
-            || t.status.as_deref() == Some("done");
+            || t.status.as_deref() == Some("done")
+            || config.boards.iter().any(|b| {
+                b.columns.iter().any(|c| stage_id_matches(&c.id, &t.stage_id) && c.terminal == Some(true))
+            });
 
         if is_terminal {
             if t.waiting_for_subtask_id.is_some() {
@@ -352,6 +355,7 @@ pub async fn save_tasks(tasks: Vec<Task>, state: State<'_, AppState>) -> Result<
         Some(&format!("Incoming IDs: [{}]", incoming_ids.join(", "))),
     );
     let disk_tasks = load_tasks_from_disk(&root).await;
+    let boards_cfg = crate::config::load_boards_config(&root).await.ok();
 
     // Defensive reconciliation: prevent stale frontend saves from destroying newly created
     // subtasks or wiping out active parent 'waiting_subtask' invariants (§ 2.2 & § 2.22).
@@ -376,7 +380,12 @@ pub async fn save_tasks(tasks: Vec<Task>, state: State<'_, AppState>) -> Result<
         if let Some(dt) = disk_tasks.iter().find(|d| d.id == t.id) {
             let is_term = stage_id_matches(&t.stage_id, "ready")
                 || stage_id_matches(&t.stage_id, "done")
-                || t.status.as_deref() == Some("done");
+                || t.status.as_deref() == Some("done")
+                || boards_cfg.as_ref().is_some_and(|cfg| {
+                    cfg.boards.iter().any(|b| {
+                        b.columns.iter().any(|c| stage_id_matches(&c.id, &t.stage_id) && c.terminal == Some(true))
+                    })
+                });
 
             if is_term {
                 t.waiting_for_subtask_id = None;
@@ -2087,12 +2096,13 @@ pub async fn internal_move_task_stage(
         }
     };
     let canonical_target_stage_id = target_col.id.clone();
-    let is_backlog = stage_id_matches(&canonical_target_stage_id, "backlog");
+    let is_backlog = target_col.is_intake == Some(true)
+        || stage_id_matches(&canonical_target_stage_id, "backlog");
     let target_has_autorun = !is_backlog && (target_col.persona.is_some() || target_col.auto_run == Some(true));
     let was_running = current_task.status.as_deref() == Some("running");
 
     // Immediate Cancellation (§ 2 specifications):
-    // If a task is moved to backlog (or any stage without autoRun / persona, or user moves a running task):
+    // If a task is moved to backlog / intake (or any stage without autoRun / persona, or user moves a running task):
     // When is_autonomous_advance is true, the calling agent is advancing autonomously and will terminate naturally via § 2.27.
     // Do NOT abort it mid-flight!
     if !is_autonomous_advance && (is_backlog || !target_has_autorun || was_running) {
@@ -2105,10 +2115,15 @@ pub async fn internal_move_task_stage(
 
 
 
-    // Gatekeeper Sensor Verification: do not block initial move from backlog to first actionable stage or new/empty worktree
+    // Gatekeeper Sensor Verification: do not block initial move from backlog/intake to first actionable stage or new/empty worktree
     if let Some(sensor_cmd) = &target_col.gatekeeper_sensor {
         let is_from_backlog = source_stage_id.is_empty()
-            || stage_id_matches(&source_stage_id, "backlog");
+            || stage_id_matches(&source_stage_id, "backlog")
+            || effective_board
+                .as_ref()
+                .and_then(|b| b.columns.iter().find(|c| stage_id_matches(&c.id, &source_stage_id)))
+                .map(|c| c.is_intake == Some(true))
+                .unwrap_or(false);
         let is_first_actionable_stage = {
             let active_board = effective_board
                 .as_ref()
@@ -2121,13 +2136,13 @@ pub async fn internal_move_task_stage(
             if let Some(b) = active_board {
                 b.columns
                     .iter()
-                    .find(|c| !stage_id_matches(&c.id, "backlog"))
+                    .find(|c| c.is_intake != Some(true) && !stage_id_matches(&c.id, "backlog"))
                     .map(|c| stage_id_matches(&canonical_target_stage_id, &c.id))
                     .unwrap_or(false)
             } else if let Ok(pipe) = load_pipeline_config(root).await {
                 pipe.columns
                     .iter()
-                    .find(|c| !stage_id_matches(&c.id, "backlog"))
+                    .find(|c| c.is_intake != Some(true) && !stage_id_matches(&c.id, "backlog"))
                     .map(|c| stage_id_matches(&canonical_target_stage_id, &c.id))
                     .unwrap_or(false)
             } else {
@@ -2667,7 +2682,15 @@ pub async fn move_task_stage(
         ),
         Some(&format!("root='{}'", root.display())),
     );
-    let is_backlog = stage_id_matches(&target_stage_id, "backlog");
+    let is_intake = stage_id_matches(&target_stage_id, "backlog") || {
+        let boards_cfg = crate::config::load_boards_config(&root).await.ok();
+        boards_cfg.as_ref().is_some_and(|cfg| {
+            let active = cfg.boards.iter().find(|b| b.id == cfg.active_board_id);
+            active.is_some_and(|b| {
+                b.columns.iter().find(|c| stage_id_matches(&c.id, &target_stage_id)).is_some_and(|c| c.is_intake == Some(true))
+            })
+        })
+    };
     let is_running_or_active = {
         if let Ok(map) = state.active_agents.lock() {
             let tid_trimmed = task_id.trim();
@@ -2682,7 +2705,7 @@ pub async fn move_task_stage(
         }
     };
 
-    if is_backlog || is_running_or_active {
+    if is_intake || is_running_or_active {
         let _ = internal_abort_agent(&root, &task_id, &state, Some(&app_handle)).await;
     }
 
@@ -4014,6 +4037,7 @@ pub async fn run_agent(
                     routes: None,
                     auto_run: None,
                     terminal: None,
+                    is_intake: None,
                 })
             })
     };

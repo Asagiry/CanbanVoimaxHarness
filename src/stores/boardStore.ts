@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { KanbanTask, PipelineColumn, PipelineConfig, TaskStatus, TaskVerdict, TaskPriority, BoardDef, TaskHookStates } from '../types';
-import { useProjectStore } from './projectStore';
 import { useDrawerStore } from './drawerStore';
 import { logEvent } from '../lib/logger';
 
@@ -61,6 +60,7 @@ interface BoardState {
   boards: BoardDef[];
   activeBoardId: string;
   isLoadingBoards: boolean;
+  isBoardsLoaded: boolean;
   hookStates: Record<string, TaskHookStates>;
 
   // Actions
@@ -85,6 +85,7 @@ interface BoardState {
   loadColumns: () => Promise<void>;
   loadTasks: () => Promise<void>;
   moveTask: (taskId: string, targetColumnId: string, options?: { force?: boolean; sourceColumnId?: string }) => Promise<void>;
+  reorderTask: (taskId: string, targetStageId: string, newIndex: number) => Promise<void>;
   updateTask: (taskId: string, partial: Partial<KanbanTask>) => void;
   updateTaskStatus: (taskId: string, status: TaskStatus) => void;
   upsertBackendTask: (rawTask: any) => void;
@@ -106,26 +107,13 @@ interface BoardState {
   runTaskAgent: (taskId: string, prompt?: string) => Promise<void>;
 }
 
-function getTasksStorageKey(): string {
-  try {
-    const activeProject = useProjectStore.getState().activeProject;
-    const storageKey = `cvh_tasks_${activeProject?.id || 'default'}`;
-    return storageKey;
-  } catch {
-    return 'cvh_tasks_default';
+export function sortTasksByPosition(a: KanbanTask, b: KanbanTask): number {
+  const posA = typeof a.position === 'number' && Number.isFinite(a.position) ? a.position : 0;
+  const posB = typeof b.position === 'number' && Number.isFinite(b.position) ? b.position : 0;
+  if (posA !== posB) {
+    return posA - posB;
   }
-}
-
-
-
-function persistTasksToLocalStorage(tasks: KanbanTask[]): void {
-  try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.setItem(getTasksStorageKey(), JSON.stringify(tasks));
-    }
-  } catch (err) {
-    console.warn('Failed to write tasks backup to localStorage:', err);
-  }
+  return (a.createdAt || 0) - (b.createdAt || 0);
 }
 
 function normalizeKanbanTask(raw: any): KanbanTask | null {
@@ -293,32 +281,6 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
   };
 }
 
-function loadTasksFromLocalStorage(): KanbanTask[] {
-  try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      const raw = window.localStorage.getItem(getTasksStorageKey());
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const normalized = parsed
-            .map((t) => {
-              try {
-                return normalizeKanbanTask(t);
-              } catch {
-                return null;
-              }
-            })
-            .filter((t): t is KanbanTask => t !== null);
-          return normalized;
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('Failed to read tasks backup from localStorage:', err);
-  }
-  return [];
-}
-
 export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
   try {
     const { invoke } = await import('@tauri-apps/api/core');
@@ -410,7 +372,6 @@ async function triggerRunAgent(taskId: string, prompt?: string): Promise<void> {
         : t
     );
     useBoardStore.setState({ tasks: reverted });
-    persistTasksToLocalStorage(reverted);
     useDrawerStore.getState().setActiveAgentTask(taskId, false);
     void syncTasksBackend(reverted);
 
@@ -423,14 +384,14 @@ function mapBackendTaskToKanban(t: any): KanbanTask {
   // Fully generic: resolve everything through the current board columns.
   // (defined outside create(), so columns come from getState()).
   // normalizeKanbanTask fills defaults for legacy tasks created before
-  // cover/attachments fields existed (localStorage / .cvh/tasks.json).
+  // cover/attachments fields existed.
   const normalized = normalizeKanbanTask(t);
   if (normalized) return normalized;
   // Крайний фолбэк: запись без id — собрать безопасную задачу-заглушку,
   // чтобы рендер никогда не падал с TypeError.
   const { columns, boards, activeBoardId } = useBoardStore.getState();
   const fallbackId = `unknown-${Date.now().toString(36)}`;
-  const fallbackCol = columns[0]?.id ?? 'backlog';
+  const fallbackCol = columns.find((c) => c.isIntake)?.id ?? columns[0]?.id ?? 'backlog';
   const fallbackBoardId = activeBoardId || boards[0]?.id || 'development';
   return {
     id: fallbackId,
@@ -475,6 +436,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   boards: [DEFAULT_BOARD],
   activeBoardId: 'development',
   isLoadingBoards: false,
+  isBoardsLoaded: false,
   hookStates: {},
 
   setHookStart: ({ taskId, stageId, hookType, hookName }) => {
@@ -555,7 +517,6 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     set({ columns, boards: updatedBoards });
   },
   setTasks: (tasks) => {
-    persistTasksToLocalStorage(tasks);
     set({ tasks });
   },
   setSelectedTaskId: (id) => set({ selectedTaskId: id }),
@@ -600,7 +561,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           const effectiveBoardId = hasBoard ? t.boardId : activeId;
           const targetBoard = rawBoards.find((b) => b.id === effectiveBoardId) ?? currentBoard;
           const colExists = targetBoard.columns.some((c) => c.id === t.columnId);
-          const effectiveColId = colExists ? t.columnId : (targetBoard.columns[0]?.id ?? 'backlog');
+          const effectiveColId = colExists ? t.columnId : (targetBoard.columns.find((c) => c.isIntake)?.id ?? targetBoard.columns[0]?.id ?? 'backlog');
           if (effectiveBoardId !== t.boardId || effectiveColId !== t.columnId) {
             return { ...t, boardId: effectiveBoardId, columnId: effectiveColId };
           }
@@ -613,8 +574,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           columns: currentBoard.columns,
           tasks: healedTasks,
           isLoadingBoards: false,
+          isBoardsLoaded: true,
         });
-        persistTasksToLocalStorage(healedTasks);
         return;
       }
     } catch (err) {
@@ -622,7 +583,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     }
 
     const current = get();
-    if (current.boards.length > 0) {
+    if (current.boards.length > 0 && current.isBoardsLoaded) {
       const curBoard = current.boards.find((b) => b.id === current.activeBoardId) ?? current.boards[0];
       set({ columns: curBoard.columns, isLoadingBoards: false });
     } else {
@@ -631,6 +592,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         activeBoardId: 'development',
         columns: CANONICAL_BOARD_COLUMNS,
         isLoadingBoards: false,
+        isBoardsLoaded: true,
       });
     }
   },
@@ -672,6 +634,11 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   },
 
   saveBoard: async (board: BoardDef) => {
+    const { isBoardsLoaded } = get();
+    if (!isBoardsLoaded) {
+      console.warn('[boardStore] saveBoard aborted: boards are not loaded yet!');
+      return;
+    }
     set((state) => {
       const nextBoards = state.boards.map((b) => (b.id === board.id ? board : b));
       const isCurrent = state.activeBoardId === board.id;
@@ -680,7 +647,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         if (t.boardId === board.id) {
           const colExists = board.columns.some((c) => c.id === t.columnId);
           if (!colExists) {
-            return { ...t, columnId: board.columns[0]?.id ?? 'backlog' };
+            return { ...t, columnId: board.columns.find((c) => c.isIntake)?.id ?? board.columns[0]?.id ?? 'backlog' };
           }
         }
         return t;
@@ -713,7 +680,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       if (!isTarget) return t;
       const targetCols = nextBoard.columns;
       const colExists = targetCols.some((c) => c.id === t.columnId);
-      const healedCol = colExists ? t.columnId : (targetCols[0]?.id ?? 'backlog');
+      const healedCol = colExists ? t.columnId : (targetCols.find((c) => c.isIntake)?.id ?? targetCols[0]?.id ?? 'backlog');
       return { ...t, boardId: nextActiveId, columnId: healedCol };
     });
 
@@ -723,7 +690,6 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       columns: nextBoard.columns,
       tasks: updatedTasks,
     });
-    persistTasksToLocalStorage(updatedTasks);
 
     try {
       const { invoke } = await import('@tauri-apps/api/core');
@@ -734,7 +700,11 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   },
 
   saveCurrentBoard: async (columns: PipelineColumn[]) => {
-    const { activeBoardId, boards } = get();
+    const { activeBoardId, boards, isBoardsLoaded } = get();
+    if (!isBoardsLoaded) {
+      console.warn('[boardStore] saveCurrentBoard aborted: boards are not loaded yet!');
+      return;
+    }
     const current = boards.find((b) => b.id === activeBoardId) ?? boards[0];
     if (!current) {
       set({ columns });
@@ -782,32 +752,26 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       logEvent('INFO', 'BOARD_STORE', `loadTasks: received ${Array.isArray(rawTasks) ? rawTasks.length : 0} tasks from backend`);
       if (Array.isArray(rawTasks)) {
         const prevTasks = get().tasks;
-        const mapped = rawTasks.map((raw) => {
-          const prev = prevTasks.find((p) => p.id === raw.id);
-          const rawCol = raw.stageId || raw.stage_id || raw.columnId;
-          if (prev && (!rawCol || prev.columnId === rawCol)) {
-            if (prev.stageEnteredAt && !raw.stageEnteredAt && !raw.stage_entered_at) {
-              raw.stageEnteredAt = prev.stageEnteredAt;
+        const mapped = rawTasks
+          .map((raw) => {
+            const prev = prevTasks.find((p) => p.id === raw.id);
+            const rawCol = raw.stageId || raw.stage_id || raw.columnId;
+            if (prev && (!rawCol || prev.columnId === rawCol)) {
+              if (prev.stageEnteredAt && !raw.stageEnteredAt && !raw.stage_entered_at) {
+                raw.stageEnteredAt = prev.stageEnteredAt;
+              }
+              if (prev.stageDurations && !raw.stageDurations) {
+                raw.stageDurations = prev.stageDurations;
+              }
             }
-            if (prev.stageDurations && !raw.stageDurations) {
-              raw.stageDurations = prev.stageDurations;
-            }
-          }
-          return mapBackendTaskToKanban(raw);
-        });
+            return mapBackendTaskToKanban(raw);
+          })
+          .sort(sortTasksByPosition);
         set({ tasks: mapped, isTauriConnected: true, isLoadingTasks: false });
-        persistTasksToLocalStorage(mapped);
         return;
       }
     } catch (err) {
       console.info('Tauri list_tasks not available or returned empty:', err);
-    }
-
-    // Fallback: restore from localStorage backup
-    const backupTasks = loadTasksFromLocalStorage();
-    if (backupTasks.length > 0) {
-      set({ tasks: backupTasks, isLoadingTasks: false });
-      return;
     }
 
     set({ tasks: [], isLoadingTasks: false });
@@ -894,11 +858,12 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           merged.waitingForSubtaskId = undefined;
           merged.status = 'done';
         }
-        const updatedTasks = get().tasks.map((t) =>
-          t.id === resolvedTaskId || t.id.trim().toLowerCase() === resolvedTaskId.trim().toLowerCase() ? merged : t
-        );
+        const updatedTasks = get()
+          .tasks.map((t) =>
+            t.id === resolvedTaskId || t.id.trim().toLowerCase() === resolvedTaskId.trim().toLowerCase() ? merged : t
+          )
+          .sort(sortTasksByPosition);
         set({ tasks: updatedTasks });
-        persistTasksToLocalStorage(updatedTasks);
         logEvent(
           'INFO',
           'BOARD_STORE',
@@ -937,10 +902,51 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     }
   },
 
+  reorderTask: async (taskId, targetStageId, newIndex) => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const backendTask = await invoke<any>('reorder_task', {
+        taskId,
+        targetStageId,
+        newIndex,
+      });
+      if (backendTask && typeof backendTask.id === 'string') {
+        const mapped = mapBackendTaskToKanban(backendTask);
+        const { tasks, columns } = get();
+        const targetColDef = columns.find((c) => c.id === targetStageId);
+        const isTerminalMove = targetStageId === 'ready' || targetColDef?.terminal === true;
+        if (isTerminalMove) {
+          mapped.waitingForSubtaskId = undefined;
+          mapped.status = 'done';
+        }
+        const updated = tasks.map((t) => (t.id === mapped.id ? { ...t, ...mapped } : t)).sort(sortTasksByPosition);
+        set({ tasks: updated });
+
+        if (mapped.boardId && mapped.boardId !== get().activeBoardId) {
+          const boardExists = get().boards.some((b) => b.id === mapped.boardId);
+          if (boardExists) {
+            await get().setActiveBoard(mapped.boardId);
+          }
+        }
+
+        if (targetColDef?.autoRun === true || (targetColDef?.autoRun !== false && Boolean(targetColDef?.persona))) {
+          const prevTask = tasks.find((t) => t.id === taskId);
+          if (prevTask && prevTask.columnId !== targetStageId) {
+            await triggerRunAgent(taskId);
+          }
+        }
+      }
+    } catch (err) {
+      console.error(`[reorderTask] Backend reorder_task failed for task "${taskId}":`, err);
+      const msg = typeof err === 'string' ? err : err instanceof Error ? err.message : JSON.stringify(err);
+      logEvent('ERROR', 'BOARD_STORE', `reorderTask: backend reorder_task failed for "${taskId}"`, msg);
+      throw (err instanceof Error ? err : new Error(msg));
+    }
+  },
+
   updateTask: (taskId, partial) => {
     set((state) => {
       const updatedTasks = state.tasks.map((t) => (t.id === taskId ? { ...t, ...partial } : t));
-      persistTasksToLocalStorage(updatedTasks);
       return { tasks: updatedTasks };
     });
     void (async () => {
@@ -972,7 +978,6 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         const isTimerRunning = status === 'running' ? t.isTimerRunning : false;
         return { ...t, status, isTimerRunning };
       });
-      persistTasksToLocalStorage(updatedTasks);
       // NOTE: NEVER call syncTasksBackend here! Backend owns agent status transitions.
       return { tasks: updatedTasks };
     });
@@ -981,6 +986,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   upsertBackendTask: (rawTask: any) => {
     if (!rawTask || typeof rawTask !== 'object') return;
     const mapped = mapBackendTaskToKanban(rawTask);
+    const { columns } = get();
     set((state) => {
       const exists = state.tasks.some((t) => t.id === mapped.id);
       const updatedTasks = exists
@@ -991,7 +997,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       const finalTasks = mapped.parentId
         ? updatedTasks.map((t) => {
             if (t.id === mapped.parentId) {
-              const isSubDone = mapped.status === 'done' || mapped.columnId === 'ready';
+              const mappedCol = columns.find((c) => c.id === mapped.columnId);
+              const isSubDone = mapped.status === 'done' || mapped.columnId === 'ready' || mappedCol?.terminal === true;
               return {
                 ...t,
                 waitingForSubtaskId: isSubDone ? undefined : mapped.id,
@@ -1003,7 +1010,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
             return t;
           })
         : updatedTasks.map((t) => {
-            if (t.id === mapped.id && (t.columnId === 'ready' || t.status === 'done')) {
+            const tCol = columns.find((c) => c.id === t.columnId);
+            if (t.id === mapped.id && (t.columnId === 'ready' || t.status === 'done' || tCol?.terminal === true)) {
               return {
                 ...t,
                 waitingForSubtaskId: undefined,
@@ -1013,14 +1021,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
             return t;
           });
 
-      persistTasksToLocalStorage(finalTasks);
-      return { tasks: finalTasks };
+      return { tasks: finalTasks.sort(sortTasksByPosition) };
     });
   },
 
   setBackendTasks: (rawTasks: any[]) => {
     if (!Array.isArray(rawTasks)) return;
     const prevTasks = get().tasks;
+    const { columns } = get();
     const mapped = rawTasks.map((raw) => {
       const prev = prevTasks.find((p) => p.id === raw.id);
       const rawCol = raw.stageId || raw.stage_id || raw.columnId;
@@ -1037,7 +1045,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
     // Relational symmetry cleanup: clear stale waitingForSubtaskId
     const cleanedTasks = mapped.map((t) => {
-      const isTerminal = t.columnId === 'ready' || t.status === 'done';
+      const colDef = columns.find((c) => c.id === t.columnId);
+      const isTerminal = t.columnId === 'ready' || t.status === 'done' || colDef?.terminal === true;
       if (isTerminal) {
         if (t.waitingForSubtaskId || t.status === 'waiting_subtask') {
           return { ...t, waitingForSubtaskId: undefined, status: 'done' as TaskStatus };
@@ -1046,7 +1055,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       }
       if (t.waitingForSubtaskId) {
         const sub = mapped.find((s) => s.id === t.waitingForSubtaskId);
-        if (!sub || sub.status === 'done' || sub.columnId === 'ready') {
+        const subColDef = sub ? columns.find((c) => c.id === sub.columnId) : undefined;
+        if (!sub || sub.status === 'done' || sub.columnId === 'ready' || subColDef?.terminal === true) {
           return {
             ...t,
             waitingForSubtaskId: undefined,
@@ -1057,14 +1067,15 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       return t;
     });
 
-    set({ tasks: cleanedTasks });
-    persistTasksToLocalStorage(cleanedTasks);
+    set({ tasks: cleanedTasks.sort(sortTasksByPosition) });
   },
 
   addTask: async (input) => {
     const state = get();
+    const intakeCol = state.columns.find((c) => c.isIntake);
     const targetColumnId =
       input.stageId ||
+      intakeCol?.id ||
       (state.columns.some((c) => c.id === 'backlog') ? 'backlog' : (state.columns[0]?.id ?? 'backlog'));
     const boardId = input.boardId || state.activeBoardId || 'development';
     const title = input.title.trim();
@@ -1094,10 +1105,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       if (backendTask && typeof backendTask.id === 'string') {
         const confirmed = mapBackendTaskToKanban(backendTask);
         const currentTasks = get().tasks;
-        const nextTasks = [confirmed, ...currentTasks.filter((t) => t.id !== confirmed.id)];
+        const nextTasks = [confirmed, ...currentTasks.filter((t) => t.id !== confirmed.id)].sort(sortTasksByPosition);
 
         set({ tasks: nextTasks });
-        persistTasksToLocalStorage(nextTasks);
 
         logEvent(
           'INFO',
@@ -1166,9 +1176,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           }
           return t;
         });
-        const finalTasks = [...updatedTasks.filter((t) => t.id !== mapped.id), mapped];
+        const finalTasks = [...updatedTasks.filter((t) => t.id !== mapped.id), mapped].sort(sortTasksByPosition);
         set({ tasks: finalTasks });
-        persistTasksToLocalStorage(finalTasks);
 
         logEvent(
           'INFO',
@@ -1254,7 +1263,6 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       hookStates: nextHookStates,
       selectedTaskId: toDelete.has(prevSelectedTaskId ?? '') ? null : prevSelectedTaskId,
     });
-    persistTasksToLocalStorage(updatedTasks);
 
     // Close drawer if active task is deleted
     const drawerActiveTaskId = useDrawerStore.getState().activeTaskId;
@@ -1302,7 +1310,6 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           : t
       );
       set({ tasks: updatedTasks });
-      persistTasksToLocalStorage(updatedTasks);
       await syncTasksBackend(updatedTasks);
       await triggerRunAgent(resolvedTaskId, prompt);
     } else {
@@ -1323,7 +1330,6 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       const updatedTasks = state.tasks.map((t) =>
         t.id === taskId ? { ...t, verdict, verdictNote: note ?? t.verdictNote } : t
       );
-      persistTasksToLocalStorage(updatedTasks);
       syncTasksBackend(updatedTasks);
       return { tasks: updatedTasks };
     });
