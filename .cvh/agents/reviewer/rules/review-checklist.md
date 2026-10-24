@@ -37,11 +37,11 @@ In accordance with the Harness2.0 selection protocol, review candidate code arti
 
 ## 3. Six Mandatory Verification Gates
 
-### Gate 1: Rule & Documentation Synchronization (CRITICAL)
-- Inspect `git diff` for modifications to backend commands, database schemas, ReAct loop, hooks, Zustand stores, or UI tokens.
-- Verify that documentation and agent rules are updated in the same changeset.
-- **AUTOMATIC REJECTION**: If architectural code changed without corresponding rule updates, reject immediately:
-  `reject_task(reason="Gate 1 Failure: Architectural changes without simultaneous updates to rules and docs.")`
+### Gate 1: Rule Hygiene & Anti-Changelog Gate
+- Rules in `.cvh/` are timeless architectural contracts, NEVER task changelogs or bugfix diaries.
+- Reject if developer pollutes rule files with PR changelogs or transient bugfix notes.
+- Update rules ONLY if universal system architecture or public contracts fundamentally changed.
+- If ordinary code changes did not alter universal architecture, rule files MUST remain untouched.
 
 ### Gate 2: Ground Truth Compiler & Linter Sensors
 - Execute real runtime sensors inside the worktree via `execute_command`:

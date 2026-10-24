@@ -21,11 +21,12 @@ You operate strictly within isolated git worktrees (`worktrees/<task-slug>`) on 
 - ALL source code edits and compiler checks MUST execute strictly within the active worktree directory (`CVH_WORKTREE_PATH`).
 - NEVER write or modify code outside the active worktree.
 
-### 1.2 Architectural Rule Synchronization Invariant (CRITICAL)
-- Whenever you modify backend commands, database schemas, agent loops, hooks, Zustand stores, IPC events, or UI layouts:
-  **YOU MUST SIMULTANEOUSLY UPDATE THE CORRESPONDING RULES IN `.cvh/rules/` AND `/docs/`!**
-- The Reviewer will REJECT your submission immediately if architectural code changes without updated rules.
-- Always check `load_rule("rules-sync")` for synchronization requirements.
+### 1.2 Rule Hygiene & Anti-Changelog Invariant
+- Rules in `.cvh/` are timeless architectural contracts, NEVER task changelogs or bugfix diaries.
+- Do NOT update rule files for ordinary feature implementations, routine refactorings, or bugfixes. Code is self-documenting through strict types and tests.
+- Update rules ONLY when universal system architecture, runtime invariants, or public contracts fundamentally change.
+- Never pollute rule files with commit messages, PR summaries, or transient fix details.
+- Always check `load_rule("rules-sync")` for hygiene requirements.
 
 ### 1.3 Ground Truth Sensor Mandate
 - NEVER hand off work without running real compiler sensors:
@@ -44,7 +45,7 @@ Use `load_rule("<rule>")` to dynamically fetch modular domain standards on deman
 - `load_rule("antislop")`: UI anti-slop (clean aesthetics, no gradients) and concise technical prose.
 - `load_rule("ponytail")`: Ponytail minimalism, minimal 1-3 line surgical diffs, zero unwarranted dependencies.
 - `load_rule("review-checklist")`: The strict 6-gate checklist the Reviewer will enforce.
-- `load_rule("rules-sync")`: Rules and docs synchronization protocol.
+- `load_rule("rules-sync")`: Architectural rule hygiene and timeless contracts protocol.
 - `load_rule("boards")`: Kanban control plane invariants and self-healing boards.
 - `load_rule("agents")`: Agent directory structure and relay handoffs.
 - `load_rule("tools")`: Authoritative standard tool catalog.
@@ -57,9 +58,9 @@ Use `load_rule("<rule>")` to dynamically fetch modular domain standards on deman
 2. **Dynamic Priming**: Load relevant modular rules via `load_rule`.
 3. **Plan**: Formulate tactical step-by-step progress checklist using `todo_write`.
 4. **Implement**: Perform surgical edits inside `CVH_WORKTREE_PATH` adhering to Ponytail minimalism.
-5. **Rule Synchronization**: Update corresponding `.cvh/rules/*.md` and `/docs/*.md` if architecture or contracts changed.
+5. **Rule Hygiene**: Update corresponding `.cvh/agents/*/rules/*.md` ONLY if universal system architecture or public contracts fundamentally changed. Keep rule files clean of changelog slop.
 6. **Sensor Verification**: Run `cargo check` and `npx tsc --noEmit`. Verify 0 errors.
 7. **Handover**: Advance to `review` via `advance_task(summary)`. The summary MUST include:
    - Summary of modifications.
    - Sensor results proving exit code 0.
-   - List of updated rules in `.cvh/rules/` and `/docs/`.
+   - Architectural contract notes (if universal architecture changed).
