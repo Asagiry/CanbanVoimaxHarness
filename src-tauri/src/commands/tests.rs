@@ -21,6 +21,7 @@ use std::path::PathBuf;
             routes: None,
             auto_run: None,
             terminal: None,
+            is_intake: None,
         }
     }
 
@@ -29,7 +30,7 @@ use std::path::PathBuf;
     }
 
     #[test]
-    fn test_normalize_backlog_first_ready_last_stable() {
+    fn test_normalize_preserves_custom_column_order() {
         let cols = vec![
             test_col("dev"),
             test_col("ready"),
@@ -38,11 +39,13 @@ use std::path::PathBuf;
             test_col("qa"),
         ];
         let out = normalize_pipeline_columns(cols).expect("normalize failed");
-        assert_eq!(ids(&out), vec!["backlog", "dev", "review", "qa", "ready"]);
+        assert_eq!(ids(&out), vec!["dev", "ready", "review", "backlog", "qa"]);
+        assert_eq!(out[0].is_intake, Some(true));
+        assert_eq!(out.last().unwrap().terminal, Some(true));
     }
 
     #[test]
-    fn test_normalize_already_ordered_keeps_middle_order() {
+    fn test_normalize_already_ordered_keeps_order_and_sets_intake_terminal() {
         let cols = vec![
             test_col("backlog"),
             test_col("a"),
@@ -51,13 +54,24 @@ use std::path::PathBuf;
         ];
         let out = normalize_pipeline_columns(cols).expect("normalize failed");
         assert_eq!(ids(&out), vec!["backlog", "a", "b", "ready"]);
+        assert_eq!(out[0].is_intake, Some(true));
+        assert_eq!(out.last().unwrap().terminal, Some(true));
     }
 
     #[test]
-    fn test_normalize_without_specials_reinjects_backlog_and_ready() {
+    fn test_normalize_without_specials_preserves_custom_columns_without_forced_injection() {
         let cols = vec![test_col("a"), test_col("b"), test_col("c")];
         let out = normalize_pipeline_columns(cols).expect("normalize failed");
-        assert_eq!(ids(&out), vec!["backlog", "a", "b", "c", "ready"]);
+        assert_eq!(ids(&out), vec!["a", "b", "c"]);
+        assert_eq!(out[0].is_intake, Some(true));
+        assert_eq!(out.last().unwrap().terminal, Some(true));
+    }
+
+    #[test]
+    fn test_normalize_empty_returns_canonical() {
+        let out = normalize_pipeline_columns(vec![]).expect("normalize failed");
+        assert_eq!(ids(&out), vec!["backlog", "dev", "ready"]);
+        assert_eq!(out[0].is_intake, Some(true));
         assert_eq!(out.last().unwrap().terminal, Some(true));
     }
 
@@ -716,6 +730,7 @@ use std::path::PathBuf;
                             routes: None,
                             auto_run: None,
                             terminal: None,
+                            is_intake: Some(true),
                         },
                         PipelineColumn {
                             id: "in_progress".to_string(),
@@ -734,6 +749,7 @@ use std::path::PathBuf;
                             routes: None,
                             auto_run: None,
                             terminal: None,
+                            is_intake: None,
                         },
                         PipelineColumn {
                             id: "ready".to_string(),
@@ -752,6 +768,7 @@ use std::path::PathBuf;
                             routes: None,
                             auto_run: None,
                             terminal: Some(true),
+                            is_intake: None,
                         },
                     ],
                 },
@@ -1074,6 +1091,7 @@ use std::path::PathBuf;
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: Some(true),
             },
             crate::config::PipelineColumn {
                 id: "dev".to_string(),
@@ -1092,6 +1110,7 @@ use std::path::PathBuf;
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: None,
             },
             crate::config::PipelineColumn {
                 id: "ready".to_string(),
@@ -1110,6 +1129,7 @@ use std::path::PathBuf;
                 routes: None,
                 auto_run: None,
                 terminal: Some(true),
+                is_intake: None,
             },
         ];
 
@@ -1131,6 +1151,7 @@ use std::path::PathBuf;
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: Some(true),
             },
             crate::config::PipelineColumn {
                 id: "in_progress".to_string(),
@@ -1149,6 +1170,7 @@ use std::path::PathBuf;
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: None,
             },
             crate::config::PipelineColumn {
                 id: "done".to_string(),
@@ -1167,6 +1189,7 @@ use std::path::PathBuf;
                 routes: None,
                 auto_run: None,
                 terminal: Some(true),
+                is_intake: None,
             },
         ];
 
@@ -1297,6 +1320,7 @@ use std::path::PathBuf;
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: Some(true),
             },
             crate::config::PipelineColumn {
                 id: "dev".to_string(),
@@ -1314,7 +1338,8 @@ use std::path::PathBuf;
                 hooks: HashMap::new(),
                 routes: None,
                 auto_run: None,
-                terminal: None,
+                terminal: Some(true),
+                is_intake: None,
             },
         ];
 
@@ -1719,6 +1744,7 @@ Write code.
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: Some(true),
             },
             crate::config::PipelineColumn {
                 id: "dev".to_string(),
@@ -1737,6 +1763,7 @@ Write code.
                 routes: None,
                 auto_run: Some(true),
                 terminal: None,
+                is_intake: None,
             },
             crate::config::PipelineColumn {
                 id: "review".to_string(),
@@ -1755,6 +1782,7 @@ Write code.
                 routes: None,
                 auto_run: Some(true),
                 terminal: None,
+                is_intake: None,
             },
             crate::config::PipelineColumn {
                 id: "ready".to_string(),
@@ -1773,6 +1801,7 @@ Write code.
                 routes: None,
                 auto_run: None,
                 terminal: Some(true),
+                is_intake: None,
             },
         ];
 
@@ -1925,6 +1954,7 @@ Write code.
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: Some(true),
             },
             crate::config::PipelineColumn {
                 id: "dev".to_string(),
@@ -1943,6 +1973,7 @@ Write code.
                 routes: None,
                 auto_run: Some(true),
                 terminal: None,
+                is_intake: None,
             },
             crate::config::PipelineColumn {
                 id: "review".to_string(),
@@ -1961,6 +1992,7 @@ Write code.
                 routes: None,
                 auto_run: Some(true),
                 terminal: None,
+                is_intake: None,
             },
             crate::config::PipelineColumn {
                 id: "retro".to_string(),
@@ -1979,6 +2011,7 @@ Write code.
                 routes: None,
                 auto_run: Some(true),
                 terminal: None,
+                is_intake: None,
             },
             crate::config::PipelineColumn {
                 id: "ready".to_string(),
@@ -1997,6 +2030,7 @@ Write code.
                 routes: None,
                 auto_run: None,
                 terminal: Some(true),
+                is_intake: None,
             },
         ];
 
@@ -2131,6 +2165,7 @@ Write code.
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: Some(true),
             },
             crate::config::PipelineColumn {
                 id: "dev".to_string(),
@@ -2149,6 +2184,7 @@ Write code.
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: None,
             },
             crate::config::PipelineColumn {
                 id: "ready".to_string(),
@@ -2167,6 +2203,7 @@ Write code.
                 routes: None,
                 auto_run: None,
                 terminal: Some(true),
+                is_intake: None,
             },
         ];
 
@@ -2877,6 +2914,7 @@ Write code.
                         routes: None,
                         auto_run: None,
                         terminal: None,
+                        is_intake: Some(true),
                     },
                     crate::config::PipelineColumn {
                         id: "dev".to_string(),
@@ -2895,6 +2933,7 @@ Write code.
                         routes: None,
                         auto_run: Some(true),
                         terminal: None,
+                        is_intake: None,
                     },
                     crate::config::PipelineColumn {
                         id: "ready".to_string(),
@@ -2913,6 +2952,7 @@ Write code.
                         routes: None,
                         auto_run: None,
                         terminal: Some(true),
+                        is_intake: None,
                     },
                 ],
             }],

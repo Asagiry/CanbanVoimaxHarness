@@ -2012,15 +2012,7 @@ pub fn is_exploratory_role(role: &str) -> bool {
 
 /// Canonical tool name normalization for aliases and SWE-bench compatibility.
 pub fn canonical_tool_name(tool_name: &str) -> &str {
-    match tool_name {
-        "bash" => "execute_command",
-        "str_replace" => "edit_file",
-        "ask_user" => "question",
-        "create_tasks" => "create_task",
-        "list_subagents" => "subagent_list",
-        "move_task" | "move_task_stage" | "advance_stage" | "next_stage" => "advance_task",
-        other => other,
-    }
+    crate::config::normalize_tool_name(tool_name)
 }
 
 pub async fn get_stage_personas(repo_root: &Path) -> HashMap<String, String> {
@@ -3144,13 +3136,14 @@ pub async fn execute_tool(
 
             let prev_col = &columns[curr_idx - 1];
 
-            // ЖЕЛЕЗНЫЙ ИНВАРИАНТ: Если текущая колонка — первая рабочая колонка после backlog (колонка A),
-            // шаг назад в backlog СТРОГО ЗАПРЕЩЁН! Возвращай ошибку:
+            // ЖЕЛЕЗНЫЙ ИНВАРИАНТ: Если предыдущая колонка — колонка приёма/бэклог (индекс 0 или is_intake),
+            // шаг назад в бэклог СТРОГО ЗАПРЕЩЁН! Возвращай ошибку:
             // "Запрещено возвращать задачу из первой рабочей стадии назад в бэклог. Задача должна быть доработана или закрыта."
-            let is_prev_backlog = prev_col.id == "backlog"
+            let is_prev_backlog = prev_col.is_intake == Some(true)
+                || curr_idx == 1
+                || prev_col.id == "backlog"
                 || prev_col.title.to_lowercase().contains("backlog")
-                || prev_col.title.to_lowercase().contains("бэклог")
-                || (curr_idx == 1 && columns[0].id == "backlog");
+                || prev_col.title.to_lowercase().contains("бэклог");
 
             if is_prev_backlog {
                 bail!("Запрещено возвращать задачу из первой рабочей стадии назад в бэклог. Задача должна быть доработана или закрыта.");

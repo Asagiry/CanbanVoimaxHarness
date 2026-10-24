@@ -62,8 +62,10 @@ export interface PipelineColumn {
   onEnterScript?: string | null;
   // Column = agent: autoRun triggers run_agent on entry (default: !!persona),
   // terminal marks a sink column (task becomes done, no further promotion).
+  // isIntake marks column 0 / intake stage.
   autoRun?: boolean;
   terminal?: boolean;
+  isIntake?: boolean;
   contextWindow?: number;
   modelOverride: string | null;
   temperature?: number;

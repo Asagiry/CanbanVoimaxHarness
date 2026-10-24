@@ -105,7 +105,7 @@ pub struct ProjectConfig {
     pub providers: HashMap<String, ProviderConfig>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct PipelineColumn {
     pub id: String,
     pub title: String,
@@ -137,6 +137,8 @@ pub struct PipelineColumn {
     pub auto_run: Option<bool>,
     #[serde(default)]
     pub terminal: Option<bool>,
+    #[serde(rename = "isIntake", default)]
+    pub is_intake: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -495,6 +497,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: Some(true),
             },
             PipelineColumn {
                 id: "dev".to_string(),
@@ -521,6 +524,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: None,
             },
             PipelineColumn {
                 id: "ready".to_string(),
@@ -543,6 +547,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 routes: None,
                 auto_run: None,
                 terminal: Some(true),
+                is_intake: None,
             },
         ],
         boards: None,
@@ -590,6 +595,7 @@ pub fn get_canonical_board_columns() -> Vec<PipelineColumn> {
             routes: None,
             auto_run: None,
             terminal: None,
+            is_intake: Some(true),
         },
         PipelineColumn {
             id: "dev".to_string(),
@@ -616,6 +622,7 @@ pub fn get_canonical_board_columns() -> Vec<PipelineColumn> {
             routes: None,
             auto_run: None,
             terminal: None,
+            is_intake: None,
         },
         PipelineColumn {
             id: "ready".to_string(),
@@ -638,6 +645,7 @@ pub fn get_canonical_board_columns() -> Vec<PipelineColumn> {
             routes: None,
             auto_run: None,
             terminal: Some(true),
+            is_intake: None,
         },
     ]
 }
@@ -666,6 +674,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: Some(true),
             },
             PipelineColumn {
                 id: "modeling".to_string(),
@@ -691,6 +700,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: None,
             },
             PipelineColumn {
                 id: "texturing".to_string(),
@@ -716,6 +726,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: None,
             },
             PipelineColumn {
                 id: "ready".to_string(),
@@ -738,6 +749,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 routes: None,
                 auto_run: None,
                 terminal: Some(true),
+                is_intake: None,
             },
         ],
 _ => get_canonical_board_columns(),
@@ -786,11 +798,12 @@ pub async fn load_boards_config(root_path: impl AsRef<Path>) -> Result<BoardsCon
     Ok(default_boards_config())
 }
 
-/// Canonical normalization of Kanban columns:
-/// - Enforces that `backlog` (id: "backlog") MUST always exist at index 0.
-/// - Enforces that `ready` (id: "ready", terminal: true) MUST always exist at the final index.
-/// - Preserves relative order of middle columns.
-/// - Duplicate IDs return an error.
+/// Normalizes pipeline columns according to dynamic column invariants:
+/// - Validates unique column IDs (duplicate IDs return an Err).
+/// - If empty, falls back to canonical board columns.
+/// - Preserves user column ordering verbatim without injecting synthetic backlog/ready.
+/// - Sets column 0 `is_intake = Some(true)` if unset.
+/// - Sets final column `terminal = Some(true)`.
 pub fn normalize_pipeline_columns(
     columns: Vec<PipelineColumn>,
 ) -> Result<Vec<PipelineColumn>, String> {
@@ -803,66 +816,18 @@ pub fn normalize_pipeline_columns(
             ));
         }
     }
-    let mut backlog: Option<PipelineColumn> = None;
-    let mut ready: Option<PipelineColumn> = None;
-    let mut middle = Vec::with_capacity(columns.len());
-    for col in columns {
-        if col.id == "backlog" && backlog.is_none() {
-            backlog = Some(col);
-        } else if col.id == "ready" && ready.is_none() {
-            ready = Some(col);
-        } else {
-            middle.push(col);
-        }
+
+    if columns.is_empty() {
+        return Ok(get_canonical_board_columns());
     }
 
-    // Invariant: 'backlog' (id: "backlog") MUST always exist at index 0.
-    let backlog = backlog.unwrap_or_else(|| PipelineColumn {
-        id: "backlog".to_string(),
-        title: "Backlog".to_string(),
-        color: None,
-        icon: None,
-        persona: None,
-        on_enter_script: None,
-        context_window: None,
-        model_override: None,
-        reasoning_effort: None,
-        temperature: None,
-        gatekeeper_sensor: None,
-        allowed_tools: None,
-        hooks: HashMap::new(),
-        routes: None,
-        auto_run: None,
-        terminal: None,
-    });
-
-    // Invariant: 'ready' (id: "ready", terminal: true) MUST always exist at the final index.
-    let mut ready = ready.unwrap_or_else(|| PipelineColumn {
-        id: "ready".to_string(),
-        title: "Ready".to_string(),
-        color: None,
-        icon: None,
-        persona: None,
-        on_enter_script: None,
-        context_window: None,
-        model_override: None,
-        reasoning_effort: None,
-        temperature: None,
-        gatekeeper_sensor: None,
-        allowed_tools: None,
-        hooks: HashMap::new(),
-        routes: None,
-        auto_run: None,
-        terminal: Some(true),
-    });
-    if ready.terminal != Some(true) {
-        ready.terminal = Some(true);
+    let mut out = columns;
+    if out[0].is_intake.is_none() {
+        out[0].is_intake = Some(true);
     }
+    let last_idx = out.len() - 1;
+    out[last_idx].terminal = Some(true);
 
-    let mut out = Vec::with_capacity(1 + middle.len() + 1);
-    out.push(backlog);
-    out.extend(middle);
-    out.push(ready);
     Ok(out)
 }
 
@@ -1149,6 +1114,7 @@ pub fn minimal_pipeline_config() -> PipelineConfig {
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: Some(true),
             },
             PipelineColumn {
                 id: "dev".to_string(),
@@ -1175,6 +1141,7 @@ pub fn minimal_pipeline_config() -> PipelineConfig {
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: None,
             },
             PipelineColumn {
                 id: "ready".to_string(),
@@ -1197,6 +1164,7 @@ pub fn minimal_pipeline_config() -> PipelineConfig {
                 routes: None,
                 auto_run: None,
                 terminal: Some(true),
+                is_intake: None,
             },
         ],
         boards: None,

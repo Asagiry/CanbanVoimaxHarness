@@ -828,6 +828,7 @@ use super::*;
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: Some(true),
             },
             crate::config::PipelineColumn {
                 id: "dev".to_string(),
@@ -846,6 +847,7 @@ use super::*;
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: None,
             },
             crate::config::PipelineColumn {
                 id: "review".to_string(),
@@ -864,6 +866,7 @@ use super::*;
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: None,
             },
             crate::config::PipelineColumn {
                 id: "ready".to_string(),
@@ -882,6 +885,7 @@ use super::*;
                 routes: None,
                 auto_run: None,
                 terminal: Some(true),
+                is_intake: None,
             },
         ];
 
@@ -1004,6 +1008,7 @@ use super::*;
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: Some(true),
             },
             PipelineColumn {
                 id: "dev".to_string(),
@@ -1022,6 +1027,7 @@ use super::*;
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: None,
             },
             PipelineColumn {
                 id: "review".to_string(),
@@ -1040,6 +1046,7 @@ use super::*;
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: None,
             },
             PipelineColumn {
                 id: "ready".to_string(),
@@ -1058,6 +1065,7 @@ use super::*;
                 routes: None,
                 auto_run: None,
                 terminal: Some(true),
+                is_intake: None,
             },
         ];
 

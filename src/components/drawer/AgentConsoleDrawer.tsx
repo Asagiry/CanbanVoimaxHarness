@@ -37,7 +37,7 @@ export default function AgentConsoleDrawer() {
 
   const rawTask = tasks.find((t) => t.id === activeTaskId);
   const fallbackBoardId = useBoardStore.getState().activeBoardId || 'development';
-  const fallbackColId = columns[0]?.id ?? 'backlog';
+  const fallbackColId = columns.find((c) => c.isIntake)?.id ?? columns[0]?.id ?? 'backlog';
   // Resilient fallback: ensure task is never undefined if drawer is active
   const task: KanbanTask = rawTask ?? {
     id: activeTaskId || 'task',

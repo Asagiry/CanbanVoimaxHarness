@@ -112,7 +112,7 @@ export default function DrawerHeader({
   }, [activeSubagentId, task?.id, storeSubagents, toolExecutions]);
 
   const workingColumns = columns.filter(
-    (c) => c.id !== 'backlog' && c.id !== 'ready' && !c.terminal
+    (c) => !c.isIntake && c.id !== 'backlog' && c.id !== 'ready' && !c.terminal
   );
   const currentStageIdx = columns.findIndex((c) => c?.id === task?.columnId);
 
