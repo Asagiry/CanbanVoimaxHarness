@@ -4262,6 +4262,7 @@ pub async fn run_agent(
                     cache_hit_rate,
                     duration_ms,
                     tps,
+                    ttft_ms,
                     system_tokens,
                     tool_tokens,
                 } => {
@@ -4276,6 +4277,7 @@ pub async fn run_agent(
                             "cacheHitRate": cache_hit_rate,
                             "durationMs": duration_ms,
                             "tps": tps,
+                            "ttftMs": ttft_ms,
                             "systemTokens": system_tokens,
                             "toolTokens": tool_tokens,
                         }),
@@ -4289,7 +4291,7 @@ pub async fn run_agent(
                         output_tokens: output_tokens as i64,
                         cached_tokens: cache_read_tokens as i64,
                         tps: tps as f64,
-                        ttft_ms: 0.0,
+                        ttft_ms,
                         duration_ms,
                         created_at: chrono::Utc::now().timestamp_millis(),
                     };

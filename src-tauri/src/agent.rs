@@ -129,6 +129,7 @@ pub enum AgentEvent {
         cache_hit_rate: f32,
         duration_ms: f64,
         tps: f32,
+        ttft_ms: f64,
         system_tokens: u64,
         tool_tokens: u64,
     },
@@ -1001,6 +1002,55 @@ pub async fn get_all_tools_for_role(repo_root: &Path, role: Option<&str>) -> Vec
     tools
 }
 
+/// Prunes the .cvh/spill directory if file count exceeds 50 or total size exceeds 20MB,
+/// removing the oldest files first based on modification time.
+pub async fn prune_spill_dir(spill_dir: &Path) -> Result<()> {
+    let mut entries = match tokio::fs::read_dir(spill_dir).await {
+        Ok(rd) => rd,
+        Err(_) => return Ok(()),
+    };
+
+    struct SpillFileInfo {
+        path: PathBuf,
+        mtime: std::time::SystemTime,
+        size: u64,
+    }
+
+    let mut files: Vec<SpillFileInfo> = Vec::new();
+    let mut total_bytes = 0u64;
+
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let path = entry.path();
+        if path.is_file() {
+            if let Ok(meta) = entry.metadata().await {
+                let mtime = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+                let size = meta.len();
+                total_bytes += size;
+                files.push(SpillFileInfo { path, mtime, size });
+            }
+        }
+    }
+
+    const MAX_FILES: usize = 50;
+    const MAX_BYTES: u64 = 20 * 1024 * 1024; // 20 MB
+
+    if files.len() > MAX_FILES || total_bytes > MAX_BYTES {
+        files.sort_by_key(|f| f.mtime);
+        let mut file_count = files.len();
+        for file in files {
+            if file_count <= MAX_FILES && total_bytes <= MAX_BYTES {
+                break;
+            }
+            if tokio::fs::remove_file(&file.path).await.is_ok() {
+                total_bytes = total_bytes.saturating_sub(file.size);
+                file_count = file_count.saturating_sub(1);
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Tool Output Spilling: if stdout/output exceeds 100 lines or 8KB, save full log to `.cvh/spill/<timestamp>-<tool>.log`,
 /// return head (first 20 lines) and tail (last 20 lines) + reference to spilled file.
 pub async fn maybe_spill_output(
@@ -1038,6 +1088,7 @@ pub async fn maybe_spill_output(
         let spill_file = spill_dir.join(&filename);
 
         tokio::fs::write(&spill_file, &output).await?;
+        let _ = prune_spill_dir(&spill_dir).await;
 
         let all_lines: Vec<&str> = output.lines().collect();
         let head = all_lines[..20.min(all_lines.len())].join("\n");
@@ -1820,10 +1871,19 @@ pub async fn find_subagent_session(
 }
 
 /// Appends raw model request and response telemetry to `.cvh/llm_debug.log`
+/// Rotates the log to `.cvh/llm_debug.log.1` if size exceeds 10MB.
 pub async fn append_llm_debug_log(repo_root: &Path, text: &str) {
     let cvh_dir = repo_root.join(".cvh");
     let _ = tokio::fs::create_dir_all(&cvh_dir).await;
     let log_path = cvh_dir.join("llm_debug.log");
+    const MAX_BYTES: u64 = 10 * 1024 * 1024; // 10MB
+    if let Ok(meta) = tokio::fs::metadata(&log_path).await {
+        if meta.len() >= MAX_BYTES {
+            let rot_path = cvh_dir.join("llm_debug.log.1");
+            let _ = tokio::fs::remove_file(&rot_path).await;
+            let _ = tokio::fs::rename(&log_path, &rot_path).await;
+        }
+    }
     if let Ok(mut file) = tokio::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -4184,7 +4244,8 @@ pub fn run_inprocess_subagent(
         .clone()
         .or_else(|| subagent_id.rfind(".sub-").map(|pos| subagent_id[(pos + 5)..].to_string()));
 
-    // 1. Tool filtering (If tools is omitted, defaults to ALL tools available to the parent agent!)
+    // 1. Tool filtering (Check against subagent role via tool policy and subagent setting)
+    let subagent_setting = load_agent_setting(&ctx.repo_root, &role).await;
     let all_tools = get_all_tools_for_role(&ctx.repo_root, Some(&role)).await;
     let base_tools: Vec<String> = match requested_tools {
         Some(t) if !t.is_empty() => t,
@@ -4207,8 +4268,13 @@ pub fn run_inprocess_subagent(
                 && t != "create_task"
                 && t != "create_tasks"
                 && t != "complete_task"
-                && is_tool_allowed(&ctx.tool_policy, ctx.stage_id.as_deref(), t)
-                && agent_allows_tool(ctx.agent_allowed_tools.as_deref(), t)
+                && is_tool_active_for_agent(
+                    t,
+                    &ctx.tool_policy,
+                    &role,
+                    None,
+                    subagent_setting.allowed_tools.as_deref(),
+                )
         })
         .collect();
     effective_sub_tools.sort();
@@ -4258,7 +4324,10 @@ pub fn run_inprocess_subagent(
         .collect();
     active_sub_tool_defs.sort_by(|a, b| a.function.name.cmp(&b.function.name));
 
-    // 5. System persona & initial messages
+    // 5. System persona & initial messages:
+    // Prompt Cache Prefix Stabilization (§ 2.10): Keep SystemMessage completely static
+    // (role persona + invariants + static tool list) with zero dynamic worktree dir, task title,
+    // or timestamp. Dynamic metadata is placed in initial_user_prompt.
     let persona_content = {
         let persona_path = crate::config::agent_persona_path(&ctx.repo_root, &role);
         if persona_path.is_file() {
@@ -4272,29 +4341,37 @@ pub fn run_inprocess_subagent(
         "# Role Persona: {}
 {}
 
-        # Scoped Subagent Mandate
-        You are an in-process subagent executing an atomic subtask.
-        Working directory: {}
-        Task Title: {}
-        Allowed Tools: {:?}
-        Invariants:
-        - Do not attempt to move kanban stages or spawn nested subagents.
-        - Single-Action Collection: When invoking 'collect_subagent', you MUST invoke it as the ONLY tool call in that turn. Do NOT batch file reads or other tools alongside collect_subagent; wait to consume and analyze the received reports before planning next steps.
-        - Execute the task thoroughly and verify results.
-        - When done, output your comprehensive final report.",
+# Scoped Subagent Mandate
+You are an in-process subagent executing an atomic subtask.
+Allowed Tools: {:?}
+Invariants:
+- Do not attempt to move kanban stages or spawn nested subagents.
+- Single-Action Collection: When invoking 'collect_subagent', you MUST invoke it as the ONLY tool call in that turn. Do NOT batch file reads or other tools alongside collect_subagent; wait to consume and analyze the received reports before planning next steps.
+- Execute the task thoroughly and verify results.
+- When done, output your comprehensive final report.",
         role,
         persona_content.as_deref().unwrap_or("You are a specialized autonomous subagent."),
+        effective_sub_tools
+    );
+
+    let initial_user_prompt = format!(
+        "# Context
+Working directory: {}
+Task Title: {}
+
+# Objective: {}
+
+{}",
         ctx.worktree_dir.to_string_lossy(),
         title,
-        effective_sub_tools
+        title,
+        prompt
     );
 
     let system_tokens = compactor::estimate_text_tokens(&system_prompt) as u64;
     let mut sub_messages = vec![
         ChatMessage::system(system_prompt).with_cache_control(crate::llm::CacheControl::ephemeral()),
-        ChatMessage::user(format!("# Objective: {}
-
-{}", title, prompt)).with_cache_control(crate::llm::CacheControl::ephemeral()),
+        ChatMessage::user(initial_user_prompt).with_cache_control(crate::llm::CacheControl::ephemeral()),
     ];
 
     let base_url = ctx.base_url.as_deref().unwrap_or("http://127.0.0.1:8045/v1");
@@ -4514,14 +4591,17 @@ Messages count: {}
                     let end_time = last_token_instant.unwrap_or_else(std::time::Instant::now);
                     let duration_secs = end_time.duration_since(start_time).as_secs_f64();
                     let duration_ms = duration_secs * 1000.0;
+                    let ttft_ms = first_token_instant
+                        .map(|t| t.duration_since(turn_start_instant).as_secs_f64() * 1000.0)
+                        .unwrap_or(0.0);
                     let tps = if duration_secs > 0.05 && output_tokens > 0 {
                         (output_tokens as f64 / duration_secs) as f32
                     } else {
                         0.0
                     };
                     eprintln!(
-                        "CVH [subagent telemetry] turn={} subagent={} input={} output={} cache_read={} hit_rate={:.1}% duration={:.2}s tps={:.1}",
-                        sub_turn, subagent_id, input_tokens, output_tokens, cache_read_tokens, cache_hit_rate, duration_secs, tps
+                        "CVH [subagent telemetry] turn={} subagent={} input={} output={} cache_read={} hit_rate={:.1}% duration={:.2}s tps={:.1} ttft={:.1}ms",
+                        sub_turn, subagent_id, input_tokens, output_tokens, cache_read_tokens, cache_hit_rate, duration_secs, tps, ttft_ms
                     );
                     if let Some(ref app) = ctx.app_handle {
                         let _ = app.emit(
@@ -4535,6 +4615,7 @@ Messages count: {}
                                 "cacheHitRate": cache_hit_rate,
                                 "durationMs": duration_ms,
                                 "tps": tps,
+                                "ttftMs": ttft_ms,
                                 "systemTokens": system_tokens,
                                 "toolTokens": tool_tokens,
                             }),
@@ -4552,6 +4633,7 @@ Messages count: {}
                                         "cacheHitRate": cache_hit_rate,
                                         "durationMs": duration_ms,
                                         "tps": tps,
+                                        "ttftMs": ttft_ms,
                                         "systemTokens": system_tokens,
                                         "toolTokens": tool_tokens,
                                     }),
@@ -4567,7 +4649,7 @@ Messages count: {}
                         output_tokens: output_tokens as i64,
                         cached_tokens: cache_read_tokens as i64,
                         tps: tps as f64,
-                        ttft_ms: 0.0,
+                        ttft_ms,
                         duration_ms,
                         created_at: chrono::Utc::now().timestamp_millis(),
                     };
@@ -4643,6 +4725,9 @@ Messages count: {}
             let end_time = last_token_instant.unwrap_or_else(std::time::Instant::now);
             let duration_secs = end_time.duration_since(start_time).as_secs_f64();
             let duration_ms = duration_secs * 1000.0;
+            let ttft_ms = first_token_instant
+                .map(|t| t.duration_since(turn_start_instant).as_secs_f64() * 1000.0)
+                .unwrap_or(0.0);
             let output_tokens = (compactor::estimate_text_tokens(&turn_content) as u64)
                 .max((turn_streamed_chars as f64 / 3.8).ceil() as u64);
             let input_tokens = compactor::estimate_request_tokens(&sub_messages, req_tools.as_deref()) as u64;
@@ -4652,8 +4737,8 @@ Messages count: {}
                 0.0
             };
             eprintln!(
-                "CVH [subagent telemetry:fallback] turn={} subagent={} input={} output={} duration={:.2}s tps={:.1}",
-                sub_turn, subagent_id, input_tokens, output_tokens, duration_secs, tps
+                "CVH [subagent telemetry:fallback] turn={} subagent={} input={} output={} duration={:.2}s tps={:.1} ttft={:.1}ms",
+                sub_turn, subagent_id, input_tokens, output_tokens, duration_secs, tps, ttft_ms
             );
             if let Some(ref app) = ctx.app_handle {
                 let _ = app.emit(
@@ -4667,6 +4752,7 @@ Messages count: {}
                         "cacheHitRate": 0.0,
                         "durationMs": duration_ms,
                         "tps": tps,
+                        "ttftMs": ttft_ms,
                         "systemTokens": system_tokens,
                         "toolTokens": tool_tokens,
                     }),
@@ -4684,6 +4770,7 @@ Messages count: {}
                                 "cacheHitRate": 0.0,
                                 "durationMs": duration_ms,
                                 "tps": tps,
+                                "ttftMs": ttft_ms,
                                 "systemTokens": system_tokens,
                                 "toolTokens": tool_tokens,
                             }),
@@ -4699,7 +4786,7 @@ Messages count: {}
                 output_tokens: output_tokens as i64,
                 cached_tokens: 0,
                 tps: tps as f64,
-                ttft_ms: 0.0,
+                ttft_ms,
                 duration_ms,
                 created_at: chrono::Utc::now().timestamp_millis(),
             };
@@ -4830,7 +4917,7 @@ Messages count: {}
             let sub_tool_ctx = ToolContext {
                 repo_root: &ctx.repo_root,
                 worktree_dir: &ctx.worktree_dir,
-                stage_id: ctx.stage_id.as_deref(),
+                stage_id: None,
                 role: Some(&role),
                 abort_handle: Arc::clone(&ctx.abort_handle),
                 tool_policy: &ctx.tool_policy,
@@ -5034,6 +5121,9 @@ Messages count: {}
                     let end_time = synth_last_token_instant.unwrap_or_else(std::time::Instant::now);
                     let duration_secs = end_time.duration_since(start_time).as_secs_f64();
                     let duration_ms = duration_secs * 1000.0;
+                    let ttft_ms = synth_first_token_instant
+                        .map(|t| t.duration_since(synth_start_instant).as_secs_f64() * 1000.0)
+                        .unwrap_or(0.0);
                     let tps = if duration_secs > 0.05 && output_tokens > 0 {
                         (output_tokens as f64 / duration_secs) as f32
                     } else {
@@ -5051,6 +5141,7 @@ Messages count: {}
                                 "cacheHitRate": cache_hit_rate,
                                 "durationMs": duration_ms,
                                 "tps": tps,
+                                "ttftMs": ttft_ms,
                                 "systemTokens": synth_system_tokens,
                                 "toolTokens": 0,
                             }),
@@ -5068,6 +5159,7 @@ Messages count: {}
                                         "cacheHitRate": cache_hit_rate,
                                         "durationMs": duration_ms,
                                         "tps": tps,
+                                        "ttftMs": ttft_ms,
                                         "systemTokens": synth_system_tokens,
                                         "toolTokens": 0,
                                     }),
@@ -5095,6 +5187,9 @@ Messages count: {}
             let end_time = synth_last_token_instant.unwrap_or_else(std::time::Instant::now);
             let duration_secs = end_time.duration_since(start_time).as_secs_f64();
             let duration_ms = duration_secs * 1000.0;
+            let ttft_ms = synth_first_token_instant
+                .map(|t| t.duration_since(synth_start_instant).as_secs_f64() * 1000.0)
+                .unwrap_or(0.0);
             let output_tokens = (compactor::estimate_text_tokens(&synth_content) as u64)
                 .max((synth_streamed_chars as f64 / 3.8).ceil() as u64);
             let input_tokens = compactor::estimate_request_tokens(&sub_messages, None) as u64;
@@ -5115,6 +5210,7 @@ Messages count: {}
                         "cacheHitRate": 0.0,
                         "durationMs": duration_ms,
                         "tps": tps,
+                        "ttftMs": ttft_ms,
                         "systemTokens": synth_system_tokens,
                         "toolTokens": 0,
                     }),
@@ -5132,6 +5228,7 @@ Messages count: {}
                                 "cacheHitRate": 0.0,
                                 "durationMs": duration_ms,
                                 "tps": tps,
+                                "ttftMs": ttft_ms,
                                 "systemTokens": synth_system_tokens,
                                 "toolTokens": 0,
                             }),
@@ -7015,13 +7112,16 @@ Messages count: {}
                     let end_time = last_token_instant.unwrap_or_else(std::time::Instant::now);
                     let duration_secs = end_time.duration_since(start_time).as_secs_f64();
                     let duration_ms = duration_secs * 1000.0;
+                    let ttft_ms = first_token_instant
+                        .map(|t| t.duration_since(turn_start_instant).as_secs_f64() * 1000.0)
+                        .unwrap_or(0.0);
                     let tps = if duration_secs > 0.05 && output_tokens > 0 {
                         (output_tokens as f64 / duration_secs) as f32
                     } else {
                         0.0
                     };
                     eprintln!(
-                        "CVH [telemetry] turn={} model={} input={} output={} cache_read={} cache_creation={} hit_rate={:.1}% duration={:.2}s tps={:.1} prefix_hash={:016x}",
+                        "CVH [telemetry] turn={} model={} input={} output={} cache_read={} cache_creation={} hit_rate={:.1}% duration={:.2}s tps={:.1} ttft={:.1}ms prefix_hash={:016x}",
                         turn,
                         config.model,
                         input_tokens,
@@ -7031,6 +7131,7 @@ Messages count: {}
                         cache_hit_rate,
                         duration_secs,
                         tps,
+                        ttft_ms,
                         prefix_hash
                     );
                     event_sink(AgentEvent::Telemetry {
@@ -7041,6 +7142,7 @@ Messages count: {}
                         cache_hit_rate,
                         duration_ms,
                         tps,
+                        ttft_ms,
                         system_tokens,
                         tool_tokens,
                     });
@@ -7060,6 +7162,9 @@ Messages count: {}
             let end_time = last_token_instant.unwrap_or_else(std::time::Instant::now);
             let duration_secs = end_time.duration_since(start_time).as_secs_f64();
             let duration_ms = duration_secs * 1000.0;
+            let ttft_ms = first_token_instant
+                .map(|t| t.duration_since(turn_start_instant).as_secs_f64() * 1000.0)
+                .unwrap_or(0.0);
             let output_tokens = (compactor::estimate_text_tokens(&turn_content) as u64)
                 .max((turn_streamed_chars as f64 / 3.8).ceil() as u64);
             let input_tokens = compactor::estimate_request_tokens(&messages, tools.as_deref()) as u64;
@@ -7069,13 +7174,14 @@ Messages count: {}
                 0.0
             };
             eprintln!(
-                "CVH [telemetry:fallback] turn={} model={} input={} output={} duration={:.2}s tps={:.1}",
+                "CVH [telemetry:fallback] turn={} model={} input={} output={} duration={:.2}s tps={:.1} ttft={:.1}ms",
                 turn,
                 config.model,
                 input_tokens,
                 output_tokens,
                 duration_secs,
-                tps
+                tps,
+                ttft_ms
             );
             event_sink(AgentEvent::Telemetry {
                 input_tokens,
@@ -7085,6 +7191,7 @@ Messages count: {}
                 cache_hit_rate: 0.0,
                 duration_ms,
                 tps,
+                ttft_ms,
                 system_tokens,
                 tool_tokens,
             });

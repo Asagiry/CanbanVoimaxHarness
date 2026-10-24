@@ -28,6 +28,7 @@ interface TaskTelemetry {
   cacheHitRate: number;
   durationMs?: number;
   tps?: number;
+  ttftMs?: number;
   systemTokens?: number;
   toolTokens?: number;
 }

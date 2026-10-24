@@ -299,6 +299,7 @@ export default function App() {
             cacheHitRate,
             durationMs,
             tps,
+            ttftMs,
             systemTokens,
             toolTokens,
           } = event.payload || {};
@@ -313,6 +314,7 @@ export default function App() {
           const hitRate = num(cacheHitRate) || (totalIn > 0 ? (cRead / totalIn) * 100 : 0);
           const sysTok = typeof systemTokens === 'number' && Number.isFinite(systemTokens) ? systemTokens : undefined;
           const toolTok = typeof toolTokens === 'number' && Number.isFinite(toolTokens) ? toolTokens : undefined;
+          const ttftVal = typeof ttftMs === 'number' && Number.isFinite(ttftMs) ? ttftMs : undefined;
 
           updateTelemetry(taskId, {
             inputTokens: inTok,
@@ -322,6 +324,7 @@ export default function App() {
             cacheHitRate: hitRate,
             durationMs: num(durationMs),
             tps: tpsVal,
+            ...(ttftVal !== undefined ? { ttftMs: ttftVal } : {}),
             ...(sysTok !== undefined ? { systemTokens: sysTok } : {}),
             ...(toolTok !== undefined ? { toolTokens: toolTok } : {}),
           });
