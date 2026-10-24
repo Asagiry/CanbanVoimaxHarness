@@ -213,7 +213,7 @@
     - `web_fetch`: Fetches URL content converted to clean Markdown (`url`).
 - **Strict Role Boundary on Task Card Operations**:
   - `create_task`, `create_tasks`, and `complete_task` are **strictly reserved for Root Orchestrators (Level 0) and human users via UI**.
-  - **Development subagents, reviewer subagents, cvh-dev, and headless copilot are STRICTLY FORBIDDEN from calling `create_task`, `create_tasks`, or `complete_task`**. Subagents work inside assigned tasks and advance stages via `advance_task` / `move_task`.
+  - **Development subagents, reviewer subagents, and cvh-dev are STRICTLY FORBIDDEN from calling `create_task`, `create_tasks`, or `complete_task`**. Subagents work inside assigned tasks and advance stages via `advance_task` / `move_task`.
 - **Dynamic Custom Tools (`.cvh/tools/`)**:
   - Extensible JSON descriptors in `.cvh/tools/<tool_name>.json` automatically expose custom CLI tools with argument interpolation (`{{args}}`).
 - **Tool Output Spilling Invariant**:
@@ -266,18 +266,14 @@
   }
   ```
 
-### 2.16 CVH-DEV & Headless Copilot Scope Invariant: Zero-Card-Management
-- **Zero-Card-Management Invariant**: The `cvh-dev` persona and Headless Copilot backend are strictly Project Configuration & Environment Specialists (`.cvh/` infrastructure, boards, pipelines, agent personas, rules, and hooks). They are strictly forbidden from creating, completing, or managing task cards (§ 2.8). Card lifecycle is strictly reserved for the human user and the pipeline orchestrator.
+### 2.16 CVH-DEV Scope Invariant: Zero-Card-Management
+- **Zero-Card-Management Invariant**: The `cvh-dev` persona is strictly a Project Configuration & Environment Specialist (`.cvh/` infrastructure, boards, pipelines, agent personas, rules, and hooks). It is strictly forbidden from creating, completing, or managing task cards (§ 2.8). Card lifecycle is strictly reserved for the human user and the pipeline orchestrator.
 - **Authoritative Tool Policy Governance**: Tool permissions for `cvh-dev` and all agents are governed authoritatively by the Two-Level Tool Policy Matrix (§ 2.5). Hardcoded role-based tool whitelists are prohibited.
-- **Strict Role Boundary on Task Card Operations**: Adheres strictly to § 2.8 (`create_task`, `create_tasks`, `complete_task` forbidden for `cvh-dev` and Copilot).
-- **UI & Layout Decoupling**: Copilot is unmounted from the default screen layout (CVH-REMOVE-COPILOT-DOCK). Any UI surfaces or settings referencing Copilot (`CopilotDock.tsx`, topbar badge, placeholders, empty states) MUST reflect "НАСТРОЙКА ПРОЕКТА" / "Project Configuration", never mislabeling configuration sidecars as general task creators.
+- **Strict Role Boundary on Task Card Operations**: Adheres strictly to § 2.8 (`create_task`, `create_tasks`, `complete_task` forbidden for `cvh-dev`).
 
-### 2.17 Headless Copilot Architecture & Layout Invariant
-- **Headless Control Plane & Screen Layout Status**: Following CVH-REMOVE-COPILOT-DOCK per user directive ("Имею ввиду тока справа вот эту колонку а так его оставить да"), Copilot is unmounted from the default screen layout to restore a clean, full-width Kanban board. However, Copilot backend IPC commands (`src-tauri/src/commands/copilot.rs`), reactive state (`copilotStore.ts`), and component architecture (`CopilotDock.tsx`) remain 100% preserved and fully functional for headless execution, automated tasks, and optional companion views.
-- **White Paper / Vercel Tactical Aesthetic**: Features a high-contrast White Paper design system (`bg-white`, left border 1px `#ebebeb`, graphite ink typography `#171717`, zero dark slop) when mounted or displayed in secondary views, intentionally differentiating the meta-architectural companion from the obsidian dark Kanban console.
-- **SQLite Dialogue Persistence Invariant**: All Copilot messages, user prompts, thinking blocks, and tool executions persist in SQLite at `<repo_root>/.cvh/harness.db` under dedicated ID `task_id = "copilot:meta-chat"` using WAL mode, loaded with `load_copilot_history` and cleared with `clear_copilot_history`.
-- **Independent ReAct Loop & Event Streaming**: Operates its own autonomous ReAct loop (`src-tauri/src/commands/copilot.rs`) emitting `copilot:stream` events with token streaming, multi-block thinking cards, tool call visualization, and abort capability (`abort_copilot`).
-- **Dedicated Permitted Tool Suite**: Pre-compiled with `get_copilot_tool_suite()` containing configuration and inspection tools (`read_file`, `write_file`, `edit_file`, `glob`, `grep`, `execute_command`, `web_search`), governed by § 2.5.
+### 2.17 Total Eradication of Dead Copilot Subsystem & Open Control Plane Invariant
+- **Total Eradication of Copilot Subsystem**: The legacy Copilot companion dock (`CopilotDock.tsx`), reactive store (`copilotStore.ts`), backend commands (`src-tauri/src/commands/copilot.rs`), and dedicated `"copilot:meta-chat"` SQLite dialogue routing are completely eradicated from CanbanVoimaxHarness.
+- **Board-As-Single-Control-Plane**: The interactive Kanban board and pipeline columns are the single, authoritative control plane of the application. All agentic execution flows through explicit stage transitions (`advance_task`, `reject_task`) and atomic subagent delegation (`subagent`, `subagent_bg`). Parallel chat docks or unanchored sidecars are strictly prohibited.
 
 ### 2.18 Board Self-Healing Runtime Subsystem
 - **Autonomous Task Healing Invariant**: The Rust desktop backend automatically heals tasks against board configurations (`heal_task_board_and_column` and `heal_tasks` in `src-tauri/src/commands/tasks.rs`).

@@ -1200,7 +1200,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
     const isBoardTask = useBoardStore.getState().tasks.some((t) => t.id === taskId);
     if (!isBoardTask) {
       const parentTaskId = state.activeTaskId;
-      if (parentTaskId && !taskId.includes(':sub:') && !taskId.startsWith('copilot:')) {
+      if (parentTaskId && !taskId.includes(':sub:')) {
         const resolvedSub = state.toolIdToSubagentId[taskId] || (state.activeSubagentId === taskId ? taskId : null);
         if (resolvedSub) {
           const isResolvedBoardTask = useBoardStore.getState().tasks.some((t) => t.id === resolvedSub);

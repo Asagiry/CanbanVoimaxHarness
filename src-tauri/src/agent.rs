@@ -281,8 +281,7 @@ pub fn is_tool_active_for_agent(
         || role.to_lowercase().contains("оркестрат")
         || effective_stage.to_lowercase().contains("orchestrat")
         || effective_stage.to_lowercase().contains("оркестрат")
-        || effective_stage == "backlog"
-        || role == "copilot";
+        || effective_stage == "backlog";
 
     let is_card_op = name == "create_task" || name == "create_tasks" || name == "complete_task";
     if is_card_op && !is_orch {

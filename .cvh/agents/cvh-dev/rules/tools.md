@@ -6,7 +6,7 @@ Authoritative guide for agent tools in CanbanVoimaxHarness.
 
 ### 1.1 Strict Role Scope: cvh-dev vs. Developer vs. Reviewer vs. Workflow Orchestrator
 - **Task Card Creation & Completion Invariant**:
-  - `create_task`, `create_tasks`, and `complete_task` are strictly reserved for **Workflow Orchestrators** (Root Orchestrator / Level 0), human users via the UI, and the **Sidecar Copilot** (`copilot:meta-chat`).
+  - `create_task`, `create_tasks`, and `complete_task` are strictly reserved for **Workflow Orchestrators** (Root Orchestrator / Level 0) and human users via the UI.
   - **cvh-dev, Developer, and Reviewer DO NOT CALL `create_task`, `create_tasks`, OR `complete_task` directly**.
   - Developer advances work to Review via `advance_task(summary)`.
   - Reviewer approves and advances to Ready via `advance_task(summary)` or rejects back to Dev via `reject_task(reason)`.

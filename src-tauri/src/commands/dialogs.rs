@@ -11,8 +11,8 @@ pub fn sanitize_task_id(task_id: &str) -> Result<String, String> {
     if trimmed.contains("..") || trimmed.contains('/') || trimmed.contains('\\') {
         return Err(format!("Invalid task ID: '{}'", trimmed));
     }
-    // Allow ':' strictly when part of the subagent delimiter ":sub:" or copilot namespace "copilot:"
-    let without_sub = trimmed.replace(":sub:", "").replace("copilot:", "");
+    // Allow ':' strictly when part of the subagent delimiter ":sub:"
+    let without_sub = trimmed.replace(":sub:", "");
     if without_sub.chars().any(|c| matches!(c, '<' | '>' | ':' | '"' | '|' | '?' | '*')) {
         return Err(format!("Task ID contains invalid characters: '{}'", trimmed));
     }
