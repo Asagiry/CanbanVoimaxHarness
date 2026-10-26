@@ -18,6 +18,7 @@ import {
   ChevronRight,
   CornerDownRight,
   CheckCheck,
+  Check,
   User,
   AlertTriangle,
   Info,
@@ -53,7 +54,13 @@ interface InlineItalicNode {
   type: 'italic';
   children: InlineNode[];
 }
-type InlineNode = InlineTextNode | InlineCodeNode | InlineBoldNode | InlineItalicNode;
+interface InlineLinkNode {
+  type: 'link';
+  text: string;
+  url: string;
+  children: InlineNode[];
+}
+type InlineNode = InlineTextNode | InlineCodeNode | InlineBoldNode | InlineItalicNode | InlineLinkNode;
 
 function isValidInlineCode(code: string): boolean {
   if (!code || code.length > 120) return false;
@@ -100,7 +107,50 @@ function parseInlineTokens(text: string, depth = 0): InlineNode[] {
       continue;
     }
 
-    // 2. Bold: **text** or __text__
+    // 2. Inline links: [label](url)
+    if (depth < 2 && text[i] === '[' && (i === 0 || text[i - 1] !== '!')) {
+      const closeBracketIdx = text.indexOf('](', i + 1);
+      if (closeBracketIdx !== -1) {
+        const candidateLabel = text.slice(i + 1, closeBracketIdx);
+        if (
+          !candidateLabel.includes('\n') &&
+          !candidateLabel.includes('[') &&
+          candidateLabel.length > 0 &&
+          candidateLabel.length <= 300
+        ) {
+          let parenDepth = 1;
+          let closeParenIdx = -1;
+          for (let p = closeBracketIdx + 2; p < text.length; p++) {
+            if (text[p] === '(') parenDepth++;
+            else if (text[p] === ')') {
+              parenDepth--;
+              if (parenDepth === 0) {
+                closeParenIdx = p;
+                break;
+              }
+            } else if (text[p] === ' ' || text[p] === '\n') {
+              break;
+            }
+          }
+          if (closeParenIdx !== -1) {
+            const candidateUrl = text.slice(closeBracketIdx + 2, closeParenIdx).trim();
+            if (candidateUrl.length > 0) {
+              flushText();
+              nodes.push({
+                type: 'link',
+                text: candidateLabel,
+                url: candidateUrl,
+                children: parseInlineTokens(candidateLabel, depth + 1),
+              });
+              i = closeParenIdx + 1;
+              continue;
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Bold: **text** or __text__
     if (depth < 2 && text.startsWith('**', i)) {
       const closeIdx = text.indexOf('**', i + 2);
       if (closeIdx !== -1) {
@@ -199,6 +249,20 @@ function renderInlineNodes(nodes: InlineNode[], prefix: string): React.ReactNode
             {renderInlineNodes(node.children, `${key}-i`)}
           </em>
         );
+      case 'link': {
+        const isDangerous = /^\s*javascript\s*:/i.test(node.url);
+        return (
+          <a
+            key={key}
+            href={isDangerous ? '#' : node.url}
+            target="_blank"
+            rel="noreferrer"
+            className="text-[#7c3aed] dark:text-[#a78bfa] hover:underline"
+          >
+            {node.children.length > 0 ? renderInlineNodes(node.children, `${key}-l`) : node.text}
+          </a>
+        );
+      }
       case 'text':
       default:
         return node.text;
@@ -364,6 +428,30 @@ export function MarkdownContent({
         continue;
       }
 
+      // Blockquotes: lines starting with `> quote`
+      if (trimmedLine.startsWith('>')) {
+        const quoteLines: string[] = [];
+        let j = index;
+        while (j < lines.length && lines[j].trim().startsWith('>')) {
+          quoteLines.push(lines[j].trim().replace(/^>\s?/, ''));
+          j++;
+        }
+        result.push(
+          <blockquote
+            key={`quote-${index}`}
+            className="my-2 border-l-2 border-[#7c3aed]/50 bg-[#f9f9fb] dark:bg-[#161b22]/40 rounded-r-md px-3.5 py-2 text-sm italic text-[#666666] dark:text-[#8b949e] space-y-1"
+          >
+            {quoteLines.map((ql, qIdx) => (
+              <div key={qIdx} className="leading-relaxed">
+                {ql.trim() === '' ? <div className="h-1" /> : formatInline(ql, `quote-${index}-${qIdx}`)}
+              </div>
+            ))}
+          </blockquote>
+        );
+        index = j - 1;
+        continue;
+      }
+
       // Image line: ![alt](url)
       const imgMatch = line.trim().match(/^!\[(.*?)\]\((.*?)\)$/);
       if (imgMatch) {
@@ -426,12 +514,39 @@ export function MarkdownContent({
         const bulletMatch = line.match(bulletRegex)!;
         const indent = bulletMatch[1].length;
         const mlClass = indent >= 4 ? 'ml-8' : indent >= 2 ? 'ml-6' : 'ml-4';
-        result.push(
-          <div key={`bullet-${index}`} className={`${mlClass} text-sm leading-relaxed text-[#171717] dark:text-[#f0f6fc] flex items-start gap-2`}>
-            <span className="text-[#666666] dark:text-[#8b949e] select-none shrink-0 leading-relaxed">•</span>
-            <span className="flex-1 min-w-0">{formatInline(bulletMatch[3], `bullet-${index}`)}</span>
-          </div>
-        );
+        const taskMatch = bulletMatch[3].match(/^\[([ xX])\]\s*(.*)$/);
+        if (taskMatch) {
+          const isChecked = taskMatch[1].toLowerCase() === 'x';
+          const taskText = taskMatch[2];
+          result.push(
+            <div
+              key={`task-${index}`}
+              className={`${mlClass} text-sm leading-relaxed flex items-start gap-2 my-0.5`}
+            >
+              {isChecked ? (
+                <span className="w-4 h-4 rounded bg-[#7c3aed]/15 dark:bg-[#7c3aed]/25 border border-[#7c3aed]/50 text-[#7c3aed] dark:text-[#a78bfa] flex items-center justify-center shrink-0 mt-0.5 select-none">
+                  <Check className="w-2.5 h-2.5 stroke-[3]" />
+                </span>
+              ) : (
+                <span className="w-4 h-4 rounded border border-[#d4d4d8] dark:border-[#30363d] bg-transparent shrink-0 mt-0.5 select-none" />
+              )}
+              <span
+                className={`flex-1 min-w-0 ${
+                  isChecked ? 'line-through text-[#71717a] dark:text-[#8b949e]' : 'text-[#171717] dark:text-[#f0f6fc]'
+                }`}
+              >
+                {formatInline(taskText, `task-${index}`)}
+              </span>
+            </div>
+          );
+        } else {
+          result.push(
+            <div key={`bullet-${index}`} className={`${mlClass} text-sm leading-relaxed text-[#171717] dark:text-[#f0f6fc] flex items-start gap-2`}>
+              <span className="text-[#666666] dark:text-[#8b949e] select-none shrink-0 leading-relaxed">•</span>
+              <span className="flex-1 min-w-0">{formatInline(bulletMatch[3], `bullet-${index}`)}</span>
+            </div>
+          );
+        }
       } else if (line.trim() === '') {
         result.push(<div key={index} className="h-1.5" />);
       } else {
@@ -1109,8 +1224,8 @@ export default function DrawerActivityStream({
                   {t('drawer.relayHandoff')}
                 </span>
               </div>
-              <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed whitespace-pre-wrap select-text font-sans">
-                {task.handoverSummary}
+              <div className="text-sm text-[#171717] dark:text-[#f0f6fc] select-text">
+                <MarkdownContent content={task.handoverSummary} />
               </div>
             </div>
           )}
@@ -1229,9 +1344,9 @@ export default function DrawerActivityStream({
                       ))}
                     </div>
                   )}
-                  <p className="text-sm text-[#171717] dark:text-[#f0f6fc] whitespace-pre-wrap select-text leading-relaxed font-sans">
-                    {activity?.content ?? ''}
-                  </p>
+                  <div className="text-sm text-[#171717] dark:text-[#f0f6fc] select-text">
+                    <MarkdownContent content={activity?.content ?? ''} />
+                  </div>
                 </div>
               );
             }
