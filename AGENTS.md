@@ -6,11 +6,12 @@
 >
 > 1. **DELEGATE ALL WORK (§ 1.1)**: Every task (Rust backend, Tauri v2 IPC, React UI, LLM streaming, hooks, git worktree manager) MUST be delegated to specialized Level 1 subagents (`agent-developer`, `tauri-rust-engineer`, `react-tailwind-artisan`) running on `gemini-3.8-flash-high`.
 > 2. **ATOMIC TASK DECOMPOSITION & ZERO KITCHEN-SINK DELEGATIONS (§ 1.2)**: NEVER dump multiple orthogonal domains into a single agent prompt (e.g., Rust process management + React DND board + LLM SSE parser). Decompose requests into distinct, single-responsibility subagents running in parallel isolated worktrees.
-> 3. **AUTONOMOUS ISOLATED WORKTREES MANDATORY (§ 2.3 & § 2.23)**: Every subagent MUST work in its own isolated `git worktree` (`worktrees/<task-slug>`), execute all edits and test runs inside that directory, and upon receiving `APPROVED`: autonomously merge into `main`, verify Turbo Sensors (`pnpm exec tsc --noEmit && cargo check`), delete the worktree (`git worktree remove worktrees/<task-slug> --force && git worktree prune`), delete the feature branch, and record the task into the ledger. Never let subagents write concurrently to the root working directory.
+> 3. **AUTONOMOUS ISOLATED WORKTREES MANDATORY (§ 2.3 & § 2.23)**: Every subagent MUST work in its own isolated `git worktree` (`worktrees/<task-slug>`), execute all edits and test runs inside that directory, and upon receiving `APPROVED`: autonomously merge into `main`, verify Turbo Sensors (`pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings && cargo check`), delete the worktree (`git worktree remove worktrees/<task-slug> --force && git worktree prune`), delete the feature branch, and record the task into the ledger. Never let subagents write concurrently to the root working directory.
 > 4. **2-TIER GOVERNANCE (§ 1.1)**: Lead Subagent (`agent-developer`) -> Level 2 Reviewer (`agent-developer-reviewer`) -> Merge & Complete. Retro Verifier (Level 3) is abolished.
 > 5. **AUTONOMOUS MERGE UPON `APPROVED` (§ 1.1)**: Merges to `main` occur only after verified `APPROVED` verdicts and zero compiler/linter errors.
 > 6. **STRICT SINGLE-TASK CEILING & ZERO AUTONOMOUS SCOPE-CREEP (§ 1.3)**: Every subagent is assigned EXACTLY ONE atomic task and MUST STOP IMMEDIATELY upon completion. Subagents are STRICTLY FORBIDDEN from expanding scope or inventing unassigned work.
 > 7. **NASA GROUND TRUTH VERIFICATION MANDATE (§ 1.4)**: All verification MUST rely exclusively on Ground Truth Runtime Sensors:
+>    - Turbo Sensors (<10s): `pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings && cargo check`.
 >    - Compiler & Clippy Sensor: `cargo check` and `cargo clippy -- -D warnings`.
 >    - Frontend Bundle Sensor: `pnpm run build` (`tsc && vite build`).
 >    - Live Process Sensor: real subprocess execution and real HTTP/SSE streaming tests against local AI proxies.
@@ -40,7 +41,7 @@
        │
        ├──► [Lead Subagent: Developer / Rust Engineer / UI Artisan] (Level 1)
        │      ├── 1. Authors code inside isolated worktrees/<task-slug>/
-       │      ├── 2. Runs Turbo Sensors in parallel (tsc --noEmit && cargo check)
+       │      ├── 2. Runs Turbo Sensors in parallel (tsc --noEmit && oxlint --deny-warnings && cargo check)
        │      ├── 3. Spawns Level 2 Reviewer via subagent
        │      │      │
        │      │      └──► [Reviewer Subagent: agent-developer-reviewer] (Level 2)
@@ -67,6 +68,7 @@
 
 ### 1.4 NASA Ground Truth Verification Mandate
 - **Runtime Sensors Invariant**: All verification MUST rely exclusively on Ground Truth Runtime Sensors:
+  - **Turbo Sensors (<10s)**: `pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings && cargo check`.
   - **Compiler & Clippy Sensor**: `cargo check` and `cargo clippy -- -D warnings`.
   - **Frontend Bundle Sensor**: `pnpm run build` (`tsc && vite build`).
   - **Live Process Sensor**: Real subprocess execution and live HTTP/SSE streaming tests against local AI proxies.
@@ -88,7 +90,7 @@
     - Step 2: `git switch -c feat/part-2-backend feat/part-1-schema` -> author dependent changes -> submit PR targeting `feat/part-1-schema`.
     - Step 3: `git switch -c feat/part-3-ui feat/part-2-backend` -> submit PR targeting `feat/part-2-backend`.
   - **Automated Rebase & Downstream Sync**: When upstream branches in the stack are modified during review rounds, use `gh stack sync` (or `git rebase --onto`) to propagate changes downward smoothly without tangled merge commits or manual cherry-picking.
-  - **Atomic Sensor Validation**: Every branch/PR in the stack MUST independently satisfy Turbo Sensors (`pnpm exec tsc --noEmit && cargo check`).
+  - **Atomic Sensor Validation**: Every branch/PR in the stack MUST independently satisfy Turbo Sensors (`pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings && cargo check`).
   - **Sequential Upstream Landing**: As predecessor PRs are approved and merged into `main`, retarget or let GitHub / `gh stack` automatically adjust the base branch of downstream PRs toward `main` until the entire feature stack is cleanly landed.
 
 ---
@@ -287,7 +289,7 @@
 ### 2.19 Dark Theme & Deep Token Propagation Invariant
 - **Deep Control Styling Invariant**: Any UI component supporting dark theme MUST NOT stop at top-level container backgrounds. All nested form controls (`<input>`, `<select>`, `<textarea>`, `<option>`), context submenus, and dialog panels MUST declare paired dark tokens (`dark:bg-[#0d1117]`, `dark:bg-[#161b22]`, `dark:border-[#30363d]`, `dark:text-[#f0f6fc]`). Hardcoded light tokens (`#ffffff`, `#fafafa`, `#ebebeb`) without dark overrides are strictly forbidden.
 - **Defensive View Transitions API Fallback**: Signature animations utilizing the CSS View Transitions API (`document.startViewTransition`) MUST include graceful fallbacks that immediately toggle state when the API is unsupported (e.g. non-Chromium or older webviews) or when the user prefers reduced motion (`prefers-reduced-motion: reduce`).
-- **Pre-Review TypeScript Sensor Gate**: Before requesting Level 2 Review on multi-file UI refactors, the lead developer MUST execute `tsc --noEmit` inside the isolated worktree to catch unbalanced JSX tags or missing props early, preserving high First-Time-Right (FTR) execution.
+- **Pre-Review TypeScript Sensor Gate**: Before requesting Level 2 Review on multi-file UI refactors, the lead developer MUST execute `tsc --noEmit` and `pnpm exec oxlint --deny-warnings` inside the isolated worktree to catch unbalanced JSX tags, lint regressions, or missing props early, preserving high First-Time-Right (FTR) execution.
 
 ### 2.20 Optimistic In-Chat Feedback, Synchronized Tool ID & Native Tooltip Ban Invariants
 - **Immediate Optimistic In-Chat Feedback Invariant**: User-initiated operations that trigger background processing or asynchronous IPC (such as context compaction, manual steering, or custom tool runs) MUST immediately (<16ms) inject an optimistic execution item with status `'running'` into both `activityFeed` and `dialogItems` before awaiting backend completion. Users must never be left staring at an unresponsive button.

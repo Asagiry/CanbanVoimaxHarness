@@ -825,7 +825,7 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
         if (policies.toolSettings) {
           for (const [tool, settings] of Object.entries(policies.toolSettings)) {
             mergedSettings[tool] = {
-              ...(DEFAULT_TOOL_SETTINGS[tool] || {}),
+              ...DEFAULT_TOOL_SETTINGS[tool],
               ...settings,
             };
           }

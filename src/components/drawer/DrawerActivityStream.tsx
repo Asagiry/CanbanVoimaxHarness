@@ -257,7 +257,7 @@ export function MarkdownContent({
     };
 
     const bulletRegex = /^(\s*)([-*+•]|\u2022)\s+(.*)$/;
-    const numberedRegex = /^(\s*)(\d+(\.\d+)*[\.\)])\s+(.*)$/;
+    const numberedRegex = /^(\s*)(\d+(\.\d+)*[.)])\s+(.*)$/;
 
     for (let index = 0; index < lines.length; index++) {
       const line = lines[index];
@@ -846,7 +846,7 @@ export default function DrawerActivityStream({
   // Pre-compute elapsed duration for each activity item
   const activityDurations = useMemo(() => {
     const list = displayActivities || [];
-    const res: (number | undefined)[] = new Array(list.length);
+    const res: (number | undefined)[] = Array.from({ length: list.length });
     for (let i = 0; i < list.length; i++) {
       const act = list[i];
       if (act?.durationMs && act.durationMs > 0) {

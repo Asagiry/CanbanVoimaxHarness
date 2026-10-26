@@ -95,7 +95,7 @@ function renderMarkdownBlocks(content: string) {
   let codeLang = '';
 
   const bulletRegex = /^(\s*)([-*+•]|\u2022)\s+(.*)$/;
-  const numberedRegex = /^(\s*)(\d+(\.\d+)*[\.\)])\s+(.*)$/;
+  const numberedRegex = /^(\s*)(\d+(\.\d+)*[.)])\s+(.*)$/;
 
   for (let idx = 0; idx < lines.length; idx++) {
     const line = lines[idx];

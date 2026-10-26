@@ -518,8 +518,8 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
               id: prev.tool?.id || tool.id,
               toolName: 'question',
               params: {
-                ...((tool.params as Record<string, unknown>) || {}),
-                ...((prev.tool?.params as Record<string, unknown>) || {}),
+                ...(tool.params as Record<string, unknown>),
+                ...(prev.tool?.params as Record<string, unknown>),
                 callId: tool.id,
               },
             },
@@ -1518,7 +1518,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
             durationMs: prev.tool?.durationMs || 0,
             status: prev.tool?.status || 'running',
             params: {
-              ...((prev.tool?.params as Record<string, unknown>) || {}),
+              ...(prev.tool?.params as Record<string, unknown>),
               taskId,
               questionId,
               callId: prev.tool?.id, // retain original call ID for tool_result routing
@@ -1539,7 +1539,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
             return {
               ...t,
               params: {
-                ...((t.params as Record<string, unknown>) || {}),
+                ...(t.params as Record<string, unknown>),
                 taskId,
                 questionId,
                 callId: t.id,

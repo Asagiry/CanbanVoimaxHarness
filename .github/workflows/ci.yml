@@ -32,6 +32,9 @@ jobs:
       - name: "Install Frontend Dependencies"
         run: pnpm install --frozen-lockfile
 
+      - name: "Verify Frontend Linter Sensor (oxlint)"
+        run: pnpm exec oxlint --deny-warnings
+
       - name: "Verify Frontend Bundle Sensor (tsc && vite build)"
         run: pnpm run build
 

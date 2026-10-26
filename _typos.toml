@@ -1,0 +1,70 @@
+# typos configuration for CanbanVoimaxHarness
+# Documentation: https://github.com/crate-ci/typos
+
+[files]
+extend-exclude = [
+    "*.min.js",
+    "*.lock",
+    "pnpm-lock.yaml",
+    "Cargo.lock",
+    ".git/",
+    ".cvh/",
+    ".agents/",
+    "worktrees/",
+    "target/",
+    "dist/",
+    "Release/",
+]
+
+[default]
+check-filename = true
+check-file = true
+
+[default.extend-identifiers]
+# Project specific abbreviations, variables, crate names
+canban = "canban"
+Canban = "Canban"
+voimax = "voimax"
+Voimax = "Voimax"
+cvh = "cvh"
+CVH = "CVH"
+tauri = "tauri"
+Tauri = "Tauri"
+dsh = "dsh"
+DSH = "DSH"
+tok = "tok"
+tps = "tps"
+ttft = "ttft"
+TTFT = "TTFT"
+ReAct = "ReAct"
+rusqlite = "rusqlite"
+libsqlite3 = "libsqlite3"
+msvc = "msvc"
+hwnd = "hwnd"
+gitdir = "gitdir"
+subagent = "subagent"
+subagents = "subagents"
+pangea = "pangea"
+zustand = "zustand"
+lucide = "lucide"
+oxlint = "oxlint"
+
+[default.extend-words]
+# Project specific terms, abbreviations, and acronyms
+canban = "canban"
+voimax = "voimax"
+cvh = "cvh"
+tauri = "tauri"
+dsh = "dsh"
+tok = "tok"
+tps = "tps"
+ttft = "ttft"
+rusqlite = "rusqlite"
+msvc = "msvc"
+gitdir = "gitdir"
+subagent = "subagent"
+subagents = "subagents"
+pangea = "pangea"
+zustand = "zustand"
+lucide = "lucide"
+oxlint = "oxlint"
