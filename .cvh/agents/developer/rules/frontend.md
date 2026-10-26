@@ -41,6 +41,10 @@ Authoritative frontend engineering standards and UI invariants of **CanbanVoimax
 - **Clipboard & File Attachments**: Supports direct image pasting from clipboard with automatic client-side compression before storage or IPC transfer.
 - **Attachment Previews & Lightbox**: Interactive attachment thumbnails provide removal, click-to-preview lightbox modal, and attachment gallery presentation in drawer feeds.
 
+### 2.4 Redundant Copy Elimination & Tri-Partite Experience Invariants
+- **Redundant Copy & Label Elimination**: Ruthlessly remove slogans, explanatory text, marketing subtitles, and minor helper labels. If an interface becomes incomprehensible after removal, the layout itself is flawed—redesign the spatial hierarchy and visual affordances from scratch rather than masking poor design with explanatory copy.
+- **Tri-Partite Experience Invariant (UX, DX, AX Synergy)**: Every modification must simultaneously consider and improve User Experience (intuitive, tactile, zero clutter), Developer Experience (modular, strictly typed, fast sensors), and AI Agent Experience (predictable schemas, clean context, reliable diffs), without breaking existing functionality.
+
 ---
 
 ## 3. State Management & React 19 Performance Discipline

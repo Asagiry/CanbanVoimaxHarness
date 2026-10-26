@@ -35,3 +35,15 @@ Authoritative frontend audit checklist for the **Reviewer** persona in CanbanVoi
 
 ## 5. Tabular Numerics for Metrics
 - **Rule**: Any dynamic numeric counter, timer, token pill, or TPS telemetry must use the `.tabular-nums` CSS class to eliminate visual layout jitter.
+
+---
+
+## 6. Redundant Copy Elimination & Structural Layout-First Invariant
+- **Rule**: Redundant slogans, explanatory filler text, marketing subtitles, and minor helper labels must be eliminated.
+- **Audit**: If an interface becomes confusing or incomprehensible when explanatory copy is removed, the layout itself is flawed. Reject solutions that add explanatory text or tooltips to patch poor visual hierarchy; mandate redesigning the layout from scratch.
+
+---
+
+## 7. Tri-Partite Experience Synergy Invariant (UX, DX, AX)
+- **Rule**: Every change must simultaneously preserve or improve User Experience (UX), Developer Experience (DX), and AI Agent Experience (AX).
+- **Audit**: Verify that UX improvements do not compromise DX or AX, and verify zero regression in existing functionality.

@@ -17,6 +17,8 @@
 > 8. **ZERO-CONTEXT-POLLING RULE [HARD BAN ON MONITORING SPAM] (§ 1.5)**: When background subagents are executing, the Root Orchestrator is STRICTLY FORBIDDEN from executing monitoring/polling loops (`list_agents`, `job_list`, `pwsh git status/log`). Wait passively for subagent push notices.
 > 9. **FULL PEER ADVISOR & MERCILESS COLLEAGUE MANDATE (§ 1.6)**: Users make mistakes, suffer from cognitive tunnel vision, or propose conflicting requirements. When users show obvious errors, architectural anti-patterns, or decision conflicts, point them out mercilessly. You are an authoritative senior engineering colleague, not a servant or passive yes-man. Challenge flawed proposals, contradict suboptimal ideas, offer battle-tested alternatives, and debate trade-offs as a full peer technical partner.
 > 10. **CHAINED PRS & STACKED CHANGES WORKFLOW (§ 1.7)**: For multiple dependent or chained pull requests, use `gh stack` (stacked git changes) to manage incremental reviewable diffs without breaking upstream integration.
+> 11. **REDUNDANT COPY ELIMINATION & STRUCTURAL LAYOUT-FIRST (§ 2.39)**: Remove redundant slogans, explanatory text, and minor labels. If the interface becomes incomprehensible after removal, it means the layout itself has issues—redesign it from scratch.
+> 12. **TRI-PARTITE EXPERIENCE SYNERGY (UX, DX, AX) (§ 2.40)**: Every modification must consider user experience, developer experience, and AI Agent usage experience. All three must improve, without breaking existing functionality.
 
 ---
 
@@ -445,3 +447,14 @@
 - **70% BPE Token Savings**: English schemas leverage dense Byte-Pair Encoding (BPE) compression, saving up to ~70% token capacity compared to multi-byte UTF-8 Cyrillic representations across Claude, Gemini, DeepSeek, and OpenAI models. This preserves precious prompt context buffers and drives prompt cache hit rates above 90%.
 - **English-Only Persona Prompts & Project Rules**: All agent persona definitions (`.cvh/agents/<role>/persona.md`) and modular rule files (`.cvh/agents/<role>/rules/*.md`, `.cvh/rules/*.md`) MUST be authored strictly in concise, technical English. User-facing commentary may be presented in Russian, but all persistent system prompts, rules, and tool contracts remain 100% English.
 - **Direct Schema Customization (`toolCustomSchemas`)**: The Global Tool Registry (`.cvh/settings/tool-policy.json`) supports direct override and customization of tool schemas via `toolCustomSchemas`. Custom schemas must likewise adhere to the English-Only Schemas Invariant.
+
+### 2.39 Redundant Copy Elimination & Structural Layout-First Invariant
+- **Ruthless Elimination of Redundant Copy & Labels**: Remove redundant slogans, explanatory text, marketing subtitles, and minor helper labels.
+- **Structural Layout-First Redesign Mandate**: If an interface becomes incomprehensible or ambiguous after removing explanatory text or minor labels, it indicates that the underlying layout and visual hierarchy are fundamentally flawed. Do not patch poor information architecture with explanatory labels, descriptive tooltips, or text banners—redesign the layout, spatial relationships, and visual affordances from scratch to make the UI self-evident and intuitive by structure alone.
+
+### 2.40 Tri-Partite Experience Invariant (UX, DX, AX Synergy)
+- **Tri-Partite Synergy Mandate (User, Developer, AI Agent Experience)**: Every modification, refactoring, or feature addition must simultaneously evaluate and improve:
+  1. **User Experience (UX)**: Intuitive, responsive, clean visual hierarchy, tactile controls, and zero cognitive clutter.
+  2. **Developer Experience (DX)**: Clean modular code, strict typing, high maintainability, fast feedback loops (<10s Turbo Sensors), and low cognitive overhead.
+  3. **AI Agent Experience (AX)**: Deterministic context, clean and unambiguous tool schemas, predictable file structures, state-preserving memory compaction, and zero hallucination traps.
+- **Non-Regression Invariant**: All three experiences (UX, DX, AX) must improve or remain uncompromised. Under no circumstances may existing functionality, invariants, or performance baselines be broken.
