@@ -1,14 +1,15 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
 import { useBoardStore } from '../../stores/boardStore';
-import { useDrawerStore } from '../../stores/drawerStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import KanbanColumn from './KanbanColumn';
 import { PipelineColumn, BoardDef, KanbanTask } from '../../types';
-import { Plus, X, Layout, Pencil, Trash2, Search } from 'lucide-react';
+import { Plus, X, Layout, Pencil, Trash2, Search, Paperclip, ImagePlus, ZoomIn } from 'lucide-react';
 import CreateBoardModal from './CreateBoardModal';
 import PersonaSelect from '../common/PersonaSelect';
+import ImageLightboxModal from '../drawer/ImageLightboxModal';
+import { compressImageFile } from '../../lib/imageCompression';
 import { slugifyTitle, uniqueColumnId } from '../../lib/slug';
 import { AGENT_PALETTE, getDeterministicAgentColor, isAllowedAgentColor } from '../../lib/agentPalette';
 import { useTranslation } from '../../stores/languageStore';
@@ -27,26 +28,6 @@ interface AgentPersonaOption {
 
 const NEW_AGENT_OPTION = '__new__';
 
-interface ThreadLine {
-  key: string;
-  parentId: string;
-  subtaskId: string;
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-  cx1: number;
-  cy1: number;
-  cx2: number;
-  cy2: number;
-  mx: number;
-  my: number;
-  pathData: string;
-  isHighlighted: boolean;
-  parentColor: string;
-  subtaskColor: string;
-}
-
 export default function KanbanBoard() {
   const {
     columns,
@@ -54,12 +35,10 @@ export default function KanbanBoard() {
     searchQuery,
     setSearchQuery,
     setTasks,
-    moveTask,
+    reorderTask,
     addTask,
     tickTimers,
     setColumns,
-    hoveredTaskId,
-    setHoveredTaskId,
     boards,
     activeBoardId,
     setActiveBoard,
@@ -67,140 +46,9 @@ export default function KanbanBoard() {
     deleteBoard,
     saveCurrentBoard,
   } = useBoardStore();
-  const { openDrawer } = useDrawerStore();
   const { availableModels, settings } = useSettingsStore();
   const { t } = useTranslation();
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
-  const [threads, setThreads] = useState<ThreadLine[]>([]);
-  const [svgDimensions, setSvgDimensions] = useState({ width: 0, height: 0 });
-
-  const computeThreads = useCallback(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    const cRect = container.getBoundingClientRect();
-    const scrollLeft = container.scrollLeft;
-    const scrollTop = container.scrollTop;
-
-    setSvgDimensions({
-      width: Math.max(container.scrollWidth, container.clientWidth),
-      height: Math.max(container.scrollHeight, container.clientHeight),
-    });
-
-    const lines: ThreadLine[] = [];
-
-    for (const subtask of tasks) {
-      if (!subtask.parentId) continue;
-      const parent = tasks.find((t) => t.id === subtask.parentId);
-      if (!parent) continue;
-
-      const parentCol = columns.find((c) => c.id === parent.columnId);
-      const subtaskCol = columns.find((c) => c.id === subtask.columnId);
-
-      const isParentDone = Boolean(
-        parentCol?.terminal ||
-        parent.columnId === 'ready' ||
-        parent.status === 'done' ||
-        parentCol?.title.toLowerCase().includes('готов') ||
-        parentCol?.title.toLowerCase().includes('done')
-      );
-      const isSubtaskDone = Boolean(
-        subtaskCol?.terminal ||
-        subtask.columnId === 'ready' ||
-        subtask.status === 'done' ||
-        subtaskCol?.title.toLowerCase().includes('готов') ||
-        subtaskCol?.title.toLowerCase().includes('done')
-      );
-
-      // In Done column, subtasks are aggregated inside root card
-      if (isParentDone && isSubtaskDone) continue;
-
-      const elP = document.getElementById(`task-card-${parent.id}`);
-      const elS = document.getElementById(`task-card-${subtask.id}`);
-      if (!elP || !elS) continue;
-
-      const pRect = elP.getBoundingClientRect();
-      const sRect = elS.getBoundingClientRect();
-
-      const isForward = pRect.left <= sRect.left;
-      const x1 = isForward
-        ? pRect.right - cRect.left + scrollLeft
-        : pRect.left - cRect.left + scrollLeft;
-      const y1 = pRect.top + pRect.height / 2 - cRect.top + scrollTop;
-
-      const x2 = isForward
-        ? sRect.left - cRect.left + scrollLeft
-        : sRect.right - cRect.left + scrollLeft;
-      const y2 = sRect.top + sRect.height / 2 - cRect.top + scrollTop;
-
-      const dx = Math.max(36, Math.abs(x2 - x1) * 0.45);
-      const cx1 = isForward ? x1 + dx : x1 - dx;
-      const cy1 = y1;
-      const cx2 = isForward ? x2 - dx : x2 + dx;
-      const cy2 = y2;
-
-      const pathData = `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
-
-      // Midpoint on cubic Bezier at t = 0.5
-      const mx = 0.125 * x1 + 0.375 * cx1 + 0.375 * cx2 + 0.125 * x2;
-      const my = 0.125 * y1 + 0.375 * cy1 + 0.375 * cy2 + 0.125 * y2;
-
-      const isHighlighted = Boolean(
-        hoveredTaskId &&
-          (hoveredTaskId === parent.id ||
-            hoveredTaskId === subtask.id ||
-            (parent.waitingForSubtaskId && hoveredTaskId === parent.waitingForSubtaskId))
-      );
-
-      lines.push({
-        key: `${parent.id}->${subtask.id}`,
-        parentId: parent.id,
-        subtaskId: subtask.id,
-        x1,
-        y1,
-        x2,
-        y2,
-        cx1,
-        cy1,
-        cx2,
-        cy2,
-        mx,
-        my,
-        pathData,
-        isHighlighted,
-        parentColor: parentCol?.color || '#f59e0b',
-        subtaskColor: subtaskCol?.color || '#8b5cf6',
-      });
-    }
-
-    setThreads(lines);
-  }, [tasks, columns, hoveredTaskId]);
-
-  useEffect(() => {
-    let animId = requestAnimationFrame(computeThreads);
-    const handleResize = () => {
-      cancelAnimationFrame(animId);
-      animId = requestAnimationFrame(computeThreads);
-    };
-    window.addEventListener('resize', handleResize);
-
-    const container = scrollContainerRef.current;
-    let resizeObserver: ResizeObserver | null = null;
-    if (container && typeof ResizeObserver !== 'undefined') {
-      resizeObserver = new ResizeObserver(() => {
-        cancelAnimationFrame(animId);
-        animId = requestAnimationFrame(computeThreads);
-      });
-      resizeObserver.observe(container);
-    }
-
-    return () => {
-      cancelAnimationFrame(animId);
-      window.removeEventListener('resize', handleResize);
-      if (resizeObserver) resizeObserver.disconnect();
-    };
-  }, [computeThreads]);
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
   const [isCreateBoardModalOpen, setIsCreateBoardModalOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>(settings.model || 'gemini-3.8-flash-high');
@@ -208,6 +56,9 @@ export default function KanbanBoard() {
   // New task form fields
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
+  const [newAttachments, setNewAttachments] = useState<{ id: string; name: string; dataUrl: string }[]>([]);
+  const [previewLightbox, setPreviewLightbox] = useState<{ src: string; alt?: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // New column inline form fields
   const [isAddColumnOpen, setIsAddColumnOpen] = useState(false);
@@ -287,23 +138,25 @@ export default function KanbanBoard() {
     if (type === 'COLUMN') {
       const sourceCol = columns[source.index];
       if (!sourceCol) return;
-      // Закреплены только backlog/ready/terminal по id/флагу (без привязки к индексу).
+      // Закреплены только intake/terminal по id/флагу/позиции.
       if (
+        sourceCol.isIntake ||
+        Boolean(sourceCol.terminal) ||
         sourceCol.id === 'backlog' ||
         sourceCol.id === 'ready' ||
-        Boolean(sourceCol.terminal)
+        source.index === 0 ||
+        source.index === columns.length - 1
       ) {
         return;
       }
-      // Бэклог строго первый.
+      // Intake строго первый.
       if (destination.index === 0) return;
 
       // Хвост закреплённых: первая terminal-колонка, иначе ready, иначе конец.
-      // Бэкенд нормализует ready-last по id — фронт совпадает до сейва.
       const terminalIdx = columns.findIndex((c) => Boolean(c.terminal));
       const readyIdx = columns.findIndex((c) => c.id === 'ready');
       const tailStart =
-        terminalIdx !== -1 ? terminalIdx : readyIdx !== -1 ? readyIdx : columns.length;
+        terminalIdx !== -1 ? terminalIdx : readyIdx !== -1 ? readyIdx : columns.length - 1;
       // Источник в хвосте быть не должен (закреплён выше), назначение в хвост — зажать.
       if (source.index >= tailStart) return;
       const maxDest = Math.max(1, tailStart - 1);
@@ -331,7 +184,7 @@ export default function KanbanBoard() {
       );
     };
 
-    const firstColId = columns[0]?.id ?? 'backlog';
+    const firstColId = columns.find((c) => c.isIntake)?.id ?? columns[0]?.id ?? 'backlog';
     const getColumnDisplayTasks = (targetColId: string) => {
       const isDone = isDoneCol(targetColId);
       const isFirst = targetColId === firstColId;
@@ -385,6 +238,16 @@ export default function KanbanBoard() {
       }
 
       setTasks(nextTasks);
+
+      // Backend-authoritative reordering: persist new index to SQLite position
+      try {
+        await reorderTask(draggableId, destColId, destIndex);
+      } catch (err: unknown) {
+        console.warn(`[handleDragEnd] reorderTask rejected for ${draggableId}, reverting state:`, err);
+        setTasks(tasks);
+        const msg = err instanceof Error ? err.message : String(err);
+        alert(t('board.errMoveTask', { msg }));
+      }
       return;
     }
 
@@ -447,12 +310,11 @@ export default function KanbanBoard() {
     // Synchronous state update guarantees smooth DnD transition
     setTasks(nextTasks);
 
-    // Backend-authoritative confirmation: if backend rejects (e.g. sensor or network error),
-    // safely revert local tasks state and notify the user.
+    // Backend-authoritative confirmation: reorder_task moves stage and updates SQLite position
     try {
-      await moveTask(draggableId, destColId, { force: true, sourceColumnId: sourceColId });
+      await reorderTask(draggableId, destColId, destIndex);
     } catch (err: unknown) {
-      console.warn(`[handleDragEnd] moveTask rejected for ${draggableId}, reverting state:`, err);
+      console.warn(`[handleDragEnd] reorderTask rejected for ${draggableId}, reverting state:`, err);
       setTasks(tasks);
       const msg = err instanceof Error ? err.message : String(err);
       alert(t('board.errMoveTask', { msg }));
@@ -476,8 +338,15 @@ export default function KanbanBoard() {
     const prev = columns;
     const sourceCol = prev[sourceIndex];
     if (!sourceCol) return;
-    // Закреплены только backlog/ready/terminal по id/флагу.
-    if (sourceCol.id === 'backlog' || sourceCol.id === 'ready' || Boolean(sourceCol.terminal)) {
+    // Закреплены только intake/terminal по id/флагу/индексу.
+    if (
+      sourceCol.isIntake ||
+      Boolean(sourceCol.terminal) ||
+      sourceCol.id === 'backlog' ||
+      sourceCol.id === 'ready' ||
+      sourceIndex === 0 ||
+      sourceIndex === prev.length - 1
+    ) {
       return;
     }
     if (destinationIndex <= 0) return;
@@ -486,22 +355,20 @@ export default function KanbanBoard() {
     const reordered = Array.from(prev);
     const [moved] = reordered.splice(sourceIndex, 1);
     if (!moved) return;
-    // Назначение в хвост закреплённых — зажать перед хвостом, нормализация ниже всё равно удержит ready последней.
+    // Назначение в хвост закреплённых — зажать перед хвостом.
     const terminalIdx = prev.findIndex((c) => Boolean(c.terminal));
     const readyIdx = prev.findIndex((c) => c.id === 'ready');
     const tailStart =
-      terminalIdx !== -1 ? terminalIdx : readyIdx !== -1 ? readyIdx : prev.length;
+      terminalIdx !== -1 ? terminalIdx : readyIdx !== -1 ? readyIdx : prev.length - 1;
     const maxDest = Math.max(1, tailStart - 1);
     const safeDest = Math.max(1, Math.min(destinationIndex, maxDest));
     reordered.splice(safeDest, 0, moved);
 
-    // backlog строго первая, ready строго последняя, остальные — в drop-порядке.
-    // Совпадает с бэкенд-нормализацией (backlog-first/ready-last по id) до сейва.
-    const prevLast = prev[prev.length - 1];
-    const backlog = reordered.find((c) => c.id === 'backlog') ?? prev[0];
-    const ready = reordered.find((c) => c.id === 'ready') ?? prevLast;
-    const middle = reordered.filter((c) => c.id !== backlog.id && c.id !== ready.id);
-    const next = [backlog, ...middle, ready];
+    // Intake строго первая, terminal строго последняя, остальные — в drop-порядке.
+    const intake = reordered.find((c) => c.isIntake || c.id === 'backlog') ?? prev[0];
+    const terminal = reordered.slice().reverse().find((c) => c.terminal || c.id === 'ready') ?? prev[prev.length - 1];
+    const middle = reordered.filter((c) => c.id !== intake.id && c.id !== terminal.id);
+    const next = [intake, ...middle, terminal];
 
     if (prev.length === next.length && prev.every((c, i) => c.id === next[i]?.id)) return;
 
@@ -518,15 +385,135 @@ export default function KanbanBoard() {
   const handleOpenAddTask = () => {
     setNewTitle('');
     setNewDescription('');
+    setNewAttachments([]);
     setSelectedModel(settings.model || (availableModels.length > 0 ? availableModels[0] : 'gemini-3.8-flash-high'));
     setIsNewTaskModalOpen(true);
+  };
+
+  const handleCloseAddTask = () => {
+    setIsNewTaskModalOpen(false);
+    setNewAttachments([]);
+    setPreviewLightbox(null);
+  };
+
+  const processAndAddImageFiles = useCallback(async (files: File[] | FileList) => {
+    const list = Array.from(files).filter(
+      (f) => f.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|svg)$/i.test(f.name)
+    );
+    if (list.length === 0) return;
+
+    try {
+      const compressedList = await Promise.all(
+        list.map(async (file, idx) => {
+          try {
+            const dataUrl = await compressImageFile(file, 1568, 0.85);
+            return {
+              id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+              name: file.name || `image-${idx + 1}.png`,
+              dataUrl,
+            };
+          } catch (err) {
+            console.error('[KanbanBoard] Failed to compress image:', file.name, err);
+            return null;
+          }
+        })
+      );
+
+      const successful = compressedList.filter(
+        (item): item is { id: string; name: string; dataUrl: string } => item !== null
+      );
+      if (successful.length > 0) {
+        setNewAttachments((prev) => [...prev, ...successful]);
+      }
+    } catch (err) {
+      console.error('[KanbanBoard] Error adding images:', err);
+    }
+  }, []);
+
+  const handleModalPaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      const pastedImageFiles: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            pastedImageFiles.push(file);
+          }
+        }
+      }
+
+      if (pastedImageFiles.length > 0) {
+        e.preventDefault();
+        void processAndAddImageFiles(pastedImageFiles);
+      }
+    },
+    [processAndAddImageFiles]
+  );
+
+  const handleModalKeyDown = useCallback(
+    async (e: React.KeyboardEvent) => {
+      const isV =
+        e.key === 'v' ||
+        e.key === 'V' ||
+        e.key === 'м' ||
+        e.key === 'М' ||
+        e.code === 'KeyV';
+
+      if ((e.ctrlKey || e.metaKey) && isV) {
+        const target = e.target as HTMLElement | null;
+        const isTextInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA');
+
+        if (!isTextInput && typeof navigator !== 'undefined' && navigator.clipboard?.read) {
+          try {
+            const clipboardItems = await navigator.clipboard.read();
+            const files: File[] = [];
+            for (const item of clipboardItems) {
+              const imageType = item.types.find((t) => t.startsWith('image/'));
+              if (imageType) {
+                const blob = await item.getType(imageType);
+                files.push(
+                  new File([blob], `screenshot-${Date.now()}.${imageType.split('/')[1] || 'png'}`, {
+                    type: imageType,
+                  })
+                );
+              }
+            }
+            if (files.length > 0) {
+              e.preventDefault();
+              void processAndAddImageFiles(files);
+            }
+          } catch (err) {
+            console.debug('[KanbanBoard] Clipboard read fallback note:', err);
+          }
+        }
+      }
+    },
+    [processAndAddImageFiles]
+  );
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      void processAndAddImageFiles(e.target.files);
+    }
+    e.target.value = '';
+  };
+
+  const handleRemoveAttachment = (id: string) => {
+    setNewAttachments((prev) => prev.filter((a) => a.id !== id));
   };
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
-    const targetColumnId = columns.some((c) => c.id === 'backlog') ? 'backlog' : (columns[0]?.id ?? 'backlog');
+    const intakeCol = columns.find((c) => c.isIntake);
+    const targetColumnId =
+      intakeCol?.id ||
+      (columns.some((c) => c.id === 'backlog') ? 'backlog' : (columns[0]?.id ?? 'backlog'));
 
     const created = await addTask({
       title: newTitle.trim(),
@@ -534,9 +521,10 @@ export default function KanbanBoard() {
       stageId: targetColumnId,
       boardId: activeBoardId || 'development',
       model: selectedModel,
+      attachments: newAttachments.map((a) => a.dataUrl),
     });
     if (!created) return;
-    setIsNewTaskModalOpen(false);
+    handleCloseAddTask();
   };
 
   const loadAgentPersonas = async () => {
@@ -648,12 +636,12 @@ export default function KanbanBoard() {
   };
 
   const handleDeleteColumn = useCallback(async (columnId: string) => {
-    if (columnId === 'backlog' || columnId === 'ready') return;
     const { columns: curCols, tasks: curTasks, setColumns: curSetCols, moveTask: curMoveTask } = useBoardStore.getState();
-    if (curCols.length <= 1) return;
     const idx = curCols.findIndex((c) => c.id === columnId);
     if (idx === -1) return;
     const col = curCols[idx];
+    if (col.isIntake || col.terminal || col.id === 'backlog' || col.id === 'ready' || idx === 0 || idx === curCols.length - 1) return;
+    if (curCols.length <= 1) return;
     const neighbor = curCols[idx - 1] ?? curCols[idx + 1] ?? null;
     if (!neighbor) return;
 
@@ -814,7 +802,7 @@ export default function KanbanBoard() {
                         ? 'bg-[#171717] dark:bg-[#21262d] text-white shadow-xs'
                         : 'bg-[#f4f4f5] dark:bg-[#161b22] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] text-[#52525b] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
                     }`}
-                    title={t('board.boardTabTitle', { name: b.name })}
+                    aria-label={t('board.boardTabTitle', { name: b.name })}
                   >
                     <Layout className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate max-w-[140px]">{b.name}</span>
@@ -836,7 +824,7 @@ export default function KanbanBoard() {
           <button
             onClick={() => setIsCreateBoardModalOpen(true)}
             className="flex items-center space-x-1 px-2.5 py-1.5 rounded-md border border-dashed border-[#d4d4d8] dark:border-[#30363d] hover:border-[#171717] dark:hover:border-[#f0f6fc] text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] text-xs font-medium transition cursor-pointer select-none"
-            title={t('board.newBoardTitle')}
+            aria-label={t('board.newBoardTitle')}
           >
             <Plus className="h-3 w-3" />
             <span>{t('board.newBoard')}</span>
@@ -856,7 +844,7 @@ export default function KanbanBoard() {
             <button
               onClick={handleOpenAddColumn}
               className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] font-sans text-xs font-medium transition cursor-pointer active:scale-[0.99]"
-              title={t('board.addColumnTitle')}
+              aria-label={t('board.addColumnTitle')}
             >
               <Plus className="h-3.5 w-3.5" />
               <span>{t('board.addColumn')}</span>
@@ -864,7 +852,7 @@ export default function KanbanBoard() {
             <button
               onClick={handleOpenAddTask}
               className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white font-sans text-xs font-medium transition cursor-pointer shadow-xs active:scale-[0.99] border border-transparent dark:border-[#30363d]"
-              title={t('board.newTaskTitle')}
+              aria-label={t('board.newTaskTitle')}
             >
               <Plus className="h-3.5 w-3.5 text-white" />
               <span>{t('board.newTask')}</span>
@@ -948,7 +936,6 @@ export default function KanbanBoard() {
 
             <div
               className="flex items-center space-x-1.5 pb-2 text-[#8f8f8f] dark:text-[#8b949e]"
-              title={t('board.autoColorTitle')}
             >
               <span
                 className="h-4 w-4 rounded-full border border-[#ebebeb] dark:border-[#30363d]"
@@ -1001,161 +988,36 @@ export default function KanbanBoard() {
         <Droppable droppableId="board-columns" direction="horizontal" type="COLUMN">
           {(provided) => (
         <div
-          ref={(el) => {
-            provided.innerRef(el);
-            scrollContainerRef.current = el;
-          }}
+          ref={provided.innerRef}
           {...provided.droppableProps}
           onWheel={(e) => {
             if (e.deltaY !== 0) {
               e.currentTarget.scrollLeft += e.deltaY;
             }
           }}
-          onScroll={computeThreads}
           className="flex-1 overflow-x-auto overflow-y-hidden p-3.5 relative"
         >
-          {/* Visual Threads SVG Overlay */}
-          {threads.length > 0 && (
-            <svg
-              className="pointer-events-none absolute top-0 left-0 z-20 overflow-visible"
-              style={{
-                width: svgDimensions.width || '100%',
-                height: svgDimensions.height || '100%',
-              }}
-            >
-              <defs>
-                <filter id="thread-glow" x="-20%" y="-20%" width="140%" height="140%">
-                  <feDropShadow dx="0" dy="0" stdDeviation="3.5" floodColor="#8b5cf6" floodOpacity="0.75" />
-                </filter>
-              </defs>
-
-              {threads.map((thread) => (
-                <g key={thread.key} className="transition-all duration-150">
-                  {/* Glowing halo behind active or hovered thread */}
-                  {thread.isHighlighted && (
-                    <path
-                      d={thread.pathData}
-                      stroke={thread.subtaskColor}
-                      strokeWidth={6}
-                      strokeOpacity={0.4}
-                      fill="none"
-                      filter="url(#thread-glow)"
-                    />
-                  )}
-
-                  {/* Main connector Bezier line */}
-                  <path
-                    d={thread.pathData}
-                    stroke={thread.subtaskColor}
-                    strokeWidth={thread.isHighlighted ? 2.5 : 1.5}
-                    strokeDasharray={thread.isHighlighted ? 'none' : '4 3'}
-                    strokeOpacity={thread.isHighlighted ? 1 : 0.65}
-                    fill="none"
-                  />
-
-                  {/* Invisible wide interactive stroke for hover and click */}
-                  <path
-                    d={thread.pathData}
-                    stroke="transparent"
-                    strokeWidth={16}
-                    fill="none"
-                    className="cursor-pointer pointer-events-auto"
-                    onClick={() => openDrawer(thread.subtaskId)}
-                    onMouseEnter={() => setHoveredTaskId(thread.subtaskId)}
-                    onMouseLeave={() => setHoveredTaskId(null)}
-                  >
-                    <title>{t('board.threadTitle', { parent: thread.parentId, subtask: thread.subtaskId })}</title>
-                  </path>
-
-                  {/* Node at parent */}
-                  <circle
-                    cx={thread.x1}
-                    cy={thread.y1}
-                    r={thread.isHighlighted ? 4.5 : 3.5}
-                    fill={thread.parentColor}
-                    stroke="#ffffff"
-                    strokeWidth={1.5}
-                  />
-
-                  {/* Node at subtask */}
-                  <circle
-                    cx={thread.x2}
-                    cy={thread.y2}
-                    r={thread.isHighlighted ? 4.5 : 3.5}
-                    fill={thread.subtaskColor}
-                    stroke="#ffffff"
-                    strokeWidth={1.5}
-                  />
-                  {thread.isHighlighted && (
-                    <circle
-                      cx={thread.x2}
-                      cy={thread.y2}
-                      r={6}
-                      fill="none"
-                      stroke={thread.subtaskColor}
-                      strokeWidth={1.5}
-                      opacity={0.5}
-                    />
-                  )}
-
-                  {/* Midpoint badge displaying subtask ID */}
-                  <g
-                    transform={`translate(${thread.mx - 27}, ${thread.my - 10})`}
-                    className="cursor-pointer pointer-events-auto select-none"
-                    onClick={() => openDrawer(thread.subtaskId)}
-                    onMouseEnter={() => setHoveredTaskId(thread.subtaskId)}
-                    onMouseLeave={() => setHoveredTaskId(null)}
-                  >
-                    <rect
-                      width={54}
-                      height={20}
-                      rx={10}
-                      fill={thread.isHighlighted ? '#171717' : '#ffffff'}
-                      stroke={thread.isHighlighted ? thread.subtaskColor : '#e5e7eb'}
-                      strokeWidth={1.5}
-                      className="shadow-xs transition-colors duration-150"
-                    />
-                    <text
-                      x={27}
-                      y={13.5}
-                      textAnchor="middle"
-                      fill={thread.isHighlighted ? '#ffffff' : '#374151'}
-                      fontSize={9}
-                      fontFamily="monospace"
-                      fontWeight={600}
-                    >
-                      {thread.subtaskId}
-                    </text>
-                  </g>
-                </g>
-              ))}
-            </svg>
-          )}
-
           <div className="flex items-start space-x-3.5 h-full min-w-max pb-1">
             {columns.map((column, index) => {
-              const firstColId = columns[0]?.id ?? 'backlog';
+              const firstColId = columns.find((c) => c.isIntake)?.id ?? columns[0]?.id ?? 'backlog';
               const isFirstColumn = column.id === firstColId;
               const columnTasks = filteredTasks.filter((t) => {
                 if (t.columnId === column.id) return true;
                 if (isFirstColumn) {
-                  // If a task's columnId doesn't match any column in the active board, fallback to the first column (backlog)
+                  // If a task's columnId doesn't match any column in the active board, fallback to the first column (intake)
                   const colExists = columns.some((c) => c.id === t.columnId);
                   return !colExists;
                 }
                 return false;
               });
-              // Закреплены только backlog/ready/terminal по id/флагу.
-              // index===0 — лишь fallback, когда id бэклога неизвестен (нет колонки backlog).
-              const pinnedById =
+              // Закреплены intake и terminal колонки (колонка 0 и последняя, либо по флагам)
+              const isPinned =
+                column.isIntake ||
+                Boolean(column.terminal) ||
                 column.id === 'backlog' ||
                 column.id === 'ready' ||
-                Boolean(column.terminal);
-              const isBacklogFallback =
-                index === 0 &&
-                !pinnedById &&
-                !columns.some((c) => c.id === 'backlog');
-              const isPinned = pinnedById || isBacklogFallback;
+                index === 0 ||
+                index === columns.length - 1;
 
               return (
                 <KanbanColumn
@@ -1179,22 +1041,32 @@ export default function KanbanBoard() {
 
       {/* Add Task Modal */}
       {isNewTaskModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 p-3 animate-in fade-in duration-100">
-          <div className="relative flex flex-col w-[480px] max-w-full rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-md p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors">
-            <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#21262d]">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 p-3 animate-in fade-in duration-100"
+          onKeyDown={handleModalKeyDown}
+        >
+          <div
+            className="relative flex flex-col w-[620px] max-w-[95vw] max-h-[90vh] rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-md p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors overflow-hidden"
+            onPaste={handleModalPaste}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#21262d] shrink-0">
               <h3 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc]">
                 {t('newTask.modalTitle')}
               </h3>
               <button
-                onClick={() => setIsNewTaskModalOpen(false)}
+                type="button"
+                onClick={handleCloseAddTask}
                 className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
-                title={t('common.close')}
+                aria-label={t('common.close')}
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateTask} className="mt-4 space-y-3.5 text-xs">
+            <form
+              onSubmit={handleCreateTask}
+              className="mt-4 flex flex-col flex-1 min-h-0 overflow-y-auto space-y-4 text-xs pr-1"
+            >
               <div>
                 <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">
                   {t('newTask.titleLabel')}
@@ -1214,12 +1086,90 @@ export default function KanbanBoard() {
                   {t('newTask.descLabel')}
                 </label>
                 <textarea
-                  rows={2}
+                  rows={6}
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
                   placeholder={t('newTask.descPlaceholder')}
-                  className="w-full px-3 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-sans resize-none transition"
+                  className="w-full min-h-[130px] px-3 py-2 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-sans leading-relaxed resize-y transition"
                 />
+              </div>
+
+              {/* Attachments Section */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium">
+                    {t('newTask.attachmentsLabel')}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-sans text-[#4d4d4d] dark:text-[#c9d1d9] bg-[#fafafa] dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] transition cursor-pointer"
+                  >
+                    <ImagePlus className="h-3 w-3" />
+                    <span>{t('newTask.pasteHint')}</span>
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileInputChange}
+                  />
+                </div>
+
+                {/* Thumbnail gallery */}
+                {newAttachments.length > 0 ? (
+                  <div className="flex flex-wrap gap-2.5 p-2 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22]/50 max-h-40 overflow-y-auto">
+                    {newAttachments.map((att, idx) => (
+                      <div
+                        key={att.id}
+                        className="group relative flex flex-col items-center w-24 rounded-md overflow-hidden border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#0d1117] shadow-2xs hover:border-[#171717] dark:hover:border-[#f0f6fc] transition"
+                      >
+                        <div
+                          className="relative w-full h-16 cursor-pointer overflow-hidden bg-black/5 dark:bg-white/5"
+                          onClick={() => setPreviewLightbox({ src: att.dataUrl, alt: att.name })}
+                          title={att.name}
+                        >
+                          <img
+                            src={att.dataUrl}
+                            alt={att.name}
+                            className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                          />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <ZoomIn className="h-4 w-4 text-white drop-shadow" />
+                          </div>
+                        </div>
+                        <div className="w-full px-1.5 py-0.5 flex items-center justify-between text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] border-t border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22]">
+                          <span className="truncate max-w-[60px]" title={att.name}>
+                            #{idx + 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveAttachment(att.id);
+                            }}
+                            className="p-0.5 rounded text-[#8f8f8f] hover:text-[#ef4444] dark:hover:text-[#f87171] transition cursor-pointer"
+                            aria-label={t('newTask.removeAttachment')}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex flex-col items-center justify-center p-3 rounded-md border border-dashed border-[#d4d4d8] dark:border-[#30363d] bg-[#fafafa]/50 dark:bg-[#161b22]/30 text-center cursor-pointer hover:bg-[#fafafa] dark:hover:bg-[#161b22] transition"
+                  >
+                    <Paperclip className="h-4 w-4 text-[#8f8f8f] dark:text-[#8b949e] mb-1" />
+                    <span className="text-[11px] font-sans text-[#666666] dark:text-[#8b949e]">
+                      {t('newTask.pasteHint')}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -1239,10 +1189,10 @@ export default function KanbanBoard() {
                 </select>
               </div>
 
-              <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#ebebeb] dark:border-[#21262d]">
+              <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#ebebeb] dark:border-[#21262d] shrink-0">
                 <button
                   type="button"
-                  onClick={() => setIsNewTaskModalOpen(false)}
+                  onClick={handleCloseAddTask}
                   className="px-3 py-1.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer font-sans"
                 >
                   {t('common.cancel')}
@@ -1257,6 +1207,15 @@ export default function KanbanBoard() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Image Preview Lightbox */}
+      {previewLightbox && (
+        <ImageLightboxModal
+          src={previewLightbox.src}
+          alt={previewLightbox.alt}
+          onClose={() => setPreviewLightbox(null)}
+        />
       )}
 
       {/* Board Tab Context Menu (ПКМ) */}

@@ -169,7 +169,7 @@ pub async fn set_active_project(
     // Ensure .gitignore excludes local CVH runtime entries
     let _ = ensure_project_gitignore(&new_path);
 
-    // Scaffold empty .cvh structure (agents/, worktrees/, skills/, settings/) if missing
+    // Scaffold empty .cvh structure (agents/, skills/, settings/) if missing
     scaffold_cvh_project(&new_path)
         .await
         .map_err(|e| format!("Failed to scaffold .cvh structure: {}", e))?;

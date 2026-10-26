@@ -21,6 +21,7 @@ use std::path::PathBuf;
             routes: None,
             auto_run: None,
             terminal: None,
+            is_intake: None,
         }
     }
 
@@ -29,7 +30,7 @@ use std::path::PathBuf;
     }
 
     #[test]
-    fn test_normalize_backlog_first_ready_last_stable() {
+    fn test_normalize_preserves_custom_column_order() {
         let cols = vec![
             test_col("dev"),
             test_col("ready"),
@@ -38,11 +39,13 @@ use std::path::PathBuf;
             test_col("qa"),
         ];
         let out = normalize_pipeline_columns(cols).expect("normalize failed");
-        assert_eq!(ids(&out), vec!["backlog", "dev", "review", "qa", "ready"]);
+        assert_eq!(ids(&out), vec!["dev", "ready", "review", "backlog", "qa"]);
+        assert_eq!(out[0].is_intake, Some(true));
+        assert_eq!(out.last().unwrap().terminal, Some(true));
     }
 
     #[test]
-    fn test_normalize_already_ordered_keeps_middle_order() {
+    fn test_normalize_already_ordered_keeps_order_and_sets_intake_terminal() {
         let cols = vec![
             test_col("backlog"),
             test_col("a"),
@@ -51,13 +54,24 @@ use std::path::PathBuf;
         ];
         let out = normalize_pipeline_columns(cols).expect("normalize failed");
         assert_eq!(ids(&out), vec!["backlog", "a", "b", "ready"]);
+        assert_eq!(out[0].is_intake, Some(true));
+        assert_eq!(out.last().unwrap().terminal, Some(true));
     }
 
     #[test]
-    fn test_normalize_without_specials_reinjects_backlog_and_ready() {
+    fn test_normalize_without_specials_preserves_custom_columns_without_forced_injection() {
         let cols = vec![test_col("a"), test_col("b"), test_col("c")];
         let out = normalize_pipeline_columns(cols).expect("normalize failed");
-        assert_eq!(ids(&out), vec!["backlog", "a", "b", "c", "ready"]);
+        assert_eq!(ids(&out), vec!["a", "b", "c"]);
+        assert_eq!(out[0].is_intake, Some(true));
+        assert_eq!(out.last().unwrap().terminal, Some(true));
+    }
+
+    #[test]
+    fn test_normalize_empty_returns_canonical() {
+        let out = normalize_pipeline_columns(vec![]).expect("normalize failed");
+        assert_eq!(ids(&out), vec!["backlog", "dev", "ready"]);
+        assert_eq!(out[0].is_intake, Some(true));
         assert_eq!(out.last().unwrap().terminal, Some(true));
     }
 
@@ -716,6 +730,7 @@ use std::path::PathBuf;
                             routes: None,
                             auto_run: None,
                             terminal: None,
+                            is_intake: Some(true),
                         },
                         PipelineColumn {
                             id: "in_progress".to_string(),
@@ -734,6 +749,7 @@ use std::path::PathBuf;
                             routes: None,
                             auto_run: None,
                             terminal: None,
+                            is_intake: None,
                         },
                         PipelineColumn {
                             id: "ready".to_string(),
@@ -752,6 +768,7 @@ use std::path::PathBuf;
                             routes: None,
                             auto_run: None,
                             terminal: Some(true),
+                            is_intake: None,
                         },
                     ],
                 },
@@ -785,6 +802,7 @@ use std::path::PathBuf;
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            position: None,
         };
 
         let modified = heal_task_board_and_column(&mut orphaned_task, &custom_cfg);
@@ -818,6 +836,7 @@ use std::path::PathBuf;
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            position: None,
         };
 
         let modified_valid = heal_task_board_and_column(&mut valid_task, &custom_cfg);
@@ -966,6 +985,7 @@ use std::path::PathBuf;
         let _ = tokio::fs::remove_dir_all(&empty_base).await;
     }
 
+    #[allow(dead_code)]
     fn hook_col(id: &str, on_enter: Option<&str>) -> PipelineColumn {
         let mut col = test_col(id);
         if let Some(v) = on_enter {
@@ -1003,6 +1023,11 @@ use std::path::PathBuf;
         let mut task3 = task_with_wt("CVH-003", None);
         apply_worktree_from_hook_stdout(&mut task3, "plain log, no markers\n");
         assert!(task3.worktree_path.is_none());
+
+        // Windows backslashes in CVH_WORKTREE are normalized to forward slashes
+        let mut task4 = task_with_wt("CVH-004", None);
+        apply_worktree_from_hook_stdout(&mut task4, "CVH_WORKTREE=worktrees\\CVH-004\n");
+        assert_eq!(task4.worktree_path.as_deref(), Some("worktrees/CVH-004"));
     }
 
     #[tokio::test]
@@ -1066,6 +1091,7 @@ use std::path::PathBuf;
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: Some(true),
             },
             crate::config::PipelineColumn {
                 id: "dev".to_string(),
@@ -1084,6 +1110,7 @@ use std::path::PathBuf;
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: None,
             },
             crate::config::PipelineColumn {
                 id: "ready".to_string(),
@@ -1102,6 +1129,7 @@ use std::path::PathBuf;
                 routes: None,
                 auto_run: None,
                 terminal: Some(true),
+                is_intake: None,
             },
         ];
 
@@ -1123,6 +1151,7 @@ use std::path::PathBuf;
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: Some(true),
             },
             crate::config::PipelineColumn {
                 id: "in_progress".to_string(),
@@ -1141,6 +1170,7 @@ use std::path::PathBuf;
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: None,
             },
             crate::config::PipelineColumn {
                 id: "done".to_string(),
@@ -1159,6 +1189,7 @@ use std::path::PathBuf;
                 routes: None,
                 auto_run: None,
                 terminal: Some(true),
+                is_intake: None,
             },
         ];
 
@@ -1205,6 +1236,7 @@ use std::path::PathBuf;
             handover_summary: None,
             attachments: None,
             cover_image: None,
+            position: None,
         };
         save_tasks_to_disk(&base, &[task1]).await.expect("save task1");
 
@@ -1243,6 +1275,7 @@ use std::path::PathBuf;
             handover_summary: None,
             attachments: None,
             cover_image: None,
+            position: None,
         };
         save_tasks_to_disk(&base, &[t1.clone(), task2]).await.expect("save task2");
 
@@ -1288,6 +1321,7 @@ use std::path::PathBuf;
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: Some(true),
             },
             crate::config::PipelineColumn {
                 id: "dev".to_string(),
@@ -1305,7 +1339,8 @@ use std::path::PathBuf;
                 hooks: HashMap::new(),
                 routes: None,
                 auto_run: None,
-                terminal: None,
+                terminal: Some(true),
+                is_intake: None,
             },
         ];
 
@@ -1347,6 +1382,7 @@ use std::path::PathBuf;
             handover_summary: None,
             attachments: None,
             cover_image: None,
+            position: None,
         };
         save_tasks_to_disk(&base, &[task]).await.expect("save task");
 
@@ -1410,6 +1446,7 @@ use std::path::PathBuf;
             handover_summary: None,
             attachments: None,
             cover_image: None,
+            position: None,
         };
 
         // 1. When task.model is set, it strictly overrides global model and column model!
@@ -1614,6 +1651,7 @@ Write code.
             handover_summary: None,
             attachments: None,
             cover_image: None,
+            position: None,
         };
         save_tasks_to_disk(&base, &[task]).await.expect("save task");
 
@@ -1707,6 +1745,7 @@ Write code.
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: Some(true),
             },
             crate::config::PipelineColumn {
                 id: "dev".to_string(),
@@ -1725,6 +1764,7 @@ Write code.
                 routes: None,
                 auto_run: Some(true),
                 terminal: None,
+                is_intake: None,
             },
             crate::config::PipelineColumn {
                 id: "review".to_string(),
@@ -1743,6 +1783,7 @@ Write code.
                 routes: None,
                 auto_run: Some(true),
                 terminal: None,
+                is_intake: None,
             },
             crate::config::PipelineColumn {
                 id: "ready".to_string(),
@@ -1761,6 +1802,7 @@ Write code.
                 routes: None,
                 auto_run: None,
                 terminal: Some(true),
+                is_intake: None,
             },
         ];
 
@@ -1800,6 +1842,7 @@ Write code.
             handover_summary: None,
             attachments: None,
             cover_image: None,
+            position: None,
         };
         save_tasks_to_disk(&base, &[parent_task]).await.expect("save parent task");
 
@@ -1838,12 +1881,10 @@ Write code.
         assert_eq!(subtask.model.as_deref(), Some("custom-model"));
         assert_eq!(subtask.priority.as_deref(), Some("high"));
 
-        // Verify SQLite dialog items contain handover summaries for both parent and child
+        // Verify SQLite dialog items contain handover summary on parent (deduplicated on subtask dialog to prevent phantom bubbles)
         let parent_dialog = crate::db::load_dialog_items(&base, "CVH-100").expect("load parent dialog");
         assert!(parent_dialog.iter().any(|d| d.content.as_deref().unwrap_or("").contains("Handover: implemented feature and tests")));
-
-        let subtask_dialog = crate::db::load_dialog_items(&base, "CVH-100.1").expect("load subtask dialog");
-        assert!(subtask_dialog.iter().any(|d| d.content.as_deref().unwrap_or("").contains("Handover: implemented feature and tests")));
+        assert_eq!(subtask.handover_summary.as_deref(), Some("Handover: implemented feature and tests"));
 
         // 1b. Verify subtask deduplication protection (§ 1):
         // Calling advance_task a second time must NOT create CVH-100.2!
@@ -1914,6 +1955,7 @@ Write code.
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: Some(true),
             },
             crate::config::PipelineColumn {
                 id: "dev".to_string(),
@@ -1932,6 +1974,7 @@ Write code.
                 routes: None,
                 auto_run: Some(true),
                 terminal: None,
+                is_intake: None,
             },
             crate::config::PipelineColumn {
                 id: "review".to_string(),
@@ -1950,6 +1993,7 @@ Write code.
                 routes: None,
                 auto_run: Some(true),
                 terminal: None,
+                is_intake: None,
             },
             crate::config::PipelineColumn {
                 id: "retro".to_string(),
@@ -1968,6 +2012,7 @@ Write code.
                 routes: None,
                 auto_run: Some(true),
                 terminal: None,
+                is_intake: None,
             },
             crate::config::PipelineColumn {
                 id: "ready".to_string(),
@@ -1986,6 +2031,7 @@ Write code.
                 routes: None,
                 auto_run: None,
                 terminal: Some(true),
+                is_intake: None,
             },
         ];
 
@@ -2025,6 +2071,7 @@ Write code.
             handover_summary: None,
             attachments: None,
             cover_image: None,
+            position: None,
         };
         save_tasks_to_disk(&base, &[parent]).await.expect("save parent");
 
@@ -2119,6 +2166,7 @@ Write code.
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: Some(true),
             },
             crate::config::PipelineColumn {
                 id: "dev".to_string(),
@@ -2137,6 +2185,7 @@ Write code.
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: None,
             },
             crate::config::PipelineColumn {
                 id: "ready".to_string(),
@@ -2155,6 +2204,7 @@ Write code.
                 routes: None,
                 auto_run: None,
                 terminal: Some(true),
+                is_intake: None,
             },
         ];
 
@@ -2194,6 +2244,7 @@ Write code.
             handover_summary: None,
             attachments: None,
             cover_image: None,
+            position: None,
         };
 
         // Parent CVH-300.1 waiting on Child CVH-300.1.1
@@ -2222,6 +2273,7 @@ Write code.
             handover_summary: None,
             attachments: None,
             cover_image: None,
+            position: None,
         };
 
         // Child CVH-300.1.1 running in dev
@@ -2250,6 +2302,7 @@ Write code.
             handover_summary: None,
             attachments: None,
             cover_image: None,
+            position: None,
         };
 
         save_tasks_to_disk(&base, &[gp, parent, child]).await.expect("save tasks");
@@ -2348,6 +2401,7 @@ Write code.
             todos: None,
             attachments: None,
             cover_image: None,
+            position: None,
         };
         save_tasks_to_disk(&base, &[task]).await.expect("save task");
 
@@ -2481,6 +2535,7 @@ Write code.
             todos: None,
             attachments: None,
             cover_image: None,
+            position: None,
         };
         save_tasks_to_disk(&base, &[task]).await.expect("save task");
 
@@ -2551,6 +2606,7 @@ Write code.
             skip_worktree: Some(false),
             created_at: chrono::Utc::now().timestamp_millis(),
             updated_at: chrono::Utc::now().timestamp_millis(),
+            position: None,
         };
 
         // Step 1: Early persistence (create_task fix)
@@ -2575,7 +2631,7 @@ Write code.
         assert_eq!(moved.status.as_deref(), Some("running"));
 
         // Step 3: Worktree completion completes late and updates worktree_path / branch
-        new_task.worktree_path = Some(".cvh/worktrees/cvh-101".to_string());
+        new_task.worktree_path = Some("worktrees/cvh-101".to_string());
         new_task.branch = Some("feat/cvh-101".to_string());
 
         let mut current_tasks = load_tasks_from_disk(&base).await;
@@ -2591,7 +2647,7 @@ Write code.
         let final_task = final_loaded.iter().find(|t| t.id == task_id).expect("task must exist on disk");
         assert_eq!(final_task.stage_id, "dev", "Stage must NOT be reverted to backlog!");
         assert_eq!(final_task.status.as_deref(), Some("running"));
-        assert_eq!(final_task.worktree_path.as_deref(), Some(".cvh/worktrees/cvh-101"));
+        assert_eq!(final_task.worktree_path.as_deref(), Some("worktrees/cvh-101"));
         assert_eq!(final_task.branch.as_deref(), Some("feat/cvh-101"));
 
         let _ = tokio::fs::remove_dir_all(&base).await;
@@ -2629,6 +2685,7 @@ Write code.
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            position: None,
         };
 
         let task_b = Task {
@@ -2656,6 +2713,7 @@ Write code.
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            position: None,
         };
 
         // Disk has only Task A
@@ -2713,6 +2771,7 @@ Write code.
             Some("CVH-005".to_string()),
             None,
             None,
+            None,
         )
         .await
         .expect("internal_create_task must succeed with explicit task_id");
@@ -2735,6 +2794,7 @@ Write code.
             "backlog".to_string(),
             Some("development".to_string()),
             Some(true),
+            None,
             None,
             None,
             None,
@@ -2789,6 +2849,7 @@ Write code.
             Some(true),
             None,
             Some("CVH-005".to_string()),
+            None,
             None,
             None,
         )
@@ -2880,6 +2941,7 @@ Write code.
             skip_worktree: Some(true),
             created_at: chrono::Utc::now().timestamp_millis(),
             updated_at: chrono::Utc::now().timestamp_millis(),
+            position: None,
         };
         save_tasks_to_disk(&tmp, &[task]).await.expect("save task");
 
@@ -2900,6 +2962,513 @@ Write code.
 
         assert_eq!(moved.id, "CVH-001");
         assert_eq!(moved.stage_id, "dev");
+
+        let _ = tokio::fs::remove_dir_all(&tmp).await;
+    }
+
+    #[tokio::test]
+    async fn test_terminal_task_clears_waiting_for_subtask_and_heal_tasks_cleans_stale_subtasks() {
+        let tmp = PathBuf::from("target").join(format!("cvh_heal_subtasks_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&tmp).await.expect("test dir");
+
+        let bcfg = crate::config::BoardsConfig {
+            active_board_id: "development".to_string(),
+            boards: vec![crate::config::BoardDef {
+                id: "development".to_string(),
+                name: "Development".to_string(),
+                columns: vec![
+                    crate::config::PipelineColumn {
+                        id: "backlog".to_string(),
+                        title: "Backlog".to_string(),
+                        color: None,
+                        icon: None,
+                        persona: None,
+                        on_enter_script: None,
+                        context_window: None,
+                        model_override: None,
+                        reasoning_effort: None,
+                        temperature: None,
+                        gatekeeper_sensor: None,
+                        allowed_tools: None,
+                        hooks: HashMap::new(),
+                        routes: None,
+                        auto_run: None,
+                        terminal: None,
+                        is_intake: Some(true),
+                    },
+                    crate::config::PipelineColumn {
+                        id: "dev".to_string(),
+                        title: "Dev".to_string(),
+                        color: None,
+                        icon: None,
+                        persona: Some("developer".to_string()),
+                        on_enter_script: None,
+                        context_window: None,
+                        model_override: None,
+                        reasoning_effort: None,
+                        temperature: None,
+                        gatekeeper_sensor: None,
+                        allowed_tools: None,
+                        hooks: HashMap::new(),
+                        routes: None,
+                        auto_run: Some(true),
+                        terminal: None,
+                        is_intake: None,
+                    },
+                    crate::config::PipelineColumn {
+                        id: "ready".to_string(),
+                        title: "Ready".to_string(),
+                        color: None,
+                        icon: None,
+                        persona: None,
+                        on_enter_script: None,
+                        context_window: None,
+                        model_override: None,
+                        reasoning_effort: None,
+                        temperature: None,
+                        gatekeeper_sensor: None,
+                        allowed_tools: None,
+                        hooks: HashMap::new(),
+                        routes: None,
+                        auto_run: None,
+                        terminal: Some(true),
+                        is_intake: None,
+                    },
+                ],
+            }],
+        };
+
+        let mut tasks = vec![
+            Task {
+                id: "CVH-500".to_string(),
+                title: "Parent in ready".to_string(),
+                description: String::new(),
+                stage_id: "ready".to_string(),
+                board_id: Some("development".to_string()),
+                worktree_path: None,
+                branch: None,
+                verdict: None,
+                custom_flow: None,
+                status: Some("done".to_string()),
+                model: None,
+                parent_id: None,
+                subtask_index: None,
+                waiting_for_subtask_id: Some("CVH-500.1".to_string()),
+                handover_summary: None,
+                cover_image: None,
+                attachments: None,
+                todos: None,
+                priority: None,
+                tags: None,
+                current_tokens: None,
+                skip_worktree: Some(true),
+                created_at: 0,
+                updated_at: 0,
+                position: None,
+            },
+            Task {
+                id: "CVH-500.1".to_string(),
+                title: "Completed subtask".to_string(),
+                description: String::new(),
+                stage_id: "dev".to_string(),
+                board_id: Some("development".to_string()),
+                worktree_path: None,
+                branch: None,
+                verdict: None,
+                custom_flow: None,
+                status: Some("done".to_string()),
+                model: None,
+                parent_id: Some("CVH-500".to_string()),
+                subtask_index: Some(1),
+                waiting_for_subtask_id: None,
+                handover_summary: None,
+                cover_image: None,
+                attachments: None,
+                todos: None,
+                priority: None,
+                tags: None,
+                current_tokens: None,
+                skip_worktree: Some(true),
+                created_at: 0,
+                updated_at: 0,
+                position: None,
+            },
+            Task {
+                id: "CVH-501".to_string(),
+                title: "Parent with completed child".to_string(),
+                description: String::new(),
+                stage_id: "dev".to_string(),
+                board_id: Some("development".to_string()),
+                worktree_path: None,
+                branch: None,
+                verdict: None,
+                custom_flow: None,
+                status: Some("waiting_subtask".to_string()),
+                model: None,
+                parent_id: None,
+                subtask_index: None,
+                waiting_for_subtask_id: Some("CVH-501.1".to_string()),
+                handover_summary: None,
+                cover_image: None,
+                attachments: None,
+                todos: None,
+                priority: None,
+                tags: None,
+                current_tokens: None,
+                skip_worktree: Some(true),
+                created_at: 0,
+                updated_at: 0,
+                position: None,
+            },
+            Task {
+                id: "CVH-501.1".to_string(),
+                title: "Subtask 501.1".to_string(),
+                description: String::new(),
+                stage_id: "dev".to_string(),
+                board_id: Some("development".to_string()),
+                worktree_path: None,
+                branch: None,
+                verdict: None,
+                custom_flow: None,
+                status: Some("done".to_string()),
+                model: None,
+                parent_id: Some("CVH-501".to_string()),
+                subtask_index: Some(1),
+                waiting_for_subtask_id: None,
+                handover_summary: None,
+                cover_image: None,
+                attachments: None,
+                todos: None,
+                priority: None,
+                tags: None,
+                current_tokens: None,
+                skip_worktree: Some(true),
+                created_at: 0,
+                updated_at: 0,
+                position: None,
+            },
+        ];
+
+        // 1. Verify heal_tasks cleans up waiting_for_subtask_id
+        let healed = heal_tasks(&mut tasks, &bcfg);
+        assert!(healed, "heal_tasks must return true when tasks are modified");
+
+        assert_eq!(tasks[0].waiting_for_subtask_id, None, "Terminal parent must have waiting_for_subtask_id None");
+        assert_eq!(tasks[0].status.as_deref(), Some("done"));
+
+        assert_eq!(tasks[2].waiting_for_subtask_id, None, "Parent with completed child must have waiting_for_subtask_id cleared");
+        assert_eq!(tasks[2].status.as_deref(), Some("idle"), "Status must revert from waiting_subtask to idle");
+
+        // 2. Verify subtask advance to terminal via internal_advance_task_to_stage clears parent waiting_for_subtask_id
+        crate::config::save_boards_config(&tmp, &bcfg).await.expect("save boards");
+        let parent_active = Task {
+            id: "CVH-600".to_string(),
+            title: "Active Parent".to_string(),
+            description: String::new(),
+            stage_id: "dev".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("waiting_subtask".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: Some("CVH-600.1".to_string()),
+            handover_summary: None,
+            cover_image: None,
+            attachments: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: Some(true),
+            created_at: 0,
+            updated_at: 0,
+            position: None,
+        };
+        let child_active = Task {
+            id: "CVH-600.1".to_string(),
+            title: "Child in dev".to_string(),
+            description: String::new(),
+            stage_id: "dev".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("running".to_string()),
+            model: None,
+            parent_id: Some("CVH-600".to_string()),
+            subtask_index: Some(1),
+            waiting_for_subtask_id: None,
+            handover_summary: None,
+            cover_image: None,
+            attachments: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: Some(true),
+            created_at: 0,
+            updated_at: 0,
+            position: None,
+        };
+        save_tasks_to_disk(&tmp, &[parent_active, child_active]).await.expect("save active tasks");
+
+        let adv_res = internal_advance_task_to_stage(&tmp, "CVH-600.1", Some("ready"), "Child finished", None)
+            .await
+            .expect("advance child to ready");
+        assert!(adv_res.contains("УСПЕШНО"));
+
+        let loaded = load_tasks_from_disk(&tmp).await;
+        let parent_after = loaded.iter().find(|t| t.id == "CVH-600").expect("parent CVH-600");
+        assert_eq!(parent_after.stage_id, "ready");
+        assert_eq!(parent_after.status.as_deref(), Some("done"));
+        assert_eq!(parent_after.waiting_for_subtask_id, None, "Parent waiting_for_subtask_id must be None after advance to ready");
+
+        let _ = tokio::fs::remove_dir_all(&tmp).await;
+    }
+
+    #[tokio::test]
+    async fn test_move_task_to_plan_stage_autorun_and_running_status() {
+        let tmp = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("tmp")
+            .join(format!("cvh_test_plan_autorun_{}", uuid::Uuid::new_v4()));
+        let _ = tokio::fs::create_dir_all(&tmp).await;
+
+        // Scaffold minimal boards.json with development board containing backlog, plan (persona planner), dev, and ready
+        let boards_cfg = serde_json::json!({
+            "active_board_id": "development",
+            "boards": [
+                {
+                    "id": "development",
+                    "name": "Разработка",
+                    "columns": [
+                        { "id": "backlog", "title": "Бэклог", "auto_run": false },
+                        { "id": "plan", "title": "Планирование", "persona": "planner", "auto_run": true },
+                        { "id": "dev", "title": "В работе", "persona": "cvh-dev", "auto_run": true },
+                        { "id": "ready", "title": "Готово", "terminal": true }
+                    ]
+                }
+            ]
+        });
+        let boards_path = tmp.join(".cvh").join("boards.json");
+        let _ = tokio::fs::create_dir_all(tmp.join(".cvh")).await;
+        tokio::fs::write(&boards_path, serde_json::to_string_pretty(&boards_cfg).unwrap())
+            .await
+            .expect("write boards.json");
+
+        // Create task in backlog
+        let task = internal_create_task(
+            &tmp,
+            "Plan Task".to_string(),
+            "Move to plan test".to_string(),
+            "backlog".to_string(),
+            Some("development".to_string()),
+            Some(true),
+            None,
+            Some("CVH-101".to_string()),
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("create task");
+
+        assert_eq!(task.stage_id, "backlog");
+        assert_ne!(task.status.as_deref(), Some("running"));
+
+        // Move task to 'plan' column
+        let moved = internal_move_task_stage(
+            &tmp,
+            "CVH-101",
+            "plan",
+            None,
+            None,
+            None,
+            None,
+            false,
+            Some("development".to_string()),
+        )
+        .await
+        .expect("move task to plan must succeed");
+
+        assert_eq!(moved.stage_id, "plan", "Task must move to 'plan'");
+        assert_ne!(moved.stage_id, "ready", "Task must NEVER falsely move to 'ready'");
+        assert_eq!(
+            moved.status.as_deref(),
+            Some("running"),
+            "Task moving to stage with persona 'planner' and auto_run=true must enter 'running' status!"
+        );
+        assert_ne!(moved.status.as_deref(), Some("done"), "Task status must NOT be 'done'");
+
+        let _ = tokio::fs::remove_dir_all(&tmp).await;
+    }
+
+    #[tokio::test]
+    async fn test_move_task_to_plan_from_pipeline_when_not_in_board() {
+        let tmp = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("tmp")
+            .join(format!("cvh_test_plan_pipeline_{}", uuid::Uuid::new_v4()));
+        let _ = tokio::fs::create_dir_all(&tmp).await;
+        let _ = tokio::fs::create_dir_all(tmp.join(".cvh")).await;
+
+        // Boards config does NOT contain 'plan' column
+        let boards_cfg = serde_json::json!({
+            "active_board_id": "development",
+            "boards": [
+                {
+                    "id": "development",
+                    "name": "Разработка",
+                    "columns": [
+                        { "id": "backlog", "title": "Бэклог", "auto_run": false },
+                        { "id": "dev", "title": "В работе", "persona": "cvh-dev", "auto_run": true },
+                        { "id": "ready", "title": "Готово", "terminal": true }
+                    ]
+                }
+            ]
+        });
+        tokio::fs::write(
+            tmp.join(".cvh").join("boards.json"),
+            serde_json::to_string_pretty(&boards_cfg).unwrap(),
+        )
+        .await
+        .expect("write boards.json");
+
+        // Pipeline config DOES contain 'plan' column
+        let pipeline_cfg = serde_json::json!({
+            "id": "development",
+            "title": "Pipeline",
+            "columns": [
+                { "id": "backlog", "title": "Бэклог" },
+                { "id": "plan", "title": "Планирование", "persona": "planner", "auto_run": true },
+                { "id": "dev", "title": "В работе", "persona": "cvh-dev", "auto_run": true },
+                { "id": "ready", "title": "Готово", "terminal": true }
+            ]
+        });
+        tokio::fs::write(
+            tmp.join(".cvh").join("pipeline.json"),
+            serde_json::to_string_pretty(&pipeline_cfg).unwrap(),
+        )
+        .await
+        .expect("write pipeline.json");
+
+        let _task = internal_create_task(
+            &tmp,
+            "Pipeline Plan Task".to_string(),
+            "Move to plan from pipeline".to_string(),
+            "backlog".to_string(),
+            Some("development".to_string()),
+            Some(true),
+            None,
+            Some("CVH-102".to_string()),
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("create task");
+
+        // Move task to 'plan' column which only exists in pipeline.json
+        let moved = internal_move_task_stage(
+            &tmp,
+            "CVH-102",
+            "plan",
+            None,
+            None,
+            None,
+            None,
+            false,
+            Some("development".to_string()),
+        )
+        .await
+        .expect("move task to plan from pipeline must succeed");
+
+        assert_eq!(moved.stage_id, "plan", "Task must move to 'plan' from pipeline");
+        assert_ne!(moved.stage_id, "ready", "Task must NEVER falsely fall back to 'ready'");
+        assert_eq!(moved.status.as_deref(), Some("running"));
+
+        let _ = tokio::fs::remove_dir_all(&tmp).await;
+    }
+
+    #[tokio::test]
+    async fn test_move_task_to_non_existent_stage_returns_error_not_ready() {
+        let tmp = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("tmp")
+            .join(format!("cvh_test_non_existent_{}", uuid::Uuid::new_v4()));
+        let _ = tokio::fs::create_dir_all(&tmp).await;
+        let _ = tokio::fs::create_dir_all(tmp.join(".cvh")).await;
+
+        let boards_cfg = serde_json::json!({
+            "active_board_id": "development",
+            "boards": [
+                {
+                    "id": "development",
+                    "name": "Разработка",
+                    "columns": [
+                        { "id": "backlog", "title": "Бэклог" },
+                        { "id": "dev", "title": "В работе" },
+                        { "id": "ready", "title": "Готово", "terminal": true }
+                    ]
+                }
+            ]
+        });
+        tokio::fs::write(
+            tmp.join(".cvh").join("boards.json"),
+            serde_json::to_string_pretty(&boards_cfg).unwrap(),
+        )
+        .await
+        .expect("write boards.json");
+
+        let _task = internal_create_task(
+            &tmp,
+            "NonExistent Stage Task".to_string(),
+            "Move to non_existent".to_string(),
+            "backlog".to_string(),
+            Some("development".to_string()),
+            Some(true),
+            None,
+            Some("CVH-103".to_string()),
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("create task");
+
+        // Attempt move to 'non_existent' column
+        let res = internal_move_task_stage(
+            &tmp,
+            "CVH-103",
+            "non_existent",
+            None,
+            None,
+            None,
+            None,
+            false,
+            Some("development".to_string()),
+        )
+        .await;
+
+        assert!(res.is_err(), "Moving to non-existent stage must fail!");
+        let err = res.unwrap_err();
+        assert!(
+            err.contains("Target stage 'non_existent' not found in active board or pipeline columns. Available:"),
+            "Error message must specify available stages and not silently fall back to ready! Got: {}",
+            err
+        );
+
+        // Verify task on disk is still in backlog and NOT in ready / done
+        let loaded = load_tasks_from_disk(&tmp).await;
+        let t = loaded.iter().find(|t| t.id == "CVH-103").expect("task exists");
+        assert_eq!(t.stage_id, "backlog", "Task must remain in backlog");
+        assert_ne!(t.stage_id, "ready", "Task must NEVER be placed into ready");
+        assert_ne!(t.status.as_deref(), Some("done"), "Task status must NOT be done");
 
         let _ = tokio::fs::remove_dir_all(&tmp).await;
     }

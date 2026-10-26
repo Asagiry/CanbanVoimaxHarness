@@ -87,7 +87,6 @@ export default function WindowControls() {
         onMouseDown={(e) => e.stopPropagation()}
         onClick={() => void minimizeWindow()}
         className="h-10 w-11 inline-flex items-center justify-center text-[#71717a] hover:text-[#18181b] hover:bg-[#f4f4f5] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] dark:hover:bg-[#161b22] active:bg-[#e4e4e7] dark:active:bg-[#21262d] transition-colors cursor-pointer select-none"
-        title="Свернуть"
         aria-label="Свернуть окно"
       >
         <Minus className="h-3.5 w-3.5" strokeWidth={1.75} />
@@ -100,7 +99,6 @@ export default function WindowControls() {
         onMouseDown={(e) => e.stopPropagation()}
         onClick={() => void toggleMaximizeWindow().then(setIsMaximized)}
         className="h-10 w-11 inline-flex items-center justify-center text-[#71717a] hover:text-[#18181b] hover:bg-[#f4f4f5] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] dark:hover:bg-[#161b22] active:bg-[#e4e4e7] dark:active:bg-[#21262d] transition-colors cursor-pointer select-none"
-        title={isMaximized ? 'Восстановить' : 'Развернуть'}
         aria-label={isMaximized ? 'Восстановить окно' : 'Развернуть окно'}
       >
         {isMaximized ? (
@@ -117,7 +115,6 @@ export default function WindowControls() {
         onMouseDown={(e) => e.stopPropagation()}
         onClick={() => void closeWindow()}
         className="h-10 w-11 inline-flex items-center justify-center text-[#71717a] hover:bg-rose-600 hover:text-white active:bg-rose-700 transition-colors cursor-pointer select-none"
-        title="Закрыть"
         aria-label="Закрыть окно"
       >
         <X className="h-3.5 w-3.5" strokeWidth={2} />

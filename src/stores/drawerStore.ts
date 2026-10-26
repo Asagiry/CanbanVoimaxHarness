@@ -28,6 +28,7 @@ interface TaskTelemetry {
   cacheHitRate: number;
   durationMs?: number;
   tps?: number;
+  ttftMs?: number;
   systemTokens?: number;
   toolTokens?: number;
 }
@@ -385,6 +386,9 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
         (lastFeedItem.type === 'steer' || lastFeedItem.type === 'user') &&
         lastFeedItem.content?.trim() === content.trim()
       ) {
+        if (images && images.length > 0) {
+          lastFeedItem.images = images;
+        }
         return state;
       }
 
@@ -1109,6 +1113,9 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
                   if (item.type === 'steer') {
                     prev.type = 'steer';
                   }
+                  if (item.images && item.images.length > 0) {
+                    prev.images = item.images;
+                  }
                   continue;
                 }
                 dedupedItems.push(item);
@@ -1194,7 +1201,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
     const isBoardTask = useBoardStore.getState().tasks.some((t) => t.id === taskId);
     if (!isBoardTask) {
       const parentTaskId = state.activeTaskId;
-      if (parentTaskId && !taskId.includes(':sub:') && !taskId.startsWith('copilot:')) {
+      if (parentTaskId && !taskId.includes(':sub:')) {
         const resolvedSub = state.toolIdToSubagentId[taskId] || (state.activeSubagentId === taskId ? taskId : null);
         if (resolvedSub) {
           const isResolvedBoardTask = useBoardStore.getState().tasks.some((t) => t.id === resolvedSub);

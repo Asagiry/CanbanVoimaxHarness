@@ -18,7 +18,6 @@ pub struct AppState {
     pub active_agents: Mutex<HashMap<String, ActiveAgentHandle>>,
     pub agent_contexts: Mutex<HashMap<String, Arc<Mutex<crate::agent::compactor::AgentContextState>>>>,
     pub tasks: Arc<Mutex<Vec<Task>>>,
-    pub active_copilot: Arc<Mutex<Option<AgentEntry>>>,
 }
 
 impl AppState {
@@ -37,7 +36,6 @@ impl AppState {
             active_agents: Mutex::new(HashMap::new()),
             agent_contexts: Mutex::new(HashMap::new()),
             tasks: Arc::new(Mutex::new(Vec::new())),
-            active_copilot: Arc::new(Mutex::new(None)),
         }
     }
 

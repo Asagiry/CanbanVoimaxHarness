@@ -7,6 +7,7 @@ import QuestionPromptCard from './QuestionPromptCard';
 import CompactedContextCard from './CompactedContextCard';
 import ImageLightboxModal from './ImageLightboxModal';
 import { useDrawerStore } from '../../stores/drawerStore';
+import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import { useTranslation } from '../../stores/languageStore';
 import AgentIcon from '../common/AgentIcon';
@@ -29,6 +30,7 @@ import {
   Circle,
   Clock,
   ZoomIn,
+  Paperclip,
 } from 'lucide-react';
 import { formatSubagentDisplayTitle } from './SubagentsSidebar';
 
@@ -727,6 +729,7 @@ export default function DrawerActivityStream({
   runError,
   onRunAgent,
   onClearRunError,
+  subtasks,
 }: DrawerActivityStreamProps) {
   const {
     activeSubagentId,
@@ -739,6 +742,14 @@ export default function DrawerActivityStream({
     (p) => p.role.toLowerCase() === (activeSubagentRole || '').toLowerCase()
   );
   const { t } = useTranslation();
+
+  const effectiveAttachments =
+    task.attachments && task.attachments.length > 0
+      ? task.attachments
+      : task.parentId
+        ? subtasks?.find((t) => t.id === task.parentId)?.attachments ||
+          useBoardStore.getState().tasks.find((t) => t.id === task.parentId)?.attachments
+        : undefined;
 
   const [collapsedOutputs, setCollapsedOutputs] = useState<Set<string>>(() => new Set());
   const [showNewButton, setShowNewButton] = useState(false);
@@ -969,7 +980,7 @@ export default function DrawerActivityStream({
               type="button"
               onClick={onClearRunError}
               className="p-1 text-[#dc2626] dark:text-[#ff7b72] hover:text-[#991b1b] dark:hover:text-[#ffa198] rounded transition cursor-pointer"
-              title={t('drawer.closeNotification')}
+              aria-label={t('drawer.closeNotification')}
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -1007,6 +1018,34 @@ export default function DrawerActivityStream({
               <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed whitespace-pre-wrap select-text font-sans bg-[#fafafa] dark:bg-[#161b22] p-3 rounded-md border border-[#ebebeb] dark:border-[#30363d]">
                 {activeSubagentPrompt || t('drawer.subagentInstruction')}
               </div>
+
+              {/* Subagent Attachments Gallery */}
+              {effectiveAttachments && effectiveAttachments.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-[#ebebeb] dark:border-[#21262d]">
+                  <div className="text-[11px] font-mono font-medium text-[#666666] dark:text-[#8b949e] mb-2 flex items-center gap-1.5">
+                    <Paperclip className="h-3 w-3" />
+                    <span>{t('newTask.attachmentsLabel')} ({effectiveAttachments.length})</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {effectiveAttachments.map((att, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => handleOpenLightbox(att, `Attachment ${idx + 1}`)}
+                        className="relative group rounded-md overflow-hidden border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22] cursor-pointer hover:border-[#171717] dark:hover:border-[#f0f6fc] transition shadow-2xs"
+                      >
+                        <img
+                          src={att}
+                          alt={`Attachment ${idx + 1}`}
+                          className="h-20 w-28 object-cover transition-transform group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-opacity opacity-0 group-hover:opacity-100">
+                          <ZoomIn className="h-4 w-4 text-white drop-shadow-md" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <>
@@ -1026,6 +1065,34 @@ export default function DrawerActivityStream({
                 <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed whitespace-pre-wrap select-text font-sans">
                   {getCleanPrompt(task.description, task.title)}
                 </div>
+
+                {/* Task Attachments Gallery */}
+                {effectiveAttachments && effectiveAttachments.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-[#ebebeb] dark:border-[#21262d]">
+                    <div className="text-[11px] font-mono font-medium text-[#666666] dark:text-[#8b949e] mb-2 flex items-center gap-1.5">
+                      <Paperclip className="h-3 w-3" />
+                      <span>{t('newTask.attachmentsLabel')} ({effectiveAttachments.length})</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {effectiveAttachments.map((att, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => handleOpenLightbox(att, `Attachment ${idx + 1}`)}
+                          className="relative group rounded-md overflow-hidden border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22] cursor-pointer hover:border-[#171717] dark:hover:border-[#f0f6fc] transition shadow-2xs"
+                        >
+                          <img
+                            src={att}
+                            alt={`Attachment ${idx + 1}`}
+                            className="h-20 w-28 object-cover transition-transform group-hover:scale-105"
+                          />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-opacity opacity-0 group-hover:opacity-100">
+                            <ZoomIn className="h-4 w-4 text-white drop-shadow-md" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
           {/* a2) Relay Handoff Card */}
@@ -1372,7 +1439,7 @@ export default function DrawerActivityStream({
           type="button"
           onClick={scrollToBottom}
           className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-[#171717] hover:bg-[#262626] text-white text-xs font-medium font-sans shadow-md transition cursor-pointer active:scale-[0.98]"
-          title={t('drawer.scrollToNewTitle')}
+          aria-label={t('drawer.scrollToNewTitle')}
         >
           <ArrowDown className="h-3.5 w-3.5" />
           <span>{t('drawer.scrollToNew')}</span>

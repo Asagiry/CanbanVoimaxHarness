@@ -1,8 +1,11 @@
 use crate::agent::{Task, TodoItem};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, TransactionBehavior};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::Path;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, Mutex};
+
+static INITIALIZED_DBS: LazyLock<Mutex<HashSet<PathBuf>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -83,104 +86,121 @@ pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
         let _ = std::fs::create_dir_all(&db_dir);
     }
     let db_path = db_dir.join("harness.db");
-    let mut conn = Connection::open(db_path)?;
+    let mut conn = Connection::open(&db_path)?;
+
+    // Set busy timeout to 5000ms to eliminate instant SQLITE_BUSY under WAL concurrent access
+    conn.busy_timeout(std::time::Duration::from_millis(5000))?;
 
     conn.execute_batch(
         "PRAGMA journal_mode = WAL;
          PRAGMA synchronous = NORMAL;
-         PRAGMA foreign_keys = ON;
-
-         CREATE TABLE IF NOT EXISTS dialog_items (
-             id TEXT PRIMARY KEY,
-             task_id TEXT NOT NULL,
-             type TEXT NOT NULL,
-             content TEXT,
-             images_json TEXT,
-             timestamp TEXT,
-             created_at INTEGER NOT NULL,
-             tool_json TEXT,
-             duration_ms REAL
-         );
-         CREATE INDEX IF NOT EXISTS idx_dialog_task ON dialog_items(task_id, created_at);
-
-         CREATE TABLE IF NOT EXISTS tasks (
-             id TEXT PRIMARY KEY,
-             title TEXT NOT NULL,
-             description TEXT NOT NULL DEFAULT '',
-             stage_id TEXT NOT NULL,
-             board_id TEXT NOT NULL DEFAULT 'development',
-             worktree_path TEXT,
-             branch TEXT,
-             verdict TEXT,
-             custom_flow TEXT,
-             status TEXT NOT NULL DEFAULT 'idle',
-             model TEXT,
-             parent_id TEXT,
-             subtask_index INTEGER,
-             waiting_for_subtask_id TEXT,
-             handover_summary TEXT,
-             cover_image TEXT,
-             priority TEXT,
-             current_tokens INTEGER,
-             skip_worktree INTEGER NOT NULL DEFAULT 0,
-             created_at INTEGER NOT NULL,
-             updated_at INTEGER NOT NULL,
-             FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE CASCADE
-         );
-         CREATE INDEX IF NOT EXISTS idx_tasks_stage ON tasks(stage_id);
-         CREATE INDEX IF NOT EXISTS idx_tasks_board ON tasks(board_id);
-         CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id);
-
-         CREATE TABLE IF NOT EXISTS task_todos (
-             id TEXT NOT NULL,
-             task_id TEXT NOT NULL,
-             content TEXT NOT NULL,
-             status TEXT NOT NULL DEFAULT 'pending',
-             order_idx INTEGER NOT NULL DEFAULT 0,
-             PRIMARY KEY (task_id, id),
-             FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
-         );
-         CREATE INDEX IF NOT EXISTS idx_todos_task ON task_todos(task_id);
-
-         CREATE TABLE IF NOT EXISTS sequences (
-             name TEXT PRIMARY KEY,
-             current_val INTEGER NOT NULL DEFAULT 0
-         );
-
-         CREATE TABLE IF NOT EXISTS task_ledger (
-             id TEXT PRIMARY KEY,
-             task_id TEXT NOT NULL,
-             commit_hash TEXT,
-             summary TEXT NOT NULL,
-             verdict TEXT,
-             author TEXT,
-             files_json TEXT,
-             created_at INTEGER NOT NULL
-         );
-         CREATE INDEX IF NOT EXISTS idx_ledger_task ON task_ledger(task_id);
-
-         CREATE TABLE IF NOT EXISTS telemetry (
-             id TEXT PRIMARY KEY,
-             task_id TEXT NOT NULL,
-             model TEXT,
-             input_tokens INTEGER DEFAULT 0,
-             output_tokens INTEGER DEFAULT 0,
-             cached_tokens INTEGER DEFAULT 0,
-             tps REAL DEFAULT 0.0,
-             ttft_ms REAL DEFAULT 0.0,
-             duration_ms REAL DEFAULT 0.0,
-             created_at INTEGER NOT NULL
-         );
-         CREATE INDEX IF NOT EXISTS idx_telemetry_task ON telemetry(task_id);",
+         PRAGMA foreign_keys = ON;",
     )?;
 
-    // Ensure optional columns exist if table was initialized by an earlier schema
-    let _ = conn.execute("ALTER TABLE dialog_items ADD COLUMN tool_json TEXT", []);
-    let _ = conn.execute("ALTER TABLE dialog_items ADD COLUMN duration_ms REAL", []);
-    let _ = conn.execute("ALTER TABLE tasks ADD COLUMN attachments TEXT", []);
-    let _ = conn.execute("ALTER TABLE tasks ADD COLUMN tags TEXT", []);
+    // Guard DDL execution so table creations and alterations run only once per db path per process
+    let should_init = {
+        let mut set = INITIALIZED_DBS.lock().unwrap();
+        set.insert(db_path.clone())
+    };
 
-    auto_migrate_if_needed(&mut conn, root);
+    if should_init {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS dialog_items (
+                 id TEXT PRIMARY KEY,
+                 task_id TEXT NOT NULL,
+                 type TEXT NOT NULL,
+                 content TEXT,
+                 images_json TEXT,
+                 timestamp TEXT,
+                 created_at INTEGER NOT NULL,
+                 tool_json TEXT,
+                 duration_ms REAL
+             );
+             CREATE INDEX IF NOT EXISTS idx_dialog_task ON dialog_items(task_id, created_at);
+
+             CREATE TABLE IF NOT EXISTS tasks (
+                 id TEXT PRIMARY KEY,
+                 title TEXT NOT NULL,
+                 description TEXT NOT NULL DEFAULT '',
+                 stage_id TEXT NOT NULL,
+                 board_id TEXT NOT NULL DEFAULT 'development',
+                 worktree_path TEXT,
+                 branch TEXT,
+                 verdict TEXT,
+                 custom_flow TEXT,
+                 status TEXT NOT NULL DEFAULT 'idle',
+                 model TEXT,
+                 parent_id TEXT,
+                 subtask_index INTEGER,
+                 waiting_for_subtask_id TEXT,
+                 handover_summary TEXT,
+                 cover_image TEXT,
+                 priority TEXT,
+                 current_tokens INTEGER,
+                 skip_worktree INTEGER NOT NULL DEFAULT 0,
+                 created_at INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL,
+                 position REAL NOT NULL DEFAULT 0.0,
+                 FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE CASCADE
+             );
+             CREATE INDEX IF NOT EXISTS idx_tasks_stage ON tasks(stage_id);
+             CREATE INDEX IF NOT EXISTS idx_tasks_board ON tasks(board_id);
+             CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id);
+             CREATE INDEX IF NOT EXISTS idx_tasks_stage_pos ON tasks(stage_id, position);
+
+             CREATE TABLE IF NOT EXISTS task_todos (
+                 id TEXT NOT NULL,
+                 task_id TEXT NOT NULL,
+                 content TEXT NOT NULL,
+                 status TEXT NOT NULL DEFAULT 'pending',
+                 order_idx INTEGER NOT NULL DEFAULT 0,
+                 PRIMARY KEY (task_id, id),
+                 FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+             );
+             CREATE INDEX IF NOT EXISTS idx_todos_task ON task_todos(task_id);
+
+             CREATE TABLE IF NOT EXISTS sequences (
+                 name TEXT PRIMARY KEY,
+                 current_val INTEGER NOT NULL DEFAULT 0
+             );
+
+             CREATE TABLE IF NOT EXISTS task_ledger (
+                 id TEXT PRIMARY KEY,
+                 task_id TEXT NOT NULL,
+                 commit_hash TEXT,
+                 summary TEXT NOT NULL,
+                 verdict TEXT,
+                 author TEXT,
+                 files_json TEXT,
+                 created_at INTEGER NOT NULL
+             );
+             CREATE INDEX IF NOT EXISTS idx_ledger_task ON task_ledger(task_id);
+
+             CREATE TABLE IF NOT EXISTS telemetry (
+                 id TEXT PRIMARY KEY,
+                 task_id TEXT NOT NULL,
+                 model TEXT,
+                 input_tokens INTEGER DEFAULT 0,
+                 output_tokens INTEGER DEFAULT 0,
+                 cached_tokens INTEGER DEFAULT 0,
+                 tps REAL DEFAULT 0.0,
+                 ttft_ms REAL DEFAULT 0.0,
+                 duration_ms REAL DEFAULT 0.0,
+                 created_at INTEGER NOT NULL
+             );
+             CREATE INDEX IF NOT EXISTS idx_telemetry_task ON telemetry(task_id);",
+        )?;
+
+        // Ensure optional columns exist if table was initialized by an earlier schema
+        let _ = conn.execute("ALTER TABLE dialog_items ADD COLUMN tool_json TEXT", []);
+        let _ = conn.execute("ALTER TABLE dialog_items ADD COLUMN duration_ms REAL", []);
+        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN attachments TEXT", []);
+        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN tags TEXT", []);
+        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN position REAL NOT NULL DEFAULT 0.0", []);
+        let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_stage_pos ON tasks(stage_id, position)", []);
+
+        auto_migrate_if_needed(&mut conn, root);
+    }
 
     Ok(conn)
 }
@@ -224,7 +244,7 @@ fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) {
         }
 
         if let Some(tasks) = loaded_tasks {
-            if let Ok(tx) = conn.transaction() {
+            if let Ok(tx) = conn.transaction_with_behavior(TransactionBehavior::Immediate) {
                 let _ = tx.execute("PRAGMA foreign_keys = OFF", []);
                 for t in &tasks {
                     let custom_flow_json = t.custom_flow.as_ref().and_then(|v| serde_json::to_string(v).ok());
@@ -233,14 +253,15 @@ fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) {
                     let skip_wt = if t.skip_worktree.unwrap_or(false) { 1i64 } else { 0i64 };
                     let cur_tokens = t.current_tokens.map(|v| v as i64);
                     let sub_idx = t.subtask_index.map(|v| v as i64);
+                    let pos_val = t.position.unwrap_or(0.0);
 
                     let _ = tx.execute(
                         "INSERT OR REPLACE INTO tasks (
                             id, title, description, stage_id, board_id, worktree_path, branch, verdict,
                             custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
                             handover_summary, cover_image, priority, current_tokens, skip_worktree,
-                            created_at, updated_at, attachments, tags
-                        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
+                            created_at, updated_at, attachments, tags, position
+                        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)",
                         params![
                             t.id,
                             t.title,
@@ -265,6 +286,7 @@ fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) {
                             t.updated_at,
                             attachments_json,
                             tags_json,
+                            pos_val,
                         ],
                     );
 
@@ -386,7 +408,7 @@ fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) {
     }
 }
 
-/// Retrieves all tasks from SQLite ordered chronologically by created_at.
+/// Retrieves all tasks from SQLite ordered by position and created_at.
 pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
     let conn = init_db(root).map_err(|e| format!("Failed to open database: {}", e))?;
 
@@ -395,9 +417,9 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
             "SELECT id, title, description, stage_id, board_id, worktree_path, branch, verdict,
                     custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
                     handover_summary, cover_image, priority, current_tokens, skip_worktree,
-                    created_at, updated_at, attachments, tags
+                    created_at, updated_at, attachments, tags, position
              FROM tasks
-             ORDER BY created_at ASC",
+             ORDER BY position ASC, created_at ASC",
         )
         .map_err(|e| format!("Prepare select tasks failed: {}", e))?;
 
@@ -426,12 +448,13 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
             let updated_at: i64 = row.get(20)?;
             let attachments_raw: Option<String> = row.get(21).ok();
             let tags_raw: Option<String> = row.get(22).ok();
+            let position: Option<f64> = row.get(23).ok();
 
             Ok((
                 id, title, description, stage_id, board_id, worktree_path, branch, verdict,
                 custom_flow_raw, status, model, parent_id, subtask_index_i64, waiting_for_subtask_id,
                 handover_summary, cover_image, priority, current_tokens_i64, skip_worktree_i64,
-                created_at, updated_at, attachments_raw, tags_raw,
+                created_at, updated_at, attachments_raw, tags_raw, position,
             ))
         })
         .map_err(|e| format!("Query tasks failed: {}", e))?;
@@ -461,7 +484,7 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
             id, title, description, stage_id, board_id, worktree_path, branch, verdict,
             custom_flow_raw, status, model, parent_id, subtask_index_i64, waiting_for_subtask_id,
             handover_summary, cover_image, priority, current_tokens_i64, skip_worktree_i64,
-            created_at, updated_at, attachments_raw, tags_raw,
+            created_at, updated_at, attachments_raw, tags_raw, position,
         ) = row_res.map_err(|e| format!("Row extraction failed: {}", e))?;
 
         let custom_flow = custom_flow_raw.and_then(|s| serde_json::from_str(&s).ok());
@@ -494,6 +517,7 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
             skip_worktree: Some(skip_worktree_i64 != 0),
             created_at,
             updated_at,
+            position,
         });
     }
 
@@ -508,7 +532,7 @@ pub fn db_get_task(root: &Path, task_id: &str) -> Result<Option<Task>, String> {
             "SELECT id, title, description, stage_id, board_id, worktree_path, branch, verdict,
                     custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
                     handover_summary, cover_image, priority, current_tokens, skip_worktree,
-                    created_at, updated_at, attachments, tags
+                    created_at, updated_at, attachments, tags, position
              FROM tasks
              WHERE id = ?1 OR LOWER(id) = LOWER(?1)
              LIMIT 1",
@@ -547,6 +571,7 @@ pub fn db_get_task(root: &Path, task_id: &str) -> Result<Option<Task>, String> {
     let updated_at: i64 = row.get(20).map_err(|e| e.to_string())?;
     let attachments_raw: Option<String> = row.get(21).ok();
     let tags_raw: Option<String> = row.get(22).ok();
+    let position: Option<f64> = row.get(23).ok();
 
     // Load todos for this task
     let mut todo_stmt = conn
@@ -594,6 +619,7 @@ pub fn db_get_task(root: &Path, task_id: &str) -> Result<Option<Task>, String> {
         skip_worktree: Some(skip_worktree_i64 != 0),
         created_at,
         updated_at,
+        position,
     }))
 }
 
@@ -601,7 +627,7 @@ pub fn db_get_task(root: &Path, task_id: &str) -> Result<Option<Task>, String> {
 pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
     let mut conn = init_db(root).map_err(|e| format!("Failed to open database: {}", e))?;
     let tx = conn
-        .transaction()
+        .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
     let custom_flow_json = task.custom_flow.as_ref().and_then(|v| serde_json::to_string(v).ok());
@@ -610,14 +636,15 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
     let skip_wt = if task.skip_worktree.unwrap_or(false) { 1i64 } else { 0i64 };
     let cur_tokens = task.current_tokens.map(|v| v as i64);
     let sub_idx = task.subtask_index.map(|v| v as i64);
+    let pos_val = task.position.unwrap_or(0.0);
 
     tx.execute(
         "INSERT INTO tasks (
             id, title, description, stage_id, board_id, worktree_path, branch, verdict,
             custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
             handover_summary, cover_image, priority, current_tokens, skip_worktree,
-            created_at, updated_at, attachments, tags
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)
+            created_at, updated_at, attachments, tags, position
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)
         ON CONFLICT(id) DO UPDATE SET
             title = excluded.title,
             description = excluded.description,
@@ -639,7 +666,8 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
             skip_worktree = excluded.skip_worktree,
             updated_at = excluded.updated_at,
             attachments = excluded.attachments,
-            tags = excluded.tags",
+            tags = excluded.tags,
+            position = excluded.position",
         params![
             task.id,
             task.title,
@@ -664,6 +692,7 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
             task.updated_at,
             attachments_json,
             tags_json,
+            pos_val,
         ],
     )
     .map_err(|e| format!("Failed to upsert task {}: {}", task.id, e))?;
@@ -689,7 +718,7 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
 pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
     let mut conn = init_db(root).map_err(|e| format!("Failed to open database: {}", e))?;
     let tx = conn
-        .transaction()
+        .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
     // Disable foreign keys temporarily during bulk batch update to accommodate unordered cascades
@@ -702,14 +731,15 @@ pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
         let skip_wt = if task.skip_worktree.unwrap_or(false) { 1i64 } else { 0i64 };
         let cur_tokens = task.current_tokens.map(|v| v as i64);
         let sub_idx = task.subtask_index.map(|v| v as i64);
+        let pos_val = task.position.unwrap_or(0.0);
 
         tx.execute(
             "INSERT INTO tasks (
                 id, title, description, stage_id, board_id, worktree_path, branch, verdict,
                 custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
                 handover_summary, cover_image, priority, current_tokens, skip_worktree,
-                created_at, updated_at, attachments, tags
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)
+                created_at, updated_at, attachments, tags, position
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)
             ON CONFLICT(id) DO UPDATE SET
                 title = excluded.title,
                 description = excluded.description,
@@ -731,7 +761,8 @@ pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
                 skip_worktree = excluded.skip_worktree,
                 updated_at = excluded.updated_at,
                 attachments = excluded.attachments,
-                tags = excluded.tags",
+                tags = excluded.tags,
+                position = excluded.position",
             params![
                 task.id,
                 task.title,
@@ -756,6 +787,7 @@ pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
                 task.updated_at,
                 attachments_json,
                 tags_json,
+                pos_val,
             ],
         )
         .map_err(|e| format!("Failed to upsert task {}: {}", task.id, e))?;
@@ -783,7 +815,7 @@ pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
 pub fn db_delete_task(root: &Path, task_id: &str) -> Result<(), String> {
     let mut conn = init_db(root).map_err(|e| format!("Failed to open database: {}", e))?;
     let tx = conn
-        .transaction()
+        .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
     // 1. Auto-unlock any parent waiting on this task
@@ -822,7 +854,7 @@ pub fn db_delete_task(root: &Path, task_id: &str) -> Result<(), String> {
 pub fn db_allocate_next_task_num(root: &Path) -> Result<u32, String> {
     let mut conn = init_db(root).map_err(|e| format!("Failed to open database: {}", e))?;
     let tx = conn
-        .transaction()
+        .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
     let current_val: u32 = tx
@@ -894,11 +926,34 @@ pub fn db_allocate_next_task_num(root: &Path) -> Result<u32, String> {
     Ok(next_num)
 }
 
+/// Explicitly updates or sets the sequence counter for task IDs in SQLite and disk files.
+pub fn db_update_task_sequence(root: &Path, val: u32) -> Result<(), String> {
+    let conn = init_db(root).map_err(|e| format!("Failed to open database: {}", e))?;
+    conn.execute(
+        "INSERT INTO sequences (name, current_val) VALUES ('task', ?1)
+         ON CONFLICT(name) DO UPDATE SET current_val = MAX(current_val, excluded.current_val)",
+        params![val as i64],
+    )
+    .map_err(|e| format!("Failed to update sequence: {}", e))?;
+
+    let settings_dir = root.join(".cvh").join("settings");
+    let _ = std::fs::create_dir_all(&settings_dir);
+    let seq_path = settings_dir.join("sequence.json");
+    if let Ok(content) = serde_json::to_string_pretty(&serde_json::json!({
+        "last_task_num": val
+    })) {
+        let _ = std::fs::write(&seq_path, &content);
+        let alt_path = root.join(".cvh").join("task-sequence.json");
+        let _ = std::fs::write(&alt_path, &content);
+    }
+    Ok(())
+}
+
 /// Atomically saves the checklist (todos) for a specific task.
 pub fn db_save_todos(root: &Path, task_id: &str, todos: &[TodoItem]) -> Result<(), String> {
     let mut conn = init_db(root).map_err(|e| format!("Failed to open database: {}", e))?;
     let tx = conn
-        .transaction()
+        .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
     tx.execute(
@@ -1075,7 +1130,7 @@ pub fn append_dialog_items(root: &Path, task_id: &str, items: &[ActivityItem]) -
 
     let mut conn = init_db(root).map_err(|e| format!("Failed to open database: {}", e))?;
     let tx = conn
-        .transaction()
+        .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
     let now_base = chrono::Utc::now().timestamp_millis();
@@ -1192,7 +1247,7 @@ pub fn persist_compacted_dialog(
 ) -> Result<(), String> {
     let mut conn = init_db(root).map_err(|e| format!("Failed to open database: {}", e))?;
     let tx = conn
-        .transaction()
+        .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
     // 1. Mark intermediate items as compacted_archived
@@ -1274,12 +1329,14 @@ pub fn persist_compacted_dialog(
     Ok(())
 }
 
-/// Deletes all dialog items for a specific task.
+/// Deletes all dialog items for a specific task and its cascaded subagents.
 pub fn clear_dialog_items(root: &Path, task_id: &str) -> Result<(), String> {
     let conn = init_db(root).map_err(|e| format!("Failed to open database: {}", e))?;
+    let sub_colon = format!("{}:sub:%", task_id);
+    let sub_dot = format!("{}.sub-%", task_id);
     conn.execute(
-        "DELETE FROM dialog_items WHERE task_id = ?1",
-        params![task_id],
+        "DELETE FROM dialog_items WHERE task_id = ?1 OR task_id LIKE ?2 OR task_id LIKE ?3",
+        params![task_id, sub_colon, sub_dot],
     )
     .map_err(|e| format!("Failed to delete dialog items: {}", e))?;
     Ok(())
@@ -1357,7 +1414,7 @@ pub fn mark_running_tools_as_aborted(
     }
 
     let tx = conn
-        .transaction()
+        .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
     let mut updated_tools = Vec::new();
@@ -1611,6 +1668,7 @@ mod tests {
             skip_worktree: Some(false),
             created_at: 1000,
             updated_at: 1000,
+            position: Some(0.0),
         };
 
         db_upsert_task(root, &task1).expect("upsert task1");
@@ -1672,6 +1730,7 @@ mod tests {
             skip_worktree: Some(false),
             created_at: 1010,
             updated_at: 1010,
+            position: Some(1.0),
         };
         db_upsert_task(root, &subtask).expect("upsert subtask");
 
@@ -1724,6 +1783,7 @@ mod tests {
             skip_worktree: None,
             created_at: 1000,
             updated_at: 1000,
+            position: None,
         };
         db_upsert_task(root, &high_task).expect("upsert high task");
 

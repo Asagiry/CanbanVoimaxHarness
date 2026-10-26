@@ -41,7 +41,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
   const { t } = useTranslation();
 
   const { columns, setColumns, updateColumn } = useBoardStore();
-  const isProtected = PROTECTED_COLUMN_IDS.has(column.id);
+  const isProtected = PROTECTED_COLUMN_IDS.has(column.id) || Boolean(column.isIntake) || Boolean(column.terminal);
 
   // Переименование
   const [draftTitle, setDraftTitle] = useState(column.title);
@@ -240,7 +240,7 @@ export default function ColumnContextMenu({ column, x, y, onClose, onDeleteColum
 
     // Автоматическое наследование цвета агента колонкой (если не backlog и не ready)
     let nextColor = column.color;
-    if (column.id !== 'backlog' && column.id !== 'ready') {
+    if (column.id !== 'backlog' && column.id !== 'ready' && !column.isIntake && !column.terminal) {
       if (nextPersona) {
         const personaColor = matchedPersona?.color || getDeterministicAgentColor(nextPersona);
         if (personaColor && isAllowedAgentColor(personaColor)) {

@@ -15,8 +15,6 @@
     "advance_task",
     "reject_task",
     "question",
-    "create_task",
-    "complete_task",
     "list_tasks",
     "get_task_history",
     "load_rule"

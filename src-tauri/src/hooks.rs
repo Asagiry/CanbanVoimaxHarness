@@ -308,7 +308,23 @@ pub async fn execute_sensor_command(
         c.raw_arg("/D");
         c.raw_arg("/S");
         c.raw_arg("/C");
-        c.raw_arg(format!("\"chcp 65001 >nul && {}\"", command_str));
+        let effective_cmd = {
+            let trimmed = command_str.trim();
+            let first_word = trimmed.split_whitespace().next().unwrap_or(trimmed);
+            let unquoted_first = first_word.trim_matches('"').trim_matches('\'');
+            if unquoted_first.ends_with(".bat") || unquoted_first.ends_with(".cmd") {
+                let normalized_first = unquoted_first.replace('/', "\\");
+                let rest = trimmed.strip_prefix(first_word).unwrap_or("").trim_start();
+                if rest.is_empty() {
+                    format!("call \"{}\"", normalized_first)
+                } else {
+                    format!("call \"{}\" {}", normalized_first, rest)
+                }
+            } else {
+                command_str.to_string()
+            }
+        };
+        c.raw_arg(format!("\"chcp 65001 >nul && {}\"", effective_cmd));
         c
     };
 
@@ -449,5 +465,25 @@ mod tests {
             .expect("sensor command execution");
         assert!(res.success, "sensor command should succeed, stderr: {}", res.stderr);
         assert!(res.stdout.contains("sensor_ok"), "got stdout: {}", res.stdout);
+    }
+
+    #[tokio::test]
+    #[cfg(windows)]
+    async fn test_execute_sensor_command_bat_forward_slashes() {
+        let tmp = std::path::PathBuf::from("target").join(format!("cvh_sensor_test_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(tmp.join("sub")).await.expect("test dir");
+        let bat_path = tmp.join("sub").join("sensor.bat");
+        tokio::fs::write(&bat_path, "@echo off\r\necho sensor_batch_ok\r\nexit /b 0\r\n")
+            .await
+            .expect("write test bat");
+
+        let rel_cmd = format!("sub/sensor.bat");
+        let res = execute_sensor_command(&rel_cmd, &tmp, Some(Duration::from_secs(10)))
+            .await
+            .expect("sensor bat execution");
+        assert!(res.success, "sensor bat should succeed, stderr: {}", res.stderr);
+        assert!(res.stdout.contains("sensor_batch_ok"), "got stdout: {}", res.stdout);
+
+        let _ = tokio::fs::remove_dir_all(&tmp).await;
     }
 }

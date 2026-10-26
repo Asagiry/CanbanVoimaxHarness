@@ -17,6 +17,8 @@
 > 8. **ZERO-CONTEXT-POLLING RULE [HARD BAN ON MONITORING SPAM] (§ 1.5)**: When background subagents are executing, the Root Orchestrator is STRICTLY FORBIDDEN from executing monitoring/polling loops (`list_agents`, `job_list`, `pwsh git status/log`). Wait passively for subagent push notices.
 > 9. **FULL PEER ADVISOR & MERCILESS COLLEAGUE MANDATE (§ 1.6)**: Users make mistakes, suffer from cognitive tunnel vision, or propose conflicting requirements. When users show obvious errors, architectural anti-patterns, or decision conflicts, point them out mercilessly. You are an authoritative senior engineering colleague, not a servant or passive yes-man. Challenge flawed proposals, contradict suboptimal ideas, offer battle-tested alternatives, and debate trade-offs as a full peer technical partner.
 > 10. **CHAINED PRS & STACKED CHANGES WORKFLOW (§ 1.7)**: For multiple dependent or chained pull requests, use `gh stack` (stacked git changes) to manage incremental reviewable diffs without breaking upstream integration.
+> 11. **REDUNDANT COPY ELIMINATION & STRUCTURAL LAYOUT-FIRST (§ 2.39)**: Remove redundant slogans, explanatory text, and minor labels. If the interface becomes incomprehensible after removal, it means the layout itself has issues—redesign it from scratch.
+> 12. **TRI-PARTITE EXPERIENCE SYNERGY (UX, DX, AX) (§ 2.40)**: Every modification must consider user experience, developer experience, and AI Agent usage experience. All three must improve, without breaking existing functionality.
 
 ---
 
@@ -213,7 +215,7 @@
     - `web_fetch`: Fetches URL content converted to clean Markdown (`url`).
 - **Strict Role Boundary on Task Card Operations**:
   - `create_task`, `create_tasks`, and `complete_task` are **strictly reserved for Root Orchestrators (Level 0) and human users via UI**.
-  - **Development subagents, reviewer subagents, cvh-dev, and headless copilot are STRICTLY FORBIDDEN from calling `create_task`, `create_tasks`, or `complete_task`**. Subagents work inside assigned tasks and advance stages via `advance_task` / `move_task`.
+  - **Development subagents, reviewer subagents, and cvh-dev are STRICTLY FORBIDDEN from calling `create_task`, `create_tasks`, or `complete_task`**. Subagents work inside assigned tasks and advance stages via `advance_task` / `move_task`.
 - **Dynamic Custom Tools (`.cvh/tools/`)**:
   - Extensible JSON descriptors in `.cvh/tools/<tool_name>.json` automatically expose custom CLI tools with argument interpolation (`{{args}}`).
 - **Tool Output Spilling Invariant**:
@@ -266,18 +268,14 @@
   }
   ```
 
-### 2.16 CVH-DEV & Headless Copilot Scope Invariant: Zero-Card-Management
-- **Zero-Card-Management Invariant**: The `cvh-dev` persona and Headless Copilot backend are strictly Project Configuration & Environment Specialists (`.cvh/` infrastructure, boards, pipelines, agent personas, rules, and hooks). They are strictly forbidden from creating, completing, or managing task cards (§ 2.8). Card lifecycle is strictly reserved for the human user and the pipeline orchestrator.
+### 2.16 CVH-DEV Scope Invariant: Zero-Card-Management
+- **Zero-Card-Management Invariant**: The `cvh-dev` persona is strictly a Project Configuration & Environment Specialist (`.cvh/` infrastructure, boards, pipelines, agent personas, rules, and hooks). It is strictly forbidden from creating, completing, or managing task cards (§ 2.8). Card lifecycle is strictly reserved for the human user and the pipeline orchestrator.
 - **Authoritative Tool Policy Governance**: Tool permissions for `cvh-dev` and all agents are governed authoritatively by the Two-Level Tool Policy Matrix (§ 2.5). Hardcoded role-based tool whitelists are prohibited.
-- **Strict Role Boundary on Task Card Operations**: Adheres strictly to § 2.8 (`create_task`, `create_tasks`, `complete_task` forbidden for `cvh-dev` and Copilot).
-- **UI & Layout Decoupling**: Copilot is unmounted from the default screen layout (CVH-REMOVE-COPILOT-DOCK). Any UI surfaces or settings referencing Copilot (`CopilotDock.tsx`, topbar badge, placeholders, empty states) MUST reflect "НАСТРОЙКА ПРОЕКТА" / "Project Configuration", never mislabeling configuration sidecars as general task creators.
+- **Strict Role Boundary on Task Card Operations**: Adheres strictly to § 2.8 (`create_task`, `create_tasks`, `complete_task` forbidden for `cvh-dev`).
 
-### 2.17 Headless Copilot Architecture & Layout Invariant
-- **Headless Control Plane & Screen Layout Status**: Following CVH-REMOVE-COPILOT-DOCK per user directive ("Имею ввиду тока справа вот эту колонку а так его оставить да"), Copilot is unmounted from the default screen layout to restore a clean, full-width Kanban board. However, Copilot backend IPC commands (`src-tauri/src/commands/copilot.rs`), reactive state (`copilotStore.ts`), and component architecture (`CopilotDock.tsx`) remain 100% preserved and fully functional for headless execution, automated tasks, and optional companion views.
-- **White Paper / Vercel Tactical Aesthetic**: Features a high-contrast White Paper design system (`bg-white`, left border 1px `#ebebeb`, graphite ink typography `#171717`, zero dark slop) when mounted or displayed in secondary views, intentionally differentiating the meta-architectural companion from the obsidian dark Kanban console.
-- **SQLite Dialogue Persistence Invariant**: All Copilot messages, user prompts, thinking blocks, and tool executions persist in SQLite at `<repo_root>/.cvh/harness.db` under dedicated ID `task_id = "copilot:meta-chat"` using WAL mode, loaded with `load_copilot_history` and cleared with `clear_copilot_history`.
-- **Independent ReAct Loop & Event Streaming**: Operates its own autonomous ReAct loop (`src-tauri/src/commands/copilot.rs`) emitting `copilot:stream` events with token streaming, multi-block thinking cards, tool call visualization, and abort capability (`abort_copilot`).
-- **Dedicated Permitted Tool Suite**: Pre-compiled with `get_copilot_tool_suite()` containing configuration and inspection tools (`read_file`, `write_file`, `edit_file`, `glob`, `grep`, `execute_command`, `web_search`), governed by § 2.5.
+### 2.17 Total Eradication of Dead Copilot Subsystem & Open Control Plane Invariant
+- **Total Eradication of Copilot Subsystem**: The legacy Copilot companion dock (`CopilotDock.tsx`), reactive store (`copilotStore.ts`), backend commands (`src-tauri/src/commands/copilot.rs`), and dedicated `"copilot:meta-chat"` SQLite dialogue routing are completely eradicated from CanbanVoimaxHarness.
+- **Board-As-Single-Control-Plane**: The interactive Kanban board and pipeline columns are the single, authoritative control plane of the application. All agentic execution flows through explicit stage transitions (`advance_task`, `reject_task`) and atomic subagent delegation (`subagent`, `subagent_bg`). Parallel chat docks or unanchored sidecars are strictly prohibited.
 
 ### 2.18 Board Self-Healing Runtime Subsystem
 - **Autonomous Task Healing Invariant**: The Rust desktop backend automatically heals tasks against board configurations (`heal_task_board_and_column` and `heal_tasks` in `src-tauri/src/commands/tasks.rs`).
@@ -449,3 +447,14 @@
 - **70% BPE Token Savings**: English schemas leverage dense Byte-Pair Encoding (BPE) compression, saving up to ~70% token capacity compared to multi-byte UTF-8 Cyrillic representations across Claude, Gemini, DeepSeek, and OpenAI models. This preserves precious prompt context buffers and drives prompt cache hit rates above 90%.
 - **English-Only Persona Prompts & Project Rules**: All agent persona definitions (`.cvh/agents/<role>/persona.md`) and modular rule files (`.cvh/agents/<role>/rules/*.md`, `.cvh/rules/*.md`) MUST be authored strictly in concise, technical English. User-facing commentary may be presented in Russian, but all persistent system prompts, rules, and tool contracts remain 100% English.
 - **Direct Schema Customization (`toolCustomSchemas`)**: The Global Tool Registry (`.cvh/settings/tool-policy.json`) supports direct override and customization of tool schemas via `toolCustomSchemas`. Custom schemas must likewise adhere to the English-Only Schemas Invariant.
+
+### 2.39 Redundant Copy Elimination & Structural Layout-First Invariant
+- **Ruthless Elimination of Redundant Copy & Labels**: Remove redundant slogans, explanatory text, marketing subtitles, and minor helper labels.
+- **Structural Layout-First Redesign Mandate**: If an interface becomes incomprehensible or ambiguous after removing explanatory text or minor labels, it indicates that the underlying layout and visual hierarchy are fundamentally flawed. Do not patch poor information architecture with explanatory labels, descriptive tooltips, or text banners—redesign the layout, spatial relationships, and visual affordances from scratch to make the UI self-evident and intuitive by structure alone.
+
+### 2.40 Tri-Partite Experience Invariant (UX, DX, AX Synergy)
+- **Tri-Partite Synergy Mandate (User, Developer, AI Agent Experience)**: Every modification, refactoring, or feature addition must simultaneously evaluate and improve:
+  1. **User Experience (UX)**: Intuitive, responsive, clean visual hierarchy, tactile controls, and zero cognitive clutter.
+  2. **Developer Experience (DX)**: Clean modular code, strict typing, high maintainability, fast feedback loops (<10s Turbo Sensors), and low cognitive overhead.
+  3. **AI Agent Experience (AX)**: Deterministic context, clean and unambiguous tool schemas, predictable file structures, state-preserving memory compaction, and zero hallucination traps.
+- **Non-Regression Invariant**: All three experiences (UX, DX, AX) must improve or remain uncompromised. Under no circumstances may existing functionality, invariants, or performance baselines be broken.

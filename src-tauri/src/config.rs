@@ -105,7 +105,7 @@ pub struct ProjectConfig {
     pub providers: HashMap<String, ProviderConfig>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct PipelineColumn {
     pub id: String,
     pub title: String,
@@ -137,6 +137,8 @@ pub struct PipelineColumn {
     pub auto_run: Option<bool>,
     #[serde(default)]
     pub terminal: Option<bool>,
+    #[serde(rename = "isIntake", default)]
+    pub is_intake: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -406,6 +408,7 @@ pub fn resolve_actual_repo_root(path: &Path) -> PathBuf {
     // 1. Traverse ancestors looking for .cvh (skipping binary/target dirs and app own codebase)
     for ancestor in path.ancestors() {
         if ancestor != path
+            && ancestor.parent().is_some()
             && !is_binary_or_target_dir(ancestor)
             && !is_app_own_directory(ancestor)
             && ancestor.join(".cvh").exists()
@@ -494,6 +497,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: Some(true),
             },
             PipelineColumn {
                 id: "dev".to_string(),
@@ -520,6 +524,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: None,
             },
             PipelineColumn {
                 id: "ready".to_string(),
@@ -542,6 +547,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
                 routes: None,
                 auto_run: None,
                 terminal: Some(true),
+                is_intake: None,
             },
         ],
         boards: None,
@@ -589,6 +595,7 @@ pub fn get_canonical_board_columns() -> Vec<PipelineColumn> {
             routes: None,
             auto_run: None,
             terminal: None,
+            is_intake: Some(true),
         },
         PipelineColumn {
             id: "dev".to_string(),
@@ -615,6 +622,7 @@ pub fn get_canonical_board_columns() -> Vec<PipelineColumn> {
             routes: None,
             auto_run: None,
             terminal: None,
+            is_intake: None,
         },
         PipelineColumn {
             id: "ready".to_string(),
@@ -637,6 +645,7 @@ pub fn get_canonical_board_columns() -> Vec<PipelineColumn> {
             routes: None,
             auto_run: None,
             terminal: Some(true),
+            is_intake: None,
         },
     ]
 }
@@ -665,6 +674,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: Some(true),
             },
             PipelineColumn {
                 id: "modeling".to_string(),
@@ -690,6 +700,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: None,
             },
             PipelineColumn {
                 id: "texturing".to_string(),
@@ -715,6 +726,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: None,
             },
             PipelineColumn {
                 id: "ready".to_string(),
@@ -737,6 +749,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 routes: None,
                 auto_run: None,
                 terminal: Some(true),
+                is_intake: None,
             },
         ],
 _ => get_canonical_board_columns(),
@@ -785,11 +798,12 @@ pub async fn load_boards_config(root_path: impl AsRef<Path>) -> Result<BoardsCon
     Ok(default_boards_config())
 }
 
-/// Canonical normalization of Kanban columns:
-/// - Enforces that `backlog` (id: "backlog") MUST always exist at index 0.
-/// - Enforces that `ready` (id: "ready", terminal: true) MUST always exist at the final index.
-/// - Preserves relative order of middle columns.
-/// - Duplicate IDs return an error.
+/// Normalizes pipeline columns according to dynamic column invariants:
+/// - Validates unique column IDs (duplicate IDs return an Err).
+/// - If empty, falls back to canonical board columns.
+/// - Preserves user column ordering verbatim without injecting synthetic backlog/ready.
+/// - Sets column 0 `is_intake = Some(true)` if unset.
+/// - Sets final column `terminal = Some(true)`.
 pub fn normalize_pipeline_columns(
     columns: Vec<PipelineColumn>,
 ) -> Result<Vec<PipelineColumn>, String> {
@@ -802,66 +816,18 @@ pub fn normalize_pipeline_columns(
             ));
         }
     }
-    let mut backlog: Option<PipelineColumn> = None;
-    let mut ready: Option<PipelineColumn> = None;
-    let mut middle = Vec::with_capacity(columns.len());
-    for col in columns {
-        if col.id == "backlog" && backlog.is_none() {
-            backlog = Some(col);
-        } else if col.id == "ready" && ready.is_none() {
-            ready = Some(col);
-        } else {
-            middle.push(col);
-        }
+
+    if columns.is_empty() {
+        return Ok(get_canonical_board_columns());
     }
 
-    // Invariant: 'backlog' (id: "backlog") MUST always exist at index 0.
-    let backlog = backlog.unwrap_or_else(|| PipelineColumn {
-        id: "backlog".to_string(),
-        title: "Backlog".to_string(),
-        color: None,
-        icon: None,
-        persona: None,
-        on_enter_script: None,
-        context_window: None,
-        model_override: None,
-        reasoning_effort: None,
-        temperature: None,
-        gatekeeper_sensor: None,
-        allowed_tools: None,
-        hooks: HashMap::new(),
-        routes: None,
-        auto_run: None,
-        terminal: None,
-    });
-
-    // Invariant: 'ready' (id: "ready", terminal: true) MUST always exist at the final index.
-    let mut ready = ready.unwrap_or_else(|| PipelineColumn {
-        id: "ready".to_string(),
-        title: "Ready".to_string(),
-        color: None,
-        icon: None,
-        persona: None,
-        on_enter_script: None,
-        context_window: None,
-        model_override: None,
-        reasoning_effort: None,
-        temperature: None,
-        gatekeeper_sensor: None,
-        allowed_tools: None,
-        hooks: HashMap::new(),
-        routes: None,
-        auto_run: None,
-        terminal: Some(true),
-    });
-    if ready.terminal != Some(true) {
-        ready.terminal = Some(true);
+    let mut out = columns;
+    if out[0].is_intake.is_none() {
+        out[0].is_intake = Some(true);
     }
+    let last_idx = out.len() - 1;
+    out[last_idx].terminal = Some(true);
 
-    let mut out = Vec::with_capacity(1 + middle.len() + 1);
-    out.push(backlog);
-    out.extend(middle);
-    out.push(ready);
     Ok(out)
 }
 
@@ -1148,6 +1114,7 @@ pub fn minimal_pipeline_config() -> PipelineConfig {
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: Some(true),
             },
             PipelineColumn {
                 id: "dev".to_string(),
@@ -1174,6 +1141,7 @@ pub fn minimal_pipeline_config() -> PipelineConfig {
                 routes: None,
                 auto_run: None,
                 terminal: None,
+                is_intake: None,
             },
             PipelineColumn {
                 id: "ready".to_string(),
@@ -1196,6 +1164,7 @@ pub fn minimal_pipeline_config() -> PipelineConfig {
                 routes: None,
                 auto_run: None,
                 terminal: Some(true),
+                is_intake: None,
             },
         ],
         boards: None,
@@ -1385,7 +1354,7 @@ pub async fn ensure_cvh_dev_scaffold(repo_root: &Path) -> Result<(), anyhow::Err
 }
 
 /// Automatically scaffold the minimal .cvh workspace structure if missing.
-/// Creates: empty `.cvh/agents/`, `.cvh/dialogs/`, `.cvh/worktrees/`,
+/// Creates: empty `.cvh/agents/`, `.cvh/dialogs/`,
 /// `.cvh/skills/`, `.cvh/settings/`, `.cvh/hooks/` and default
 /// config/pipeline/tool-policy files. Fresh scaffolds seed NO agents:
 /// `pipeline.json` holds only `backlog` (no persona, first) + `ready`
@@ -1403,7 +1372,6 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
     let cvh_dir = repo_root.join(".cvh");
     let agents_dir = cvh_dir.join("agents");
     let dialogs_dir = cvh_dir.join("dialogs");
-    let worktrees_dir = cvh_dir.join("worktrees");
     let skills_dir = cvh_dir.join("skills");
     let settings_dir = cvh_dir.join("settings");
     let hooks_dir = cvh_dir.join("hooks");
@@ -1411,7 +1379,6 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
     tokio::fs::create_dir_all(&cvh_dir).await?;
     tokio::fs::create_dir_all(&agents_dir).await?;
     tokio::fs::create_dir_all(&dialogs_dir).await?;
-    tokio::fs::create_dir_all(&worktrees_dir).await?;
     tokio::fs::create_dir_all(&skills_dir).await?;
     tokio::fs::create_dir_all(&settings_dir).await?;
     tokio::fs::create_dir_all(&hooks_dir).await?;
@@ -2378,7 +2345,6 @@ mod tests {
         let cvh = base_dir.join(".cvh");
         assert!(cvh.exists());
         assert!(cvh.join("agents").is_dir());
-        assert!(cvh.join("worktrees").is_dir());
         assert!(cvh.join("skills").is_dir());
         assert!(cvh.join("settings").is_dir());
 
@@ -2477,7 +2443,6 @@ mod tests {
 
         // remaining scaffold files/dirs in place
         assert!(cvh.join("dialogs").is_dir());
-        assert!(cvh.join("worktrees").is_dir());
         assert!(cvh.join("config.json").is_file());
         assert!(!cvh.join("tasks.json").exists(), "tasks.json must not be scaffolded");
         assert!(tool_policy_path(&base_dir).is_file());
@@ -2757,7 +2722,7 @@ mod tests {
         // Verify pipeline.json synchronized with active board (normalized with mandatory backlog and ready)
         let pipe = load_pipeline_config(&base_dir).await.expect("load pipeline");
         assert_eq!(pipe.title, "3D Моделирование");
-        assert_eq!(pipe.columns.len(), 5);
+        assert_eq!(pipe.columns.len(), 4);
 
         // Load boards config back
         let reloaded = load_boards_config(&base_dir).await.expect("load boards");

@@ -299,6 +299,7 @@ export default function App() {
             cacheHitRate,
             durationMs,
             tps,
+            ttftMs,
             systemTokens,
             toolTokens,
           } = event.payload || {};
@@ -313,6 +314,7 @@ export default function App() {
           const hitRate = num(cacheHitRate) || (totalIn > 0 ? (cRead / totalIn) * 100 : 0);
           const sysTok = typeof systemTokens === 'number' && Number.isFinite(systemTokens) ? systemTokens : undefined;
           const toolTok = typeof toolTokens === 'number' && Number.isFinite(toolTokens) ? toolTokens : undefined;
+          const ttftVal = typeof ttftMs === 'number' && Number.isFinite(ttftMs) ? ttftMs : undefined;
 
           updateTelemetry(taskId, {
             inputTokens: inTok,
@@ -322,6 +324,7 @@ export default function App() {
             cacheHitRate: hitRate,
             durationMs: num(durationMs),
             tps: tpsVal,
+            ...(ttftVal !== undefined ? { ttftMs: ttftVal } : {}),
             ...(sysTok !== undefined ? { systemTokens: sysTok } : {}),
             ...(toolTok !== undefined ? { toolTokens: toolTok } : {}),
           });
@@ -495,10 +498,11 @@ export default function App() {
         });
         unlisteners.push(uTasksUpdated);
 
-        const uAutoRun = await listen<{ taskId?: string }>('agent:autorun', (event) => {
+        const uAutoRun = await listen<{ taskId?: string; prompt?: string }>('agent:autorun', (event) => {
           const tid = event.payload?.taskId;
+          const prompt = event.payload?.prompt;
           if (tid) {
-            void runTaskAgent(tid);
+            void runTaskAgent(tid, prompt);
           }
         });
         unlisteners.push(uAutoRun);
@@ -573,15 +577,6 @@ export default function App() {
           </main>
         </div>
 
-        {/* Mind / Rule Editor Modal */}
-        <RuleEditorModal />
-
-        {/* Global Tool Policy Matrix Modal */}
-        <ToolPolicyModal />
-
-        {/* LLM Settings Modal */}
-        <SettingsModal />
-
         {/* Zoom Indicator Toast */}
         {showIndicator && (
           <div className="fixed bottom-4 right-4 z-50 flex items-center space-x-2 px-3 py-1.5 rounded-md bg-[#161b22] text-[#f0f6fc] border border-[#30363d] font-mono text-xs shadow-md transition-opacity duration-150 animate-in fade-in select-none">
@@ -597,6 +592,11 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {/* Modals rendered at root level outside zoom-scaled container to prevent position:fixed containment trap (§ 2.13) */}
+      <RuleEditorModal />
+      <ToolPolicyModal />
+      <SettingsModal />
 
       {/* Fullscreen Modal: Real-Time Agent Console (rendered at root level outside zoomed container to avoid position: fixed breakage and clipping) */}
       <ErrorBoundary scopeLabel="Консоль задачи" onClose={() => useDrawerStore.getState().closeDrawer()}>

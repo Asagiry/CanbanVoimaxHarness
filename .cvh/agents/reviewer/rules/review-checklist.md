@@ -1,4 +1,4 @@
-# Rule: Ultra-Strict Review Checklist & Harness2.0 Verification Protocol
+# Rule: Ultra-Strict Review Checklist & Harness2.0 Verification Protocol (review-checklist.md)
 
 Authoritative inspection checklist and governance protocol for the **Reviewer** persona in CanbanVoimaxHarness.
 
@@ -33,66 +33,40 @@ In accordance with the Harness2.0 selection protocol, review candidate code arti
 7. **Values Are Values**:
    - A requested value or logic must be delivered directly as an operational solution, never leaving formulas, stubs, or re-computation to downstream consumers.
 
-*Length & Polish Invariant*: Length and aesthetic polish are not merits in themselves. A concise, correct, complete, exactly-shaped implementation always beats a verbose one with a gap or an embellishment.
-
 ---
 
 ## 3. Six Mandatory Verification Gates
 
-### Gate 1: Rule & Documentation Synchronization (CRITICAL)
-- Inspect `git diff` for modifications to backend commands, database schemas, ReAct loop, hooks, Zustand stores, or UI tokens.
-- Verify that `.cvh/rules/*.md` and `/docs/*.md` are updated in the same changeset.
-- **AUTOMATIC REJECTION**: If architectural code changed without corresponding rule updates, reject immediately:
-  `reject_task(reason="Gate 1 Failure: Architectural changes in <files> without simultaneous updates to .cvh/rules/ and /docs/. Code and rules must never diverge.")`
+### Gate 1: Rule Hygiene & Anti-Changelog Gate
+- Rules in `.cvh/` are timeless architectural contracts, NEVER task changelogs or bugfix diaries.
+- Reject if developer pollutes rule files with PR changelogs or transient bugfix notes.
+- Update rules ONLY if universal system architecture or public contracts fundamentally changed.
+- If ordinary code changes did not alter universal architecture, rule files MUST remain untouched.
 
 ### Gate 2: Ground Truth Compiler & Linter Sensors
-- Execute real runtime sensors inside the worktree:
+- Execute real runtime sensors inside the worktree via `execute_command`:
   - Backend Sensor: `cargo check --manifest-path src-tauri/Cargo.toml` (must exit 0 with 0 errors).
   - Backend Linter: `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` (zero warnings).
   - Frontend Sensor: `npx tsc --noEmit` (must exit 0 with 0 type errors).
 - The Reviewer does not accept claims of success without live sensor verification.
-- If any sensor check fails, reject immediately with exact compiler error logs.
 
 ### Gate 3: Backend Architectural Invariants
-- **Single-Instance Plugin**: `tauri-plugin-single-instance` MUST be the FIRST registered plugin in `src-tauri/src/lib.rs` (prevents Windows WebView2 `0x800700AA` lock collision).
-- **WebView2 UDF**: UDF path must reside in verified writeable paths (`%LOCALAPPDATA%\com.voimax.cvh`), never relative, never inside `.cvh/` or build output folders.
-- **SQLite WAL**: All database mutations in `src-tauri/src/db.rs` must execute under WAL mode and within explicit `conn.transaction()` blocks.
-- **Zero Naked Unwraps**: Zero `.unwrap()` or `.expect()` calls in production paths; use typed `Result<T, AppError>` or `anyhow::Context`.
-- **Safe Quoting**: All Windows process spawns must use `quote_windows_path()` and `quote_windows_arg()`.
+- Single-Instance plugin ordering first in `src-tauri/src/lib.rs`.
+- WebView2 UDF path strictly in verified `%LOCALAPPDATA%` paths, never in `.cvh/`.
+- SQLite mutations inside explicit `conn.transaction()` blocks.
+- Zero naked `.unwrap()` or `.expect()` in non-test production paths.
+- Windows process spawns using safe path/arg quoting.
 
 ### Gate 4: Frontend UI Invariants
-- **Zustand Discipline**: All store selections returning arrays or objects MUST use `useShallow` to prevent infinite re-rendering loops.
-- **Flexbox Bounds**: Nested scrollable views must chain `flex flex-col min-h-0 min-w-0 overflow-hidden`.
-- **Dual Design System**: Strictly adhere to Vercel Light Paper (`#fafafa`, `#171717`, `#ebebeb`) or Obsidian Dark (`#090a0f`, `#0d1117`, `#21262d`, `#f0f6fc`). Zero arbitrary neon gradients.
-- **Zoom Hoisting**: Overlays and drawers (`AgentConsoleDrawer`) must be mounted at document root outside `useUiZoom`.
+- Zustand store selections returning objects or arrays wrapped in `useShallow`.
+- Nested scrollable flex containers chaining `flex flex-col min-h-0 min-w-0 overflow-hidden`.
+- Light Paper (`#fafafa`) or Obsidian Dark (`#090a0f`) design tokens; zero neon gradients.
+- Overlays mounted outside `useUiZoom` canvas root.
 
 ### Gate 5: Code Hygiene & Ponytail Minimalism
-- Zero dead code, zero unused imports, zero `console.log` spam, zero leftover temporary files.
-- Monospace `.tabular-nums` on all timers, token metrics, and duration pills.
-- Zero AI-slop: no decorative emoji in system buttons, no meaningless rounded chips, no unnecessary npm packages.
+- Zero dead code, zero unused imports, zero console.log spam.
+- Monospace `.tabular-nums` on all dynamic timers and token metrics.
+- Surgical diffs adhering to 1-3 line Ponytail minimalism.
 
-### Gate 6: Review Routing Protocol (Approval vs. Rejection)
-When Gates 1–5 pass completely:
-1. Ensure the task feature branch is cleanly committed.
-2. In the repository root, merge into `main` and push to remote `origin`:
-   ```bash
-   git checkout main
-   git merge --no-ff <branch> -m "feat(<task_id>): <task_title> [approved by reviewer]"
-   git push origin main
-   ```
-3. **Determine Stage Routing**:
-   - **Approved Immediately (First Attempt)**: The task passed review on its first submission without prior rejections (`CHANGES_REQUESTED`):
-     Invoke `advance_task(stage_id="ready", summary="Task approved on first attempt: all sensors passed, rules synchronized, cleanly merged to main.")`
-   - **Approved After Revisions**: The task had prior rejections (`CHANGES_REQUESTED`) and required developer fixes:
-     Invoke `advance_task(stage_id="retro", summary="Task approved after fixes: routing to retro to record root-cause learnings and update .cvh/rules/.")`
-
----
-
-## 4. Rejection Protocol
-
-If ANY gate fails:
-- Call `reject_task(reason)` with:
-  1. Failed gate number and specific violated invariant.
-  2. Concrete error logs, file paths, and exact line numbers.
-  3. Actionable checklist for the developer to resolve.
-- The task automatically returns to the `dev` stage with verdict `CHANGES_REQUESTED`.
+### Gate 6: Stage Routing Protocol
+- Merge feature branch into `main` and execute routing verdict (see `verdict-routing.md`).

@@ -6,7 +6,7 @@ import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useTranslation, Language } from '../../stores/languageStore';
 import { useShallow } from 'zustand/react/shallow';
-import { GitBranch, CornerUpLeft, ChevronDown, MessageSquare, GitFork, Check, X, Loader2, Terminal } from 'lucide-react';
+import { GitBranch, CornerUpLeft, ChevronDown, MessageSquare, GitFork, Check, X, Loader2, Terminal, Paperclip } from 'lucide-react';
 import TaskContextMenu from './TaskContextMenu';
 import { getDeterministicAgentColor } from '../../lib/agentPalette';
 
@@ -247,7 +247,7 @@ function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle, 
         <div
           ref={triggerRef}
           className={`w-4 h-4 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-110 ${nodeColorClass}`}
-          title={`${side === 'left' ? 'on_enter' : 'on_leave'}: ${hookName}`}
+          aria-label={`${side === 'left' ? 'on_enter' : 'on_leave'}: ${hookName}`}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
@@ -306,7 +306,7 @@ function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle, 
           </div>
 
           {/* Hook name */}
-          <div className="mt-2 text-xs font-mono font-semibold text-neutral-900 dark:text-[#f0f6fc] truncate" title={hookName}>
+          <div className="mt-2 text-xs font-mono font-semibold text-neutral-900 dark:text-[#f0f6fc] truncate" aria-label={hookName}>
             {hookName}
           </div>
 
@@ -368,11 +368,22 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const setHoveredTaskId = useBoardStore((s) => s.setHoveredTaskId);
   const columns = useBoardStore((s) => s.columns);
   const { language, t } = useTranslation();
-  const isHighlighted = useBoardStore((s) =>
-    s.hoveredTaskId === task.id ||
-    (Boolean(task.waitingForSubtaskId) && s.hoveredTaskId === task.waitingForSubtaskId) ||
-    (Boolean(task.parentId) && s.hoveredTaskId === task.parentId)
-  );
+  const isHighlighted = useBoardStore((s) => {
+    const hId = s.hoveredTaskId;
+    if (!hId) return false;
+    if (hId === task.id) return true;
+    if (task.parentId && hId === task.parentId) return true;
+    if (task.waitingForSubtaskId && hId === task.waitingForSubtaskId) return true;
+    const hoveredTask = s.tasks.find((t) => t.id === hId);
+    if (!hoveredTask) return false;
+    // Parent of hovered task
+    if (hoveredTask.parentId === task.id) return true;
+    // Sibling subtask sharing the same parent
+    if (task.parentId && hoveredTask.parentId && task.parentId === hoveredTask.parentId) return true;
+    // Subtask that hovered task is currently waiting for
+    if (hoveredTask.waitingForSubtaskId === task.id) return true;
+    return false;
+  });
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [isSubtasksOpen, setIsSubtasksOpen] = useState(false);
@@ -445,7 +456,15 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   };
 
   const getStatusBadge = (status: TaskStatus) => {
-    if (task.waitingForSubtaskId || status === 'waiting_subtask') {
+    const waitingSub = task.waitingForSubtaskId
+      ? useBoardStore.getState().tasks.find((t) => t.id === task.waitingForSubtaskId)
+      : null;
+    const waitingSubCol = waitingSub ? columns.find((c) => c.id === waitingSub.columnId) : null;
+    const isSubActive = waitingSub
+      ? waitingSub.status !== 'done' && waitingSub.columnId !== 'ready' && !waitingSubCol?.terminal
+      : true;
+
+    if (!isDone && status !== 'done' && isSubActive && (task.waitingForSubtaskId || status === 'waiting_subtask')) {
       return (
         <button
           type="button"
@@ -454,9 +473,10 @@ function KanbanCard({ task, index }: KanbanCardProps) {
             if (task.waitingForSubtaskId) openDrawer(task.waitingForSubtaskId);
           }}
           className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#d97706] dark:text-[#f59e0b] bg-[#fefce8] dark:bg-[#161b22] border border-[#fef08a] dark:border-[#30363d] hover:border-[#f59e0b] transition cursor-pointer"
+          aria-label={task.waitingForSubtaskId ? `${t('status.waitingSubtask')}: ${task.waitingForSubtaskId}` : undefined}
         >
           <span className="h-1.5 w-1.5 rounded-full bg-[#f59e0b]" />
-          <span>{t('status.waitingSubtask', { id: task.waitingForSubtaskId || '' })}</span>
+          <span>{t('status.waitingSubtask')}</span>
         </button>
       );
     }
@@ -537,7 +557,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                 ? 'scale-[1.02] rotate-[1.5deg] shadow-2xl ring-1 ring-black/10 dark:ring-white/20 cursor-grabbing z-50 border-[#171717] dark:border-[#30363d] bg-white dark:bg-[#161b22]'
                 : `transition-transform duration-100 ease-out cursor-pointer active:scale-[0.99] ${
                     isHighlighted
-                      ? 'border-[#8b5cf6] shadow-md ring-1 ring-[#8b5cf6]/40 bg-white dark:bg-[#161b22]'
+                      ? 'border-[#8b5cf6] shadow-md ring-2 ring-[#8b5cf6]/50 bg-purple-50/20 dark:bg-[#1c1b29]'
                       : 'border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] hover:border-[#d4d4d8] dark:hover:border-[#30363d] shadow-xs'
                   }`
             }`}
@@ -558,7 +578,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                       openDrawer(task.parentId!);
                     }}
                     className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#6366f1] dark:text-[#a5b4fc] bg-[#eef2ff] dark:bg-[#312e81]/40 border border-[#c7d2fe] dark:border-[#4338ca] hover:bg-[#e0e7ff] dark:hover:bg-[#3730a3]/50 transition cursor-pointer"
-                    title={t('card.parentTask', { id: task.parentId })}
+                    aria-label={t('card.parentTask', { id: task.parentId })}
                   >
                     <CornerUpLeft className="h-2.5 w-2.5 text-[#6366f1] dark:text-[#a5b4fc]" />
                     <span>{task.parentId}</span>
@@ -578,7 +598,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
               {task.model && task.model.trim().length > 0 && (
                 <div
                   className="truncate font-mono text-[10px] text-[#666666] dark:text-[#8b949e] mb-1"
-                  title={t('card.model', { model: task.model })}
+                  aria-label={t('card.model', { model: task.model })}
                 >
                   {task.model}
                 </div>
@@ -591,17 +611,28 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                   </span>
                 </div>
               ) : null}
-              {(task.createdAt || currentTotalElapsed > 0) && (
-                <div className="mt-1 flex items-center gap-1 font-mono text-[10px] text-[#8f8f8f] dark:text-[#8b949e] tabular-nums whitespace-nowrap">
-                  {task.createdAt ? (
-                    <span>{t('card.created', { date: formatCardDate(task.createdAt) })}</span>
-                  ) : null}
-                  {task.createdAt && currentTotalElapsed > 0 ? <span>·</span> : null}
-                  {currentTotalElapsed > 0 ? (
-                    <span>
-                      {t('card.elapsed', { time: formatStageDuration(currentTotalElapsed, language) })}
+              {(task.createdAt || currentTotalElapsed > 0 || (task.attachments && task.attachments.length > 0)) && (
+                <div className="mt-1 flex items-center justify-between gap-1 font-mono text-[10px] text-[#8f8f8f] dark:text-[#8b949e] tabular-nums whitespace-nowrap">
+                  <div className="flex items-center gap-1 min-w-0 truncate">
+                    {task.createdAt ? (
+                      <span>{t('card.created', { date: formatCardDate(task.createdAt) })}</span>
+                    ) : null}
+                    {task.createdAt && currentTotalElapsed > 0 ? <span>·</span> : null}
+                    {currentTotalElapsed > 0 ? (
+                      <span>
+                        {t('card.elapsed', { time: formatStageDuration(currentTotalElapsed, language) })}
+                      </span>
+                    ) : null}
+                  </div>
+                  {task.attachments && task.attachments.length > 0 && (
+                    <span
+                      className="inline-flex items-center gap-0.5 text-[10px] font-mono text-[#666666] dark:text-[#8b949e] shrink-0"
+                      aria-label={t('newTask.attachmentsLabel')}
+                    >
+                      <Paperclip className="h-2.5 w-2.5 shrink-0" />
+                      <span>{task.attachments.length}</span>
                     </span>
-                  ) : null}
+                  )}
                 </div>
               )}
             </div>
@@ -616,7 +647,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                     setIsSubtasksOpen(!isSubtasksOpen);
                   }}
                   className="flex items-center justify-between w-full text-[10px] font-mono font-medium text-[#4d4d4d] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] transition cursor-pointer py-1 px-1 rounded hover:bg-[#f4f4f5] dark:hover:bg-[#21262d]"
-                  title={t('card.expandSubtasks')}
+                  aria-label={t('card.expandSubtasks')}
                 >
                   <span className="flex items-center gap-1.5">
                     <GitFork className="h-3 w-3 text-[#8b5cf6]" />
@@ -650,7 +681,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                               if (subId) openDrawer(subId);
                             }}
                           className="flex items-center justify-between p-1.5 rounded bg-[#f8f9fa] dark:bg-[#0d1117] hover:bg-[#f1f3f5] dark:hover:bg-[#21262d] border border-[#e9ecef] dark:border-[#30363d] cursor-pointer transition text-[10px] font-mono group"
-                          title={t('card.openSubtaskDialog', { id: sub.id })}
+                          aria-label={t('card.openSubtaskDialog', { id: sub.id })}
                         >
                           <div className="flex items-center gap-1.5 truncate min-w-0">
                             <span className="font-semibold text-[#8b5cf6] shrink-0">

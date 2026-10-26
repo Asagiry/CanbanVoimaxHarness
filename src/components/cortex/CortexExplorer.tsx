@@ -358,7 +358,7 @@ export default function CortexExplorer() {
         <button
           type="button"
           onClick={handleRefreshPersonas}
-          title={t('cortex.refreshAgents')}
+          aria-label={t('cortex.refreshAgents')}
           className="p-1 rounded hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] transition cursor-pointer"
         >
           <RotateCw className={`h-3.5 w-3.5 ${isRefreshingPersonas ? 'animate-spin' : ''}`} />
@@ -462,7 +462,6 @@ export default function CortexExplorer() {
                   e.stopPropagation();
                   setIsCreateAgentOpen(true);
                 }}
-                title={t('cortex.createAgent')}
                 aria-label={t('cortex.createAgent')}
                 className="p-1 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d] transition cursor-pointer"
               >
@@ -559,7 +558,7 @@ export default function CortexExplorer() {
                 ? 'text-[#a1a1aa] dark:text-[#6e7681] cursor-not-allowed opacity-50'
                 : 'text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer'
             }`}
-            title={agentContextMenu.isBuiltin ? t('cortex.cannotRenameBuiltin') : undefined}
+            aria-label={agentContextMenu.isBuiltin ? t('cortex.cannotRenameBuiltin') : undefined}
           >
             <Pencil className="h-3.5 w-3.5 text-[#71717a] dark:text-[#8b949e]" />
             <span>{t('cortex.renameAgent')}</span>
@@ -577,7 +576,7 @@ export default function CortexExplorer() {
                 ? 'text-[#a1a1aa] dark:text-[#6e7681] cursor-not-allowed opacity-50'
                 : 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-700 dark:hover:text-red-300 cursor-pointer'
             }`}
-            title={agentContextMenu.isBuiltin ? t('cortex.cannotDeleteBuiltin') : undefined}
+            aria-label={agentContextMenu.isBuiltin ? t('cortex.cannotDeleteBuiltin') : undefined}
           >
             <Trash2 className="h-3.5 w-3.5" />
             <span>{t('cortex.deleteAgent')}</span>
@@ -740,7 +739,6 @@ function StageHeaderButton({
             e.stopPropagation();
             onPlus();
           }}
-          title={t('cortex.newRule')}
           aria-label={t('cortex.newRule')}
           className="p-1 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d] transition cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shrink-0"
         >
@@ -1138,7 +1136,6 @@ function RulesFolderBlock({
             e.stopPropagation();
             onNew();
           }}
-          title={t('cortex.newRule')}
           aria-label={t('cortex.newRule')}
           className="p-1 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d] transition cursor-pointer opacity-0 group-hover/folder:opacity-100 focus:opacity-100 focus-visible:opacity-100 shrink-0"
         >
@@ -1206,7 +1203,6 @@ function HooksFolderBlock({
               e.stopPropagation();
               onNew();
             }}
-            title={t('cortex.newHook')}
             aria-label={t('cortex.newHook')}
             className="p-1 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d] transition cursor-pointer opacity-0 group-hover/folder:opacity-100 focus:opacity-100 focus-visible:opacity-100 shrink-0"
           >
@@ -1251,7 +1247,7 @@ function SettingMissingBlock({
       <button
         onClick={onCreate}
         className="flex items-center space-x-1 px-2 py-1 rounded-md text-[11px] font-mono bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white dark:text-[#f0f6fc] transition cursor-pointer"
-        title={t('cortex.createSettingTemplate')}
+        aria-label={t('cortex.createSettingTemplate')}
       >
         <Plus className="h-3 w-3 shrink-0" />
         <span>{t('cortex.createTemplate')}</span>
@@ -1657,7 +1653,7 @@ function EditAgentPersonaModal({
                       key={c}
                       type="button"
                       onClick={() => setSelectedColor(c)}
-                      title={c}
+                      aria-label={c}
                       className={`h-7 w-7 rounded-full transition-transform cursor-pointer flex items-center justify-center shadow-xs ${
                         isSelected ? 'scale-110 ring-2 ring-offset-2 ring-[#171717] dark:ring-[#f0f6fc]' : 'hover:scale-105'
                       }`}
@@ -1693,7 +1689,7 @@ function EditAgentPersonaModal({
                       key={ic}
                       type="button"
                       onClick={() => setSelectedIcon(ic)}
-                      title={ic}
+                      aria-label={ic}
                       className={`flex flex-col items-center justify-center p-2 rounded-md transition cursor-pointer ${
                         isSelected
                           ? 'bg-white dark:bg-[#21262d] border-2 border-[#171717] dark:border-[#f0f6fc] shadow-xs'

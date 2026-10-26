@@ -507,24 +507,24 @@ pub struct AgentContextState {
 }
 
 /// Estimates tokens for a given text using multilingual-aware BPE heuristics:
-/// - Non-ASCII / Cyrillic alphabetic characters: ~1.7 chars per token.
+/// - Non-ASCII / Cyrillic UTF-8 characters: ~1.4 chars per token.
 /// - ASCII and other characters: ~3.8 chars per token.
 pub fn estimate_text_tokens(text: &str) -> usize {
     if text.is_empty() {
         return 0;
     }
-    let mut non_ascii_alpha = 0usize;
-    let mut other_chars = 0usize;
+    let mut non_ascii = 0usize;
+    let mut ascii = 0usize;
 
     for c in text.chars() {
-        if c.is_alphabetic() && !c.is_ascii() {
-            non_ascii_alpha += 1;
+        if !c.is_ascii() {
+            non_ascii += 1;
         } else {
-            other_chars += 1;
+            ascii += 1;
         }
     }
 
-    let estimated = (non_ascii_alpha as f64 / 1.7) + (other_chars as f64 / 3.8);
+    let estimated = (non_ascii as f64 / 1.4) + (ascii as f64 / 3.8);
     (estimated.ceil() as usize).max(1)
 }
 

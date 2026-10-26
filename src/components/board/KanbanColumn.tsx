@@ -77,13 +77,13 @@ function KanbanColumn({
   const remaining = displayTasks.length - visibleCount;
   const nextCount = Math.min(PAGE_SIZE, remaining);
 
-  // Закреплены только backlog/ready/terminal по id/флагу (без привязки к индексу).
-  // index===0 — лишь fallback, когда id бэклога неизвестен. По index===last не пиним.
+  // Закреплены только intake и terminal колонки по id/флагу (без привязки к индексу).
   const isPinned = Boolean(
     isPinnedProp ?? (
+      column.isIntake ||
+      Boolean(column.terminal) ||
       column.id === 'backlog' ||
       column.id === 'ready' ||
-      Boolean(column.terminal) ||
       index === 0
     )
   );
@@ -126,7 +126,7 @@ function KanbanColumn({
           e.stopPropagation();
           setMenuPos({ x: e.clientX, y: e.clientY });
         }}
-        title={
+        aria-label={
           isPinned
             ? t('board.columnPinnedTitle')
             : t('board.columnDragTitle')

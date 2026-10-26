@@ -10,11 +10,6 @@ export type TaskStatus = 'idle' | 'running' | 'paused' | 'waiting_review' | 'wai
 
 export type TaskVerdict = 'NONE' | 'APPROVED' | 'APPROVED_WITH_CAVEATS' | 'CHANGES_REQUESTED';
 
-export interface FastTrackConfig {
-  noReview?: boolean;
-  noRetro?: boolean;
-}
-
 export interface BoardDef {
   id: string;
   name: string;
@@ -41,7 +36,6 @@ export interface KanbanTask {
   totalElapsed: number; // in seconds
   isTimerRunning: boolean;
   returnsCount: number;
-  fastTrack?: FastTrackConfig;
   customFlow?: string[];
   verdict?: TaskVerdict;
   verdictNote?: string;
@@ -56,6 +50,7 @@ export interface KanbanTask {
   skipWorktree?: boolean;
   skipBacklogHook?: boolean;
   skip_backlog_hook?: boolean;
+  position?: number;
 }
 
 export interface PipelineColumn {
@@ -67,8 +62,10 @@ export interface PipelineColumn {
   onEnterScript?: string | null;
   // Column = agent: autoRun triggers run_agent on entry (default: !!persona),
   // terminal marks a sink column (task becomes done, no further promotion).
+  // isIntake marks column 0 / intake stage.
   autoRun?: boolean;
   terminal?: boolean;
+  isIntake?: boolean;
   contextWindow?: number;
   modelOverride: string | null;
   temperature?: number;

@@ -3,6 +3,7 @@ setlocal enabledelayedexpansion
 REM ==============================================================================
 REM CanbanVoimaxHarness Hook: on_review_finish.bat
 REM Merges approved task feature branch into main and pushes to origin/main
+REM Automates clean worktree teardown (§ 2.23)
 REM ==============================================================================
 
 echo [CVH Merge Hook] Task: %CVH_TASK_ID% ^| Stage: %CVH_STAGE_ID% ^| Verdict: [%CVH_VERDICT%] ^| Branch: [%CVH_BRANCH%]
@@ -21,7 +22,7 @@ REM Verify feature branch exists
 git rev-parse --verify "%CVH_BRANCH%" >nul 2>&1
 if errorlevel 1 (
     echo [CVH Merge Hook] Notice: Branch is not found or was already merged. Skipping.
-    exit /b 0
+    goto TEARDOWN
 )
 
 REM Check if branch is already merged into main
@@ -30,7 +31,7 @@ if not errorlevel 1 (
     echo [CVH Merge Hook] Branch is already merged into main.
     echo [CVH Merge Hook] Pushing main to origin/main...
     git push origin main
-    exit /b 0
+    goto TEARDOWN
 )
 
 echo [CVH Merge Hook] Checking out main...
@@ -58,4 +59,22 @@ if errorlevel 1 (
 )
 
 echo [CVH Merge Hook] SUCCESS: Cleanly merged into main and pushed to origin/main!
+
+:TEARDOWN
+REM Worktree Teardown Protocol (§ 2.23)
+set "TARGET_WT=%CVH_WORKTREE_PATH%"
+if "%TARGET_WT%"=="" if not "%CVH_TASK_ID%"=="" (
+    if exist "worktrees%CVH_TASK_ID%" set "TARGET_WT=worktrees%CVH_TASK_ID%"
+)
+
+if not "%TARGET_WT%"=="" if exist "%TARGET_WT%" (
+    echo [CVH Merge Hook] Tearing down worktree: %TARGET_WT%
+    git worktree remove "%TARGET_WT%" --force >nul 2>&1
+    git worktree prune >nul 2>&1
+)
+
+if not "%CVH_BRANCH%"=="" (
+    git branch -D "%CVH_BRANCH%" >nul 2>&1
+)
+
 exit /b 0

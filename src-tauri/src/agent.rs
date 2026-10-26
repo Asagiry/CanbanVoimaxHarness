@@ -95,6 +95,8 @@ pub struct Task {
     pub created_at: i64,
     #[serde(rename = "updatedAt", alias = "updated_at", default)]
     pub updated_at: i64,
+    #[serde(default)]
+    pub position: Option<f64>,
 }
 
 pub type KanbanTask = Task;
@@ -127,6 +129,7 @@ pub enum AgentEvent {
         cache_hit_rate: f32,
         duration_ms: f64,
         tps: f32,
+        ttft_ms: f64,
         system_tokens: u64,
         tool_tokens: u64,
     },
@@ -281,8 +284,7 @@ pub fn is_tool_active_for_agent(
         || role.to_lowercase().contains("оркестрат")
         || effective_stage.to_lowercase().contains("orchestrat")
         || effective_stage.to_lowercase().contains("оркестрат")
-        || effective_stage == "backlog"
-        || role == "copilot";
+        || effective_stage == "backlog";
 
     let is_card_op = name == "create_task" || name == "create_tasks" || name == "complete_task";
     if is_card_op && !is_orch {
@@ -1000,6 +1002,55 @@ pub async fn get_all_tools_for_role(repo_root: &Path, role: Option<&str>) -> Vec
     tools
 }
 
+/// Prunes the .cvh/spill directory if file count exceeds 50 or total size exceeds 20MB,
+/// removing the oldest files first based on modification time.
+pub async fn prune_spill_dir(spill_dir: &Path) -> Result<()> {
+    let mut entries = match tokio::fs::read_dir(spill_dir).await {
+        Ok(rd) => rd,
+        Err(_) => return Ok(()),
+    };
+
+    struct SpillFileInfo {
+        path: PathBuf,
+        mtime: std::time::SystemTime,
+        size: u64,
+    }
+
+    let mut files: Vec<SpillFileInfo> = Vec::new();
+    let mut total_bytes = 0u64;
+
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let path = entry.path();
+        if path.is_file() {
+            if let Ok(meta) = entry.metadata().await {
+                let mtime = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+                let size = meta.len();
+                total_bytes += size;
+                files.push(SpillFileInfo { path, mtime, size });
+            }
+        }
+    }
+
+    const MAX_FILES: usize = 50;
+    const MAX_BYTES: u64 = 20 * 1024 * 1024; // 20 MB
+
+    if files.len() > MAX_FILES || total_bytes > MAX_BYTES {
+        files.sort_by_key(|f| f.mtime);
+        let mut file_count = files.len();
+        for file in files {
+            if file_count <= MAX_FILES && total_bytes <= MAX_BYTES {
+                break;
+            }
+            if tokio::fs::remove_file(&file.path).await.is_ok() {
+                total_bytes = total_bytes.saturating_sub(file.size);
+                file_count = file_count.saturating_sub(1);
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Tool Output Spilling: if stdout/output exceeds 100 lines or 8KB, save full log to `.cvh/spill/<timestamp>-<tool>.log`,
 /// return head (first 20 lines) and tail (last 20 lines) + reference to spilled file.
 pub async fn maybe_spill_output(
@@ -1037,6 +1088,7 @@ pub async fn maybe_spill_output(
         let spill_file = spill_dir.join(&filename);
 
         tokio::fs::write(&spill_file, &output).await?;
+        let _ = prune_spill_dir(&spill_dir).await;
 
         let all_lines: Vec<&str> = output.lines().collect();
         let head = all_lines[..20.min(all_lines.len())].join("\n");
@@ -1738,6 +1790,28 @@ pub static SUBAGENT_RECEIVERS: LazyLock<tokio::sync::Mutex<HashMap<String, Subag
 pub static SUBAGENT_SESSIONS: LazyLock<tokio::sync::Mutex<HashMap<String, SubagentSession>>> =
     LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
 
+/// Evicts completed, aborted, or failed subagent sessions from in-memory cache when capacity exceeds 30.
+pub async fn prune_subagent_sessions_cache() {
+    let mut sessions = SUBAGENT_SESSIONS.lock().await;
+    if sessions.len() <= 30 {
+        return;
+    }
+    let mut removable_keys = Vec::new();
+    for (key, sess) in sessions.iter() {
+        if let Ok(info) = sess.retry_info.try_lock() {
+            if info.status == "finished" || info.status == "aborted" || info.status == "failed" {
+                removable_keys.push(key.clone());
+            }
+        }
+    }
+    for k in removable_keys {
+        if sessions.len() <= 30 {
+            break;
+        }
+        sessions.remove(&k);
+    }
+}
+
 /// Robust subagent session finder: searches SUBAGENT_SESSIONS by exact ID, stripped `:sub:`,
 /// formatted `{parent}.sub-{id}`, or suffix matching `.sub-{tool_call_id}`.
 pub async fn find_subagent_session(
@@ -1797,10 +1871,19 @@ pub async fn find_subagent_session(
 }
 
 /// Appends raw model request and response telemetry to `.cvh/llm_debug.log`
+/// Rotates the log to `.cvh/llm_debug.log.1` if size exceeds 10MB.
 pub async fn append_llm_debug_log(repo_root: &Path, text: &str) {
     let cvh_dir = repo_root.join(".cvh");
     let _ = tokio::fs::create_dir_all(&cvh_dir).await;
     let log_path = cvh_dir.join("llm_debug.log");
+    const MAX_BYTES: u64 = 10 * 1024 * 1024; // 10MB
+    if let Ok(meta) = tokio::fs::metadata(&log_path).await {
+        if meta.len() >= MAX_BYTES {
+            let rot_path = cvh_dir.join("llm_debug.log.1");
+            let _ = tokio::fs::remove_file(&rot_path).await;
+            let _ = tokio::fs::rename(&log_path, &rot_path).await;
+        }
+    }
     if let Ok(mut file) = tokio::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -1929,24 +2012,25 @@ pub fn is_exploratory_role(role: &str) -> bool {
 
 /// Canonical tool name normalization for aliases and SWE-bench compatibility.
 pub fn canonical_tool_name(tool_name: &str) -> &str {
-    match tool_name {
-        "bash" => "execute_command",
-        "str_replace" => "edit_file",
-        "ask_user" => "question",
-        "create_tasks" => "create_task",
-        "list_subagents" => "subagent_list",
-        "move_task" | "move_task_stage" | "advance_stage" | "next_stage" => "advance_task",
-        other => other,
-    }
+    crate::config::normalize_tool_name(tool_name)
 }
 
 pub async fn get_stage_personas(repo_root: &Path) -> HashMap<String, String> {
     let mut map = HashMap::new();
     if let Ok(boards_cfg) = crate::config::load_boards_config(repo_root).await {
-        for b in boards_cfg.boards {
-            for c in b.columns {
-                if let Some(p) = c.persona {
-                    map.insert(c.id, p);
+        if let Some(active) = boards_cfg.boards.iter().find(|b| b.id == boards_cfg.active_board_id) {
+            for c in &active.columns {
+                if let Some(ref p) = c.persona {
+                    map.insert(c.id.clone(), p.clone());
+                }
+            }
+        }
+        for b in &boards_cfg.boards {
+            if b.id != boards_cfg.active_board_id {
+                for c in &b.columns {
+                    if let Some(ref p) = c.persona {
+                        map.entry(c.id.clone()).or_insert_with(|| p.clone());
+                    }
                 }
             }
         }
@@ -2333,6 +2417,7 @@ pub async fn execute_tool(
                 let mut sessions = SUBAGENT_SESSIONS.lock().await;
                 sessions.insert(subagent_id.clone(), session);
             }
+            prune_subagent_sessions_cache().await;
 
             let mut owned_ctx = ctx.to_owned();
             owned_ctx.abort_handle = Arc::clone(&sub_abort_handle);
@@ -2483,6 +2568,7 @@ pub async fn execute_tool(
                 let mut sessions = SUBAGENT_SESSIONS.lock().await;
                 sessions.insert(subagent_id.clone(), session);
             }
+            prune_subagent_sessions_cache().await;
 
             let mut owned_ctx = ctx.to_owned();
             owned_ctx.abort_handle = Arc::clone(&sub_abort_handle);
@@ -3050,71 +3136,199 @@ pub async fn execute_tool(
 
             let prev_col = &columns[curr_idx - 1];
 
-            // ЖЕЛЕЗНЫЙ ИНВАРИАНТ: Если текущая колонка — первая рабочая колонка после backlog (колонка A),
-            // шаг назад в backlog СТРОГО ЗАПРЕЩЁН! Возвращай ошибку:
+            // ЖЕЛЕЗНЫЙ ИНВАРИАНТ: Если предыдущая колонка — колонка приёма/бэклог (индекс 0 или is_intake),
+            // шаг назад в бэклог СТРОГО ЗАПРЕЩЁН! Возвращай ошибку:
             // "Запрещено возвращать задачу из первой рабочей стадии назад в бэклог. Задача должна быть доработана или закрыта."
-            let is_prev_backlog = prev_col.id == "backlog"
+            let is_prev_backlog = prev_col.is_intake == Some(true)
+                || curr_idx == 1
+                || prev_col.id == "backlog"
                 || prev_col.title.to_lowercase().contains("backlog")
-                || prev_col.title.to_lowercase().contains("бэклог")
-                || (curr_idx == 1 && columns[0].id == "backlog");
+                || prev_col.title.to_lowercase().contains("бэклог");
 
             if is_prev_backlog {
                 bail!("Запрещено возвращать задачу из первой рабочей стадии назад в бэклог. Задача должна быть доработана или закрыта.");
             }
 
-            let rejection_summary = format!("ОТКЛОНЕНО РЕВЬЮ: {}", reason);
-
-            // 2. Execute move_task_stage logic with status 'idle', verdict 'CHANGES_REQUESTED', and handover_summary
-            let updated_task = crate::commands::internal_move_task_stage(
-                repo_root,
-                task_id,
-                &prev_col.id,
-                Some("CHANGES_REQUESTED".to_string()),
-                Some("idle".to_string()),
-                Some(rejection_summary),
-                ctx.app_handle.as_ref(),
-                true, // is_autonomous_advance
-                None,
-            )
-            .await
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
-
-            // 3. Save rejection reason to task dialog/history
             let reject_content = format!(
                 "### Задача возвращена на этап: {}\n\n**Причина отклонения:**\n{}",
                 prev_col.title,
                 reason
             );
-            let _ = crate::commands::append_task_dialog_activity(
-                repo_root,
-                task_id,
-                "reject",
-                &reject_content,
-                ctx.app_handle.as_ref(),
-            )
-            .await;
 
-            // Emit task:moved with reject marker and reason
-            if let Some(app) = ctx.app_handle.as_ref() {
-                let _ = app.emit("task:moved", serde_json::json!({
-                    "taskId": task_id,
-                    "toStage": prev_col.id,
-                    "stageId": prev_col.id,
-                    "status": "idle",
-                    "rejected": true,
-                    "reason": reason,
-                    "verdict": "CHANGES_REQUESTED",
-                    "task": &updated_task,
-                }));
+            // If current task is a subtask, find the previous subtask in prev_col and reactivate it
+            let subtask_rejection = if let Some(ref pid) = current_task.parent_id {
+                let prev_subtask_opt = tasks
+                    .iter()
+                    .filter(|t| {
+                        t.parent_id.as_deref().is_some_and(|p| crate::commands::task_id_matches(p, pid))
+                            && crate::commands::stage_id_matches(&t.stage_id, &prev_col.id)
+                            && !crate::commands::task_id_matches(&t.id, task_id)
+                    })
+                    .max_by_key(|t| (t.subtask_index.unwrap_or(0), t.created_at))
+                    .cloned();
+
+                if let Some(prev_sub) = prev_subtask_opt {
+                    let mut mut_tasks = tasks.clone();
+                    let prev_col_has_autorun = prev_col.persona.is_some() || prev_col.auto_run == Some(true);
+                    let prev_status = if prev_col_has_autorun { "running" } else { "idle" };
+
+                    // 1. Reactivate prev_subtask in prev_col
+                    if let Some(ps) = mut_tasks.iter_mut().find(|t| crate::commands::task_id_matches(&t.id, &prev_sub.id)) {
+                        ps.status = Some(prev_status.to_string());
+                        ps.verdict = Some("CHANGES_REQUESTED".to_string());
+                        ps.handover_summary = Some(format!("ОТКЛОНЕНО: {}", reason));
+                        ps.updated_at = chrono::Utc::now().timestamp_millis();
+                        let _ = crate::db::db_upsert_task(repo_root, ps);
+                    }
+
+                    // 2. Keep rejecting subtask in its stage with status idle and verdict CHANGES_REQUESTED
+                    if let Some(cs) = mut_tasks.iter_mut().find(|t| crate::commands::task_id_matches(&t.id, task_id)) {
+                        cs.status = Some("idle".to_string());
+                        cs.verdict = Some("CHANGES_REQUESTED".to_string());
+                        cs.updated_at = chrono::Utc::now().timestamp_millis();
+                        let _ = crate::db::db_upsert_task(repo_root, cs);
+                    }
+
+                    // 3. Update parent task waiting_for_subtask_id
+                    if let Some(p) = mut_tasks.iter_mut().find(|t| crate::commands::task_id_matches(&t.id, pid)) {
+                        p.waiting_for_subtask_id = Some(prev_sub.id.clone());
+                        p.status = Some("waiting_subtask".to_string());
+                        p.updated_at = chrono::Utc::now().timestamp_millis();
+                        let _ = crate::db::db_upsert_task(repo_root, p);
+                    }
+
+                    // Save to disk and AppState
+                    let _ = crate::commands::save_tasks_to_disk(repo_root, &mut_tasks).await;
+                    if let Some(app) = ctx.app_handle.as_ref() {
+                        if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+                            if let Ok(mut guard) = state_ref.tasks.lock() {
+                                *guard = mut_tasks.clone();
+                            }
+                        }
+                    }
+
+                    // Append dialog activities
+                    let _ = crate::commands::append_task_dialog_activity(
+                        repo_root,
+                        task_id,
+                        "reject",
+                        &reject_content,
+                        ctx.app_handle.as_ref(),
+                    )
+                    .await;
+
+                    let _ = crate::commands::append_task_dialog_activity(
+                        repo_root,
+                        &prev_sub.id,
+                        "steer",
+                        &reject_content,
+                        ctx.app_handle.as_ref(),
+                    )
+                    .await;
+
+                    // Emit events
+                    if let Some(app) = ctx.app_handle.as_ref() {
+                        if let Some(cs) = mut_tasks.iter().find(|t| crate::commands::task_id_matches(&t.id, task_id)) {
+                            let _ = app.emit("task:updated", serde_json::json!({ "task": cs }));
+                        }
+                        if let Some(ps) = mut_tasks.iter().find(|t| crate::commands::task_id_matches(&t.id, &prev_sub.id)) {
+                            let _ = app.emit("task:updated", serde_json::json!({ "task": ps }));
+                            let _ = app.emit("task:moved", serde_json::json!({
+                                "taskId": ps.id,
+                                "toStage": prev_col.id,
+                                "stageId": prev_col.id,
+                                "status": prev_status,
+                                "rejected": true,
+                                "reason": reason,
+                                "verdict": "CHANGES_REQUESTED",
+                                "task": ps,
+                            }));
+                        }
+                        if let Some(p) = mut_tasks.iter().find(|t| crate::commands::task_id_matches(&t.id, pid)) {
+                            let _ = app.emit("task:updated", serde_json::json!({ "task": p }));
+                        }
+                        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &mut_tasks }));
+
+                        if prev_col_has_autorun {
+                            let _ = app.emit("agent:autorun", serde_json::json!({
+                                "taskId": prev_sub.id,
+                                "prompt": reject_content,
+                            }));
+                        }
+                    }
+
+                    Some(format!(
+                        "ОТКЛОНЕНО: Задача {} возвращена на этап '{}' ({}) к подзадаче {} по причине: {}",
+                        task_id,
+                        prev_col.title,
+                        prev_col.id,
+                        prev_sub.id,
+                        reason
+                    ))
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            if let Some(res_str) = subtask_rejection {
+                res_str
+            } else {
+                // Fallback for single tasks or subtasks without previous subtask
+                let rejection_summary = format!("ОТКЛОНЕНО РЕВЬЮ: {}", reason);
+                let updated_task = crate::commands::internal_move_task_stage(
+                    repo_root,
+                    task_id,
+                    &prev_col.id,
+                    Some("CHANGES_REQUESTED".to_string()),
+                    Some("idle".to_string()),
+                    Some(rejection_summary),
+                    ctx.app_handle.as_ref(),
+                    true, // is_autonomous_advance
+                    None,
+                )
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+                let _ = crate::commands::append_task_dialog_activity(
+                    repo_root,
+                    task_id,
+                    "reject",
+                    &reject_content,
+                    ctx.app_handle.as_ref(),
+                )
+                .await;
+
+                // Emit task:moved with reject marker and reason
+                if let Some(app) = ctx.app_handle.as_ref() {
+                    let _ = app.emit("task:moved", serde_json::json!({
+                        "taskId": task_id,
+                        "toStage": prev_col.id,
+                        "stageId": prev_col.id,
+                        "status": "idle",
+                        "rejected": true,
+                        "reason": reason,
+                        "verdict": "CHANGES_REQUESTED",
+                        "task": &updated_task,
+                    }));
+                    let prev_has_autorun = prev_col.persona.is_some() || prev_col.auto_run == Some(true);
+                    if prev_has_autorun {
+                        let _ = app.emit("agent:autorun", serde_json::json!({
+                            "taskId": task_id,
+                            "prompt": reject_content,
+                        }));
+                    }
+                }
+
+                format!(
+                    "ОТКЛОНЕНО: Задача {} возвращена на этап '{}' ({}) по причине: {}",
+                    task_id,
+                    prev_col.title,
+                    prev_col.id,
+                    reason
+                )
             }
-
-            format!(
-                "ОТКЛОНЕНО: Задача {} возвращена на этап '{}' ({}) по причине: {}",
-                task_id,
-                prev_col.title,
-                prev_col.id,
-                reason
-            )
         }
 
         "question" => {
@@ -3488,6 +3702,7 @@ pub async fn execute_tool(
                     skip_worktree: None,
                     created_at: now,
                     updated_at: now,
+                    position: None,
                 };
 
                 tasks.push(new_task);
@@ -3834,6 +4049,13 @@ pub async fn execute_tool(
                             }
                         }
                     }
+                    "output" | "assistant" | "response" => {
+                        if let Some(ref c) = it.content {
+                            if !c.trim().is_empty() {
+                                last_terminal_text = Some(c.trim().to_string());
+                            }
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -4015,7 +4237,8 @@ pub fn run_inprocess_subagent(
         .clone()
         .or_else(|| subagent_id.rfind(".sub-").map(|pos| subagent_id[(pos + 5)..].to_string()));
 
-    // 1. Tool filtering (If tools is omitted, defaults to ALL tools available to the parent agent!)
+    // 1. Tool filtering (Check against subagent role via tool policy and subagent setting)
+    let subagent_setting = load_agent_setting(&ctx.repo_root, &role).await;
     let all_tools = get_all_tools_for_role(&ctx.repo_root, Some(&role)).await;
     let base_tools: Vec<String> = match requested_tools {
         Some(t) if !t.is_empty() => t,
@@ -4038,8 +4261,13 @@ pub fn run_inprocess_subagent(
                 && t != "create_task"
                 && t != "create_tasks"
                 && t != "complete_task"
-                && is_tool_allowed(&ctx.tool_policy, ctx.stage_id.as_deref(), t)
-                && agent_allows_tool(ctx.agent_allowed_tools.as_deref(), t)
+                && is_tool_active_for_agent(
+                    t,
+                    &ctx.tool_policy,
+                    &role,
+                    None,
+                    subagent_setting.allowed_tools.as_deref(),
+                )
         })
         .collect();
     effective_sub_tools.sort();
@@ -4089,7 +4317,10 @@ pub fn run_inprocess_subagent(
         .collect();
     active_sub_tool_defs.sort_by(|a, b| a.function.name.cmp(&b.function.name));
 
-    // 5. System persona & initial messages
+    // 5. System persona & initial messages:
+    // Prompt Cache Prefix Stabilization (§ 2.10): Keep SystemMessage completely static
+    // (role persona + invariants + static tool list) with zero dynamic worktree dir, task title,
+    // or timestamp. Dynamic metadata is placed in initial_user_prompt.
     let persona_content = {
         let persona_path = crate::config::agent_persona_path(&ctx.repo_root, &role);
         if persona_path.is_file() {
@@ -4103,29 +4334,37 @@ pub fn run_inprocess_subagent(
         "# Role Persona: {}
 {}
 
-        # Scoped Subagent Mandate
-        You are an in-process subagent executing an atomic subtask.
-        Working directory: {}
-        Task Title: {}
-        Allowed Tools: {:?}
-        Invariants:
-        - Do not attempt to move kanban stages or spawn nested subagents.
-        - Single-Action Collection: When invoking 'collect_subagent', you MUST invoke it as the ONLY tool call in that turn. Do NOT batch file reads or other tools alongside collect_subagent; wait to consume and analyze the received reports before planning next steps.
-        - Execute the task thoroughly and verify results.
-        - When done, output your comprehensive final report.",
+# Scoped Subagent Mandate
+You are an in-process subagent executing an atomic subtask.
+Allowed Tools: {:?}
+Invariants:
+- Do not attempt to move kanban stages or spawn nested subagents.
+- Single-Action Collection: When invoking 'collect_subagent', you MUST invoke it as the ONLY tool call in that turn. Do NOT batch file reads or other tools alongside collect_subagent; wait to consume and analyze the received reports before planning next steps.
+- Execute the task thoroughly and verify results.
+- When done, output your comprehensive final report.",
         role,
         persona_content.as_deref().unwrap_or("You are a specialized autonomous subagent."),
+        effective_sub_tools
+    );
+
+    let initial_user_prompt = format!(
+        "# Context
+Working directory: {}
+Task Title: {}
+
+# Objective: {}
+
+{}",
         ctx.worktree_dir.to_string_lossy(),
         title,
-        effective_sub_tools
+        title,
+        prompt
     );
 
     let system_tokens = compactor::estimate_text_tokens(&system_prompt) as u64;
     let mut sub_messages = vec![
         ChatMessage::system(system_prompt).with_cache_control(crate::llm::CacheControl::ephemeral()),
-        ChatMessage::user(format!("# Objective: {}
-
-{}", title, prompt)).with_cache_control(crate::llm::CacheControl::ephemeral()),
+        ChatMessage::user(initial_user_prompt).with_cache_control(crate::llm::CacheControl::ephemeral()),
     ];
 
     let base_url = ctx.base_url.as_deref().unwrap_or("http://127.0.0.1:8045/v1");
@@ -4345,14 +4584,17 @@ Messages count: {}
                     let end_time = last_token_instant.unwrap_or_else(std::time::Instant::now);
                     let duration_secs = end_time.duration_since(start_time).as_secs_f64();
                     let duration_ms = duration_secs * 1000.0;
+                    let ttft_ms = first_token_instant
+                        .map(|t| t.duration_since(turn_start_instant).as_secs_f64() * 1000.0)
+                        .unwrap_or(0.0);
                     let tps = if duration_secs > 0.05 && output_tokens > 0 {
                         (output_tokens as f64 / duration_secs) as f32
                     } else {
                         0.0
                     };
                     eprintln!(
-                        "CVH [subagent telemetry] turn={} subagent={} input={} output={} cache_read={} hit_rate={:.1}% duration={:.2}s tps={:.1}",
-                        sub_turn, subagent_id, input_tokens, output_tokens, cache_read_tokens, cache_hit_rate, duration_secs, tps
+                        "CVH [subagent telemetry] turn={} subagent={} input={} output={} cache_read={} hit_rate={:.1}% duration={:.2}s tps={:.1} ttft={:.1}ms",
+                        sub_turn, subagent_id, input_tokens, output_tokens, cache_read_tokens, cache_hit_rate, duration_secs, tps, ttft_ms
                     );
                     if let Some(ref app) = ctx.app_handle {
                         let _ = app.emit(
@@ -4366,6 +4608,7 @@ Messages count: {}
                                 "cacheHitRate": cache_hit_rate,
                                 "durationMs": duration_ms,
                                 "tps": tps,
+                                "ttftMs": ttft_ms,
                                 "systemTokens": system_tokens,
                                 "toolTokens": tool_tokens,
                             }),
@@ -4383,6 +4626,7 @@ Messages count: {}
                                         "cacheHitRate": cache_hit_rate,
                                         "durationMs": duration_ms,
                                         "tps": tps,
+                                        "ttftMs": ttft_ms,
                                         "systemTokens": system_tokens,
                                         "toolTokens": tool_tokens,
                                     }),
@@ -4398,7 +4642,7 @@ Messages count: {}
                         output_tokens: output_tokens as i64,
                         cached_tokens: cache_read_tokens as i64,
                         tps: tps as f64,
-                        ttft_ms: 0.0,
+                        ttft_ms,
                         duration_ms,
                         created_at: chrono::Utc::now().timestamp_millis(),
                     };
@@ -4474,6 +4718,9 @@ Messages count: {}
             let end_time = last_token_instant.unwrap_or_else(std::time::Instant::now);
             let duration_secs = end_time.duration_since(start_time).as_secs_f64();
             let duration_ms = duration_secs * 1000.0;
+            let ttft_ms = first_token_instant
+                .map(|t| t.duration_since(turn_start_instant).as_secs_f64() * 1000.0)
+                .unwrap_or(0.0);
             let output_tokens = (compactor::estimate_text_tokens(&turn_content) as u64)
                 .max((turn_streamed_chars as f64 / 3.8).ceil() as u64);
             let input_tokens = compactor::estimate_request_tokens(&sub_messages, req_tools.as_deref()) as u64;
@@ -4483,8 +4730,8 @@ Messages count: {}
                 0.0
             };
             eprintln!(
-                "CVH [subagent telemetry:fallback] turn={} subagent={} input={} output={} duration={:.2}s tps={:.1}",
-                sub_turn, subagent_id, input_tokens, output_tokens, duration_secs, tps
+                "CVH [subagent telemetry:fallback] turn={} subagent={} input={} output={} duration={:.2}s tps={:.1} ttft={:.1}ms",
+                sub_turn, subagent_id, input_tokens, output_tokens, duration_secs, tps, ttft_ms
             );
             if let Some(ref app) = ctx.app_handle {
                 let _ = app.emit(
@@ -4498,6 +4745,7 @@ Messages count: {}
                         "cacheHitRate": 0.0,
                         "durationMs": duration_ms,
                         "tps": tps,
+                        "ttftMs": ttft_ms,
                         "systemTokens": system_tokens,
                         "toolTokens": tool_tokens,
                     }),
@@ -4515,6 +4763,7 @@ Messages count: {}
                                 "cacheHitRate": 0.0,
                                 "durationMs": duration_ms,
                                 "tps": tps,
+                                "ttftMs": ttft_ms,
                                 "systemTokens": system_tokens,
                                 "toolTokens": tool_tokens,
                             }),
@@ -4530,7 +4779,7 @@ Messages count: {}
                 output_tokens: output_tokens as i64,
                 cached_tokens: 0,
                 tps: tps as f64,
-                ttft_ms: 0.0,
+                ttft_ms,
                 duration_ms,
                 created_at: chrono::Utc::now().timestamp_millis(),
             };
@@ -4661,7 +4910,7 @@ Messages count: {}
             let sub_tool_ctx = ToolContext {
                 repo_root: &ctx.repo_root,
                 worktree_dir: &ctx.worktree_dir,
-                stage_id: ctx.stage_id.as_deref(),
+                stage_id: None,
                 role: Some(&role),
                 abort_handle: Arc::clone(&ctx.abort_handle),
                 tool_policy: &ctx.tool_policy,
@@ -4865,6 +5114,9 @@ Messages count: {}
                     let end_time = synth_last_token_instant.unwrap_or_else(std::time::Instant::now);
                     let duration_secs = end_time.duration_since(start_time).as_secs_f64();
                     let duration_ms = duration_secs * 1000.0;
+                    let ttft_ms = synth_first_token_instant
+                        .map(|t| t.duration_since(synth_start_instant).as_secs_f64() * 1000.0)
+                        .unwrap_or(0.0);
                     let tps = if duration_secs > 0.05 && output_tokens > 0 {
                         (output_tokens as f64 / duration_secs) as f32
                     } else {
@@ -4882,6 +5134,7 @@ Messages count: {}
                                 "cacheHitRate": cache_hit_rate,
                                 "durationMs": duration_ms,
                                 "tps": tps,
+                                "ttftMs": ttft_ms,
                                 "systemTokens": synth_system_tokens,
                                 "toolTokens": 0,
                             }),
@@ -4899,6 +5152,7 @@ Messages count: {}
                                         "cacheHitRate": cache_hit_rate,
                                         "durationMs": duration_ms,
                                         "tps": tps,
+                                        "ttftMs": ttft_ms,
                                         "systemTokens": synth_system_tokens,
                                         "toolTokens": 0,
                                     }),
@@ -4926,6 +5180,9 @@ Messages count: {}
             let end_time = synth_last_token_instant.unwrap_or_else(std::time::Instant::now);
             let duration_secs = end_time.duration_since(start_time).as_secs_f64();
             let duration_ms = duration_secs * 1000.0;
+            let ttft_ms = synth_first_token_instant
+                .map(|t| t.duration_since(synth_start_instant).as_secs_f64() * 1000.0)
+                .unwrap_or(0.0);
             let output_tokens = (compactor::estimate_text_tokens(&synth_content) as u64)
                 .max((synth_streamed_chars as f64 / 3.8).ceil() as u64);
             let input_tokens = compactor::estimate_request_tokens(&sub_messages, None) as u64;
@@ -4946,6 +5203,7 @@ Messages count: {}
                         "cacheHitRate": 0.0,
                         "durationMs": duration_ms,
                         "tps": tps,
+                        "ttftMs": ttft_ms,
                         "systemTokens": synth_system_tokens,
                         "toolTokens": 0,
                     }),
@@ -4963,6 +5221,7 @@ Messages count: {}
                                 "cacheHitRate": 0.0,
                                 "durationMs": duration_ms,
                                 "tps": tps,
+                                "ttftMs": ttft_ms,
                                 "systemTokens": synth_system_tokens,
                                 "toolTokens": 0,
                             }),
@@ -5070,6 +5329,7 @@ Subagent [{}] '{}' report:
             let _ = sender.send(report.clone());
         }
     }
+    prune_subagent_sessions_cache().await;
 
     if let Some(ref app) = ctx.app_handle {
         let _ = app.emit(
@@ -5697,6 +5957,7 @@ pub struct AgentSessionConfig {
     pub task_title: String,
     pub task_description: String,
     pub handover_summary: Option<String>,
+    pub task_attachments: Option<Vec<String>>,
     pub steer_prompt: Option<String>,
     pub steer_images: Option<Vec<String>>,
     pub base_url: String,
@@ -5712,38 +5973,43 @@ pub struct AgentSessionConfig {
 /// Checks if an opening tag candidate (<thinking> or <think>) at `pos` is a genuine model
 /// control tag rather than markdown inline code (`<thinking>`), code fence, or word substring.
 pub fn is_valid_opening_tag(buffer: &str, pos: usize, tag_len: usize) -> bool {
-    if pos + tag_len > buffer.len() {
+    if !buffer.is_char_boundary(pos) || !buffer.is_char_boundary(pos + tag_len) || pos + tag_len > buffer.len() {
         return false;
     }
 
     // 1. Check character immediately preceding the tag
     if pos > 0 {
-        let prev_char = buffer[..pos].chars().next_back().unwrap();
-        // If preceded by a backtick (e.g. `<thinking>` or ```<thinking>), it's markdown inline code or fence
-        if prev_char == '`' {
-            return false;
-        }
-        // If preceded by an alphanumeric char or underscore, it's inside an identifier/word (e.g. var<thinking>)
-        if prev_char.is_alphanumeric() || prev_char == '_' {
-            return false;
+        if let Some(prev_char) = buffer.get(..pos).and_then(|s| s.chars().next_back()) {
+            // If preceded by a backtick (e.g. `<thinking>` or ```<thinking>), it's markdown inline code or fence
+            if prev_char == '`' {
+                return false;
+            }
+            // If preceded by an alphanumeric char or underscore, it's inside an identifier/word (e.g. var<thinking>)
+            if prev_char.is_alphanumeric() || prev_char == '_' {
+                return false;
+            }
         }
     }
 
     // 2. Check character immediately following the tag
     if pos + tag_len < buffer.len() {
-        let next_char = buffer[pos + tag_len..].chars().next().unwrap();
-        // If immediately followed by a backtick (e.g. <thinking>`), it's markdown
-        if next_char == '`' {
-            return false;
+        if let Some(next_char) = buffer.get(pos + tag_len..).and_then(|s| s.chars().next()) {
+            // If immediately followed by a backtick (e.g. <thinking>`), it's markdown
+            if next_char == '`' {
+                return false;
+            }
         }
     }
 
     // 3. Check if inside unclosed inline backtick code on the current line
-    let line_start = buffer[..pos].rfind('\n').map(|p| p + 1).unwrap_or(0);
-    let line_before = &buffer[line_start..pos];
-    let backticks_before = line_before.chars().filter(|&c| c == '`').count();
-    if backticks_before % 2 == 1 {
-        return false;
+    if let Some(before) = buffer.get(..pos) {
+        let line_start = before.rfind('\n').map(|p| p + 1).unwrap_or(0);
+        if let Some(line_before) = before.get(line_start..) {
+            let backticks_before = line_before.chars().filter(|&c| c == '`').count();
+            if backticks_before % 2 == 1 {
+                return false;
+            }
+        }
     }
 
     true
@@ -5752,29 +6018,34 @@ pub fn is_valid_opening_tag(buffer: &str, pos: usize, tag_len: usize) -> bool {
 /// Checks if a closing tag candidate (</thinking> or </think>) at `pos` is a genuine model
 /// control tag rather than markdown inline code (`</thinking>`).
 pub fn is_valid_closing_tag(buffer: &str, pos: usize, tag_len: usize) -> bool {
-    if pos + tag_len > buffer.len() {
+    if !buffer.is_char_boundary(pos) || !buffer.is_char_boundary(pos + tag_len) || pos + tag_len > buffer.len() {
         return false;
     }
 
     if pos > 0 {
-        let prev_char = buffer[..pos].chars().next_back().unwrap();
-        if prev_char == '`' {
-            return false;
+        if let Some(prev_char) = buffer.get(..pos).and_then(|s| s.chars().next_back()) {
+            if prev_char == '`' {
+                return false;
+            }
         }
     }
 
     if pos + tag_len < buffer.len() {
-        let next_char = buffer[pos + tag_len..].chars().next().unwrap();
-        if next_char == '`' {
-            return false;
+        if let Some(next_char) = buffer.get(pos + tag_len..).and_then(|s| s.chars().next()) {
+            if next_char == '`' {
+                return false;
+            }
         }
     }
 
-    let line_start = buffer[..pos].rfind('\n').map(|p| p + 1).unwrap_or(0);
-    let line_before = &buffer[line_start..pos];
-    let backticks_before = line_before.chars().filter(|&c| c == '`').count();
-    if backticks_before % 2 == 1 {
-        return false;
+    if let Some(before) = buffer.get(..pos) {
+        let line_start = before.rfind('\n').map(|p| p + 1).unwrap_or(0);
+        if let Some(line_before) = before.get(line_start..) {
+            let backticks_before = line_before.chars().filter(|&c| c == '`').count();
+            if backticks_before % 2 == 1 {
+                return false;
+            }
+        }
     }
 
     true
@@ -5782,16 +6053,24 @@ pub fn is_valid_closing_tag(buffer: &str, pos: usize, tag_len: usize) -> bool {
 
 /// Helper to check if a potential partial tag prefix at `pos` could be a valid opening tag
 pub fn is_valid_partial_opening_tag(buffer: &str, pos: usize) -> bool {
+    if !buffer.is_char_boundary(pos) || pos > buffer.len() {
+        return false;
+    }
     if pos > 0 {
-        let prev_char = buffer[..pos].chars().next_back().unwrap();
-        if prev_char == '`' || prev_char.is_alphanumeric() || prev_char == '_' {
-            return false;
+        if let Some(prev_char) = buffer.get(..pos).and_then(|s| s.chars().next_back()) {
+            if prev_char == '`' || prev_char.is_alphanumeric() || prev_char == '_' {
+                return false;
+            }
         }
     }
-    let line_start = buffer[..pos].rfind('\n').map(|p| p + 1).unwrap_or(0);
-    let backticks_before = buffer[line_start..pos].chars().filter(|&c| c == '`').count();
-    if backticks_before % 2 == 1 {
-        return false;
+    if let Some(before) = buffer.get(..pos) {
+        let line_start = before.rfind('\n').map(|p| p + 1).unwrap_or(0);
+        if let Some(line_before) = before.get(line_start..) {
+            let backticks_before = line_before.chars().filter(|&c| c == '`').count();
+            if backticks_before % 2 == 1 {
+                return false;
+            }
+        }
     }
     true
 }
@@ -5823,8 +6102,12 @@ impl ThinkingStreamParser {
                 let mut earliest_open: Option<(usize, usize)> = None;
                 let mut search_pos = 0;
                 while search_pos < self.buffer.len() {
-                    let open_thinking = self.buffer[search_pos..].find("<thinking>").map(|p| search_pos + p);
-                    let open_think = self.buffer[search_pos..].find("<think>").map(|p| search_pos + p);
+                    let sub = match self.buffer.get(search_pos..) {
+                        Some(s) => s,
+                        None => break,
+                    };
+                    let open_thinking = sub.find("<thinking>").map(|p| search_pos + p);
+                    let open_think = sub.find("<think>").map(|p| search_pos + p);
 
                     let next_cand = match (open_thinking, open_think) {
                         (Some(pos1), Some(pos2)) => {
@@ -5841,14 +6124,15 @@ impl ThinkingStreamParser {
 
                     match next_cand {
                         Some((pos, tag_len)) => {
-                            let backticks_before = self.buffer[..pos].chars().filter(|&c| c == '`').count();
+                            let backticks_before = self.buffer.get(..pos).map(|s| s.chars().filter(|&c| c == '`').count()).unwrap_or(0);
                             let effective_in_backtick = (self.in_backtick as usize + backticks_before) % 2 == 1;
 
                             if !effective_in_backtick && is_valid_opening_tag(&self.buffer, pos, tag_len) {
                                 earliest_open = Some((pos, tag_len));
                                 break;
                             } else {
-                                search_pos = pos + 1;
+                                let advance = self.buffer.get(pos..).and_then(|s| s.chars().next()).map(|c| c.len_utf8()).unwrap_or(1);
+                                search_pos = pos + advance;
                             }
                         }
                         None => break,
@@ -5857,7 +6141,7 @@ impl ThinkingStreamParser {
 
                 if let Some((pos, tag_len)) = earliest_open {
                     if pos > 0 {
-                        let text = self.buffer[..pos].to_string();
+                        let text = self.buffer.get(..pos).unwrap_or("").to_string();
                         for c in text.chars() {
                             if c == '`' {
                                 self.in_backtick = !self.in_backtick;
@@ -5867,7 +6151,7 @@ impl ThinkingStreamParser {
                     }
                     self.in_thinking = true;
                     self.in_backtick = false;
-                    self.buffer = self.buffer[pos + tag_len..].to_string();
+                    self.buffer = self.buffer.get(pos + tag_len..).unwrap_or("").to_string();
                     continue;
                 }
 
@@ -5878,7 +6162,7 @@ impl ThinkingStreamParser {
                         for len in 1..tag.len() {
                             if self.buffer.ends_with(&tag[..len]) && len > partial_len {
                                 let pos = self.buffer.len() - len;
-                                let backticks_before = self.buffer[..pos].chars().filter(|&c| c == '`').count();
+                                let backticks_before = self.buffer.get(..pos).map(|s| s.chars().filter(|&c| c == '`').count()).unwrap_or(0);
                                 let effective_in_backtick = (self.in_backtick as usize + backticks_before) % 2 == 1;
                                 if !effective_in_backtick && is_valid_partial_opening_tag(&self.buffer, pos) {
                                     partial_len = len;
@@ -5890,15 +6174,15 @@ impl ThinkingStreamParser {
 
                 if partial_len > 0 {
                     let safe_len = self.buffer.len() - partial_len;
-                    if safe_len > 0 {
-                        let text = self.buffer[..safe_len].to_string();
+                    if safe_len > 0 && self.buffer.is_char_boundary(safe_len) {
+                        let text = self.buffer.get(..safe_len).unwrap_or("").to_string();
                         for c in text.chars() {
                             if c == '`' {
                                 self.in_backtick = !self.in_backtick;
                             }
                         }
                         outputs.push((false, text));
-                        self.buffer = self.buffer[safe_len..].to_string();
+                        self.buffer = self.buffer.get(safe_len..).unwrap_or("").to_string();
                     }
                     break;
                 } else {
@@ -5918,8 +6202,12 @@ impl ThinkingStreamParser {
                 let mut earliest_close: Option<(usize, usize)> = None;
                 let mut search_pos = 0;
                 while search_pos < self.buffer.len() {
-                    let close_thinking = self.buffer[search_pos..].find("</thinking>").map(|p| search_pos + p);
-                    let close_think = self.buffer[search_pos..].find("</think>").map(|p| search_pos + p);
+                    let sub = match self.buffer.get(search_pos..) {
+                        Some(s) => s,
+                        None => break,
+                    };
+                    let close_thinking = sub.find("</thinking>").map(|p| search_pos + p);
+                    let close_think = sub.find("</think>").map(|p| search_pos + p);
 
                     let next_cand = match (close_thinking, close_think) {
                         (Some(pos1), Some(pos2)) => {
@@ -5940,7 +6228,8 @@ impl ThinkingStreamParser {
                                 earliest_close = Some((pos, tag_len));
                                 break;
                             } else {
-                                search_pos = pos + 1;
+                                let advance = self.buffer.get(pos..).and_then(|s| s.chars().next()).map(|c| c.len_utf8()).unwrap_or(1);
+                                search_pos = pos + advance;
                             }
                         }
                         None => break,
@@ -5949,11 +6238,12 @@ impl ThinkingStreamParser {
 
                 if let Some((pos, tag_len)) = earliest_close {
                     if pos > 0 {
-                        outputs.push((true, self.buffer[..pos].to_string()));
+                        let text = self.buffer.get(..pos).unwrap_or("").to_string();
+                        outputs.push((true, text));
                     }
                     self.in_thinking = false;
                     self.in_backtick = false;
-                    self.buffer = self.buffer[pos + tag_len..].to_string();
+                    self.buffer = self.buffer.get(pos + tag_len..).unwrap_or("").to_string();
                     continue;
                 }
 
@@ -5972,9 +6262,10 @@ impl ThinkingStreamParser {
 
                 if partial_len > 0 {
                     let safe_len = self.buffer.len() - partial_len;
-                    if safe_len > 0 {
-                        outputs.push((true, self.buffer[..safe_len].to_string()));
-                        self.buffer = self.buffer[safe_len..].to_string();
+                    if safe_len > 0 && self.buffer.is_char_boundary(safe_len) {
+                        let text = self.buffer.get(..safe_len).unwrap_or("").to_string();
+                        outputs.push((true, text));
+                        self.buffer = self.buffer.get(safe_len..).unwrap_or("").to_string();
                     }
                     break;
                 } else {
@@ -6275,6 +6566,15 @@ where
         config.task_description.trim()
     ));
 
+    if let Some(ref atts) = config.task_attachments {
+        if !atts.is_empty() {
+            initial_user_prompt.push_str(&format!(
+                "\n\n[ВЛОЖЕНИЯ К ЗАДАЧЕ / ATTACHMENTS]: Прикреплено {} изображений/скриншотов. Внимательно изучи их при выполнении задачи.",
+                atts.len()
+            ));
+        }
+    }
+
     // 1. Check if an existing in-memory context already exists for this task_id
     let in_memory_context = if let Some(ref app) = config.app_handle {
         if let Some(state) = app.try_state::<crate::commands::AppState>() {
@@ -6312,24 +6612,47 @@ where
     };
 
     // 3. Adopt existing messages or initialize fresh 2-message array
-    let (starting_turn, mut messages) = if let Some((cur_turn, msgs)) = in_memory_context {
+    let (starting_turn, mut messages) = if let Some((cur_turn, mut msgs)) = in_memory_context {
         eprintln!(
             "CVH [agent]: Adopting existing in-memory context ({} messages, turn {}) for task {}",
             msgs.len(), cur_turn, config.task_id
         );
+        if let Some(ref atts) = config.task_attachments {
+            if !atts.is_empty() && msgs.len() >= 2 && msgs[1].role == Role::User && !msgs[1].has_images() {
+                let text = msgs[1].text_content().unwrap_or(&initial_user_prompt).to_string();
+                msgs[1] = ChatMessage::user_with_images(text, atts.clone())
+                    .with_cache_control(crate::llm::CacheControl::ephemeral());
+            }
+        }
         (cur_turn, msgs)
-    } else if let Some((cur_turn, msgs)) = sqlite_context {
+    } else if let Some((cur_turn, mut msgs)) = sqlite_context {
         eprintln!(
             "CVH [agent]: Adopting reconstructed SQLite dialogue context ({} messages) for task {}",
             msgs.len(), config.task_id
         );
+        if let Some(ref atts) = config.task_attachments {
+            if !atts.is_empty() && msgs.len() >= 2 && msgs[1].role == Role::User && !msgs[1].has_images() {
+                let text = msgs[1].text_content().unwrap_or(&initial_user_prompt).to_string();
+                msgs[1] = ChatMessage::user_with_images(text, atts.clone())
+                    .with_cache_control(crate::llm::CacheControl::ephemeral());
+            }
+        }
         (cur_turn, msgs)
     } else {
+        let initial_user_msg = if let Some(ref atts) = config.task_attachments {
+            if !atts.is_empty() {
+                ChatMessage::user_with_images(initial_user_prompt, atts.clone())
+            } else {
+                ChatMessage::user(initial_user_prompt)
+            }
+        } else {
+            ChatMessage::user(initial_user_prompt)
+        };
         (
             0,
             vec![
                 ChatMessage::system(system_prompt.clone()).with_cache_control(crate::llm::CacheControl::ephemeral()),
-                ChatMessage::user(initial_user_prompt).with_cache_control(crate::llm::CacheControl::ephemeral()),
+                initial_user_msg.with_cache_control(crate::llm::CacheControl::ephemeral()),
             ],
         )
     };
@@ -6782,13 +7105,16 @@ Messages count: {}
                     let end_time = last_token_instant.unwrap_or_else(std::time::Instant::now);
                     let duration_secs = end_time.duration_since(start_time).as_secs_f64();
                     let duration_ms = duration_secs * 1000.0;
+                    let ttft_ms = first_token_instant
+                        .map(|t| t.duration_since(turn_start_instant).as_secs_f64() * 1000.0)
+                        .unwrap_or(0.0);
                     let tps = if duration_secs > 0.05 && output_tokens > 0 {
                         (output_tokens as f64 / duration_secs) as f32
                     } else {
                         0.0
                     };
                     eprintln!(
-                        "CVH [telemetry] turn={} model={} input={} output={} cache_read={} cache_creation={} hit_rate={:.1}% duration={:.2}s tps={:.1} prefix_hash={:016x}",
+                        "CVH [telemetry] turn={} model={} input={} output={} cache_read={} cache_creation={} hit_rate={:.1}% duration={:.2}s tps={:.1} ttft={:.1}ms prefix_hash={:016x}",
                         turn,
                         config.model,
                         input_tokens,
@@ -6798,6 +7124,7 @@ Messages count: {}
                         cache_hit_rate,
                         duration_secs,
                         tps,
+                        ttft_ms,
                         prefix_hash
                     );
                     event_sink(AgentEvent::Telemetry {
@@ -6808,6 +7135,7 @@ Messages count: {}
                         cache_hit_rate,
                         duration_ms,
                         tps,
+                        ttft_ms,
                         system_tokens,
                         tool_tokens,
                     });
@@ -6827,6 +7155,9 @@ Messages count: {}
             let end_time = last_token_instant.unwrap_or_else(std::time::Instant::now);
             let duration_secs = end_time.duration_since(start_time).as_secs_f64();
             let duration_ms = duration_secs * 1000.0;
+            let ttft_ms = first_token_instant
+                .map(|t| t.duration_since(turn_start_instant).as_secs_f64() * 1000.0)
+                .unwrap_or(0.0);
             let output_tokens = (compactor::estimate_text_tokens(&turn_content) as u64)
                 .max((turn_streamed_chars as f64 / 3.8).ceil() as u64);
             let input_tokens = compactor::estimate_request_tokens(&messages, tools.as_deref()) as u64;
@@ -6836,13 +7167,14 @@ Messages count: {}
                 0.0
             };
             eprintln!(
-                "CVH [telemetry:fallback] turn={} model={} input={} output={} duration={:.2}s tps={:.1}",
+                "CVH [telemetry:fallback] turn={} model={} input={} output={} duration={:.2}s tps={:.1} ttft={:.1}ms",
                 turn,
                 config.model,
                 input_tokens,
                 output_tokens,
                 duration_secs,
-                tps
+                tps,
+                ttft_ms
             );
             event_sink(AgentEvent::Telemetry {
                 input_tokens,
@@ -6852,6 +7184,7 @@ Messages count: {}
                 cache_hit_rate: 0.0,
                 duration_ms,
                 tps,
+                ttft_ms,
                 system_tokens,
                 tool_tokens,
             });

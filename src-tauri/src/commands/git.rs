@@ -27,7 +27,7 @@ pub fn apply_worktree_from_hook_stdout(task: &mut Task, stdout: &str) {
         if let Some(v) = t.strip_prefix("CVH_WORKTREE=") {
             let v = v.trim();
             if !v.is_empty() {
-                task.worktree_path = Some(v.to_string());
+                task.worktree_path = Some(v.replace('\\', "/"));
             }
         } else if let Some(v) = t.strip_prefix("CVH_BRANCH=") {
             let v = v.trim();

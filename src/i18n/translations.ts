@@ -47,7 +47,7 @@ export const translations = {
     'status.done': 'Done',
     'status.blocked': 'Blocked',
     'status.waitingReview': 'Review',
-    'status.waitingSubtask': 'Waiting for subtask {id}',
+    'status.waitingSubtask': 'Waiting for subtask',
     'status.error': 'Error',
 
     // Priorities
@@ -71,6 +71,9 @@ export const translations = {
     'newTask.descLabel': 'Description',
     'newTask.descPlaceholder': 'Details and task requirements...',
     'newTask.modelLabel': 'Agent Model',
+    'newTask.attachmentsLabel': 'Attachments',
+    'newTask.pasteHint': 'Paste image from clipboard (Ctrl+V / Ctrl+М) or attach file',
+    'newTask.removeAttachment': 'Remove image',
 
     // Kanban Board & Columns
     'board.searchPlaceholder': 'Search...',
@@ -96,7 +99,6 @@ export const translations = {
     'board.columnDragTitle': 'Drag to reorder columns. Right click for column actions',
     'board.confirmDeleteColumnEmpty': 'Delete column "{title}"?',
     'board.confirmDeleteColumnWithTasks': 'Delete column "{title}"? Tasks in it: {count}. They will be moved to column "{neighbor}".',
-    'board.threadTitle': 'Thread: {parent} -> {subtask} (click to open subtask console)',
     'board.errMoveTask': 'Failed to move task:\n{msg}',
     'board.errReorderRollback': 'Failed to save column order. Changes rolled back.',
     'board.errNameLettersOrDigits': 'Name must contain letters or digits.',
@@ -150,7 +152,6 @@ export const translations = {
     'drawer.stageCurrent': 'Current stage: {title}',
     'drawer.stageSwitch': 'Switch to stage: {title}',
     'drawer.stageNotStarted': 'Stage not yet started',
-    'drawer.stopAgent': 'Stop Agent',
     'drawer.runAgent': 'Run',
     'drawer.runAgentTitle': 'Run agent',
     'drawer.compactContext': 'Compact Context',
@@ -495,7 +496,6 @@ export const translations = {
     'ruleEditor.stage': 'Stage:',
     'ruleEditor.lines': 'Lines:',
     'ruleEditor.words': 'Words:',
-    'ruleEditor.settingsBadge': 'settings',
     'ruleEditor.settingsTabVisual': 'Settings (UI)',
     'ruleEditor.settingsTabCode': 'JSON Code',
     'ruleEditor.customizationSection': 'Agent Customization',
@@ -589,7 +589,7 @@ export const translations = {
     'status.done': 'Готово',
     'status.blocked': 'Блок',
     'status.waitingReview': 'Ревью',
-    'status.waitingSubtask': 'Ждем подзадачу {id}',
+    'status.waitingSubtask': 'Ждем подзадачу',
     'status.error': 'Ошибка',
 
     // Priorities
@@ -613,6 +613,9 @@ export const translations = {
     'newTask.descLabel': 'Описание',
     'newTask.descPlaceholder': 'Детали и требования к задаче...',
     'newTask.modelLabel': 'Модель агента',
+    'newTask.attachmentsLabel': 'Вложения',
+    'newTask.pasteHint': 'Вставьте скриншот из буфера (Ctrl+V / Ctrl+М) или выберите файл',
+    'newTask.removeAttachment': 'Удалить изображение',
 
     // Kanban Board & Columns
     'board.searchPlaceholder': 'Поиск...',
@@ -638,7 +641,6 @@ export const translations = {
     'board.columnDragTitle': 'Перетащите для смены порядка колонок. Правая кнопка — действия с колонкой',
     'board.confirmDeleteColumnEmpty': 'Удалить колонку «{title}»?',
     'board.confirmDeleteColumnWithTasks': 'Удалить колонку «{title}»? Задач в ней: {count}. Они будут перенесены в колонку «{neighbor}».',
-    'board.threadTitle': 'Нить: {parent} -> {subtask} (нажмите для открытия консоли подзадачи)',
     'board.errMoveTask': 'Не удалось переместить задачу:\n{msg}',
     'board.errReorderRollback': 'Не удалось сохранить порядок колонок. Изменения откачены.',
     'board.errNameLettersOrDigits': 'Имя должно содержать буквы или цифры.',
@@ -692,7 +694,6 @@ export const translations = {
     'drawer.stageCurrent': 'Текущий этап: {title}',
     'drawer.stageSwitch': 'Перейти к этапу: {title}',
     'drawer.stageNotStarted': 'Этап еще не начат',
-    'drawer.stopAgent': 'Остановить',
     'drawer.runAgent': 'Запустить',
     'drawer.runAgentTitle': 'Запустить агента',
     'drawer.compactContext': 'Сжать контекст',
@@ -1037,7 +1038,6 @@ export const translations = {
     'ruleEditor.stage': 'Этап:',
     'ruleEditor.lines': 'Строк:',
     'ruleEditor.words': 'Слов:',
-    'ruleEditor.settingsBadge': 'настройки',
     'ruleEditor.settingsTabVisual': 'Настройки (UI)',
     'ruleEditor.settingsTabCode': 'JSON код',
     'ruleEditor.customizationSection': 'Кастомизация агента',

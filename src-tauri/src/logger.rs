@@ -164,7 +164,7 @@ mod tests {
 
     #[test]
     fn test_cvh_log_format_and_file_write() {
-        let temp_dir = std::env::temp_dir().join(format!("cvh_log_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let temp_dir = std::path::PathBuf::from("target").join(format!("cvh_log_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
         let _ = std::fs::create_dir_all(&temp_dir);
 
         cvh_log(Some(&temp_dir), "INFO", "TEST", "Hello logging world!");

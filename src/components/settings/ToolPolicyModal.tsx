@@ -32,7 +32,7 @@ function Toggle({
         if (!disabled) onToggle();
       }}
       disabled={disabled}
-      title={title}
+      aria-label={title}
       aria-pressed={enabled}
       className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer shrink-0 ${
         enabled ? 'bg-[#171717] dark:bg-[#f0f6fc]' : 'bg-[#e4e4e7] dark:bg-[#30363d]'
@@ -122,7 +122,7 @@ function ToolParamRow({
           disabled={currentValue <= param.min}
           onClick={() => handleStep(-param.step)}
           className="w-6 h-6 flex items-center justify-center rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] text-xs font-mono font-bold transition select-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-          title={t('toolPolicy.decreaseBy', { step: param.step })}
+          aria-label={t('toolPolicy.decreaseBy', { step: param.step })}
         >
           -
         </button>
@@ -144,7 +144,7 @@ function ToolParamRow({
           disabled={currentValue >= param.max}
           onClick={() => handleStep(param.step)}
           className="w-6 h-6 flex items-center justify-center rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] text-xs font-mono font-bold transition select-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-          title={t('toolPolicy.increaseBy', { step: param.step })}
+          aria-label={t('toolPolicy.increaseBy', { step: param.step })}
         >
           +
         </button>
@@ -534,7 +534,7 @@ export default function ToolPolicyModal() {
           <button
             onClick={closeModal}
             className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
-            title={t('common.close')}
+            aria-label={t('common.close')}
           >
             <X className="h-4 w-4" />
           </button>
@@ -824,7 +824,7 @@ export default function ToolPolicyModal() {
                               <button
                                 type="button"
                                 onClick={() => toggleExpanded(tool.id)}
-                                title={isExpanded ? t('toolPolicy.collapseDesc') : t('toolPolicy.expandDesc')}
+                                aria-label={isExpanded ? t('toolPolicy.collapseDesc') : t('toolPolicy.expandDesc')}
                                 className="flex items-start gap-1.5 text-left cursor-pointer min-w-0 flex-1 group"
                               >
                                 {isChild && (
@@ -923,7 +923,7 @@ export default function ToolPolicyModal() {
                           <button
                             type="button"
                             onClick={() => toggleExpanded(expandId)}
-                            title={isExpanded ? t('toolPolicy.collapseDesc') : t('toolPolicy.expandDesc')}
+                            aria-label={isExpanded ? t('toolPolicy.collapseDesc') : t('toolPolicy.expandDesc')}
                             className="flex items-start gap-1.5 text-left cursor-pointer min-w-0 flex-1 group"
                           >
                             <ChevronDown
@@ -942,7 +942,7 @@ export default function ToolPolicyModal() {
                             <button
                               type="button"
                               onClick={() => void handleDeleteCustomTool(tool.name)}
-                              title={`${t('common.delete')} ${tool.name}`}
+                              aria-label={`${t('common.delete')} ${tool.name}`}
                               className="p-1.5 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 border border-transparent hover:border-red-200 dark:hover:border-red-900/50 transition cursor-pointer"
                             >
                               <Trash2 className="h-3.5 w-3.5" />

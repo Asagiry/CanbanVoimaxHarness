@@ -21,33 +21,6 @@ CVH_BRANCH=<git_branch_name>
 ```
 The CVH runtime intercepts these lines from hook stdout and writes them directly to the task card's `worktree_path` and `branch` fields in SQLite.
 
-### Worktree Creation Script Example (`.cvh/hooks/create_worktree.bat`):
-```bat
-@echo off
-set "WT_DIR=worktrees\%CVH_TASK_ID%"
-set "BRANCH=feat/%CVH_TASK_ID%"
-if not exist "%WT_DIR%" (
-    git worktree add -b "%BRANCH%" "%WT_DIR%" HEAD || exit /b 1
-)
-echo CVH_WORKTREE=%WT_DIR%
-echo CVH_BRANCH=%BRANCH%
-exit /b 0
-```
-
-### Worktree Creation Script Example (`.cvh/hooks/create_worktree.sh`):
-```bash
-#!/usr/bin/env bash
-set -e
-WT_DIR="worktrees/${CVH_TASK_ID}"
-BRANCH="feat/${CVH_TASK_ID}"
-if [ ! -d "$WT_DIR" ]; then
-    git worktree add -b "$BRANCH" "$WT_DIR" HEAD
-fi
-echo "CVH_WORKTREE=$WT_DIR"
-echo "CVH_BRANCH=$BRANCH"
-exit 0
-```
-
 ---
 
 ## 3. Injected Task Context Environment Variables
@@ -61,24 +34,19 @@ Every hook execution receives the task's context via system environment variable
 
 ---
 
-## 4. Hook Rejection Mechanism
-When a hook script returns a non-zero exit code (`exit code != 0`):
-1. The transition is aborted immediately; the task remains pinned in the source stage.
-2. The error log (`stderr` or `stdout`) is recorded into SQLite task dialog history as a steer message (`### [HOOK REJECTED: ...]`).
-3. The task status resets to `idle`, and its verdict is set to `CHANGES_REQUESTED`.
-4. If the column configures an agent (`persona`) or has `autoRun: true`, the runtime triggers an `agent:autorun` event directing the agent to fix the defect.
+## 4. Gatekeeper Sensors
+Columns may define `gatekeeperSensor` (e.g. `cargo check` or `npm run build`).
+Gatekeeper sensors execute inside `CVH_WORKTREE_PATH` before any card advance. If exit code != 0, transition is blocked.
 
 ---
 
-## 5. Gatekeeper Sensor Checks
-A column may declare a `gatekeeperSensor` command (e.g. `.cvh/hooks/gatekeeper_sensor.bat` or `cargo check`).
-- The sensor executes strictly inside `CVH_WORKTREE_PATH` before moving a card into the target stage.
-- If the sensor exits non-zero, the transition is blocked.
-- Sensor execution is automatically skipped on initial moves from `backlog` into the first working stage, or when the worktree is empty.
-
----
-
-## 6. Terminal Stage Invariants
-- The `ready` stage (or any column with `terminal: true`) represents the delivery endpoint.
-- Only an `on_enter` hook is permitted (e.g. verifying remote push, cleaning artifacts).
-- An `on_leave` hook on a terminal stage is strictly forbidden and rejected by configuration normalizers.
+## 5. Hook Execution on `advance_task` & Subtask Handover Protocol
+During autonomous transitions via `advance_task`:
+1. **Hook Sequence Enforcement**:
+   - `on_leave` / `on_exit` hook of current stage is executed.
+   - `gatekeeperSensor` of target stage is executed.
+   - `on_enter` hook of target stage is executed.
+   - If any hook/sensor fails, the transition is blocked immediately: NO new subtasks are created, verdict is set to `CHANGES_REQUESTED`, status is kept `running` (if column has persona/autorun), and error details are injected into task dialog and autorun prompt.
+2. **Generic Rejection Handover (Zero Card Duplication)**:
+   - When a review subtask rejects via `reject_task(reason)`, the reviewing subtask stays in its column with `idle` status and `CHANGES_REQUESTED`, while the developer subtask in `dev` is reactivated with `running` status and rejection details.
+   - When the developer calls `advance_task(summary)`, CVH identifies the existing subtask in the target column, marks developer subtask `done`, reactivates the target subtask with `running` status and `handover_prompt`, without generating duplicate subtask cards (`CVH-X.3`).

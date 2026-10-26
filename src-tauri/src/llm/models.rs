@@ -252,6 +252,15 @@ impl ChatMessage {
         self.content.as_ref().and_then(|c| c.as_str())
     }
 
+    pub fn has_images(&self) -> bool {
+        match self.content.as_ref() {
+            Some(MessageContent::Parts(parts)) => {
+                parts.iter().any(|p| matches!(p, ContentPart::ImageUrl { .. }))
+            }
+            _ => false,
+        }
+    }
+
     pub fn as_str(&self) -> Option<&str> {
         self.text_content()
     }

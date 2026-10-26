@@ -573,7 +573,7 @@ export default function SubagentsSidebar({
                           <div className="shrink-0 flex items-center space-x-1">
                             {sub.status === 'running' ? (
                               <>
-                                <span className="flex items-center justify-center h-5 w-5" title={language === 'ru' ? 'Выполняется' : 'Running'}>
+                                <span className="flex items-center justify-center h-5 w-5">
                                   <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0 ring-2 ring-emerald-500/20" />
                                 </span>
                                 <button
@@ -600,11 +600,11 @@ export default function SubagentsSidebar({
                                 </button>
                               </>
                             ) : sub.status === 'error' || sub.status === 'stopped' ? (
-                              <span className="flex items-center justify-center h-5 w-5" title={sub.status === 'stopped' ? 'Остановлен' : 'Ошибка'}>
+                              <span className="flex items-center justify-center h-5 w-5">
                                 <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
                               </span>
                             ) : (
-                              <span className="flex items-center justify-center h-5 w-5" title={language === 'ru' ? 'Завершено' : 'Completed'}>
+                              <span className="flex items-center justify-center h-5 w-5">
                                 <span className="h-2 w-2 rounded-full bg-[#a1a1aa] dark:bg-[#52525b] shrink-0" />
                               </span>
                             )}
@@ -619,13 +619,13 @@ export default function SubagentsSidebar({
                         {/* Footer: Duration + Steps */}
                         <div className="flex items-center justify-between text-[11px] font-mono text-[#71717a] dark:text-[#8b949e] pt-1.5 border-t border-[#f4f4f5] dark:border-[#21262d]/60">
                           <div className="flex items-center space-x-2">
-                            <div className="flex items-center space-x-1" title={language === 'ru' ? 'Время выполнения' : 'Execution duration'}>
+                            <div className="flex items-center space-x-1">
                               <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
                               <span className="tabular-nums">
                                 {formatDuration(sub.durationMs, sub.status === 'running')}
                               </span>
                             </div>
-                            <div className="flex items-center space-x-1" title={language === 'ru' ? 'Шаги подзадачи' : 'Subtask steps'}>
+                            <div className="flex items-center space-x-1">
                               <Layers className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
                               <span className="tabular-nums">{formatSteps(sub.stepsCount || 0, language)}</span>
                             </div>
@@ -713,7 +713,7 @@ export default function SubagentsSidebar({
                           <div className="shrink-0 flex items-center space-x-1">
                             {sub.status === 'running' ? (
                               <>
-                                <span className="flex items-center justify-center h-5 w-5" title={language === 'ru' ? 'Выполняется' : 'Running'}>
+                                <span className="flex items-center justify-center h-5 w-5">
                                   <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0 ring-2 ring-emerald-500/20" />
                                 </span>
                                 <button
@@ -745,11 +745,11 @@ export default function SubagentsSidebar({
                                 </button>
                               </>
                             ) : sub.status === 'error' || sub.status === 'stopped' ? (
-                              <span className="flex items-center justify-center h-5 w-5" title={sub.status === 'stopped' ? 'Остановлен' : 'Ошибка'}>
+                              <span className="flex items-center justify-center h-5 w-5">
                                 <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
                               </span>
                             ) : (
-                              <span className="flex items-center justify-center h-5 w-5" title={language === 'ru' ? 'Завершено' : 'Completed'}>
+                              <span className="flex items-center justify-center h-5 w-5">
                                 <span className="h-2 w-2 rounded-full bg-[#a1a1aa] dark:bg-[#52525b] shrink-0" />
                               </span>
                             )}
@@ -766,7 +766,6 @@ export default function SubagentsSidebar({
                           <div className="flex items-center space-x-2">
                             <div
                               className="flex items-center space-x-1"
-                              title={language === 'ru' ? 'Время выполнения' : 'Execution duration'}
                             >
                               <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
                               <span className="tabular-nums">
@@ -808,21 +807,15 @@ export default function SubagentsSidebar({
                             </div>
                             <div
                               className="flex items-center space-x-1"
-                              title={language === 'ru' ? 'Шаги субагента' : 'Subagent steps'}
                             >
                               <Layers className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
                               <span className="tabular-nums">{formatSteps(sub.stepsCount || 0, language)}</span>
                             </div>
                           </div>
 
-                          {/* Mode Label & Tooltip */}
+                          {/* Mode Label */}
                           <div
                             className="flex items-center space-x-1 text-[10px] shrink-0"
-                            title={
-                              sub.isBg
-                                ? (language === 'ru' ? 'Фоновый субагент (параллельный поток)' : 'Background subagent (parallel flow)')
-                                : (language === 'ru' ? 'Синхронный вызов (прямой вызов)' : 'Synchronous call (direct call)')
-                            }
                           >
                             {sub.isBg ? (
                               <span className="inline-flex items-center gap-1 font-sans font-medium text-purple-600 dark:text-purple-400">

@@ -81,6 +81,7 @@ pub fn run() {
             update_task,
             delete_task,
             move_task_stage,
+            reorder_task,
             advance_task,
             run_agent,
             abort_agent,
@@ -107,10 +108,6 @@ pub fn run() {
             list_projects,
             open_project,
             init_project_harness,
-            send_copilot_message,
-            abort_copilot,
-            load_copilot_history,
-            clear_copilot_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running CanbanVoimaxHarness desktop application");

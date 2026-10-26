@@ -46,7 +46,7 @@ pub async fn create_worktree(
     base_branch: &str,
 ) -> Result<PathBuf> {
     let repo_path = repo_root.as_ref();
-    let worktree_rel = PathBuf::from(".cvh").join("worktrees").join(task_slug);
+    let worktree_rel = PathBuf::from("worktrees").join(task_slug);
     let worktree_abs = repo_path.join(&worktree_rel);
     let branch_name = format!("feat/{}", task_slug);
 
@@ -54,7 +54,7 @@ pub async fn create_worktree(
         return Ok(worktree_abs);
     }
 
-    let alt_worktree_rel = PathBuf::from("worktrees").join(task_slug);
+    let alt_worktree_rel = PathBuf::from(".cvh").join("worktrees").join(task_slug);
     let alt_worktree_abs = repo_path.join(&alt_worktree_rel);
     if alt_worktree_abs.exists() {
         return Ok(alt_worktree_abs);
@@ -364,7 +364,7 @@ pub async fn remove_worktree(
     task_slug: &str,
 ) -> Result<()> {
     let repo_path = repo_root.as_ref();
-    let worktree_rel = PathBuf::from(".cvh").join("worktrees").join(task_slug);
+    let worktree_rel = PathBuf::from("worktrees").join(task_slug);
     let worktree_str = worktree_rel.to_string_lossy().to_string();
 
     // Run git worktree remove --force
@@ -381,6 +381,18 @@ pub async fn remove_worktree(
     let worktree_abs = repo_path.join(&worktree_rel);
     if worktree_abs.exists() {
         let _ = tokio::fs::remove_dir_all(&worktree_abs).await;
+    }
+
+    // Also check alt path (.cvh/worktrees/<task_slug>) for backward compatibility
+    let alt_worktree_rel = PathBuf::from(".cvh").join("worktrees").join(task_slug);
+    let alt_worktree_abs = repo_path.join(&alt_worktree_rel);
+    if alt_worktree_abs.exists() {
+        let _ = run_git(
+            repo_path,
+            &["worktree", "remove", "--force", &alt_worktree_rel.to_string_lossy()],
+        )
+        .await;
+        let _ = tokio::fs::remove_dir_all(&alt_worktree_abs).await;
     }
 
     Ok(())
@@ -483,8 +495,8 @@ mod tests {
             ));
         let _ = std::fs::create_dir_all(&tmp);
         let root = tmp.join("root");
-        // Worktree abs mimics `<root>/.cvh/worktrees/<slug>` layout.
-        let worktree_abs = root.join(".cvh").join("worktrees").join("task-a");
+        // Worktree abs mimics `<root>/worktrees/<slug>` layout.
+        let worktree_abs = root.join("worktrees").join("task-a");
         let src_cvh = root.join(".cvh");
         let dst_cvh = worktree_abs.join(".cvh");
 

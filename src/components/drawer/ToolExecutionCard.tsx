@@ -242,9 +242,9 @@ function CompactContextExecutionCard({ tool }: { tool: ToolExecution }) {
                 {progressPct}%
               </span>
             </div>
-            <div className="h-1.5 w-full bg-[#f4f4f5] dark:bg-[#21262d] rounded-full overflow-hidden">
+            <div className="h-1.5 w-full bg-[#f4f4f5] dark:bg-[#161b22] border border-transparent dark:border-[#30363d] rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-400 transition-all duration-300 ease-out rounded-full"
+                className="h-full bg-indigo-600 dark:bg-indigo-500 transition-all duration-300 ease-out rounded-full"
                 style={{ width: `${progressPct}%` }}
               />
             </div>
