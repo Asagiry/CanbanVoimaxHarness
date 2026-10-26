@@ -19,6 +19,7 @@
 > 10. **CHAINED PRS & STACKED CHANGES WORKFLOW (§ 1.7)**: For multiple dependent or chained pull requests, use `gh stack` (stacked git changes) to manage incremental reviewable diffs without breaking upstream integration.
 > 11. **REDUNDANT COPY ELIMINATION & STRUCTURAL LAYOUT-FIRST (§ 2.39)**: Remove redundant slogans, explanatory text, and minor labels. If the interface becomes incomprehensible after removal, it means the layout itself has issues—redesign it from scratch.
 > 12. **TRI-PARTITE EXPERIENCE SYNERGY (UX, DX, AX) (§ 2.40)**: Every modification must consider user experience, developer experience, and AI Agent usage experience. All three must improve, without breaking existing functionality.
+> 13. **CODE-OVER-DOCS GROUND TRUTH INVARIANT (§ 2.41)**: When a repository's documentation and its existing code disagree, follow the conventions used in the existing code, and in your final reply point out each inconsistency you found between the documentation and the code.
 
 ---
 
@@ -458,3 +459,8 @@
   2. **Developer Experience (DX)**: Clean modular code, strict typing, high maintainability, fast feedback loops (<10s Turbo Sensors), and low cognitive overhead.
   3. **AI Agent Experience (AX)**: Deterministic context, clean and unambiguous tool schemas, predictable file structures, state-preserving memory compaction, and zero hallucination traps.
 - **Non-Regression Invariant**: All three experiences (UX, DX, AX) must improve or remain uncompromised. Under no circumstances may existing functionality, invariants, or performance baselines be broken.
+
+### 2.41 Code-Over-Documentation Ground Truth Invariant (Anti-Stale-Docs)
+- **Code As Ground Truth**: When a repository's documentation, architectural markdown files, specifications, or guidelines disagree with the running, verified codebase, agents MUST follow the conventions and implementations used in the existing code.
+- **Inconsistency Reporting Mandate**: Never refactor working, tested code to conform to obsolete, unmaintained, or conflicting documentation. In your final response or report, explicitly list each inconsistency found between the documentation and the code so documentation can be synchronized.
+- **Instruction-Hierarchy Bias Defense**: Prevents models from succumbing to instruction-following bias where stale documentation files (e.g. `AGENTS.md`, `CLAUDE.md`, `README.md`) are blindly prioritized over actual compiler-tested, sensor-verified production code.
