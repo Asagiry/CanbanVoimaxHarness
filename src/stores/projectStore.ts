@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { ProjectInfo } from '../types';
 import { useBoardStore } from './boardStore';
 import { useCortexStore } from './cortexStore';
+import { useDrawerStore } from './drawerStore';
 import { logEvent } from '../lib/logger';
 
 export function isInvalidProjectPath(path?: string | null): boolean {
@@ -107,7 +108,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       }
     }
 
-    // When switching projects, clear and reload board, tasks, and cortex agents
+    // When switching projects, close drawer and clear/reload board, tasks, and cortex agents
+    useDrawerStore.getState().closeDrawer();
     const board = useBoardStore.getState();
     board.setTasks([]);
     await board.loadBoards();
@@ -273,7 +275,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     persistStoredProjects(updatedProjects);
     logEvent('INFO', 'PROJECT_STORE', `setActiveProjectByPath: project active "${proj.name}" (${proj.rootPath})`);
 
-    // When setting active project by path, reload board, tasks, and cortex agents
+    // When setting active project by path, close drawer and reload board, tasks, and cortex agents
+    useDrawerStore.getState().closeDrawer();
     const board = useBoardStore.getState();
     board.setTasks([]);
     await board.loadBoards();
@@ -321,7 +324,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         }
       }
 
-      // When switching project, clear and reload board, tasks, and cortex agents
+      // When switching project, close drawer and clear/reload board, tasks, and cortex agents
+      useDrawerStore.getState().closeDrawer();
       const board = useBoardStore.getState();
       board.setTasks([]);
       await board.loadBoards();

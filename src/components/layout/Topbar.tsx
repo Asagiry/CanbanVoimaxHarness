@@ -145,7 +145,7 @@ export default function Topbar() {
                   key={project.id || project.rootPath}
                   data-no-drag
                   onMouseDown={(e) => e.stopPropagation()}
-                  onClick={() => void switchProject(project.id)}
+                  onClick={() => void switchProject(project.rootPath || project.id)}
                   title={project.rootPath || project.name}
                   className={`group flex items-center space-x-1.5 px-2 py-1 rounded-md text-xs transition cursor-pointer select-none shrink-0 border ${
                     isActive
@@ -162,7 +162,7 @@ export default function Topbar() {
                     onMouseDown={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation();
-                      void removeProjectFromHistory(project.id);
+                      void removeProjectFromHistory(project.rootPath || project.id);
                     }}
                     className="p-0.5 rounded text-[#8f8f8f] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] hover:bg-[#e4e4e7] dark:hover:bg-[#30363d] transition cursor-pointer flex items-center justify-center"
                     aria-label={`Close ${folderName}`}
