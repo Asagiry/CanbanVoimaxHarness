@@ -764,7 +764,11 @@ export const useBoardStore = create<BoardState>((set, get) => ({
                 raw.stageDurations = prev.stageDurations;
               }
             }
-            return mapBackendTaskToKanban(raw);
+            const task = mapBackendTaskToKanban(raw);
+            if (prev?.todos && (task.todos === undefined || task.todos.length === 0)) {
+              task.todos = prev.todos;
+            }
+            return task;
           })
           .sort(sortTasksByPosition);
         set({ tasks: mapped, isTauriConnected: true, isLoadingTasks: false });
@@ -842,6 +846,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           priority: prev.priority,
           attachments: mapped.attachments ?? prev.attachments,
           handoverSummary: mapped.handoverSummary ?? prev.handoverSummary,
+          todos: mapped.todos !== undefined ? mapped.todos : prev.todos,
           stageEnteredAt: Date.now(),
           updatedAt: Date.now(),
           activeStageDuration: 0,
@@ -919,7 +924,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           mapped.waitingForSubtaskId = undefined;
           mapped.status = 'done';
         }
-        const updated = tasks.map((t) => (t.id === mapped.id ? { ...t, ...mapped } : t)).sort(sortTasksByPosition);
+        const prev = tasks.find((t) => t.id === mapped.id);
+        const preservedTodos = mapped.todos !== undefined ? mapped.todos : prev?.todos;
+        const updated = tasks.map((t) => (t.id === mapped.id ? { ...t, ...mapped, todos: preservedTodos } : t)).sort(sortTasksByPosition);
         set({ tasks: updated });
 
         if (mapped.boardId && mapped.boardId !== get().activeBoardId) {
@@ -990,7 +997,13 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     set((state) => {
       const exists = state.tasks.some((t) => t.id === mapped.id);
       const updatedTasks = exists
-        ? state.tasks.map((t) => (t.id === mapped.id ? { ...t, ...mapped } : t))
+        ? state.tasks.map((t) => {
+            if (t.id === mapped.id) {
+              const preservedTodos = mapped.todos !== undefined ? mapped.todos : t.todos;
+              return { ...t, ...mapped, todos: preservedTodos };
+            }
+            return t;
+          })
         : [...state.tasks, mapped];
 
       // Relational symmetry: if this is a subtask, ensure parent task reflects waitingForSubtaskId
@@ -1040,7 +1053,11 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           raw.stageDurations = prev.stageDurations;
         }
       }
-      return mapBackendTaskToKanban(raw);
+      const task = mapBackendTaskToKanban(raw);
+      if (prev?.todos && (task.todos === undefined || task.todos.length === 0)) {
+        task.todos = prev.todos;
+      }
+      return task;
     });
 
     // Relational symmetry cleanup: clear stale waitingForSubtaskId

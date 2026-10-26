@@ -97,13 +97,22 @@ pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
          PRAGMA foreign_keys = ON;",
     )?;
 
-    // Guard DDL execution so table creations and alterations run only once per db path per process
-    let should_init = {
-        let mut set = INITIALIZED_DBS.lock().unwrap();
-        set.insert(db_path.clone())
+    // Verify whether essential tables exist; DDL must execute if tables are missing
+    let tables_exist: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('tasks', 'task_todos', 'dialog_items')",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|count| count == 3)
+        .unwrap_or(false);
+
+    let already_initialized = {
+        let set = INITIALIZED_DBS.lock().unwrap();
+        set.contains(&db_path)
     };
 
-    if should_init {
+    if !tables_exist || !already_initialized {
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS dialog_items (
                  id TEXT PRIMARY KEY,
@@ -200,6 +209,9 @@ pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
         let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_stage_pos ON tasks(stage_id, position)", []);
 
         auto_migrate_if_needed(&mut conn, root);
+
+        let mut set = INITIALIZED_DBS.lock().unwrap();
+        set.insert(db_path.clone());
     }
 
     Ok(conn)
@@ -301,6 +313,59 @@ fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) {
                     }
                 }
                 let _ = tx.execute("PRAGMA foreign_keys = ON", []);
+                let _ = tx.commit();
+            }
+        }
+    }
+
+    let todo_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM task_todos", [], |r| r.get(0))
+        .unwrap_or(0);
+
+    if todo_count == 0 && task_count > 0 {
+        let tasks_file = root.join(".cvh").join("tasks.json");
+        let mut loaded_tasks: Option<Vec<Task>> = None;
+        if tasks_file.exists() {
+            if let Ok(content) = std::fs::read_to_string(&tasks_file) {
+                let trimmed = content.trim();
+                if !trimmed.is_empty() {
+                    if let Ok(parsed) = serde_json::from_str::<Vec<Task>>(trimmed) {
+                        if !parsed.is_empty() {
+                            loaded_tasks = Some(parsed);
+                        }
+                    }
+                }
+            }
+        }
+        if loaded_tasks.is_none() {
+            let backup_file = crate::commands::tasks::get_project_tasks_backup_file(root);
+            if backup_file.exists() {
+                if let Ok(content) = std::fs::read_to_string(&backup_file) {
+                    let trimmed = content.trim();
+                    if !trimmed.is_empty() {
+                        if let Ok(parsed) = serde_json::from_str::<Vec<Task>>(trimmed) {
+                            if !parsed.is_empty() {
+                                loaded_tasks = Some(parsed);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Some(tasks) = loaded_tasks {
+            if let Ok(tx) = conn.transaction_with_behavior(TransactionBehavior::Immediate) {
+                for t in &tasks {
+                    if let Some(ref todos) = t.todos {
+                        for (idx, td) in todos.iter().enumerate() {
+                            let _ = tx.execute(
+                                "INSERT OR REPLACE INTO task_todos (id, task_id, content, status, order_idx)
+                                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                                params![td.id, t.id, td.content, td.status, idx as i64],
+                            );
+                        }
+                    }
+                }
                 let _ = tx.commit();
             }
         }
