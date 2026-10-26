@@ -8,6 +8,7 @@ import { useCortexStore } from '../../stores/cortexStore';
 import AgentIcon from '../common/AgentIcon';
 import { getDeterministicAgentColor } from '../../lib/agentPalette';
 import { useTranslation } from '../../stores/languageStore';
+import { useUiZoom, adjustDndTransformForZoom } from '../../hooks/useUiZoom';
 
 const PAGE_SIZE = 10;
 
@@ -29,6 +30,7 @@ function KanbanColumn({
   onDeleteColumn,
   doneParentIds,
 }: KanbanColumnProps) {
+  const { zoom } = useUiZoom();
   // Клик по шапке больше не подсвечивает колонку и не трогает проводник
   // (фокус из проводника в доску оставлен, обратного нет).
   const { t } = useTranslation();
@@ -94,16 +96,20 @@ function KanbanColumn({
 
   return (
     <Draggable draggableId={column.id} index={index} isDragDisabled={isPinned}>
-      {(colProvided, colSnapshot) => (
-    <div
-      ref={colProvided.innerRef}
-      {...colProvided.draggableProps}
-      style={{
-        ...(isPinned
-          ? { ...colProvided.draggableProps.style, transform: 'none' }
-          : colProvided.draggableProps.style),
-        borderColor: colSnapshot.isDragging ? undefined : isFocused ? undefined : `${assignedAgentColor}40`,
-      }}
+      {(colProvided, colSnapshot) => {
+        const baseColTransform = isPinned
+          ? 'none'
+          : adjustDndTransformForZoom(colProvided.draggableProps.style?.transform, zoom);
+
+        return (
+          <div
+            ref={colProvided.innerRef}
+            {...colProvided.draggableProps}
+            style={{
+              ...colProvided.draggableProps.style,
+              ...(baseColTransform ? { transform: baseColTransform } : {}),
+              borderColor: colSnapshot.isDragging ? undefined : isFocused ? undefined : `${assignedAgentColor}40`,
+            }}
       className={`flex flex-col w-72 shrink-0 h-full rounded-lg bg-[#f9f9f9] dark:bg-[#0d1117] border select-none overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
         colSnapshot.isDragging
           ? 'border-[#171717] dark:border-[#30363d] shadow-md opacity-90'
@@ -190,7 +196,8 @@ function KanbanColumn({
         />
       )}
     </div>
-      )}
+        );
+      }}
     </Draggable>
   );
 }

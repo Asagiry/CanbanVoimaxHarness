@@ -9,6 +9,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { GitBranch, CornerUpLeft, ChevronDown, MessageSquare, GitFork, Check, X, Loader2, Terminal, Paperclip } from 'lucide-react';
 import TaskContextMenu from './TaskContextMenu';
 import { getDeterministicAgentColor } from '../../lib/agentPalette';
+import { useUiZoom, adjustDndTransformForZoom } from '../../hooks/useUiZoom';
 
 function formatCardDate(ts?: number): string {
   if (!ts || !Number.isFinite(ts)) return '';
@@ -364,6 +365,7 @@ interface KanbanCardProps {
 }
 
 function KanbanCard({ task, index }: KanbanCardProps) {
+  const { zoom } = useUiZoom();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const setHoveredTaskId = useBoardStore((s) => s.setHoveredTaskId);
   const columns = useBoardStore((s) => s.columns);
@@ -527,22 +529,24 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   return (
     <>
       <Draggable draggableId={task.id} index={index}>
-        {(provided, snapshot) => (
-          <div
-            id={`task-card-${task.id}`}
-            data-task-id={task.id}
-            ref={provided.innerRef}
-            {...provided.draggableProps}
-            {...provided.dragHandleProps}
-            onClick={() => openDrawer(task.id)}
-            onContextMenu={handleContextMenu}
-            onMouseEnter={() => setHoveredTaskId(task.id)}
-            onMouseLeave={() => setHoveredTaskId(null)}
-            style={{
-              ...provided.draggableProps.style,
-              transform: snapshot.isDragging && provided.draggableProps.style?.transform
-                ? `${provided.draggableProps.style.transform} rotate(1.8deg) scale(1.025)`
-                : provided.draggableProps.style?.transform,
+        {(provided, snapshot) => {
+          const baseTransform = adjustDndTransformForZoom(provided.draggableProps.style?.transform, zoom);
+          return (
+            <div
+              id={`task-card-${task.id}`}
+              data-task-id={task.id}
+              ref={provided.innerRef}
+              {...provided.draggableProps}
+              {...provided.dragHandleProps}
+              onClick={() => openDrawer(task.id)}
+              onContextMenu={handleContextMenu}
+              onMouseEnter={() => setHoveredTaskId(task.id)}
+              onMouseLeave={() => setHoveredTaskId(null)}
+              style={{
+                ...provided.draggableProps.style,
+                transform: snapshot.isDragging && baseTransform
+                  ? `${baseTransform} rotate(1.8deg) scale(1.025)`
+                  : baseTransform,
               transition: provided.draggableProps.style?.transition
                 ? `${provided.draggableProps.style.transition}, transform 0.08s ease-out, box-shadow 0.15s ease-out`
                 : 'transform 0.08s ease-out, box-shadow 0.15s ease-out',
@@ -749,7 +753,8 @@ function KanbanCard({ task, index }: KanbanCardProps) {
               />
             )}
           </div>
-        )}
+        );
+      }}
       </Draggable>
       {contextMenu && (
         <TaskContextMenu

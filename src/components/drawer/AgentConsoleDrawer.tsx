@@ -10,8 +10,10 @@ import DrawerActivityStream from './DrawerActivityStream';
 import DrawerSteerBar from './DrawerSteerBar';
 import GitDiffSidebar from './GitDiffSidebar';
 import SubagentsSidebar from './SubagentsSidebar';
+import { useUiZoom, getZoomOverlayStyle } from '../../hooks/useUiZoom';
 
 export default function AgentConsoleDrawer() {
+  const { zoom } = useUiZoom();
   const {
     isOpen,
     activeTaskId,
@@ -540,7 +542,10 @@ export default function AgentConsoleDrawer() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col h-screen max-h-screen overflow-hidden bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] select-none animate-in fade-in duration-150 transition-colors">
+    <div
+      style={getZoomOverlayStyle(zoom)}
+      className="fixed inset-0 z-50 flex flex-col h-screen max-h-screen overflow-hidden bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] select-none animate-in fade-in duration-150 transition-colors"
+    >
       {/* Outer guard: header/banner are outside inner boundaries */}
       <ErrorBoundary scopeLabel="окно чата" onClose={closeDrawer}>
         {/* Count subagents for header badge */}

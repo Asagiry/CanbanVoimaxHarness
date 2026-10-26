@@ -1,6 +1,7 @@
 import { useState, useId, useMemo, useRef, useEffect } from 'react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useTranslation } from '../../stores/languageStore';
+import { useUiZoom, getZoomOverlayStyle } from '../../hooks/useUiZoom';
 import {
   X,
   Check,
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react';
 
 export default function SettingsModal() {
+  const { zoom } = useUiZoom();
   const {
     isOpen,
     settings,
@@ -127,7 +129,7 @@ export default function SettingsModal() {
 
   return (
     <>
-      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 dark:bg-black/80 p-4 animate-in fade-in duration-100">
+      <div style={getZoomOverlayStyle(zoom)} className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 dark:bg-black/80 p-4 animate-in fade-in duration-100">
         <div className="relative flex flex-col w-[500px] max-w-full rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-md p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors">
           {/* Header */}
           <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#21262d]">
@@ -343,7 +345,7 @@ export default function SettingsModal() {
 
       {/* Modal Dialog: "Choose models to add" */}
       {isChooseModelsModalOpen && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 dark:bg-black/80 p-4 animate-in fade-in duration-100">
+        <div style={getZoomOverlayStyle(zoom)} className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 dark:bg-black/80 p-4 animate-in fade-in duration-100">
           <div className="relative flex flex-col w-[520px] max-w-full rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-md p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors">
             {/* Header */}
             <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#21262d]">

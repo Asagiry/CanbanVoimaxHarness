@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
+import { create } from 'zustand';
 
 const STORAGE_KEY = 'cvh_ui_zoom';
 const MIN_ZOOM = 0.5; // 50%
@@ -26,107 +27,153 @@ function getInitialZoom(): number {
   return 1.0;
 }
 
-export function useUiZoom() {
-  const [zoom, setZoomState] = useState<number>(getInitialZoom);
-  const [showIndicator, setShowIndicator] = useState(false);
+let indicatorTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const setZoom = useCallback((newVal: number | ((prev: number) => number)) => {
-    setZoomState((prev) => {
-      const target = typeof newVal === 'function' ? newVal(prev) : newVal;
-      const clamped = clampZoom(target);
-      try {
-        localStorage.setItem(STORAGE_KEY, clamped.toString());
-      } catch {
-        // Ignore storage error
-      }
-      return clamped;
-    });
-    setShowIndicator(true);
-  }, []);
+export interface UiZoomState {
+  zoom: number;
+  showIndicator: boolean;
+  setZoom: (newVal: number | ((prev: number) => number)) => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  resetZoom: () => void;
+}
 
-  const zoomIn = useCallback(() => {
-    setZoom((prev) => prev + STEP);
-  }, [setZoom]);
-
-  const zoomOut = useCallback(() => {
-    setZoom((prev) => prev - STEP);
-  }, [setZoom]);
-
-  const resetZoom = useCallback(() => {
-    setZoom(1.0);
-  }, [setZoom]);
-
-  // Hide toast indicator after 1.4s
-  useEffect(() => {
-    if (!showIndicator) return;
-    const timer = setTimeout(() => setShowIndicator(false), 1400);
-    return () => clearTimeout(timer);
-  }, [showIndicator, zoom]);
-
-  // Hotkeys & Ctrl+Wheel listeners
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return;
-
-      // Ctrl + / Ctrl = (Zoom In)
-      if (e.key === '=' || e.key === '+' || e.code === 'NumpadAdd' || e.key === 'Add') {
-        e.preventDefault();
-        zoomIn();
-        return;
-      }
-
-      // Ctrl - (Zoom Out)
-      if (e.key === '-' || e.key === '_' || e.code === 'NumpadSubtract' || e.key === 'Subtract') {
-        e.preventDefault();
-        zoomOut();
-        return;
-      }
-
-      // Ctrl 0 (Reset)
-      if (e.key === '0' || e.code === 'Numpad0' || e.code === 'Digit0') {
-        e.preventDefault();
-        resetZoom();
-        return;
-      }
-    };
-
-    const handleWheel = (e: WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        if (e.deltaY < 0) {
-          zoomIn();
-        } else if (e.deltaY > 0) {
-          zoomOut();
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('wheel', handleWheel, { passive: false });
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('wheel', handleWheel);
-    };
-  }, [zoomIn, zoomOut, resetZoom]);
-
-  const isZoomSupported = typeof document !== 'undefined' && 'zoom' in document.documentElement.style;
-
-  const rootStyle = useMemo<React.CSSProperties>(() => {
-    if (isZoomSupported) {
-      return {
-        zoom,
-        width: `${100 / zoom}vw`,
-        height: `${100 / zoom}vh`,
-      };
+export const useUiZoomStore = create<UiZoomState>((set, get) => ({
+  zoom: getInitialZoom(),
+  showIndicator: false,
+  setZoom: (newVal) => {
+    const current = get().zoom;
+    const target = typeof newVal === 'function' ? newVal(current) : newVal;
+    const clamped = clampZoom(target);
+    try {
+      localStorage.setItem(STORAGE_KEY, clamped.toString());
+    } catch {
+      // Ignore storage error
     }
+    if (indicatorTimer) {
+      clearTimeout(indicatorTimer);
+    }
+    indicatorTimer = setTimeout(() => {
+      set({ showIndicator: false });
+    }, 1400);
+
+    set({ zoom: clamped, showIndicator: true });
+  },
+  zoomIn: () => {
+    get().setZoom((prev) => prev + STEP);
+  },
+  zoomOut: () => {
+    get().setZoom((prev) => prev - STEP);
+  },
+  resetZoom: () => {
+    get().setZoom(1.0);
+  },
+}));
+
+let isListenerAttached = false;
+
+export function attachGlobalZoomListeners(): void {
+  if (typeof window === 'undefined' || isListenerAttached) return;
+  isListenerAttached = true;
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+
+    // Ctrl + / Ctrl = (Zoom In)
+    if (e.key === '=' || e.key === '+' || e.code === 'NumpadAdd' || e.key === 'Add') {
+      e.preventDefault();
+      useUiZoomStore.getState().zoomIn();
+      return;
+    }
+
+    // Ctrl - (Zoom Out)
+    if (e.key === '-' || e.key === '_' || e.code === 'NumpadSubtract' || e.key === 'Subtract') {
+      e.preventDefault();
+      useUiZoomStore.getState().zoomOut();
+      return;
+    }
+
+    // Ctrl 0 (Reset)
+    if (e.key === '0' || e.code === 'Numpad0' || e.code === 'Digit0') {
+      e.preventDefault();
+      useUiZoomStore.getState().resetZoom();
+      return;
+    }
+  };
+
+  const handleWheel = (e: WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      if (e.deltaY < 0) {
+        useUiZoomStore.getState().zoomIn();
+      } else if (e.deltaY > 0) {
+        useUiZoomStore.getState().zoomOut();
+      }
+    }
+  };
+
+  window.addEventListener('keydown', handleKeyDown);
+  window.addEventListener('wheel', handleWheel, { passive: false });
+}
+
+// Auto-attach listeners in browser environment
+if (typeof window !== 'undefined') {
+  attachGlobalZoomListeners();
+}
+
+const isZoomSupported = typeof document !== 'undefined' && 'zoom' in document.documentElement.style;
+
+export function getRootZoomStyle(zoom: number): React.CSSProperties {
+  if (isZoomSupported) {
     return {
-      transform: `scale(${zoom})`,
-      transformOrigin: 'top left',
+      zoom,
       width: `${100 / zoom}vw`,
       height: `${100 / zoom}vh`,
     };
-  }, [zoom, isZoomSupported]);
+  }
+  return {
+    transform: `scale(${zoom})`,
+    transformOrigin: 'top left',
+    width: `${100 / zoom}vw`,
+    height: `${100 / zoom}vh`,
+  };
+}
+
+export function getZoomOverlayStyle(zoom: number): React.CSSProperties | undefined {
+  if (zoom === 1 || Math.abs(zoom - 1) < 0.001) {
+    return undefined;
+  }
+  return {
+    zoom,
+    width: `${100 / zoom}vw`,
+    height: `${100 / zoom}vh`,
+  };
+}
+
+export function adjustDndTransformForZoom(transform: string | undefined | null, zoom: number): string | undefined {
+  if (!transform || zoom === 1 || Math.abs(zoom - 1) < 0.001) {
+    return transform ?? undefined;
+  }
+  return transform.replace(/translate\(\s*(-?[\d.]+)px\s*,\s*(-?[\d.]+)px\s*\)/, (_match, x, y) => {
+    const adjustedX = parseFloat(x) / zoom;
+    const adjustedY = parseFloat(y) / zoom;
+    return `translate(${adjustedX}px, ${adjustedY}px)`;
+  });
+}
+
+export function useUiZoom() {
+  attachGlobalZoomListeners();
+
+  const zoom = useUiZoomStore((s) => s.zoom);
+  const showIndicator = useUiZoomStore((s) => s.showIndicator);
+  const setZoom = useUiZoomStore((s) => s.setZoom);
+  const zoomIn = useUiZoomStore((s) => s.zoomIn);
+  const zoomOut = useUiZoomStore((s) => s.zoomOut);
+  const resetZoom = useUiZoomStore((s) => s.resetZoom);
+
+  const rootStyle = useMemo<React.CSSProperties>(() => {
+    return getRootZoomStyle(zoom);
+  }, [zoom]);
 
   return {
     zoom,

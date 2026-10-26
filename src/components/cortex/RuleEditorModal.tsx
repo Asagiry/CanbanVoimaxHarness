@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useCortexStore } from '../../stores/cortexStore';
 import { useTranslation } from '../../stores/languageStore';
 import AgentSettingVisualEditor from './AgentSettingVisualEditor';
+import { useUiZoom, getZoomOverlayStyle } from '../../hooks/useUiZoom';
 import {
   X,
   Save,
@@ -220,6 +221,7 @@ function renderMarkdownBlocks(content: string) {
 }
 
 export default function RuleEditorModal() {
+  const { zoom } = useUiZoom();
   const { activeFile, isEditorOpen, isSaving, saveFeedback, updateActiveFileContent, saveRules, closeEditor } =
     useCortexStore();
   const { t } = useTranslation();
@@ -275,7 +277,7 @@ export default function RuleEditorModal() {
   const isHook = activeFile.type === 'hook';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 p-3">
+    <div style={getZoomOverlayStyle(zoom)} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 p-3">
       <div className="relative flex flex-col h-[82vh] w-[860px] max-w-full rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-md overflow-hidden">
         {/* Editor Top Bar */}
         <div className="flex items-center justify-between border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] px-4 py-2.5">
