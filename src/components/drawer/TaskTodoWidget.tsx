@@ -37,6 +37,47 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
     subagentIdToToolId,
   } = useDrawerStore();
 
+  const extractTodosFromFeed = (feed: any[]): TodoItem[] | null => {
+    for (let i = feed.length - 1; i >= 0; i--) {
+      const item = feed[i];
+      if (item && (item.item_type === 'todos' || item.type === 'todos')) {
+        try {
+          const parsed = typeof item.content === 'string' ? JSON.parse(item.content) : item.content;
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.map((t: any, idx: number) => ({
+              id: t.id || `todo-${idx + 1}`,
+              content: String(t.content).trim(),
+              status: (t.status === 'completed' || t.status === 'done'
+                ? 'completed'
+                : t.status === 'in_progress' || t.status === 'running'
+                ? 'in_progress'
+                : 'pending') as TodoItem['status'],
+            }));
+          }
+        } catch {}
+      }
+      const tool = item?.tool;
+      const toolName = tool?.toolName || item?.toolName;
+      if (toolName === 'todo_write' && tool?.params) {
+        const rawTodos = (tool.params as Record<string, unknown>)?.todos;
+        if (Array.isArray(rawTodos) && rawTodos.length > 0) {
+          return rawTodos
+            .filter((t: any) => t && typeof t.content === 'string' && t.content.trim().length > 0)
+            .map((t: any, idx: number) => ({
+              id: t.id || `todo-${idx + 1}`,
+              content: String(t.content).trim(),
+              status: (t.status === 'completed' || t.status === 'done'
+                ? 'completed'
+                : t.status === 'in_progress' || t.status === 'running'
+                ? 'in_progress'
+                : 'pending') as TodoItem['status'],
+            }));
+        }
+      }
+    }
+    return null;
+  };
+
   const todos: TodoItem[] = useMemo(() => {
     if (activeSubagentId) {
       // 1. If this activeSubagentId is a board subtask, inspect its todos
@@ -45,33 +86,16 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
         return boardSubtask.todos;
       }
 
-      // 2. Search activity feed for the subagent's latest todo_write tool execution
+      // 2. Search activity feed for the subagent's latest todo_write tool execution or todos item
       const feed =
         activityFeed[activeSubagentId] ||
         (toolIdToSubagentId[activeSubagentId] ? activityFeed[toolIdToSubagentId[activeSubagentId]] : undefined) ||
         (subagentIdToToolId[activeSubagentId] ? activityFeed[subagentIdToToolId[activeSubagentId]] : undefined) ||
         [];
 
-      for (let i = feed.length - 1; i >= 0; i--) {
-        const item = feed[i];
-        const tool = item.tool;
-        const toolName = tool?.toolName || (item as any).toolName;
-        if (toolName === 'todo_write' && tool?.params) {
-          const rawTodos = (tool.params as Record<string, unknown>)?.todos;
-          if (Array.isArray(rawTodos)) {
-            return rawTodos
-              .filter((t: any) => t && typeof t.content === 'string' && t.content.trim().length > 0)
-              .map((t: any, idx: number) => ({
-                id: t.id || `todo-${idx + 1}`,
-                content: String(t.content).trim(),
-                status: (t.status === 'completed' || t.status === 'done'
-                  ? 'completed'
-                  : t.status === 'in_progress' || t.status === 'running'
-                  ? 'in_progress'
-                  : 'pending') as TodoItem['status'],
-              }));
-          }
-        }
+      const subTodos = extractTodosFromFeed(feed);
+      if (subTodos && subTodos.length > 0) {
+        return subTodos;
       }
 
       // If active subagent has not called todo_write yet, return empty list!
@@ -80,8 +104,19 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
     }
 
     // Main parent task view: show parent task's todos
+    if (task.todos && task.todos.length > 0) {
+      return task.todos;
+    }
+
+    // Fallback: extract latest todos from parent task's activity feed
+    const parentFeed = activityFeed[task.id] || [];
+    const feedTodos = extractTodosFromFeed(parentFeed);
+    if (feedTodos && feedTodos.length > 0) {
+      return feedTodos;
+    }
+
     return task.todos ?? [];
-  }, [activeSubagentId, task.todos, activityFeed, toolIdToSubagentId, subagentIdToToolId]);
+  }, [activeSubagentId, task.id, task.todos, activityFeed, toolIdToSubagentId, subagentIdToToolId]);
 
   const completedCount = todos.filter((t) => t.status === 'completed').length;
   const inProgressCount = todos.filter((t) => t.status === 'in_progress').length;
