@@ -128,9 +128,9 @@
             "on_leave": ".cvh/hooks/on_review_finish.bat"
           },
           "routes": {
-            "on_approved_after_changes": "retro",
+            "on_approved": "ready",
             "on_changes_requested": "dev",
-            "on_approved": "ready"
+            "on_approved_after_changes": "retro"
           },
           "autoRun": true,
           "terminal": null,
