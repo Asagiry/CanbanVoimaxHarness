@@ -85,6 +85,41 @@ pub struct TaskGitDiff {
     pub branch: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitImageDiff {
+    pub path: String,
+    pub status: String,
+    pub mime_type: String,
+    pub current_data_url: Option<String>,
+    pub previous_data_url: Option<String>,
+    pub current_bytes: Option<usize>,
+    pub previous_bytes: Option<usize>,
+}
+
+pub fn get_image_mime_type(path: &str) -> &'static str {
+    let lower = path.to_lowercase();
+    if lower.ends_with(".png") {
+        "image/png"
+    } else if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
+        "image/jpeg"
+    } else if lower.ends_with(".webp") {
+        "image/webp"
+    } else if lower.ends_with(".gif") {
+        "image/gif"
+    } else if lower.ends_with(".svg") {
+        "image/svg+xml"
+    } else if lower.ends_with(".bmp") {
+        "image/bmp"
+    } else if lower.ends_with(".ico") {
+        "image/x-icon"
+    } else if lower.ends_with(".avif") {
+        "image/avif"
+    } else {
+        "application/octet-stream"
+    }
+}
+
 /// Returns true if the file path is an internal CVH runtime, database, secret,
 /// or worktree artifact that must be hidden from Git diffs.
 /// Configuration files under `.cvh/` (rules, agents, settings, tools, hooks,
@@ -436,6 +471,135 @@ pub async fn get_task_git_diff(
     })
 }
 
+#[tauri::command]
+pub async fn get_task_image_diff(
+    task_id: String,
+    path: String,
+    state: State<'_, AppState>,
+) -> Result<GitImageDiff, String> {
+    let root = state.get_root();
+    let task_opt = {
+        if let Ok(guard) = state.tasks.lock() {
+            guard
+                .iter()
+                .find(|t| crate::commands::task_id_matches(&t.id, &task_id))
+                .cloned()
+        } else {
+            None
+        }
+    };
+
+    let task = match task_opt {
+        Some(t) => Some(t),
+        None => {
+            let disk_tasks = load_tasks_from_disk(&root).await;
+            disk_tasks
+                .into_iter()
+                .find(|t| crate::commands::task_id_matches(&t.id, &task_id))
+        }
+    };
+
+    let workdir = match task.as_ref().and_then(|t| t.worktree_path.as_deref()) {
+        Some(p) if !p.trim().is_empty() => {
+            let pb = Path::new(p.trim());
+            let exists = if pb.is_absolute() {
+                pb.exists()
+            } else {
+                root.join(pb).exists()
+            };
+            if exists {
+                if pb.is_absolute() {
+                    pb.to_path_buf()
+                } else {
+                    root.join(pb)
+                }
+            } else {
+                root.clone()
+            }
+        }
+        _ => root.clone(),
+    };
+
+    let clean_path = path.replace('\\', "/");
+    let clean_path = clean_path
+        .trim_start_matches("./")
+        .trim_start_matches('/')
+        .to_string();
+
+    let mime_type = get_image_mime_type(&clean_path).to_string();
+
+    let abs_file = workdir.join(&clean_path);
+    let mut current_bytes = None;
+    let mut current_data_url = None;
+
+    if abs_file.exists() {
+        if let Ok(bytes) = tokio::fs::read(&abs_file).await {
+            use base64::Engine;
+            current_bytes = Some(bytes.len());
+            current_data_url = Some(format!(
+                "data:{};base64,{}",
+                mime_type,
+                base64::engine::general_purpose::STANDARD.encode(&bytes)
+            ));
+        }
+    }
+
+    let mut previous_bytes = None;
+    let mut previous_data_url = None;
+
+    let mut show_cmd = Command::new("git");
+    show_cmd
+        .current_dir(&workdir)
+        .args(["show", &format!("HEAD:{}", clean_path)]);
+    #[cfg(windows)]
+    show_cmd.creation_flags(CREATE_NO_WINDOW);
+
+    if let Ok(output) = show_cmd.output().await {
+        if output.status.success() && !output.stdout.is_empty() {
+            use base64::Engine;
+            previous_bytes = Some(output.stdout.len());
+            previous_data_url = Some(format!(
+                "data:{};base64,{}",
+                mime_type,
+                base64::engine::general_purpose::STANDARD.encode(&output.stdout)
+            ));
+        }
+    }
+
+    let status = match (current_data_url.is_some(), previous_data_url.is_some()) {
+        (true, true) => {
+            if current_data_url == previous_data_url {
+                "U".to_string()
+            } else {
+                "M".to_string()
+            }
+        }
+        (true, false) => "A".to_string(),
+        (false, true) => "D".to_string(),
+        (false, false) => "?".to_string(),
+    };
+
+    crate::logger::cvh_log(
+        Some(&root),
+        "DEBUG",
+        "GIT_DIFF",
+        &format!(
+            "get_task_image_diff: task='{}', path='{}', status='{}', curr_bytes={:?}, prev_bytes={:?}",
+            task_id, clean_path, status, current_bytes, previous_bytes
+        ),
+    );
+
+    Ok(GitImageDiff {
+        path,
+        status,
+        mime_type,
+        current_data_url,
+        previous_data_url,
+        current_bytes,
+        previous_bytes,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -519,5 +683,19 @@ index 789..012 100644
         assert!(blocks.contains_key("src/lib.rs"));
         assert!(blocks.contains_key(".cvh/boards.json"));
         assert!(!blocks.contains_key(".cvh/tasks.json"));
+    }
+
+    #[test]
+    fn test_get_image_mime_type() {
+        assert_eq!(get_image_mime_type("assets/logo.png"), "image/png");
+        assert_eq!(get_image_mime_type("img/hero.JPG"), "image/jpeg");
+        assert_eq!(get_image_mime_type("photo.jpeg"), "image/jpeg");
+        assert_eq!(get_image_mime_type("banner.webp"), "image/webp");
+        assert_eq!(get_image_mime_type("anim.gif"), "image/gif");
+        assert_eq!(get_image_mime_type("icons/icon.svg"), "image/svg+xml");
+        assert_eq!(get_image_mime_type("bitmap.bmp"), "image/bmp");
+        assert_eq!(get_image_mime_type("favicon.ico"), "image/x-icon");
+        assert_eq!(get_image_mime_type("nextgen.avif"), "image/avif");
+        assert_eq!(get_image_mime_type("data.bin"), "application/octet-stream");
     }
 }

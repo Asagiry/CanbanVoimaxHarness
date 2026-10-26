@@ -26,6 +26,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-single-instance = "2"
 rusqlite = { version = "0.32", features = ["bundled"] }
+base64 = "0.22"
 
 [features]
 default = ["custom-protocol"]

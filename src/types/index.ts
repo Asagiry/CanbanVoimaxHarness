@@ -195,6 +195,16 @@ export interface TaskGitDiff {
   branch: string;
 }
 
+export interface GitImageDiff {
+  path: string;
+  status: string;
+  mimeType: string;
+  currentDataUrl?: string | null;
+  previousDataUrl?: string | null;
+  currentBytes?: number | null;
+  previousBytes?: number | null;
+}
+
 export type SubagentRole = 'explorer' | 'developer' | 'reviewer' | 'general' | string;
 export type SubagentStatus = 'running' | 'finished' | 'error' | 'stopped';
 

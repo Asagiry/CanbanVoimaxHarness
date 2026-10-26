@@ -87,6 +87,7 @@ pub fn run() {
             abort_agent,
             cleanup_task_worktree,
             get_task_git_diff,
+            get_task_image_diff,
             get_tool_policies,
             save_tool_policies,
             get_tool_definitions,

@@ -210,6 +210,15 @@ export const translations = {
     'gitDiff.noTextChanges': 'No text changes (binary file or empty diff)',
     'gitDiff.copyPatch': 'Copy patch of this file',
     'gitDiff.patchCopied': 'Patch copied',
+    'gitDiff.imageNew': 'New',
+    'gitDiff.imageOld': 'Old',
+    'gitDiff.image2Up': '2-up',
+    'gitDiff.imageLoading': 'Loading image preview...',
+    'gitDiff.imageFailed': 'Failed to load image preview',
+    'gitDiff.imageDeleted': 'Image deleted',
+    'gitDiff.imageAdded': 'New image',
+    'gitDiff.imageNoPreview': 'No preview available',
+    'gitDiff.imageClickToZoom': 'Click to expand / zoom',
 
     // Subagents Sidebar
     'subagents.title': 'Subagents',
@@ -752,6 +761,15 @@ export const translations = {
     'gitDiff.noTextChanges': 'Нет текстовых изменений (бинарный файл или пустой diff)',
     'gitDiff.copyPatch': 'Скопировать patch этого файла',
     'gitDiff.patchCopied': 'Патч скопирован',
+    'gitDiff.imageNew': 'Новое',
+    'gitDiff.imageOld': 'Старое',
+    'gitDiff.image2Up': 'Рядом',
+    'gitDiff.imageLoading': 'Загрузка превью изображения...',
+    'gitDiff.imageFailed': 'Не удалось загрузить превью изображения',
+    'gitDiff.imageDeleted': 'Изображение удалено',
+    'gitDiff.imageAdded': 'Новое изображение',
+    'gitDiff.imageNoPreview': 'Превью недоступно',
+    'gitDiff.imageClickToZoom': 'Нажмите для увеличения',
 
     // Subagents Sidebar
     'subagents.title': 'Субагенты',
