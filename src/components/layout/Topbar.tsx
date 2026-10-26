@@ -1,6 +1,5 @@
 import { useRef } from 'react';
-import { useProjectStore } from '../../stores/projectStore';
-import { useBoardStore } from '../../stores/boardStore';
+import { useProjectStore, isInvalidProjectPath } from '../../stores/projectStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useToolPolicyStore } from '../../stores/toolPolicyStore';
 import Logo from '../common/Logo';
@@ -11,19 +10,46 @@ import {
   Wrench,
   Sun,
   Moon,
+  X,
 } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useTranslation } from '../../stores/languageStore';
 
 export default function Topbar() {
-  const { activeProject, openFolder, hasActiveProject } = useProjectStore();
-  const currentFolderName = (activeProject.rootPath || '').split(/[\\/]/).filter(Boolean).pop() || activeProject.name || '';
-  const { loadTasks } = useBoardStore();
+  const {
+    activeProject,
+    availableProjects,
+    openFolder,
+    switchProject,
+    removeProjectFromHistory,
+    hasActiveProject,
+  } = useProjectStore();
   const { openSettings } = useSettingsStore();
   const { openModal: openToolPolicyModal } = useToolPolicyStore();
   const { theme, toggleThemeWithAnimation } = useThemeStore();
   const { language, toggleLanguage, t } = useTranslation();
   const folderInputRef = useRef<HTMLInputElement>(null);
+
+  // Filter and deduplicate valid project tabs
+  const validAvailable: typeof availableProjects = [];
+  const seenPaths = new Set<string>();
+  for (const p of availableProjects) {
+    if (!p || isInvalidProjectPath(p.rootPath)) continue;
+    const normalized = p.rootPath.toLowerCase();
+    if (!seenPaths.has(normalized)) {
+      seenPaths.add(normalized);
+      validAvailable.push(p);
+    }
+  }
+
+  // Ensure active project is represented if valid
+  if (
+    hasActiveProject &&
+    !isInvalidProjectPath(activeProject.rootPath) &&
+    !seenPaths.has(activeProject.rootPath.toLowerCase())
+  ) {
+    validAvailable.push(activeProject);
+  }
 
   const handleHeaderDoubleClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
@@ -41,7 +67,6 @@ export default function Topbar() {
       const selectedPath = await invoke<string | null>('choose_project_folder');
       if (selectedPath) {
         await openFolder(selectedPath);
-        await loadTasks();
         return;
       }
     } catch {
@@ -62,7 +87,6 @@ export default function Topbar() {
       const path = (firstFile as any).webkitRelativePath || firstFile.name;
       const rootFolder = path.split('/')[0] || 'Selected Project';
       await openFolder(rootFolder);
-      await loadTasks();
     }
   };
 
@@ -84,9 +108,9 @@ export default function Topbar() {
         className="hidden"
       />
 
-      {/* Left: Logo + Folder Picker (без дубля названия проекта) */}
-      <div className="flex items-center space-x-2 shrink-0" data-tauri-drag-region>
-        <div className="flex items-center cursor-default" data-no-drag>
+      {/* Left: Logo + Folder Picker + Project Switcher Tabs */}
+      <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden mr-2" data-tauri-drag-region>
+        <div className="flex items-center cursor-default shrink-0" data-no-drag>
           <Logo size={18} className="shrink-0" />
         </div>
 
@@ -94,20 +118,61 @@ export default function Topbar() {
           data-no-drag
           onMouseDown={(e) => e.stopPropagation()}
           onClick={handleOpenFolderClick}
-          className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#4d4d4d] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer font-sans text-xs"
+          className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#4d4d4d] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer font-sans text-xs shrink-0"
           aria-label={t('topbar.selectProjectFolder')}
         >
           <FolderOpen className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e]" />
           <span>{t('topbar.openFolder')}</span>
         </button>
 
-        {/* Current folder indicator: read-only caption */}
-        {hasActiveProject && currentFolderName && (
-          <span
-            className="font-mono text-[11px] text-[#8f8f8f] dark:text-[#8b949e] truncate max-w-[220px] cursor-default"
+        {/* Project Switcher Tabs */}
+        {validAvailable.length > 0 && (
+          <div
+            className="flex items-center space-x-1 overflow-x-auto min-w-0 py-0.5"
+            data-no-drag
           >
-            {currentFolderName}
-          </span>
+            {validAvailable.map((project) => {
+              const isActive =
+                project.id === activeProject.id ||
+                (Boolean(project.rootPath) &&
+                  Boolean(activeProject.rootPath) &&
+                  project.rootPath.toLowerCase() === activeProject.rootPath.toLowerCase());
+              const folderName =
+                (project.rootPath || '').split(/[\\/]/).filter(Boolean).pop() || project.name;
+
+              return (
+                <div
+                  key={project.id || project.rootPath}
+                  data-no-drag
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => void switchProject(project.id)}
+                  title={project.rootPath || project.name}
+                  className={`group flex items-center space-x-1.5 px-2 py-1 rounded-md text-xs transition cursor-pointer select-none shrink-0 border ${
+                    isActive
+                      ? 'bg-[#f4f4f5] dark:bg-[#21262d] border-[#d4d4d8] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] font-medium'
+                      : 'border-transparent text-[#666666] dark:text-[#8b949e] hover:bg-[#f9f9f9] dark:hover:bg-[#161b22] hover:border-[#ebebeb] dark:hover:border-[#21262d] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
+                  }`}
+                >
+                  <span className="max-w-[130px] truncate font-sans text-xs">
+                    {folderName}
+                  </span>
+                  <button
+                    type="button"
+                    data-no-drag
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void removeProjectFromHistory(project.id);
+                    }}
+                    className="p-0.5 rounded text-[#8f8f8f] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] hover:bg-[#e4e4e7] dark:hover:bg-[#30363d] transition cursor-pointer flex items-center justify-center"
+                    aria-label={`Close ${folderName}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 

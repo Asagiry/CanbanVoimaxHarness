@@ -39,6 +39,7 @@ interface ProjectState {
   selectProjectFolder: () => Promise<string | null>;
   openFolder: (path: string) => Promise<void>;
   setActiveProjectByPath: (path: string) => Promise<void>;
+  removeProjectFromHistory: (projectId: string) => Promise<void>;
 }
 
 const OPENED_PROJECTS_KEY = 'cvh_opened_projects';
@@ -179,15 +180,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const stored = loadStoredProjects().filter((p) => !isInvalidProjectPath(p.rootPath));
     const mergedMap = new Map<string, ProjectInfo>();
 
-    if (backendActive && !isInvalidProjectPath(backendActive.rootPath)) {
-      mergedMap.set(backendActive.rootPath.toLowerCase(), backendActive);
-    }
-    for (const p of backendProjects) {
+    for (const p of stored) {
       if (p.rootPath && !mergedMap.has(p.rootPath.toLowerCase())) {
         mergedMap.set(p.rootPath.toLowerCase(), p);
       }
     }
-    for (const p of stored) {
+    if (backendActive && !isInvalidProjectPath(backendActive.rootPath)) {
+      const existing = mergedMap.get(backendActive.rootPath.toLowerCase());
+      mergedMap.set(backendActive.rootPath.toLowerCase(), { ...existing, ...backendActive });
+    }
+    for (const p of backendProjects) {
       if (p.rootPath && !mergedMap.has(p.rootPath.toLowerCase())) {
         mergedMap.set(p.rootPath.toLowerCase(), p);
       }
@@ -254,10 +256,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       hasProject: true,
     };
 
-    const existing = state.availableProjects.filter(
-      (p) => p.id !== id && p.rootPath.toLowerCase() !== cleanPath.toLowerCase() && !isInvalidProjectPath(p.rootPath)
+    const exists = state.availableProjects.some(
+      (p) => p.id === id || p.rootPath.toLowerCase() === cleanPath.toLowerCase()
     );
-    const updatedProjects = [proj, ...existing];
+    const updatedProjects = exists
+      ? state.availableProjects.map((p) =>
+          p.id === id || p.rootPath.toLowerCase() === cleanPath.toLowerCase() ? proj : p
+        )
+      : [...state.availableProjects.filter((p) => !isInvalidProjectPath(p.rootPath)), proj];
 
     set({
       activeProject: proj,
@@ -274,5 +280,56 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     await board.loadTasks();
     await useCortexStore.getState().loadAgentPersonas();
     useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
+  },
+
+  removeProjectFromHistory: async (projectId: string) => {
+    const state = get();
+    const cleanId = projectId.trim();
+    if (!cleanId) return;
+
+    const targetProject = state.availableProjects.find(
+      (p) => p.id === cleanId || p.rootPath.toLowerCase() === cleanId.toLowerCase()
+    );
+
+    const updatedProjects = state.availableProjects.filter(
+      (p) => p.id !== cleanId && p.rootPath.toLowerCase() !== cleanId.toLowerCase()
+    );
+
+    persistStoredProjects(updatedProjects);
+
+    const isCurrentActive =
+      state.activeProject.id === cleanId ||
+      state.activeProject.rootPath.toLowerCase() === cleanId.toLowerCase() ||
+      Boolean(targetProject && state.activeProject.rootPath.toLowerCase() === targetProject.rootPath.toLowerCase());
+
+    if (isCurrentActive) {
+      const nextProject = updatedProjects[0] || DEFAULT_PROJECT;
+      logEvent('INFO', 'PROJECT_STORE', `removeProjectFromHistory: active project removed, switching to "${nextProject.name}"`);
+
+      set({
+        activeProject: nextProject,
+        availableProjects: updatedProjects,
+        hasActiveProject: !isInvalidProjectPath(nextProject.rootPath),
+      });
+
+      if (nextProject.rootPath && !isInvalidProjectPath(nextProject.rootPath)) {
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          await invoke('set_active_project', { path: nextProject.rootPath });
+        } catch (err) {
+          console.warn('Failed to invoke set_active_project on removeProjectFromHistory:', err);
+        }
+      }
+
+      // When switching project, clear and reload board, tasks, and cortex agents
+      const board = useBoardStore.getState();
+      board.setTasks([]);
+      await board.loadBoards();
+      await board.loadTasks();
+      await useCortexStore.getState().loadAgentPersonas();
+      useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
+    } else {
+      set({ availableProjects: updatedProjects });
+    }
   },
 }));
