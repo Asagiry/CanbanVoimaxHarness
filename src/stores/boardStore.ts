@@ -1323,9 +1323,11 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const targetColumns = (taskBoard?.columns && taskBoard.columns.length > 0)
       ? taskBoard.columns
       : (activeColumns && activeColumns.length > 0 ? activeColumns : CANONICAL_BOARD_COLUMNS);
-    const taskCol = targetColumns.find((c) => c.id === task.columnId || c.id.toLowerCase() === task.columnId.toLowerCase());
+    const taskCol = targetColumns.find(
+      (c) => c.id === task.columnId || (task.columnId && c.id.toLowerCase() === task.columnId.toLowerCase())
+    );
 
-    if (taskCol?.terminal || taskCol?.id === 'ready') {
+    if (taskCol?.terminal || taskCol?.id === 'ready' || taskCol?.id === 'done') {
       logEvent('INFO', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" is in terminal column "${task.columnId}", skipping`);
       return;
     } else if (taskCol?.persona || taskCol?.autoRun) {
