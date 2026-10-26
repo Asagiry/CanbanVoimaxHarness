@@ -69,7 +69,7 @@
       "modelOverride": "gemini-3.8-flash-high",
       "reasoningEffort": null,
       "temperature": 0.2,
-      "gatekeeperSensor": "call .cvh\\hooks\\gatekeeper_sensor.bat",
+      "gatekeeperSensor": null,
       "allowedTools": [
         "execute_command",
         "read_file",
@@ -261,7 +261,7 @@
           "modelOverride": "gemini-3.8-flash-high",
           "reasoningEffort": null,
           "temperature": 0.2,
-          "gatekeeperSensor": "call .cvh\\hooks\\gatekeeper_sensor.bat",
+          "gatekeeperSensor": null,
           "allowedTools": [
             "execute_command",
             "read_file",

@@ -1,6 +1,6 @@
 use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
@@ -294,13 +294,36 @@ pub async fn execute_hook(
     }
 }
 
+#[cfg(target_os = "windows")]
+fn parse_command_token(s: &str) -> (&str, &str) {
+    let s = s.trim_start();
+    if let Some(stripped) = s.strip_prefix('"') {
+        if let Some(end) = stripped.find('"') {
+            return (&stripped[..end], stripped[end + 1..].trim_start());
+        }
+    } else if let Some(stripped) = s.strip_prefix('\'') {
+        if let Some(end) = stripped.find('\'') {
+            return (&stripped[..end], stripped[end + 1..].trim_start());
+        }
+    }
+    match s.find(|c: char| c.is_whitespace()) {
+        Some(idx) => (&s[..idx], s[idx..].trim_start()),
+        None => (s, ""),
+    }
+}
+
 /// Executes an arbitrary gatekeeper sensor command (e.g. "cargo check" or "npm test")
 pub async fn execute_sensor_command(
     command_str: &str,
     working_dir: impl AsRef<Path>,
     timeout: Option<Duration>,
 ) -> Result<HookExecutionResult> {
-    let cwd = working_dir.as_ref();
+    let cwd_ref = working_dir.as_ref();
+    let cwd_path = if cwd_ref.exists() {
+        cwd_ref.to_path_buf()
+    } else {
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    };
 
     #[cfg(target_os = "windows")]
     let mut cmd = {
@@ -310,16 +333,26 @@ pub async fn execute_sensor_command(
         c.raw_arg("/C");
         let effective_cmd = {
             let trimmed = command_str.trim();
-            let first_word = trimmed.split_whitespace().next().unwrap_or(trimmed);
-            let unquoted_first = first_word.trim_matches('"').trim_matches('\'');
-            if unquoted_first.ends_with(".bat") || unquoted_first.ends_with(".cmd") {
-                let normalized_first = unquoted_first.replace('/', "\\");
-                let rest = trimmed.strip_prefix(first_word).unwrap_or("").trim_start();
+            let (is_call, token_slice, rest) = if trimmed.len() >= 5 && trimmed[..5].eq_ignore_ascii_case("call ") {
+                let after_call = trimmed[5..].trim_start();
+                let (tok, r) = parse_command_token(after_call);
+                (true, tok, r)
+            } else {
+                let (tok, r) = parse_command_token(trimmed);
+                (false, tok, r)
+            };
+
+            let unquoted = token_slice.trim_matches('"').trim_matches('\'');
+            let lower = unquoted.to_ascii_lowercase();
+            if lower.ends_with(".bat") || lower.ends_with(".cmd") {
+                let normalized = unquoted.replace('/', "\\");
                 if rest.is_empty() {
-                    format!("call \"{}\"", normalized_first)
+                    format!("call \"{}\"", normalized)
                 } else {
-                    format!("call \"{}\" {}", normalized_first, rest)
+                    format!("call \"{}\" {}", normalized, rest)
                 }
+            } else if is_call {
+                trimmed.to_string()
             } else {
                 command_str.to_string()
             }
@@ -335,7 +368,7 @@ pub async fn execute_sensor_command(
         c
     };
 
-    cmd.current_dir(cwd);
+    cmd.current_dir(&cwd_path);
     cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
