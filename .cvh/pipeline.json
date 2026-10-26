@@ -26,7 +26,8 @@
       },
       "routes": null,
       "autoRun": null,
-      "terminal": null
+      "terminal": null,
+      "isIntake": true
     },
     {
       "id": "plan",
@@ -55,7 +56,8 @@
       "hooks": {},
       "routes": null,
       "autoRun": true,
-      "terminal": null
+      "terminal": null,
+      "isIntake": null
     },
     {
       "id": "dev",
@@ -91,7 +93,8 @@
       "hooks": {},
       "routes": null,
       "autoRun": true,
-      "terminal": null
+      "terminal": null,
+      "isIntake": null
     },
     {
       "id": "review",
@@ -128,7 +131,8 @@
         "on_approved": "ready"
       },
       "autoRun": true,
-      "terminal": null
+      "terminal": null,
+      "isIntake": null
     },
     {
       "id": "retro",
@@ -158,7 +162,8 @@
       "hooks": {},
       "routes": null,
       "autoRun": true,
-      "terminal": null
+      "terminal": null,
+      "isIntake": null
     },
     {
       "id": "ready",
@@ -181,7 +186,8 @@
       },
       "routes": null,
       "autoRun": null,
-      "terminal": true
+      "terminal": true,
+      "isIntake": null
     }
   ],
   "boards": [
@@ -212,7 +218,8 @@
           },
           "routes": null,
           "autoRun": null,
-          "terminal": null
+          "terminal": null,
+          "isIntake": true
         },
         {
           "id": "plan",
@@ -241,7 +248,8 @@
           "hooks": {},
           "routes": null,
           "autoRun": true,
-          "terminal": null
+          "terminal": null,
+          "isIntake": null
         },
         {
           "id": "dev",
@@ -277,7 +285,8 @@
           "hooks": {},
           "routes": null,
           "autoRun": true,
-          "terminal": null
+          "terminal": null,
+          "isIntake": null
         },
         {
           "id": "review",
@@ -314,7 +323,8 @@
             "on_approved": "ready"
           },
           "autoRun": true,
-          "terminal": null
+          "terminal": null,
+          "isIntake": null
         },
         {
           "id": "retro",
@@ -344,7 +354,8 @@
           "hooks": {},
           "routes": null,
           "autoRun": true,
-          "terminal": null
+          "terminal": null,
+          "isIntake": null
         },
         {
           "id": "ready",
@@ -367,7 +378,8 @@
           },
           "routes": null,
           "autoRun": null,
-          "terminal": true
+          "terminal": true,
+          "isIntake": null
         }
       ]
     },
@@ -396,7 +408,8 @@
           "hooks": {},
           "routes": null,
           "autoRun": null,
-          "terminal": null
+          "terminal": null,
+          "isIntake": true
         },
         {
           "id": "dev",
@@ -421,7 +434,8 @@
           "hooks": {},
           "routes": null,
           "autoRun": null,
-          "terminal": null
+          "terminal": null,
+          "isIntake": null
         },
         {
           "id": "ready",
@@ -442,7 +456,8 @@
           "hooks": {},
           "routes": null,
           "autoRun": null,
-          "terminal": true
+          "terminal": true,
+          "isIntake": null
         }
       ]
     }

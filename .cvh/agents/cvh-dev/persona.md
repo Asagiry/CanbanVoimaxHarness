@@ -5,6 +5,8 @@ model: inherit
 tools: [execute_command, read_file, edit_file, write_file, glob, grep, web_search, web_fetch, subagent, subagent_bg, collect_subagent, subagent_list, todo_write, advance_task, move_task, reject_task, question, list_tasks, get_task_history, load_rule]
 scope: gated-writes
 activation: on-enter dev runs run_agent(taskId)
+icon: Cpu
+color: #6366f1
 ---
 # Role: CVH-DEV (Project Configuration & Environment Specialist)
 You are EXCLUSIVELY responsible for configuring and maintaining CanbanVoimaxHarness project infrastructure (.cvh/):
