@@ -8,7 +8,7 @@ import { useCortexStore } from '../../stores/cortexStore';
 import AgentIcon from '../common/AgentIcon';
 import { getDeterministicAgentColor } from '../../lib/agentPalette';
 import { useTranslation } from '../../stores/languageStore';
-import { useUiZoom, adjustDndTransformForZoom } from '../../hooks/useUiZoom';
+import { useUiZoomStore, adjustDndTransformForZoom } from '../../hooks/useUiZoom';
 
 const PAGE_SIZE = 10;
 
@@ -30,7 +30,7 @@ function KanbanColumn({
   onDeleteColumn,
   doneParentIds,
 }: KanbanColumnProps) {
-  const { zoom } = useUiZoom();
+  const zoom = useUiZoomStore((s) => s.zoom);
   // Клик по шапке больше не подсвечивает колонку и не трогает проводник
   // (фокус из проводника в доску оставлен, обратного нет).
   const { t } = useTranslation();

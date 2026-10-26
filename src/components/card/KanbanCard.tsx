@@ -9,7 +9,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { GitBranch, CornerUpLeft, ChevronDown, MessageSquare, GitFork, Check, X, Loader2, Terminal, Paperclip } from 'lucide-react';
 import TaskContextMenu from './TaskContextMenu';
 import { getDeterministicAgentColor } from '../../lib/agentPalette';
-import { useUiZoom, adjustDndTransformForZoom } from '../../hooks/useUiZoom';
+import { useUiZoomStore, adjustDndTransformForZoom } from '../../hooks/useUiZoom';
 
 function formatCardDate(ts?: number): string {
   if (!ts || !Number.isFinite(ts)) return '';
@@ -365,7 +365,7 @@ interface KanbanCardProps {
 }
 
 function KanbanCard({ task, index }: KanbanCardProps) {
-  const { zoom } = useUiZoom();
+  const zoom = useUiZoomStore((s) => s.zoom);
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const setHoveredTaskId = useBoardStore((s) => s.setHoveredTaskId);
   const columns = useBoardStore((s) => s.columns);
