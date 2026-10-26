@@ -73,3 +73,8 @@ Authoritative backend engineering standards and architectural invariants of **Ca
   - Library modules use strongly typed enums with `thiserror::Error`.
   - Application command boundaries use `anyhow::Context` (`.with_context(|| format!("failed to ..."))?`).
 - **Async Runtime Safety**: Never run heavy synchronous CPU-bound loops or blocking disk I/O directly inside Tokio async tasks; wrap in `tokio::task::spawn_blocking`. Channels must be bounded (`tokio::sync::mpsc::channel(buffer)`).
+
+### 3.3 Code-Over-Documentation Ground Truth Invariant (Anti-Stale-Docs)
+- **Code As Ground Truth**: When a repository's documentation, architectural markdown files, specifications, or guidelines disagree with the running, verified codebase, follow the conventions used in the existing code.
+- **Inconsistency Reporting Mandate**: Never refactor working, tested code to conform to obsolete, unmaintained, or conflicting documentation. In your final response or report, explicitly list each inconsistency found between the documentation and the code so documentation can be synchronized.
+- **Instruction-Hierarchy Bias Defense**: Prevents models from prioritizing stale textual documentation over actual compiler-tested, sensor-verified production code.
