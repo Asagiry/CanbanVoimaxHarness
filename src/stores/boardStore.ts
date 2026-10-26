@@ -1298,7 +1298,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   },
 
   runTaskAgent: async (taskId, prompt) => {
-    const { tasks, columns, moveTask } = get();
+    const { tasks, boards, activeBoardId, columns: activeColumns, moveTask } = get();
     const task = tasks.find(
       (t) => t.id === taskId || t.id.trim().toLowerCase() === taskId.trim().toLowerCase()
     );
@@ -1318,8 +1318,17 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     // Ensure the task is guaranteed to be saved and known to the backend before running agent (§ Requirement 4)
     await syncTasksBackend(get().tasks);
 
-    const taskCol = columns.find((c) => c.id === task.columnId);
-    if (taskCol?.persona || taskCol?.autoRun) {
+    const effectiveBoardId = task.boardId || activeBoardId;
+    const taskBoard = boards.find((b) => b.id === effectiveBoardId);
+    const targetColumns = (taskBoard?.columns && taskBoard.columns.length > 0)
+      ? taskBoard.columns
+      : (activeColumns && activeColumns.length > 0 ? activeColumns : CANONICAL_BOARD_COLUMNS);
+    const taskCol = targetColumns.find((c) => c.id === task.columnId || c.id.toLowerCase() === task.columnId.toLowerCase());
+
+    if (taskCol?.terminal || taskCol?.id === 'ready') {
+      logEvent('INFO', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" is in terminal column "${task.columnId}", skipping`);
+      return;
+    } else if (taskCol?.persona || taskCol?.autoRun) {
       logEvent('INFO', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" is in agent column "${taskCol.id}", starting agent`);
       const updatedTasks = get().tasks.map((t) =>
         t.id === resolvedTaskId || t.id.trim().toLowerCase() === resolvedTaskId.trim().toLowerCase()
@@ -1329,16 +1338,18 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       set({ tasks: updatedTasks });
       await syncTasksBackend(updatedTasks);
       await triggerRunAgent(resolvedTaskId, prompt);
-    } else {
-      // Task sits in a non-agent column: move to the FIRST column with a persona or autoRun
-      // (moveTask auto-runs the agent on entry).
-      const firstAgentCol = columns.find((c) => c.persona || c.autoRun);
+    } else if (taskCol?.isIntake || taskCol?.id === 'backlog') {
+      // Only intake/backlog column should move to first agent column
+      const firstAgentCol = targetColumns.find((c) => c.persona || c.autoRun);
       if (firstAgentCol) {
-        logEvent('INFO', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" in non-agent column "${task.columnId}", moving to "${firstAgentCol.id}"`);
+        logEvent('INFO', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" in intake column "${task.columnId}", moving to "${firstAgentCol.id}"`);
         await moveTask(resolvedTaskId, firstAgentCol.id);
       } else {
         logEvent('WARN', 'BOARD_STORE', `runTaskAgent: no agent column found for task "${resolvedTaskId}"`);
       }
+    } else {
+      // Task is in a stage without autoRun/persona or not intake: NEVER bounce back to dev!
+      logEvent('WARN', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" sits in column "${task.columnId}" without autoRun/persona. No move performed.`);
     }
   },
 
