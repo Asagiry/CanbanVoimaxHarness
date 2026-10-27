@@ -16,7 +16,6 @@ import {
   ArrowDown,
   ChevronDown,
   ChevronRight,
-  CornerDownRight,
   CheckCheck,
   Check,
   User,
@@ -1130,8 +1129,11 @@ export default function DrawerActivityStream({
                   </span>
                 </div>
               </div>
-              <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed whitespace-pre-wrap select-text font-sans bg-[#fafafa] dark:bg-[#161b22] p-3 rounded-md border border-[#ebebeb] dark:border-[#30363d]">
-                {activeSubagentPrompt || t('drawer.subagentInstruction')}
+              <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed select-text font-sans bg-[#fafafa] dark:bg-[#161b22] p-3 rounded-md border border-[#ebebeb] dark:border-[#30363d]">
+                <MarkdownContent
+                  content={activeSubagentPrompt || t('drawer.subagentInstruction')}
+                  onImageClick={handleOpenLightbox}
+                />
               </div>
 
               {/* Subagent Attachments Gallery */}
@@ -1163,76 +1165,55 @@ export default function DrawerActivityStream({
               )}
             </div>
           ) : (
-            <>
-              {/* a) Task Goal / User Objective Card */}
-              <div className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-4 shadow-xs">
-                <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#ebebeb] dark:border-[#21262d]">
-                  <div className="flex items-center space-x-2">
-                    <Target className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
-                    <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">
-                      {t('drawer.taskObjective')}
-                    </span>
-                  </div>
-                  <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e]">
+            /* a) Task Goal / User Objective Card */
+            <div className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-4 shadow-xs">
+              <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#ebebeb] dark:border-[#21262d]">
+                <div className="flex items-center space-x-2">
+                  <Target className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
+                  <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">
                     {t('drawer.taskObjective')}
                   </span>
                 </div>
-                <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed whitespace-pre-wrap select-text font-sans">
-                  {getCleanPrompt(task.description, task.title)}
-                </div>
-
-                {/* Task Attachments Gallery */}
-                {effectiveAttachments && effectiveAttachments.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-[#ebebeb] dark:border-[#21262d]">
-                    <div className="text-[11px] font-mono font-medium text-[#666666] dark:text-[#8b949e] mb-2 flex items-center gap-1.5">
-                      <Paperclip className="h-3 w-3" />
-                      <span>{t('newTask.attachmentsLabel')} ({effectiveAttachments.length})</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {effectiveAttachments.map((att, idx) => (
-                        <div
-                          key={idx}
-                          onClick={() => handleOpenLightbox(att, `Attachment ${idx + 1}`)}
-                          className="relative group rounded-md overflow-hidden border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22] cursor-pointer hover:border-[#171717] dark:hover:border-[#f0f6fc] transition shadow-2xs"
-                        >
-                          <img
-                            src={att}
-                            alt={`Attachment ${idx + 1}`}
-                            className="h-20 w-28 object-cover transition-transform group-hover:scale-105"
-                          />
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-opacity opacity-0 group-hover:opacity-100">
-                            <ZoomIn className="h-4 w-4 text-white drop-shadow-md" />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-          {/* a2) Relay Handoff Card */}
-          {task.handoverSummary && (
-            <div className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-[#fcfcfc] dark:bg-[#0d1117] p-4 shadow-xs">
-              <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#ebebeb] dark:border-[#21262d]">
-                <div className="flex items-center space-x-2">
-                  <CornerDownRight className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
-                  <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">
-                    {t('drawer.relayContext')}
-                  </span>
-                </div>
-                <span className="text-[10px] font-mono text-[#71717a] dark:text-[#8b949e] bg-[#f4f4f5] dark:bg-[#161b22] px-2 py-0.5 rounded border border-[#ebebeb] dark:border-[#30363d]">
-                  {t('drawer.relayHandoff')}
+                <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e]">
+                  {t('drawer.taskObjective')}
                 </span>
               </div>
-              <div className="text-sm text-[#171717] dark:text-[#f0f6fc] select-text">
-                <MarkdownContent content={task.handoverSummary} />
+              <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed select-text font-sans">
+                <MarkdownContent
+                  content={getCleanPrompt(task.description, task.title)}
+                  onImageClick={handleOpenLightbox}
+                />
               </div>
+
+              {/* Task Attachments Gallery */}
+              {effectiveAttachments && effectiveAttachments.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-[#ebebeb] dark:border-[#21262d]">
+                  <div className="text-[11px] font-mono font-medium text-[#666666] dark:text-[#8b949e] mb-2 flex items-center gap-1.5">
+                    <Paperclip className="h-3 w-3" />
+                    <span>{t('newTask.attachmentsLabel')} ({effectiveAttachments.length})</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {effectiveAttachments.map((att, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => handleOpenLightbox(att, `Attachment ${idx + 1}`)}
+                        className="relative group rounded-md overflow-hidden border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22] cursor-pointer hover:border-[#171717] dark:hover:border-[#f0f6fc] transition shadow-2xs"
+                      >
+                        <img
+                          src={att}
+                          alt={`Attachment ${idx + 1}`}
+                          className="h-20 w-28 object-cover transition-transform group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-opacity opacity-0 group-hover:opacity-100">
+                          <ZoomIn className="h-4 w-4 text-white drop-shadow-md" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
-
-
-          </>
-        )}
 
           {/* Unified Chronological Activity Stream */}
           {(displayActivities ?? []).map((activity, idx) => {
@@ -1344,8 +1325,8 @@ export default function DrawerActivityStream({
                       ))}
                     </div>
                   )}
-                  <div className="text-sm text-[#171717] dark:text-[#f0f6fc] select-text">
-                    <MarkdownContent content={activity?.content ?? ''} />
+                  <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed select-text font-sans">
+                    <MarkdownContent content={activity?.content ?? ''} onImageClick={handleOpenLightbox} />
                   </div>
                 </div>
               );
