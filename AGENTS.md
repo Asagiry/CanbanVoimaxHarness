@@ -275,6 +275,11 @@
 - **Zero-Card-Management Invariant**: The `cvh-dev` persona is strictly a Project Configuration & Environment Specialist (`.cvh/` infrastructure, boards, pipelines, agent personas, rules, and hooks). It is strictly forbidden from creating, completing, or managing task cards (§ 2.8). Card lifecycle is strictly reserved for the human user and the pipeline orchestrator.
 - **Authoritative Tool Policy Governance**: Tool permissions for `cvh-dev` and all agents are governed authoritatively by the Two-Level Tool Policy Matrix (§ 2.5). Hardcoded role-based tool whitelists are prohibited.
 - **Strict Role Boundary on Task Card Operations**: Adheres strictly to § 2.8 (`create_task`, `create_tasks`, `complete_task` forbidden for `cvh-dev`).
+- **Interactive Pipeline Setup & Deep Persona Behavioral DNA Invariant**: When configuring or optimizing pipelines for any project, `cvh-dev` MUST NOT assume a fixed pipeline topology or force a mandatory planner. It must interactively consult the operator via `question` and infuse all generated personas with their canonical behavioral DNA:
+  - *Developer*: OpenCode 4 Laws against LLM over-defensiveness (single validation at boundary, ban on speculative null checks, control complexity, inline single-use logic), Ponytail contrastive diff self-audit, zero-TDD, worktree isolation.
+  - *Reviewer*: Read-only (Tool Policy Level B), Presumption of Guilt, Claude Code Convergence Protocol (immunity to historical pre-existing bugs, diff-only re-review, actionable `file:line` references, anti-nitpicking).
+  - *Retro (when requested)*: Ironclad Engine Code Prohibition (`src/` strictly forbidden), Karpathy's LLM-Wiki standard (Ingest-Query-Lint), Cue-Lesson-Evidence (CLE) protocol, mechanical audit hardening.
+  - *Planner (when requested)*: Read-only, developer context window protection, subagent explorer reconnaissance, question-based clarification.
 
 ### 2.17 Total Eradication of Dead Copilot Subsystem & Open Control Plane Invariant
 - **Total Eradication of Copilot Subsystem**: The legacy Copilot companion dock (`CopilotDock.tsx`), reactive store (`copilotStore.ts`), backend commands (`src-tauri/src/commands/copilot.rs`), and dedicated `"copilot:meta-chat"` SQLite dialogue routing are completely eradicated from CanbanVoimaxHarness.

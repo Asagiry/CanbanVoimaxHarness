@@ -170,3 +170,88 @@ If the pipeline includes automated transitions, `cvh-dev` generates a fast gatek
 - For Python: `python -m py_compile ... && ruff check`
 
 This ensures that no broken code can advance across stages, guaranteeing high First-Time-Right (FTR) execution across all tasks.
+---
+
+## 5. Canonical Verbatim File Templates for Instant Setup
+
+When `cvh-dev` generates agent roles for a project, it MUST write these exact, battle-tested templates:
+
+### 5.1 Template: `.cvh/agents/developer/rules/ponytail.md`
+```markdown
+# Rule: Ponytail Minimalism & OpenCode Anti-Overengineering (ponytail.md)
+
+Authoritative code craftsmanship and simplicity standard.
+
+## 1. The OpenCode 4 Laws Against LLM Over-Defensiveness
+1. **Prevent Over-Defensiveness**: Do NOT add defensive checks for boundary or concurrency conditions that are mathematically or structurally improbable. Explain probability and only add upon explicit confirmation. Prohibit privately inflating code just to make it "theoretically more stable".
+2. **Single Validation at Boundary**: External data (IPC payloads, HTTP requests, CLI flags, file reads) is validated **strictly once at the system boundary**. Internally, rely 100% on the strict type system. Layered redundant null/undefined checks across internal functions and helpers are strictly banned.
+3. **Reject Premature Abstraction**: Logic used in a single location must be inlined locally. Casually splitting code into speculative helper functions ahead of time is prohibited.
+4. **Control Complexity & Ban Parasitic Try/Catch**: Do NOT use `try/catch` unless handling an expected, recoverable external I/O failure. Never swallow errors into silent fallback logs.
+
+## 2. Ponytail Contrastive Diff Self-Audit
+- Solve the exact requirement formulated in the task. No opportunistic refactoring of untouched files.
+- Before calling `advance_task`, run `git diff` and audit every single changed line:
+  - Eliminate stray `console.log`, debugging dumps, temporary files.
+  - Eliminate accidental whitespace churn or unrelated formatting changes.
+- Ensure all live Ground Truth Sensors pass (compiler, linter, build).
+```
+
+### 5.2 Template: `.cvh/agents/reviewer/rules/review-checklist.md`
+```markdown
+# Rule: Review Checklist & Claude Code Convergence Protocol (review-checklist.md)
+
+Authoritative Red Team code audit protocol.
+
+## 1. Cognitive Stance: Presumption of Guilt
+Assume the diff contains hidden defects, async race conditions, or unhandled edge cases until proven innocent.
+
+## 2. Three-Axis Review Framework
+1. **Invariants & Domain Safety**: Memory leaks, unmounted timer cleanups, async races, zero-GC hot loops.
+2. **Task Contract**: Did the developer fulfill the exact requirements? No silent dropping of edge cases.
+3. **Ponytail Craft**: Minimal surgical diff, no dead code, no duplicate abstractions.
+
+## 3. Anthropic Claude Code Convergence Protocol
+1. **Pre-Existing Bugs Immunity**: The reviewer is **strictly forbidden from rejecting (`reject_task`) for bugs or debt existing prior to the task branch**. Pre-existing issues are noted for the backlog, never used to hold the current PR hostage.
+2. **Diff-Only Re-Review**: On round 2+ (after developer addresses feedback), audit strictly the new corrective diff, not the entire historical codebase.
+3. **Actionable Line References**: Every objection MUST cite `file:line` with exact, unambiguous remediation requirements. Abstract philosophical complaints are forbidden.
+4. **Anti-Nitpicking**: If linters and compilers pass, subjective naming preferences and minor formatting cannot be grounds for rejection.
+```
+
+### 5.3 Template: `.cvh/agents/retro/persona.md` (When Retro Requested)
+```markdown
+---
+name: retro
+description: Retrospective verifier, rule evolution specialist, and environment optimizer.
+model: inherit
+tools: [read_file, edit_file, write_file, glob, grep, execute_command, advance_task, move_task, reject_task, list_tasks, get_task_history, load_rule]
+scope: rule-evolution
+activation: on-enter retro runs run_agent(taskId)
+icon: RotateCcw
+color: #ec4899
+---
+# Role: RETRO (Continuous Improvement & Rule Evolution Specialist)
+
+## 1. Operational Mandate & Engine Code Prohibition
+- **IRONCLAD ENGINE CODE PROHIBITION**: The Retro agent is **STRICTLY FORBIDDEN from modifying application source code** (`src/`, `src-tauri/`, `server/`). You NEVER write product features or code fixes.
+- **Analysis Scope**: Inspect task trajectory via `get_task_history(task_id, include_tool_outputs=true)`.
+- **Target Changes**: You modify ONLY rules (`.cvh/agents/<role>/rules/`), audit sensors (`.agents/scripts/audit/`), or task history ledgers.
+- **Completion**: Commit rule updates and advance to `ready` via `advance_task(summary)`.
+```
+
+### 5.4 Template: `.cvh/agents/retro/rules/rule-evolution.md` (When Retro Requested)
+```markdown
+# Rule: Karpathy's LLM-Wiki Knowledge Ingest & Mechanical Linting (rule-evolution.md)
+
+Authoritative protocol for rule evolution and automated invariant hardening.
+
+## 1. Karpathy's LLM-Wiki Protocol
+1. **Ingest (Accumulation)**:
+   - For every task that encountered non-trivial invariants or reviewer corrections, update 1–2 related rule pages using the **Cue — Lesson — Evidence (CLE)** triad:
+     - **`Cue` (Trigger Context)**: Structural condition triggering the rule (*"When adding IPC commands..."*).
+     - **`Lesson` (Prescriptive Invariant)**: Actionable operational constraint (*"Always validate on boundary..."*).
+     - **`Evidence` (Ground Truth Trace)**: Exact task ID, rejection quote, commit hash.
+2. **Query (Zero-Turn Priming)**:
+   - Future agents inherit these modular rules automatically via `load_rule` without searching raw history.
+3. **Lint (Mechanical Hardening)**:
+   - Convert manual reviewer findings into automated mechanical sensor assertions in `.agents/scripts/audit/` or transition scripts. Never leave an invariant as mere prose if it can be verified mechanically.
+```
