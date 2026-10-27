@@ -739,20 +739,15 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
   },
 
   isToolAllowed: (toolId, stageOrAgentId) => {
-    const { globalEnabled, stageOverrides } = get();
+    const { stageOverrides } = get();
 
     // Hierarchical rule for subagent sub-options
     if (toolId === 'subagent_sync' || toolId === 'subagent_bg' || toolId === 'collect_subagent' || toolId === 'subagent_list') {
-      const masterGlobal = globalEnabled['subagent'] ?? true;
-      if (!masterGlobal) return false;
       if (stageOrAgentId) {
         const stageMaster = stageOverrides[stageOrAgentId]?.['subagent'];
         if (stageMaster === false) return false;
-      }
-      const selfGlobal = globalEnabled[toolId] ?? true;
-      if (!selfGlobal) return false;
-      if (stageOrAgentId) {
-        return stageOverrides[stageOrAgentId]?.[toolId] ?? true;
+        const selfStage = stageOverrides[stageOrAgentId]?.[toolId];
+        if (typeof selfStage === 'boolean') return selfStage;
       }
       return true;
     }
@@ -779,12 +774,10 @@ export const useToolPolicyStore = create<ToolPolicyState>((set, get) => ({
       if (DEFAULT_OVERRIDES[stageOrAgentId] && typeof DEFAULT_OVERRIDES[stageOrAgentId][toolId] === 'boolean') {
         return DEFAULT_OVERRIDES[stageOrAgentId][toolId];
       }
+      return true;
     }
 
-    const isGloballyAllowed = globalEnabled[toolId] ?? true;
-    if (!isGloballyAllowed) return false;
-    if (!stageOrAgentId) return true;
-    return stageOverrides[stageOrAgentId]?.[toolId] ?? true;
+    return true;
   },
 
   calculateSavedTokens: (stageId) => {

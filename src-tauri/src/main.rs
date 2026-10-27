@@ -14,20 +14,23 @@ fn main() {
         let udf = canban_voimax_harness_lib::udf::resolve_and_prepare_webview2_udf();
         std::env::set_var("WEBVIEW2_USER_DATA_FOLDER", udf.to_string_lossy().as_ref());
 
-        let required_flags = "--disable-features=RendererCodeIntegrity";
-        match std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS") {
-            Ok(existing) => {
-                if !existing.contains("RendererCodeIntegrity") {
-                    std::env::set_var(
-                        "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
-                        format!("{existing} {required_flags}"),
-                    );
+        let flags_to_add = [
+            "--disable-features=RendererCodeIntegrity",
+            "--js-flags=--max-old-space-size=4096",
+        ];
+        let mut current_flags = std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS")
+            .unwrap_or_default();
+
+        for flag in flags_to_add {
+            if !current_flags.contains(flag) {
+                if current_flags.is_empty() {
+                    current_flags = flag.to_string();
+                } else {
+                    current_flags = format!("{current_flags} {flag}");
                 }
             }
-            Err(_) => {
-                std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", required_flags);
-            }
         }
+        std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", current_flags);
     }
 
     // Install file-based panic hook so panics are never lost silently

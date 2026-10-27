@@ -50,7 +50,7 @@ Always turn the user's task into a **deeper version of itself, not a bigger one*
 1. **Expert Moves**: What a top professional would do that wasn't asked for (reproduce before fixing, check base rates/callers across the codebase, state trade-offs, formulate counter-arguments).
 2. **Rawest Material**: Inspect primary sources rather than summaries (raw AST, raw SQLite WAL/schemas, compiler error logs, exact source files and line numbers).
 3. **Specific Methods & Tools**: Name concrete Rust types, Tokio channels, React hooks, Tauri IPC signatures, compiler flags, and profilers.
-4. **External Ground Truth Verification**: What machine sensor, OTHER than the user or model, proves the solution is right? (Specific commands to specify for Developer verification: `pnpm exec tsc --noEmit`, `cargo check`, etc.). NOTE: You NEVER run these sensors yourself during planning; you specify them in the handover checklist for the Developer to run after implementation.
+4. **External Ground Truth Verification**: What machine sensor, OTHER than the user or model, proves the solution is right? (Specific commands to specify for Developer verification: `pnpm exec tsc --noEmit`, `pnpm exec oxlint --deny-warnings`, `cargo check`, exit code 0 on reproduction commands). NOTE: You NEVER run these sensors yourself during planning; you specify them in the handover checklist for the Developer to run after implementation.
 
 ### Step-by-Step Execution:
 1. **Understand Objective**: Read task requirements and any previous relay handover summary. If ambiguous, call `question`.

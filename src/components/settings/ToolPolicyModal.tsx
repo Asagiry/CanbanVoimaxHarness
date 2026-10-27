@@ -354,9 +354,7 @@ export default function ToolPolicyModal() {
   const { zoom } = useUiZoom();
   const {
     isModalOpen,
-    globalEnabled,
     closeModal,
-    toggleGlobalTool,
     setStageTool,
     isToolAllowed,
     toolDescriptions,
@@ -413,7 +411,6 @@ export default function ToolPolicyModal() {
     });
   }, [agentPersonas, columns]);
 
-  const [activeTab, setActiveTab] = useState<'matrix' | 'global'>('matrix');
   const [expandedToolId, setExpandedToolId] = useState<string | null>(null);
 
   const [customTools, setCustomTools] = useState<CustomTool[]>([]);
@@ -542,85 +539,61 @@ export default function ToolPolicyModal() {
           </button>
         </div>
 
-        {/* Tabs Bar */}
-        <div className="flex border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] px-4 font-mono text-xs">
-          <button
-            onClick={() => setActiveTab('matrix')}
-            className={`px-3.5 py-2.5 border-b-2 transition cursor-pointer ${
-              activeTab === 'matrix'
-                ? 'border-[#171717] dark:border-[#f0f6fc] text-[#171717] dark:text-[#f0f6fc] font-semibold'
-                : 'border-transparent text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
-            }`}
-          >
-            {t('toolPolicy.tabMatrix')}
-          </button>
-          <button
-            onClick={() => setActiveTab('global')}
-            className={`px-3.5 py-2.5 border-b-2 transition cursor-pointer ${
-              activeTab === 'global'
-                ? 'border-[#171717] dark:border-[#f0f6fc] text-[#171717] dark:text-[#f0f6fc] font-semibold'
-                : 'border-transparent text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
-            }`}
-          >
-            {t('toolPolicy.tabGlobal')}
-          </button>
-        </div>
-
         {/* Body Content */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 font-mono text-xs">
-          {activeTab === 'matrix' && (
-            <div className="overflow-x-auto rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117]">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] text-[10px] uppercase">
-                    <th className="py-2.5 px-3 font-medium">{t('toolPolicy.toolHeader')}</th>
-                    <th className="py-2.5 px-2 text-right font-medium">{t('toolPolicy.weightHeader')}</th>
-                    {agents.map((agent) => (
-                      <th key={agent.role} className="py-2.5 px-2 text-center font-medium border-l border-[#ebebeb] dark:border-[#21262d] min-w-[95px]">
-                        <div className="flex flex-col items-center gap-1">
-                          <div className="flex items-center gap-1.5 justify-center max-w-[110px]">
-                            <AgentIcon
-                              name={agent.icon || (agent.isBuiltin ? 'Cpu' : 'Bot')}
-                              className={`h-3.5 w-3.5 shrink-0 ${agent.isBuiltin ? 'text-indigo-600 dark:text-indigo-400' : 'text-[#171717] dark:text-[#f0f6fc]'}`}
-                            />
-                            <span className="truncate block font-mono font-semibold text-[#171717] dark:text-[#f0f6fc]" title={agent.role}>
-                              {agent.role}
-                            </span>
-                          </div>
-                          {agent.isBuiltin && (
-                            <span className="px-1 py-0.2 rounded text-[9px] font-sans font-medium bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                              {t('toolPolicy.builtin')}
-                            </span>
-                          )}
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 font-mono text-xs">
+          <div className="overflow-x-auto rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117]">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] text-[10px] uppercase">
+                  <th className="py-2.5 px-3 font-medium">{t('toolPolicy.toolHeader')}</th>
+                  <th className="py-2.5 px-2 text-right font-medium">{t('toolPolicy.weightHeader')}</th>
+                  {agents.map((agent) => (
+                    <th key={agent.role} className="py-2.5 px-2 text-center font-medium border-l border-[#ebebeb] dark:border-[#21262d] min-w-[95px]">
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="flex items-center gap-1.5 justify-center max-w-[110px]">
+                          <AgentIcon
+                            name={agent.icon || (agent.isBuiltin ? 'Cpu' : 'Bot')}
+                            className={`h-3.5 w-3.5 shrink-0 ${agent.isBuiltin ? 'text-indigo-600 dark:text-indigo-400' : 'text-[#171717] dark:text-[#f0f6fc]'}`}
+                          />
+                          <span className="truncate block font-mono font-semibold text-[#171717] dark:text-[#f0f6fc]" title={agent.role}>
+                            {agent.role}
+                          </span>
                         </div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#ebebeb] dark:divide-[#21262d]">
-                  {CATEGORY_ORDER.map((catKey) => {
-                    const toolsInCat = AVAILABLE_TOOLS.filter((t) => t.category === catKey);
-                    if (toolsInCat.length === 0) return null;
+                        {agent.isBuiltin && (
+                          <span className="px-1 py-0.2 rounded text-[9px] font-sans font-medium bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                            {t('toolPolicy.builtin')}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
 
-                    return (
-                      <Fragment key={`cat-grp-${catKey}`}>
-                        <tr className="bg-[#f4f4f5]/90 dark:bg-[#161b22] border-y border-[#ebebeb] dark:border-[#21262d]">
-                          <td
-                            colSpan={2 + agents.length}
-                            className="py-1.5 px-3 text-[10px] font-semibold text-[#52525b] dark:text-[#8b949e] uppercase tracking-wider"
-                          >
-                            {getCategoryLabel(catKey, t)}
-                          </td>
-                        </tr>
-                        {toolsInCat.map((tool) => {
-                          const isGloballyActive = globalEnabled[tool.id] ?? false;
-                          const isChild = Boolean(tool.parentTool);
-                          const toolLabelKey = getToolTranslationKey(tool.id, 'label') as TranslationKey;
-                          const toolLabel = t(toolLabelKey) !== toolLabelKey ? t(toolLabelKey) : tool.label;
+              <tbody className="divide-y divide-[#ebebeb] dark:divide-[#21262d]">
+                {CATEGORY_ORDER.map((catKey) => {
+                  const toolsInCat = AVAILABLE_TOOLS.filter((t) => t.category === catKey);
+                  if (toolsInCat.length === 0) return null;
 
-                          return (
+                  return (
+                    <Fragment key={`cat-grp-${catKey}`}>
+                      <tr className="bg-[#f4f4f5]/90 dark:bg-[#161b22] border-y border-[#ebebeb] dark:border-[#21262d]">
+                        <td
+                          colSpan={2 + agents.length}
+                          className="py-1.5 px-3 text-[10px] font-semibold text-[#52525b] dark:text-[#8b949e] uppercase tracking-wider"
+                        >
+                          {getCategoryLabel(catKey, t)}
+                        </td>
+                      </tr>
+                      {toolsInCat.map((tool) => {
+                        const isExpanded = expandedToolId === tool.id;
+                        const isChild = Boolean(tool.parentTool);
+                        const toolLabelKey = getToolTranslationKey(tool.id, 'label') as TranslationKey;
+                        const toolLabel = t(toolLabelKey) !== toolLabelKey ? t(toolLabelKey) : tool.label;
+
+                        return (
+                          <Fragment key={tool.id}>
                             <tr
-                              key={tool.id}
                               className={`hover:bg-[#fafafa] dark:hover:bg-[#161b22] transition text-[#171717] dark:text-[#f0f6fc] ${
                                 isChild ? 'bg-[#fafafc] dark:bg-[#090a0f]' : ''
                               }`}
@@ -632,29 +605,38 @@ export default function ToolPolicyModal() {
                                       {tool.id === 'subagent_list' ? '└──' : '├──'}
                                     </span>
                                   )}
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <span
-                                        className={`font-medium text-[#171717] dark:text-[#f0f6fc] leading-tight ${
-                                          tool.isSubagentMaster ? 'font-semibold' : ''
-                                        }`}
-                                      >
-                                        {toolLabel}
-                                      </span>
-                                      {toolCustomSchemas[tool.id] !== undefined ? (
-                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-                                          Кастомная схема
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleExpanded(tool.id)}
+                                    className="flex items-start gap-1.5 text-left cursor-pointer min-w-0 flex-1 group"
+                                  >
+                                    <ChevronDown
+                                      className={`w-3.5 h-3.5 shrink-0 mt-0.5 text-[#8f8f8f] dark:text-[#8b949e] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span
+                                          className={`font-medium text-[#171717] dark:text-[#f0f6fc] leading-tight group-hover:underline underline-offset-2 ${
+                                            tool.isSubagentMaster ? 'font-semibold' : ''
+                                          }`}
+                                        >
+                                          {toolLabel}
                                         </span>
-                                      ) : toolDescriptions[tool.id] !== undefined && toolDescriptions[tool.id] !== tool.description ? (
-                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-                                          Кастомное описание
-                                        </span>
-                                      ) : null}
+                                        {toolCustomSchemas[tool.id] !== undefined ? (
+                                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                                            Кастомная схема
+                                          </span>
+                                        ) : toolDescriptions[tool.id] !== undefined && toolDescriptions[tool.id] !== tool.description ? (
+                                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                                            Кастомное описание
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                      <div className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] font-mono leading-tight mt-0.5">
+                                        {tool.name}
+                                      </div>
                                     </div>
-                                    <div className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] font-mono leading-tight mt-0.5">
-                                      {tool.name}
-                                    </div>
-                                  </div>
+                                  </button>
                                 </div>
                               </td>
 
@@ -676,11 +658,7 @@ export default function ToolPolicyModal() {
 
                                 return (
                                   <td key={agent.role} className="py-2 px-2 text-center border-l border-[#ebebeb] dark:border-[#21262d] align-middle">
-                                    {!isGloballyActive ? (
-                                      <span className="text-[10px] text-[#8f8f8f] select-none block pt-0.5">
-                                        {t('toolPolicy.off')}
-                                      </span>
-                                    ) : isDisabled ? (
+                                    {isDisabled ? (
                                       <span className="inline-flex justify-center opacity-40 pt-0.5">
                                         <Toggle
                                           enabled={false}
@@ -717,27 +695,54 @@ export default function ToolPolicyModal() {
                                 );
                               })}
                             </tr>
-                          );
-                        })}
-                      </Fragment>
-                    );
-                  })}
-                  {customTools.map((customTool) => {
-                    const customId = `custom:${customTool.name}`;
-                    const isCustomGloballyActive = globalEnabled[customTool.name] ?? true;
+                            {isExpanded && (
+                              <tr className="bg-[#f9f9fb] dark:bg-[#07090e] border-b border-[#ebebeb] dark:border-[#21262d]">
+                                <td colSpan={2 + agents.length} className="p-3">
+                                  <div className="space-y-2 max-w-3xl">
+                                    <ToolParamsEditor toolId={tool.id} />
+                                    <ToolSchemaEditor tool={tool} />
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}
+                    </Fragment>
+                  );
+                })}
 
-                    return (
-                      <tr key={customId} className="hover:bg-[#fafafa] dark:hover:bg-[#161b22] transition text-[#171717] dark:text-[#f0f6fc]">
+                {customTools.map((customTool) => {
+                  const customId = `custom:${customTool.name}`;
+                  const isExpanded = expandedToolId === customId;
+
+                  return (
+                    <Fragment key={customId}>
+                      <tr className="hover:bg-[#fafafa] dark:hover:bg-[#161b22] transition text-[#171717] dark:text-[#f0f6fc]">
                         <td className="py-2 px-3 align-middle">
                           <div className="flex items-start gap-1.5 text-left w-full">
-                            <div className="min-w-0 flex-1">
-                              <span className="font-medium text-[#171717] dark:text-[#f0f6fc] leading-tight">
-                                {customTool.name}
-                              </span>
-                              <span className="ml-1.5 inline-block rounded border border-[#ebebeb] dark:border-[#30363d] bg-[#f4f4f5] dark:bg-[#161b22] px-1 py-px text-[10px] leading-none text-[#666666] dark:text-[#8b949e] align-middle">
-                                {t('toolPolicy.customBadge')}
-                              </span>
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() => toggleExpanded(customId)}
+                              className="flex items-start gap-1.5 text-left cursor-pointer min-w-0 flex-1 group"
+                            >
+                              <ChevronDown
+                                className={`w-3.5 h-3.5 shrink-0 mt-0.5 text-[#8f8f8f] dark:text-[#8b949e] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-medium text-[#171717] dark:text-[#f0f6fc] leading-tight group-hover:underline underline-offset-2">
+                                    {customTool.name}
+                                  </span>
+                                  <span className="rounded border border-[#ebebeb] dark:border-[#30363d] bg-[#f4f4f5] dark:bg-[#161b22] px-1 py-px text-[10px] leading-none text-[#666666] dark:text-[#8b949e] align-middle">
+                                    {t('toolPolicy.customBadge')}
+                                  </span>
+                                </div>
+                                <div className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] font-mono leading-tight mt-0.5 truncate">
+                                  {customTool.description}
+                                </div>
+                              </div>
+                            </button>
                           </div>
                         </td>
 
@@ -750,299 +755,141 @@ export default function ToolPolicyModal() {
 
                           return (
                             <td key={agent.role} className="py-2 px-2 text-center border-l border-[#ebebeb] dark:border-[#21262d] align-middle">
-                              {!isCustomGloballyActive ? (
-                                <span className="text-[10px] text-[#8f8f8f] select-none block pt-0.5">
-                                  {t('toolPolicy.off')}
-                                </span>
-                              ) : (
-                                <span className="inline-flex justify-center pt-0.5">
-                                  <Toggle
-                                    enabled={isCustomAllowed}
-                                    onToggle={() => {
-                                      setStageTool(agent.role, customTool.name, !isCustomAllowed);
-                                      for (const col of columns) {
-                                        if (col.persona === agent.role && col.id !== agent.role) {
-                                          setStageTool(col.id, customTool.name, !isCustomAllowed);
-                                        }
+                              <span className="inline-flex justify-center pt-0.5">
+                                <Toggle
+                                  enabled={isCustomAllowed}
+                                  onToggle={() => {
+                                    setStageTool(agent.role, customTool.name, !isCustomAllowed);
+                                    for (const col of columns) {
+                                      if (col.persona === agent.role && col.id !== agent.role) {
+                                        setStageTool(col.id, customTool.name, !isCustomAllowed);
                                       }
-                                    }}
-                                    title={t('toolPolicy.toolAgentStatus', {
-                                      tool: customTool.name,
-                                      agent: agent.role,
-                                      status: isCustomAllowed ? t('toolPolicy.statusEnabled') : t('toolPolicy.statusDisabled'),
-                                    })}
-                                  />
-                                </span>
-                              )}
+                                    }
+                                  }}
+                                  title={t('toolPolicy.toolAgentStatus', {
+                                    tool: customTool.name,
+                                    agent: agent.role,
+                                    status: isCustomAllowed ? t('toolPolicy.statusEnabled') : t('toolPolicy.statusDisabled'),
+                                  })}
+                                />
+                              </span>
                             </td>
                           );
                         })}
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
 
-          {activeTab === 'global' && (
-            <div className="space-y-4">
-              {CATEGORY_ORDER.map((catKey) => {
-                const toolsInCat = AVAILABLE_TOOLS.filter((t) => t.category === catKey);
-                if (toolsInCat.length === 0) return null;
-
-                return (
-                  <div key={`global-cat-${catKey}`} className="space-y-2">
-                    <h3 className="text-[11px] font-semibold text-[#52525b] dark:text-[#8b949e] uppercase tracking-wider px-1">
-                      {getCategoryLabel(catKey, t)}
-                    </h3>
-                    <div className="space-y-2">
-                      {toolsInCat.map((tool) => {
-                        const isEnabled = globalEnabled[tool.id] ?? false;
-                        const isExpanded = expandedToolId === tool.id;
-                        const isChild = Boolean(tool.parentTool);
-                        const isMasterGloballyActive = tool.parentTool ? (globalEnabled[tool.parentTool] ?? true) : true;
-                        const isDisabled = isChild && !isMasterGloballyActive;
-                        const toolLabelKey = getToolTranslationKey(tool.id, 'label') as TranslationKey;
-                        const toolLabel = t(toolLabelKey) !== toolLabelKey ? t(toolLabelKey) : tool.label;
-                        const masterLabel = tool.parentTool
-                          ? (t(getToolTranslationKey(tool.parentTool, 'label') as TranslationKey) !== getToolTranslationKey(tool.parentTool, 'label')
-                              ? t(getToolTranslationKey(tool.parentTool, 'label') as TranslationKey)
-                              : tool.parentTool)
-                          : '';
-
-                        return (
-                          <div
-                            key={tool.id}
-                            className={`p-3 rounded-md border transition select-none ${
-                              isChild ? 'ml-4 bg-[#f9f9fb] dark:bg-[#090a0f]' : ''
-                            } ${
-                              isEnabled && !isDisabled
-                                ? 'border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:border-[#d4d4d8] dark:hover:border-[#484f58] shadow-xs'
-                                : 'border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] opacity-60'
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <button
-                                type="button"
-                                onClick={() => toggleExpanded(tool.id)}
-                                aria-label={isExpanded ? t('toolPolicy.collapseDesc') : t('toolPolicy.expandDesc')}
-                                className="flex items-start gap-1.5 text-left cursor-pointer min-w-0 flex-1 group"
-                              >
-                                {isChild && (
-                                  <span className="text-[#8f8f8f] dark:text-[#8b949e] font-mono text-xs select-none shrink-0 mt-0.5 leading-none">
-                                    {tool.id === 'subagent_list' ? '└──' : '├──'}
-                                  </span>
-                                )}
-                                <ChevronDown
-                                  className={`w-4 h-4 shrink-0 mt-0.5 text-[#8f8f8f] dark:text-[#8b949e] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <div className={`font-mono font-medium text-xs text-[#171717] dark:text-[#f0f6fc] truncate leading-tight group-hover:underline underline-offset-2 ${tool.isSubagentMaster ? 'font-semibold' : ''}`}>
-                                      {toolLabel}
-                                    </div>
-                                    {toolCustomSchemas[tool.id] !== undefined ? (
-                                      <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-                                        Кастомная схема
-                                      </span>
-                                    ) : toolDescriptions[tool.id] !== undefined && toolDescriptions[tool.id] !== tool.description ? (
-                                      <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-                                        Кастомное описание
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                  <div className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] font-mono leading-tight mt-0.5">
-                                    {tool.name}
-                                  </div>
-                                </div>
-                              </button>
-
-                              <div className="shrink-0 pt-0.5">
-                                <Toggle
-                                  enabled={isEnabled && !isDisabled}
-                                  disabled={isDisabled}
-                                  onToggle={() => toggleGlobalTool(tool.id)}
-                                  title={
-                                    isDisabled
-                                      ? t('toolPolicy.masterGlobalDisabledNotice', {
-                                          tool: toolLabel,
-                                          master: masterLabel,
-                                        })
-                                      : t('toolPolicy.toolGlobalStatus', {
-                                          tool: toolLabel,
-                                          status: isEnabled ? t('toolPolicy.statusEnabled') : t('toolPolicy.statusDisabled'),
-                                        })
-                                  }
-                                />
+                      {isExpanded && (
+                        <tr className="bg-[#f9f9fb] dark:bg-[#07090e] border-b border-[#ebebeb] dark:border-[#21262d]">
+                          <td colSpan={2 + agents.length} className="p-3">
+                            <div className="space-y-1.5 text-xs font-mono">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[#666666] dark:text-[#8b949e]">{t('toolPolicy.commandPrefix')} <code className="bg-[#f4f4f5] dark:bg-[#21262d] px-1 py-0.5 rounded">{customTool.command}</code></span>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleDeleteCustomTool(customTool.name)}
+                                  className="px-2 py-1 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                  {t('common.delete')}
+                                </button>
                               </div>
                             </div>
-                            {isExpanded && (
-                              <div className="mt-2 space-y-2">
-                                <ToolParamsEditor toolId={tool.id} />
-                                <ToolSchemaEditor tool={tool} />
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-              {/* Свои инструменты */}
-              <div className="pt-2">
-                <h3 className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">
-                  {t('toolPolicy.customTools')}
-                </h3>
+          {/* Custom Tools Creation Form */}
+          <div className="pt-2">
+            <h3 className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">
+              {t('toolPolicy.customTools')}
+            </h3>
 
-                {customLoading && (
-                  <p className="text-[11px] text-[#666666] dark:text-[#8b949e] font-sans mt-2">{t('common.loading')}</p>
-                )}
-                {customListError && (
-                  <p className="text-[11px] font-sans mt-2 text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-md px-3 py-1.5">
-                    {customListError}
-                  </p>
-                )}
+            {customLoading && (
+              <p className="text-[11px] text-[#666666] dark:text-[#8b949e] font-sans mt-2">{t('common.loading')}</p>
+            )}
+            {customListError && (
+              <p className="text-[11px] font-sans mt-2 text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-md px-3 py-1.5">
+                {customListError}
+              </p>
+            )}
 
-                {!customLoading && !customListError && customTools.length === 0 && (
-                  <p className="text-[11px] text-[#8f8f8f] dark:text-[#8b949e] font-sans mt-2">
-                    {t('toolPolicy.noCustomTools')}
-                  </p>
-                )}
-
-                <div className="space-y-2 mt-2">
-                  {customTools.map((tool) => {
-                    const expandId = `custom:${tool.name}`;
-                    const isExpanded = expandedToolId === expandId;
-                    return (
-                      <div
-                        key={tool.name}
-                        className="p-3 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22]"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <button
-                            type="button"
-                            onClick={() => toggleExpanded(expandId)}
-                            aria-label={isExpanded ? t('toolPolicy.collapseDesc') : t('toolPolicy.expandDesc')}
-                            className="flex items-start gap-1.5 text-left cursor-pointer min-w-0 flex-1 group"
-                          >
-                            <ChevronDown
-                              className={`w-4 h-4 shrink-0 mt-0.5 text-[#8f8f8f] dark:text-[#8b949e] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                            />
-                            <div className="min-w-0 flex-1">
-                              <span className="font-mono font-medium text-xs text-[#171717] dark:text-[#f0f6fc] truncate leading-tight group-hover:underline underline-offset-2">
-                                {tool.name}
-                              </span>
-                              <span className="ml-1.5 inline-block rounded border border-[#ebebeb] dark:border-[#30363d] bg-[#f4f4f5] dark:bg-[#161b22] px-1 py-px text-[10px] leading-none text-[#666666] dark:text-[#8b949e] align-middle">
-                                {t('toolPolicy.customBadge')}
-                              </span>
-                            </div>
-                          </button>
-                          <div className="shrink-0 pt-0.5">
-                            <button
-                              type="button"
-                              onClick={() => void handleDeleteCustomTool(tool.name)}
-                              aria-label={`${t('common.delete')} ${tool.name}`}
-                              className="p-1.5 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 border border-transparent hover:border-red-200 dark:hover:border-red-900/50 transition cursor-pointer"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                        <p className="text-[11px] text-[#666666] dark:text-[#8b949e] mt-1 font-sans leading-snug">
-                          {tool.description}
-                        </p>
-                        {isExpanded && (
-                          <div className="mt-2 space-y-1 text-[11px] font-sans">
-                            <p className="text-[#666666] dark:text-[#8b949e]">
-                              <span className="font-medium text-[#171717] dark:text-[#f0f6fc]">{t('toolPolicy.commandPrefix')} </span>
-                              <code className="font-mono bg-[#f4f4f5] dark:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] rounded px-1 py-0.5 break-all">
-                                {tool.command}
-                              </code>
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+            <form onSubmit={(e) => void handleAddCustomTool(e)} className="mt-3 p-3 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#161b22] space-y-2.5">
+              <p className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc] font-sans">
+                {t('toolPolicy.addTool')}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1 text-[11px]">
+                    {t('toolPolicy.nameLabel')}
+                  </label>
+                  <input
+                    type="text"
+                    value={customName}
+                    onChange={(e) => setCustomName(e.target.value)}
+                    placeholder="my_tool"
+                    className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] font-mono text-xs transition"
+                  />
                 </div>
-
-                {/* Форма добавления */}
-                <form onSubmit={(e) => void handleAddCustomTool(e)} className="mt-3 p-3 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#161b22] space-y-2.5">
-                  <p className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc] font-sans">
-                    {t('toolPolicy.addTool')}
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1 text-[11px]">
-                        {t('toolPolicy.nameLabel')}
-                      </label>
-                      <input
-                        type="text"
-                        value={customName}
-                        onChange={(e) => setCustomName(e.target.value)}
-                        placeholder="my_tool"
-                        className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] font-mono text-xs transition"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1 text-[11px]">
-                        {t('toolPolicy.commandLabel')}
-                      </label>
-                      <input
-                        type="text"
-                        value={customCommand}
-                        onChange={(e) => setCustomCommand(e.target.value)}
-                        placeholder="my-script --input {args}"
-                        className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] font-mono text-xs transition"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1 text-[11px]">
-                      {t('toolPolicy.descLabel')}
-                    </label>
-                    <input
-                      type="text"
-                      value={customDescription}
-                      onChange={(e) => setCustomDescription(e.target.value)}
-                      placeholder={t('toolPolicy.descPlaceholder')}
-                      className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] font-sans text-xs transition"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1 text-[11px]">
-                      {t('toolPolicy.paramsLabel')}
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={customParamsText}
-                      onChange={(e) => setCustomParamsText(e.target.value)}
-                      placeholder={'{"type": "object", "properties": {}}'}
-                      spellCheck={false}
-                      className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] font-mono text-xs resize-y transition"
-                    />
-                  </div>
-                  {customFormError && (
-                    <p className="text-[11px] font-sans text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-md px-3 py-1.5">
-                      {customFormError}
-                    </p>
-                  )}
-                  <div className="flex justify-end">
-                    <button
-                      type="submit"
-                      disabled={customSaving}
-                      className="px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#238636] hover:bg-[#262626] dark:hover:bg-[#2ea043] disabled:opacity-50 text-white font-medium transition cursor-pointer font-sans text-xs shadow-xs"
-                    >
-                      {customSaving ? t('common.saving') : t('toolPolicy.add')}
-                    </button>
-                  </div>
-                </form>
+                <div>
+                  <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1 text-[11px]">
+                    {t('toolPolicy.commandLabel')}
+                  </label>
+                  <input
+                    type="text"
+                    value={customCommand}
+                    onChange={(e) => setCustomCommand(e.target.value)}
+                    placeholder="my-script --input {args}"
+                    className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] font-mono text-xs transition"
+                  />
+                </div>
               </div>
-            </div>
-          )}
+              <div>
+                <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1 text-[11px]">
+                  {t('toolPolicy.descLabel')}
+                </label>
+                <input
+                  type="text"
+                  value={customDescription}
+                  onChange={(e) => setCustomDescription(e.target.value)}
+                  placeholder={t('toolPolicy.descPlaceholder')}
+                  className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] font-sans text-xs transition"
+                />
+              </div>
+              <div>
+                <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1 text-[11px]">
+                  {t('toolPolicy.paramsLabel')}
+                </label>
+                <textarea
+                  rows={3}
+                  value={customParamsText}
+                  onChange={(e) => setCustomParamsText(e.target.value)}
+                  placeholder={'{"type": "object", "properties": {}}'}
+                  spellCheck={false}
+                  className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] font-mono text-xs resize-y transition"
+                />
+              </div>
+              {customFormError && (
+                <p className="text-[11px] font-sans text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-md px-3 py-1.5">
+                  {customFormError}
+                </p>
+              )}
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={customSaving}
+                  className="px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#238636] hover:bg-[#262626] dark:hover:bg-[#2ea043] disabled:opacity-50 text-white font-medium transition cursor-pointer font-sans text-xs shadow-xs"
+                >
+                  {customSaving ? t('common.saving') : t('toolPolicy.add')}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
 
         {/* Footer */}

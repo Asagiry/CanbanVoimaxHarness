@@ -1473,6 +1473,8 @@ use std::path::PathBuf;
 
     #[tokio::test]
     async fn test_sync_tool_policies_to_personas_frontmatter() {
+        // Verification: persona.md must remain untouched (zero file mutation churn)
+        // and tool permissions are resolved purely from ToolPolicyConfig.
         let base = PathBuf::from("target").join(format!("cvh_policy_sync_{}", uuid::Uuid::new_v4()));
         let agent_dir = base.join(".cvh").join("agents").join("developer");
         tokio::fs::create_dir_all(&agent_dir).await.expect("test dir");
@@ -1494,27 +1496,23 @@ Write code.
         dev_map.insert("read_file".to_string(), true);
         dev_map.insert("edit_file".to_string(), true);
         dev_map.insert("write_file".to_string(), true);
-        dev_map.insert("execute_command".to_string(), true);
-        dev_map.insert("glob".to_string(), true);
-        dev_map.insert("grep".to_string(), true);
         dev_map.insert("web_search".to_string(), false);
-        dev_map.insert("create_task".to_string(), true);
-        dev_map.insert("complete_task".to_string(), true);
         policy.stage_overrides.insert("dev".to_string(), dev_map);
 
         crate::config::sync_tool_policies_to_personas(&base, &policy)
             .await
             .expect("sync policies");
 
-        let updated = tokio::fs::read_to_string(agent_dir.join("persona.md"))
+        let post_sync = tokio::fs::read_to_string(agent_dir.join("persona.md"))
             .await
-            .expect("read updated");
-        assert!(updated.contains("tools: ["));
-        assert!(updated.contains("edit_file"));
-        assert!(updated.contains("write_file"));
-        assert!(!updated.contains("web_search"));
-        assert!(updated.contains("create_task"), "create_task must be written to persona frontmatter when enabled in tool-policy!");
-        assert!(updated.contains("complete_task"), "complete_task must be written to persona frontmatter when enabled in tool-policy!");
+            .expect("read post sync");
+        // Must be identical: persona.md is NOT mutated by tool policy saves
+        assert_eq!(post_sync, initial_persona);
+
+        // Tool permission checks work directly from policy
+        assert!(crate::config::is_tool_allowed(&policy, Some("dev"), "read_file"));
+        assert!(crate::config::is_tool_allowed(&policy, Some("dev"), "edit_file"));
+        assert!(!crate::config::is_tool_allowed(&policy, Some("dev"), "web_search"));
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }

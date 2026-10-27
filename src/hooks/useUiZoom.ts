@@ -129,6 +129,8 @@ export function getRootZoomStyle(zoom: number): React.CSSProperties {
       zoom,
       width: `${100 / zoom}vw`,
       height: `${100 / zoom}vh`,
+      maxWidth: 'none',
+      maxHeight: 'none',
     };
   }
   return {
@@ -136,6 +138,8 @@ export function getRootZoomStyle(zoom: number): React.CSSProperties {
     transformOrigin: 'top left',
     width: `${100 / zoom}vw`,
     height: `${100 / zoom}vh`,
+    maxWidth: 'none',
+    maxHeight: 'none',
   };
 }
 
@@ -143,10 +147,22 @@ export function getZoomOverlayStyle(zoom: number): React.CSSProperties | undefin
   if (zoom === 1 || Math.abs(zoom - 1) < 0.001) {
     return undefined;
   }
+  if (isZoomSupported) {
+    return {
+      zoom,
+      width: `${100 / zoom}vw`,
+      height: `${100 / zoom}vh`,
+      maxWidth: 'none',
+      maxHeight: 'none',
+    };
+  }
   return {
-    zoom,
+    transform: `scale(${zoom})`,
+    transformOrigin: 'top left',
     width: `${100 / zoom}vw`,
     height: `${100 / zoom}vh`,
+    maxWidth: 'none',
+    maxHeight: 'none',
   };
 }
 

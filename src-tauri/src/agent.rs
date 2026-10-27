@@ -181,7 +181,6 @@ Frontmatter template for every generated `.cvh/agents/<role>/persona.md` (keep �
 name: <role>
 description: Use PROACTIVELY when <trigger condition for this role>
 model: inherit
-tools: [read_file, glob, grep, execute_command]
 scope: files-only | read-only | gated-writes
 activation: on-enter <column-id> runs run_agent(<task-id>)
 ---
@@ -201,9 +200,9 @@ Pipeline skeleton (ids/order must match board; backlog first, ready last):
 ```json
 {"id":"development","title":"Development","columns":[{"id":"dev","title":"Dev","persona":"developer"},{"id":"review","title":"Review","persona":"reviewer","gatekeeperSensor":"cargo check"},{"id":"ready","title":"Ready","terminal":true}]}
 ```
-Tool-policy skeleton (AND-semantics: effective = globalEnabled && stageOverrides; global false cannot be re-enabled):
+Tool-policy skeleton (authoritative stageOverrides per role/column; tools dynamically assembled in backend):
 ```json
-{"globalEnabled":{"read_file":true,"glob":true,"grep":true,"execute_command":true,"edit_file":true,"write_file":true,"web_search":true,"web_fetch":true,"subagent":true},"stageOverrides":{"dev":{"web_search":false},"review":{"edit_file":false,"write_file":false}}}
+{"stageOverrides":{"dev":{"read_file":true,"write_file":true,"edit_file":true,"advance_task":true},"review":{"read_file":true,"edit_file":false,"write_file":false,"advance_task":true}}}
 ```
 
 Rules (apply to every step):
@@ -279,7 +278,7 @@ pub fn is_tool_active_for_agent(
     tool_policy: &crate::config::ToolPolicyConfig,
     role: &str,
     stage_id: Option<&str>,
-    agent_allowed_tools: Option<&[String]>,
+    _agent_allowed_tools: Option<&[String]>,
 ) -> bool {
     let effective_stage = stage_id.unwrap_or(role);
     let is_orch = role.to_lowercase().contains("orchestrat")
@@ -341,9 +340,8 @@ pub fn is_tool_active_for_agent(
     {
         return false;
     }
-    if !agent_allows_tool(agent_allowed_tools, name) {
-        return false;
-    }
+    // ToolPolicyConfig (stage_overrides / per-role) is the authoritative source of truth.
+    // Persona YAML frontmatter 'tools: [...]' is no longer required or enforced as a gate.
     true
 }
 
@@ -375,31 +373,30 @@ pub async fn compile_primed_system_prompt_with_tools(
             .collect()
     };
 
-    let tools_line = format!("tools: [{}]", resolved_tools.join(", "));
-
     // 1. Role Persona: directory path (.cvh/agents/<role>/persona.md) → built-in fallback.
+    // YAML frontmatter does NOT store allowed tools; any legacy 'tools:' line is stripped.
     let persona_path = crate::config::agent_persona_path(repo_root, role);
     if persona_path.is_file() {
         if let Ok(persona_text) = tokio::fs::read_to_string(&persona_path).await {
-            let sanitized_persona = crate::config::update_frontmatter_tools(&persona_text, &tools_line);
+            let sanitized_persona = crate::config::strip_frontmatter_tools(&persona_text);
             sections.push(format!("# Role Persona: {}\n\n{}", role, sanitized_persona.trim()));
         } else if role == "cvh-dev" {
-            let sanitized = crate::config::update_frontmatter_tools(BUILTIN_CVH_DEV_PROMPT, &tools_line);
+            let sanitized = crate::config::strip_frontmatter_tools(BUILTIN_CVH_DEV_PROMPT);
             sections.push(sanitized);
         } else if role == "developer" {
-            let sanitized = crate::config::update_frontmatter_tools(BUILTIN_DEVELOPER_PROMPT, &tools_line);
+            let sanitized = crate::config::strip_frontmatter_tools(BUILTIN_DEVELOPER_PROMPT);
             sections.push(sanitized);
         } else {
-            sections.push(format!("---\n{}\n---\n# Role Persona: {}\nYou are an expert AI agent in {}.", tools_line, role, role));
+            sections.push(format!("# Role Persona: {}\nYou are an expert AI agent in {}.", role, role));
         }
     } else if role == "cvh-dev" {
-        let sanitized = crate::config::update_frontmatter_tools(BUILTIN_CVH_DEV_PROMPT, &tools_line);
+        let sanitized = crate::config::strip_frontmatter_tools(BUILTIN_CVH_DEV_PROMPT);
         sections.push(sanitized);
     } else if role == "developer" {
-        let sanitized = crate::config::update_frontmatter_tools(BUILTIN_DEVELOPER_PROMPT, &tools_line);
+        let sanitized = crate::config::strip_frontmatter_tools(BUILTIN_DEVELOPER_PROMPT);
         sections.push(sanitized);
     } else {
-        sections.push(format!("---\n{}\n---\n# Role Persona: {}\nYou are an expert AI agent in {}.", tools_line, role, role));
+        sections.push(format!("# Role Persona: {}\nYou are an expert AI agent in {}.", role, role));
     }
 
     // 1b. Per-agent rules: `.cvh/agents/<role>/rules/*.md`, alphabetical.
@@ -435,7 +432,14 @@ pub async fn compile_primed_system_prompt_with_tools(
         }
     }
 
-    // 2. Dynamic Tool Instructions & Execution Mandates
+    // 2. Dynamic Tool Instructions & Execution Mandates ("отдельная склейка" backend-authoritative)
+    let mut tool_sections = Vec::new();
+    let tools_line = format!("tools: [{}]", resolved_tools.join(", "));
+    tool_sections.push(format!(
+        "# Authorized Tools (Backend-Authoritative)\n{}\nThese tools are authorized and dynamically assembled by the backend engine.",
+        tools_line
+    ));
+
     let has_fs_tools = resolved_tools.iter().any(|t| {
         matches!(t.as_str(), "read_file" | "write_file" | "edit_file" | "execute_command" | "glob" | "grep")
     });
@@ -443,7 +447,6 @@ pub async fn compile_primed_system_prompt_with_tools(
         matches!(t.as_str(), "subagent" | "subagent_bg" | "collect_subagent")
     });
 
-    let mut tool_sections = Vec::new();
     if has_fs_tools {
         let active_fs_tools: Vec<&str> = ["read_file", "write_file", "edit_file", "glob", "grep", "execute_command"]
             .into_iter()
@@ -2097,19 +2100,20 @@ pub async fn execute_tool(
             );
         }
     }
-
-    // Subagent boundary vs Parent Agent Policy (§ 2.8, § 2.16 & Invariant 2.32):
-    let is_subagent = task_id.map(|t| t.contains(".sub-") || t.contains(":sub:")).unwrap_or(false);
-    if is_subagent {
-        if !agent_allows_tool(agent_allowed_tools, normalized_tool_name) {
+    if let Some(allowed) = agent_allowed_tools {
+        if !agent_allows_tool(Some(allowed), normalized_tool_name) {
             bail!(
-                "PermissionDenied: Инструмент '{}' запрещён для субагента (§ 2.8)",
+                "PermissionDenied: Инструмент '{}' отключен конфигурацией агента",
                 normalized_tool_name
             );
         }
-    } else if !agent_allows_tool(agent_allowed_tools, normalized_tool_name) {
+    }
+
+    // Subagent boundary (§ 2.8, § 2.16 & Invariant 2.32):
+    let is_subagent = task_id.map(|t| t.contains(".sub-") || t.contains(":sub:")).unwrap_or(false);
+    if is_subagent && agent_allowed_tools.is_some() && !agent_allows_tool(agent_allowed_tools, normalized_tool_name) {
         bail!(
-            "PermissionDenied: Инструмент '{}' запрещён настройками агента (setting.allowed_tools)",
+            "PermissionDenied: Инструмент '{}' запрещён для субагента (§ 2.8)",
             normalized_tool_name
         );
     }
@@ -6518,8 +6522,7 @@ where
         .await
         .unwrap_or_default();
 
-    // Bi-directional synchronization of allowed tools into YAML frontmatter of persona.md (§ 2.21)
-    let _ = crate::config::sync_tool_policies_to_personas(&config.repo_root, &tool_policy).await;
+    // Tool permissions are dynamically evaluated from ToolPolicyConfig without touching persona.md.
 
     // Best-effort per-agent overrides (missing/broken → defaults).
     let agent_setting = load_agent_setting(&config.repo_root, &config.role).await;

@@ -4470,7 +4470,6 @@ pub async fn run_agent(
                         "content": &token,
                         "token": &token
                     });
-                    let _ = app_inner.emit("agent:token", &payload);
                     let _ = app_inner.emit("agent:output", &payload);
                 }
                 AgentEvent::Output(output) => {
@@ -4495,9 +4494,32 @@ pub async fn run_agent(
                     );
                 }
                 AgentEvent::ToolResult { id, name, result, success } => {
+                    let sanitized_result = if result.len() > 65536 {
+                        let half = 32768;
+                        let head_end = result
+                            .char_indices()
+                            .map(|(i, _)| i)
+                            .take_while(|&i| i <= half)
+                            .last()
+                            .unwrap_or(0);
+                        let tail_target = result.len() - half;
+                        let tail_start = result
+                            .char_indices()
+                            .map(|(i, _)| i)
+                            .find(|&i| i >= tail_target)
+                            .unwrap_or(result.len());
+                        format!(
+                            "{}\n\n... [IPC payload truncated ({} bytes total). Full output in SQLite] ...\n\n{}",
+                            &result[..head_end],
+                            result.len(),
+                            &result[tail_start..]
+                        )
+                    } else {
+                        result
+                    };
                     let _ = app_inner.emit(
                         "agent:tool_result",
-                        serde_json::json!({ "taskId": tid_inner, "id": id, "name": name, "result": result, "success": success }),
+                        serde_json::json!({ "taskId": tid_inner, "id": id, "name": name, "result": sanitized_result, "success": success }),
                     );
                 }
                 AgentEvent::TurnStart { turn } => {
