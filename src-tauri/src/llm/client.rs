@@ -234,6 +234,8 @@ impl LlmClient {
 
         let mut stream = response.bytes_stream().eventsource();
         let mut tool_calls_in_progress: HashMap<usize, (String, String, String)> = HashMap::new();
+        let mut first_chunk_sent = false;
+        let mut pending_usage: Option<StreamChunk> = None;
 
         while let Some(item) = stream.next().await {
             match item {
@@ -244,6 +246,11 @@ impl LlmClient {
                     }
 
                     if let Ok(chunk) = serde_json::from_str::<OpenAIChatChunk>(data) {
+                        if !first_chunk_sent {
+                            first_chunk_sent = true;
+                            let _ = tx.send(StreamChunk::FirstChunk).await;
+                        }
+
                         // Telemetry / Usage delta if available (e.g. DeepSeek / OpenAI prompt cache hit).
                         // Raw usage is logged so a zero cache_read can be attributed to the
                         // proxy payload (missing cached_tokens) rather than to our parser.
@@ -256,12 +263,12 @@ impl LlmClient {
                                 "CVH [llm_client] usage raw={} parsed input={} output={} cache_read={} cache_creation={}",
                                 usage, input_tokens, output_tokens, cache_read, cache_creation
                             );
-                            let _ = tx.send(StreamChunk::Usage {
+                            pending_usage = Some(StreamChunk::Usage {
                                 input_tokens,
                                 output_tokens,
                                 cache_read_tokens: cache_read,
                                 cache_creation_tokens: cache_creation,
-                            }).await;
+                            });
                         }
 
                         if let Some(choices) = chunk.choices {
@@ -336,6 +343,11 @@ impl LlmClient {
                     })
                     .await;
             }
+        }
+
+        // Emit telemetry usage chunk if captured during stream, strictly after all tool calls are flushed
+        if let Some(usage_chunk) = pending_usage.take() {
+            let _ = tx.send(usage_chunk).await;
         }
 
         let _ = tx.send(StreamChunk::Done).await;

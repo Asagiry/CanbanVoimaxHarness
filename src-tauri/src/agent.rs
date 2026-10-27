@@ -4485,6 +4485,12 @@ Messages count: {}
                 break;
             }
             match chunk {
+                StreamChunk::FirstChunk => {
+                    if first_token_instant.is_none() {
+                        first_token_instant = Some(std::time::Instant::now());
+                    }
+                    last_token_instant = Some(std::time::Instant::now());
+                }
                 StreamChunk::Token(token) => {
                     if first_token_instant.is_none() {
                         first_token_instant = Some(std::time::Instant::now());
@@ -5082,6 +5088,12 @@ Messages count: {}
                 break;
             }
             match chunk {
+                StreamChunk::FirstChunk => {
+                    if synth_first_token_instant.is_none() {
+                        synth_first_token_instant = Some(std::time::Instant::now());
+                    }
+                    synth_last_token_instant = Some(std::time::Instant::now());
+                }
                 StreamChunk::Token(token) => {
                     if synth_first_token_instant.is_none() {
                         synth_first_token_instant = Some(std::time::Instant::now());
@@ -7043,6 +7055,12 @@ Messages count: {}
             }
 
             match chunk {
+                StreamChunk::FirstChunk => {
+                    if first_token_instant.is_none() {
+                        first_token_instant = Some(std::time::Instant::now());
+                    }
+                    last_token_instant = Some(std::time::Instant::now());
+                }
                 StreamChunk::Token(token) => {
                     if first_token_instant.is_none() {
                         first_token_instant = Some(std::time::Instant::now());

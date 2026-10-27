@@ -19,6 +19,7 @@ import {
   CheckCheck,
   Check,
   User,
+  ShieldAlert,
   AlertTriangle,
   Info,
   Target,
@@ -1289,9 +1290,56 @@ export default function DrawerActivityStream({
               );
             }
 
-            // User steer message
+            // User steer message or Gatekeeper Sensor rejection
             if (activity?.type === 'user' || activity?.type === 'steer') {
               const images = Array.isArray(activity?.images) ? activity.images : [];
+              const isSensorRejection = Boolean(
+                activity?.content?.includes('[ОТКЛОНЕНО СЕНСОРОМ') ||
+                activity?.content?.includes('[SENSOR REJECTED') ||
+                activity?.content?.includes('SENSOR REJECTED:')
+              );
+
+              if (isSensorRejection) {
+                return (
+                  <div
+                    key={key}
+                    className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-amber-500/20 bg-amber-500/10 p-3.5 shadow-xs"
+                  >
+                    <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-amber-500/20 text-[10px] font-mono">
+                      <div className="flex items-center space-x-1.5 text-amber-500 dark:text-amber-400 font-medium">
+                        <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
+                        <span>{t('drawer.sensorRejection')}</span>
+                      </div>
+                    </div>
+                    {images.length > 0 && (
+                      <div className="flex items-center gap-2 mb-2.5 flex-wrap">
+                        {images.map((imgUrl, i) => (
+                          <div
+                            key={i}
+                            onClick={() => handleOpenLightbox(imgUrl, `${t('drawer.attachImage')} ${i + 1}`)}
+                            className="relative rounded-lg overflow-hidden border border-amber-500/20 max-w-[240px] max-h-40 bg-[#f4f4f5] dark:bg-[#161b22] shadow-xs group cursor-zoom-in"
+                          >
+                            <img
+                              src={imgUrl}
+                              alt={`${t('drawer.attachImage')} ${i + 1}`}
+                              className="w-full h-full max-h-40 object-cover group-hover:scale-105 transition-transform duration-200 cursor-zoom-in"
+                            />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none">
+                              <span className="p-1 rounded-full bg-black/60 text-white shadow-xs">
+                                <ZoomIn className="w-3.5 h-3.5" />
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed select-text font-sans">
+                      <MarkdownContent content={activity?.content ?? ''} onImageClick={handleOpenLightbox} />
+                    </div>
+                  </div>
+                );
+              }
+
               return (
                 <div
                   key={key}
