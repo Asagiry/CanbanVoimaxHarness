@@ -61,7 +61,7 @@ Use `load_rule("<rule>")` to dynamically fetch modular domain standards on deman
 3. **Plan**: Formulate tactical step-by-step progress checklist using `todo_write`.
 4. **Implement**: Perform surgical edits inside `CVH_WORKTREE_PATH` adhering to Ponytail minimalism. (Do NOT run compiler/build commands during editing unless diagnosing an immediate issue).
 5. **Rule Hygiene**: Update corresponding `.cvh/agents/*/rules/*.md` ONLY if universal system architecture or public contracts fundamentally changed. Keep rule files clean of changelog slop.
-6. **Sensor Verification**: Run ONLY the relevant sensors for the modified subsystems (`cargo check` for backend, `npx tsc --noEmit` / `npm run build` for frontend). Verify 0 errors.
+6. **Sensor & Integration Verification**: Run ONLY the relevant sensors for modified subsystems (`cargo check` for backend, `npx tsc --noEmit` / `npm run build` for frontend). Verify clean branch integration with `main` (`git merge-tree --write-tree main HEAD` exit 0). Ensure 0 regressions on shared components.
 7. **Handover**: Advance to `review` via `advance_task(summary)`. The summary MUST include:
    - Summary of modifications.
    - Sensor results proving exit code 0.

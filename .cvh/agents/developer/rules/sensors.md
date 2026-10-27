@@ -40,6 +40,16 @@ npm run build
 ### 2.3 Non-Code / Prompt / Rule Modifications
 - If only documentation, rule markdown files, or configuration files were changed without code edits, no heavy compilation commands are required. Verify file formatting and valid syntax.
 
+### 2.4 Branch Integration & Zero-Regression Pre-Flight Sensor
+```bash
+git merge-tree --write-tree main HEAD
+```
+- **Acceptance Criteria**: Exit code `0` with zero merge conflicts.
+- **Concurrent Main Invariant (CLE)**:
+  - **Cue**: When completing a task in an isolated worktree or touching shared components (`KanbanCard.tsx`, stores, migrations) while `main` advances with concurrent PRs.
+  - **Lesson**: Always sync with `main` (`git merge origin/main`) and verify clean mergeability (`git merge-tree --write-tree main HEAD` exit 0) before handover; diff against `origin/main` to ensure concurrently merged features are never overwritten.
+  - **Evidence**: Task CVH-022 rejected on Gate 6 & Gate 4 due to stale base `7b038b7` clobbering CVH-021's Todo progress bar in `KanbanCard.tsx` (resolved in `fa09d41`, approved in `37eae88`).
+
 ---
 
 ## 3. Sensor Output in Handover Summary
@@ -47,8 +57,9 @@ npm run build
 When invoking `advance_task(summary)`, the Developer MUST include explicit sensor proof:
 ```text
 - Sensors Verified:
-  1. cargo check --manifest-path src-tauri/Cargo.toml: EXIT 0 (0 errors)
-  2. cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings: EXIT 0 (0 warnings)
-  3. npx tsc --noEmit: EXIT 0 (0 type errors)
+  1. git merge-tree --write-tree main HEAD: EXIT 0 (0 merge conflicts)
+  2. cargo check --manifest-path src-tauri/Cargo.toml: EXIT 0 (0 errors)
+  3. cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings: EXIT 0 (0 warnings)
+  4. npx tsc --noEmit: EXIT 0 (0 type errors)
 ```
 Failure to include concrete sensor results will cause the Reviewer to reject the task under Gate 2.

@@ -1,0 +1,43 @@
+{
+  "taskId": "CVH-022",
+  "task": "persist-hook-states-checkmarks",
+  "title": "Галочка хуков / Persist hook execution state and checkmark badges across restarts",
+  "branch": "feat/CVH-022",
+  "commitHash": "9fec185",
+  "mergeCommitHash": "37eae88",
+  "commitMessage": "feat(hooks): persist hook states and checkmark badges across restarts",
+  "author": "developer (fullstack-lead)",
+  "verdict": "APPROVED_AFTER_REVISIONS",
+  "date": "2026-10-27T15:25:00.000Z",
+  "timestamp": 1793116800000,
+  "sensors": {
+    "cargo_check": "pass (0 errors)",
+    "cargo_clippy": "pass (0 warnings)",
+    "cargo_test": "pass (184 passed, 0 failed)",
+    "tsc_check": "pass (0 type errors)",
+    "oxlint": "pass (0 warnings, 0 errors)",
+    "npm_run_build": "pass (clean bundle in dist/)",
+    "git_merge_tree": "pass (0 merge conflicts against main)"
+  },
+  "files": [
+    "src-tauri/src/agent.rs",
+    "src-tauri/src/db.rs",
+    "src-tauri/src/commands/tasks.rs",
+    "src/types/index.ts",
+    "src/stores/boardStore.ts",
+    "src/components/card/KanbanCard.tsx"
+  ],
+  "summary": "Fixed hook checkmark badges disappearing on app restart: (1) Added hook_states column to tasks table in SQLite and field to Task struct in agent.rs; (2) Implemented record_task_hook_result in commands/tasks.rs across on_enter and on_leave execution points; (3) Added double hydration in boardStore.ts via localStorage (cvh_task_hook_states) for zero-flicker reload; (4) Resolved KanbanCard hook badge resolution to support store, task, and parent hooks with columnId matching; (5) Preserved CVH-021 Todo progress bar and added hookStates check to areCardPropsEqual; (6) Added mergeability sensor to gatekeeper_sensor.bat/sh and evolved modular rules in sensors.md, role-developer.md, and review-checklist.md.",
+  "ftrAnalysis": {
+    "firstTimeRight": false,
+    "ftrScore": "50%",
+    "verdict": "APPROVED_AFTER_REVISIONS",
+    "rootCauses": [
+      {
+        "cause": "Gate 6 (Clean Merge) & Gate 4 (Zero Regression) Violation: Feature branch branched from stale commit 7b038b7",
+        "detail": "Worktree feature branch feat/CVH-022 fell behind main by 7 commits. The initial implementation modified an outdated KanbanCard.tsx, obliterating CVH-021's Todo checklist progress strip and creating merge conflicts across 5 files upon PR merge.",
+        "resolution": "Merged origin/main into feat/CVH-022, resolved all conflicts cleanly, preserved both hookStates and CVH-021 Todo checklist strip in KanbanCard.tsx, verified clean fast-forward merge (fa09d41, 37eae88), and authoritatively hardened gatekeeper_sensor with git merge-tree --write-tree main HEAD."
+      }
+    ]
+  }
+}

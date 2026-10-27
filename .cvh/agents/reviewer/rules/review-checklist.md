@@ -72,8 +72,9 @@ In accordance with the Harness2.0 selection protocol, review candidate code arti
 - Surgical diffs adhering to 1-3 line Ponytail minimalism.
 - Code Simplifier: favor early returns over deep nested ladders; unwind single-use pass-through wrapper functions.
 
-### Gate 6: Stage Routing Protocol
-- Merge feature branch into `main` and execute routing verdict (see `verdict-routing.md`).
+### Gate 6: Clean Merge, Origin Integration & Stage Routing Protocol
+- **Clean Mergeability Check**: Verify clean mergeability against `main` (`git merge-tree --write-tree main <branch>` exits 0). Reject immediately with `CHANGES_REQUESTED` if merge conflicts exist or if the branch silently clobbers recent commits from `main`.
+- **Merge & Origin Integration**: Merge approved feature branch into `main`, push to remote `origin` (`git push origin main`), and execute routing verdict (see `verdict-routing.md`).
 
 
 ---

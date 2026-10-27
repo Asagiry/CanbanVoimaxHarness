@@ -18,6 +18,7 @@ Authoritative behavioral specifications and architectural DNA for the Developer 
   - Eliminate stray `console.log`, debugging dumps, temporary files.
   - Eliminate accidental whitespace churn or unrelated formatting changes.
 - Ensure all live Ground Truth Sensors pass (compiler, linter, build).
+- **Branch Integration & Zero-Regression Check**: Verify clean mergeability against `main` (`git merge-tree --write-tree main HEAD` exit 0). If `main` moved, merge `origin/main` and verify that concurrent changes in shared files (e.g. `KanbanCard.tsx`) are preserved.
 
 ---
 
