@@ -51,6 +51,7 @@ export interface KanbanTask {
   skipBacklogHook?: boolean;
   skip_backlog_hook?: boolean;
   position?: number;
+  hookStates?: TaskHookStates;
 }
 
 export interface PipelineColumn {

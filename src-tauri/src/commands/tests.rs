@@ -803,6 +803,7 @@ use std::path::PathBuf;
             created_at: 0,
             updated_at: 0,
             position: None,
+            hook_states: None,
         };
 
         let modified = heal_task_board_and_column(&mut orphaned_task, &custom_cfg);
@@ -837,6 +838,7 @@ use std::path::PathBuf;
             created_at: 0,
             updated_at: 0,
             position: None,
+            hook_states: None,
         };
 
         let modified_valid = heal_task_board_and_column(&mut valid_task, &custom_cfg);
@@ -1237,6 +1239,7 @@ use std::path::PathBuf;
             attachments: None,
             cover_image: None,
             position: None,
+            hook_states: None,
         };
         save_tasks_to_disk(&base, &[task1]).await.expect("save task1");
 
@@ -1276,6 +1279,7 @@ use std::path::PathBuf;
             attachments: None,
             cover_image: None,
             position: None,
+            hook_states: None,
         };
         save_tasks_to_disk(&base, &[t1.clone(), task2]).await.expect("save task2");
 
@@ -1383,6 +1387,7 @@ use std::path::PathBuf;
             attachments: None,
             cover_image: None,
             position: None,
+            hook_states: None,
         };
         save_tasks_to_disk(&base, &[task]).await.expect("save task");
 
@@ -1447,6 +1452,7 @@ use std::path::PathBuf;
             attachments: None,
             cover_image: None,
             position: None,
+            hook_states: None,
         };
 
         // 1. When task.model is set, it strictly overrides global model and column model!
@@ -1652,6 +1658,7 @@ Write code.
             attachments: None,
             cover_image: None,
             position: None,
+            hook_states: None,
         };
         save_tasks_to_disk(&base, &[task]).await.expect("save task");
 
@@ -1843,6 +1850,7 @@ Write code.
             attachments: None,
             cover_image: None,
             position: None,
+            hook_states: None,
         };
         save_tasks_to_disk(&base, &[parent_task]).await.expect("save parent task");
 
@@ -2072,6 +2080,7 @@ Write code.
             attachments: None,
             cover_image: None,
             position: None,
+            hook_states: None,
         };
         save_tasks_to_disk(&base, &[parent]).await.expect("save parent");
 
@@ -2245,6 +2254,7 @@ Write code.
             attachments: None,
             cover_image: None,
             position: None,
+            hook_states: None,
         };
 
         // Parent CVH-300.1 waiting on Child CVH-300.1.1
@@ -2274,6 +2284,7 @@ Write code.
             attachments: None,
             cover_image: None,
             position: None,
+            hook_states: None,
         };
 
         // Child CVH-300.1.1 running in dev
@@ -2303,6 +2314,7 @@ Write code.
             attachments: None,
             cover_image: None,
             position: None,
+            hook_states: None,
         };
 
         save_tasks_to_disk(&base, &[gp, parent, child]).await.expect("save tasks");
@@ -2402,6 +2414,7 @@ Write code.
             attachments: None,
             cover_image: None,
             position: None,
+            hook_states: None,
         };
         save_tasks_to_disk(&base, &[task]).await.expect("save task");
 
@@ -2536,6 +2549,7 @@ Write code.
             attachments: None,
             cover_image: None,
             position: None,
+            hook_states: None,
         };
         save_tasks_to_disk(&base, &[task]).await.expect("save task");
 
@@ -2607,6 +2621,7 @@ Write code.
             created_at: chrono::Utc::now().timestamp_millis(),
             updated_at: chrono::Utc::now().timestamp_millis(),
             position: None,
+            hook_states: None,
         };
 
         // Step 1: Early persistence (create_task fix)
@@ -2686,6 +2701,7 @@ Write code.
             created_at: 0,
             updated_at: 0,
             position: None,
+            hook_states: None,
         };
 
         let task_b = Task {
@@ -2714,6 +2730,7 @@ Write code.
             created_at: 0,
             updated_at: 0,
             position: None,
+            hook_states: None,
         };
 
         // Disk has only Task A
@@ -2942,6 +2959,7 @@ Write code.
             created_at: chrono::Utc::now().timestamp_millis(),
             updated_at: chrono::Utc::now().timestamp_millis(),
             position: None,
+            hook_states: None,
         };
         save_tasks_to_disk(&tmp, &[task]).await.expect("save task");
 
@@ -3065,6 +3083,7 @@ Write code.
                 created_at: 0,
                 updated_at: 0,
                 position: None,
+                hook_states: None,
             },
             Task {
                 id: "CVH-500.1".to_string(),
@@ -3092,6 +3111,7 @@ Write code.
                 created_at: 0,
                 updated_at: 0,
                 position: None,
+                hook_states: None,
             },
             Task {
                 id: "CVH-501".to_string(),
@@ -3119,6 +3139,7 @@ Write code.
                 created_at: 0,
                 updated_at: 0,
                 position: None,
+                hook_states: None,
             },
             Task {
                 id: "CVH-501.1".to_string(),
@@ -3146,6 +3167,7 @@ Write code.
                 created_at: 0,
                 updated_at: 0,
                 position: None,
+                hook_states: None,
             },
         ];
 
@@ -3187,6 +3209,7 @@ Write code.
             created_at: 0,
             updated_at: 0,
             position: None,
+            hook_states: None,
         };
         let child_active = Task {
             id: "CVH-600.1".to_string(),
@@ -3214,6 +3237,7 @@ Write code.
             created_at: 0,
             updated_at: 0,
             position: None,
+            hook_states: None,
         };
         save_tasks_to_disk(&tmp, &[parent_active, child_active]).await.expect("save active tasks");
 

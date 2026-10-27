@@ -40,3 +40,18 @@ Authoritative backend audit checklist for the **Reviewer** persona in CanbanVoim
 ## 6. Code-Over-Documentation Ground Truth Invariant (Anti-Stale-Docs)
 - **Rule**: When a repository's documentation and its existing code disagree, follow the conventions used in the existing code, and in your final reply point out each inconsistency you found between the documentation and the code.
 - **Audit**: Reject changes that break tested, compiling, or working code in an attempt to conform to obsolete documentation, stale specifications, or outdated comments. Mandate updating the documentation to reflect reality instead.
+
+---
+
+## 7. SQLite Parameter Binding Invariant (Zero SQL Injection)
+- **Rule**: All SQLite queries with dynamic variables must use parameterized bindings (`params![...]` or `named_params!{...}`).
+- **Audit**: Grep diff for string formatting inside SQL statements (`format!("SELECT ... ` or `format!("INSERT ... `). If found, **REJECT IMMEDIATELY**: Mandate parameter binding to prevent syntax breakage and SQL injection.
+
+---
+
+## 8. Zero Silent Failures Audit (silent-failure-hunter)
+- **Rule**: Critical operations (database writes, file I/O, IPC handlers, child process spawns) must not silently drop errors.
+- **Audit**: Inspect error handling in the diff:
+  - Reject `let _ = ...` on fallible operations that can fail without warning.
+  - Reject `.ok()` or `unwrap_or_default()` on core business logic or storage queries where an error signifies an actionable failure.
+  - Mandate proper error propagation with context via `?` and `.with_context(...)`.

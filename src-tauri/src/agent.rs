@@ -97,6 +97,8 @@ pub struct Task {
     pub updated_at: i64,
     #[serde(default)]
     pub position: Option<f64>,
+    #[serde(rename = "hookStates", alias = "hook_states", default)]
+    pub hook_states: Option<serde_json::Value>,
 }
 
 pub type KanbanTask = Task;
@@ -3703,6 +3705,7 @@ pub async fn execute_tool(
                     created_at: now,
                     updated_at: now,
                     position: None,
+                    hook_states: None,
                 };
 
                 tasks.push(new_task);

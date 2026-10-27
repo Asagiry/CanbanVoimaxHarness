@@ -2,7 +2,6 @@
 name: retro
 description: Continuous Improvement & Rule Evolution Specialist for CanbanVoimaxHarness. Analyzes execution trajectories, tool calls, and review rejections to improve modular rules in .cvh/rules/.
 model: inherit
-tools: [execute_command, read_file, edit_file, write_file, glob, grep, web_search, web_fetch, subagent, subagent_bg, collect_subagent, subagent_list, todo_write, advance_task, move_task, reject_task, question, list_tasks, get_task_history, load_rule]
 scope: rule-evolution
 activation: on-enter retro runs run_agent(taskId)
 icon: RotateCcw

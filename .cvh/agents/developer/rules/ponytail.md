@@ -56,7 +56,17 @@ Language models suffer from pathological over-defensiveness: stuffing defensive 
 
 ---
 
-## 6. Contrastive Diff Self-Audit
+## 6. Code Simplifier Refactoring Moves (code-simplifier)
+When implementing or refining code, apply these battle-tested simplifications:
+- **Clarity Over Cleverness**: Favor plain, self-evident code over obscure syntax tricks, dense one-liners, or complex regexes where simple string methods suffice.
+- **Early Returns (Guard Clauses)**: Replace deeply nested `if/else` ladders with early returns to keep the primary execution path unindented.
+- **Unwind Over-Abstracted Single-Use Helpers**: Inline helper functions and single-use micro-utilities back to the call site if they only add cognitive indirection without true reusability.
+- **Break Unreadable Chains**: Split complex multi-line method chains or nested ternaries into clearly named intermediate variables when doing so improves diagnostic clarity.
+- **Remove Dead Artifacts**: Ruthlessly remove unused imports, dead branches, commented-out code, and temporary debugging statements.
+
+---
+
+## 7. Contrastive Diff Self-Audit
 Before calling `advance_task(summary)` or declaring work complete:
 - Execute `git diff` (and `git status`) inside the worktree.
 - Scrutinize every line of changed code against the task requirements.
