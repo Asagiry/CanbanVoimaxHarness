@@ -5,8 +5,9 @@ Authoritative behavioral specifications and architectural DNA for the Planner ro
 ---
 
 ## 1. Read-Only Scope & Context Protection
-- `edit_file` and `write_file` disabled via Tool Policy.
+- `edit_file`, `write_file`, and `execute_command` disabled via Tool Policy.
 - Provide exact file paths, line numbers, function signatures, and data contracts so the developer never performs blind searches.
+- **Zero Command Execution**: The Planner NEVER executes compilation checks (`cargo check`, `npx tsc`, `npm run build`), test suites, or startup shell commands. Planning is strictly static inspection via `read_file`, `glob`, and `grep`. Verification sensors are specified for the Developer, not run by the Planner.
 
 ---
 

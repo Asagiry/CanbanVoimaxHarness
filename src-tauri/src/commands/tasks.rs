@@ -417,6 +417,9 @@ pub async fn save_tasks(tasks: Vec<Task>, state: State<'_, AppState>) -> Result<
             if t.handover_summary.is_none() && dt.handover_summary.is_some() {
                 t.handover_summary = dt.handover_summary.clone();
             }
+            if t.hook_states.is_none() && dt.hook_states.is_some() {
+                t.hook_states = dt.hook_states.clone();
+            }
         }
     }
 
@@ -678,6 +681,45 @@ pub async fn create_task(
 }
 
 #[allow(clippy::too_many_arguments)]
+pub fn record_task_hook_result(
+    task: &mut Task,
+    stage_id: &str,
+    hook_type: &str,
+    hook_name: &str,
+    started_at: i64,
+    duration_ms: u64,
+    success: bool,
+    exit_code: Option<i32>,
+    stdout: &str,
+    stderr: &str,
+    error: Option<&str>,
+) {
+    let mut map: serde_json::Map<String, serde_json::Value> = task
+        .hook_states
+        .as_ref()
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+
+    map.insert(
+        hook_type.to_string(),
+        serde_json::json!({
+            "hookName": hook_name,
+            "stageId": stage_id,
+            "hookType": hook_type,
+            "status": if success { "success" } else { "failed" },
+            "startedAt": started_at,
+            "durationMs": duration_ms,
+            "exitCode": exit_code,
+            "stdout": stdout,
+            "stderr": stderr,
+            "error": error,
+        }),
+    );
+
+    task.hook_states = Some(serde_json::Value::Object(map));
+}
+
+#[allow(clippy::too_many_arguments)]
 pub async fn internal_create_task(
     root: &Path,
     title: String,
@@ -763,6 +805,7 @@ pub async fn internal_create_task(
         created_at: now,
         updated_at: now,
         position: Some(next_pos),
+        hook_states: None,
     };
 
     // RACE CONDITION PREVENTION (AGENTS.md):
@@ -835,6 +878,7 @@ pub async fn internal_create_task(
                             "hookName": hook_rel
                         }));
                     }
+                    let hook_started_at = chrono::Utc::now().timestamp_millis();
                     let ctx = HookContext {
                         task_id: task_id.clone(),
                         task_title: title.clone(),
@@ -847,6 +891,7 @@ pub async fn internal_create_task(
                     };
                     match execute_hook(&hook_path, root, &ctx, None).await {
                         Ok(res) => {
+                            let duration_ms = (chrono::Utc::now().timestamp_millis() - hook_started_at).max(0) as u64;
                             if !res.success {
                                 let err_details = if !res.stderr.trim().is_empty() {
                                     res.stderr.trim().to_string()
@@ -855,6 +900,19 @@ pub async fn internal_create_task(
                                 } else {
                                     format!("Exit code {:?}", res.exit_code)
                                 };
+                                record_task_hook_result(
+                                    &mut new_task,
+                                    &stage_id,
+                                    "on_enter",
+                                    &hook_rel,
+                                    hook_started_at,
+                                    duration_ms,
+                                    false,
+                                    res.exit_code,
+                                    &res.stdout,
+                                    &res.stderr,
+                                    Some(&err_details),
+                                );
                                 if let Some(app) = app_handle {
                                     let _ = app.emit("hook:finish", serde_json::json!({
                                         "taskId": task_id,
@@ -880,6 +938,19 @@ pub async fn internal_create_task(
                                 ).await;
                                 new_task.verdict = Some("CHANGES_REQUESTED".to_string());
                             } else {
+                                record_task_hook_result(
+                                    &mut new_task,
+                                    &stage_id,
+                                    "on_enter",
+                                    &hook_rel,
+                                    hook_started_at,
+                                    duration_ms,
+                                    true,
+                                    res.exit_code,
+                                    &res.stdout,
+                                    &res.stderr,
+                                    None,
+                                );
                                 if let Some(app) = app_handle {
                                     let _ = app.emit("hook:finish", serde_json::json!({
                                         "taskId": task_id,
@@ -895,7 +966,21 @@ pub async fn internal_create_task(
                             }
                         }
                         Err(e) => {
+                            let duration_ms = (chrono::Utc::now().timestamp_millis() - hook_started_at).max(0) as u64;
                             let err_details = e.to_string();
+                            record_task_hook_result(
+                                &mut new_task,
+                                &stage_id,
+                                "on_enter",
+                                &hook_rel,
+                                hook_started_at,
+                                duration_ms,
+                                false,
+                                None,
+                                "",
+                                &err_details,
+                                Some(&err_details),
+                            );
                             if let Some(app) = app_handle {
                                 let _ = app.emit("hook:finish", serde_json::json!({
                                     "taskId": task_id,
@@ -933,6 +1018,7 @@ pub async fn internal_create_task(
     if let Some(t) = updated_tasks.iter_mut().find(|t| t.id == new_task.id) {
         t.worktree_path = new_task.worktree_path.clone();
         t.branch = new_task.branch.clone();
+        t.hook_states = new_task.hook_states.clone();
         t.updated_at = Utc::now().timestamp_millis();
         new_task = t.clone();
     } else {
@@ -944,6 +1030,7 @@ pub async fn internal_create_task(
             if let Some(t) = guard.iter_mut().find(|t| t.id == new_task.id) {
                 t.worktree_path = new_task.worktree_path.clone();
                 t.branch = new_task.branch.clone();
+                t.hook_states = new_task.hook_states.clone();
                 t.updated_at = new_task.updated_at;
                 new_task.stage_id = t.stage_id.clone();
                 new_task.status = t.status.clone();
@@ -1129,6 +1216,7 @@ pub async fn internal_create_subtask(
         created_at: now,
         updated_at: now,
         position: Some(next_subtask_pos),
+        hook_states: tasks[parent_idx].hook_states.clone(),
     };
 
     let parent_task_clone = tasks[parent_idx].clone();
@@ -1649,6 +1737,7 @@ pub fn propagate_parent_subtask_advance(
                 created_at: now,
                 updated_at: now,
                 position: Some(next_subtask_pos),
+                hook_states: tasks[parent_idx].hook_states.clone(),
             };
 
             if has_autorun {
@@ -1846,6 +1935,7 @@ pub async fn internal_move_task_stage(
                         "hookName": hook_rel
                     }));
                 }
+                let hook_started_at = chrono::Utc::now().timestamp_millis();
                 let ctx = HookContext {
                     task_id: current_task.id.clone(),
                     task_title: current_task.title.clone(),
@@ -1859,6 +1949,7 @@ pub async fn internal_move_task_stage(
                 let hook_res = execute_hook(&hook_path, root, &ctx, None).await;
                 match hook_res {
                     Ok(res) => {
+                        let duration_ms = (chrono::Utc::now().timestamp_millis() - hook_started_at).max(0) as u64;
                         if !res.success {
                             let err_details = if !res.stderr.trim().is_empty() {
                                 res.stderr.trim().to_string()
@@ -1867,6 +1958,19 @@ pub async fn internal_move_task_stage(
                             } else {
                                 format!("Exit code {:?}", res.exit_code)
                             };
+                            record_task_hook_result(
+                                current_task,
+                                &scol.id,
+                                "on_leave",
+                                hook_rel,
+                                hook_started_at,
+                                duration_ms,
+                                false,
+                                res.exit_code,
+                                &res.stdout,
+                                &res.stderr,
+                                Some(&err_details),
+                            );
 
                             if let Some(app) = app_handle {
                                 let _ = app.emit("hook:finish", serde_json::json!({
@@ -1942,6 +2046,20 @@ pub async fn internal_move_task_stage(
                             ));
                         }
 
+                        record_task_hook_result(
+                            current_task,
+                            &scol.id,
+                            "on_leave",
+                            hook_rel,
+                            hook_started_at,
+                            duration_ms,
+                            true,
+                            res.exit_code,
+                            &res.stdout,
+                            &res.stderr,
+                            None,
+                        );
+
                         if let Some(app) = app_handle {
                             let _ = app.emit("hook:finish", serde_json::json!({
                                 "taskId": current_task.id,
@@ -1956,7 +2074,21 @@ pub async fn internal_move_task_stage(
                         apply_worktree_from_hook_stdout(current_task, &res.stdout);
                     }
                     Err(e) => {
+                        let duration_ms = (chrono::Utc::now().timestamp_millis() - hook_started_at).max(0) as u64;
                         let err_details = e.to_string();
+                        record_task_hook_result(
+                            current_task,
+                            &scol.id,
+                            "on_leave",
+                            hook_rel,
+                            hook_started_at,
+                            duration_ms,
+                            false,
+                            None,
+                            "",
+                            &err_details,
+                            Some(&err_details),
+                        );
                         if let Some(app) = app_handle {
                             let _ = app.emit("hook:finish", serde_json::json!({
                                 "taskId": current_task.id,
@@ -2287,6 +2419,7 @@ pub async fn internal_move_task_stage(
                     "hookName": hook_rel
                 }));
             }
+            let hook_started_at = chrono::Utc::now().timestamp_millis();
             let ctx = HookContext {
                 task_id: current_task.id.clone(),
                 task_title: current_task.title.clone(),
@@ -2300,6 +2433,7 @@ pub async fn internal_move_task_stage(
             let hook_res = execute_hook(&hook_path, root, &ctx, None).await;
             match hook_res {
                 Ok(res) => {
+                    let duration_ms = (chrono::Utc::now().timestamp_millis() - hook_started_at).max(0) as u64;
                     if !res.success {
                         let err_details = if !res.stderr.trim().is_empty() {
                             res.stderr.trim().to_string()
@@ -2308,6 +2442,19 @@ pub async fn internal_move_task_stage(
                         } else {
                             format!("Exit code {:?}", res.exit_code)
                         };
+                        record_task_hook_result(
+                            current_task,
+                            &canonical_target_stage_id,
+                            "on_enter",
+                            &hook_rel,
+                            hook_started_at,
+                            duration_ms,
+                            false,
+                            res.exit_code,
+                            &res.stdout,
+                            &res.stderr,
+                            Some(&err_details),
+                        );
 
                         if let Some(app) = app_handle {
                             let _ = app.emit("hook:finish", serde_json::json!({
@@ -2383,6 +2530,20 @@ pub async fn internal_move_task_stage(
                         ));
                     }
 
+                    record_task_hook_result(
+                        current_task,
+                        &canonical_target_stage_id,
+                        "on_enter",
+                        &hook_rel,
+                        hook_started_at,
+                        duration_ms,
+                        true,
+                        res.exit_code,
+                        &res.stdout,
+                        &res.stderr,
+                        None,
+                    );
+
                     if let Some(app) = app_handle {
                         let _ = app.emit("hook:finish", serde_json::json!({
                             "taskId": current_task.id,
@@ -2397,7 +2558,21 @@ pub async fn internal_move_task_stage(
                     apply_worktree_from_hook_stdout(current_task, &res.stdout);
                 }
                 Err(e) => {
+                    let duration_ms = (chrono::Utc::now().timestamp_millis() - hook_started_at).max(0) as u64;
                     let err_details = e.to_string();
+                    record_task_hook_result(
+                        current_task,
+                        &canonical_target_stage_id,
+                        "on_enter",
+                        &hook_rel,
+                        hook_started_at,
+                        duration_ms,
+                        false,
+                        None,
+                        "",
+                        &err_details,
+                        Some(&err_details),
+                    );
                     if let Some(app) = app_handle {
                         let _ = app.emit("hook:finish", serde_json::json!({
                             "taskId": current_task.id,
@@ -2994,6 +3169,7 @@ pub async fn internal_advance_task_to_stage(
                         "hookName": hook_rel
                     }));
                 }
+                let hook_started_at = chrono::Utc::now().timestamp_millis();
                 let ctx = HookContext {
                     task_id: current_task.id.clone(),
                     task_title: current_task.title.clone(),
@@ -3007,6 +3183,7 @@ pub async fn internal_advance_task_to_stage(
                 let hook_res = execute_hook(&hook_path, root, &ctx, None).await;
                 match hook_res {
                     Ok(res) => {
+                        let duration_ms = (chrono::Utc::now().timestamp_millis() - hook_started_at).max(0) as u64;
                         if !res.success {
                             let err_details = if !res.stderr.trim().is_empty() {
                                 res.stderr.trim().to_string()
@@ -3015,6 +3192,20 @@ pub async fn internal_advance_task_to_stage(
                             } else {
                                 format!("Exit code {:?}", res.exit_code)
                             };
+                            record_task_hook_result(
+                                &mut current_task,
+                                &sc.id,
+                                "on_leave",
+                                hook_rel,
+                                hook_started_at,
+                                duration_ms,
+                                false,
+                                res.exit_code,
+                                &res.stdout,
+                                &res.stderr,
+                                Some(&err_details),
+                            );
+                            let _ = crate::db::db_upsert_task(root, &current_task);
                             if let Some(app) = app_handle {
                                 let _ = app.emit("hook:finish", serde_json::json!({
                                     "taskId": current_task.id,
@@ -3041,6 +3232,20 @@ pub async fn internal_advance_task_to_stage(
                                 app_handle,
                             ).await;
                         }
+                        record_task_hook_result(
+                            &mut current_task,
+                            &sc.id,
+                            "on_leave",
+                            hook_rel,
+                            hook_started_at,
+                            duration_ms,
+                            true,
+                            res.exit_code,
+                            &res.stdout,
+                            &res.stderr,
+                            None,
+                        );
+                        let _ = crate::db::db_upsert_task(root, &current_task);
                         if let Some(app) = app_handle {
                             let _ = app.emit("hook:finish", serde_json::json!({
                                 "taskId": current_task.id,
@@ -3055,7 +3260,22 @@ pub async fn internal_advance_task_to_stage(
                         apply_worktree_from_hook_stdout(&mut current_task, &res.stdout);
                     }
                     Err(e) => {
+                        let duration_ms = (chrono::Utc::now().timestamp_millis() - hook_started_at).max(0) as u64;
                         let err_details = e.to_string();
+                        record_task_hook_result(
+                            &mut current_task,
+                            &sc.id,
+                            "on_leave",
+                            hook_rel,
+                            hook_started_at,
+                            duration_ms,
+                            false,
+                            None,
+                            "",
+                            &err_details,
+                            Some(&err_details),
+                        );
+                        let _ = crate::db::db_upsert_task(root, &current_task);
                         if let Some(app) = app_handle {
                             let _ = app.emit("hook:finish", serde_json::json!({
                                 "taskId": current_task.id,
@@ -3223,6 +3443,7 @@ pub async fn internal_advance_task_to_stage(
                     "hookName": hook_rel
                 }));
             }
+            let hook_started_at = chrono::Utc::now().timestamp_millis();
             let ctx = HookContext {
                 task_id: current_task.id.clone(),
                 task_title: current_task.title.clone(),
@@ -3236,6 +3457,7 @@ pub async fn internal_advance_task_to_stage(
             let hook_res = execute_hook(&hook_path, root, &ctx, None).await;
             match hook_res {
                 Ok(res) => {
+                    let duration_ms = (chrono::Utc::now().timestamp_millis() - hook_started_at).max(0) as u64;
                     if !res.success {
                         let err_details = if !res.stderr.trim().is_empty() {
                             res.stderr.trim().to_string()
@@ -3244,6 +3466,20 @@ pub async fn internal_advance_task_to_stage(
                         } else {
                             format!("Exit code {:?}", res.exit_code)
                         };
+                        record_task_hook_result(
+                            &mut current_task,
+                            &target_col.id,
+                            "on_enter",
+                            &hook_rel,
+                            hook_started_at,
+                            duration_ms,
+                            false,
+                            res.exit_code,
+                            &res.stdout,
+                            &res.stderr,
+                            Some(&err_details),
+                        );
+                        let _ = crate::db::db_upsert_task(root, &current_task);
                         if let Some(app) = app_handle {
                             let _ = app.emit("hook:finish", serde_json::json!({
                                 "taskId": current_task.id,
@@ -3270,6 +3506,20 @@ pub async fn internal_advance_task_to_stage(
                             app_handle,
                         ).await;
                     }
+                    record_task_hook_result(
+                        &mut current_task,
+                        &target_col.id,
+                        "on_enter",
+                        &hook_rel,
+                        hook_started_at,
+                        duration_ms,
+                        true,
+                        res.exit_code,
+                        &res.stdout,
+                        &res.stderr,
+                        None,
+                    );
+                    let _ = crate::db::db_upsert_task(root, &current_task);
                     if let Some(app) = app_handle {
                         let _ = app.emit("hook:finish", serde_json::json!({
                             "taskId": current_task.id,
@@ -3284,7 +3534,22 @@ pub async fn internal_advance_task_to_stage(
                     apply_worktree_from_hook_stdout(&mut current_task, &res.stdout);
                 }
                 Err(e) => {
+                    let duration_ms = (chrono::Utc::now().timestamp_millis() - hook_started_at).max(0) as u64;
                     let err_details = e.to_string();
+                    record_task_hook_result(
+                        &mut current_task,
+                        &target_col.id,
+                        "on_enter",
+                        &hook_rel,
+                        hook_started_at,
+                        duration_ms,
+                        false,
+                        None,
+                        "",
+                        &err_details,
+                        Some(&err_details),
+                    );
+                    let _ = crate::db::db_upsert_task(root, &current_task);
                     if let Some(app) = app_handle {
                         let _ = app.emit("hook:finish", serde_json::json!({
                             "taskId": current_task.id,

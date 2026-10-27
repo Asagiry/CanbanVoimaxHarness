@@ -147,11 +147,12 @@ pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
                  priority TEXT,
                  current_tokens INTEGER,
                  skip_worktree INTEGER NOT NULL DEFAULT 0,
-                 created_at INTEGER NOT NULL,
-                 updated_at INTEGER NOT NULL,
-                 position REAL NOT NULL DEFAULT 0.0,
-                 FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE CASCADE
-             );
+                  created_at INTEGER NOT NULL,
+                  updated_at INTEGER NOT NULL,
+                  position REAL NOT NULL DEFAULT 0.0,
+                  hook_states TEXT,
+                  FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE CASCADE
+              );
              CREATE INDEX IF NOT EXISTS idx_tasks_stage ON tasks(stage_id);
              CREATE INDEX IF NOT EXISTS idx_tasks_board ON tasks(board_id);
              CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id);
@@ -206,6 +207,7 @@ pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
         let _ = conn.execute("ALTER TABLE tasks ADD COLUMN attachments TEXT", []);
         let _ = conn.execute("ALTER TABLE tasks ADD COLUMN tags TEXT", []);
         let _ = conn.execute("ALTER TABLE tasks ADD COLUMN position REAL NOT NULL DEFAULT 0.0", []);
+        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN hook_states TEXT", []);
         let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_stage_pos ON tasks(stage_id, position)", []);
 
         auto_migrate_if_needed(&mut conn, root);
@@ -262,6 +264,7 @@ fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) {
                     let custom_flow_json = t.custom_flow.as_ref().and_then(|v| serde_json::to_string(v).ok());
                     let attachments_json = t.attachments.as_ref().and_then(|v| serde_json::to_string(v).ok());
                     let tags_json = t.tags.as_ref().and_then(|v| serde_json::to_string(v).ok());
+                    let hook_states_json = t.hook_states.as_ref().and_then(|v| serde_json::to_string(v).ok());
                     let skip_wt = if t.skip_worktree.unwrap_or(false) { 1i64 } else { 0i64 };
                     let cur_tokens = t.current_tokens.map(|v| v as i64);
                     let sub_idx = t.subtask_index.map(|v| v as i64);
@@ -272,8 +275,8 @@ fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) {
                             id, title, description, stage_id, board_id, worktree_path, branch, verdict,
                             custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
                             handover_summary, cover_image, priority, current_tokens, skip_worktree,
-                            created_at, updated_at, attachments, tags, position
-                        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)",
+                            created_at, updated_at, attachments, tags, position, hook_states
+                        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)",
                         params![
                             t.id,
                             t.title,
@@ -299,6 +302,7 @@ fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) {
                             attachments_json,
                             tags_json,
                             pos_val,
+                            hook_states_json,
                         ],
                     );
 
@@ -482,7 +486,7 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
             "SELECT id, title, description, stage_id, board_id, worktree_path, branch, verdict,
                     custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
                     handover_summary, cover_image, priority, current_tokens, skip_worktree,
-                    created_at, updated_at, attachments, tags, position
+                    created_at, updated_at, attachments, tags, position, hook_states
              FROM tasks
              ORDER BY position ASC, created_at ASC",
         )
@@ -514,12 +518,13 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
             let attachments_raw: Option<String> = row.get(21).ok();
             let tags_raw: Option<String> = row.get(22).ok();
             let position: Option<f64> = row.get(23).ok();
+            let hook_states_raw: Option<String> = row.get(24).ok();
 
             Ok((
                 id, title, description, stage_id, board_id, worktree_path, branch, verdict,
                 custom_flow_raw, status, model, parent_id, subtask_index_i64, waiting_for_subtask_id,
                 handover_summary, cover_image, priority, current_tokens_i64, skip_worktree_i64,
-                created_at, updated_at, attachments_raw, tags_raw, position,
+                created_at, updated_at, attachments_raw, tags_raw, position, hook_states_raw,
             ))
         })
         .map_err(|e| format!("Query tasks failed: {}", e))?;
@@ -549,12 +554,13 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
             id, title, description, stage_id, board_id, worktree_path, branch, verdict,
             custom_flow_raw, status, model, parent_id, subtask_index_i64, waiting_for_subtask_id,
             handover_summary, cover_image, priority, current_tokens_i64, skip_worktree_i64,
-            created_at, updated_at, attachments_raw, tags_raw, position,
+            created_at, updated_at, attachments_raw, tags_raw, position, hook_states_raw,
         ) = row_res.map_err(|e| format!("Row extraction failed: {}", e))?;
 
         let custom_flow = custom_flow_raw.and_then(|s| serde_json::from_str(&s).ok());
         let attachments = attachments_raw.and_then(|s| serde_json::from_str(&s).ok());
         let tags = tags_raw.and_then(|s| serde_json::from_str(&s).ok());
+        let hook_states = hook_states_raw.and_then(|s| serde_json::from_str(&s).ok());
         let todos = todos_by_task.remove(&id);
 
         tasks.push(Task {
@@ -583,6 +589,7 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
             created_at,
             updated_at,
             position,
+            hook_states,
         });
     }
 
@@ -597,7 +604,7 @@ pub fn db_get_task(root: &Path, task_id: &str) -> Result<Option<Task>, String> {
             "SELECT id, title, description, stage_id, board_id, worktree_path, branch, verdict,
                     custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
                     handover_summary, cover_image, priority, current_tokens, skip_worktree,
-                    created_at, updated_at, attachments, tags, position
+                    created_at, updated_at, attachments, tags, position, hook_states
              FROM tasks
              WHERE id = ?1 OR LOWER(id) = LOWER(?1)
              LIMIT 1",
@@ -637,6 +644,7 @@ pub fn db_get_task(root: &Path, task_id: &str) -> Result<Option<Task>, String> {
     let attachments_raw: Option<String> = row.get(21).ok();
     let tags_raw: Option<String> = row.get(22).ok();
     let position: Option<f64> = row.get(23).ok();
+    let hook_states_raw: Option<String> = row.get(24).ok();
 
     // Load todos for this task
     let mut todo_stmt = conn
@@ -658,6 +666,7 @@ pub fn db_get_task(root: &Path, task_id: &str) -> Result<Option<Task>, String> {
     let custom_flow = custom_flow_raw.and_then(|s| serde_json::from_str(&s).ok());
     let attachments = attachments_raw.and_then(|s| serde_json::from_str(&s).ok());
     let tags = tags_raw.and_then(|s| serde_json::from_str(&s).ok());
+    let hook_states = hook_states_raw.and_then(|s| serde_json::from_str(&s).ok());
 
     Ok(Some(Task {
         id,
@@ -685,6 +694,7 @@ pub fn db_get_task(root: &Path, task_id: &str) -> Result<Option<Task>, String> {
         created_at,
         updated_at,
         position,
+        hook_states,
     }))
 }
 
@@ -698,6 +708,7 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
     let custom_flow_json = task.custom_flow.as_ref().and_then(|v| serde_json::to_string(v).ok());
     let attachments_json = task.attachments.as_ref().and_then(|v| serde_json::to_string(v).ok());
     let tags_json = task.tags.as_ref().and_then(|v| serde_json::to_string(v).ok());
+    let hook_states_json = task.hook_states.as_ref().and_then(|v| serde_json::to_string(v).ok());
     let skip_wt = if task.skip_worktree.unwrap_or(false) { 1i64 } else { 0i64 };
     let cur_tokens = task.current_tokens.map(|v| v as i64);
     let sub_idx = task.subtask_index.map(|v| v as i64);
@@ -708,8 +719,8 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
             id, title, description, stage_id, board_id, worktree_path, branch, verdict,
             custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
             handover_summary, cover_image, priority, current_tokens, skip_worktree,
-            created_at, updated_at, attachments, tags, position
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)
+            created_at, updated_at, attachments, tags, position, hook_states
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)
         ON CONFLICT(id) DO UPDATE SET
             title = excluded.title,
             description = excluded.description,
@@ -732,7 +743,8 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
             updated_at = excluded.updated_at,
             attachments = excluded.attachments,
             tags = excluded.tags,
-            position = excluded.position",
+            position = excluded.position,
+            hook_states = excluded.hook_states",
         params![
             task.id,
             task.title,
@@ -758,6 +770,7 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
             attachments_json,
             tags_json,
             pos_val,
+            hook_states_json,
         ],
     )
     .map_err(|e| format!("Failed to upsert task {}: {}", task.id, e))?;
@@ -793,6 +806,7 @@ pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
         let custom_flow_json = task.custom_flow.as_ref().and_then(|v| serde_json::to_string(v).ok());
         let attachments_json = task.attachments.as_ref().and_then(|v| serde_json::to_string(v).ok());
         let tags_json = task.tags.as_ref().and_then(|v| serde_json::to_string(v).ok());
+        let hook_states_json = task.hook_states.as_ref().and_then(|v| serde_json::to_string(v).ok());
         let skip_wt = if task.skip_worktree.unwrap_or(false) { 1i64 } else { 0i64 };
         let cur_tokens = task.current_tokens.map(|v| v as i64);
         let sub_idx = task.subtask_index.map(|v| v as i64);
@@ -803,8 +817,8 @@ pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
                 id, title, description, stage_id, board_id, worktree_path, branch, verdict,
                 custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
                 handover_summary, cover_image, priority, current_tokens, skip_worktree,
-                created_at, updated_at, attachments, tags, position
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)
+                created_at, updated_at, attachments, tags, position, hook_states
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)
             ON CONFLICT(id) DO UPDATE SET
                 title = excluded.title,
                 description = excluded.description,
@@ -827,7 +841,8 @@ pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
                 updated_at = excluded.updated_at,
                 attachments = excluded.attachments,
                 tags = excluded.tags,
-                position = excluded.position",
+                position = excluded.position,
+                hook_states = excluded.hook_states",
             params![
                 task.id,
                 task.title,
@@ -853,6 +868,7 @@ pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
                 attachments_json,
                 tags_json,
                 pos_val,
+                hook_states_json,
             ],
         )
         .map_err(|e| format!("Failed to upsert task {}: {}", task.id, e))?;
@@ -1734,6 +1750,20 @@ mod tests {
             created_at: 1000,
             updated_at: 1000,
             position: Some(0.0),
+            hook_states: Some(serde_json::json!({
+                "on_enter": {
+                    "hookName": "check.bat",
+                    "stageId": "dev",
+                    "hookType": "on_enter",
+                    "status": "success",
+                    "startedAt": 1000,
+                    "durationMs": 150,
+                    "exitCode": 0,
+                    "stdout": "OK",
+                    "stderr": "",
+                    "error": null
+                }
+            })),
         };
 
         db_upsert_task(root, &task1).expect("upsert task1");
@@ -1743,6 +1773,11 @@ mod tests {
         assert_eq!(loaded.title, "Task 10");
         assert_eq!(loaded.tags, Some(vec!["backend".to_string(), "sqlite".to_string()]));
         assert_eq!(loaded.current_tokens, Some(1500));
+        assert!(loaded.hook_states.is_some());
+        assert_eq!(
+            loaded.hook_states.as_ref().unwrap()["on_enter"]["status"],
+            "success"
+        );
         let todos = loaded.todos.expect("todos present");
         assert_eq!(todos.len(), 2);
         assert_eq!(todos[0].id, "td-1");
@@ -1796,6 +1831,7 @@ mod tests {
             created_at: 1010,
             updated_at: 1010,
             position: Some(1.0),
+            hook_states: None,
         };
         db_upsert_task(root, &subtask).expect("upsert subtask");
 
@@ -1849,6 +1885,7 @@ mod tests {
             created_at: 1000,
             updated_at: 1000,
             position: None,
+            hook_states: None,
         };
         db_upsert_task(root, &high_task).expect("upsert high task");
 

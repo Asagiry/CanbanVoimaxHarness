@@ -404,10 +404,16 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   );
 
   // Hook nodes data
-  const taskHooks = useBoardStore(useShallow((s) => s.hookStates[task.id]));
+  const storeHooks = useBoardStore(useShallow((s) => s.hookStates[task.id]));
+  const parentHooks = useBoardStore(useShallow((s) => (task.parentId ? s.hookStates[task.parentId] : undefined)));
+  const taskHooks = storeHooks || task.hookStates || parentHooks;
 
   const enterHookName = taskColumn?.hooks?.['on_enter'];
-  const enterHookState = taskHooks?.on_enter;
+  const rawEnterHookState = taskHooks?.on_enter;
+  const enterHookState =
+    rawEnterHookState && (!rawEnterHookState.stageId || rawEnterHookState.stageId === task.columnId)
+      ? rawEnterHookState
+      : undefined;
 
   const leaveHookName =
     taskColumn?.hooks?.['on_leave'] ||
@@ -875,6 +881,7 @@ function areCardPropsEqual(prev: KanbanCardProps, next: KanbanCardProps): boolea
     a.isTimerRunning === b.isTimerRunning &&
     a.returnsCount === b.returnsCount &&
     a.attachments === b.attachments &&
+    a.hookStates === b.hookStates &&
     areTodosEqual(a.todos, b.todos)
   );
 }

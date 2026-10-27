@@ -146,7 +146,8 @@
       "write_file": false,
       "create_task": false,
       "edit_file": false,
-      "complete_task": false
+      "complete_task": false,
+      "execute_command": false
     },
     "backlog": {
       "complete_task": false,
@@ -201,7 +202,8 @@
       "edit_file": false,
       "web_search": false,
       "subagent": false,
-      "create_task": false
+      "create_task": false,
+      "execute_command": false
     }
   },
   "toolSettings": {

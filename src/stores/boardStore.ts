@@ -278,6 +278,9 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
       : (typeof raw.current_tokens === 'number' ? raw.current_tokens : undefined),
     skipWorktree,
     position: typeof raw.position === 'number' && Number.isFinite(raw.position) ? raw.position : undefined,
+    hookStates: (raw.hookStates || raw.hook_states) && typeof (raw.hookStates || raw.hook_states) === 'object'
+      ? (raw.hookStates || raw.hook_states)
+      : undefined,
   };
 }
 
@@ -332,6 +335,7 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
         createdAt: t.createdAt || Date.now(),
         updatedAt: Date.now(),
         skipWorktree: t.skipWorktree ?? false,
+        hookStates: t.hookStates ?? null,
       };
     });
     await invoke('save_tasks', { tasks: backendPayload });
@@ -424,6 +428,30 @@ function mapBackendTaskToKanban(t: any): KanbanTask {
   };
 }
 
+const HOOK_STATES_KEY = 'cvh_task_hook_states';
+
+function loadCachedHookStates(): Record<string, TaskHookStates> {
+  if (typeof window === 'undefined' || !window.localStorage) return {};
+  try {
+    const raw = window.localStorage.getItem(HOOK_STATES_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (err) {
+    console.warn('Failed to load hook states from localStorage:', err);
+    return {};
+  }
+}
+
+function saveCachedHookStates(states: Record<string, TaskHookStates>): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(HOOK_STATES_KEY, JSON.stringify(states));
+  } catch (err) {
+    console.warn('Failed to save hook states to localStorage:', err);
+  }
+}
+
 export const useBoardStore = create<BoardState>((set, get) => ({
   columns: CANONICAL_BOARD_COLUMNS,
   tasks: [], // Initialized with empty array - NO mock tasks!
@@ -437,27 +465,37 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   activeBoardId: 'development',
   isLoadingBoards: false,
   isBoardsLoaded: false,
-  hookStates: {},
+  hookStates: loadCachedHookStates(),
 
   setHookStart: ({ taskId, stageId, hookType, hookName }) => {
     set((state) => {
       const prev = state.hookStates[taskId] || {};
-      return {
-        hookStates: {
-          ...state.hookStates,
-          [taskId]: {
-            ...prev,
-            [hookType]: {
-              hookName,
-              stageId,
-              hookType,
-              status: 'running',
-              startedAt: Date.now(),
-              stdout: '',
-              stderr: '',
-            },
-          },
+      const nextTaskHookState: TaskHookStates = {
+        ...prev,
+        [hookType]: {
+          hookName,
+          stageId,
+          hookType,
+          status: 'running',
+          startedAt: Date.now(),
+          stdout: '',
+          stderr: '',
         },
+      };
+      const nextHookStates = {
+        ...state.hookStates,
+        [taskId]: nextTaskHookState,
+      };
+      saveCachedHookStates(nextHookStates);
+      const nextTasks = state.tasks.map((t) => {
+        if (t.id === taskId) {
+          return { ...t, hookStates: nextTaskHookState };
+        }
+        return t;
+      });
+      return {
+        hookStates: nextHookStates,
+        tasks: nextTasks,
       };
     });
   },
@@ -468,25 +506,35 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       const existing = prev[hookType];
       const startedAt = existing?.startedAt ?? Date.now();
       const durationMs = Date.now() - startedAt;
-      return {
-        hookStates: {
-          ...state.hookStates,
-          [taskId]: {
-            ...prev,
-            [hookType]: {
-              hookName: existing?.hookName || hookType,
-              stageId,
-              hookType,
-              status: success ? 'success' : 'failed',
-              startedAt,
-              durationMs,
-              exitCode: exitCode ?? null,
-              stdout: stdout || '',
-              stderr: stderr || '',
-              error,
-            },
-          },
+      const nextTaskHookState: TaskHookStates = {
+        ...prev,
+        [hookType]: {
+          hookName: existing?.hookName || hookType,
+          stageId,
+          hookType,
+          status: success ? 'success' : 'failed',
+          startedAt,
+          durationMs,
+          exitCode: exitCode ?? null,
+          stdout: stdout || '',
+          stderr: stderr || '',
+          error,
         },
+      };
+      const nextHookStates = {
+        ...state.hookStates,
+        [taskId]: nextTaskHookState,
+      };
+      saveCachedHookStates(nextHookStates);
+      const nextTasks = state.tasks.map((t) => {
+        if (t.id === taskId) {
+          return { ...t, hookStates: nextTaskHookState };
+        }
+        return t;
+      });
+      return {
+        hookStates: nextHookStates,
+        tasks: nextTasks,
       };
     });
   },
@@ -497,16 +545,34 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       if (!hookType) {
         const next = { ...state.hookStates };
         delete next[taskId];
-        return { hookStates: next };
+        saveCachedHookStates(next);
+        const nextTasks = state.tasks.map((t) => {
+          if (t.id === taskId) {
+            const copy = { ...t };
+            delete copy.hookStates;
+            return copy;
+          }
+          return t;
+        });
+        return { hookStates: next, tasks: nextTasks };
       }
       const prev = state.hookStates[taskId];
       const nextTaskHooks = { ...prev };
       delete nextTaskHooks[hookType];
+      const nextHookStates = {
+        ...state.hookStates,
+        [taskId]: nextTaskHooks,
+      };
+      saveCachedHookStates(nextHookStates);
+      const nextTasks = state.tasks.map((t) => {
+        if (t.id === taskId) {
+          return { ...t, hookStates: nextTaskHooks };
+        }
+        return t;
+      });
       return {
-        hookStates: {
-          ...state.hookStates,
-          [taskId]: nextTaskHooks,
-        },
+        hookStates: nextHookStates,
+        tasks: nextTasks,
       };
     });
   },
@@ -771,7 +837,18 @@ export const useBoardStore = create<BoardState>((set, get) => ({
             return task;
           })
           .sort(sortTasksByPosition);
-        set({ tasks: mapped, isTauriConnected: true, isLoadingTasks: false });
+        const prevHookStates = get().hookStates;
+        const nextHookStates: Record<string, TaskHookStates> = { ...prevHookStates };
+        for (const t of mapped) {
+          if (t.hookStates) {
+            nextHookStates[t.id] = {
+              ...nextHookStates[t.id],
+              ...t.hookStates,
+            };
+          }
+        }
+        saveCachedHookStates(nextHookStates);
+        set({ tasks: mapped, hookStates: nextHookStates, isTauriConnected: true, isLoadingTasks: false });
         return;
       }
     } catch (err) {
@@ -995,12 +1072,26 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const mapped = mapBackendTaskToKanban(rawTask);
     const { columns } = get();
     set((state) => {
+      let nextHookStates = state.hookStates;
+      if (mapped.hookStates) {
+        nextHookStates = {
+          ...state.hookStates,
+          [mapped.id]: {
+            ...state.hookStates[mapped.id],
+            ...mapped.hookStates,
+          },
+        };
+        saveCachedHookStates(nextHookStates);
+      }
       const exists = state.tasks.some((t) => t.id === mapped.id);
       const updatedTasks = exists
         ? state.tasks.map((t) => {
             if (t.id === mapped.id) {
               const preservedTodos = mapped.todos !== undefined ? mapped.todos : t.todos;
-              return { ...t, ...mapped, todos: preservedTodos };
+              const mergedHookStates = mapped.hookStates
+                ? { ...t.hookStates, ...mapped.hookStates }
+                : t.hookStates;
+              return { ...t, ...mapped, todos: preservedTodos, hookStates: mergedHookStates };
             }
             return t;
           })
@@ -1034,7 +1125,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
             return t;
           });
 
-      return { tasks: finalTasks.sort(sortTasksByPosition) };
+      return { tasks: finalTasks.sort(sortTasksByPosition), hookStates: nextHookStates };
     });
   },
 
@@ -1084,7 +1175,19 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       return t;
     });
 
-    set({ tasks: cleanedTasks.sort(sortTasksByPosition) });
+    const prevHookStates = get().hookStates;
+    const nextHookStates: Record<string, TaskHookStates> = { ...prevHookStates };
+    for (const t of mapped) {
+      if (t.hookStates) {
+        nextHookStates[t.id] = {
+          ...nextHookStates[t.id],
+          ...t.hookStates,
+        };
+      }
+    }
+    saveCachedHookStates(nextHookStates);
+
+    set({ tasks: cleanedTasks.sort(sortTasksByPosition), hookStates: nextHookStates });
   },
 
   addTask: async (input) => {
@@ -1275,6 +1378,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     for (const id of ids) {
       delete nextHookStates[id];
     }
+    saveCachedHookStates(nextHookStates);
     set({
       tasks: updatedTasks,
       hookStates: nextHookStates,

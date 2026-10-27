@@ -34,3 +34,10 @@ Authoritative behavioral specifications and architectural DNA for the Developer 
 
 ## 5. Worktree Isolation
 - All feature implementation takes place in dedicated Git worktrees (`worktrees/<task-slug>`). Never touch root directly on multi-stage boards.
+
+---
+
+## 6. Command Execution Discipline (Zero Unnecessary Commands)
+- **No Startup Commands**: Never execute `cargo check`, `npx tsc`, `npm run build`, or test commands on startup or during exploration. Initial inspection is strictly static (`read_file`, `glob`, `grep`).
+- **Subsystem-Targeted Verification**: Run compiler/linter sensors strictly at the verification stage, and ONLY for the subsystems touched (do NOT run backend checks for frontend-only changes; do NOT run frontend builds for backend-only changes).
+- **No Speculative Execution**: Shell commands must be strictly purposeful; never run commands without necessity.
