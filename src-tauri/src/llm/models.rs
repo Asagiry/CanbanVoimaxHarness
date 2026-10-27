@@ -334,6 +334,7 @@ impl TokenUsageStats {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload")]
 pub enum StreamChunk {
+    FirstChunk,
     Token(String),
     Thought(String),
     Output(String),

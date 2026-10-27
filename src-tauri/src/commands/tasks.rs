@@ -4492,6 +4492,29 @@ pub async fn run_agent(
                         "agent:tool_call",
                         serde_json::json!({ "taskId": tid_inner, "id": id, "name": name, "arguments": arguments }),
                     );
+
+                    let parsed_args = serde_json::from_str::<serde_json::Value>(&arguments)
+                        .unwrap_or_else(|_| serde_json::json!({ "raw": &arguments }));
+                    let tool_obj = serde_json::json!({
+                        "id": &id,
+                        "toolName": &name,
+                        "name": &name,
+                        "arguments": &arguments,
+                        "params": parsed_args,
+                        "status": "running",
+                        "timestamp": chrono::Utc::now().to_rfc3339(),
+                        "durationMs": 0,
+                    });
+                    let tool_item = crate::db::ActivityItem {
+                        id: id.clone(),
+                        item_type: "tool".to_string(),
+                        timestamp: chrono::Utc::now().to_rfc3339(),
+                        content: None,
+                        tool: Some(tool_obj),
+                        duration_ms: None,
+                        images: None,
+                    };
+                    let _ = crate::db::append_dialog_items(&root_inner, &tid_inner, std::slice::from_ref(&tool_item));
                 }
                 AgentEvent::ToolResult { id, name, result, success } => {
                     let sanitized_result = if result.len() > 65536 {
@@ -4519,8 +4542,47 @@ pub async fn run_agent(
                     };
                     let _ = app_inner.emit(
                         "agent:tool_result",
-                        serde_json::json!({ "taskId": tid_inner, "id": id, "name": name, "result": sanitized_result, "success": success }),
+                        serde_json::json!({ "taskId": tid_inner, "id": id, "name": name, "result": &sanitized_result, "success": success }),
                     );
+
+                    let status_str = if success { "success" } else { "failed" };
+                    let mut updated_item = None;
+                    if let Ok(items) = crate::db::load_dialog_items(&root_inner, &tid_inner) {
+                        if let Some(mut existing) = items.into_iter().find(|it| it.id == id) {
+                            let mut tool_val = existing.tool.take().unwrap_or_else(|| serde_json::json!({}));
+                            if let Some(obj) = tool_val.as_object_mut() {
+                                obj.insert("status".to_string(), serde_json::json!(status_str));
+                                obj.insert("stdout".to_string(), serde_json::json!(&sanitized_result));
+                                obj.insert("result".to_string(), serde_json::json!(&sanitized_result));
+                                if !success {
+                                    obj.insert("stderr".to_string(), serde_json::json!(&sanitized_result));
+                                }
+                            }
+                            existing.tool = Some(tool_val);
+                            updated_item = Some(existing);
+                        }
+                    }
+                    let item_to_save = updated_item.unwrap_or_else(|| {
+                        let tool_obj = serde_json::json!({
+                            "id": &id,
+                            "toolName": &name,
+                            "name": &name,
+                            "status": status_str,
+                            "stdout": &sanitized_result,
+                            "result": &sanitized_result,
+                            "timestamp": chrono::Utc::now().to_rfc3339(),
+                        });
+                        crate::db::ActivityItem {
+                            id: id.clone(),
+                            item_type: "tool".to_string(),
+                            timestamp: chrono::Utc::now().to_rfc3339(),
+                            content: None,
+                            tool: Some(tool_obj),
+                            duration_ms: None,
+                            images: None,
+                        }
+                    });
+                    let _ = crate::db::append_dialog_items(&root_inner, &tid_inner, std::slice::from_ref(&item_to_save));
                 }
                 AgentEvent::TurnStart { turn } => {
                     let _ = app_inner.emit(
@@ -4599,9 +4661,21 @@ pub async fn run_agent(
                         serde_json::json!({
                             "taskId": tid_inner,
                             "status": "finished",
-                            "response": final_response
+                            "response": &final_response
                         }),
                     );
+                    if !final_response.trim().is_empty() {
+                        let resp_item = crate::db::ActivityItem {
+                            id: uuid::Uuid::new_v4().to_string(),
+                            item_type: "output".to_string(),
+                            timestamp: chrono::Utc::now().to_rfc3339(),
+                            content: Some(final_response.clone()),
+                            tool: None,
+                            duration_ms: None,
+                            images: None,
+                        };
+                        let _ = crate::db::append_dialog_items(&root_inner, &tid_inner, std::slice::from_ref(&resp_item));
+                    }
                 }
                 AgentEvent::TaskUpdated { task_id, todos } => {
                     let _ = app_inner.emit(

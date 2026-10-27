@@ -1060,7 +1060,12 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
               ? { ...state.tokenOverrides, [taskId]: compactedTokens }
               : state.tokenOverrides;
 
-            if (currentFeed.length === 0 || items.length >= currentFeed.length || hasCompacted) {
+            if (
+              currentFeed.length === 0 ||
+              items.length >= currentFeed.length ||
+              hasCompacted ||
+              items[items.length - 1]?.id !== currentFeed[currentFeed.length - 1]?.id
+            ) {
               // Deduplicate questions and adjacent identical steer / user messages (§ 2.20 & Question Dedup)
               const dedupedItems: DrawerActivityItem[] = [];
               const loadedQuestionIds = new Set<string>();
