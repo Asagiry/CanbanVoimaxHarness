@@ -41,3 +41,14 @@ Boards are configured in `.cvh/boards.json` and mirrored in `.cvh/pipeline.json`
 - **Strict Board Isolation**: Tasks MUST strictly preserve their `board_id` across `advance_task`, agent loop completion, and UI moves. Cross-board hopping is forbidden.
 - **Autonomous Progression Scope**: `advance_task` and agent finalization MUST advance tasks through columns belonging to the task's own board (`task.board_id`). Tasks must never be abducted to another board simply because the user switched tabs or changed `active_board_id`.
 - **UI Drag & Drop**: Moving tasks in the UI preserves `task.boardId` unless explicitly re-assigned.
+
+
+---
+
+## 5. Multi-Stage Pipeline Topologies & Interactive Setup
+When creating or restructuring pipelines, refer to `load_rule("pipeline-setup")`.
+`cvh-dev` must interactively ask the user via `question` to select among standard topologies:
+1. **Standard Peer Review**: `backlog` ➔ `dev` (Developer) ➔ `review` (Reviewer) ➔ `ready`.
+2. **Full Cognitive Triad (CarSmash Model)**: `backlog` ➔ `plan` (Planner) ➔ `dev` (Developer) ➔ `review` (Reviewer) ➔ `retro` (Retro) ➔ `ready`.
+3. **Lean Solo**: `backlog` ➔ `dev` (Developer) ➔ `ready`.
+4. **Custom**: Defined interactively with the user.

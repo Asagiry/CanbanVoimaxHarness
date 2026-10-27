@@ -32,3 +32,14 @@ Each agent directory `.cvh/agents/<role>/setting` contains JSON configuration wi
 ```
 - **Priority & Precedence**: Values defined in `setting` take precedence over YAML frontmatter defaults.
 - **Color Invariants**: Gray (`#64748b`) and green (`#10b981`) colors are strictly reserved for system stages `backlog` and `ready` and forbidden for agents.
+
+
+---
+
+## 4. Persona Creation & Behavioral DNA Infusion
+When instantiating personas, `cvh-dev` must NEVER generate shallow placeholder prompts.
+Refer to `load_rule("pipeline-setup")` for the complete behavioral specifications:
+- **Developer**: OpenCode 4 Laws (anti-overengineering), Ponytail minimal diffs, Zero-TDD, contrastive diff self-audit.
+- **Reviewer**: Read-only (Tool Policy Level B), Presumption of Guilt, Three-Axis Review, Anthropic Claude Code convergence (immunity to historical pre-existing bugs, diff-only re-review, line-by-line actionable references).
+- **Planner**: Read-only, context window protection for developer, subagent explorer, question-based clarification.
+- **Retro**: Engine code prohibition (`src/` strictly forbidden), Karpathy LLM-Wiki knowledge ingest, Cue-Lesson-Evidence protocol, automated audit hardening.

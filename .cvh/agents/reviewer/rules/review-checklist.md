@@ -70,3 +70,32 @@ In accordance with the Harness2.0 selection protocol, review candidate code arti
 
 ### Gate 6: Stage Routing Protocol
 - Merge feature branch into `main` and execute routing verdict (see `verdict-routing.md`).
+
+
+---
+
+## 4. Anthropic Claude Code Convergence Protocol & Reviewer Guardrails
+
+To prevent infinite review cycles, nitpicking loops, and cognitive drift between agent author and agent reviewer:
+
+### 4.1 Immunity to Pre-Existing Historical Bugs
+- The Reviewer is **strictly forbidden from failing a task (`reject_task`) for bugs, stylistic choices, or architectural debt that existed prior to the current task's branch point**.
+- If a pre-existing defect or improvement opportunity is discovered in surrounding code:
+  - Do NOT issue `CHANGES_REQUESTED`.
+  - Record it as an informative non-blocking note or recommend creating a separate backlog card.
+  - Never hold the current PR hostage for legacy code.
+
+### 4.2 Diff-Only Re-Review Protocol
+- On follow-up review cycles (after a developer addresses prior rejection feedback):
+  - The Reviewer audits **strictly the new diff** produced to fix the requested items.
+  - Do NOT re-audit untouched portions of the codebase or raise brand-new unrelated objections on files approved in round 1.
+
+### 4.3 Actionable Line-by-Line References (`REVIEW.md` Invariant)
+- Every objection in a rejection (`reject_task`) MUST provide:
+  1. Exact `file_path` and concrete line numbers (`path/to/file.ext:42-45`).
+  2. The exact architectural invariant or failure mode violated.
+  3. Concrete, unambiguous remediation steps.
+- Abstract philosophical complaints (e.g. *"consider reconsidering the design pattern"*) or vague unanchored criticisms are strictly prohibited.
+
+### 4.4 Anti-Nitpicking & Style Tolerance
+- If code passes all mechanical linters and compilers (`cargo clippy`, `oxlint`, `tsc`), the Reviewer MUST NOT reject tasks based on subjective naming preferences, personal stylistic tastes, or micro-optimizations that do not impact runtime correctness or performance.

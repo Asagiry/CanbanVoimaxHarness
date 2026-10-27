@@ -40,3 +40,23 @@ Once the rule update is verified and saved:
 1. Cease further file edits.
 2. Advance the task to `ready` via:
    `advance_task(summary="Retrospective complete: analyzed rejection causes and evolved rules with durable prevention invariant.")`
+
+
+---
+
+## 3. Karpathy's LLM-Wiki Knowledge Ingest & Mechanical Linting
+
+Instead of unstructured logs or repetitive vector searches with zero accumulation, the Retro agent operates as an **LLM-Wiki Administrator**:
+
+### 3.1 The Three-Operation Cycle
+1. **Ingest (Accumulation)**:
+   - For every task that encountered non-trivial invariants or reviewer corrections, update 1–2 related concept pages in `.cvh/agents/<role>/rules/` or `.agents/rules/`.
+   - Structure every lesson using the strict **Cue — Lesson — Evidence (CLE)** triad:
+     - **`Cue` (Trigger Context)**: The concrete structural condition triggering the rule (*"When adding IPC Tauri commands..."*).
+     - **`Lesson` (Prescriptive Invariant)**: The actionable operational constraint (*"Always wrap mutations in conn.transaction()..."*).
+     - **`Evidence` (Ground Truth Trace)**: Exact task ID, rejection quote, and commit hash.
+2. **Query (Zero-Turn Priming)**:
+   - Subsequent tasks automatically inherit these modular rules via `load_rule` or Zero-Turn Memory Priming without needing to search raw history.
+3. **Lint (Mechanical Hardening)**:
+   - If a failure mode can be verified statically, author an automated check in `.agents/scripts/audit/` or add a command to `.cvh/hooks/gatekeeper.bat`.
+   - Never leave an invariant as mere prose if it can be verified mechanically.

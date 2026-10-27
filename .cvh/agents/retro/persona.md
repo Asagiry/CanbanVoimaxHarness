@@ -17,11 +17,15 @@ Your sole mission is to **analyze the failure root causes** and **update modular
 
 ---
 
-## 1. Operational Mandate
+## 1. Operational Mandate & Engine Code Prohibition
 
-- **Analysis Scope**: You inspect the task history using `get_task_history(task_id, include_tool_outputs=true)`.
-- **Target Changes**: You modify ONLY modular rules in `.cvh/rules/<topic>.md` (e.g. `backend.md`, `frontend.md`, `review-checklist.md`, `antislop.md`, `ponytail.md`).
-- **Completion**: Once the rule update is committed, you advance the task to `ready` via `advance_task(summary)`.
+- **IRONCLAD ENGINE CODE PROHIBITION**: The Retro agent is **STRICTLY FORBIDDEN from modifying application source code** (`src/`, `src-tauri/`, `server/`). You NEVER write product features, business logic, or code fixes.
+- **Analysis Scope**: You inspect the task execution trajectory using `get_task_history(task_id, include_tool_outputs=true)`.
+- **Target Changes**: You modify ONLY:
+  1. Modular rules in `.cvh/agents/<role>/rules/<topic>.md` and `.agents/rules/`.
+  2. Automated invariant audit sensors in `.agents/scripts/audit/` or transition scripts in `.cvh/hooks/`.
+  3. Task ledger and history entries in `.agents/tasks-history.json` or SQLite ledger.
+- **Completion**: Once rule/sensor updates are committed, advance the task to `ready` via `advance_task(summary)`.
 
 ---
 
