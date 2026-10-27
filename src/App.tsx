@@ -196,22 +196,84 @@ export default function App() {
       }
     };
 
+    const isTaskActiveInDrawer = (taskId: string): boolean => {
+      const drawerState = useDrawerStore.getState();
+      if (!drawerState.isOpen || !drawerState.activeTaskId) return false;
+      const activeId = drawerState.activeTaskId;
+      if (taskId === activeId) return true;
+      const subId = drawerState.activeSubagentId;
+      if (subId) {
+        if (
+          taskId === subId ||
+          drawerState.toolIdToSubagentId[taskId] === subId ||
+          drawerState.subagentIdToToolId[taskId] === subId ||
+          drawerState.toolIdToSubagentId[subId] === taskId ||
+          drawerState.subagentIdToToolId[subId] === taskId
+        ) {
+          return true;
+        }
+      }
+      if (
+        taskId.startsWith(`${activeId}.sub-`) ||
+        taskId.startsWith(`${activeId}:sub:`) ||
+        taskId.startsWith(`${activeId}.`)
+      ) {
+        return true;
+      }
+      const task = useBoardStore.getState().tasks.find((t) => t.id === taskId);
+      if (task && task.parentId === activeId) {
+        return true;
+      }
+      return false;
+    };
+
+    const ensureTaskRunningOnBoard = (taskId: string) => {
+      const boardState = useBoardStore.getState();
+      let currentTask = boardState.tasks.find((t) => t.id === taskId);
+      if (!currentTask && taskId.includes('.')) {
+        const parentCandidateId = taskId.split('.')[0];
+        currentTask = boardState.tasks.find((t) => t.id === parentCandidateId);
+      } else if (!currentTask && taskId.includes(':sub:')) {
+        const parentCandidateId = taskId.split(':sub:')[0];
+        currentTask = boardState.tasks.find((t) => t.id === parentCandidateId);
+      }
+      if (
+        currentTask &&
+        currentTask.status !== 'running' &&
+        currentTask.status !== 'done' &&
+        currentTask.status !== 'waiting_subtask'
+      ) {
+        boardState.updateTaskStatus(currentTask.id, 'running');
+      }
+    };
+
     const setupListeners = async () => {
       try {
         const { listen } = await import('@tauri-apps/api/event');
 
         const u1 = await listen<any>('agent:thought', (event) => {
           const { taskId, thought, delta } = event.payload || {};
-          if (taskId && (thought || delta)) {
-            queueThought(taskId, thought || delta);
+          if (!taskId) return;
+          ensureTaskRunningOnBoard(taskId);
+          if (!isTaskActiveInDrawer(taskId)) {
+            return;
+          }
+          const text = thought || delta;
+          if (text) {
+            queueThought(taskId, text);
           }
         });
         unlisteners.push(u1);
 
         const u2 = await listen<any>('agent:output', (event) => {
           const { taskId, output, content, token } = event.payload || {};
+          if (!taskId) return;
+          ensureTaskRunningOnBoard(taskId);
+          if (!isTaskActiveInDrawer(taskId)) {
+            return;
+          }
           const text = output || content || token;
-          if (taskId && text) {
+          if (text) {
             queueOutput(taskId, text);
           }
         });
@@ -219,30 +281,31 @@ export default function App() {
 
         const u3 = await listen<any>('agent:tool_call', (event) => {
           const { taskId, id, name, arguments: args } = event.payload || {};
-          // Flush текста перед tool-событием, чтобы сохранить хронологию ленты.
-          if (taskId) {
-            useDrawerStore.getState().setActiveAgentTask(taskId, true);
-            flushTask(taskId);
+          if (!taskId) return;
+          ensureTaskRunningOnBoard(taskId);
+          if (!isTaskActiveInDrawer(taskId)) {
+            return;
           }
-          if (taskId) {
-            const st = useDrawerStore.getState();
-            if (st.generationEndTime[taskId] == null) {
-              st.setGenerationEndTime(taskId, Date.now());
-            }
-            if (st.finalTps[taskId] == null) {
-              const tele = st.taskTelemetry[taskId];
-              const outTokens = tele?.outputTokens || st.streamedTurnTokens[taskId] || 0;
-              const start = st.generationStartTime[taskId] ?? st.thinkingStartTime[taskId];
-              const end = st.generationEndTime[taskId] ?? Date.now();
-              if (start != null && outTokens > 0) {
-                const elapsedSec = (end - start) / 1000;
-                if (elapsedSec > 0.05) {
-                  st.recordTurnMetrics(taskId, outTokens, elapsedSec);
-                }
+          // Flush текста перед tool-событием, чтобы сохранить хронологию ленты.
+          useDrawerStore.getState().setActiveAgentTask(taskId, true);
+          flushTask(taskId);
+          const st = useDrawerStore.getState();
+          if (st.generationEndTime[taskId] == null) {
+            st.setGenerationEndTime(taskId, Date.now());
+          }
+          if (st.finalTps[taskId] == null) {
+            const tele = st.taskTelemetry[taskId];
+            const outTokens = tele?.outputTokens || st.streamedTurnTokens[taskId] || 0;
+            const start = st.generationStartTime[taskId] ?? st.thinkingStartTime[taskId];
+            const end = st.generationEndTime[taskId] ?? Date.now();
+            if (start != null && outTokens > 0) {
+              const elapsedSec = (end - start) / 1000;
+              if (elapsedSec > 0.05) {
+                st.recordTurnMetrics(taskId, outTokens, elapsedSec);
               }
             }
           }
-          if (taskId && name) {
+          if (name) {
             let parsedParams: Record<string, unknown> = {};
             try {
               parsedParams = typeof args === 'string' ? JSON.parse(args) : (args || {});
@@ -263,8 +326,12 @@ export default function App() {
 
         const uToolResult = await listen<any>('agent:tool_result', (event) => {
           const { taskId, id, result, success } = event.payload || {};
-          if (taskId) flushTask(taskId);
-          if (taskId && id) {
+          if (!taskId) return;
+          if (!isTaskActiveInDrawer(taskId)) {
+            return;
+          }
+          flushTask(taskId);
+          if (id) {
             const outStr = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
             updateToolExecution(taskId, id, {
               status: success ? 'success' : 'failed',
@@ -348,9 +415,12 @@ export default function App() {
         const uTurnStart = await listen<any>('agent:turn_start', (event) => {
           const { taskId } = event.payload || {};
           if (taskId) {
-            flushTask(taskId);
-            useDrawerStore.getState().resetTurnStreamMetrics(taskId);
-            useDrawerStore.getState().setActiveAgentTask(taskId, true);
+            ensureTaskRunningOnBoard(taskId);
+            if (isTaskActiveInDrawer(taskId)) {
+              flushTask(taskId);
+              useDrawerStore.getState().resetTurnStreamMetrics(taskId);
+              useDrawerStore.getState().setActiveAgentTask(taskId, true);
+            }
           }
         });
         unlisteners.push(uTurnStart);
@@ -358,35 +428,43 @@ export default function App() {
         const u5 = await listen<any>('agent:finished', (event) => {
           const { taskId, response } = event.payload || {};
           if (taskId) {
-            // Принудительный flush буферов перед финальной обработкой,
-            // иначе дедуп ниже не увидит забутченные токены.
-            flushTask(taskId);
-            const st = useDrawerStore.getState();
-            st.setActiveAgentTask(taskId, false);
-            st.setGenerationEndTime(taskId, Date.now());
-            st.setTaskEndTime(taskId, Date.now());
+            if (isTaskActiveInDrawer(taskId)) {
+              flushTask(taskId);
+              const st = useDrawerStore.getState();
+              st.setActiveAgentTask(taskId, false);
+              st.setGenerationEndTime(taskId, Date.now());
+              st.setTaskEndTime(taskId, Date.now());
 
-            // Заморозка TPS на финише: те же источники, что в ContextGauge
-            try {
-              if (st.finalTps[taskId] == null) {
-                const tele = st.taskTelemetry[taskId];
-                const outTokens = tele?.outputTokens || st.streamedTurnTokens[taskId] || 0;
-                const start = st.generationStartTime[taskId] ?? st.thinkingStartTime[taskId];
-                const end = st.generationEndTime[taskId] ?? Date.now();
-                if (start != null && outTokens > 0) {
-                  const elapsedSec = (end - start) / 1000;
-                  if (elapsedSec > 0.05) {
-                    st.recordTurnMetrics(taskId, outTokens, elapsedSec);
+              // Заморозка TPS на финише: те же источники, что в ContextGauge
+              try {
+                if (st.finalTps[taskId] == null) {
+                  const tele = st.taskTelemetry[taskId];
+                  const outTokens = tele?.outputTokens || st.streamedTurnTokens[taskId] || 0;
+                  const start = st.generationStartTime[taskId] ?? st.thinkingStartTime[taskId];
+                  const end = st.generationEndTime[taskId] ?? Date.now();
+                  if (start != null && outTokens > 0) {
+                    const elapsedSec = (end - start) / 1000;
+                    if (elapsedSec > 0.05) {
+                      st.recordTurnMetrics(taskId, outTokens, elapsedSec);
+                    }
                   }
                 }
+              } catch {
+                // ignore
               }
-            } catch {
-              // ignore
+              // Дедуп финала и маркировка финального ответа
+              st.markFinalResponse(taskId, response);
+              // Immediately flush task activity feed to disk upon turn finish
+              st.flushSaveDialog(taskId);
+            } else {
+              const b = textBuffers.get(taskId);
+              if (b) {
+                if (b.thoughtTimer) clearTimeout(b.thoughtTimer);
+                if (b.outputTimer) clearTimeout(b.outputTimer);
+                textBuffers.delete(taskId);
+              }
+              useDrawerStore.getState().setActiveAgentTask(taskId, false);
             }
-            // Дедуп финала и маркировка финального ответа
-            st.markFinalResponse(taskId, response);
-            // Immediately flush task activity feed to disk upon turn finish
-            st.flushSaveDialog(taskId);
             const currentTask = useBoardStore.getState().tasks.find((t) => t.id === taskId);
             if (currentTask && currentTask.status === 'running') {
               useBoardStore.getState().updateTaskStatus(taskId, 'idle');
@@ -399,14 +477,24 @@ export default function App() {
         const uErr = await listen<any>('agent:error', (event) => {
           const { taskId } = event.payload || {};
           if (taskId) {
-            flushTask(taskId);
-            useDrawerStore.getState().setActiveAgentTask(taskId, false);
-            useDrawerStore.getState().flushSaveDialog(taskId);
+            if (isTaskActiveInDrawer(taskId)) {
+              flushTask(taskId);
+              useDrawerStore.getState().setActiveAgentTask(taskId, false);
+              useDrawerStore.getState().flushSaveDialog(taskId);
+              useDrawerStore.getState().setThinkingStartTime(taskId, null);
+            } else {
+              const b = textBuffers.get(taskId);
+              if (b) {
+                if (b.thoughtTimer) clearTimeout(b.thoughtTimer);
+                if (b.outputTimer) clearTimeout(b.outputTimer);
+                textBuffers.delete(taskId);
+              }
+              useDrawerStore.getState().setActiveAgentTask(taskId, false);
+            }
             const currentTask = useBoardStore.getState().tasks.find((t) => t.id === taskId);
             if (currentTask && currentTask.status === 'running') {
               useBoardStore.getState().updateTaskStatus(taskId, 'idle');
             }
-            useDrawerStore.getState().setThinkingStartTime(taskId, null);
           } else {
             flushAll();
           }
@@ -417,14 +505,24 @@ export default function App() {
         const u6 = await listen<any>('agent:status', (event) => {
           const { taskId, status } = event.payload || {};
           if (taskId && (status === 'finished' || status === 'aborted' || status === 'error')) {
-            flushTask(taskId);
-            useDrawerStore.getState().setActiveAgentTask(taskId, false);
-            useDrawerStore.getState().flushSaveDialog(taskId);
+            if (isTaskActiveInDrawer(taskId)) {
+              flushTask(taskId);
+              useDrawerStore.getState().setActiveAgentTask(taskId, false);
+              useDrawerStore.getState().flushSaveDialog(taskId);
+              useDrawerStore.getState().setThinkingStartTime(taskId, null);
+            } else {
+              const b = textBuffers.get(taskId);
+              if (b) {
+                if (b.thoughtTimer) clearTimeout(b.thoughtTimer);
+                if (b.outputTimer) clearTimeout(b.outputTimer);
+                textBuffers.delete(taskId);
+              }
+              useDrawerStore.getState().setActiveAgentTask(taskId, false);
+            }
             const currentTask = useBoardStore.getState().tasks.find((t) => t.id === taskId);
             if (currentTask && currentTask.status === 'running') {
               useBoardStore.getState().updateTaskStatus(taskId, 'idle');
             }
-            useDrawerStore.getState().setThinkingStartTime(taskId, null);
           }
           loadTasks();
         });
