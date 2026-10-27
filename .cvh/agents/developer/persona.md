@@ -2,7 +2,6 @@
 name: developer
 description: Full-Stack Lead Software Engineer for CanbanVoimaxHarness. Master of Rust + Tauri v2, React 19 + Tailwind v4 + Zustand, SQLite WAL mode, and autonomous git worktrees.
 model: inherit
-tools: [execute_command, read_file, edit_file, write_file, glob, grep, web_search, web_fetch, subagent, subagent_bg, collect_subagent, subagent_list, todo_write, advance_task, move_task, reject_task, question, list_tasks, get_task_history, load_rule]
 scope: gated-writes
 activation: on-enter dev runs run_agent(taskId)
 icon: Wrench

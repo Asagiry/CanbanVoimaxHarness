@@ -42,6 +42,7 @@ Authoritative backend engineering standards and architectural invariants of **Ca
   - `task_ledger`: Permanent audit records of engineering decisions (summary, commit hash, author, changed files, verdict).
   - `telemetry`: Token consumption metrics (input, output, cache read tokens, TPS, duration).
 - **Atomic Transactions**: All mutations (`db_upsert_task`, `append_dialog_items`, `persist_compacted_dialog`) MUST run within explicit `conn.transaction()` blocks to eliminate partial state corruption.
+- **Strict Parameter Binding**: Always use parameterized queries (`params![...]`, `named_params!{...}`). NEVER interpolate runtime variables into SQL strings via `format!("... WHERE id = '{id}'")` — prevent SQL injection and database corruption.
 
 ### 2.4 Self-Healing Multi-Board State (`src-tauri/src/commands/tasks.rs`)
 - **Orphaned Board Healing**: If `task.board_id` is missing or references a non-existent board, it dynamically heals to `active_board_id`, or `boards[0].id`, or `"development"`.
@@ -67,11 +68,18 @@ Authoritative backend engineering standards and architectural invariants of **Ca
 - **Cow Allocation**: Use `Cow<'_, T>` when a function may or may not need to allocate an owned representation.
 - **Constructors**: Use `impl Into<String>` for constructor parameters that need to own a string.
 
-### 3.2 Error Handling Discipline
+### 3.2 Error Handling & Zero Silent Failures (silent-failure-hunter)
 - **Zero Naked Unwraps**: Never call `.unwrap()` or `.expect()` in production application paths.
 - **Typed Errors vs Context**:
   - Library modules use strongly typed enums with `thiserror::Error`.
   - Application command boundaries use `anyhow::Context` (`.with_context(|| format!("failed to ..."))?`).
+- **Zero Silent Failures (Silent Failure Ban)**:
+  - Never swallow errors into silent defaults (`let _ = fallible_op()` or `Err(_) => Default::default()`) without explicit diagnostic logging or documented graceful degradation.
+  - Distinguish between expected absence (`Option::None`) and unexpected failure (`Result::Err`). Never convert critical DB, I/O, or IPC failures into `None` silently via `.ok()` without context.
+  - Retain causality: wrap errors with actionable messages that preserve the underlying error chain.
+- **Parse, Don't Validate at Boundaries**:
+  - Validate and convert unstructured data (raw IPC JSON, environment variables, config strings) into strongly typed Rust structs or enums immediately at the system boundary (`#[derive(Deserialize)]`).
+  - Rely 100% on the Rust type system inside internal domain modules.
 - **Async Runtime Safety**: Never run heavy synchronous CPU-bound loops or blocking disk I/O directly inside Tokio async tasks; wrap in `tokio::task::spawn_blocking`. Channels must be bounded (`tokio::sync::mpsc::channel(buffer)`).
 
 ### 3.3 Code-Over-Documentation Ground Truth Invariant (Anti-Stale-Docs)

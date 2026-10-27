@@ -66,8 +66,12 @@ Authoritative frontend engineering standards and UI invariants of **CanbanVoimax
 
 ---
 
-## 4. TypeScript Strict Standards
+## 4. TypeScript Strict Standards & Zero Silent Failures
 
 - **Strict Mode**: `strict: true`, `noUnusedLocals: true`, `noUnusedParameters: true`.
 - **Avoid `any`**: Use `unknown` for untrusted input and narrow it with type guards.
-- **Sensor Check**: Verify frontend integrity via `npx tsc --noEmit` (must exit 0 with 0 errors).
+- **Zero Silent Failures (silent-failure-hunter)**:
+  - **Empty Catch Ban**: Never write empty catch blocks (`catch {}` or `catch (err) { /* ignore */ }`).
+  - **Dangerous Fallback Ban**: Never mask failed network calls, IPC invocations, or data operations with silent fallbacks (e.g. `.catch(() => [])` or `.catch(() => null)`) that hide the root cause from the user and error boundaries.
+  - **Diagnostic Context**: If an error is caught and handled gracefully, log it with context or forward to `log_ui_error`. Never leave downstream UI in a zombie state with uncommunicated failures.
+- **Sensor Check**: Verify frontend integrity via `pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings` (must exit 0 with 0 errors/warnings).

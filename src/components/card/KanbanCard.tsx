@@ -113,25 +113,21 @@ function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle, 
   const updatePosition = () => {
     if (!triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
-    const popoverWidth = 320;
+    const popoverWidth = 420;
     const popoverHeight = popoverRef.current?.offsetHeight ?? 260;
 
-    let left: number;
-    if (side === 'right') {
-      left = rect.left - popoverWidth - 8;
-      if (left < 8) {
-        left = rect.right + 8;
-      }
-    } else {
-      left = rect.right + 8;
-      if (left + popoverWidth > window.innerWidth - 8) {
-        left = rect.left - popoverWidth - 8;
-      }
-    }
+    let left = side === 'left' ? rect.left : rect.right - popoverWidth;
     left = Math.max(8, Math.min(left, window.innerWidth - popoverWidth - 8));
 
-    let top = rect.top + rect.height / 2 - popoverHeight / 2;
-    top = Math.max(8, Math.min(top, window.innerHeight - popoverHeight - 8));
+    let top = rect.bottom + 6;
+    if (top + popoverHeight > window.innerHeight - 8) {
+      const topAbove = rect.top - popoverHeight - 6;
+      if (topAbove >= 8) {
+        top = topAbove;
+      } else {
+        top = Math.max(8, window.innerHeight - popoverHeight - 8);
+      }
+    }
 
     setCoords({ top, left });
   };
@@ -202,7 +198,7 @@ function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle, 
     hideTimerRef.current = window.setTimeout(() => {
       setIsHovered(false);
       hideTimerRef.current = null;
-    }, 100);
+    }, 180);
   };
 
   const handlePopoverMouseEnter = () => {
@@ -219,7 +215,7 @@ function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle, 
     hideTimerRef.current = window.setTimeout(() => {
       setIsHovered(false);
       hideTimerRef.current = null;
-    }, 100);
+    }, 180);
   };
 
   const nodeColorClass = (() => {
@@ -265,7 +261,7 @@ function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle, 
       {isHovered && coords && typeof document !== 'undefined' && createPortal(
         <div
           ref={popoverRef}
-          className="fixed z-[9999] w-80 shadow-2xl rounded-lg border border-neutral-200 dark:border-[#30363d] bg-white dark:bg-[#161b22] p-3 text-left cursor-default select-text pointer-events-auto"
+          className="fixed z-[9999] w-[420px] max-w-[calc(100vw-24px)] shadow-2xl rounded-lg border border-neutral-200 dark:border-[#30363d] bg-white dark:bg-[#161b22] p-3.5 text-left cursor-default select-text pointer-events-auto"
           style={{
             top: `${coords.top}px`,
             left: `${coords.left}px`,
@@ -276,30 +272,30 @@ function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle, 
         >
           {/* Header */}
           <div className="flex items-center justify-between gap-1.5 pb-2 border-b border-neutral-100 dark:border-[#21262d]">
-            <span className="text-[10px] font-mono font-medium text-neutral-500 dark:text-neutral-400">
+            <span className="text-xs font-mono font-medium text-neutral-500 dark:text-neutral-400">
               {side === 'left' ? 'Входной хук (on_enter)' : 'Выходной хук (on_leave)'}
             </span>
             <div className="flex items-center gap-1">
               {status === 'running' && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800">
-                  <Loader2 className="w-2.5 h-2.5 animate-spin text-amber-600 dark:text-amber-400" />
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono tabular-nums text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800">
+                  <Loader2 className="w-3 h-3 animate-spin text-amber-600 dark:text-amber-400" />
                   <span>{elapsedSec.toFixed(1)}s</span>
                 </span>
               )}
               {status === 'success' && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
-                  <Check className="w-2.5 h-2.5 stroke-[2.5]" />
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono tabular-nums text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
+                  <Check className="w-3 h-3 stroke-[2.5]" />
                   <span>Успех {state?.durationMs ? `${(state.durationMs / 1000).toFixed(2)}s` : ''}</span>
                 </span>
               )}
               {status === 'failed' && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800">
-                  <X className="w-2.5 h-2.5 stroke-[2.5]" />
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono tabular-nums text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800">
+                  <X className="w-3 h-3 stroke-[2.5]" />
                   <span>Ошибка {state?.exitCode != null ? `(код ${state.exitCode})` : ''}</span>
                 </span>
               )}
               {status === 'idle' && (
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono text-neutral-600 dark:text-neutral-400 bg-neutral-100 dark:bg-[#0d1117] border border-neutral-200 dark:border-[#30363d]">
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono text-neutral-600 dark:text-neutral-400 bg-neutral-100 dark:bg-[#0d1117] border border-neutral-200 dark:border-[#30363d]">
                   Готов к запуску
                 </span>
               )}
@@ -307,19 +303,19 @@ function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle, 
           </div>
 
           {/* Hook name */}
-          <div className="mt-2 text-xs font-mono font-semibold text-neutral-900 dark:text-[#f0f6fc] truncate" aria-label={hookName}>
+          <div className="mt-2 text-[13px] font-mono font-semibold text-neutral-900 dark:text-[#f0f6fc] truncate" aria-label={hookName} title={hookName}>
             {hookName}
           </div>
 
           {stageTitle && (
-            <div className="text-[10px] text-neutral-500 dark:text-neutral-400 font-mono mt-0.5">
+            <div className="text-xs text-neutral-500 dark:text-neutral-400 font-mono mt-0.5">
               Стадия: {stageTitle}
             </div>
           )}
 
           {/* Error description if failed */}
           {status === 'failed' && errorText.length > 0 && (
-            <div className="mt-2 p-2 rounded bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 text-[11px] font-mono text-rose-800 dark:text-rose-300 whitespace-pre-wrap break-words max-h-32 overflow-y-auto leading-relaxed">
+            <div className="mt-2 p-2.5 rounded bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 text-xs font-mono text-rose-800 dark:text-rose-300 whitespace-pre-wrap break-words max-h-44 overflow-y-auto leading-relaxed">
               <div className="font-semibold text-rose-900 dark:text-rose-200 mb-1 flex items-center gap-1">
                 <span>⛔ Отклонено хуком:</span>
               </div>
@@ -330,21 +326,21 @@ function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle, 
           {/* Terminal log output */}
           {hasOutput ? (
             <div className="mt-2.5">
-              <div className="flex items-center justify-between text-[10px] font-mono text-neutral-500 dark:text-neutral-400 mb-1">
+              <div className="flex items-center justify-between text-xs font-mono text-neutral-500 dark:text-neutral-400 mb-1">
                 <span className="flex items-center gap-1">
-                  <Terminal className="w-3 h-3" />
+                  <Terminal className="w-3.5 h-3.5" />
                   <span>Лог терминала</span>
                 </span>
-                <span className="text-[9px]">
+                <span className="text-[10px]">
                   {stdout.length > 0 ? 'stdout' : ''} {stderr.length > 0 ? 'stderr' : ''}
                 </span>
               </div>
-              <div className="p-2 rounded bg-[#0d1117] border border-[#30363d] font-mono text-[10px] text-[#c9d1d9] leading-tight max-h-40 overflow-y-auto whitespace-pre-wrap break-all select-text">
+              <div className="p-2.5 rounded bg-[#0d1117] border border-[#30363d] font-mono text-xs text-[#c9d1d9] leading-relaxed max-h-56 overflow-y-auto whitespace-pre-wrap break-words [word-break:break-word] select-text">
                 {stdout || stderr}
               </div>
             </div>
           ) : (
-            <div className="mt-2 text-[11px] text-neutral-500 dark:text-neutral-400 font-sans leading-snug">
+            <div className="mt-2 text-xs text-neutral-500 dark:text-neutral-400 font-sans leading-relaxed">
               {status === 'running'
                 ? 'Выполняется скрипт жизненного цикла стадии...'
                 : side === 'left'

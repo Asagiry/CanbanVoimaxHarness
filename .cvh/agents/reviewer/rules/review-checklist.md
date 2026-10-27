@@ -50,23 +50,27 @@ In accordance with the Harness2.0 selection protocol, review candidate code arti
   - Frontend Sensor: `npx tsc --noEmit` (must exit 0 with 0 type errors).
 - The Reviewer does not accept claims of success without live sensor verification.
 
-### Gate 3: Backend Architectural Invariants
+### Gate 3: Backend Architectural Invariants & Zero Silent Failures
 - Single-Instance plugin ordering first in `src-tauri/src/lib.rs`.
 - WebView2 UDF path strictly in verified `%LOCALAPPDATA%` paths, never in `.cvh/`.
 - SQLite mutations inside explicit `conn.transaction()` blocks.
+- Strict parameter binding in SQLite queries (`params![...]`); zero raw string interpolation (`format!("... WHERE id = '{id}'")`).
 - Zero naked `.unwrap()` or `.expect()` in non-test production paths.
+- Zero silent failures: reject `let _ = ...` or silent `.ok()` conversions on fallible I/O or DB operations that discard error causality.
 - Windows process spawns using safe path/arg quoting.
 
-### Gate 4: Frontend UI Invariants
+### Gate 4: Frontend UI Invariants & Error Visibility
 - Zustand store selections returning objects or arrays wrapped in `useShallow`.
 - Nested scrollable flex containers chaining `flex flex-col min-h-0 min-w-0 overflow-hidden`.
 - Light Paper (`#fafafa`) or Obsidian Dark (`#090a0f`) design tokens; zero neon gradients.
 - Overlays mounted outside `useUiZoom` canvas root.
+- Zero silent failures: reject empty `catch {}` blocks or dangerous fallbacks (`.catch(() => [])`, `.catch(() => null)`) that mask broken queries or failed IPC commands.
 
-### Gate 5: Code Hygiene & Ponytail Minimalism
+### Gate 5: Code Hygiene, Simplifier & Ponytail Minimalism
 - Zero dead code, zero unused imports, zero console.log spam.
 - Monospace `.tabular-nums` on all dynamic timers and token metrics.
 - Surgical diffs adhering to 1-3 line Ponytail minimalism.
+- Code Simplifier: favor early returns over deep nested ladders; unwind single-use pass-through wrapper functions.
 
 ### Gate 6: Stage Routing Protocol
 - Merge feature branch into `main` and execute routing verdict (see `verdict-routing.md`).

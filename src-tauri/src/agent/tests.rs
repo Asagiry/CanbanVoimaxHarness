@@ -292,7 +292,7 @@ use super::*;
             "contextWindow",
             "gatekeeperSensor",
             "terminal",
-            "globalEnabled && stageOverrides",
+            "stageOverrides",
             "commands.rs:47",
             "resolve_safe_path",
             "Verification[evidence]",
@@ -2884,6 +2884,7 @@ line 2 again"
 
         // 3. When policy disables a tool, cvh-dev is denied by the Tool Policy Matrix
         let mut restricted_policy = ToolPolicyConfig::default();
+        restricted_policy.stage_overrides.entry("dev".to_string()).or_default().insert("web_search".to_string(), false);
         restricted_policy.global_enabled.insert("web_search".to_string(), false);
         let restricted_ctx = ToolContext {
             tool_policy: &restricted_policy,
@@ -4152,7 +4153,7 @@ Rule: Strictly isolated worktrees.",
 
         let planner_rules = get_available_rules(repo_root, Some("planner"));
         println!("planner_rules: {:?}", planner_rules);
-        assert_eq!(planner_rules, vec!["architecture", "decomposition", "scope-hygiene"]);
+        assert_eq!(planner_rules, vec!["architecture", "be-ambitious", "decomposition", "scope-hygiene"]);
 
         let dev_rules = get_available_rules(repo_root, Some("developer"));
         assert_eq!(dev_rules, vec!["backend", "frontend", "ponytail", "rules-sync", "sensors"]);
@@ -4166,7 +4167,20 @@ Rule: Strictly isolated worktrees.",
         assert_eq!(retro_rules, vec!["reflection-methodology", "rule-evolution"]);
 
         let cvh_dev_rules = get_available_rules(repo_root, Some("cvh-dev"));
-        assert_eq!(cvh_dev_rules, vec!["agents", "boards", "hooks", "tools"]);
+        assert_eq!(
+            cvh_dev_rules,
+            vec![
+                "agents",
+                "boards",
+                "hooks",
+                "pipeline-setup",
+                "role-developer",
+                "role-planner",
+                "role-retro",
+                "role-reviewer",
+                "tools",
+            ]
+        );
     }
 
     #[tokio::test]

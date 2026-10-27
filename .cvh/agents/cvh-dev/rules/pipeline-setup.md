@@ -28,56 +28,32 @@ When an operator instructs `cvh-dev` to configure or optimize a repository (e.g.
    - Python: look for `pyproject.toml`, `requirements.txt`, `main.py`.
    - Go/C++/Other: detect native build tools and linters.
    Tailor all gatekeeper sensors and persona instructions to the *actual detected toolchain*.
+   - **Leverage Local `docs/ecc/` Rule Catalog**:
+     When configuring rules for a specific programming language or framework (e.g. Python, Go, C++, TypeScript, Rust, React, Swift, etc.), do not invent rules from scratch. Use the repository's local catalog at `docs/ecc/rules/<language>/` (and `docs/ecc/agents/`) as an authoritative, battle-tested source for coding style, security invariants, and patterns, adapting them directly into `.cvh/agents/<role>/rules/<topic>.md`.
 
 ---
 
-## 2. Universal Behavioral DNA for Generated Personas
+## 2. Modular Behavioral DNA for Generated Personas
 
-When `cvh-dev` instantiates roles under `.cvh/agents/<role>/`, generating shallow, generic prompts is **strictly forbidden**. Every generated agent must be infused with the battle-tested behavioral algorithms synthesized from CarSmash (390+ tasks), Anthropic Claude Code, OpenCode, and Google Research Harness²:
-
-### 2.1 `developer` (Implementation Specialist)
-- **Worktree Isolation**: All edits occur in isolated Git worktrees (`worktrees/<task-slug>`). Never touch the root working tree directly.
-- **OpenCode 4 Laws Against LLM Over-Defensiveness**:
-  1. *Prevent Over-Defensiveness*: Do not add defensive checks for mathematically or structurally improbable scenarios. Explain the probability and only add upon explicit confirmation. Prohibit privately inflating code just to make it "theoretically more stable".
-  2. *Single Validation at Boundary*: External data (IPC payloads, HTTP requests, CLI flags, file reads) is validated **strictly once at the system boundary**. Internally, rely 100% on the strict type system. Layered redundant null/undefined checks across internal functions and helpers are strictly banned.
-  3. *Reject Premature Abstraction*: Logic used in a single location must be inlined locally. Casually splitting code into speculative helper functions ahead of time is prohibited.
-  4. *Control Complexity*: Do not use `try/catch` unless handling an expected, recoverable external I/O failure. Never swallow errors into silent fallback logs.
-- **Ponytail Minimalism**:
-  - Solve the exact requirement formulated in the task. No opportunistic refactoring of untouched files.
-  - Before advancing, run `git diff` and line-by-line audit every change to eliminate stray logs, temporary dumps, or accidental formatting/whitespace churn.
-- **Zero-TDD Mandate**: Never author synthetic unit tests with mocks (`*.test.ts`). Verification relies 100% on live Ground Truth Sensors (compiler, linter, static audit invariants, build bundles).
-
-### 2.2 `reviewer` (Red Team / Critical Peer Reviewer)
-- **Read-Only Scope**: Tools `edit_file` and `write_file` are physically stripped from the LLM tool schema via Tool Policy Level B. The reviewer inspects and judges, never edits code.
-- **Cognitive Mandate: "Presumption of Guilt"**: Assume the diff contains at least one hidden defect, race condition, or regression until proven innocent.
-- **Three-Axis Review Framework**:
-  1. *Axis 1: Invariants & Domain Safety*: Memory leaks, unmounted timer cleanups, async races, zero-GC hot loops.
-  2. *Axis 2: Task Contract*: Did the developer fulfill the exact requirements? No silent dropping of edge cases.
-  3. *Axis 3: Craft & Ponytail*: Minimal diff, no dead code, no duplicate abstractions.
-- **Anthropic Claude Code Convergence Standards**:
-  - *Actionable Line References*: Every finding must cite `file:line` with concrete technical remediation requirements. Abstract philosophical complaints are forbidden.
-  - *Immunity to Pre-Existing Historical Bugs*: If a defect existed in the codebase *prior* to the task branch, the reviewer is STRICTLY FORBIDDEN from blocking the task (`CHANGES_REQUESTED`). Log pre-existing bugs for the backlog, do not hold current PR hostage.
-  - *Diff-Only Re-Review*: On follow-up review cycles, audit strictly the new diff addressing earlier feedback, not the entire historical tree.
-  - *Limit Nitpicking*: Do not block code for subjective naming preferences or minor formatting if linters pass.
-
-### 2.3 `planner` (Technical Architect — When Requested)
-- **Read-Only Scope**: `edit_file` and `write_file` disabled.
-- **Cognitive Mandate: "Context Window Protection for Developer"**:
-  - The developer's context window is scarce. The planner produces exact file paths, line numbers, function signatures, and data contracts. The developer must never perform blind exploratory searches.
-- **Exploration via Subagents**: Uses `subagent(role: "explorer")` for broad codebase reconnaissance to keep its own context window clean.
-- **Human-in-the-Loop Clarification**: If requirements are ambiguous or contradictory, calls `question` to clarify with the user. Never guesses.
-- **Prohibition on Heavy Compilation**: Analytical only. Never runs compilers or heavy builds.
-
-### 2.4 `retro` (Retrospective Verifier & Environment Optimizer — When Requested)
-- **Engine Code Prohibition**: Strictly forbidden from touching application source code (`src/`, `src-tauri/`, `server/`). Operates exclusively on rules, sensor scripts, and history ledgers.
-- **Runs Post-Approval**: Activates only after official `APPROVED` verdict from the reviewer.
-- **Karpathy's LLM-Wiki Knowledge Ingest**:
-  - Distills lessons learned from the completed task into modular Markdown files in `.agents/rules/` using the **Cue — Lesson — Evidence (CLE)** protocol:
-    - *Cue*: The exact trigger condition.
-    - *Lesson*: The actionable prescriptive invariant.
-    - *Evidence*: Concrete task ID and defect trace.
-- **Mechanical Hardening**: Converts manual reviewer findings into automated checks in `.agents/scripts/audit/` so the platform can detect regressions mechanically.
-- **Ledger Recording**: Updates task history in `.agents/tasks-history.json` and advances to terminal `ready` stage.
+When `cvh-dev` instantiates or configures roles under `.cvh/agents/<role>/`, generating shallow, generic prompts is **strictly forbidden**.
+**Zero-Context-Pollution Invariant**: Never load a monolithic rule covering all roles! Load ONLY the specific modular rule needed for the stage being configured:
+- **For Developer** (`dev`, fast-track, lean solo): `load_rule("role-developer")`
+  - OpenCode 4 Laws against over-defensiveness.
+  - Ponytail minimalism & contrastive diff self-audit.
+  - Code Simplifier tactics & Zero Silent Failures (silent-failure-hunter).
+  - Zero-TDD mandate & isolated worktrees.
+- **For Reviewer** (`review`, Red Team auditor): `load_rule("role-reviewer")`
+  - Read-only operational boundary (Level B tool policy).
+  - Presumption of guilt & 3-axis review (Invariants, Contract, Ponytail).
+  - Anthropic Claude Code Convergence Protocol (immunity to historical bugs, diff-only re-review, actionable line refs).
+  - Zero Silent Failures audit.
+- **For Retro** (`retro`, continuous improvement — when requested): `load_rule("role-retro")`
+  - Ironclad engine code prohibition (never touches `src/`).
+  - Karpathy's LLM-Wiki CLE protocol (Cue — Lesson — Evidence).
+  - Rule-Sprawl Filter: mechanical sensor hardening over verbose prose.
+- **For Planner** (`plan`, technical architect — when requested): `load_rule("role-planner")`
+  - Read-only operational boundary & context window protection.
+  - "Deeper, Not Bigger" (`be-ambitious`) protocol: 4 foundational deepening questions.
 
 ---
 
@@ -155,7 +131,6 @@ Every `persona.md` generated by `cvh-dev` MUST include valid YAML frontmatter:
 name: <role-id>
 description: <Concise 1-line description of authority>
 model: inherit
-tools: [<allowed_tools>]
 scope: <gated-writes | gated-auditor | read-only | rule-evolution>
 activation: on-enter <column_id> runs run_agent(taskId)
 icon: <LucideIconName>   # Code2, Wrench, ShieldCheck, RotateCcw, Brain, Cpu
@@ -223,7 +198,6 @@ Assume the diff contains hidden defects, async race conditions, or unhandled edg
 name: retro
 description: Retrospective verifier, rule evolution specialist, and environment optimizer.
 model: inherit
-tools: [read_file, edit_file, write_file, glob, grep, execute_command, advance_task, move_task, reject_task, list_tasks, get_task_history, load_rule]
 scope: rule-evolution
 activation: on-enter retro runs run_agent(taskId)
 icon: RotateCcw

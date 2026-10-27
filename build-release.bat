@@ -548,7 +548,7 @@ if "%DLL_FOUND%"=="1" (
 )
 
 if "!NO_BUNDLE!"=="1" (
-  echo   NOTE: fast build (--no-bundle); skipping installer discovery.
+  echo   NOTE: fast build [--no-bundle] - skipping installer discovery
   goto skip_installer_collect
 )
 

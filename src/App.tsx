@@ -576,21 +576,6 @@ export default function App() {
             <KanbanBoard />
           </main>
         </div>
-
-        {/* Zoom Indicator Toast */}
-        {showIndicator && (
-          <div className="fixed bottom-4 right-4 z-50 flex items-center space-x-2 px-3 py-1.5 rounded-md bg-[#161b22] text-[#f0f6fc] border border-[#30363d] font-mono text-xs shadow-md transition-opacity duration-150 animate-in fade-in select-none">
-            <span>Масштаб: {zoomPercent}%</span>
-            {zoomPercent !== 100 && (
-              <button
-                onClick={resetZoom}
-                className="text-[#8b949e] hover:text-[#f0f6fc] underline text-[11px] ml-1 cursor-pointer"
-              >
-                Сброс
-              </button>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Modals rendered at root level outside zoom-scaled container to prevent position:fixed containment trap (§ 2.13) */}
@@ -602,6 +587,21 @@ export default function App() {
       <ErrorBoundary scopeLabel="Консоль задачи" onClose={() => useDrawerStore.getState().closeDrawer()}>
         <AgentConsoleDrawer />
       </ErrorBoundary>
+
+      {/* Zoom Indicator Toast (rendered at root level above modals and drawer with z-[120]) */}
+      {showIndicator && (
+        <div className="fixed bottom-4 right-4 z-[120] flex items-center space-x-2 px-3 py-1.5 rounded-md bg-[#161b22] text-[#f0f6fc] border border-[#30363d] font-mono text-xs shadow-md transition-opacity duration-150 animate-in fade-in select-none">
+          <span>Масштаб: {zoomPercent}%</span>
+          {zoomPercent !== 100 && (
+            <button
+              onClick={resetZoom}
+              className="text-[#8b949e] hover:text-[#f0f6fc] underline text-[11px] ml-1 cursor-pointer"
+            >
+              Сброс
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Terminal Bootloader Splash Screen / Welcome Project Picker */}
       {(showSplash || !hasActiveProject) && (

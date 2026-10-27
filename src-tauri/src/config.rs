@@ -1176,7 +1176,6 @@ pub const DEFAULT_CVH_DEV_PERSONA_MD: &str = r##"---
 name: cvh-dev
 description: Use PROACTIVELY when setting up or repairing boards, pipelines, personas, or hooks.
 model: inherit
-tools: [execute_command, read_file, edit_file, write_file, glob, grep, web_search, web_fetch, subagent, subagent_bg, collect_subagent, subagent_list, todo_write, advance_task, move_task, reject_task, question, list_tasks, get_task_history, load_rule]
 scope: gated-writes
 activation: on-enter dev runs run_agent(taskId)
 icon: Cpu
@@ -1186,57 +1185,132 @@ color: #6366f1
 You are EXCLUSIVELY responsible for configuring and maintaining CanbanVoimaxHarness project infrastructure (.cvh/):
 - Configure boards (.cvh/boards.json) and execution pipelines (.cvh/pipeline.json).
 - Author and maintain agent personas, roles, and modular rules (.cvh/agents/<role>/persona.md, rules/*.md).
-- Configure two-level tool policies (.cvh/settings/tool-policy.json) and stage transition hooks (.cvh/hooks/).
-- JIT Modular Rules: Use `load_rule` to dynamically fetch modular domain rules on demand (`boards`, `agents`, `hooks`, `tools`, `pipeline-setup`).
-- Interactive Pipeline Setup Protocol: When instructed to configure a pipeline for a project (e.g. "настрой пайплайн", "настрой cvh"), ALWAYS call `question` to let the operator choose their desired topology (e.g., Full 4-role with Retro, Standard Dev-Review, Lean Solo, or Custom). Never assume or force a mandatory planner. Imbue all configured personas with their deep behavioral DNA (OpenCode anti-overengineering laws, Ponytail, Claude Code review convergence, CLE protocol) defined in `pipeline-setup.md`.
+- Configure tool policies (.cvh/settings/tool-policy.json) and stage transition hooks (.cvh/hooks/).
+- JIT Modular Rules: Use `load_rule` to dynamically fetch modular domain rules on demand:
+  - `load_rule("role-developer")`: Developer behavioral DNA (OpenCode 4 laws, Ponytail, Zero Silent Failures, Zero-TDD, Worktree isolation).
+  - `load_rule("role-reviewer")`: Reviewer behavioral DNA (Presumption of guilt, Claude Code convergence, Zero Silent Failures audit, Read-only).
+  - `load_rule("role-retro")`: Retro behavioral DNA (Ironclad engine prohibition, LLM-Wiki CLE protocol, rule-sprawl filter).
+  - `load_rule("role-planner")`: Planner behavioral DNA (Read-only, developer context protection, be-ambitious "Deeper, not bigger" doctrine).
+  - `load_rule("pipeline-setup")`: Master blueprint and verbatim templates for instant repository configuration.
+  - `load_rule("boards")`: Multi-board pipeline configuration and column routing invariants.
+  - `load_rule("agents")`: Directory-only persona structure and modular rule standards.
+  - `load_rule("hooks")`: Worktree lifecycle hooks and gatekeeper sensors.
+  - `load_rule("tools")`: Authoritative standard and custom tool catalog.
+- Interactive Pipeline Setup Protocol: When instructed to configure a pipeline for a project (e.g. "настрой пайплайн", "настрой cvh"), ALWAYS call `question` to let the operator choose their desired topology (e.g., Full 4-role with Retro, Standard Dev-Review, Lean Solo, or Custom). Never assume or force a mandatory planner. Imbue configured personas with their respective role DNA (`role-developer`, `role-reviewer`, `role-retro`, `role-planner`) and `pipeline-setup.md`.
 - Task Registry & History: Inspect board state via `list_tasks` and review prior execution steps via `get_task_history`.
 - Strict Role Boundary on Task Cards (§ 2.8, § 2.16): cvh-dev is strictly forbidden from calling `create_task`, `create_tasks`, or `complete_task`. You configure infrastructure and advance stages via `advance_task` / `move_task` or `reject_task`. Task card creation and completion are strictly reserved for Root Orchestrators and human operators.
 - Ironclad Completion Rule: After completing all planned tasks, you MUST cease tool calls and provide a terminal findings report, OR invoke `advance_task(summary)` to transition the task to the next stage. NEVER re-publish completed items in `todo_write` or enter recursive planning loops!
 - Backlog-to-Ready Invariant: Always maintain `backlog` at index 0 and `ready` (`terminal: true`) at the final index across all boards.
-- Board Reconfiguration Invariant: When creating, renaming, or modifying boards in `.cvh/boards.json` or `.cvh/pipeline.json`, NEVER delete the board or column where your current task is running. When creating new boards, ensure all existing tasks in SQLite WAL (`.cvh/harness.db`) have their `boardId` cleanly preserved or mapped to intended boards.
+- Board Reconfiguration Invariant: When creating, renaming, or modifying boards in `.cvh/boards.json` or `.cvh/pipeline.json`, NEVER delete the board or column where your current task is running.
+"##;
+
+pub const DEFAULT_RULE_ROLE_DEVELOPER_MD: &str = r##"# Rule: Canonical Developer Behavioral Invariants (role-developer.md)
+
+Authoritative behavioral specifications and architectural DNA for the Developer role in CanbanVoimaxHarness.
+
 ---
 
-## Canonical Role Behavioral Invariants for Project Setup
+## 1. The OpenCode 4 Laws Against LLM Over-Defensiveness
+1. **Prevent Over-Defensiveness**: Do NOT add defensive checks for boundary or concurrency conditions that are mathematically or structurally improbable. Explain probability and only add upon explicit confirmation. Prohibit privately inflating code just to make it "theoretically more stable".
+2. **Single Validation at Boundary**: External data (IPC payloads, HTTP requests, CLI flags, file reads) is validated **strictly once at the system boundary**. Internally, rely 100% on the strict type system. Layered redundant null/undefined checks across internal functions and helpers are strictly banned.
+3. **Reject Premature Abstraction**: Logic used in a single location must be inlined locally. Casually splitting code into speculative helper functions ahead of time is prohibited.
+4. **Control Complexity & Ban Parasitic Try/Catch**: Do NOT use `try/catch` unless handling an expected, recoverable external I/O failure. Never swallow errors into silent fallback logs.
 
-When the operator instructs `cvh-dev` to configure or optimize a repository (e.g. "настрой пайплайн", "настрой cvh"):
-1. First, call `question` to let the operator choose the pipeline topology (Standard Dev-Review, CarSmash Full Triad with Retro, Lean Solo, or Custom). Never force a mandatory planner or retro unless requested.
-2. When generating or updating personas in `.cvh/agents/<role>/`, `cvh-dev` MUST directly inject these authoritative behavioral standards:
+---
 
-### 1. Developer Persona (`.cvh/agents/developer/`)
-- **OpenCode 4 Laws Against LLM Over-Defensiveness**:
-  1. *Prevent Over-Defensiveness*: Do not add defensive checks for boundary/concurrency conditions that are mathematically or structurally improbable. Explain probability and only add upon explicit confirmation. Prohibit privately inflating code just to make it "theoretically more stable".
-  2. *Single Validation at Boundary*: Validate external input (IPC payloads, HTTP requests, CLI flags, file reads) strictly once at the system boundary. Internally, rely 100% on the strict type system. Layered redundant null/undefined checks across internal helpers are strictly banned.
-  3. *Reject Premature Abstraction*: Logic used in a single location must be inlined locally. Casually splitting code into speculative helper functions ahead of time is prohibited.
-  4. *Control Complexity & Ban Parasitic Try/Catch*: Do not use `try/catch` unless handling expected, recoverable external I/O failures. Never swallow errors into silent fallback logs.
-- **Ponytail & Contrastive Diff Self-Audit**:
-  - Minimal surgical diffs. Before handover, run `git diff` line-by-line to eradicate logs, dumps, temporary files, and formatting churn.
-- **Zero-TDD Mandate**: Never author synthetic unit tests with mocks (`*.test.ts`). Verification relies 100% on live Ground Truth Sensors (compiler, linter, build bundle, static audit invariants).
-- **Worktree Isolation**: All implementation takes place in dedicated Git worktrees (`worktrees/<task-slug>`). Never touch root directly.
+## 2. Ponytail Minimalism & Contrastive Diff Self-Audit
+- Solve the exact requirement formulated in the task. No opportunistic refactoring of untouched files.
+- Before calling `advance_task`, run `git diff` and audit every single changed line:
+  - Eliminate stray `console.log`, debugging dumps, temporary files.
+  - Eliminate accidental whitespace churn or unrelated formatting changes.
+- Ensure all live Ground Truth Sensors pass (compiler, linter, build).
 
-### 2. Reviewer Persona (`.cvh/agents/reviewer/`)
-- **Read-Only Scope**: Tools `edit_file` and `write_file` are physically stripped from tool schema via Tool Policy Level B.
-- **Presumption of Guilt**: Assume the diff contains hidden defects until proven innocent. Three-axis review: Invariants, Task Contract, Ponytail.
-- **Anthropic Claude Code Convergence Protocol**:
-  - *Pre-Existing Bugs Immunity*: Strictly forbidden from rejecting (`reject_task`) for code/debt existing prior to the task branch. Pre-existing issues are logged for the backlog, never used to hold the current PR hostage.
-  - *Diff-Only Re-Review*: On round 2+, audit strictly the new corrective diff, not the entire historical codebase.
-  - *Actionable Line References*: Every objection must cite `file:line` with exact technical remediation requirements. Abstract philosophical complaints are forbidden.
-  - *Anti-Nitpicking*: If linters and compilers pass, subjective naming preferences and minor formatting cannot be grounds for rejection.
+---
 
-### 3. Retro Persona (`.cvh/agents/retro/` — When Requested)
-- **Ironclad Engine Code Prohibition**: Strictly forbidden from touching application source code (`src/`, `src-tauri/`, `server/`). Operates exclusively on rules, sensor scripts, and history ledgers.
-- **Karpathy's LLM-Wiki Knowledge Ingest**:
-  - *Ingest*: Distill lessons learned from completed tasks into modular rules in `.agents/rules/` using the **Cue — Lesson — Evidence (CLE)** protocol:
-    - `Cue`: Exact structural trigger condition.
-    - `Lesson`: Actionable prescriptive invariant.
-    - `Evidence`: Concrete task ID and defect trace.
-  - *Query*: Zero-turn memory priming loads high-signal rules directly into Turn 1 system prompt.
-  - *Lint*: Convert manual reviewer findings into automated mechanical sensor assertions in `.agents/scripts/audit/` or transition hooks (`.cvh/hooks/`).
+## 3. Code Simplifier & Zero Silent Failures (ECC Invariants)
+- **Zero Silent Failures**: Never swallow errors via empty `catch {}`, `let _ = ...`, or deceptive fallback defaults (`.catch(() => [])`, `Err(_) => Default::default()`). Distinguish expected absence from failure. Always preserve error causality and diagnostic context.
+- **Code Simplifier Refactoring**: Favor early returns (guard clauses) over nested ladders; inline single-use helpers; break complex chains into clear intermediate variables; clarity over cleverness.
 
-### 4. Planner Persona (`.cvh/agents/planner/` — When Requested)
-- **Read-Only Scope**: `edit_file` and `write_file` disabled via Tool Policy Level B.
-- **Developer Context Protection**: Provide exact file paths, line numbers, function signatures, and data contracts so the developer never performs blind searches.
-- **Subagent Reconnaissance**: Uses `subagent(role: "explorer")` for broad context gathering.
-- **Clarification Protocol**: Calls `question` when specs are ambiguous or contradictory. Never guesses.
+---
+
+## 4. Zero-TDD Mandate
+- Never author synthetic unit tests with mocks (`*.test.ts`). Verification relies 100% on live Ground Truth Sensors (compiler, linter, build bundle, static audit invariants).
+
+---
+
+## 5. Worktree Isolation
+- All feature implementation takes place in dedicated Git worktrees (`worktrees/<task-slug>`). Never touch root directly on multi-stage boards.
+"##;
+
+pub const DEFAULT_RULE_ROLE_REVIEWER_MD: &str = r##"# Rule: Canonical Reviewer Behavioral Invariants (role-reviewer.md)
+
+Authoritative behavioral specifications and architectural DNA for the Reviewer role in CanbanVoimaxHarness.
+
+---
+
+## 1. Read-Only Operational Boundary
+- Tools `edit_file` and `write_file` are physically stripped from tool schema via Tool Policy.
+
+---
+
+## 2. Cognitive Stance: Presumption of Guilt
+- Assume the diff contains hidden defects, async race conditions, or unhandled edge cases until proven innocent. Three-axis review: Invariants, Task Contract, Ponytail.
+
+---
+
+## 3. Anthropic Claude Code Convergence Protocol
+1. **Pre-Existing Bugs Immunity**: The reviewer is **strictly forbidden from rejecting (`reject_task`) for bugs or debt existing prior to the task branch**. Pre-existing issues are noted for the backlog, never used to hold the current PR hostage.
+2. **Diff-Only Re-Review**: On round 2+ (after developer addresses feedback), audit strictly the new corrective diff, not the entire historical codebase.
+3. **Actionable Line References**: Every objection MUST cite `file:line` with exact, unambiguous remediation requirements. Abstract philosophical complaints are forbidden.
+4. **Anti-Nitpicking**: If linters and compilers pass, subjective naming preferences and minor formatting cannot be grounds for rejection.
+
+---
+
+## 4. Zero Silent Failures & Simplification Audit
+- Strictly reject any code that masks errors behind empty catch blocks, silent fallbacks, or discarded results without context.
+- Reject over-abstracted single-use wrapper functions that introduce cognitive overhead without genuine reuse.
+"##;
+
+pub const DEFAULT_RULE_ROLE_RETRO_MD: &str = r##"# Rule: Canonical Retrospective Behavioral Invariants (role-retro.md)
+
+Authoritative behavioral specifications and architectural DNA for the Retro role in CanbanVoimaxHarness.
+
+---
+
+## 1. Ironclad Engine Code Prohibition
+- The Retro agent is **STRICTLY FORBIDDEN from touching application source code** (`src/`, `src-tauri/`, `server/`). You NEVER write product features or code fixes.
+
+---
+
+## 2. Karpathy's LLM-Wiki Knowledge Ingest & Rule-Sprawl Filter
+1. **Ingest (Accumulation via CLE)**:
+   - For every task that encountered non-trivial invariants or reviewer corrections, update 1–2 related rule pages using the **Cue — Lesson — Evidence (CLE)** triad:
+     - `Cue`: Structural trigger condition (*"When adding IPC commands..."*).
+     - `Lesson`: Actionable operational constraint (*"Always validate on boundary..."*).
+     - `Evidence`: Concrete task ID and defect trace.
+2. **Rule-Sprawl Filter (Mechanical Hardening Over Prose)**:
+   - **Banned**: Writing generic prose rules or philosophical essays for one-off bugs.
+   - **Mandated**: Convert manual reviewer findings into automated mechanical sensor assertions in `.agents/scripts/audit/` or transition hooks (`.cvh/hooks/`). If an invariant cannot be checked mechanically, record at most 3-4 lines of CLE into an existing rule page. Never create new rule files for single-instance bugs.
+"##;
+
+pub const DEFAULT_RULE_ROLE_PLANNER_MD: &str = r##"# Rule: Canonical Planner Behavioral Invariants (role-planner.md)
+
+Authoritative behavioral specifications and architectural DNA for the Planner role in CanbanVoimaxHarness.
+
+---
+
+## 1. Read-Only Scope & Context Protection
+- `edit_file` and `write_file` disabled via Tool Policy.
+- Provide exact file paths, line numbers, function signatures, and data contracts so the developer never performs blind searches.
+
+---
+
+## 2. "Deeper, Not Bigger" (be-ambitious) Protocol
+Turn tasks into deeper versions of themselves, not bigger ones:
+1. **Expert Moves**: What a top senior engineer would do that wasn't asked for (reproduce before fixing, check base rates/callers, state trade-offs).
+2. **Rawest Material**: Inspect primary sources rather than summaries (raw AST, raw SQLite WAL/schemas, logs, real code instead of assumptions).
+3. **Specific Methods & Tools**: Name concrete Rust types, React hooks, Tauri IPC signatures, compiler flags, and profilers.
+4. **External Ground Truth Verification**: Specific sensor commands (`pnpm exec tsc --noEmit`, `cargo check`, exit code 0 on reproduction commands) that prove correctness without trusting the model.
 "##;
 
 pub const DEFAULT_RULE_BOARDS_MD: &str = r##"# Guide: Boards and Pipelines Configuration (boards.md)
@@ -1426,56 +1500,32 @@ When an operator instructs `cvh-dev` to configure or optimize a repository (e.g.
    - Python: look for `pyproject.toml`, `requirements.txt`, `main.py`.
    - Go/C++/Other: detect native build tools and linters.
    Tailor all gatekeeper sensors and persona instructions to the *actual detected toolchain*.
+   - **Leverage Local `docs/ecc/` Rule Catalog**:
+     When configuring rules for a specific programming language or framework (e.g. Python, Go, C++, TypeScript, Rust, React, Swift, etc.), do not invent rules from scratch. Use the repository's local catalog at `docs/ecc/rules/<language>/` (and `docs/ecc/agents/`) as an authoritative, battle-tested source for coding style, security invariants, and patterns, adapting them directly into `.cvh/agents/<role>/rules/<topic>.md`.
 
 ---
 
-## 2. Universal Behavioral DNA for Generated Personas
+## 2. Modular Behavioral DNA for Generated Personas
 
-When `cvh-dev` instantiates roles under `.cvh/agents/<role>/`, generating shallow, generic prompts is **strictly forbidden**. Every generated agent must be infused with the battle-tested behavioral algorithms synthesized from CarSmash (390+ tasks), Anthropic Claude Code, OpenCode, and Google Research Harness²:
-
-### 2.1 `developer` (Implementation Specialist)
-- **Worktree Isolation**: All edits occur in isolated Git worktrees (`worktrees/<task-slug>`). Never touch the root working tree directly.
-- **OpenCode 4 Laws Against LLM Over-Defensiveness**:
-  1. *Prevent Over-Defensiveness*: Do not add defensive checks for mathematically or structurally improbable scenarios. Explain the probability and only add upon explicit confirmation. Prohibit privately inflating code just to make it "theoretically more stable".
-  2. *Single Validation at Boundary*: External data (IPC payloads, HTTP requests, CLI flags, file reads) is validated **strictly once at the system boundary**. Internally, rely 100% on the strict type system. Layered redundant null/undefined checks across internal functions and helpers are strictly banned.
-  3. *Reject Premature Abstraction*: Logic used in a single location must be inlined locally. Casually splitting code into speculative helper functions ahead of time is prohibited.
-  4. *Control Complexity*: Do not use `try/catch` unless handling an expected, recoverable external I/O failure. Never swallow errors into silent fallback logs.
-- **Ponytail Minimalism**:
-  - Solve the exact requirement formulated in the task. No opportunistic refactoring of untouched files.
-  - Before advancing, run `git diff` and line-by-line audit every change to eliminate stray logs, temporary dumps, or accidental formatting/whitespace churn.
-- **Zero-TDD Mandate**: Never author synthetic unit tests with mocks (`*.test.ts`). Verification relies 100% on live Ground Truth Sensors (compiler, linter, static audit invariants, build bundles).
-
-### 2.2 `reviewer` (Red Team / Critical Peer Reviewer)
-- **Read-Only Scope**: Tools `edit_file` and `write_file` are physically stripped from the LLM tool schema via Tool Policy Level B. The reviewer inspects and judges, never edits code.
-- **Cognitive Mandate: "Presumption of Guilt"**: Assume the diff contains at least one hidden defect, race condition, or regression until proven innocent.
-- **Three-Axis Review Framework**:
-  1. *Axis 1: Invariants & Domain Safety*: Memory leaks, unmounted timer cleanups, async races, zero-GC hot loops.
-  2. *Axis 2: Task Contract*: Did the developer fulfill the exact requirements? No silent dropping of edge cases.
-  3. *Axis 3: Craft & Ponytail*: Minimal diff, no dead code, no duplicate abstractions.
-- **Anthropic Claude Code Convergence Standards**:
-  - *Actionable Line References*: Every finding must cite `file:line` with concrete technical remediation requirements. Abstract philosophical complaints are forbidden.
-  - *Immunity to Pre-Existing Historical Bugs*: If a defect existed in the codebase *prior* to the task branch, the reviewer is STRICTLY FORBIDDEN from blocking the task (`CHANGES_REQUESTED`). Log pre-existing bugs for the backlog, do not hold current PR hostage.
-  - *Diff-Only Re-Review*: On follow-up review cycles, audit strictly the new diff addressing earlier feedback, not the entire historical tree.
-  - *Limit Nitpicking*: Do not block code for subjective naming preferences or minor formatting if linters pass.
-
-### 2.3 `planner` (Technical Architect — When Requested)
-- **Read-Only Scope**: `edit_file` and `write_file` disabled.
-- **Cognitive Mandate: "Context Window Protection for Developer"**:
-  - The developer's context window is scarce. The planner produces exact file paths, line numbers, function signatures, and data contracts. The developer must never perform blind exploratory searches.
-- **Exploration via Subagents**: Uses `subagent(role: "explorer")` for broad codebase reconnaissance to keep its own context window clean.
-- **Human-in-the-Loop Clarification**: If requirements are ambiguous or contradictory, calls `question` to clarify with the user. Never guesses.
-- **Prohibition on Heavy Compilation**: Analytical only. Never runs compilers or heavy builds.
-
-### 2.4 `retro` (Retrospective Verifier & Environment Optimizer — When Requested)
-- **Engine Code Prohibition**: Strictly forbidden from touching application source code (`src/`, `src-tauri/`, `server/`). Operates exclusively on rules, sensor scripts, and history ledgers.
-- **Runs Post-Approval**: Activates only after official `APPROVED` verdict from the reviewer.
-- **Karpathy's LLM-Wiki Knowledge Ingest**:
-  - Distills lessons learned from the completed task into modular Markdown files in `.agents/rules/` using the **Cue — Lesson — Evidence (CLE)** protocol:
-    - *Cue*: The exact trigger condition.
-    - *Lesson*: The actionable prescriptive invariant.
-    - *Evidence*: Concrete task ID and defect trace.
-- **Mechanical Hardening**: Converts manual reviewer findings into automated checks in `.agents/scripts/audit/` so the platform can detect regressions mechanically.
-- **Ledger Recording**: Updates task history in `.agents/tasks-history.json` and advances to terminal `ready` stage.
+When `cvh-dev` instantiates or configures roles under `.cvh/agents/<role>/`, generating shallow, generic prompts is **strictly forbidden**.
+**Zero-Context-Pollution Invariant**: Never load a monolithic rule covering all roles! Load ONLY the specific modular rule needed for the stage being configured:
+- **For Developer** (`dev`, fast-track, lean solo): `load_rule("role-developer")`
+  - OpenCode 4 Laws against over-defensiveness.
+  - Ponytail minimalism & contrastive diff self-audit.
+  - Code Simplifier tactics & Zero Silent Failures (silent-failure-hunter).
+  - Zero-TDD mandate & isolated worktrees.
+- **For Reviewer** (`review`, Red Team auditor): `load_rule("role-reviewer")`
+  - Read-only operational boundary (Level B tool policy).
+  - Presumption of guilt & 3-axis review (Invariants, Contract, Ponytail).
+  - Anthropic Claude Code Convergence Protocol (immunity to historical bugs, diff-only re-review, actionable line refs).
+  - Zero Silent Failures audit.
+- **For Retro** (`retro`, continuous improvement — when requested): `load_rule("role-retro")`
+  - Ironclad engine code prohibition (never touches `src/`).
+  - Karpathy's LLM-Wiki CLE protocol (Cue — Lesson — Evidence).
+  - Rule-Sprawl Filter: mechanical sensor hardening over verbose prose.
+- **For Planner** (`plan`, technical architect — when requested): `load_rule("role-planner")`
+  - Read-only operational boundary & context window protection.
+  - "Deeper, Not Bigger" (`be-ambitious`) protocol: 4 foundational deepening questions.
 
 ---
 
@@ -1553,7 +1603,6 @@ Every `persona.md` generated by `cvh-dev` MUST include valid YAML frontmatter:
 name: <role-id>
 description: <Concise 1-line description of authority>
 model: inherit
-tools: [<allowed_tools>]
 scope: <gated-writes | gated-auditor | read-only | rule-evolution>
 activation: on-enter <column_id> runs run_agent(taskId)
 icon: <LucideIconName>   # Code2, Wrench, ShieldCheck, RotateCcw, Brain, Cpu
@@ -1621,7 +1670,6 @@ Assume the diff contains hidden defects, async race conditions, or unhandled edg
 name: retro
 description: Retrospective verifier, rule evolution specialist, and environment optimizer.
 model: inherit
-tools: [read_file, edit_file, write_file, glob, grep, execute_command, advance_task, move_task, reject_task, list_tasks, get_task_history, load_rule]
 scope: rule-evolution
 activation: on-enter retro runs run_agent(taskId)
 icon: RotateCcw
@@ -1701,6 +1749,26 @@ pub async fn ensure_cvh_dev_scaffold(repo_root: &Path) -> Result<(), anyhow::Err
     let pipeline_setup_md_path = cvh_dev_rules_dir.join("pipeline-setup.md");
     if !pipeline_setup_md_path.exists() {
         atomic_write_file(&pipeline_setup_md_path, DEFAULT_RULE_PIPELINE_SETUP_MD).await?;
+    }
+    let role_developer_md_path = cvh_dev_rules_dir.join("role-developer.md");
+    if !role_developer_md_path.exists() {
+        atomic_write_file(&role_developer_md_path, DEFAULT_RULE_ROLE_DEVELOPER_MD).await?;
+    }
+    let role_reviewer_md_path = cvh_dev_rules_dir.join("role-reviewer.md");
+    if !role_reviewer_md_path.exists() {
+        atomic_write_file(&role_reviewer_md_path, DEFAULT_RULE_ROLE_REVIEWER_MD).await?;
+    }
+    let role_retro_md_path = cvh_dev_rules_dir.join("role-retro.md");
+    if !role_retro_md_path.exists() {
+        atomic_write_file(&role_retro_md_path, DEFAULT_RULE_ROLE_RETRO_MD).await?;
+    }
+    let role_planner_md_path = cvh_dev_rules_dir.join("role-planner.md");
+    if !role_planner_md_path.exists() {
+        atomic_write_file(&role_planner_md_path, DEFAULT_RULE_ROLE_PLANNER_MD).await?;
+    }
+    let legacy_canonical_roles_path = cvh_dev_rules_dir.join("canonical-roles.md");
+    if legacy_canonical_roles_path.exists() {
+        let _ = tokio::fs::remove_file(&legacy_canonical_roles_path).await;
     }
 
     Ok(())
@@ -2393,14 +2461,10 @@ pub fn is_tool_allowed(
     // the zero-trust gate in execute_tool evaluate the same canonical name.
     let canonical = normalize_tool_name(tool_name);
 
-    // Hierarchical Subagent Policy:
+    // Hierarchical Subagent Policy per stage:
     // If checking 'subagent', 'subagent_bg', or 'collect_subagent':
-    // The master switch 'subagent' must be allowed first!
+    // The master switch 'subagent' for this stage/role controls availability directly.
     if canonical == "subagent" || canonical == "subagent_bg" || canonical == "collect_subagent" || canonical == "subagent_list" {
-        let master_global = policy_lookup(&policy.global_enabled, "subagent").unwrap_or(true);
-        if !master_global {
-            return false;
-        }
         if let Some(stage) = stage_id {
             if let Some(stage_map) = policy.stage_overrides.get(stage) {
                 if let Some(master_stage) = policy_lookup(stage_map, "subagent") {
@@ -2408,57 +2472,41 @@ pub fn is_tool_allowed(
                         return false;
                     }
                 }
-            }
-        }
-
-        if canonical == "subagent" {
-            let sync_global = policy_lookup(&policy.global_enabled, "subagent_sync").unwrap_or(true);
-            if !sync_global {
-                return false;
-            }
-            if let Some(stage) = stage_id {
-                if let Some(stage_map) = policy.stage_overrides.get(stage) {
+                if canonical == "subagent" {
                     if let Some(sync_stage) = policy_lookup(stage_map, "subagent_sync") {
                         if !sync_stage {
                             return false;
                         }
                     }
+                    return true;
                 }
-            }
-            return true;
-        }
-
-        if canonical == "subagent_bg" || canonical == "collect_subagent" || canonical == "subagent_list" {
-            let bg_global = policy_lookup(&policy.global_enabled, "subagent_bg").unwrap_or(true);
-            if !bg_global {
-                return false;
-            }
-            if let Some(stage) = stage_id {
-                if let Some(stage_map) = policy.stage_overrides.get(stage) {
+                if canonical == "subagent_bg" || canonical == "collect_subagent" || canonical == "subagent_list" {
                     if let Some(bg_stage) = policy_lookup(stage_map, "subagent_bg") {
                         if !bg_stage {
                             return false;
                         }
                     }
+                    return true;
                 }
             }
-            return true;
         }
+        return true;
     }
 
-    // AND-semantics: effective(tool, stage) = globalEnabled && stageOverride
-    // (missing entries default to true). A stage override of `true` can no
-    // longer re-enable a globally disabled tool; both layers must allow it.
-    let global_ok = policy_lookup(&policy.global_enabled, canonical).unwrap_or(true);
-    let stage_ok = match stage_id {
-        Some(stage) => policy
-            .stage_overrides
-            .get(stage)
-            .and_then(|stage_map| policy_lookup(stage_map, canonical))
-            .unwrap_or(true),
-        None => true,
-    };
-    global_ok && stage_ok
+    // Single Authoritative Layer: stage_overrides directly dictates tool availability.
+    // If the stage/role explicitly configures the tool (true/false), that decision is final.
+    match stage_id {
+        Some(stage) => {
+            if let Some(stage_map) = policy.stage_overrides.get(stage) {
+                policy_lookup(stage_map, canonical)
+                    .or_else(|| policy_lookup(&policy.global_enabled, canonical))
+                    .unwrap_or(true)
+            } else {
+                policy_lookup(&policy.global_enabled, canonical).unwrap_or(true)
+            }
+        }
+        None => policy_lookup(&policy.global_enabled, canonical).unwrap_or(true),
+    }
 }
 
 /// Canonical on-disk location of the Tool Policy Matrix.
@@ -2498,119 +2546,26 @@ pub async fn save_tool_policies(root_path: impl AsRef<Path>, config: &ToolPolicy
     let serialized = serde_json::to_string_pretty(config)
         .context("Failed to serialize ToolPolicyConfig to JSON")?;
     atomic_write_file(&canonical, &serialized).await?;
-    let _ = sync_tool_policies_to_personas(root, config).await;
+    // Note: Two-way YAML persona frontmatter synchronization is eradicated.
+    // Backend tool schemas are injected dynamically from ToolPolicyConfig without touching persona.md.
     Ok(())
 }
 
 /// Synchronizes allowed tools from `ToolPolicyConfig` into each agent persona's
 /// `.cvh/agents/<role>/persona.md` YAML frontmatter `tools: [...]`.
 pub async fn sync_tool_policies_to_personas(
-    root_path: impl AsRef<Path>,
-    config: &ToolPolicyConfig,
+    _root_path: impl AsRef<Path>,
+    _config: &ToolPolicyConfig,
 ) -> Result<()> {
-    let root = root_path.as_ref();
-    let agents_dir = root.join(".cvh").join("agents");
-    if !agents_dir.exists() {
-        return Ok(());
-    }
-
-    let mut dir_entries = match tokio::fs::read_dir(&agents_dir).await {
-        Ok(entries) => entries,
-        Err(_) => return Ok(()),
-    };
-
-    // Load pipeline and boards dynamically to resolve persona -> stage column mapping
-    let pipeline = load_pipeline_config(root).await.ok();
-    let boards = load_boards_config(root).await.ok();
-
-    while let Ok(Some(entry)) = dir_entries.next_entry().await {
-        let path = entry.path();
-        if !path.is_dir() {
-            continue;
-        }
-        let role = match entry.file_name().to_str() {
-            Some(s) if !s.is_empty() => s.to_string(),
-            _ => continue,
-        };
-
-        let persona_file = if path.join("persona.md").is_file() {
-            path.join("persona.md")
-        } else if path.join("agent.md").is_file() {
-            path.join("agent.md")
-        } else {
-            continue;
-        };
-
-        let content = match tokio::fs::read_to_string(&persona_file).await {
-            Ok(c) => c,
-            Err(_) => continue,
-        };
-
-        // Determine effective stage/role identifier for policy lookup dynamically:
-        // 1. Direct match in stage_overrides (e.g. stage_overrides has "reviewer" or "cvh-dev")
-        // 2. Column in pipeline where column.persona == role or column.id == role
-        // 3. Column in boards where column.persona == role or column.id == role
-        // 4. Fallback convention for minimal environments: developer -> dev, reviewer -> review, retro -> retro
-        let stage_target: Option<String> = if config.stage_overrides.contains_key(&role) {
-            Some(role.clone())
-        } else {
-            let from_pipeline = pipeline.as_ref().and_then(|p| {
-                p.columns.iter().find(|col| {
-                    col.persona.as_deref() == Some(&role) || col.id == role
-                }).map(|col| col.id.clone())
-            });
-
-            let from_boards = from_pipeline.or_else(|| {
-                boards.as_ref().and_then(|b| {
-                    for board in &b.boards {
-                        if let Some(col) = board.columns.iter().find(|col| {
-                            col.persona.as_deref() == Some(&role) || col.id == role
-                        }) {
-                            return Some(col.id.clone());
-                        }
-                    }
-                    None
-                })
-            });
-
-            from_boards.or_else(|| {
-                if config.stage_overrides.contains_key(&role) {
-                    Some(role.clone())
-                } else if (role == "developer" || role == "cvh-dev") && config.stage_overrides.contains_key("dev") {
-                    Some("dev".to_string())
-                } else if role == "reviewer" && config.stage_overrides.contains_key("review") {
-                    Some("review".to_string())
-                } else if (role == "retrospective" || role == "retro") && config.stage_overrides.contains_key("retro") {
-                    Some("retro".to_string())
-                } else {
-                    None
-                }
-            })
-        };
-
-        let mut enabled_tools = Vec::new();
-        for &tool in CANONICAL_TOOLS {
-            if !crate::agent::is_tool_active_for_agent(tool, config, &role, stage_target.as_deref(), None) {
-                continue;
-            }
-            enabled_tools.push(tool);
-        }
-
-        let tools_line = format!("tools: [{}]", enabled_tools.join(", "));
-
-        let updated_content = update_frontmatter_tools(&content, &tools_line);
-        if updated_content != content {
-            let _ = atomic_write_file(&persona_file, &updated_content).await;
-        }
-    }
-
+    // Deprecated: Two-way YAML synchronization is eradicated.
+    // Tool permissions are governed directly by ToolPolicyConfig.
     Ok(())
 }
 
-pub fn update_frontmatter_tools(content: &str, new_tools_line: &str) -> String {
+pub fn strip_frontmatter_tools(content: &str) -> String {
     let trimmed = content.trim_start();
     if !trimmed.starts_with("---") {
-        return format!("---\n{}\n---\n{}", new_tools_line, content);
+        return content.to_string();
     }
 
     let rest = &trimmed[3..];
@@ -2620,13 +2575,10 @@ pub fn update_frontmatter_tools(content: &str, new_tools_line: &str) -> String {
 
         let mut lines: Vec<String> = Vec::new();
         let mut in_tools = false;
-        let mut replaced = false;
 
         for line in frontmatter.lines() {
             let line_trim = line.trim();
             if line_trim.starts_with("tools:") {
-                lines.push(new_tools_line.to_string());
-                replaced = true;
                 in_tools = true;
                 continue;
             }
@@ -2641,15 +2593,20 @@ pub fn update_frontmatter_tools(content: &str, new_tools_line: &str) -> String {
             lines.push(line.to_string());
         }
 
-        if !replaced {
-            lines.push(new_tools_line.to_string());
-        }
-
         let new_frontmatter = lines.join("\n");
-        format!("---\n{}\n---{}", new_frontmatter.trim(), body)
+        let new_fm_trimmed = new_frontmatter.trim();
+        if new_fm_trimmed.is_empty() {
+            body.trim_start_matches('\n').to_string()
+        } else {
+            format!("---\n{}\n---{}", new_fm_trimmed, body)
+        }
     } else {
         content.to_string()
     }
+}
+
+pub fn update_frontmatter_tools(content: &str, _new_tools_line: &str) -> String {
+    strip_frontmatter_tools(content)
 }
 
 #[cfg(test)]
@@ -2912,30 +2869,30 @@ mod tests {
     }
 
     #[test]
-    fn test_tool_policy_and_semantics_global_stage() {
-        // AND-semantics: effective(tool, stage) = globalEnabled && stageOverride
-        // (missing entries default to true). A stage `true` must NOT resurrect
-        // a globally disabled tool (the reported bug: default dev/review
-        // overrides are almost all `true`, so global-off did nothing).
+    fn test_strip_frontmatter_tools() {
+        let content_single = "---\nname: dev\ntools: [read_file, glob]\nmodel: inherit\n---\n# Dev persona";
+        let stripped = strip_frontmatter_tools(content_single);
+        assert!(!stripped.contains("tools:"));
+        assert!(stripped.contains("name: dev"));
+        assert!(stripped.contains("model: inherit"));
+        assert!(stripped.contains("# Dev persona"));
+
+        let content_multi = "---\nname: dev\ntools:\n  - read_file\n  - glob\nmodel: inherit\n---\n# Dev persona";
+        let stripped_multi = strip_frontmatter_tools(content_multi);
+        assert!(!stripped_multi.contains("tools:"));
+        assert!(!stripped_multi.contains("read_file"));
+        assert!(stripped_multi.contains("name: dev"));
+        assert!(stripped_multi.contains("model: inherit"));
+        assert!(stripped_multi.contains("# Dev persona"));
+    }
+
+    #[test]
+    fn test_tool_policy_stage_overrides_authoritative() {
+        // Single Authoritative Layer: stage_overrides directly dictates tool availability.
+        // An explicit stage/role override controls the agent directly.
         let mut policy = ToolPolicyConfig::default();
 
-        // global=false + stage=true -> false (incl. alias normalization).
-        policy.global_enabled.insert("read_file".to_string(), false);
-        assert!(!is_tool_allowed(&policy, Some("dev"), "read_file"));
-        // No stage record at all + global=false -> false.
-        assert!(!is_tool_allowed(&policy, Some("no-such-stage"), "read_file"));
-        assert!(!is_tool_allowed(&policy, None, "read_file"));
-
-        // global=true + stage=false -> false.
-        policy.global_enabled.insert("read_file".to_string(), true);
-        policy
-            .stage_overrides
-            .entry("dev".to_string())
-            .or_default()
-            .insert("read_file".to_string(), false);
-        assert!(!is_tool_allowed(&policy, Some("dev"), "read_file"));
-
-        // Both true -> true.
+        // dev explicitly allows read_file
         policy
             .stage_overrides
             .entry("dev".to_string())
@@ -2943,14 +2900,18 @@ mod tests {
             .insert("read_file".to_string(), true);
         assert!(is_tool_allowed(&policy, Some("dev"), "read_file"));
 
-        // Alias pair under AND: global execute_command=false + stage bash=true
-        // (stored under alias key) -> still false.
-        policy.global_enabled.insert("execute_command".to_string(), false);
-        let dev = policy.stage_overrides.entry("dev".to_string()).or_default();
-        dev.remove("execute_command");
-        dev.insert("bash".to_string(), true);
-        assert!(!is_tool_allowed(&policy, Some("dev"), "execute_command"));
-        assert!(!is_tool_allowed(&policy, Some("dev"), "bash"));
+        // dev explicitly disables read_file
+        policy
+            .stage_overrides
+            .entry("dev".to_string())
+            .or_default()
+            .insert("read_file".to_string(), false);
+        assert!(!is_tool_allowed(&policy, Some("dev"), "read_file"));
+
+        // Fallback for stages with no record: falls back to global_enabled
+        policy.global_enabled.insert("glob".to_string(), false);
+        assert!(!is_tool_allowed(&policy, Some("no-such-stage"), "glob"));
+        assert!(!is_tool_allowed(&policy, None, "glob"));
     }
 
     #[test]
