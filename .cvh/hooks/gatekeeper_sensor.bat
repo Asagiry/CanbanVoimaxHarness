@@ -26,7 +26,7 @@ if exist "src-tauri\Cargo.toml" (
 
 echo [CVH Sensor] Running TypeScript frontend typecheck...
 if exist "package.json" (
-    call pnpm exec tsc --noEmit
+    call npx tsc --noEmit
     if errorlevel 1 (
         echo [CVH Sensor] ERROR: Frontend TypeScript check failed! >&2
         exit /b 1
