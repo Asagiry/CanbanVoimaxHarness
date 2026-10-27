@@ -474,7 +474,6 @@ echo.
 
 echo Collecting artifacts...
 if not exist "%BIN_DIR%" mkdir "%BIN_DIR%"
-if not exist "%INST_DIR%" mkdir "%INST_DIR%"
 
 set "APP_EXE="
 if not "%CARGO_TARGET_DIR%"=="" (
@@ -548,6 +547,14 @@ if "%DLL_FOUND%"=="1" (
   echo   ok: copied WebView2Loader.dll to %BIN_DIR%
 )
 
+if "!NO_BUNDLE!"=="1" (
+  echo   NOTE: fast build (--no-bundle); skipping installer discovery.
+  goto skip_installer_collect
+)
+
+if exist "%INST_DIR%" rmdir /s /q "%INST_DIR%" >nul 2>nul
+if not exist "%INST_DIR%" mkdir "%INST_DIR%"
+
 set "FOUND_INSTALLER=0"
 if not "%CARGO_TARGET_DIR%"=="" (
   if not "%TARGET%"=="" (
@@ -611,6 +618,8 @@ if "%FOUND_INSTALLER%"=="0" (
 if "%FOUND_INSTALLER%"=="0" (
   echo   NOTE: no NSIS/MSI installers found; portable exe only.
 )
+
+:skip_installer_collect
 echo.
 
 rem Sign and unblock release artifacts with PowerShell
@@ -618,9 +627,11 @@ echo Signing and unblocking artifacts...
 if exist "%COPIED_BIN%" (
   powershell -NoProfile -ExecutionPolicy Bypass -Command "$cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -match 'CN=Voimax' } | Select-Object -First 1; if (-not $cert) { try { $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Voimax, O=Voimax, C=RU' -CertStoreLocation 'Cert:\CurrentUser\My' -NotAfter (Get-Date).AddYears(5) -KeyUsage DigitalSignature -FriendlyName 'Voimax Code Signing Certificate'; $rootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('Root', 'CurrentUser'); $rootStore.Open('ReadWrite'); $rootStore.Add($cert); $rootStore.Close(); $pubStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('TrustedPublisher', 'CurrentUser'); $pubStore.Open('ReadWrite'); $pubStore.Add($cert); $pubStore.Close(); } catch {} }; if (-not $cert) { $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -match 'CN=CanbanVoimaxHarness' } | Select-Object -First 1 }; if ($cert) { Set-AuthenticodeSignature -FilePath '%COPIED_BIN%' -Certificate $cert | Out-Null; Write-Host ('  ok: signed %COPIED_BIN% with certificate ' + $cert.Subject) } else { Write-Host '  notice: code signing certificate not found in Cert:\CurrentUser\My' }; Unblock-File -Path '%COPIED_BIN%' -ErrorAction SilentlyContinue"
 )
-for %%F in ("%INST_DIR%\*.exe") do (
-  if exist "%%F" (
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "$cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -match 'CN=Voimax' } | Select-Object -First 1; if (-not $cert) { try { $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Voimax, O=Voimax, C=RU' -CertStoreLocation 'Cert:\CurrentUser\My' -NotAfter (Get-Date).AddYears(5) -KeyUsage DigitalSignature -FriendlyName 'Voimax Code Signing Certificate'; $rootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('Root', 'CurrentUser'); $rootStore.Open('ReadWrite'); $rootStore.Add($cert); $rootStore.Close(); $pubStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('TrustedPublisher', 'CurrentUser'); $pubStore.Open('ReadWrite'); $pubStore.Add($cert); $pubStore.Close(); } catch {} }; if (-not $cert) { $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -match 'CN=CanbanVoimaxHarness' } | Select-Object -First 1 }; if ($cert) { Set-AuthenticodeSignature -FilePath '%%F' -Certificate $cert | Out-Null; Write-Host ('  ok: signed installer %%F with certificate ' + $cert.Subject) } else { Write-Host '  notice: code signing certificate not found in Cert:\CurrentUser\My' }; Unblock-File -Path '%%F' -ErrorAction SilentlyContinue"
+if not "!NO_BUNDLE!"=="1" (
+  for %%F in ("%INST_DIR%\*.exe") do (
+    if exist "%%F" (
+      powershell -NoProfile -ExecutionPolicy Bypass -Command "$cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -match 'CN=Voimax' } | Select-Object -First 1; if (-not $cert) { try { $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Voimax, O=Voimax, C=RU' -CertStoreLocation 'Cert:\CurrentUser\My' -NotAfter (Get-Date).AddYears(5) -KeyUsage DigitalSignature -FriendlyName 'Voimax Code Signing Certificate'; $rootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('Root', 'CurrentUser'); $rootStore.Open('ReadWrite'); $rootStore.Add($cert); $rootStore.Close(); $pubStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('TrustedPublisher', 'CurrentUser'); $pubStore.Open('ReadWrite'); $pubStore.Add($cert); $pubStore.Close(); } catch {} }; if (-not $cert) { $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -match 'CN=CanbanVoimaxHarness' } | Select-Object -First 1 }; if ($cert) { Set-AuthenticodeSignature -FilePath '%%F' -Certificate $cert | Out-Null; Write-Host ('  ok: signed installer %%F with certificate ' + $cert.Subject) } else { Write-Host '  notice: code signing certificate not found in Cert:\CurrentUser\My' }; Unblock-File -Path '%%F' -ErrorAction SilentlyContinue"
+    )
   )
 )
 echo.
@@ -628,8 +639,10 @@ echo.
 echo Release artifacts:
 call :print_size "%COPIED_BIN%"
 if exist "%BIN_DIR%\WebView2Loader.dll" call :print_size "%BIN_DIR%\WebView2Loader.dll"
-for %%F in ("%INST_DIR%\*") do (
-  if exist "%%F" call :print_size "%%F"
+if not "!NO_BUNDLE!"=="1" (
+  for %%F in ("%INST_DIR%\*") do (
+    if exist "%%F" call :print_size "%%F"
+  )
 )
 echo.
 echo DONE: local Release build complete.
@@ -660,8 +673,8 @@ echo     Release\Windows\installer\  NSIS setup.exe, MSI
 echo.
 echo   Options:
 echo     --fast, --no-bundle fast build: portable exe only, skips slow NSIS compression (default in interactive)
-    --installer       full build with NSIS setup installer
-    --skip-install    reuse existing node_modules (default: skip if present)
+echo     --installer       full build with NSIS setup installer
+echo     --skip-install    reuse existing node_modules (default: skip if present)
 echo     --checks          run cargo check + cargo clippy (skipped by default for speed)
 echo     --with-checks     alias for --checks
 echo     --skip-checks     skip cargo check + cargo clippy (default)

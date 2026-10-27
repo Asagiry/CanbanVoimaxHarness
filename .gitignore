@@ -43,7 +43,7 @@ Thumbs.db
 .cvh/tasks.json
 .cvh/task-sequence.json
 .cvh/settings/sequence.json
-.cvh/llm_debug.log
+.cvh/llm_debug.log*
 .cvh/llm.json
 **/.cvh/llm.json
 

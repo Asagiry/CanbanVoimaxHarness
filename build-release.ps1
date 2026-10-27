@@ -2,8 +2,8 @@
 # CanbanVoimaxHarness - one-button local Release build (PowerShell 5.1+).
 # Single entry point for agents: run from the repository root, no questions.
 #
-#   ./build-release.ps1 [-SkipInstall] [-SkipChecks] [-Bundles nsis] [-Target x86_64-pc-windows-gnu] [-NoPause] [-Pause] [-Help]
-#   Double-dash spellings (--skip-install, --bundles=nsis, --target=..., --no-pause, --pause, --help) work too.
+#   ./build-release.ps1 [-Fast] [-NoBundle] [-SkipInstall] [-SkipChecks] [-Bundles nsis] [-Target x86_64-pc-windows-gnu] [-NoPause] [-Pause] [-Help]
+#   Double-dash spellings (--fast, --no-bundle, --skip-install, --bundles=nsis, --target=..., --no-pause, --pause, --help) work too.
 #
 # Pipeline: [1/5] preflight, [2/5] pnpm install, [3/5] frontend build,
 #             [4/5] cargo check + clippy, [5/5] tauri build + collect.
@@ -28,6 +28,8 @@ Usage: build-release.ps1 [options]
     Release/Linux/installer/    AppImage, deb
 
   Options:
+    -Fast        | --fast            fast build: portable binary only, skip installer
+    -NoBundle    | --no-bundle       same as -Fast (passes --no-bundle to tauri build)
     -SkipInstall | --skip-install    reuse existing node_modules (default: skip if present)
     -SkipChecks  | --skip-checks     skip cargo check + cargo clippy
     -Bundles LIST | --bundles=LIST   forward to "tauri build --bundles LIST" (e.g. nsis)
@@ -60,6 +62,7 @@ function Fail([string]$Message, [int]$Code = 1) {
 
 $SkipInstall = $false
 $SkipChecks = $false
+$NoBundle = $false
 $Bundles = ""
 $Target = ""
 $i = 0
@@ -70,15 +73,29 @@ while ($i -lt $args.Count) {
   elseif ($a -eq "--skip-checks" -or $a -eq "-SkipChecks") { $SkipChecks = $true }
   elseif ($a -eq "--no-pause" -or $a -eq "-NoPause") { $NoPause = $true }
   elseif ($a -eq "--pause" -or $a -eq "-Pause") { $NoPause = $false }
+  elseif ($a -eq "--fast" -or $a -eq "-Fast" -or $a -eq "--no-bundle" -or $a -eq "-NoBundle") {
+    $NoBundle = $true
+    $Bundles = ""
+  }
   elseif ($a -like "--bundles=*") {
     $Bundles = $a.Substring(11)
-    if ([string]::IsNullOrWhiteSpace($Bundles)) { Fail "--bundles requires a non-empty value." 2 }
+    if ($Bundles -eq "none" -or $Bundles -eq "off" -or $Bundles -eq "0") {
+      $NoBundle = $true
+      $Bundles = ""
+    } elseif ([string]::IsNullOrWhiteSpace($Bundles)) {
+      Fail "--bundles requires a non-empty value." 2
+    }
   }
   elseif ($a -eq "--bundles" -or $a -eq "-Bundles") {
     $i++
     if ($i -ge $args.Count) { Fail "--bundles requires a value." 2 }
     $Bundles = [string]$args[$i]
-    if ([string]::IsNullOrWhiteSpace($Bundles)) { Fail "--bundles requires a non-empty value." 2 }
+    if ($Bundles -eq "none" -or $Bundles -eq "off" -or $Bundles -eq "0") {
+      $NoBundle = $true
+      $Bundles = ""
+    } elseif ([string]::IsNullOrWhiteSpace($Bundles)) {
+      Fail "--bundles requires a non-empty value." 2
+    }
   }
   elseif ($a -like "--target=*") {
     $Target = $a.Substring(9)
@@ -218,13 +235,17 @@ if ($OnWindows) {
       Write-Host "  notice: MSVC link.exe not found and GNU target installed; defaulting target to $Target"
     }
   }
-  if ([string]::IsNullOrEmpty($Bundles)) {
+  if (-not $NoBundle -and [string]::IsNullOrEmpty($Bundles)) {
     $Bundles = "nsis"
   }
 }
 
 if ([string]::IsNullOrEmpty($Target)) { Write-Host "  target: host default" } else { Write-Host "  target: $Target" }
-if ([string]::IsNullOrEmpty($Bundles)) { Write-Host "  bundles: (tauri.conf.json defaults)" } else { Write-Host "  bundles: $Bundles" }
+if ($NoBundle) {
+  Write-Host "  mode: FAST build [portable binary only, --no-bundle]"
+} else {
+  if ([string]::IsNullOrEmpty($Bundles)) { Write-Host "  bundles: (tauri.conf.json defaults)" } else { Write-Host "  bundles: $Bundles" }
+}
 Write-Host ""
 
 Write-Host "[2/5] Installing frontend dependencies..."
@@ -287,7 +308,9 @@ $tauriArgs = @("tauri", "build", "--config", $tempConfigFile)
 if (-not [string]::IsNullOrEmpty($Target)) {
   $tauriArgs += @("--target", $Target)
 }
-if (-not [string]::IsNullOrEmpty($Bundles)) {
+if ($NoBundle) {
+  $tauriArgs += @("--no-bundle")
+} elseif (-not [string]::IsNullOrEmpty($Bundles)) {
   $tauriArgs += @("--bundles", $Bundles)
 }
 try {
@@ -300,7 +323,12 @@ Write-Host ""
 
 Write-Host "Collecting artifacts..."
 New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
-New-Item -ItemType Directory -Force -Path $InstDir | Out-Null
+if (-not $NoBundle) {
+  if (Test-Path -LiteralPath $InstDir) {
+    Remove-Item -Recurse -Force -LiteralPath $InstDir -ErrorAction SilentlyContinue
+  }
+  New-Item -ItemType Directory -Force -Path $InstDir | Out-Null
+}
 
 $targetDirs = @()
 if (-not [string]::IsNullOrEmpty($env:CARGO_TARGET_DIR)) {
@@ -363,38 +391,42 @@ if ($OnWindows) {
 }
 
 # Resolve installer files (prefer targeted, newest by leaf name)
-$installerCandidates = @()
-foreach ($td in $targetDirs) {
-  if ($OnWindows) {
-    if (-not [string]::IsNullOrEmpty($Target)) {
-      $installerCandidates += @(Get-ChildItem "$td/$Target/release/bundle/nsis/*.exe" -ErrorAction SilentlyContinue)
-      $installerCandidates += @(Get-ChildItem "$td/$Target/release/bundle/msi/*.msi" -ErrorAction SilentlyContinue)
-    }
-    if ($installerCandidates.Count -eq 0) {
-      $installerCandidates += @(Get-ChildItem "$td/release/bundle/nsis/*.exe" -ErrorAction SilentlyContinue)
-      $installerCandidates += @(Get-ChildItem "$td/release/bundle/msi/*.msi" -ErrorAction SilentlyContinue)
-    }
-  } else {
-    if (-not [string]::IsNullOrEmpty($Target)) {
-      $installerCandidates += @(Get-ChildItem "$td/$Target/release/bundle/appimage/*.AppImage" -ErrorAction SilentlyContinue)
-      $installerCandidates += @(Get-ChildItem "$td/$Target/release/bundle/deb/*.deb" -ErrorAction SilentlyContinue)
-    }
-    if ($installerCandidates.Count -eq 0) {
-      $installerCandidates += @(Get-ChildItem "$td/release/bundle/appimage/*.AppImage" -ErrorAction SilentlyContinue)
-      $installerCandidates += @(Get-ChildItem "$td/release/bundle/deb/*.deb" -ErrorAction SilentlyContinue)
+if ($NoBundle) {
+  Write-Host "  NOTE: fast build (--no-bundle); skipping installer discovery."
+} else {
+  $installerCandidates = @()
+  foreach ($td in $targetDirs) {
+    if ($OnWindows) {
+      if (-not [string]::IsNullOrEmpty($Target)) {
+        $installerCandidates += @(Get-ChildItem "$td/$Target/release/bundle/nsis/*.exe" -ErrorAction SilentlyContinue)
+        $installerCandidates += @(Get-ChildItem "$td/$Target/release/bundle/msi/*.msi" -ErrorAction SilentlyContinue)
+      }
+      if ($installerCandidates.Count -eq 0) {
+        $installerCandidates += @(Get-ChildItem "$td/release/bundle/nsis/*.exe" -ErrorAction SilentlyContinue)
+        $installerCandidates += @(Get-ChildItem "$td/release/bundle/msi/*.msi" -ErrorAction SilentlyContinue)
+      }
+    } else {
+      if (-not [string]::IsNullOrEmpty($Target)) {
+        $installerCandidates += @(Get-ChildItem "$td/$Target/release/bundle/appimage/*.AppImage" -ErrorAction SilentlyContinue)
+        $installerCandidates += @(Get-ChildItem "$td/$Target/release/bundle/deb/*.deb" -ErrorAction SilentlyContinue)
+      }
+      if ($installerCandidates.Count -eq 0) {
+        $installerCandidates += @(Get-ChildItem "$td/release/bundle/appimage/*.AppImage" -ErrorAction SilentlyContinue)
+        $installerCandidates += @(Get-ChildItem "$td/release/bundle/deb/*.deb" -ErrorAction SilentlyContinue)
+      }
     }
   }
-}
 
-$seenByLeaf = @{}
-foreach ($f in ($installerCandidates | Sort-Object LastWriteTime -Descending)) {
-  $leaf = Split-Path -Leaf $f.FullName
-  if (-not $seenByLeaf.ContainsKey($leaf)) {
-    $seenByLeaf[$leaf] = $true
-    Copy-Item -Force -LiteralPath $f.FullName -Destination $InstDir
+  $seenByLeaf = @{}
+  foreach ($f in ($installerCandidates | Sort-Object LastWriteTime -Descending)) {
+    $leaf = Split-Path -Leaf $f.FullName
+    if (-not $seenByLeaf.ContainsKey($leaf)) {
+      $seenByLeaf[$leaf] = $true
+      Copy-Item -Force -LiteralPath $f.FullName -Destination $InstDir
+    }
   }
+  if ($seenByLeaf.Count -eq 0) { Write-Host "  NOTE: no installers found; portable binary only." }
 }
-if ($seenByLeaf.Count -eq 0) { Write-Host "  NOTE: no installers found; portable binary only." }
 Write-Host ""
 
 # Sign and unblock release artifacts with Authenticode
@@ -428,7 +460,7 @@ if ($OnWindows) {
     Unblock-File -Path $copiedBin -ErrorAction SilentlyContinue
   }
 
-  if (Test-Path -LiteralPath $InstDir) {
+  if (-not $NoBundle -and (Test-Path -LiteralPath $InstDir)) {
     foreach ($instExe in (Get-ChildItem -LiteralPath $InstDir -Filter "*.exe" -File)) {
       if ($cert) {
         Set-AuthenticodeSignature -FilePath $instExe.FullName -Certificate $cert | Out-Null
@@ -450,8 +482,10 @@ foreach ($f in (Get-ChildItem -LiteralPath $BinDir -File)) {
     Write-Host ("  {0}  [{1} bytes]" -f $f.FullName, $f.Length)
   }
 }
-foreach ($f in (Get-ChildItem -LiteralPath $InstDir -File)) {
-  Write-Host ("  {0}  [{1} bytes]" -f $f.FullName, $f.Length)
+if (-not $NoBundle -and (Test-Path -LiteralPath $InstDir)) {
+  foreach ($f in (Get-ChildItem -LiteralPath $InstDir -File)) {
+    Write-Host ("  {0}  [{1} bytes]" -f $f.FullName, $f.Length)
+  }
 }
 Write-Host ""
 Write-Host "DONE: local Release build complete."
