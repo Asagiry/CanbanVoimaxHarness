@@ -881,6 +881,7 @@ function areCardPropsEqual(prev: KanbanCardProps, next: KanbanCardProps): boolea
     a.isTimerRunning === b.isTimerRunning &&
     a.returnsCount === b.returnsCount &&
     a.attachments === b.attachments &&
+    a.hookStates === b.hookStates &&
     areTodosEqual(a.todos, b.todos)
   );
 }
