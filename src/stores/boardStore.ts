@@ -226,8 +226,11 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
 
   const stageStart = stageEnteredAt || updatedAt || createdAt;
   const isDoneTask = status === 'done';
+  const finishTime = completedAt || (isDoneTask ? updatedAt : undefined);
   const computedStageDuration = isDoneTask
-    ? (typeof raw.activeStageDuration === 'number' && Number.isFinite(raw.activeStageDuration) ? raw.activeStageDuration : 0)
+    ? (typeof raw.activeStageDuration === 'number' && Number.isFinite(raw.activeStageDuration) && raw.activeStageDuration > 0
+        ? raw.activeStageDuration
+        : (stageStart && finishTime ? Math.max(0, Math.floor((finishTime - stageStart) / 1000)) : 0))
     : (stageStart ? Math.max(0, Math.floor((Date.now() - stageStart) / 1000)) : 0);
 
   const activeStageDuration = typeof raw.activeStageDuration === 'number' && Number.isFinite(raw.activeStageDuration) && raw.activeStageDuration > 0
@@ -235,7 +238,9 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
     : computedStageDuration;
 
   const computedTotalElapsed = isDoneTask
-    ? (typeof raw.totalElapsed === 'number' && Number.isFinite(raw.totalElapsed) ? raw.totalElapsed : 0)
+    ? (typeof raw.totalElapsed === 'number' && Number.isFinite(raw.totalElapsed) && raw.totalElapsed > 0
+        ? raw.totalElapsed
+        : (createdAt && finishTime ? Math.max(0, Math.floor((finishTime - createdAt) / 1000)) : 0))
     : (createdAt ? Math.max(0, Math.floor((Date.now() - createdAt) / 1000)) : 0);
 
   const totalElapsed = typeof raw.totalElapsed === 'number' && Number.isFinite(raw.totalElapsed) && raw.totalElapsed > 0
@@ -1043,6 +1048,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           merged.waitingForSubtaskId = undefined;
           merged.status = 'done';
           merged.completedAt = merged.completedAt || Date.now();
+          if (merged.createdAt) {
+            merged.totalElapsed = Math.max(0, Math.floor((merged.completedAt - merged.createdAt) / 1000));
+          }
         } else {
           merged.completedAt = undefined;
         }
@@ -1107,6 +1115,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           mapped.waitingForSubtaskId = undefined;
           mapped.status = 'done';
           mapped.completedAt = mapped.completedAt || Date.now();
+          if (mapped.createdAt) {
+            mapped.totalElapsed = Math.max(0, Math.floor((mapped.completedAt - mapped.createdAt) / 1000));
+          }
         } else {
           mapped.completedAt = undefined;
         }
