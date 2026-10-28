@@ -6,7 +6,7 @@ import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore, isDoneColumnDef } from '../../stores/boardStore';
 import { useTranslation, Language } from '../../stores/languageStore';
 import { useShallow } from 'zustand/react/shallow';
-import { GitBranch, CornerUpLeft, ChevronDown, MessageSquare, GitFork, Check, X, Loader2, Terminal, Paperclip } from 'lucide-react';
+import { GitBranch, ChevronDown, MessageSquare, GitFork, Check, X, Loader2, Terminal, Paperclip } from 'lucide-react';
 import TaskContextMenu from './TaskContextMenu';
 import { CardTodoProgress } from './CardTodoProgress';
 import { getDeterministicAgentColor } from '../../lib/agentPalette';
@@ -653,28 +653,12 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                   }`
             }`}
           >
-            {/* Header: ID, Parent link & Concise Status */}
+            {/* Header: ID & Concise Status */}
             <div className="flex items-center justify-between mb-2 gap-1.5 flex-wrap">
               <div className="flex items-center space-x-1.5">
                 <span className="font-mono text-[10px] font-semibold text-[#171717] dark:text-[#f0f6fc] bg-[#f4f4f5] dark:bg-[#0d1117] px-1.5 py-0.5 rounded border border-[#ebebeb] dark:border-[#30363d] tabular-nums">
                   {task.id}
                 </span>
-
-                {/* Subtask link to parent */}
-                {task.parentId && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openDrawer(task.parentId!);
-                    }}
-                    className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#6366f1] dark:text-[#a5b4fc] bg-[#eef2ff] dark:bg-[#312e81]/40 border border-[#c7d2fe] dark:border-[#4338ca] hover:bg-[#e0e7ff] dark:hover:bg-[#3730a3]/50 transition cursor-pointer"
-                    aria-label={t('card.parentTask', { id: task.parentId })}
-                  >
-                    <CornerUpLeft className="h-2.5 w-2.5 text-[#6366f1] dark:text-[#a5b4fc]" />
-                    <span>{task.parentId}</span>
-                  </button>
-                )}
               </div>
               {getStatusBadge(task.status)}
             </div>
