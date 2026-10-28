@@ -210,15 +210,25 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
     ? raw.returnsCount
     : 0;
 
-  const skipWorktree = Boolean(raw.skipWorktree ?? raw.skip_worktree ?? raw.skipBacklogHook ?? raw.skip_backlog_hook ?? false);
-  const branch = typeof raw.branch === 'string' && raw.branch.trim() !== ''
-    ? raw.branch.trim()
-    : undefined;
-  const worktreePath = typeof raw.worktreePath === 'string' && raw.worktreePath.trim() !== ''
-    ? raw.worktreePath.trim()
-    : (typeof raw.worktree_path === 'string' && raw.worktree_path.trim() !== '' ? raw.worktree_path.trim() : undefined);
+  const rawParentId = (typeof raw.parentId === 'string' && raw.parentId.trim() !== '')
+    ? raw.parentId.trim()
+    : (typeof raw.parent_id === 'string' && raw.parent_id.trim() !== ''
+      ? raw.parent_id.trim()
+      : (typeof raw.id === 'string' && raw.id.includes('.') ? raw.id.split('.')[0] : undefined));
 
-  const rawParentId = raw.parentId ?? raw.parent_id ?? undefined;
+  const parentTask = rawParentId ? useBoardStore.getState().tasks.find((t) => t.id === rawParentId) : undefined;
+
+  const skipWorktree = Boolean(
+    raw.skipWorktree ?? raw.skip_worktree ?? raw.skipBacklogHook ?? raw.skip_backlog_hook ?? parentTask?.skipWorktree ?? false
+  );
+  const branch = (typeof raw.branch === 'string' && raw.branch.trim() !== '')
+    ? raw.branch.trim()
+    : parentTask?.branch;
+  const worktreePath = (typeof raw.worktreePath === 'string' && raw.worktreePath.trim() !== '')
+    ? raw.worktreePath.trim()
+    : ((typeof raw.worktree_path === 'string' && raw.worktree_path.trim() !== '')
+      ? raw.worktree_path.trim()
+      : parentTask?.worktreePath);
   const rawTitle = typeof raw.title === 'string' ? raw.title : '';
   const isReviewSubtask = Boolean(
     rawParentId ||

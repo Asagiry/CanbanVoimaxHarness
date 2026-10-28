@@ -668,14 +668,17 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                   {task.model}
                 </div>
               )}
-              {task.branch ? (
-                <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
-                  <span className="inline-flex items-center gap-1 truncate text-[#8f8f8f] dark:text-[#8b949e] min-w-0">
-                    <GitBranch className="h-2.5 w-2.5 shrink-0" />
-                    <span className="truncate">{task.branch}</span>
-                  </span>
-                </div>
-              ) : null}
+              {(() => {
+                const cardBranch = task.branch || (task.parentId ? useBoardStore.getState().tasks.find((t) => t.id === task.parentId)?.branch : undefined);
+                return cardBranch ? (
+                  <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
+                    <span className="inline-flex items-center gap-1 truncate text-[#8f8f8f] dark:text-[#8b949e] min-w-0">
+                      <GitBranch className="h-2.5 w-2.5 shrink-0" />
+                      <span className="truncate">{cardBranch}</span>
+                    </span>
+                  </div>
+                ) : null;
+              })()}
               {(task.createdAt || currentTotalElapsed > 0 || (task.attachments && task.attachments.length > 0)) && (
                 <div className="mt-1 flex items-center justify-between gap-1 font-mono text-[10px] text-[#8f8f8f] dark:text-[#8b949e] tabular-nums whitespace-nowrap">
                   <div className="flex items-center gap-1 min-w-0 truncate">
