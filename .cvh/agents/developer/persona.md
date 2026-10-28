@@ -28,6 +28,10 @@ You operate strictly within isolated git worktrees (`worktrees/<task-slug>`) on 
 - Always check `load_rule("rules-sync")` for hygiene requirements.
 
 ### 1.3 Ground Truth Sensor Mandate & Command Execution Discipline
+- **Direct Coordinate Navigation**: Jump directly to the exact target files and line coordinates provided in the Planner's handover plan or compiler diagnostics. Never read entire files sequentially from line 1.
+- **Anti-Micro-Reading Mandate**: NEVER call `read_file` in micro-batches of 20–50 lines to scroll through source files. Use `grep` to locate definitions or symbols, and use `read_file` with ranges of 100–300 lines around target coordinates.
+- **Mandatory Git Commit Before Handover**: Always stage and commit all modified files to the feature branch (`git add -A && git commit`) before calling `advance_task`. Handing over an uncommitted or dirty working tree triggers immediate Gate 6 rejection.
+- **Batch TODO Updates**: Update `todo_write` strictly at major task milestones (task start, logical implementation complete, and final pre-flight verification), never after every individual read or minor step.
 - **Zero Unnecessary Commands**: Do NOT run shell commands without clear necessity.
   - **NEVER run commands on startup**: Never run `cargo check`, `npm run build`, `npx tsc`, or test suites at the beginning of a task before making edits. Static code exploration is done with `read_file`, `glob`, `grep`.
   - **Targeted Verification Only**: Run compiler/linter sensors strictly during the post-edit verification phase (Step 6), and ONLY for the subsystems touched by your changes:
@@ -60,7 +64,7 @@ Use `load_rule("<rule>")` to dynamically fetch modular domain standards on deman
 2. **Dynamic Priming**: Load relevant modular rules via `load_rule`.
 3. **Plan**: Formulate tactical step-by-step progress checklist using `todo_write`.
 4. **Implement**: Perform surgical edits inside `CVH_WORKTREE_PATH` adhering to Ponytail minimalism. (Do NOT run compiler/build commands during editing unless diagnosing an immediate issue).
-4.1 **Commit**: Commit your changes.
+4.1 **Commit**: Commit your changes to the feature branch (`git add -A && git commit`). Handing off uncommitted work is strictly prohibited.
 5. **Rule Hygiene**: Update corresponding `.cvh/agents/*/rules/*.md` ONLY if universal system architecture or public contracts fundamentally changed. Keep rule files clean of changelog slop.
 6. **Sensor & Integration Verification**: Run ONLY the relevant sensors for modified subsystems (`cargo check` for backend, `npx tsc --noEmit` / `npm run build` for frontend). Verify clean branch integration with `main` (`git merge-tree --write-tree main HEAD` exit 0). Ensure 0 regressions on shared components.
 7. **Handover**: Advance to `review` via `advance_task(summary)`. The summary MUST include:

@@ -248,6 +248,48 @@ pub async fn execute_hook(
         cmd.env(k, v);
     }
 
+    // Inject shared CARGO_TARGET_DIR to avoid cold compilations in worktrees
+    if !context.extra_env.contains_key("CARGO_TARGET_DIR") {
+        if let Ok(existing) = std::env::var("CARGO_TARGET_DIR") {
+            if !existing.trim().is_empty() {
+                cmd.env("CARGO_TARGET_DIR", existing);
+            }
+        } else {
+            let abs_script = if script.is_absolute() {
+                script.to_path_buf()
+            } else {
+                std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join(script)
+            };
+            let mut resolved_target = None;
+            for ancestor in abs_script.ancestors() {
+                if ancestor.file_name().and_then(|n| n.to_str()) == Some(".cvh") {
+                    if let Some(repo_root) = ancestor.parent() {
+                        resolved_target = Some(repo_root.join("src-tauri").join("target"));
+                        break;
+                    }
+                }
+            }
+            if resolved_target.is_none() {
+                let abs_cwd = if cwd.is_absolute() {
+                    cwd.to_path_buf()
+                } else {
+                    std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join(cwd)
+                };
+                for ancestor in abs_cwd.ancestors() {
+                    if ancestor.file_name().and_then(|n| n.to_str()) == Some("worktrees") {
+                        if let Some(repo_root) = ancestor.parent() {
+                            resolved_target = Some(repo_root.join("src-tauri").join("target"));
+                            break;
+                        }
+                    }
+                }
+            }
+            if let Some(target) = resolved_target {
+                cmd.env("CARGO_TARGET_DIR", target);
+            }
+        }
+    }
+
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
 
@@ -372,6 +414,27 @@ pub async fn execute_sensor_command(
     cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
+
+    // Inject shared CARGO_TARGET_DIR to avoid cold compilations in worktrees
+    if let Ok(existing) = std::env::var("CARGO_TARGET_DIR") {
+        if !existing.trim().is_empty() {
+            cmd.env("CARGO_TARGET_DIR", existing);
+        }
+    } else {
+        let abs_cwd = if cwd_path.is_absolute() {
+            cwd_path.clone()
+        } else {
+            std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join(&cwd_path)
+        };
+        for ancestor in abs_cwd.ancestors() {
+            if ancestor.file_name().and_then(|n| n.to_str()) == Some("worktrees") {
+                if let Some(repo_root) = ancestor.parent() {
+                    cmd.env("CARGO_TARGET_DIR", repo_root.join("src-tauri").join("target"));
+                    break;
+                }
+            }
+        }
+    }
 
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);

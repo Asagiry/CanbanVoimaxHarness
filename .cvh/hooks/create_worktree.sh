@@ -11,6 +11,11 @@ if [ -z "$CVH_TASK_ID" ]; then
     exit 1
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -z "$CARGO_TARGET_DIR" ]; then
+    export CARGO_TARGET_DIR="$(cd "$SCRIPT_DIR/../../src-tauri/target" 2>/dev/null && pwd || echo "$SCRIPT_DIR/../../src-tauri/target")"
+fi
+
 if [ "$CVH_SKIP_WORKTREE" = "true" ]; then
     echo "[CVH Worktree Hook] CVH_SKIP_WORKTREE is true. Skipping worktree creation."
     exit 0
@@ -34,6 +39,14 @@ else
         echo "[CVH Worktree Hook] Creating new branch '${BRANCH}' and worktree '${WT_DIR}'..."
         git worktree add -b "$BRANCH" "$WT_DIR" HEAD
     fi
+fi
+
+# Ensure dist directory exists for tauri generate_context!() proc macro
+mkdir -p "$WT_DIR/dist"
+
+# Link root node_modules if present to avoid cold npm installs
+if [ -d "node_modules" ] && [ ! -e "$WT_DIR/node_modules" ]; then
+    ln -s "$(pwd)/node_modules" "$WT_DIR/node_modules" 2>/dev/null || true
 fi
 
 # Standard CVH output protocol
