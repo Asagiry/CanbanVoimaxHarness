@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { Draggable } from '@hello-pangea/dnd';
-import { KanbanTask, TaskStatus, HookExecutionState, TodoItem } from '../../types';
+import { KanbanTask, TaskStatus, HookExecutionState, TodoItem, getHookScript, getHookDescription } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore, isDoneColumnDef } from '../../stores/boardStore';
 import { useTranslation, Language } from '../../stores/languageStore';
@@ -59,6 +59,7 @@ interface CardHookNodeProps {
   side: 'left' | 'right';
   hookType: 'on_enter' | 'on_leave';
   hookName: string;
+  description?: string;
   state?: HookExecutionState;
   stageTitle?: string;
   sourceStageTitle?: string;
@@ -71,6 +72,7 @@ function CardHookNode({
   side,
   hookType: _hookType,
   hookName,
+  description,
   state,
   stageTitle,
   sourceStageTitle,
@@ -86,6 +88,7 @@ function CardHookNode({
   const hideTimerRef = useRef<number | null>(null);
 
   const status = state?.status ?? 'idle';
+  const hookDescription = description || state?.description;
 
   useEffect(() => {
     if (status === 'running') {
@@ -333,6 +336,13 @@ function CardHookNode({
             </div>
           ) : null}
 
+          {/* Hook description */}
+          {hookDescription && (
+            <div className="mt-2 text-xs text-neutral-600 dark:text-neutral-300 font-sans leading-relaxed">
+              {hookDescription}
+            </div>
+          )}
+
           {/* Error description if failed */}
           {status === 'failed' && errorText.length > 0 && (
             <div className="mt-2 p-2.5 rounded bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 text-xs font-mono text-rose-800 dark:text-rose-300 whitespace-pre-wrap break-words max-h-44 overflow-y-auto leading-relaxed">
@@ -360,15 +370,17 @@ function CardHookNode({
               </div>
             </div>
           ) : (
-            <div className="mt-2 text-xs text-neutral-500 dark:text-neutral-400 font-sans leading-relaxed">
-              {status === 'running'
-                ? 'Выполняется скрипт жизненного цикла стадии...'
-                : isTransition
-                ? 'Скрипт перехода, выполненный при выходе из предыдущей стадии.'
-                : side === 'left'
-                ? 'Скрипт выполнится автоматически при входе в эту стадию.'
-                : 'Скрипт выполнится автоматически при выходе из этой стадии.'}
-            </div>
+            (!hookDescription || status === 'running') && (
+              <div className="mt-2 text-xs text-neutral-500 dark:text-neutral-400 font-sans leading-relaxed">
+                {status === 'running'
+                  ? 'Выполняется скрипт жизненного цикла стадии...'
+                  : isTransition
+                  ? 'Скрипт перехода, выполненный при выходе из предыдущей стадии.'
+                  : side === 'left'
+                  ? 'Скрипт выполнится автоматически при входе в эту стадию.'
+                  : 'Скрипт выполнится автоматически при выходе из этой стадии.'}
+              </div>
+            )
           )}
         </div>,
         document.body
@@ -424,17 +436,21 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const parentHooks = useBoardStore(useShallow((s) => (task.parentId ? s.hookStates[task.parentId] : undefined)));
   const taskHooks = storeHooks || task.hookStates || parentHooks;
 
-  const enterHookName = taskColumn?.hooks?.['on_enter'];
+  const enterHookDef = taskColumn?.hooks?.['on_enter'];
+  const enterHookName = getHookScript(enterHookDef);
+  const enterHookDescription = getHookDescription(enterHookDef);
   const rawEnterHookState = taskHooks?.on_enter;
   const enterHookState =
     rawEnterHookState && (!rawEnterHookState.stageId || rawEnterHookState.stageId === task.columnId)
       ? rawEnterHookState
       : undefined;
 
-  const leaveHookName =
+  const leaveHookDef =
     taskColumn?.hooks?.['on_leave'] ||
     taskColumn?.hooks?.['on_exit'] ||
     taskColumn?.hooks?.['on_finish'];
+  const leaveHookName = getHookScript(leaveHookDef);
+  const leaveHookDescription = getHookDescription(leaveHookDef);
   const leaveHookState = taskHooks?.on_leave;
 
   // Check predecessor column in board order
@@ -478,6 +494,11 @@ function KanbanCard({ task, index }: KanbanCardProps) {
     ? columns.find((c) => c.id === effectiveLeftState.stageId)
     : undefined;
   const sourceStageTitle = sourceStageCol?.title || effectiveLeftState?.stageId;
+  const sourceLeaveDef =
+    sourceStageCol?.hooks?.['on_leave'] ||
+    sourceStageCol?.hooks?.['on_exit'] ||
+    sourceStageCol?.hooks?.['on_finish'];
+  const transitionHookDescription = getHookDescription(sourceLeaveDef);
 
   // Right node: exit hook from this column
   const hasRightHook = Boolean(
@@ -791,6 +812,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                 side="left"
                 hookType="on_enter"
                 hookName={effectiveLeftHookName}
+                description={isTransitionHookFromResult ? transitionHookDescription : enterHookDescription}
                 state={effectiveLeftState}
                 stageTitle={taskColumn?.title || task.columnId}
                 sourceStageTitle={sourceStageTitle}
@@ -806,6 +828,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                 side="right"
                 hookType="on_leave"
                 hookName={effectiveRightHookName}
+                description={leaveHookDescription}
                 state={effectiveRightState}
                 stageTitle={taskColumn?.title || task.columnId}
                 taskId={task.id}

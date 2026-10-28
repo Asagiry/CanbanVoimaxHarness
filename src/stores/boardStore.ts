@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { KanbanTask, PipelineColumn, PipelineConfig, TaskStatus, TaskVerdict, TaskPriority, BoardDef, TaskHookStates } from '../types';
+import { KanbanTask, PipelineColumn, PipelineConfig, TaskStatus, TaskVerdict, TaskPriority, BoardDef, TaskHookStates, getHookScript } from '../types';
 import { useDrawerStore } from './drawerStore';
 import { logEvent } from '../lib/logger';
 
@@ -64,7 +64,7 @@ interface BoardState {
   hookStates: Record<string, TaskHookStates>;
 
   // Actions
-  setHookStart: (payload: { taskId: string; stageId: string; hookType: 'on_enter' | 'on_leave'; hookName: string }) => void;
+  setHookStart: (payload: { taskId: string; stageId: string; hookType: 'on_enter' | 'on_leave'; hookName: string; description?: string }) => void;
   setHookFinish: (payload: { taskId: string; stageId: string; hookType: 'on_enter' | 'on_leave'; success: boolean; exitCode?: number | null; stdout?: string; stderr?: string; error?: string }) => void;
   clearHookState: (taskId: string, hookType?: 'on_enter' | 'on_leave') => void;
   setColumns: (columns: PipelineColumn[]) => void;
@@ -512,7 +512,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   isBoardsLoaded: false,
   hookStates: loadCachedHookStates(),
 
-  setHookStart: ({ taskId, stageId, hookType, hookName }) => {
+  setHookStart: ({ taskId, stageId, hookType, hookName, description }) => {
     set((state) => {
       const prev = state.hookStates[taskId] || {};
       const nextTaskHookState: TaskHookStates = {
@@ -525,6 +525,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           startedAt: Date.now(),
           stdout: '',
           stderr: '',
+          description,
         },
       };
       const nextHookStates = {
@@ -564,6 +565,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           stdout: stdout || '',
           stderr: stderr || '',
           error,
+          description: existing?.description,
         },
       };
       const nextHookStates = {
@@ -948,11 +950,11 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         const sourceColId = options?.sourceColumnId ?? prev.columnId;
         const sourceCol = columns.find((c) => c.id === sourceColId);
         const sourceHasLeaveHook = Boolean(
-          sourceCol?.hooks?.['on_leave'] ||
-          sourceCol?.hooks?.['on_exit'] ||
-          sourceCol?.hooks?.['on_finish']
+          getHookScript(sourceCol?.hooks?.['on_leave']) ||
+          getHookScript(sourceCol?.hooks?.['on_exit']) ||
+          getHookScript(sourceCol?.hooks?.['on_finish'])
         );
-        const targetHasEnterHook = Boolean(targetColDef?.hooks?.['on_enter']);
+        const targetHasEnterHook = Boolean(getHookScript(targetColDef?.hooks?.['on_enter']));
 
         // Clean up hook states if departing stage had no on_leave hook, or entering stage had no on_enter hook
         let nextTaskHookStates = mapped.hookStates
@@ -1625,9 +1627,9 @@ export async function initBoardEventListeners(): Promise<() => void> {
       await useBoardStore.getState().loadTasks();
     });
     const uHookStart = await listen<any>('hook:start', (event) => {
-      const { taskId, stageId, hookType, hookName } = event.payload || {};
+      const { taskId, stageId, hookType, hookName, description } = event.payload || {};
       if (taskId && hookType) {
-        useBoardStore.getState().setHookStart({ taskId, stageId, hookType, hookName });
+        useBoardStore.getState().setHookStart({ taskId, stageId, hookType, hookName, description });
       }
     });
     const uHookFinish = await listen<any>('hook:finish', (event) => {

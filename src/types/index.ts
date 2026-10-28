@@ -75,8 +75,24 @@ export interface PipelineColumn {
   reasoningEffort?: string;
   gatekeeperSensor?: string | null;
   wipLimit?: number;
-  hooks?: Record<string, string>;
+  hooks?: Record<string, HookDefinition>;
   routes?: Record<string, string>;
+}
+
+export type HookDefinition = string | {
+  script: string;
+  description?: string;
+};
+
+export function getHookScript(hook: HookDefinition | undefined | null): string | undefined {
+  if (!hook) return undefined;
+  if (typeof hook === 'string') return hook;
+  return hook.script || (hook as { path?: string }).path || undefined;
+}
+
+export function getHookDescription(hook: HookDefinition | undefined | null): string | undefined {
+  if (!hook || typeof hook === 'string') return undefined;
+  return hook.description || undefined;
 }
 
 export interface HookExecutionState {
@@ -90,6 +106,7 @@ export interface HookExecutionState {
   stdout?: string;
   stderr?: string;
   error?: string;
+  description?: string;
 }
 
 export interface TaskHookStates {
