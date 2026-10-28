@@ -3800,6 +3800,9 @@ pub async fn internal_advance_task_to_stage(
             let mut tasks = load_tasks_from_disk(root).await;
             if let Some(sub) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
                 sub.status = Some("done".to_string());
+                if sub.completed_at.is_none() {
+                    sub.completed_at = Some(Utc::now().timestamp_millis());
+                }
                 sub.updated_at = Utc::now().timestamp_millis();
                 auto_complete_task_todos(root, sub, app_handle);
                 let _ = crate::db::db_upsert_task(root, sub);
@@ -3809,6 +3812,9 @@ pub async fn internal_advance_task_to_stage(
                     if let Ok(mut guard) = state_ref.tasks.lock() {
                         if let Some(sub) = guard.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
                             sub.status = Some("done".to_string());
+                            if sub.completed_at.is_none() {
+                                sub.completed_at = Some(Utc::now().timestamp_millis());
+                            }
                             sub.updated_at = Utc::now().timestamp_millis();
                         }
                     }
@@ -3846,6 +3852,9 @@ pub async fn internal_advance_task_to_stage(
                 if task_id_matches(&t.id, &parent_id) {
                     t.waiting_for_subtask_id = None;
                     t.status = Some("done".to_string());
+                    if t.completed_at.is_none() {
+                        t.completed_at = Some(Utc::now().timestamp_millis());
+                    }
                     t.stage_id = target_col.id.clone();
                     t.updated_at = Utc::now().timestamp_millis();
                     auto_complete_task_todos(root, t, app_handle);
@@ -3853,6 +3862,9 @@ pub async fn internal_advance_task_to_stage(
                 }
                 if t.parent_id.as_deref() == Some(&parent_id) {
                     t.status = Some("done".to_string());
+                    if t.completed_at.is_none() {
+                        t.completed_at = Some(Utc::now().timestamp_millis());
+                    }
                     t.updated_at = Utc::now().timestamp_millis();
                     auto_complete_task_todos(root, t, app_handle);
                     let _ = crate::db::db_upsert_task(root, t);
@@ -3915,6 +3927,9 @@ pub async fn internal_advance_task_to_stage(
                 // 1. Mark current subtask as done
                 if let Some(sub) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
                     sub.status = Some("done".to_string());
+                    if sub.completed_at.is_none() {
+                        sub.completed_at = Some(Utc::now().timestamp_millis());
+                    }
                     sub.updated_at = Utc::now().timestamp_millis();
                     let _ = crate::db::db_upsert_task(root, sub);
                 }
@@ -3931,6 +3946,7 @@ pub async fn internal_advance_task_to_stage(
                 if let Some(target_sub) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &existing_sub.id)) {
                     target_sub.status = Some(next_status.to_string());
                     target_sub.verdict = None;
+                    target_sub.completed_at = None;
                     target_sub.handover_summary = Some(summary.to_string());
                     target_sub.updated_at = Utc::now().timestamp_millis();
                     let _ = crate::db::db_upsert_task(root, target_sub);
@@ -4002,6 +4018,9 @@ pub async fn internal_advance_task_to_stage(
                 // 1. Mark this subtask as done
                 if let Some(sub) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
                     sub.status = Some("done".to_string());
+                    if sub.completed_at.is_none() {
+                        sub.completed_at = Some(Utc::now().timestamp_millis());
+                    }
                     sub.updated_at = Utc::now().timestamp_millis();
                     let _ = crate::db::db_upsert_task(root, sub);
                 }
@@ -4010,6 +4029,9 @@ pub async fn internal_advance_task_to_stage(
                         if let Ok(mut guard) = state_ref.tasks.lock() {
                             if let Some(sub) = guard.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
                                 sub.status = Some("done".to_string());
+                                if sub.completed_at.is_none() {
+                                    sub.completed_at = Some(Utc::now().timestamp_millis());
+                                }
                                 sub.updated_at = Utc::now().timestamp_millis();
                             }
                         }
