@@ -39,6 +39,7 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(state)
         .setup(|_app| {
             Ok(())
@@ -83,6 +84,7 @@ pub fn run() {
             move_task_stage,
             reorder_task,
             advance_task,
+            focus_main_window,
             run_agent,
             abort_agent,
             cleanup_task_worktree,

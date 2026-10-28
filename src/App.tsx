@@ -14,6 +14,11 @@ import { useDrawerStore } from './stores/drawerStore';
 import { useCortexStore, initCortexEventListeners } from './stores/cortexStore';
 import { useToolPolicyStore } from './stores/toolPolicyStore';
 import { useUiZoom } from './hooks/useUiZoom';
+import {
+  initNotifications,
+  showAdvanceTaskNotification,
+  showQuestionNotification,
+} from './services/notificationService';
 
 // Микробатчинг SSE-текста: один Zustand set() на пачку токенов вместо set() на токен.
 const TEXT_FLUSH_MS = 150;
@@ -93,6 +98,7 @@ export default function App() {
         await useCortexStore.getState().loadAgentPersonas();
         useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
         await useToolPolicyStore.getState().loadFromTauri();
+        void initNotifications();
       } catch (e) {
         console.warn('Initialization error:', e);
       } finally {
@@ -352,6 +358,17 @@ export default function App() {
               options: options || [],
               multiple: Boolean(multiple),
             });
+            useBoardStore.getState().setActiveQuestion({
+              taskId,
+              questionId,
+              text: text || '',
+              timestamp: Date.now(),
+            });
+            void showQuestionNotification({
+              taskId,
+              questionId,
+              text: text || '',
+            });
           }
         });
         unlisteners.push(uQuestion);
@@ -428,6 +445,7 @@ export default function App() {
         const u5 = await listen<any>('agent:finished', (event) => {
           const { taskId, response } = event.payload || {};
           if (taskId) {
+            useBoardStore.getState().clearActiveQuestion(taskId);
             if (isTaskActiveInDrawer(taskId)) {
               flushTask(taskId);
               const st = useDrawerStore.getState();
@@ -477,6 +495,7 @@ export default function App() {
         const uErr = await listen<any>('agent:error', (event) => {
           const { taskId } = event.payload || {};
           if (taskId) {
+            useBoardStore.getState().clearActiveQuestion(taskId);
             if (isTaskActiveInDrawer(taskId)) {
               flushTask(taskId);
               useDrawerStore.getState().setActiveAgentTask(taskId, false);
@@ -505,6 +524,7 @@ export default function App() {
         const u6 = await listen<any>('agent:status', (event) => {
           const { taskId, status } = event.payload || {};
           if (taskId && (status === 'finished' || status === 'aborted' || status === 'error')) {
+            useBoardStore.getState().clearActiveQuestion(taskId);
             if (isTaskActiveInDrawer(taskId)) {
               flushTask(taskId);
               useDrawerStore.getState().setActiveAgentTask(taskId, false);
@@ -547,6 +567,13 @@ export default function App() {
           loadTasks();
         });
         unlisteners.push(uTaskMoved);
+
+        const uTaskAdvanced = await listen<any>('task:advanced', (event) => {
+          if (event.payload) {
+            void showAdvanceTaskNotification(event.payload);
+          }
+        });
+        unlisteners.push(uTaskAdvanced);
 
         const uHookStart = await listen<any>('hook:start', (event) => {
           const { taskId, stageId, hookType, hookName, description } = event.payload || {};

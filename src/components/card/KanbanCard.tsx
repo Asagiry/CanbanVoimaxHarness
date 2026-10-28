@@ -414,6 +414,11 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const setHoveredTaskId = useBoardStore((s) => s.setHoveredTaskId);
   const columns = useBoardStore(useShallow((s) => s.columns));
+  const activeQuestions = useBoardStore(useShallow((s) => s.activeQuestions));
+  const directQuestion = activeQuestions[task.id];
+  const subtaskQuestion = task.waitingForSubtaskId ? activeQuestions[task.waitingForSubtaskId] : undefined;
+  const activeQuestion = directQuestion || subtaskQuestion;
+  const activeQuestionTargetId = directQuestion ? task.id : task.waitingForSubtaskId;
   const { language, t } = useTranslation();
   const isHighlighted = useBoardStore((s) => {
     const hId = s.hoveredTaskId;
@@ -673,6 +678,43 @@ function KanbanCard({ task, index }: KanbanCardProps) {
               </div>
               {getStatusBadge(task.status)}
             </div>
+
+            {/* Active Agent Question Alert Badge */}
+            {activeQuestion && (
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (activeQuestionTargetId) {
+                    openDrawer(activeQuestionTargetId, 'thoughts');
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.stopPropagation();
+                    if (activeQuestionTargetId) {
+                      openDrawer(activeQuestionTargetId, 'thoughts');
+                    }
+                  }
+                }}
+                className="mb-2 flex items-center gap-1.5 px-2 py-1.5 rounded bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 dark:hover:bg-amber-500/30 transition cursor-pointer text-left overflow-hidden shadow-xs"
+                title={activeQuestion.text}
+              >
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                </span>
+                <div className="flex items-center gap-1 min-w-0 flex-1">
+                  <span className="text-[10px] font-mono font-bold tracking-tight shrink-0">
+                    {t('card.agentQuestion')}:
+                  </span>
+                  <span className="text-[10px] font-sans truncate text-[#4d4d4d] dark:text-[#d4d4d8]">
+                    {activeQuestion.text}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Title */}
             <h4 className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc] leading-snug mb-2 font-sans break-words">

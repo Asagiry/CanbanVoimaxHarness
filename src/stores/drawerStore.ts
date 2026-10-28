@@ -1600,6 +1600,7 @@ export const useDrawerStore = create<DrawerState>((set, get) => ({
   },
 
   recordQuestionAnswer: async (taskId, questionId, answer) => {
+    useBoardStore.getState().clearActiveQuestion(taskId);
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('answer_agent_question', { taskId, questionId, answer });
