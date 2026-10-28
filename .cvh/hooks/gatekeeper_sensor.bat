@@ -38,10 +38,10 @@ if not errorlevel 1 (
     git rev-parse --verify HEAD >nul 2>&1
     if not errorlevel 1 (
         set "DIFF_AVAILABLE=1"
-        git diff --name-only main HEAD 2>nul | findstr /i "src-tauri Cargo.toml Cargo.lock" >nul 2>&1
+        git diff --name-only main HEAD 2>nul | findstr /b /i "src-tauri/ Cargo.toml Cargo.lock" >nul 2>&1
         if not errorlevel 1 set "HAS_BACKEND_CHANGES=1"
 
-        git diff --name-only main HEAD 2>nul | findstr /i "src/ index.html vite.config tsconfig package.json" >nul 2>&1
+        git diff --name-only main HEAD 2>nul | findstr /b /i "src/ index.html vite.config. tsconfig package.json" >nul 2>&1
         if not errorlevel 1 set "HAS_FRONTEND_CHANGES=1"
     )
 )
@@ -61,6 +61,7 @@ if "!RUN_BACKEND!"=="0" (
     echo [CVH Sensor] Backend unchanged, skipping cargo check.
 ) else (
     echo [CVH Sensor] Running Rust backend check...
+    if not exist "dist" mkdir "dist" >nul 2>&1
     if exist "src-tauri\Cargo.toml" (
         cargo check --manifest-path "src-tauri\Cargo.toml"
         if errorlevel 1 (

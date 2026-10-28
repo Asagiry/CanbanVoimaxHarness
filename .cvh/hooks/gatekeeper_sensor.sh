@@ -30,10 +30,10 @@ HAS_FRONTEND_CHANGES=0
 if git rev-parse --verify main >/dev/null 2>&1 && git rev-parse --verify HEAD >/dev/null 2>&1; then
     DIFF_AVAILABLE=1
     DIFF_FILES="$(git diff --name-only main HEAD 2>/dev/null || true)"
-    if echo "$DIFF_FILES" | grep -qiE '(^|/)(src-tauri/|Cargo\.toml|Cargo\.lock)'; then
+    if echo "$DIFF_FILES" | grep -qiE '^(src-tauri/|Cargo\.toml|Cargo\.lock)'; then
         HAS_BACKEND_CHANGES=1
     fi
-    if echo "$DIFF_FILES" | grep -qiE '(^|/)(src/|index\.html|vite\.config|tsconfig|package\.json)'; then
+    if echo "$DIFF_FILES" | grep -qiE '^(src/|index\.html|vite\.config\.|tsconfig|package\.json)'; then
         HAS_FRONTEND_CHANGES=1
     fi
 fi
@@ -53,6 +53,9 @@ if [ "$RUN_BACKEND" -eq 0 ]; then
     echo "[CVH Sensor] Backend unchanged, skipping cargo check."
 elif [ -f "src-tauri/Cargo.toml" ]; then
     echo "[CVH Sensor] Running Rust backend check..."
+    if [ ! -d "dist" ]; then
+        mkdir -p "dist"
+    fi
     cargo check --manifest-path "src-tauri/Cargo.toml"
 fi
 

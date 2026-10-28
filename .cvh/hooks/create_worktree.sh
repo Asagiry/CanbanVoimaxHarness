@@ -41,6 +41,14 @@ else
     fi
 fi
 
+# Ensure dist directory exists for tauri generate_context!() proc macro
+mkdir -p "$WT_DIR/dist"
+
+# Link root node_modules if present to avoid cold npm installs
+if [ -d "node_modules" ] && [ ! -e "$WT_DIR/node_modules" ]; then
+    ln -s "$(pwd)/node_modules" "$WT_DIR/node_modules" 2>/dev/null || true
+fi
+
 # Standard CVH output protocol
 echo "CVH_WORKTREE=$WT_DIR"
 echo "CVH_BRANCH=$BRANCH"

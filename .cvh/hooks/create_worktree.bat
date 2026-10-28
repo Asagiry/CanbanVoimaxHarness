@@ -53,6 +53,16 @@ if exist "%WT_DIR%" (
     )
 )
 
+REM Ensure dist directory exists for tauri generate_context!() proc macro
+if not exist "%WT_DIR%\dist" (
+    mkdir "%WT_DIR%\dist" >nul 2>&1
+)
+
+REM Link root node_modules if present to avoid cold npm installs
+if exist "node_modules" if not exist "%WT_DIR%\node_modules" (
+    mklink /J "%WT_DIR%\node_modules" "node_modules" >nul 2>&1
+)
+
 REM Standard CVH output protocol: runtime captures these lines to assign task.worktree_path and task.branch
 echo CVH_WORKTREE=worktrees/%SLUG%
 echo CVH_BRANCH=%BRANCH%
