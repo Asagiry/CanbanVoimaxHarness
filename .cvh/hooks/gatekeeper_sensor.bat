@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal enabledelayedexpansion
 set "PATH=%USERPROFILE%\.cargo\bin;C:\Users\Voimax\.cargo\bin;%PATH%"
 
 echo [CVH Sensor] Checking git mergeability with main...
@@ -7,7 +7,11 @@ git rev-parse --is-inside-work-tree >nul 2>&1
 if not errorlevel 1 (
     git rev-parse --verify main >nul 2>&1
     if not errorlevel 1 (
-        git merge-tree --write-tree main HEAD >nul 2>&1
+        set "TARGET_COMMIT=HEAD"
+        for /f "tokens=*" %%i in ('git stash create 2^>nul') do (
+            if not "%%i"=="" set "TARGET_COMMIT=%%i"
+        )
+        git merge-tree --write-tree main !TARGET_COMMIT! >nul 2>&1
         if errorlevel 1 (
             echo [CVH Sensor] ERROR: Merge conflict detected against 'main'! Merge or rebase latest main before handoff. >&2
             exit /b 1

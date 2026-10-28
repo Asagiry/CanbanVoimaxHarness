@@ -1849,5 +1849,50 @@
                 }
             ]
         }
+    },
+    "CVH-026": {
+        "taskId": "CVH-026",
+        "task": "fix-git-diff-subtask-worktree-hierarchy",
+        "title": "Гитдифк / Inherit parent worktree and branch in subtasks and prevent diff resetting to main",
+        "branch": "feat/CVH-026",
+        "commitHash": "605d173",
+        "mergeCommitHash": "ad43391",
+        "resolutionCommitHash": "c31e5cb",
+        "commitMessage": "feat(CVH-026): resolve git diff worktree hierarchy and auto-heal parent-child context",
+        "author": "developer (fullstack-lead)",
+        "verdict": "APPROVED_AFTER_REVISIONS",
+        "date": "2026-10-28T11:45:00.000Z",
+        "timestamp": 1793187900000,
+        "sensors": {
+            "cargo_check": "pass (0 errors)",
+            "cargo_clippy": "pass (0 warnings)",
+            "cargo_test": "pass (4 passed: test_get_task_git_diff_subtask_inherits_parent_worktree, test_resolve_task_worktree_filesystem_heuristic_heals_parent_and_child, test_save_tasks_preserves_worktree_path_and_branch_from_client_wipes, test_completed_at_lifecycle_on_stage_transitions)",
+            "tsc_check": "pass (0 type errors)",
+            "oxlint": "pass (0 warnings, 0 errors across 52 files)",
+            "npm_run_build": "pass (Vite production bundle built in 8.83s)",
+            "git_merge_tree": "pass (clean tree hash c51c1b21a5a2e33b1bf33353e614e2108fc40b19, 0 merge conflicts against main)"
+        },
+        "files": [
+            "src-tauri/src/commands/git.rs",
+            "src-tauri/src/commands/tasks.rs",
+            "src-tauri/src/commands/tests.rs",
+            "src/stores/boardStore.ts",
+            "src/components/drawer/AgentConsoleDrawer.tsx",
+            "src/components/drawer/DrawerHeader.tsx",
+            "src/components/card/KanbanCard.tsx"
+        ],
+        "summary": "Eliminated right sidebar Git diff resetting to main on subtasks/post-plan pipeline columns: (1) Implemented resolve_task_worktree in src-tauri/src/commands/git.rs with 4-level hierarchy (subtask -> parent -> filesystem heuristics worktrees/<id> -> auto-healing into SQLite and state); (2) Fortified save_tasks IPC against client overwriting worktree_path, branch, and parent_id with None; (3) Added immediate SQLite db_upsert_task and AppState sync after on_enter/on_leave hook execution in internal_advance_task_to_stage; (4) Added parent worktree inheritance and filesystem heuristics in internal_create_subtask; (5) Added frontend fallback inheritance in boardStore.ts, AgentConsoleDrawer.tsx, DrawerHeader.tsx, and KanbanCard.tsx; (6) Added 3 comprehensive Rust unit tests verifying subtask diff resolution, auto-healing, and persistence.",
+        "ftrAnalysis": {
+            "firstTimeRight": false,
+            "ftrScore": "50%",
+            "verdict": "APPROVED_AFTER_REVISIONS",
+            "rootCauses": [
+                {
+                    "cause": "Gate 6 (Clean Merge) Violation: False-positive pre-flight mergeability check due to uncommitted working tree",
+                    "detail": "Developer ran 'git merge-tree --write-tree main HEAD' with modified files still uncommitted in the working tree. Because HEAD evaluated to the stale base commit before changes were added, the check falsely reported 0 merge conflicts, masking an EOF conflict in src-tauri/src/commands/tests.rs caused by concurrent CVH-025 commit on main.",
+                    "resolution": "Merged main into feat/CVH-026, reconciled tests.rs retaining both CVH-025 and CVH-026 test suites, updated 5 Task literals with completed_at: None (c31e5cb, ad43391), mechanically hardened gatekeeper_sensor.bat/sh using 'git stash create' to evaluate dirty working tree changes before advance_task, and codified Pre-Handover Commit Mandate in sensors.md, role-developer.md, and review-checklist.md."
+                }
+            ]
+        }
     }
 }
