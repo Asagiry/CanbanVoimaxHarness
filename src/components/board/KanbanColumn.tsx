@@ -5,6 +5,7 @@ import { PipelineColumn, KanbanTask } from '../../types';
 import KanbanCard from '../card/KanbanCard';
 import ColumnContextMenu from './ColumnContextMenu';
 import { useCortexStore } from '../../stores/cortexStore';
+import { isDoneColumnDef, sortDoneTasksByCompletionDateDesc } from '../../stores/boardStore';
 import AgentIcon from '../common/AgentIcon';
 import { getDeterministicAgentColor } from '../../lib/agentPalette';
 import { useTranslation } from '../../stores/languageStore';
@@ -39,16 +40,14 @@ function KanbanColumn({
     column.persona ? s.agentPersonas.find((p) => p.role === column.persona) : undefined
   );
   const effectiveIcon = (column.persona ? assignedPersona?.icon : column.icon) || column.icon || assignedPersona?.icon || 'Layers';
-  const isDoneColumn = Boolean(
-    column.terminal ||
-    column.id === 'ready' ||
-    column.title.toLowerCase().includes('готов') ||
-    column.title.toLowerCase().includes('done')
-  );
+  const isDoneColumn = isDoneColumnDef(column);
   // Схлопывание подзадач: в Done отображаются только корневые задачи;
   // в остальных колонках завершенные подзадачи (status === done или родитель в done) схлопываются в родителя (§ 3).
   const displayTasks = isDoneColumn
-    ? tasks.filter((t) => !t.parentId)
+    ? tasks
+        .filter((t) => !t.parentId)
+        .slice()
+        .sort(sortDoneTasksByCompletionDateDesc)
     : tasks.filter((t) => {
         if (!t.parentId) return true;
         if (doneParentIds && doneParentIds.has(t.parentId)) return false;

@@ -23,6 +23,7 @@ export interface KanbanTask {
   attachments?: string[];
   createdAt?: number;
   updatedAt?: number;
+  completedAt?: number;
   stageEnteredAt?: number;
   priority: TaskPriority;
   columnId: string;
