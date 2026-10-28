@@ -6,7 +6,7 @@ import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore, isDoneColumnDef } from '../../stores/boardStore';
 import { useTranslation, Language } from '../../stores/languageStore';
 import { useShallow } from 'zustand/react/shallow';
-import { GitBranch, CornerUpLeft, ChevronDown, MessageSquare, GitFork, Check, X, Loader2, Terminal, Paperclip } from 'lucide-react';
+import { GitBranch, ChevronDown, MessageSquare, GitFork, Check, X, Loader2, Terminal, Paperclip } from 'lucide-react';
 import TaskContextMenu from './TaskContextMenu';
 import { CardTodoProgress } from './CardTodoProgress';
 import { getDeterministicAgentColor } from '../../lib/agentPalette';
@@ -176,24 +176,39 @@ function CardHookNode({
       setIsHovered(false);
     };
 
-    const handlePointerDown = (e: PointerEvent) => {
-      if (popoverRef.current?.contains(e.target as Node)) {
-        return;
-      }
-      if (triggerRef.current?.contains(e.target as Node)) {
+    const handleScroll = (e: Event) => {
+      if (e.target instanceof Node && popoverRef.current?.contains(e.target)) {
         return;
       }
       handleClose();
     };
 
-    window.addEventListener('scroll', handleClose, { capture: true, passive: true });
+    const handlePointerDown = (e: PointerEvent) => {
+      if (e.target instanceof Node && popoverRef.current?.contains(e.target)) {
+        return;
+      }
+      if (e.target instanceof Node && triggerRef.current?.contains(e.target)) {
+        return;
+      }
+      handleClose();
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { capture: true, passive: true });
     window.addEventListener('resize', handleClose);
     window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      window.removeEventListener('scroll', handleClose, { capture: true });
+      window.removeEventListener('scroll', handleScroll, { capture: true });
       window.removeEventListener('resize', handleClose);
       window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isHovered]);
 
@@ -276,7 +291,7 @@ function CardHookNode({
       {isHovered && coords && typeof document !== 'undefined' && createPortal(
         <div
           ref={popoverRef}
-          className="fixed z-[9999] w-[420px] max-w-[calc(100vw-24px)] shadow-2xl rounded-lg border border-neutral-200 dark:border-[#30363d] bg-white dark:bg-[#161b22] p-3.5 text-left cursor-default select-text pointer-events-auto"
+          className="fixed z-[9999] w-[420px] max-w-[calc(100vw-24px)] shadow-2xl rounded-lg border border-neutral-200 dark:border-[#30363d] bg-white dark:bg-[#161b22] p-3.5 text-left cursor-default select-text pointer-events-auto overscroll-contain"
           style={{
             top: `${coords.top}px`,
             left: `${coords.left}px`,
@@ -345,7 +360,7 @@ function CardHookNode({
 
           {/* Error description if failed */}
           {status === 'failed' && errorText.length > 0 && (
-            <div className="mt-2 p-2.5 rounded bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 text-xs font-mono text-rose-800 dark:text-rose-300 whitespace-pre-wrap break-words max-h-44 overflow-y-auto leading-relaxed">
+            <div className="mt-2 p-2.5 rounded bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 text-xs font-mono text-rose-800 dark:text-rose-300 whitespace-pre-wrap break-words max-h-44 overflow-y-auto leading-relaxed overscroll-contain">
               <div className="font-semibold text-rose-900 dark:text-rose-200 mb-1 flex items-center gap-1">
                 <span>⛔ Отклонено хуком:</span>
               </div>
@@ -365,7 +380,7 @@ function CardHookNode({
                   {stdout.length > 0 ? 'stdout' : ''} {stderr.length > 0 ? 'stderr' : ''}
                 </span>
               </div>
-              <div className="p-2.5 rounded bg-[#0d1117] border border-[#30363d] font-mono text-xs text-[#c9d1d9] leading-relaxed max-h-56 overflow-y-auto whitespace-pre-wrap break-words [word-break:break-word] select-text">
+              <div className="p-2.5 rounded bg-[#0d1117] border border-[#30363d] font-mono text-xs text-[#c9d1d9] leading-relaxed max-h-56 overflow-y-auto whitespace-pre-wrap break-words [word-break:break-word] select-text overscroll-contain">
                 {stdout || stderr}
               </div>
             </div>
@@ -399,6 +414,11 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const setHoveredTaskId = useBoardStore((s) => s.setHoveredTaskId);
   const columns = useBoardStore(useShallow((s) => s.columns));
+  const activeQuestions = useBoardStore(useShallow((s) => s.activeQuestions));
+  const directQuestion = activeQuestions[task.id];
+  const subtaskQuestion = task.waitingForSubtaskId ? activeQuestions[task.waitingForSubtaskId] : undefined;
+  const activeQuestion = directQuestion || subtaskQuestion;
+  const activeQuestionTargetId = directQuestion ? task.id : task.waitingForSubtaskId;
   const { language, t } = useTranslation();
   const isHighlighted = useBoardStore((s) => {
     const hId = s.hoveredTaskId;
@@ -638,31 +658,52 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                   }`
             }`}
           >
-            {/* Header: ID, Parent link & Concise Status */}
+            {/* Header: ID & Concise Status */}
             <div className="flex items-center justify-between mb-2 gap-1.5 flex-wrap">
               <div className="flex items-center space-x-1.5">
                 <span className="font-mono text-[10px] font-semibold text-[#171717] dark:text-[#f0f6fc] bg-[#f4f4f5] dark:bg-[#0d1117] px-1.5 py-0.5 rounded border border-[#ebebeb] dark:border-[#30363d] tabular-nums">
                   {task.id}
                 </span>
-
-                {/* Subtask link to parent */}
-                {task.parentId && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openDrawer(task.parentId!);
-                    }}
-                    className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#6366f1] dark:text-[#a5b4fc] bg-[#eef2ff] dark:bg-[#312e81]/40 border border-[#c7d2fe] dark:border-[#4338ca] hover:bg-[#e0e7ff] dark:hover:bg-[#3730a3]/50 transition cursor-pointer"
-                    aria-label={t('card.parentTask', { id: task.parentId })}
-                  >
-                    <CornerUpLeft className="h-2.5 w-2.5 text-[#6366f1] dark:text-[#a5b4fc]" />
-                    <span>{task.parentId}</span>
-                  </button>
-                )}
               </div>
               {getStatusBadge(task.status)}
             </div>
+
+            {/* Active Agent Question Alert Badge */}
+            {activeQuestion && (
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (activeQuestionTargetId) {
+                    openDrawer(activeQuestionTargetId, 'thoughts');
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.stopPropagation();
+                    if (activeQuestionTargetId) {
+                      openDrawer(activeQuestionTargetId, 'thoughts');
+                    }
+                  }
+                }}
+                className="mb-2 flex items-center gap-1.5 px-2 py-1.5 rounded bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 dark:hover:bg-amber-500/30 transition cursor-pointer text-left overflow-hidden shadow-xs"
+                title={activeQuestion.text}
+              >
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                </span>
+                <div className="flex items-center gap-1 min-w-0 flex-1">
+                  <span className="text-[10px] font-mono font-bold tracking-tight shrink-0">
+                    {t('card.agentQuestion')}:
+                  </span>
+                  <span className="text-[10px] font-sans truncate text-[#4d4d4d] dark:text-[#d4d4d8]">
+                    {activeQuestion.text}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Title */}
             <h4 className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc] leading-snug mb-2 font-sans break-words">

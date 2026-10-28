@@ -14,6 +14,7 @@ import {
   Search,
   CheckSquare,
   Square,
+  Bell,
 } from 'lucide-react';
 
 export default function SettingsModal() {
@@ -21,16 +22,19 @@ export default function SettingsModal() {
   const {
     isOpen,
     settings,
+    notificationSettings,
     availableModels,
     isSaving,
     saveStatus,
     closeSettings,
     setSettings,
+    setNotificationSettings,
     saveSettings,
     addAvailableModels,
     fetchAvailableModels,
   } = useSettingsStore();
 
+  const [activeTab, setActiveTab] = useState<'llm' | 'notifications'>('llm');
   const [showApiKey, setShowApiKey] = useState(false);
   const [isChooseModelsModalOpen, setIsChooseModelsModalOpen] = useState(false);
   const [isFetchingModels, setIsFetchingModels] = useState(false);
@@ -145,8 +149,38 @@ export default function SettingsModal() {
             </button>
           </div>
 
+          {/* Tabs */}
+          <div className="flex border-b border-[#ebebeb] dark:border-[#21262d] mt-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab('llm')}
+              className={`px-3 py-1.5 text-xs font-sans font-medium transition cursor-pointer border-b-2 -mb-px flex items-center gap-1.5 ${
+                activeTab === 'llm'
+                  ? 'border-[#171717] dark:border-[#f0f6fc] text-[#171717] dark:text-[#f0f6fc]'
+                  : 'border-transparent text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
+              }`}
+            >
+              <Cpu className="h-3.5 w-3.5" />
+              <span>{t('settings.tabLlm')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('notifications')}
+              className={`px-3 py-1.5 text-xs font-sans font-medium transition cursor-pointer border-b-2 -mb-px flex items-center gap-1.5 ${
+                activeTab === 'notifications'
+                  ? 'border-[#171717] dark:border-[#f0f6fc] text-[#171717] dark:text-[#f0f6fc]'
+                  : 'border-transparent text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
+              }`}
+            >
+              <Bell className="h-3.5 w-3.5" />
+              <span>{t('settings.tabNotifications')}</span>
+            </button>
+          </div>
+
           {/* Form Body */}
           <form onSubmit={handleSubmit} className="mt-4 space-y-3.5 text-xs font-mono">
+            {activeTab === 'llm' ? (
+              <>
             {/* Provider */}
             <div className="space-y-1">
               <label htmlFor={providerId} className="block text-[#4d4d4d] dark:text-[#8b949e] font-sans text-xs font-medium">
@@ -314,6 +348,113 @@ export default function SettingsModal() {
                 {t('settings.compactorDesc')}
               </p>
             </div>
+            </>
+            ) : (
+            <div className="space-y-4 py-1">
+              {/* Master toggle */}
+              <div className="flex items-center justify-between p-3 rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#161b22]">
+                <div className="space-y-0.5 pr-2">
+                  <span className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc] font-sans block">
+                    {t('settings.notifyWindowsMaster')}
+                  </span>
+                  <span className="text-[10px] text-[#666666] dark:text-[#8b949e] font-sans block">
+                    {t('settings.notificationsDesc')}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={notificationSettings.enabled}
+                  onClick={() => setNotificationSettings({ enabled: !notificationSettings.enabled })}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                    notificationSettings.enabled ? 'bg-[#10b981]' : 'bg-[#e5e7eb] dark:bg-[#30363d]'
+                  }`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                      notificationSettings.enabled ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Sub-toggles */}
+              <div className={`space-y-2 pl-1 transition-opacity ${notificationSettings.enabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                {/* On Question */}
+                <div className="flex items-center justify-between py-1.5 border-b border-[#f4f4f5] dark:border-[#21262d]">
+                  <span className="text-xs text-[#171717] dark:text-[#f0f6fc] font-sans">
+                    {t('settings.notifyOnQuestion')}
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    disabled={!notificationSettings.enabled}
+                    aria-checked={notificationSettings.onQuestion}
+                    onClick={() => setNotificationSettings({ onQuestion: !notificationSettings.onQuestion })}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                      notificationSettings.onQuestion && notificationSettings.enabled ? 'bg-[#10b981]' : 'bg-[#e5e7eb] dark:bg-[#30363d]'
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                        notificationSettings.onQuestion && notificationSettings.enabled ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* On Advance Task */}
+                <div className="flex items-center justify-between py-1.5 border-b border-[#f4f4f5] dark:border-[#21262d]">
+                  <span className="text-xs text-[#171717] dark:text-[#f0f6fc] font-sans">
+                    {t('settings.notifyOnAdvanceTask')}
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    disabled={!notificationSettings.enabled}
+                    aria-checked={notificationSettings.onAdvanceTask}
+                    onClick={() => setNotificationSettings({ onAdvanceTask: !notificationSettings.onAdvanceTask })}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                      notificationSettings.onAdvanceTask && notificationSettings.enabled ? 'bg-[#10b981]' : 'bg-[#e5e7eb] dark:bg-[#30363d]'
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                        notificationSettings.onAdvanceTask && notificationSettings.enabled ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* On Task Completed */}
+                <div className="flex items-center justify-between py-1.5">
+                  <span className="text-xs text-[#171717] dark:text-[#f0f6fc] font-sans">
+                    {t('settings.notifyOnTaskCompleted')}
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    disabled={!notificationSettings.enabled}
+                    aria-checked={notificationSettings.onTaskCompleted}
+                    onClick={() => setNotificationSettings({ onTaskCompleted: !notificationSettings.onTaskCompleted })}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                      notificationSettings.onTaskCompleted && notificationSettings.enabled ? 'bg-[#10b981]' : 'bg-[#e5e7eb] dark:bg-[#30363d]'
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                        notificationSettings.onTaskCompleted && notificationSettings.enabled ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            </div>
+            )}
 
             {/* Action buttons */}
             <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#ebebeb] dark:border-[#21262d]">

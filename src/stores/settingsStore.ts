@@ -9,9 +9,17 @@ export interface LlmSettingsState {
   compactorModel?: string;
 }
 
+export interface NotificationSettings {
+  enabled: boolean;
+  onAdvanceTask: boolean;
+  onQuestion: boolean;
+  onTaskCompleted: boolean;
+}
+
 interface SettingsStoreState {
   isOpen: boolean;
   settings: LlmSettingsState;
+  notificationSettings: NotificationSettings;
   availableModels: string[];
   isSaving: boolean;
   saveStatus: 'idle' | 'saved' | 'error';
@@ -20,6 +28,7 @@ interface SettingsStoreState {
   openSettings: () => void;
   closeSettings: () => void;
   setSettings: (partial: Partial<LlmSettingsState>) => void;
+  setNotificationSettings: (partial: Partial<NotificationSettings>) => void;
   setAvailableModels: (models: string[]) => void;
   addAvailableModels: (newModels: string[]) => void;
   loadSettings: () => Promise<void>;
@@ -35,6 +44,31 @@ const DEFAULT_SETTINGS: LlmSettingsState = {
   model: 'gemini-3.8-flash-high',
   compactorModel: 'inherit',
 };
+
+const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
+  enabled: true,
+  onAdvanceTask: true,
+  onQuestion: true,
+  onTaskCompleted: true,
+};
+
+function loadStoredNotificationSettings(): NotificationSettings {
+  try {
+    const raw = localStorage.getItem('cvh_notification_settings');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        enabled: parsed.enabled ?? DEFAULT_NOTIFICATION_SETTINGS.enabled,
+        onAdvanceTask: parsed.onAdvanceTask ?? DEFAULT_NOTIFICATION_SETTINGS.onAdvanceTask,
+        onQuestion: parsed.onQuestion ?? DEFAULT_NOTIFICATION_SETTINGS.onQuestion,
+        onTaskCompleted: parsed.onTaskCompleted ?? DEFAULT_NOTIFICATION_SETTINGS.onTaskCompleted,
+      };
+    }
+  } catch {
+    // Ignore localStorage error
+  }
+  return DEFAULT_NOTIFICATION_SETTINGS;
+}
 
 const PROVIDER_PRESETS: Record<string, { gatewayUrl: string; defaultModel: string }> = {
   'Antigravity Proxy': {
@@ -62,6 +96,7 @@ const PROVIDER_PRESETS: Record<string, { gatewayUrl: string; defaultModel: strin
 export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
   isOpen: false,
   settings: DEFAULT_SETTINGS,
+  notificationSettings: loadStoredNotificationSettings(),
   availableModels: ['gemini-3.8-flash-high'],
   isSaving: false,
   saveStatus: 'idle',
@@ -74,6 +109,17 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
 
   closeSettings: () => {
     set({ isOpen: false });
+  },
+
+  setNotificationSettings: (partial) => {
+    const current = get().notificationSettings;
+    const next = { ...current, ...partial };
+    set({ notificationSettings: next });
+    try {
+      localStorage.setItem('cvh_notification_settings', JSON.stringify(next));
+    } catch (e) {
+      console.warn('Failed to save notification settings to localStorage:', e);
+    }
   },
 
   setAvailableModels: (models) => {
@@ -182,7 +228,9 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
     }
 
     if (loaded) {
-      set({ settings: loaded });
+      set({ settings: loaded, notificationSettings: loadStoredNotificationSettings() });
+    } else {
+      set({ notificationSettings: loadStoredNotificationSettings() });
     }
   },
 

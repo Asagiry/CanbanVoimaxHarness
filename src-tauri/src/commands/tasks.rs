@@ -3881,6 +3881,17 @@ pub async fn internal_advance_task_to_stage(
                     let _ = app.emit("task:updated", serde_json::json!({ "task": parent }));
                 }
                 let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &final_tasks }));
+                let _ = app.emit("task:advanced", serde_json::json!({
+                    "taskId": &parent_id,
+                    "sourceTaskId": &subtask_id,
+                    "targetTaskId": &parent_id,
+                    "sourceStageId": source_col.as_ref().map(|c| c.id.as_str()).unwrap_or(current_task.stage_id.as_str()),
+                    "sourceStageTitle": source_col.as_ref().map(|c| c.title.as_str()).unwrap_or(current_task.stage_id.as_str()),
+                    "targetStageId": &target_col.id,
+                    "targetStageTitle": &target_col.title,
+                    "isTerminal": true,
+                    "summary": summary,
+                }));
             }
 
             let parent_summary_content = format!(
@@ -3979,6 +3990,17 @@ pub async fn internal_advance_task_to_stage(
                         let _ = app.emit("task:updated", serde_json::json!({ "task": target_sub }));
                     }
                     let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+                    let _ = app.emit("task:advanced", serde_json::json!({
+                        "taskId": &parent_id,
+                        "sourceTaskId": &subtask_id,
+                        "targetTaskId": &existing_sub.id,
+                        "sourceStageId": source_col.as_ref().map(|c| c.id.as_str()).unwrap_or(current_task.stage_id.as_str()),
+                        "sourceStageTitle": source_col.as_ref().map(|c| c.title.as_str()).unwrap_or(current_task.stage_id.as_str()),
+                        "targetStageId": &target_col.id,
+                        "targetStageTitle": &target_col.title,
+                        "isTerminal": false,
+                        "summary": summary,
+                    }));
 
                     if target_has_autorun {
                         let _ = app.emit("agent:autorun", serde_json::json!({
@@ -4045,6 +4067,20 @@ pub async fn internal_advance_task_to_stage(
                     next_subtask_id, target_col.title, summary
                 );
                 let _ = append_task_dialog_activity(root, &parent_id, "summary", &parent_summary_content, app_handle).await;
+
+                if let Some(app) = app_handle {
+                    let _ = app.emit("task:advanced", serde_json::json!({
+                        "taskId": &parent_id,
+                        "sourceTaskId": &subtask_id,
+                        "targetTaskId": &next_subtask_id,
+                        "sourceStageId": source_col.as_ref().map(|c| c.id.as_str()).unwrap_or(current_task.stage_id.as_str()),
+                        "sourceStageTitle": source_col.as_ref().map(|c| c.title.as_str()).unwrap_or(current_task.stage_id.as_str()),
+                        "targetStageId": &target_col.id,
+                        "targetStageTitle": &target_col.title,
+                        "isTerminal": false,
+                        "summary": summary,
+                    }));
+                }
 
                 return Ok(format!(
                     "УСПЕШНО: Создана подзадача {} ({}) для задачи {}",
@@ -4158,6 +4194,17 @@ pub async fn internal_advance_task_to_stage(
                     let _ = app.emit("task:updated", serde_json::json!({ "task": target_sub }));
                 }
                 let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+                let _ = app.emit("task:advanced", serde_json::json!({
+                    "taskId": task_id,
+                    "sourceTaskId": task_id,
+                    "targetTaskId": &existing_sub.id,
+                    "sourceStageId": source_col.as_ref().map(|c| c.id.as_str()).unwrap_or(current_task.stage_id.as_str()),
+                    "sourceStageTitle": source_col.as_ref().map(|c| c.title.as_str()).unwrap_or(current_task.stage_id.as_str()),
+                    "targetStageId": &target_col.id,
+                    "targetStageTitle": &target_col.title,
+                    "isTerminal": false,
+                    "summary": summary,
+                }));
 
                 if target_has_autorun {
                     let _ = app.emit("agent:autorun", serde_json::json!({
@@ -4198,6 +4245,20 @@ pub async fn internal_advance_task_to_stage(
         )
         .await;
 
+        if let Some(app) = app_handle {
+            let _ = app.emit("task:advanced", serde_json::json!({
+                "taskId": task_id,
+                "sourceTaskId": task_id,
+                "targetTaskId": &subtask_id,
+                "sourceStageId": source_col.as_ref().map(|c| c.id.as_str()).unwrap_or(current_task.stage_id.as_str()),
+                "sourceStageTitle": source_col.as_ref().map(|c| c.title.as_str()).unwrap_or(current_task.stage_id.as_str()),
+                "targetStageId": &target_col.id,
+                "targetStageTitle": &target_col.title,
+                "isTerminal": false,
+                "summary": summary,
+            }));
+        }
+
         return Ok(format!(
             "УСПЕШНО: Создана подзадача {} ({}) для задачи {}",
             subtask_id, target_col.title, task_id
@@ -4228,6 +4289,20 @@ pub async fn internal_advance_task_to_stage(
     )
     .await;
 
+    if let Some(app) = app_handle {
+        let _ = app.emit("task:advanced", serde_json::json!({
+            "taskId": task_id,
+            "sourceTaskId": task_id,
+            "targetTaskId": task_id,
+            "sourceStageId": source_col.as_ref().map(|c| c.id.as_str()).unwrap_or(current_task.stage_id.as_str()),
+            "sourceStageTitle": source_col.as_ref().map(|c| c.title.as_str()).unwrap_or(current_task.stage_id.as_str()),
+            "targetStageId": &target_col.id,
+            "targetStageTitle": &target_col.title,
+            "isTerminal": true,
+            "summary": summary,
+        }));
+    }
+
     Ok(format!(
         "УСПЕШНО: Задача {} завершена в терминальной колонке '{}' ({}), статус: {}",
         task_id,
@@ -4245,6 +4320,18 @@ pub async fn advance_task(
 ) -> Result<String, String> {
     let root = state.get_root();
     internal_advance_task(&root, &task_id, &summary, Some(&app)).await
+}
+
+#[tauri::command]
+pub fn focus_main_window(app: AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.unminimize();
+        let _ = win.show();
+        let _ = win.set_focus();
+        Ok(())
+    } else {
+        Err("Main window not found".to_string())
+    }
 }
 
 /// Resolves the effective active agent model for a task, following the canonical priority hierarchy:

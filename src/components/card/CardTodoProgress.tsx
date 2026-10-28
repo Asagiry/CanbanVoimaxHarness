@@ -24,10 +24,11 @@ export const CardTodoProgress = memo(function CardTodoProgress({
   const openDrawer = useDrawerStore((s) => s.openDrawer);
 
   const [isHovered, setIsHovered] = useState(false);
-  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number; placement: 'bottom' | 'top' } | null>(null);
 
   const triggerRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const hideTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -62,16 +63,19 @@ export const CardTodoProgress = memo(function CardTodoProgress({
     left = Math.max(8, Math.min(left, window.innerWidth - popoverWidth - 8));
 
     let top = rect.bottom + 6;
+    let placement: 'bottom' | 'top' = 'bottom';
     if (top + popoverHeight > window.innerHeight - 8) {
       const topAbove = rect.top - popoverHeight - 6;
       if (topAbove >= 8) {
         top = topAbove;
+        placement = 'top';
       } else {
         top = Math.max(8, window.innerHeight - popoverHeight - 8);
+        placement = 'bottom';
       }
     }
 
-    setCoords({ top, left });
+    setCoords({ top, left, placement });
   };
 
   useLayoutEffect(() => {
@@ -93,24 +97,80 @@ export const CardTodoProgress = memo(function CardTodoProgress({
       setCoords(null);
     };
 
-    const handlePointerDown = (e: PointerEvent) => {
-      if (popoverRef.current?.contains(e.target as Node)) {
-        return;
-      }
-      if (triggerRef.current?.contains(e.target as Node)) {
+    const handleScroll = (e: Event) => {
+      if (e.target instanceof Node && popoverRef.current?.contains(e.target)) {
         return;
       }
       handleClose();
     };
 
-    window.addEventListener('scroll', handleClose, { capture: true, passive: true });
+    const handlePointerDown = (e: PointerEvent) => {
+      if (e.target instanceof Node && popoverRef.current?.contains(e.target)) {
+        return;
+      }
+      if (e.target instanceof Node && triggerRef.current?.contains(e.target)) {
+        return;
+      }
+      handleClose();
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+
+    const handleTriggerWheel = (e: WheelEvent) => {
+      if (!listRef.current) return;
+      if (e.deltaY !== 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        listRef.current.scrollTop += e.deltaY;
+      }
+    };
+
+    const handlePopoverWheel = (e: WheelEvent) => {
+      if (!listRef.current) return;
+      e.stopPropagation();
+      const list = listRef.current;
+      const isAtTop = list.scrollTop <= 0 && e.deltaY < 0;
+      const isAtBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 1 && e.deltaY > 0;
+      if (isAtTop || isAtBottom) {
+        e.preventDefault();
+        return;
+      }
+      if (!list.contains(e.target as Node)) {
+        e.preventDefault();
+        list.scrollTop += e.deltaY;
+      }
+    };
+
+    const triggerEl = triggerRef.current;
+    const popoverEl = popoverRef.current;
+
+    if (triggerEl) {
+      triggerEl.addEventListener('wheel', handleTriggerWheel, { passive: false });
+    }
+    if (popoverEl) {
+      popoverEl.addEventListener('wheel', handlePopoverWheel, { passive: false });
+    }
+
+    window.addEventListener('scroll', handleScroll, { capture: true, passive: true });
     window.addEventListener('resize', handleClose);
     window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      window.removeEventListener('scroll', handleClose, { capture: true });
+      if (triggerEl) {
+        triggerEl.removeEventListener('wheel', handleTriggerWheel);
+      }
+      if (popoverEl) {
+        popoverEl.removeEventListener('wheel', handlePopoverWheel);
+      }
+      window.removeEventListener('scroll', handleScroll, { capture: true });
       window.removeEventListener('resize', handleClose);
       window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isHovered]);
 
@@ -137,10 +197,14 @@ export const CardTodoProgress = memo(function CardTodoProgress({
   };
 
   const handleMouseLeave = () => {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+    }
     hideTimerRef.current = window.setTimeout(() => {
       setIsHovered(false);
       setCoords(null);
-    }, 180);
+      hideTimerRef.current = null;
+    }, 300);
   };
 
   return (
@@ -200,7 +264,11 @@ export const CardTodoProgress = memo(function CardTodoProgress({
               left: `${coords?.left ?? -9999}px`,
               visibility: coords ? 'visible' : 'hidden',
             }}
-            className="fixed z-[9999] w-[320px] sm:w-[350px] max-w-[calc(100vw-24px)] bg-white dark:bg-[#161b22] border border-neutral-200 dark:border-[#30363d] shadow-2xl rounded-lg p-3 text-left select-text"
+            className={`fixed z-[9999] w-[320px] sm:w-[350px] max-w-[calc(100vw-24px)] bg-white dark:bg-[#161b22] border border-neutral-200 dark:border-[#30363d] shadow-2xl rounded-lg p-3 text-left select-text overscroll-contain ${
+              coords?.placement === 'top'
+                ? "after:content-[''] after:absolute after:-bottom-3 after:left-0 after:right-0 after:h-3"
+                : "before:content-[''] before:absolute before:-top-3 before:left-0 before:right-0 before:h-3"
+            }`}
           >
             {/* Header: Stage badge & progress counter */}
             <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-neutral-100 dark:border-[#21262d]">
@@ -255,7 +323,10 @@ export const CardTodoProgress = memo(function CardTodoProgress({
             </div>
 
             {/* Scrollable todos list */}
-            <div className="max-h-60 overflow-y-auto divide-y divide-neutral-100 dark:divide-[#21262d] pr-0.5">
+            <div
+              ref={listRef}
+              className="max-h-60 overflow-y-auto divide-y divide-neutral-100 dark:divide-[#21262d] pr-1 overscroll-contain"
+            >
               {todos.map((item, idx) => {
                 const isCompleted = item.status === 'completed';
                 const isInProgress = item.status === 'in_progress';
