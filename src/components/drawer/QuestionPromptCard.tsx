@@ -158,10 +158,8 @@ export default function QuestionPromptCard({ activity, taskId }: QuestionPromptC
       {/* 1. Header with Question Counter & Icon */}
       <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-[#ebebeb] dark:border-[#21262d]">
         <div className="flex items-center space-x-2 text-[#71717a] dark:text-[#8b949e]">
-          <span className="p-1 rounded-md bg-[#f4f4f5] dark:bg-[#161b22] text-[#171717] dark:text-[#f0f6fc]">
-            <QuestionMarkIcon className="w-3.5 h-3.5" />
-          </span>
-          <span className="text-xs font-mono font-medium text-[#71717a] dark:text-[#8b949e]">
+          <QuestionMarkIcon className="w-3.5 h-3.5 text-[#71717a] dark:text-[#8b949e] shrink-0" />
+          <span className="text-xs font-mono font-medium tabular-nums text-[#71717a] dark:text-[#8b949e]">
             1 из 1 вопросов
           </span>
           {isMultiple && !isAnswered && (

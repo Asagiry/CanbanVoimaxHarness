@@ -41,13 +41,14 @@ export function formatSubagentDisplayTitle(title?: string | null, lang?: Languag
 
 function getSubagentRoleLabel(role: string, isRu: boolean): string {
   const r = role.trim().toLowerCase();
-  if (r === 'architect') return isRu ? 'АРХИТЕКТОР' : 'ARCHITECT';
-  if (r === 'developer' || r === 'dev') return isRu ? 'РАЗРАБОТЧИК' : 'DEVELOPER';
-  if (r === 'reviewer' || r === 'review') return isRu ? 'РЕВЬЮЕР' : 'REVIEWER';
-  if (r === 'scout') return isRu ? 'СКАУТ' : 'SCOUT';
-  if (r === 'explorer') return isRu ? 'ИССЛЕДОВАТЕЛЬ' : 'EXPLORER';
-  if (r === 'cvh-dev') return 'CVH-DEV';
-  return role.trim().toUpperCase();
+  if (r === 'architect') return isRu ? 'Архитектор' : 'Architect';
+  if (r === 'developer' || r === 'dev') return isRu ? 'Разработчик' : 'Developer';
+  if (r === 'reviewer' || r === 'review') return isRu ? 'Ревьюер' : 'Reviewer';
+  if (r === 'scout') return isRu ? 'Скаут' : 'Scout';
+  if (r === 'explorer') return isRu ? 'Исследователь' : 'Explorer';
+  if (r === 'cvh-dev') return 'CVH-Dev';
+  const trimmed = role.trim();
+  return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase() : '';
 }
 
 export function formatSubagentRoleDisplay(
@@ -62,12 +63,12 @@ export function formatSubagentRoleDisplay(
     if (role && r && r !== 'general') {
       return getSubagentRoleLabel(role, isRu);
     }
-    return isRu ? 'ПОДЗАДАЧА' : 'SUBTASK';
+    return isRu ? 'Подзадача' : 'Subtask';
   }
 
   const r = (role || '').trim().toLowerCase();
   const hasRole = Boolean(role && r && r !== 'general');
-  const baseName = hasRole ? getSubagentRoleLabel(role!, isRu) : (isRu ? 'СУБАГЕНТ' : 'SUBAGENT');
+  const baseName = hasRole ? getSubagentRoleLabel(role!, isRu) : (isRu ? 'Субагент' : 'Subagent');
 
   if (subIndex != null) {
     return `${baseName} #${subIndex}`;
@@ -523,7 +524,7 @@ export default function SubagentsSidebar({
               {boardSubtasks.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between px-1 pt-0.5 pb-0.5">
-                    <span className="text-[11px] font-mono uppercase tracking-wider text-[#71717a] dark:text-[#8b949e] font-semibold">
+                    <span className="text-[11px] font-mono text-[#71717a] dark:text-[#8b949e] font-medium">
                       {t('subagents.boardSubtasks')}
                     </span>
                     <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-[#e4e4e7] dark:bg-[#21262d] text-[#52525b] dark:text-[#8b949e] font-medium">
@@ -535,7 +536,8 @@ export default function SubagentsSidebar({
                       (p) => p.role.toLowerCase() === (sub.role || '').toLowerCase()
                     );
                     const roleBadgeStyle = getRoleBadgeStyle(sub.role, matchedPersona?.color);
-                    const stageBadge = (sub.role || 'developer').toUpperCase();
+                    const isRu = language === 'ru';
+                    const stageBadge = sub.role ? getSubagentRoleLabel(sub.role, isRu) : (isRu ? 'Подзадача' : 'Subtask');
 
                     return (
                       <div
@@ -561,7 +563,7 @@ export default function SubagentsSidebar({
                             <GitBranch className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400 shrink-0" />
                             <span
                               style={roleBadgeStyle}
-                              className="px-2 py-0.5 rounded text-[11px] font-mono font-bold tracking-wider uppercase border shrink-0 select-none"
+                              className="px-2 py-0.5 rounded text-[11px] font-mono font-medium border shrink-0 select-none"
                             >
                               {stageBadge}
                             </span>
@@ -641,7 +643,7 @@ export default function SubagentsSidebar({
               {inProcessSubagents.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between px-1 pt-2 pb-0.5">
-                    <span className="text-[11px] font-mono uppercase tracking-wider text-[#71717a] dark:text-[#8b949e] font-semibold">
+                    <span className="text-[11px] font-mono text-[#71717a] dark:text-[#8b949e] font-medium">
                       {t('subagents.inProcess')}
                     </span>
                     <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-[#e4e4e7] dark:bg-[#21262d] text-[#52525b] dark:text-[#8b949e] font-medium">
@@ -703,7 +705,7 @@ export default function SubagentsSidebar({
                             )}
                             <span
                               style={roleBadgeStyle}
-                              className="px-2 py-0.5 rounded text-[11px] font-mono font-bold tracking-wider uppercase border shrink-0 select-none"
+                              className="px-2 py-0.5 rounded text-[11px] font-mono font-medium border shrink-0 select-none"
                             >
                               {roleDisplay}
                             </span>

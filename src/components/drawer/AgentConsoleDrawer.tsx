@@ -275,17 +275,71 @@ export default function AgentConsoleDrawer() {
     };
   }, [task?.id, updateTask]);
 
-  // Esc key listener to close drawer
+  const availableStageTaskIds = useMemo(() => {
+    const workingCols = columns.filter(
+      (c) => !c.isIntake && c.id !== 'backlog' && c.id !== 'ready' && !c.terminal
+    );
+    const ids: string[] = [];
+    for (const col of workingCols) {
+      const matchingSubtask = subtasks.find(
+        (s) => s.columnId === col.id || (s as any).stageId === col.id
+      );
+      const isRootStage = rootTask ? rootTask.columnId === col.id : false;
+      const tid = matchingSubtask ? matchingSubtask.id : (isRootStage && rootTask ? rootTask.id : null);
+      if (tid && !ids.includes(tid)) {
+        ids.push(tid);
+      }
+    }
+    if (rootTask && !ids.includes(rootTask.id)) {
+      const rootColIdx = columns.findIndex((c) => c.id === rootTask.columnId);
+      const firstWorkColIdx = columns.findIndex((c) => workingCols.length > 0 && c.id === workingCols[0].id);
+      if (firstWorkColIdx >= 0 && rootColIdx < firstWorkColIdx) {
+        ids.unshift(rootTask.id);
+      } else {
+        ids.push(rootTask.id);
+      }
+    }
+    return ids;
+  }, [columns, subtasks, rootTask]);
+
+  // Esc key listener to close drawer & ArrowLeft/ArrowRight to switch stages
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         closeDrawer();
+        return;
+      }
+
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        const target = e.target as HTMLElement | null;
+        if (
+          target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          target?.isContentEditable ||
+          target?.closest?.('input, textarea, [contenteditable="true"]')
+        ) {
+          return;
+        }
+
+        if (availableStageTaskIds.length <= 1) return;
+        const currentIdx = availableStageTaskIds.indexOf(activeTaskId || '');
+        if (e.key === 'ArrowRight') {
+          if (currentIdx >= 0 && currentIdx < availableStageTaskIds.length - 1) {
+            e.preventDefault();
+            openDrawer(availableStageTaskIds[currentIdx + 1]);
+          }
+        } else if (e.key === 'ArrowLeft') {
+          if (currentIdx > 0) {
+            e.preventDefault();
+            openDrawer(availableStageTaskIds[currentIdx - 1]);
+          }
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, closeDrawer]);
+  }, [isOpen, closeDrawer, availableStageTaskIds, activeTaskId, openDrawer]);
 
   // Unified Chronological Activity List (Parent stream or Nested Subagent stream)
   const unifiedActivities = useMemo(() => {
@@ -630,8 +684,8 @@ export default function AgentConsoleDrawer() {
             />
           </ErrorBoundary>
 
-          {/* Center Column: Activity Feed + Steer Bar - DSH-style inset cockpit card */}
-          <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] dark:bg-[#090a0f] overflow-hidden transition-colors rounded-tl-xl rounded-tr-xl border-t border-x border-[#ebebeb] dark:border-[#21262d] shadow-2xs mt-1 mx-1.5">
+          {/* Center Column: Activity Feed + Steer Bar */}
+          <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] dark:bg-[#090a0f] overflow-hidden transition-colors">
             <ErrorBoundary scopeLabel="чат задачи" onClose={closeDrawer}>
               {/* Modular Activity Stream: Objective card, Relay handoff, Live thinking, Tools, Subagent cards */}
               <DrawerActivityStream
