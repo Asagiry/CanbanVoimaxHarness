@@ -536,12 +536,13 @@ export const useCortexStore = create<CortexState>((set, get) => ({
         const hookFiles = hookMoments.map(([moment, target]) => {
           const hookId = `${col.id}-hook-${moment}`;
           const prev = prevFileById.get(hookId);
+          const targetPath = typeof target === 'string' ? target : target?.script || (target as any)?.path || '';
           return {
             id: hookId,
             name: moment,
             stageId: col.id,
             type: 'hook' as const,
-            path: target,
+            path: targetPath,
             content: prev?.content ?? '',
             isDirty: false,
           };
@@ -579,12 +580,13 @@ export const useCortexStore = create<CortexState>((set, get) => ({
       const hookFiles = hookMoments.map(([moment, target]) => {
         const hookId = `${col.id}-hook-${moment}`;
         const prev = prevFileById.get(hookId);
+        const targetPath = typeof target === 'string' ? target : target?.script || (target as any)?.path || '';
         return {
           id: hookId,
           name: moment,
           stageId: col.id,
           type: 'hook' as const,
-          path: target,
+          path: targetPath,
           content: prev?.content ?? '',
           isDirty: false,
         };

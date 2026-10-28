@@ -549,9 +549,9 @@ export default function App() {
         unlisteners.push(uTaskMoved);
 
         const uHookStart = await listen<any>('hook:start', (event) => {
-          const { taskId, stageId, hookType, hookName } = event.payload || {};
+          const { taskId, stageId, hookType, hookName, description } = event.payload || {};
           if (taskId && hookType) {
-            useBoardStore.getState().setHookStart({ taskId, stageId, hookType, hookName });
+            useBoardStore.getState().setHookStart({ taskId, stageId, hookType, hookName, description });
           }
         });
         unlisteners.push(uHookStart);

@@ -1454,7 +1454,7 @@ use super::*;
 
         if let Some(board) = boards_cfg.boards.iter_mut().find(|b| b.id == "test-board") {
             if let Some(col) = board.columns.iter_mut().find(|c| c.id == "review") {
-                col.hooks.insert("on_enter".to_string(), hook_filename.to_string());
+                col.hooks.insert("on_enter".to_string(), hook_filename.into());
             }
         }
         crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");

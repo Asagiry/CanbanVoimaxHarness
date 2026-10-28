@@ -883,7 +883,9 @@ pub async fn internal_create_task(
         };
         if let Some(col) = col_opt {
             trigger_column_on_enter_script(&col, &new_task, &stage_id, None, root).await;
-            if let Some(hook_rel) = col.hooks.get("on_enter").cloned() {
+            if let Some(hook_cfg) = col.hooks.get("on_enter").cloned() {
+                let hook_rel = hook_cfg.script().to_string();
+                let hook_desc = hook_cfg.description().map(str::to_string);
                 let hook_path = crate::config::resolve_hook_path(
                     root,
                     col.persona.as_deref(),
@@ -895,7 +897,8 @@ pub async fn internal_create_task(
                             "taskId": task_id,
                             "stageId": stage_id,
                             "hookType": "on_enter",
-                            "hookName": hook_rel
+                            "hookName": hook_rel,
+                            "description": hook_desc,
                         }));
                     }
                     let hook_started_at = chrono::Utc::now().timestamp_millis();
@@ -1996,7 +1999,9 @@ pub async fn internal_move_task_stage(
     };
 
     if let Some(ref scol) = source_col {
-        if let Some(hook_rel) = scol.hooks.get("on_leave").or_else(|| scol.hooks.get("on_exit")) {
+        if let Some(hook_cfg) = scol.hooks.get("on_leave").or_else(|| scol.hooks.get("on_exit")) {
+            let hook_rel = hook_cfg.script();
+            let hook_desc = hook_cfg.description();
             let hook_path = crate::config::resolve_hook_path(
                 root,
                 scol.persona.as_deref(),
@@ -2008,7 +2013,8 @@ pub async fn internal_move_task_stage(
                         "taskId": current_task.id,
                         "stageId": scol.id,
                         "hookType": "on_leave",
-                        "hookName": hook_rel
+                        "hookName": hook_rel,
+                        "description": hook_desc,
                     }));
                 }
                 let hook_started_at = chrono::Utc::now().timestamp_millis();
@@ -2480,7 +2486,9 @@ pub async fn internal_move_task_stage(
     }
 
     // Trigger on_enter hook if configured
-    if let Some(hook_rel) = target_col.hooks.get("on_enter").cloned() {
+    if let Some(hook_cfg) = target_col.hooks.get("on_enter").cloned() {
+        let hook_rel = hook_cfg.script().to_string();
+        let hook_desc = hook_cfg.description().map(str::to_string);
         let hook_path = crate::config::resolve_hook_path(
             root,
             target_col.persona.as_deref(),
@@ -2492,7 +2500,8 @@ pub async fn internal_move_task_stage(
                     "taskId": current_task.id,
                     "stageId": canonical_target_stage_id,
                     "hookType": "on_enter",
-                    "hookName": hook_rel
+                    "hookName": hook_rel,
+                    "description": hook_desc,
                 }));
             }
             let hook_started_at = chrono::Utc::now().timestamp_millis();
@@ -3322,7 +3331,9 @@ pub async fn internal_advance_task_to_stage(
 
     // 1. Check and execute on_leave / on_exit hook of source stage
     if let Some(ref sc) = source_col {
-        if let Some(hook_rel) = sc.hooks.get("on_leave").or_else(|| sc.hooks.get("on_exit")) {
+        if let Some(hook_cfg) = sc.hooks.get("on_leave").or_else(|| sc.hooks.get("on_exit")) {
+            let hook_rel = hook_cfg.script();
+            let hook_desc = hook_cfg.description();
             let hook_path = crate::config::resolve_hook_path(root, sc.persona.as_deref(), hook_rel);
             if hook_path.exists() {
                 if let Some(app) = app_handle {
@@ -3330,7 +3341,8 @@ pub async fn internal_advance_task_to_stage(
                         "taskId": current_task.id,
                         "stageId": sc.id,
                         "hookType": "on_leave",
-                        "hookName": hook_rel
+                        "hookName": hook_rel,
+                        "description": hook_desc,
                     }));
                 }
                 let hook_started_at = chrono::Utc::now().timestamp_millis();
@@ -3606,7 +3618,9 @@ pub async fn internal_advance_task_to_stage(
     }
 
     // 3. Check and execute on_enter hook of target column
-    if let Some(hook_rel) = target_col.hooks.get("on_enter").cloned() {
+    if let Some(hook_cfg) = target_col.hooks.get("on_enter").cloned() {
+        let hook_rel = hook_cfg.script().to_string();
+        let hook_desc = hook_cfg.description().map(str::to_string);
         let hook_path = crate::config::resolve_hook_path(
             root,
             target_col.persona.as_deref(),
@@ -3618,7 +3632,8 @@ pub async fn internal_advance_task_to_stage(
                     "taskId": current_task.id,
                     "stageId": target_col.id,
                     "hookType": "on_enter",
-                    "hookName": hook_rel
+                    "hookName": hook_rel,
+                    "description": hook_desc,
                 }));
             }
             let hook_started_at = chrono::Utc::now().timestamp_millis();

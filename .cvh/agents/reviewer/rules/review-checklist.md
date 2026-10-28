@@ -73,7 +73,8 @@ In accordance with the Harness2.0 selection protocol, review candidate code arti
 - Code Simplifier: favor early returns over deep nested ladders; unwind single-use pass-through wrapper functions.
 
 ### Gate 6: Clean Merge, Origin Integration & Stage Routing Protocol
-- **Clean Mergeability Check**: Verify clean mergeability against `main` (`git merge-tree --write-tree main <branch>` exits 0). Reject immediately with `CHANGES_REQUESTED` if merge conflicts exist or if the branch silently clobbers recent commits from `main`. (Note: If the worktree has uncommitted changes, verify `TARGET=$(git stash create); git merge-tree --write-tree main ${TARGET:-HEAD}` so the check evaluates the actual code instead of a stale `HEAD`).
+- **Clean Mergeability Check**: Verify clean mergeability against `main` (`git merge-tree --write-tree main HEAD` exits 0). Reject immediately with `CHANGES_REQUESTED` if merge conflicts exist or if the branch silently clobbers recent commits from `main`.
+- **Pre-Handover Clean Working Tree Check**: The feature branch MUST contain all task commits and the working tree must be completely clean (`git status --porcelain` is empty). Reject immediately with `CHANGES_REQUESTED` if uncommitted modifications exist; teardown hooks (`on_review_finish.bat`) merge the branch, NOT the dirty worktree, and force-remove uncommitted files upon completion.
 - **Merge & Origin Integration**: Merge approved feature branch into `main`, push to remote `origin` (`git push origin main`), and execute routing verdict (see `verdict-routing.md`).
 
 

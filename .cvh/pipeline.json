@@ -22,7 +22,10 @@
         "web_fetch"
       ],
       "hooks": {
-        "on_leave": ".cvh/hooks/create_worktree.bat"
+        "on_leave": {
+          "script": ".cvh/hooks/create_worktree.bat",
+          "description": "Создает изолированный git worktree и feature-ветку feat/<task-id> для безопасной разработки задачи"
+        }
       },
       "routes": null,
       "autoRun": null,
@@ -123,7 +126,10 @@
         "web_fetch"
       ],
       "hooks": {
-        "on_leave": ".cvh/hooks/on_review_finish.bat"
+        "on_leave": {
+          "script": ".cvh/hooks/on_review_finish.bat",
+          "description": "Сливает утвержденную feature-ветку в main, отправляет в origin/main и удаляет изолированный worktree"
+        }
       },
       "routes": {
         "on_approved": "ready",
@@ -182,7 +188,10 @@
         "grep"
       ],
       "hooks": {
-        "on_enter": ".cvh/hooks/on_enter_ready.bat"
+        "on_enter": {
+          "script": ".cvh/hooks/on_enter_ready.bat",
+          "description": "Финальная проверка слияния ветки задачи в main, отправка в origin/main и удаление временного worktree"
+        }
       },
       "routes": null,
       "autoRun": null,
@@ -214,7 +223,10 @@
             "web_fetch"
           ],
           "hooks": {
-            "on_leave": ".cvh/hooks/create_worktree.bat"
+            "on_leave": {
+            "script": ".cvh/hooks/create_worktree.bat",
+            "description": "Создает изолированный git worktree и feature-ветку feat/<task-id> для безопасной разработки задачи"
+          }
           },
           "routes": null,
           "autoRun": null,
@@ -315,7 +327,10 @@
             "web_fetch"
           ],
           "hooks": {
-            "on_leave": ".cvh/hooks/on_review_finish.bat"
+            "on_leave": {
+            "script": ".cvh/hooks/on_review_finish.bat",
+            "description": "Сливает утвержденную feature-ветку в main, отправляет в origin/main и удаляет изолированный worktree"
+          }
           },
           "routes": {
             "on_approved": "ready",
@@ -374,7 +389,10 @@
             "grep"
           ],
           "hooks": {
-            "on_enter": ".cvh/hooks/on_enter_ready.bat"
+            "on_enter": {
+            "script": ".cvh/hooks/on_enter_ready.bat",
+            "description": "Финальная проверка слияния ветки задачи в main, отправка в origin/main и удаление временного worktree"
+          }
           },
           "routes": null,
           "autoRun": null,

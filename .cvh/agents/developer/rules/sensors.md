@@ -43,20 +43,19 @@ npm run build
 ### 2.4 Branch Integration & Zero-Regression Pre-Flight Sensor
 ```bash
 # 1. Commit all working tree changes to the branch first:
-git commit -am "feat(<task-id>): <concise summary>"
+git add -A && git commit -m "feat(<task-id>): <concise summary>"
 # 2. Verify clean mergeability against main:
 git merge-tree --write-tree main HEAD
-# (Alternatively, if checking before commit: TARGET=$(git stash create); git merge-tree --write-tree main ${TARGET:-HEAD})
 ```
-- **Acceptance Criteria**: Exit code `0` with zero merge conflicts.
+- **Acceptance Criteria**: Working tree is clean (`git status --porcelain` empty) and `git merge-tree` returns exit code `0` with zero merge conflicts.
 - **Concurrent Main Invariant (CLE)**:
   - **Cue**: When completing a task in an isolated worktree or touching shared components (`KanbanCard.tsx`, stores, migrations) while `main` advances with concurrent PRs.
   - **Lesson**: Always sync with `main` (`git merge origin/main`) and verify clean mergeability (`git merge-tree --write-tree main HEAD` exit 0) before handover; diff against `origin/main` to ensure concurrently merged features are never overwritten.
   - **Evidence**: Task CVH-022 rejected on Gate 6 & Gate 4 due to stale base `7b038b7` clobbering CVH-021's Todo progress bar in `KanbanCard.tsx` (resolved in `fa09d41`, approved in `37eae88`).
 - **Committed HEAD Pre-Flight Invariant (CLE)**:
-  - **Cue**: When executing `git merge-tree` or preparing to invoke `advance_task` with uncommitted changes in the worktree.
-  - **Lesson**: Commit all changes before handover; running `git merge-tree --write-tree main HEAD` on a dirty working tree tests the stale base commit instead of your changes, creating false-positive passing checks that break downstream in Review.
-  - **Evidence**: Task CVH-026 failed Gate 6 with `CHANGES_REQUESTED` because uncommitted changes in `tests.rs` hid an EOF conflict against CVH-025 on `main` until Reviewer committed them (resolved via `c31e5cb` and `ad43391`).
+  - **Cue**: When preparing to invoke `advance_task` or running mergeability pre-flight checks.
+  - **Lesson**: Commit all modified files to the feature branch before handover; running `git merge-tree --write-tree main HEAD` on a dirty working tree tests stale base commits and triggers automatic gatekeeper rejection (`git status --porcelain` check). Never hand off uncommitted changes, as teardown hooks (`on_review_finish.bat`) will discard them upon merge.
+  - **Evidence**: Tasks CVH-026 and CVH-031 failed Gate 6 with `CHANGES_REQUESTED` when uncommitted working trees masked conflicts and risked empty branch merges (resolved via `4173c2c` and `5ce7988`, mechanically enforced by `gatekeeper_sensor.bat`/`.sh`).
 
 ---
 

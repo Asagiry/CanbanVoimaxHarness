@@ -105,6 +105,46 @@ pub struct ProjectConfig {
     pub providers: HashMap<String, ProviderConfig>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum HookConfig {
+    Script(String),
+    Detailed {
+        #[serde(alias = "path", alias = "command")]
+        script: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        description: Option<String>,
+    },
+}
+
+impl HookConfig {
+    pub fn script(&self) -> &str {
+        match self {
+            HookConfig::Script(s) => s.as_str(),
+            HookConfig::Detailed { script, .. } => script.as_str(),
+        }
+    }
+
+    pub fn description(&self) -> Option<&str> {
+        match self {
+            HookConfig::Script(_) => None,
+            HookConfig::Detailed { description, .. } => description.as_deref(),
+        }
+    }
+}
+
+impl From<&str> for HookConfig {
+    fn from(s: &str) -> Self {
+        HookConfig::Script(s.to_string())
+    }
+}
+
+impl From<String> for HookConfig {
+    fn from(s: String) -> Self {
+        HookConfig::Script(s)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct PipelineColumn {
     pub id: String,
@@ -130,7 +170,7 @@ pub struct PipelineColumn {
     #[serde(rename = "allowedTools", default)]
     pub allowed_tools: Option<Vec<String>>,
     #[serde(default)]
-    pub hooks: HashMap<String, String>,
+    pub hooks: HashMap<String, HookConfig>,
     #[serde(default)]
     pub routes: Option<HashMap<String, String>>,
     #[serde(rename = "autoRun", default)]
@@ -1422,12 +1462,32 @@ Authoritative rules for `.cvh/hooks/` and column lifecycle scripts.
 
 ---
 
-## 1. Hook Invocation Triggers
+## 1. Hook Configuration Schema & Invocation Triggers
 Columns declare transition hooks in configuration (`boards.json` and `pipeline.json`) within the `hooks` object:
 - `hooks.on_enter`: Executes when a task enters the stage.
 - `hooks.on_leave`: Executes when a task exits the stage.
 
-All hooks are executable scripts (`.bat`, `.cmd`, `.ps1`, `.sh`, `.py`) located in `.cvh/hooks/` or inside an agent's directory.
+### Hook Declaration Formats
+Hooks support two schema formats:
+1. **Object format (Recommended)** with `script` and `description`:
+   ```json
+   "hooks": {
+     "on_leave": {
+       "script": ".cvh/hooks/on_review_finish.bat",
+       "description": "Сливает утвержденную feature-ветку в main, отправляет в origin/main и удаляет изолированный worktree"
+     }
+   }
+   ```
+   - `script` (aliases: `path`, `command`): Relative path to executable script (`.bat`, `.cmd`, `.ps1`, `.sh`, `.py`).
+   - `description`: Informative human-readable explanation displayed when hovering over the Kanban card hook indicator node, clarifying hook purpose and operations to users and agents.
+2. **String scalar format (Compact / Legacy)**:
+   ```json
+   "hooks": {
+     "on_leave": ".cvh/hooks/create_worktree.bat"
+   }
+   ```
+
+All hooks are executable scripts located in `.cvh/hooks/` or inside an agent's directory (`.cvh/agents/<role>/hooks/`).
 
 ---
 
@@ -3273,6 +3333,52 @@ mod tests {
         assert_eq!(resolve_actual_repo_root(Path::new("Release/Windows/installer")), PathBuf::new());
         assert_eq!(resolve_actual_repo_root(Path::new(r"C:\Users\VibeCode\CanbanVoimaxHarness")), PathBuf::from(r"C:\Users\VibeCode\CanbanVoimaxHarness"));
         assert_eq!(resolve_actual_repo_root(Path::new(r"C:\Users\VibeCode\CanbanVoimaxHarness\Release\Windows\bin")), PathBuf::new());
+    }
+
+    #[test]
+    fn test_hook_config_serde_and_helpers() {
+        // String format
+        let raw_str = r#""hooks/create_worktree.bat""#;
+        let hook_str: HookConfig = serde_json::from_str(raw_str).expect("deserialize string hook");
+        assert_eq!(hook_str.script(), "hooks/create_worktree.bat");
+        assert_eq!(hook_str.description(), None);
+        assert_eq!(serde_json::to_string(&hook_str).unwrap(), raw_str);
+
+        // Detailed object format with description
+        let raw_detailed = r#"{"script":"hooks/on_enter.bat","description":"Initializes the worktree"}"#;
+        let hook_det: HookConfig = serde_json::from_str(raw_detailed).expect("deserialize detailed hook");
+        assert_eq!(hook_det.script(), "hooks/on_enter.bat");
+        assert_eq!(hook_det.description(), Some("Initializes the worktree"));
+
+        // Detailed object format with alias 'path' and no description
+        let raw_alias = r#"{"path":"hooks/on_enter.bat"}"#;
+        let hook_alias: HookConfig = serde_json::from_str(raw_alias).expect("deserialize alias hook");
+        assert_eq!(hook_alias.script(), "hooks/on_enter.bat");
+        assert_eq!(hook_alias.description(), None);
+
+        // Detailed object format with alias 'command'
+        let raw_cmd = r#"{"command":"hooks/on_enter.bat"}"#;
+        let hook_cmd: HookConfig = serde_json::from_str(raw_cmd).expect("deserialize command hook");
+        assert_eq!(hook_cmd.script(), "hooks/on_enter.bat");
+        assert_eq!(hook_cmd.description(), None);
+
+        // Deserializing within PipelineColumn
+        let col_json = r#"{
+            "id": "backlog",
+            "title": "Backlog",
+            "hooks": {
+                "on_leave": {
+                    "script": ".cvh/hooks/create_worktree.bat",
+                    "description": "Creates worktree"
+                },
+                "on_enter": ".cvh/hooks/on_enter.bat"
+            }
+        }"#;
+        let col: PipelineColumn = serde_json::from_str(col_json).expect("deserialize column with hooks");
+        assert_eq!(col.hooks.get("on_leave").unwrap().script(), ".cvh/hooks/create_worktree.bat");
+        assert_eq!(col.hooks.get("on_leave").unwrap().description(), Some("Creates worktree"));
+        assert_eq!(col.hooks.get("on_enter").unwrap().script(), ".cvh/hooks/on_enter.bat");
+        assert_eq!(col.hooks.get("on_enter").unwrap().description(), None);
     }
 }
 

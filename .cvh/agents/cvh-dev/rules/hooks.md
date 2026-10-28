@@ -4,12 +4,32 @@ Authoritative rules for `.cvh/hooks/` and column lifecycle scripts.
 
 ---
 
-## 1. Hook Invocation Triggers
+## 1. Hook Configuration Schema & Invocation Triggers
 Columns declare transition hooks in configuration (`boards.json` and `pipeline.json`) within the `hooks` object:
 - `hooks.on_enter`: Executes when a task enters the stage.
 - `hooks.on_leave`: Executes when a task exits the stage.
 
-All hooks are executable scripts (`.bat`, `.cmd`, `.ps1`, `.sh`, `.py`) located in `.cvh/hooks/` or inside an agent's directory.
+### Hook Declaration Formats
+Hooks support two schema formats:
+1. **Object format (Recommended)** with `script` and `description`:
+   ```json
+   "hooks": {
+     "on_leave": {
+       "script": ".cvh/hooks/on_review_finish.bat",
+       "description": "Сливает утвержденную feature-ветку в main, отправляет в origin/main и удаляет изолированный worktree"
+     }
+   }
+   ```
+   - `script` (aliases: `path`, `command`): Relative path to executable script (`.bat`, `.cmd`, `.ps1`, `.sh`, `.py`).
+   - `description`: Informative human-readable explanation displayed when hovering over the Kanban card hook indicator node, clarifying hook purpose and operations to users and agents.
+2. **String scalar format (Compact / Legacy)**:
+   ```json
+   "hooks": {
+     "on_leave": ".cvh/hooks/create_worktree.bat"
+   }
+   ```
+
+All hooks are executable scripts located in `.cvh/hooks/` or inside an agent's directory (`.cvh/agents/<role>/hooks/`).
 
 ---
 

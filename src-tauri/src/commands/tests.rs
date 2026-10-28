@@ -993,7 +993,7 @@ use std::path::PathBuf;
     fn hook_col(id: &str, on_enter: Option<&str>) -> PipelineColumn {
         let mut col = test_col(id);
         if let Some(v) = on_enter {
-            col.hooks.insert("on_enter".to_string(), v.to_string());
+            col.hooks.insert("on_enter".to_string(), v.into());
         }
         col
     }
