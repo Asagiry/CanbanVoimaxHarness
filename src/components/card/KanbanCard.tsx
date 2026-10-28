@@ -302,7 +302,7 @@ function CardHookNode({
         >
           {/* Header */}
           <div className="flex items-center justify-between gap-1.5 pb-2 border-b border-neutral-100 dark:border-[#21262d]">
-            <span className="text-xs font-mono font-medium text-neutral-500 dark:text-neutral-400">
+            <span className="text-xs font-mono font-medium text-[#71717a] dark:text-[#8b949e]">
               {isTransition
                 ? 'Хук перехода (on_leave)'
                 : side === 'left'
@@ -342,11 +342,11 @@ function CardHookNode({
           </div>
 
           {isTransition && sourceStageTitle ? (
-            <div className="text-xs text-neutral-500 dark:text-neutral-400 font-mono mt-0.5">
+            <div className="text-xs text-[#71717a] dark:text-[#8b949e] font-mono mt-0.5">
               Переход из: {sourceStageTitle}
             </div>
           ) : stageTitle ? (
-            <div className="text-xs text-neutral-500 dark:text-neutral-400 font-mono mt-0.5">
+            <div className="text-xs text-[#71717a] dark:text-[#8b949e] font-mono mt-0.5">
               Стадия: {stageTitle}
             </div>
           ) : null}
@@ -371,7 +371,7 @@ function CardHookNode({
           {/* Terminal log output */}
           {hasOutput ? (
             <div className="mt-2.5">
-              <div className="flex items-center justify-between text-xs font-mono text-neutral-500 dark:text-neutral-400 mb-1">
+              <div className="flex items-center justify-between text-xs font-mono text-[#71717a] dark:text-[#8b949e] mb-1">
                 <span className="flex items-center gap-1">
                   <Terminal className="w-3.5 h-3.5" />
                   <span>Лог терминала</span>
@@ -386,7 +386,7 @@ function CardHookNode({
             </div>
           ) : (
             (!hookDescription || status === 'running') && (
-              <div className="mt-2 text-xs text-neutral-500 dark:text-neutral-400 font-sans leading-relaxed">
+              <div className="mt-2 text-xs text-[#71717a] dark:text-[#8b949e] font-sans leading-relaxed">
                 {status === 'running'
                   ? 'Выполняется скрипт жизненного цикла стадии...'
                   : isTransition
@@ -748,7 +748,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                     ) : null}
                     {task.createdAt && (currentTotalElapsed > 0 || isDone) ? <span>·</span> : null}
                     {isDone ? (
-                      <span>
+                      <span className="tabular-nums">
                         {t('card.completedDuration', {
                           time: currentTotalElapsed > 0
                             ? formatStageDuration(currentTotalElapsed, language)
@@ -756,22 +756,22 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                         })}
                       </span>
                     ) : isRunning && currentTotalElapsed > 0 ? (
-                      <span>
+                      <span className="tabular-nums">
                         {t('card.elapsed', { time: formatStageDuration(currentTotalElapsed, language) })}
                       </span>
                     ) : currentTotalElapsed > 0 ? (
-                      <span>
+                      <span className="tabular-nums">
                         {formatStageDuration(currentTotalElapsed, language)}
                       </span>
                     ) : null}
                   </div>
                   {task.attachments && task.attachments.length > 0 && (
                     <span
-                      className="inline-flex items-center gap-0.5 text-[10px] font-mono text-[#666666] dark:text-[#8b949e] shrink-0"
+                      className="inline-flex items-center gap-0.5 text-[10px] font-mono text-[#666666] dark:text-[#8b949e] shrink-0 tabular-nums"
                       aria-label={t('newTask.attachmentsLabel')}
                     >
                       <Paperclip className="h-2.5 w-2.5 shrink-0" />
-                      <span>{task.attachments.length}</span>
+                      <span className="tabular-nums">{task.attachments.length}</span>
                     </span>
                   )}
                 </div>

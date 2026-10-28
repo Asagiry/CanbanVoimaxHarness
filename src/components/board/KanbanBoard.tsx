@@ -42,6 +42,7 @@ export default function KanbanBoard() {
     boards,
     activeBoardId,
     setActiveBoard,
+    createBoard,
     saveBoard,
     deleteBoard,
     saveCurrentBoard,
@@ -81,6 +82,9 @@ export default function KanbanBoard() {
   const [boardContextMenu, setBoardContextMenu] = useState<BoardContextMenuState | null>(null);
   const [renamingBoardId, setRenamingBoardId] = useState<string | null>(null);
   const [renamingBoardName, setRenamingBoardName] = useState('');
+  const [isCreatingBoard, setIsCreatingBoard] = useState(false);
+  const [newBoardName, setNewBoardName] = useState('');
+  const isSubmittingBoardRef = useRef(false);
 
   useEffect(() => {
     if (!boardContextMenu) return;
@@ -107,6 +111,31 @@ export default function KanbanBoard() {
     } catch (err) {
       console.info('saveBoard failed for rename:', err);
     }
+  };
+
+  const handleCommitCreateBoard = async () => {
+    if (isSubmittingBoardRef.current) return;
+    isSubmittingBoardRef.current = true;
+    const trimmed = newBoardName.trim();
+    setIsCreatingBoard(false);
+    setNewBoardName('');
+    if (!trimmed) {
+      isSubmittingBoardRef.current = false;
+      return;
+    }
+    try {
+      await createBoard(trimmed);
+    } catch (err) {
+      console.info('createBoard failed:', err);
+    } finally {
+      isSubmittingBoardRef.current = false;
+    }
+  };
+
+  const handleCancelCreateBoard = () => {
+    if (isSubmittingBoardRef.current) return;
+    setIsCreatingBoard(false);
+    setNewBoardName('');
   };
 
   const handleTabContextMenu = (e: React.MouseEvent, boardId: string) => {
@@ -858,14 +887,44 @@ export default function KanbanBoard() {
               </div>
             );
           })}
-          <button
-            onClick={() => setIsCreateBoardModalOpen(true)}
-            className="flex items-center space-x-1 px-2.5 py-1.5 rounded-md border border-dashed border-[#d4d4d8] dark:border-[#30363d] hover:border-[#171717] dark:hover:border-[#f0f6fc] text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] text-xs font-medium transition cursor-pointer select-none"
-            aria-label={t('board.newBoardTitle')}
-          >
-            <Plus className="h-3 w-3" />
-            <span>{t('board.newBoard')}</span>
-          </button>
+          {isCreatingBoard ? (
+            <div className="flex items-center space-x-1 px-2 py-1 rounded-md text-xs font-medium border bg-white dark:bg-[#0d1117] border-[#171717] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc]">
+              <Layout className="h-3.5 w-3.5 shrink-0 text-[#71717a] dark:text-[#8b949e]" />
+              <input
+                type="text"
+                autoFocus
+                placeholder={t('createBoard.namePlaceholder')}
+                value={newBoardName}
+                onChange={(e) => setNewBoardName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void handleCommitCreateBoard();
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleCancelCreateBoard();
+                  }
+                }}
+                onBlur={handleCancelCreateBoard}
+                onClick={(e) => e.stopPropagation()}
+                className="px-1.5 py-0.5 rounded text-xs outline-hidden w-28 sm:w-36 font-sans bg-[#fafafa] dark:bg-[#161b22] text-[#171717] dark:text-[#f0f6fc] border border-[#d4d4d8] dark:border-[#30363d]"
+              />
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                setNewBoardName('');
+                setIsCreatingBoard(true);
+              }}
+              className="flex items-center space-x-1 px-2.5 py-1.5 rounded-md border border-dashed border-[#d4d4d8] dark:border-[#30363d] hover:border-[#171717] dark:hover:border-[#f0f6fc] text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] text-xs font-medium transition cursor-pointer select-none"
+              aria-label={t('board.newBoardTitle')}
+            >
+              <Plus className="h-3 w-3" />
+              <span>{t('board.newBoard')}</span>
+            </button>
+          )}
         </div>
 
         {/* Right: Board Stats & Action Buttons */}
