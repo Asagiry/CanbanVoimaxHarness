@@ -3880,3 +3880,113 @@ Write code.
 
         let _ = tokio::fs::remove_dir_all(&tmp).await;
     }
+
+    #[tokio::test]
+    async fn test_advance_task_auto_completes_unfinished_todos() {
+        let base = PathBuf::from("target").join(format!("cvh_auto_complete_todos_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        let dev_board = crate::config::BoardsConfig {
+            active_board_id: "development".to_string(),
+            boards: vec![crate::config::BoardDef {
+                id: "development".to_string(),
+                name: "Development".to_string(),
+                columns: vec![
+                    test_col("backlog"),
+                    test_col("dev"),
+                    test_col("ready"),
+                ],
+            }],
+        };
+        crate::config::save_boards_config(&base, &dev_board).await.expect("save boards");
+
+        let task_id = "CVH-TODO-1";
+        let initial_todos = vec![
+            crate::agent::TodoItem {
+                id: "todo-1".to_string(),
+                content: "Implement feature".to_string(),
+                status: "in_progress".to_string(),
+            },
+            crate::agent::TodoItem {
+                id: "todo-2".to_string(),
+                content: "Run test suite".to_string(),
+                status: "pending".to_string(),
+            },
+        ];
+
+        let task = Task {
+            id: task_id.to_string(),
+            title: "Task with unfinished todos".to_string(),
+            description: "Testing fallback auto-completion of todos".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("running".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            handover_summary: None,
+            cover_image: None,
+            attachments: None,
+            todos: Some(initial_todos.clone()),
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: Some(true),
+            created_at: chrono::Utc::now().timestamp_millis(),
+            updated_at: chrono::Utc::now().timestamp_millis(),
+            completed_at: None,
+            position: None,
+            hook_states: None,
+        };
+
+        save_tasks_to_disk(&base, &[task]).await.expect("save task");
+        crate::db::db_save_todos(&base, task_id, &initial_todos).expect("save initial todos to db");
+
+        // Verify todos before advance
+        let pre_task = crate::db::db_get_task(&base, task_id).expect("load task").expect("task exists");
+        let pre_todos = pre_task.todos.expect("pre todos exist");
+        assert_eq!(pre_todos.len(), 2);
+        assert_eq!(pre_todos[0].status, "in_progress");
+        assert_eq!(pre_todos[1].status, "pending");
+
+        // Advance task to next stage (from dev to ready)
+        let adv_res = internal_advance_task_to_stage(
+            &base,
+            task_id,
+            Some("ready"),
+            "Completed all work and verified",
+            None,
+        )
+        .await
+        .expect("internal_advance_task_to_stage must succeed");
+
+        assert!(adv_res.contains("УСПЕШНО"));
+
+        // Verify task in memory/disk after advance
+        let disk_tasks = load_tasks_from_disk(&base).await;
+        let advanced_task = disk_tasks.iter().find(|t| t.id == task_id).expect("task on disk");
+        assert_eq!(advanced_task.stage_id, "ready");
+        let disk_todos = advanced_task.todos.as_ref().expect("disk todos present");
+        assert_eq!(disk_todos.len(), 2);
+        assert_eq!(disk_todos[0].status, "completed");
+        assert_eq!(disk_todos[1].status, "completed");
+
+        // Verify task and todos directly in SQLite
+        let db_task = crate::db::db_get_task(&base, task_id).expect("db_get_task").expect("task in db");
+        let db_todos = db_task.todos.as_ref().expect("db todos present");
+        assert_eq!(db_todos.len(), 2);
+        assert_eq!(db_todos[0].status, "completed");
+        assert_eq!(db_todos[1].status, "completed");
+
+        // Also test idempotency: calling auto_complete_task_todos again returns false
+        let mut task_clone = db_task.clone();
+        let changed_again = auto_complete_task_todos(&base, &mut task_clone, None);
+        assert!(!changed_again, "auto_complete_task_todos must be idempotent and return false when already completed");
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }

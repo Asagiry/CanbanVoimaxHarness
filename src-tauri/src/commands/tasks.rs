@@ -2758,6 +2758,7 @@ pub async fn internal_move_task_stage(
             current_task.completed_at = Some(Utc::now().timestamp_millis());
         }
         current_task.waiting_for_subtask_id = None;
+        auto_complete_task_todos(root, current_task, app_handle);
     } else {
         current_task.completed_at = None;
     }
@@ -2790,6 +2791,7 @@ pub async fn internal_move_task_stage(
                     t.completed_at = Some(Utc::now().timestamp_millis());
                 }
                 t.updated_at = Utc::now().timestamp_millis();
+                auto_complete_task_todos(root, t, app_handle);
             }
             if t.parent_id.as_deref() == Some(&cur_id) {
                 t.status = Some("done".to_string());
@@ -2797,6 +2799,7 @@ pub async fn internal_move_task_stage(
                     t.completed_at = Some(Utc::now().timestamp_millis());
                 }
                 t.updated_at = Utc::now().timestamp_millis();
+                auto_complete_task_todos(root, t, app_handle);
             }
         }
     }
@@ -2847,6 +2850,12 @@ pub async fn internal_move_task_stage(
         parent_moved_events = parent_res.moved_events;
         parent_created_tasks = parent_res.created_tasks;
         parent_autorun_ids = parent_res.autorun_task_ids;
+
+        for t in tasks.iter_mut() {
+            if t.status.as_deref() == Some("done") {
+                auto_complete_task_todos(root, t, app_handle);
+            }
+        }
     }
 
     if let Some(app) = app_handle {
@@ -3131,6 +3140,74 @@ async fn handle_advance_hook_or_sensor_rejection(
     Err(error_msg)
 }
 
+/// Fallback: auto-completes any unfinished task todos (status != 'completed')
+/// when advancing or completing a task, updating SQLite, memory, and emitting UI events.
+/// Returns true if any todos were modified/completed, false if already completed or absent.
+pub fn auto_complete_task_todos(
+    root: &Path,
+    task: &mut Task,
+    app_handle: Option<&AppHandle>,
+) -> bool {
+    let memory_had_unfinished = task.todos.as_ref().is_some_and(|tds| {
+        tds.iter().any(|td| td.status != "completed")
+    });
+    let db_had_unfinished = if memory_had_unfinished {
+        true
+    } else {
+        crate::db::db_has_unfinished_todos(root, &task.id)
+    };
+
+    if !memory_had_unfinished && !db_had_unfinished {
+        return false;
+    }
+
+    if let Some(ref mut todos) = task.todos {
+        for td in todos.iter_mut() {
+            if td.status != "completed" {
+                td.status = "completed".to_string();
+            }
+        }
+    }
+
+    match crate::db::db_complete_all_todos(root, &task.id) {
+        Ok(Some(db_todos)) => {
+            if task.todos.is_none() {
+                task.todos = Some(db_todos);
+            }
+        }
+        Ok(None) => {}
+        Err(e) => {
+            crate::logger::cvh_log(
+                Some(root),
+                "WARN",
+                "AUTO_COMPLETE_TODOS",
+                &format!("db_complete_all_todos error for task {}: {}", task.id, e),
+            );
+        }
+    }
+
+    task.updated_at = Utc::now().timestamp_millis();
+    let _ = crate::db::db_upsert_task(root, task);
+
+    if let Some(app) = app_handle {
+        if let Some(state_ref) = app.try_state::<AppState>() {
+            if let Ok(mut guard) = state_ref.tasks.lock() {
+                if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &task.id)) {
+                    t.todos = task.todos.clone();
+                    t.updated_at = task.updated_at;
+                }
+            }
+        }
+        let _ = app.emit("task:updated", serde_json::json!({
+            "taskId": &task.id,
+            "todos": &task.todos,
+            "task": &task,
+        }));
+    }
+
+    true
+}
+
 pub async fn internal_advance_task_to_stage(
     root: &Path,
     task_id: &str,
@@ -3404,6 +3481,9 @@ pub async fn internal_advance_task_to_stage(
             }
         }
     }
+
+    // Fallback: auto-complete any unfinished todos for the advancing task
+    auto_complete_task_todos(root, &mut current_task, app_handle);
 
     // 2. Check and execute gatekeeper sensor of target column
     if let Some(sensor_cmd) = &target_col.gatekeeper_sensor {
@@ -3706,6 +3786,7 @@ pub async fn internal_advance_task_to_stage(
             if let Some(sub) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
                 sub.status = Some("done".to_string());
                 sub.updated_at = Utc::now().timestamp_millis();
+                auto_complete_task_todos(root, sub, app_handle);
                 let _ = crate::db::db_upsert_task(root, sub);
             }
             if let Some(app) = app_handle {
@@ -3752,11 +3833,13 @@ pub async fn internal_advance_task_to_stage(
                     t.status = Some("done".to_string());
                     t.stage_id = target_col.id.clone();
                     t.updated_at = Utc::now().timestamp_millis();
+                    auto_complete_task_todos(root, t, app_handle);
                     let _ = crate::db::db_upsert_task(root, t);
                 }
                 if t.parent_id.as_deref() == Some(&parent_id) {
                     t.status = Some("done".to_string());
                     t.updated_at = Utc::now().timestamp_millis();
+                    auto_complete_task_todos(root, t, app_handle);
                     let _ = crate::db::db_upsert_task(root, t);
                 }
             }
