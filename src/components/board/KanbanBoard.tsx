@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
-import { useBoardStore } from '../../stores/boardStore';
+import { useBoardStore, isDoneColumnDef, sortDoneTasksByCompletionDateDesc } from '../../stores/boardStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import KanbanColumn from './KanbanColumn';
@@ -176,12 +176,7 @@ export default function KanbanBoard() {
 
     const isDoneCol = (colId: string) => {
       const col = columns.find((c) => c.id === colId);
-      return Boolean(
-        col?.terminal ||
-        colId === 'ready' ||
-        col?.title.toLowerCase().includes('готов') ||
-        col?.title.toLowerCase().includes('done')
-      );
+      return isDoneColumnDef(col);
     };
 
     const firstColId = columns.find((c) => c.isIntake)?.id ?? columns[0]?.id ?? 'backlog';
@@ -197,11 +192,21 @@ export default function KanbanBoard() {
         }
         return false;
       });
-      return isDone ? colTasks.filter((t) => !t.parentId) : colTasks;
+      return isDone
+        ? colTasks
+            .filter((t) => !t.parentId)
+            .slice()
+            .sort(sortDoneTasksByCompletionDateDesc)
+        : colTasks;
     };
 
     if (sourceColId === destColId) {
       if (sourceIndex === destIndex) return;
+      if (isDoneCol(destColId)) {
+        // Done column tasks are strictly sorted by completion date (newest first).
+        // Manual reordering within Done column is a no-op to preserve chronological ordering.
+        return;
+      }
 
       const colDisplayTasks = getColumnDisplayTasks(destColId);
       const otherTasks = colDisplayTasks.filter((t) => t.id !== draggableId);
@@ -262,12 +267,7 @@ export default function KanbanBoard() {
     const [movedTask] = originalTasks.splice(taskPos, 1);
     const destColDef = columns.find((c) => c.id === destColId);
     const effectiveBoardId = activeBoardId || 'development';
-    const isDone = Boolean(
-      destColDef?.terminal ||
-      destColId === 'ready' ||
-      destColDef?.title.toLowerCase().includes('готов') ||
-      destColDef?.title.toLowerCase().includes('done')
-    );
+    const isDone = isDoneCol(destColId);
     const targetStatus = isDone
       ? 'done'
       : destColDef?.persona
@@ -280,6 +280,7 @@ export default function KanbanBoard() {
       boardId: effectiveBoardId,
       persona: destColDef?.persona || movedTask.persona,
       status: targetStatus,
+      completedAt: isDone ? (movedTask.completedAt || Date.now()) : undefined,
       updatedAt: Date.now(),
       stageEnteredAt: Date.now(),
     };

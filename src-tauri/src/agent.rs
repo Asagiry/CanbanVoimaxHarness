@@ -95,6 +95,8 @@ pub struct Task {
     pub created_at: i64,
     #[serde(rename = "updatedAt", alias = "updated_at", default)]
     pub updated_at: i64,
+    #[serde(rename = "completedAt", alias = "completed_at", default)]
+    pub completed_at: Option<i64>,
     #[serde(default)]
     pub position: Option<f64>,
     #[serde(rename = "hookStates", alias = "hook_states", default)]
@@ -3710,6 +3712,7 @@ pub async fn execute_tool(
                     skip_worktree: None,
                     created_at: now,
                     updated_at: now,
+                    completed_at: None,
                     position: None,
                     hook_states: None,
                 };

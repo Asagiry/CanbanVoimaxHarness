@@ -116,6 +116,29 @@ export function sortTasksByPosition(a: KanbanTask, b: KanbanTask): number {
   return (a.createdAt || 0) - (b.createdAt || 0);
 }
 
+export function isDoneColumnDef(col?: { id: string; title?: string; terminal?: boolean } | null): boolean {
+  if (!col) return false;
+  return Boolean(
+    col.terminal ||
+    col.id === 'ready' ||
+    col.title?.toLowerCase().includes('готов') ||
+    col.title?.toLowerCase().includes('done')
+  );
+}
+
+export function getTaskCompletionTime(task: KanbanTask): number {
+  return task.completedAt || task.stageEnteredAt || task.updatedAt || task.createdAt || 0;
+}
+
+export function sortDoneTasksByCompletionDateDesc(a: KanbanTask, b: KanbanTask): number {
+  const timeA = getTaskCompletionTime(a);
+  const timeB = getTaskCompletionTime(b);
+  if (timeB !== timeA) {
+    return timeB - timeA;
+  }
+  return (b.createdAt || 0) - (a.createdAt || 0);
+}
+
 function normalizeKanbanTask(raw: any): KanbanTask | null {
   if (!raw || typeof raw.id !== 'string' || raw.id.trim() === '') return null;
   const { boards, activeBoardId, columns: currentColumns } = useBoardStore.getState();
@@ -187,6 +210,9 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
     : (typeof raw.stage_entered_at === 'number' && Number.isFinite(raw.stage_entered_at)
       ? raw.stage_entered_at
       : undefined);
+  const completedAt = typeof raw.completedAt === 'number' && Number.isFinite(raw.completedAt)
+    ? raw.completedAt
+    : (typeof raw.completed_at === 'number' && Number.isFinite(raw.completed_at) ? raw.completed_at : undefined);
 
   const stageStart = stageEnteredAt || updatedAt || createdAt;
   const isDoneTask = status === 'done';
@@ -243,6 +269,7 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
     attachments: Array.isArray(raw.attachments) ? raw.attachments.filter((a: unknown) => typeof a === 'string') : undefined,
     createdAt,
     updatedAt,
+    completedAt,
     stageEnteredAt,
     priority: (raw.priority as TaskPriority) || 'high',
     columnId,
@@ -334,6 +361,7 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
         tags: t.tags ?? null,
         createdAt: t.createdAt || Date.now(),
         updatedAt: Date.now(),
+        completedAt: t.completedAt ?? null,
         skipWorktree: t.skipWorktree ?? false,
         hookStates: t.hookStates ?? null,
       };
@@ -935,10 +963,13 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           isTimerRunning: mapped.status === 'running',
           returnsCount: isRework ? prev.returnsCount + 1 : prev.returnsCount,
         };
-        const isTerminalMove = targetStageId === 'ready' || targetColDef?.terminal === true;
+        const isTerminalMove = isDoneColumnDef(targetColDef) || targetStageId === 'ready';
         if (isTerminalMove) {
           merged.waitingForSubtaskId = undefined;
           merged.status = 'done';
+          merged.completedAt = merged.completedAt || Date.now();
+        } else {
+          merged.completedAt = undefined;
         }
         const updatedTasks = get()
           .tasks.map((t) =>
@@ -996,10 +1027,13 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         const mapped = mapBackendTaskToKanban(backendTask);
         const { tasks, columns } = get();
         const targetColDef = columns.find((c) => c.id === targetStageId);
-        const isTerminalMove = targetStageId === 'ready' || targetColDef?.terminal === true;
+        const isTerminalMove = isDoneColumnDef(targetColDef) || targetStageId === 'ready';
         if (isTerminalMove) {
           mapped.waitingForSubtaskId = undefined;
           mapped.status = 'done';
+          mapped.completedAt = mapped.completedAt || Date.now();
+        } else {
+          mapped.completedAt = undefined;
         }
         const prev = tasks.find((t) => t.id === mapped.id);
         const preservedTodos = mapped.todos !== undefined ? mapped.todos : prev?.todos;

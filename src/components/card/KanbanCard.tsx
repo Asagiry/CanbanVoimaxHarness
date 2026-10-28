@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Draggable } from '@hello-pangea/dnd';
 import { KanbanTask, TaskStatus, HookExecutionState, TodoItem } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
-import { useBoardStore } from '../../stores/boardStore';
+import { useBoardStore, isDoneColumnDef } from '../../stores/boardStore';
 import { useTranslation, Language } from '../../stores/languageStore';
 import { useShallow } from 'zustand/react/shallow';
 import { GitBranch, CornerUpLeft, ChevronDown, MessageSquare, GitFork, Check, X, Loader2, Terminal, Paperclip } from 'lucide-react';
@@ -391,13 +391,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const assignedAgentColor = taskColumn?.persona
     ? getDeterministicAgentColor(taskColumn.persona)
     : (taskColumn?.color || getDeterministicAgentColor(task.columnId));
-  const isDone = Boolean(
-    task.status === 'done' ||
-    taskColumn?.terminal === true ||
-    task.columnId === 'ready' ||
-    taskColumn?.title?.toLowerCase().includes('готов') ||
-    taskColumn?.title?.toLowerCase().includes('done')
-  );
+  const isDone = Boolean(task.status === 'done' || isDoneColumnDef(taskColumn));
 
   // Subtasks belonging to this task (queried only if card is in done column)
   const subtasks = useBoardStore(
