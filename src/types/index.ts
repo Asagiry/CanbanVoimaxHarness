@@ -52,6 +52,7 @@ export interface KanbanTask {
   skipBacklogHook?: boolean;
   skip_backlog_hook?: boolean;
   position?: number;
+  previousStageId?: string;
   hookStates?: TaskHookStates;
 }
 
