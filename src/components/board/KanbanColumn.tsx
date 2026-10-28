@@ -105,6 +105,13 @@ function KanbanColumn({
           <div
             ref={colProvided.innerRef}
             {...colProvided.draggableProps}
+            data-kanban-column={column.id}
+            onWheel={(e) => {
+              if (e.ctrlKey || e.metaKey) return;
+              if (!e.shiftKey) {
+                e.stopPropagation();
+              }
+            }}
             style={{
               ...colProvided.draggableProps.style,
               ...(baseColTransform ? { transform: baseColTransform } : {}),
@@ -163,7 +170,7 @@ function KanbanColumn({
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className={`flex-1 min-h-0 p-2 overflow-y-auto transition-colors ${
+            className={`flex-1 min-h-0 p-2 overflow-y-auto overscroll-y-contain transition-colors ${
               snapshot.isDraggingOver
                 ? 'bg-[#f4f4f5] dark:bg-[#161b22]/50 border border-dashed border-[#171717]/30 dark:border-[#30363d] rounded-b-lg'
                 : 'bg-transparent'

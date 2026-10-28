@@ -720,6 +720,36 @@ export default function KanbanBoard() {
     return set;
   }, [tasks]);
 
+  const handleBoardWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    // Zooming via Ctrl/Meta + wheel is handled globally by useUiZoom
+    if (e.ctrlKey || e.metaKey) {
+      return;
+    }
+
+    // Horizontal gestures (trackpad, tilt-wheel, or browser-remapped Shift+wheel)
+    // are handled natively by the container's overflow-x-auto
+    if (Math.abs(e.deltaX) > 0) {
+      return;
+    }
+
+    // Explicit horizontal scroll via Shift + Wheel
+    if (e.shiftKey && e.deltaY !== 0) {
+      e.currentTarget.scrollLeft += e.deltaY;
+      return;
+    }
+
+    // Ignore events originating inside any Kanban column (defense-in-depth)
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('[data-kanban-column]')) {
+      return;
+    }
+
+    // Scroll board horizontally only when scrolling over free canvas / board background
+    if (e.deltaY !== 0) {
+      e.currentTarget.scrollLeft += e.deltaY;
+    }
+  }, []);
+
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#fafafa] dark:bg-[#090a0f] transition-colors">
       {/* Board Top Toolbar */}
@@ -990,11 +1020,7 @@ export default function KanbanBoard() {
         <div
           ref={provided.innerRef}
           {...provided.droppableProps}
-          onWheel={(e) => {
-            if (e.deltaY !== 0) {
-              e.currentTarget.scrollLeft += e.deltaY;
-            }
-          }}
+          onWheel={handleBoardWheel}
           className="flex-1 overflow-x-auto overflow-y-hidden p-3.5 relative"
         >
           <div className="flex items-start space-x-3.5 h-full min-w-max pb-1">
