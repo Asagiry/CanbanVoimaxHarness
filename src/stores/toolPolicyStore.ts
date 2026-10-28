@@ -88,7 +88,7 @@ export const AVAILABLE_TOOLS: ToolMeta[] = [
     id: 'advance_task',
     name: 'advance_task',
     label: 'Передать этап',
-    description: 'Advance task to the next sequential pipeline stage or transition to a specific stage (stage_id / target_stage). Requires comprehensive summary of completed work and verification proof.',
+    description: 'Advance task to the next sequential pipeline stage or transition to a specific stage (stage_id / target_stage). CRITICAL: All TODO items must be fully completed before calling. Requires comprehensive summary of completed work and verification proof.',
     category: 'workflow',
     tokenWeight: 220,
     parameters: {

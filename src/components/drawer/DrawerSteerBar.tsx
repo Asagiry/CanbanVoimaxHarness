@@ -15,6 +15,7 @@ import {
   Plus,
   ChevronDown,
   Square,
+  Play,
 } from 'lucide-react';
 
 export interface DrawerSteerBarProps {
@@ -198,8 +199,6 @@ export default function DrawerSteerBar({
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const trimmed = interactiveInput.trim();
-    if (!trimmed && attachedImages.length === 0) return;
 
     const currentImages = [...attachedImages];
     const textToSend = interactiveInput;
@@ -212,6 +211,8 @@ export default function DrawerSteerBar({
 
     void onSendPrompt(textToSend, currentImages);
   };
+
+  const hasContent = Boolean(interactiveInput.trim() || attachedImages.length > 0);
 
   return (
     <footer className="bg-[#fafafa] dark:bg-[#090a0f] px-3 pb-3 pt-1 shrink-0 shadow-xs z-10 transition-colors">
@@ -358,7 +359,7 @@ export default function DrawerSteerBar({
                 )}
               </div>
 
-              {/* Action Button: Abort when running, Send when idle */}
+              {/* Action Button: Abort when running, Send when idle and has content, Play/Continue when idle and empty */}
               {isRunning ? (
                 <button
                   type="button"
@@ -368,15 +369,26 @@ export default function DrawerSteerBar({
                 >
                   <Square className="h-3.5 w-3.5 fill-current" />
                 </button>
+              ) : hasContent ? (
+                <button
+                  type="button"
+                  onClick={() => handleSubmit()}
+                  className="w-8 h-8 rounded-full bg-[#171717] dark:bg-[#f0f6fc] hover:bg-black dark:hover:bg-white text-white dark:text-[#090a0f] flex items-center justify-center shadow-xs transition-colors cursor-pointer"
+                  aria-label={t('drawer.sendMessage')}
+                  title={t('drawer.sendMessage')}
+                >
+                  <ArrowUp className="h-4 w-4 stroke-[2.5]" />
+                </button>
               ) : (
                 <button
                   type="button"
                   onClick={() => handleSubmit()}
-                  disabled={!interactiveInput.trim() && attachedImages.length === 0}
-                  className="w-8 h-8 rounded-full bg-[#171717] dark:bg-[#f0f6fc] hover:bg-black dark:hover:bg-white disabled:opacity-40 disabled:hover:bg-[#171717] dark:disabled:hover:bg-[#f0f6fc] disabled:cursor-not-allowed text-white dark:text-[#090a0f] flex items-center justify-center shadow-xs transition-colors cursor-pointer"
-                  aria-label={t('drawer.sendMessage')}
+                  className="h-8 px-2.5 rounded-full bg-[#171717] dark:bg-[#f0f6fc] hover:bg-black dark:hover:bg-white text-white dark:text-[#090a0f] flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer text-xs font-medium"
+                  aria-label={t('drawer.runLoop')}
+                  title={t('drawer.runLoop')}
                 >
-                  <ArrowUp className="h-4 w-4 stroke-[2.5]" />
+                  <Play className="h-3.5 w-3.5 fill-current ml-0.5" />
+                  <span className="hidden sm:inline font-sans">{t('drawer.continueLoop')}</span>
                 </button>
               )}
             </div>

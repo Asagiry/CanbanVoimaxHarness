@@ -469,7 +469,34 @@ export default function AgentConsoleDrawer() {
     images: Array<{ id: string; name: string; dataUrl: string }>
   ) => {
     const trimmed = promptText.trim();
-    if (!trimmed && images.length === 0) return;
+    if (!trimmed && images.length === 0) {
+      if (isRunning) return;
+
+      if (activeSubagentId) {
+        const isSubagentABoardTask = Boolean(
+          useBoardStore.getState().tasks.some((t) => t.id === activeSubagentId)
+        );
+        if (!isSubagentABoardTask) {
+          const resolvedSubagentId =
+            useDrawerStore.getState().toolIdToSubagentId[activeSubagentId] || activeSubagentId;
+          setActiveAgentTask(activeSubagentId, true);
+          try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            await invoke('retry_subagent', {
+              parentTaskId: task.id,
+              subagentId: resolvedSubagentId,
+              message: null,
+            });
+          } catch (err) {
+            console.info('retry_subagent invoke error or web mode:', err);
+          }
+          return;
+        }
+      }
+
+      await handleRunAgent();
+      return;
+    }
 
     const imageUrls = images.map((img) => img.dataUrl);
     setRunError(null);
