@@ -480,7 +480,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   // Stale check: A transition hook must be from the predecessor stage and temporally
   // tied to the moment this stage was entered. If the hook executed long before
   // entering this stage, it is stale state from an earlier stage transition and must not leak.
-  const stageEntryTime = task.stageEnteredAt || task.updatedAt || 0;
+  const stageEntryTime = task.stageEnteredAt || task.createdAt || 0;
   const hookDuration = leaveHookState?.durationMs || 0;
   const isRecentHook =
     Boolean(leaveHookState?.startedAt) &&
@@ -529,7 +529,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const effectiveRightHookName = leaveHookName || effectiveRightState?.hookName;
 
   const isRunning = task.status === 'running';
-  const stageStart = task.stageEnteredAt;
+  const stageStart = task.stageEnteredAt || task.createdAt;
   const currentStageDuration = isRunning && stageStart
     ? Math.max(0, Math.floor((Date.now() - stageStart) / 1000))
     : (task.activeStageDuration ?? 0);

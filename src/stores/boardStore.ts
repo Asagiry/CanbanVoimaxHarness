@@ -219,12 +219,12 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
     ? raw.stageEnteredAt
     : (typeof raw.stage_entered_at === 'number' && Number.isFinite(raw.stage_entered_at)
       ? raw.stage_entered_at
-      : undefined);
+      : createdAt);
   const completedAt = typeof raw.completedAt === 'number' && Number.isFinite(raw.completedAt)
     ? raw.completedAt
     : (typeof raw.completed_at === 'number' && Number.isFinite(raw.completed_at) ? raw.completed_at : undefined);
 
-  const stageStart = stageEnteredAt || updatedAt || createdAt;
+  const stageStart = stageEnteredAt || createdAt;
   const isDoneTask = status === 'done';
   const finishTime = completedAt || (isDoneTask ? updatedAt : undefined);
   const computedStageDuration = isDoneTask
@@ -392,7 +392,8 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
         priority: t.priority ?? null,
         tags: t.tags ?? null,
         createdAt: t.createdAt || Date.now(),
-        updatedAt: Date.now(),
+        updatedAt: t.updatedAt || Date.now(),
+        stageEnteredAt: t.stageEnteredAt || t.createdAt || Date.now(),
         completedAt: t.completedAt ?? null,
         skipWorktree: t.skipWorktree ?? false,
         hookStates: t.hookStates ?? null,
@@ -1032,7 +1033,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           attachments: mapped.attachments ?? prev.attachments,
           handoverSummary: mapped.handoverSummary ?? prev.handoverSummary,
           todos: mapped.todos !== undefined ? mapped.todos : prev.todos,
-          stageEnteredAt: Date.now(),
+          stageEnteredAt: backendTask.stageEnteredAt || backendTask.stage_entered_at || Date.now(),
           updatedAt: Date.now(),
           activeStageDuration: 0,
           stageDurations: {
@@ -1211,7 +1212,18 @@ export const useBoardStore = create<BoardState>((set, get) => ({
               const mergedHookStates = mapped.hookStates
                 ? { ...t.hookStates, ...mapped.hookStates }
                 : t.hookStates;
-              return { ...t, ...mapped, todos: preservedTodos, hookStates: mergedHookStates };
+              const preservedStageEnteredAt = mapped.stageEnteredAt || t.stageEnteredAt || t.createdAt;
+              const preservedStageDurations = mapped.stageDurations && Object.keys(mapped.stageDurations).length > 0
+                ? mapped.stageDurations
+                : t.stageDurations;
+              return {
+                ...t,
+                ...mapped,
+                stageEnteredAt: preservedStageEnteredAt,
+                stageDurations: preservedStageDurations,
+                todos: preservedTodos,
+                hookStates: mergedHookStates,
+              };
             }
             return t;
           })
@@ -1343,7 +1355,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       });
 
       if (backendTask && typeof backendTask.id === 'string') {
-        const confirmed = mapBackendTaskToKanban(backendTask);
+        const confirmed = mapBackendTaskToKanban({
+          ...backendTask,
+          stageEnteredAt: backendTask.stageEnteredAt || backendTask.stage_entered_at || Date.now(),
+        });
         const currentTasks = get().tasks;
         const nextTasks = [confirmed, ...currentTasks.filter((t) => t.id !== confirmed.id)].sort(sortTasksByPosition);
 
@@ -1403,7 +1418,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       });
 
       if (backendSubtask && typeof backendSubtask.id === 'string') {
-        const mapped = mapBackendTaskToKanban(backendSubtask);
+        const mapped = mapBackendTaskToKanban({
+          ...backendSubtask,
+          stageEnteredAt: backendSubtask.stageEnteredAt || backendSubtask.stage_entered_at || Date.now(),
+        });
         const currentTasks = get().tasks;
         const updatedTasks = currentTasks.map((t) => {
           if (t.id === parentId) {
@@ -1604,7 +1622,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         if (task.status === 'done' || task.status === 'paused') {
           return task;
         }
-        const stageStart = task.stageEnteredAt || task.updatedAt || task.createdAt;
+        const stageStart = task.stageEnteredAt || task.createdAt;
         const activeStageDuration = stageStart
           ? Math.max(0, Math.floor((now - stageStart) / 1000))
           : (typeof task.activeStageDuration === 'number' && Number.isFinite(task.activeStageDuration) ? task.activeStageDuration + 1 : 1);

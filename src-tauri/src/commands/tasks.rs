@@ -437,6 +437,16 @@ pub async fn internal_save_tasks(
             if t.parent_id.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) && dt.parent_id.is_some() {
                 t.parent_id = dt.parent_id.clone();
             }
+            if t.stage_id == dt.stage_id {
+                if dt.stage_entered_at.is_some() {
+                    t.stage_entered_at = dt.stage_entered_at;
+                }
+            } else if t.stage_entered_at.is_none() {
+                t.stage_entered_at = dt.stage_entered_at;
+            }
+            if t.stage_entered_at.is_none() {
+                t.stage_entered_at = Some(t.created_at);
+            }
         }
     }
 
@@ -823,6 +833,7 @@ pub async fn internal_create_task(
         skip_worktree: skip_worktree.or(Some(false)),
         created_at: now,
         updated_at: now,
+        stage_entered_at: Some(now),
         completed_at: None,
         position: Some(next_pos),
         hook_states: None,
@@ -1279,6 +1290,7 @@ pub async fn internal_create_subtask(
         skip_worktree: parent_skip_wt,
         created_at: now,
         updated_at: now,
+        stage_entered_at: Some(now),
         completed_at: None,
         position: Some(next_subtask_pos),
         hook_states: tasks[parent_idx].hook_states.clone(),
@@ -1814,6 +1826,7 @@ pub fn propagate_parent_subtask_advance(
                 skip_worktree: parent_skip_wt,
                 created_at: now,
                 updated_at: now,
+                stage_entered_at: Some(now),
                 completed_at: None,
                 position: Some(next_subtask_pos),
                 hook_states: tasks[parent_idx].hook_states.clone(),
@@ -2772,6 +2785,9 @@ pub async fn internal_move_task_stage(
         current_task.completed_at = None;
     }
     current_task.updated_at = Utc::now().timestamp_millis();
+    if old_stage != canonical_target_stage_id || current_task.stage_entered_at.is_none() {
+        current_task.stage_entered_at = Some(Utc::now().timestamp_millis());
+    }
 
     if old_stage != canonical_target_stage_id {
         let cur_id = tasks[task_idx].id.clone();
@@ -3856,6 +3872,9 @@ pub async fn internal_advance_task_to_stage(
                         t.completed_at = Some(Utc::now().timestamp_millis());
                     }
                     t.stage_id = target_col.id.clone();
+                    if t.stage_entered_at.is_none() {
+                        t.stage_entered_at = Some(Utc::now().timestamp_millis());
+                    }
                     t.updated_at = Utc::now().timestamp_millis();
                     auto_complete_task_todos(root, t, app_handle);
                     let _ = crate::db::db_upsert_task(root, t);
