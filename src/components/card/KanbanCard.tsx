@@ -514,8 +514,13 @@ function KanbanCard({ task, index }: KanbanCardProps) {
     ? Math.max(0, Math.floor((Date.now() - stageStart) / 1000))
     : (task.activeStageDuration ?? 0);
 
-  const currentTotalElapsed = isRunning && stageStart
-    ? (task.totalElapsed ?? 0) + Math.max(0, Math.floor((Date.now() - stageStart) / 1000))
+  const finishTime = task.completedAt || (isDone ? task.updatedAt : undefined);
+  const currentTotalElapsed = isDone
+    ? (task.totalElapsed > 0
+        ? task.totalElapsed
+        : (task.createdAt && finishTime ? Math.max(0, Math.floor((finishTime - task.createdAt) / 1000)) : 0))
+    : isRunning
+    ? (task.createdAt ? Math.max(0, Math.floor((Date.now() - task.createdAt) / 1000)) : (task.totalElapsed ?? 0))
     : (task.totalElapsed ?? 0);
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -700,10 +705,22 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                     {task.createdAt ? (
                       <span>{t('card.created', { date: formatCardDate(task.createdAt) })}</span>
                     ) : null}
-                    {task.createdAt && currentTotalElapsed > 0 ? <span>·</span> : null}
-                    {currentTotalElapsed > 0 ? (
+                    {task.createdAt && (currentTotalElapsed > 0 || isDone) ? <span>·</span> : null}
+                    {isDone ? (
+                      <span>
+                        {t('card.completedDuration', {
+                          time: currentTotalElapsed > 0
+                            ? formatStageDuration(currentTotalElapsed, language)
+                            : `<1${language === 'ru' ? 'с' : 's'}`,
+                        })}
+                      </span>
+                    ) : isRunning && currentTotalElapsed > 0 ? (
                       <span>
                         {t('card.elapsed', { time: formatStageDuration(currentTotalElapsed, language) })}
+                      </span>
+                    ) : currentTotalElapsed > 0 ? (
+                      <span>
+                        {formatStageDuration(currentTotalElapsed, language)}
                       </span>
                     ) : null}
                   </div>
@@ -775,6 +792,17 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                             </span>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                            {(() => {
+                              const subFinish = sub.completedAt || (sub.status === 'done' ? sub.updatedAt : undefined);
+                              const subDuration = (sub.totalElapsed && sub.totalElapsed > 0)
+                                ? sub.totalElapsed
+                                : (sub.createdAt && subFinish ? Math.max(0, Math.floor((subFinish - sub.createdAt) / 1000)) : 0);
+                              return subDuration > 0 ? (
+                                <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] tabular-nums">
+                                  {formatStageDuration(subDuration, language)}
+                                </span>
+                              ) : null;
+                            })()}
                             {sub?.verdict && sub.verdict !== 'NONE' ? (
                               <span
                                 className={`px-1 py-0.2 rounded text-[9px] font-mono ${
@@ -897,6 +925,7 @@ function areCardPropsEqual(prev: KanbanCardProps, next: KanbanCardProps): boolea
     a.handoverSummary === b.handoverSummary &&
     a.activeStageDuration === b.activeStageDuration &&
     a.totalElapsed === b.totalElapsed &&
+    a.completedAt === b.completedAt &&
     a.stageEnteredAt === b.stageEnteredAt &&
     a.updatedAt === b.updatedAt &&
     a.createdAt === b.createdAt &&

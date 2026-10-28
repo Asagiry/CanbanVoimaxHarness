@@ -3272,7 +3272,12 @@ Write code.
         let parent_after = loaded.iter().find(|t| t.id == "CVH-600").expect("parent CVH-600");
         assert_eq!(parent_after.stage_id, "ready");
         assert_eq!(parent_after.status.as_deref(), Some("done"));
+        assert!(parent_after.completed_at.is_some(), "Parent completed_at must be Some when completed");
         assert_eq!(parent_after.waiting_for_subtask_id, None, "Parent waiting_for_subtask_id must be None after advance to ready");
+
+        let child_after = loaded.iter().find(|t| t.id == "CVH-600.1").expect("child CVH-600.1");
+        assert_eq!(child_after.status.as_deref(), Some("done"));
+        assert!(child_after.completed_at.is_some(), "Child completed_at must be Some when completed");
 
         let _ = tokio::fs::remove_dir_all(&tmp).await;
     }
@@ -3877,6 +3882,99 @@ Write code.
 
         assert_eq!(moved_back_to_dev.stage_id, "dev");
         assert_eq!(moved_back_to_dev.completed_at, None, "Task moving out of terminal must reset completed_at to None");
+
+        let _ = tokio::fs::remove_dir_all(&tmp).await;
+    }
+
+    #[tokio::test]
+    async fn test_advance_task_sets_subtask_completed_at() {
+        let tmp = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("tmp")
+            .join(format!("cvh_test_subtask_completed_at_{}", uuid::Uuid::new_v4()));
+        let _ = tokio::fs::create_dir_all(&tmp).await;
+        let _ = tokio::fs::create_dir_all(tmp.join(".cvh")).await;
+
+        let boards_cfg = serde_json::json!({
+            "active_board_id": "development",
+            "boards": [
+                {
+                    "id": "development",
+                    "name": "Разработка",
+                    "columns": [
+                        { "id": "backlog", "title": "Бэклог", "auto_run": false },
+                        { "id": "plan", "title": "План", "auto_run": false },
+                        { "id": "dev", "title": "В работе", "auto_run": false },
+                        { "id": "ready", "title": "Готово", "terminal": true }
+                    ]
+                }
+            ]
+        });
+        tokio::fs::write(
+            tmp.join(".cvh").join("boards.json"),
+            serde_json::to_string_pretty(&boards_cfg).unwrap(),
+        )
+        .await
+        .expect("write boards.json");
+
+        let _parent = internal_create_task(
+            &tmp,
+            "Parent Subtask CompletedAt Test".to_string(),
+            "Testing subtask completed_at".to_string(),
+            "plan".to_string(),
+            Some("development".to_string()),
+            Some(true),
+            None,
+            Some("CVH-777".to_string()),
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("create parent task");
+
+        let sub1 = internal_create_subtask(
+            &tmp,
+            "CVH-777",
+            Some("plan"),
+            Some("Parent Subtask CompletedAt Test (План)"),
+            Some("Planning..."),
+            None,
+        )
+        .await
+        .expect("create sub1");
+
+        assert_eq!(sub1.completed_at, None);
+
+        // Advance subtask to dev (non-terminal transition)
+        let adv_res = internal_advance_task_to_stage(&tmp, &sub1.id, Some("dev"), "Plan completed", None)
+            .await
+            .expect("advance to dev");
+        assert!(adv_res.contains("УСПЕШНО"));
+
+        let loaded = load_tasks_from_disk(&tmp).await;
+        let sub1_after = loaded.iter().find(|t| t.id == sub1.id).expect("sub1 loaded");
+        assert_eq!(sub1_after.status.as_deref(), Some("done"));
+        assert!(sub1_after.completed_at.is_some(), "Subtask 1 completed_at must be populated after advance");
+
+        // Find the created subtask 2 in dev
+        let sub2 = loaded.iter().find(|t| t.parent_id.as_deref() == Some("CVH-777") && t.stage_id == "dev").expect("sub2");
+        assert_eq!(sub2.completed_at, None);
+
+        // Advance subtask 2 to ready (terminal transition)
+        let adv_terminal = internal_advance_task_to_stage(&tmp, &sub2.id, Some("ready"), "Implementation finished", None)
+            .await
+            .expect("advance to ready");
+        assert!(adv_terminal.contains("УСПЕШНО"));
+
+        let loaded_final = load_tasks_from_disk(&tmp).await;
+        let sub2_final = loaded_final.iter().find(|t| t.id == sub2.id).expect("sub2 final");
+        assert_eq!(sub2_final.status.as_deref(), Some("done"));
+        assert!(sub2_final.completed_at.is_some(), "Subtask 2 completed_at must be populated after terminal advance");
+
+        let parent_final = loaded_final.iter().find(|t| t.id == "CVH-777").expect("parent final");
+        assert_eq!(parent_final.status.as_deref(), Some("done"));
+        assert!(parent_final.completed_at.is_some(), "Parent task completed_at must be populated after terminal advance");
 
         let _ = tokio::fs::remove_dir_all(&tmp).await;
     }

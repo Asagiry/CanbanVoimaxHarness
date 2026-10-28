@@ -274,13 +274,19 @@ export default function KanbanBoard() {
       ? 'running'
       : 'idle';
 
+    const completedAt = isDone ? (movedTask.completedAt || Date.now()) : undefined;
+    const totalElapsed = isDone && movedTask.createdAt
+      ? Math.max(0, Math.floor((completedAt! - movedTask.createdAt) / 1000))
+      : movedTask.totalElapsed;
+
     const updatedMovedTask: KanbanTask = {
       ...movedTask,
       columnId: destColId,
       boardId: effectiveBoardId,
       persona: destColDef?.persona || movedTask.persona,
       status: targetStatus,
-      completedAt: isDone ? (movedTask.completedAt || Date.now()) : undefined,
+      completedAt,
+      totalElapsed,
       updatedAt: Date.now(),
       stageEnteredAt: Date.now(),
     };
