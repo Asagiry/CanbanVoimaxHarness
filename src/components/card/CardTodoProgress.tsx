@@ -145,31 +145,34 @@ export const CardTodoProgress = memo(function CardTodoProgress({
 
   return (
     <>
-      {/* Trigger Strip */}
-      <div
-        ref={triggerRef}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        className="mb-2 -mx-1.5 px-1.5 py-1 rounded flex items-center gap-2 select-none cursor-pointer transition-colors hover:bg-neutral-100/70 dark:hover:bg-[#21262d]/60"
-        aria-label={t('card.todosProgress', { completed: completedCount, total: totalCount, percent })}
-      >
-        <div className="flex items-center gap-1 font-mono text-[10px] tabular-nums font-medium text-[#666666] dark:text-[#8b949e] shrink-0">
+      {/* Progress Strip Container */}
+      <div className="mb-2 flex items-center gap-2 select-none">
+        {/* Interactive Checklist Badge Trigger (Icon + Numbers + In-Progress Dot) */}
+        <div
+          ref={triggerRef}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+          className="flex items-center gap-1 font-mono text-[10px] tabular-nums font-medium text-[#666666] dark:text-[#8b949e] shrink-0 cursor-pointer rounded px-1 -mx-1 py-0.5 -my-0.5 transition-colors hover:bg-neutral-100/80 dark:hover:bg-[#21262d]/80 hover:text-[#171717] dark:hover:text-[#f0f6fc]"
+          aria-label={t('card.todosProgress', { completed: completedCount, total: totalCount, percent })}
+        >
           {isAllCompleted ? (
             <CheckCircle2 className="h-3 w-3 text-[#15803d] dark:text-[#4ade80] shrink-0" />
           ) : (
             <ListTodo className="h-3 w-3 text-[#8f8f8f] dark:text-[#8b949e] shrink-0" />
           )}
-          <span className={completedCount > 0 ? 'text-[#15803d] dark:text-[#4ade80] font-semibold' : 'text-[#171717] dark:text-[#f0f6fc]'}>
-            {completedCount}
+          <span className="inline-flex items-center gap-1 translate-y-px leading-none">
+            <span className={completedCount > 0 ? 'text-[#15803d] dark:text-[#4ade80] font-semibold' : 'text-[#171717] dark:text-[#f0f6fc]'}>
+              {completedCount}
+            </span>
+            <span className="text-[#a1a1aa] dark:text-[#6e7681]">/</span>
+            <span>{totalCount}</span>
           </span>
-          <span className="text-[#a1a1aa] dark:text-[#6e7681]">/</span>
-          <span>{totalCount}</span>
           {inProgressCount > 0 && !isAllCompleted && (
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse ml-0.5" />
           )}
         </div>
 
-        {/* Micro Progress Bar */}
+        {/* Micro Progress Bar (Inert to Tooltip Hover) */}
         <div className="flex-1 h-1 rounded-full bg-[#f4f4f5] dark:bg-[#21262d] overflow-hidden border border-[#ebebeb]/60 dark:border-[#30363d]/60">
           <div
             className="h-full rounded-full bg-[#15803d] dark:bg-[#4ade80] transition-all duration-300"
@@ -177,7 +180,8 @@ export const CardTodoProgress = memo(function CardTodoProgress({
           />
         </div>
 
-        <span className="font-mono text-[9px] tabular-nums text-[#8f8f8f] dark:text-[#8b949e] shrink-0">
+        {/* Percentage Label */}
+        <span className="font-mono text-[9px] tabular-nums text-[#8f8f8f] dark:text-[#8b949e] shrink-0 leading-none">
           {percent}%
         </span>
       </div>
