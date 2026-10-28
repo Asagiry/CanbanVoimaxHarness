@@ -1,0 +1,50 @@
+{
+  "taskId": "CVH-031",
+  "task": "hook-descriptions",
+  "title": "Описание хуков / Hook description popover and configuration schema",
+  "branch": "feat/CVH-031",
+  "commitHash": "4173c2c",
+  "mergeCommitHash": "5ce7988",
+  "commitMessage": "feat(CVH-031): реализовать описания переходных хуков",
+  "author": "developer (fullstack-lead)",
+  "verdict": "APPROVED_AFTER_REVISIONS",
+  "date": "2026-10-28T10:00:00.000Z",
+  "timestamp": 1793182301225,
+  "sensors": {
+    "cargo_check": "pass (0 errors)",
+    "cargo_clippy": "pass (0 warnings)",
+    "cargo_test": "pass (193 passed, 0 failed)",
+    "tsc_check": "pass (0 type errors)",
+    "oxlint": "pass (0 warnings, 0 errors)",
+    "npm_run_build": "pass (clean bundle in dist/)",
+    "git_merge_tree": "pass (0 merge conflicts against main)"
+  },
+  "files": [
+    ".cvh/agents/cvh-dev/rules/hooks.md",
+    ".cvh/boards.json",
+    ".cvh/pipeline.json",
+    "docs/hooks.md",
+    "src-tauri/src/agent/tests.rs",
+    "src-tauri/src/commands/tasks.rs",
+    "src-tauri/src/commands/tests.rs",
+    "src-tauri/src/config.rs",
+    "src/App.tsx",
+    "src/components/card/KanbanCard.tsx",
+    "src/stores/boardStore.ts",
+    "src/stores/cortexStore.ts",
+    "src/types/index.ts"
+  ],
+  "summary": "Implemented hook descriptions in UI and pipeline: (1) Added HookConfig enum (untagged) in src-tauri/src/config.rs supporting string and detailed { script, description } formats with path/command aliases; (2) Enriched hook:start IPC event with description across task progression; (3) Added HookDefinition type and helper functions getHookScript/getHookDescription in src/types/index.ts; (4) Updated boardStore and cortexStore to preserve hook description in hookStates; (5) Enriched CardHookNode in KanbanCard.tsx with hover description popover replacing default generic copy when present (UI Anti-Slop); (6) Populated informative descriptions across backlog, review, and ready hooks in .cvh/pipeline.json, .cvh/boards.json, and documentation.",
+  "ftrAnalysis": {
+    "firstTimeRight": false,
+    "ftrScore": "50%",
+    "verdict": "APPROVED_AFTER_REVISIONS",
+    "rootCauses": [
+      {
+        "cause": "Gate 6 (Clean Merge & Pre-Handover Commit Mandate) Violation: Uncommitted working tree handed off to Review",
+        "detail": "Developer implemented changes across 13 files and ran pre-flight sensors, but invoked advance_task without committing the working tree to the feat/CVH-031 branch. Because gatekeeper_sensor.bat used 'git stash create' to evaluate mergeability, the sensor passed on the dirty worktree instead of enforcing a clean commit. Reviewer rejected under Gate 6 because an uncommitted worktree would result in merging a stale/empty branch in on_review_finish.bat followed by destructive worktree removal (git worktree remove --force).",
+        "resolution": "Developer committed all 13 modified files (4173c2c), merged latest main (5ce7988), and passed all sensors. Retrospective hardened gatekeeper_sensor.bat and gatekeeper_sensor.sh to mechanically reject dirty worktrees via 'git status --porcelain', purged permissive git stash create advice from sensors.md and review-checklist.md, and codified zero-tolerance uncommitted handoff invariant."
+      }
+    ]
+  }
+}
