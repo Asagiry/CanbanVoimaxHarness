@@ -538,7 +538,11 @@ export default function App() {
 
         const uTaskMoved = await listen<any>('task:moved', (event) => {
           if (event.payload?.task) {
-            useBoardStore.getState().upsertBackendTask(event.payload.task);
+            const rawTask = event.payload.task;
+            if (event.payload.fromStage && typeof rawTask === 'object') {
+              rawTask.previousStageId = event.payload.fromStage;
+            }
+            useBoardStore.getState().upsertBackendTask(rawTask);
           }
           loadTasks();
         });
