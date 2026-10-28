@@ -176,24 +176,39 @@ function CardHookNode({
       setIsHovered(false);
     };
 
-    const handlePointerDown = (e: PointerEvent) => {
-      if (popoverRef.current?.contains(e.target as Node)) {
-        return;
-      }
-      if (triggerRef.current?.contains(e.target as Node)) {
+    const handleScroll = (e: Event) => {
+      if (e.target instanceof Node && popoverRef.current?.contains(e.target)) {
         return;
       }
       handleClose();
     };
 
-    window.addEventListener('scroll', handleClose, { capture: true, passive: true });
+    const handlePointerDown = (e: PointerEvent) => {
+      if (e.target instanceof Node && popoverRef.current?.contains(e.target)) {
+        return;
+      }
+      if (e.target instanceof Node && triggerRef.current?.contains(e.target)) {
+        return;
+      }
+      handleClose();
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { capture: true, passive: true });
     window.addEventListener('resize', handleClose);
     window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      window.removeEventListener('scroll', handleClose, { capture: true });
+      window.removeEventListener('scroll', handleScroll, { capture: true });
       window.removeEventListener('resize', handleClose);
       window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isHovered]);
 
@@ -276,7 +291,7 @@ function CardHookNode({
       {isHovered && coords && typeof document !== 'undefined' && createPortal(
         <div
           ref={popoverRef}
-          className="fixed z-[9999] w-[420px] max-w-[calc(100vw-24px)] shadow-2xl rounded-lg border border-neutral-200 dark:border-[#30363d] bg-white dark:bg-[#161b22] p-3.5 text-left cursor-default select-text pointer-events-auto"
+          className="fixed z-[9999] w-[420px] max-w-[calc(100vw-24px)] shadow-2xl rounded-lg border border-neutral-200 dark:border-[#30363d] bg-white dark:bg-[#161b22] p-3.5 text-left cursor-default select-text pointer-events-auto overscroll-contain"
           style={{
             top: `${coords.top}px`,
             left: `${coords.left}px`,
@@ -345,7 +360,7 @@ function CardHookNode({
 
           {/* Error description if failed */}
           {status === 'failed' && errorText.length > 0 && (
-            <div className="mt-2 p-2.5 rounded bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 text-xs font-mono text-rose-800 dark:text-rose-300 whitespace-pre-wrap break-words max-h-44 overflow-y-auto leading-relaxed">
+            <div className="mt-2 p-2.5 rounded bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 text-xs font-mono text-rose-800 dark:text-rose-300 whitespace-pre-wrap break-words max-h-44 overflow-y-auto leading-relaxed overscroll-contain">
               <div className="font-semibold text-rose-900 dark:text-rose-200 mb-1 flex items-center gap-1">
                 <span>⛔ Отклонено хуком:</span>
               </div>
@@ -365,7 +380,7 @@ function CardHookNode({
                   {stdout.length > 0 ? 'stdout' : ''} {stderr.length > 0 ? 'stderr' : ''}
                 </span>
               </div>
-              <div className="p-2.5 rounded bg-[#0d1117] border border-[#30363d] font-mono text-xs text-[#c9d1d9] leading-relaxed max-h-56 overflow-y-auto whitespace-pre-wrap break-words [word-break:break-word] select-text">
+              <div className="p-2.5 rounded bg-[#0d1117] border border-[#30363d] font-mono text-xs text-[#c9d1d9] leading-relaxed max-h-56 overflow-y-auto whitespace-pre-wrap break-words [word-break:break-word] select-text overscroll-contain">
                 {stdout || stderr}
               </div>
             </div>
