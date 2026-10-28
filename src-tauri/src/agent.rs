@@ -41,7 +41,7 @@ fn default_todo_id() -> String {
     uuid::Uuid::new_v4().to_string()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Task {
     pub id: String,
     pub title: String,
@@ -95,6 +95,8 @@ pub struct Task {
     pub created_at: i64,
     #[serde(rename = "updatedAt", alias = "updated_at", default)]
     pub updated_at: i64,
+    #[serde(rename = "stageEnteredAt", alias = "stage_entered_at", default)]
+    pub stage_entered_at: Option<i64>,
     #[serde(rename = "completedAt", alias = "completed_at", default)]
     pub completed_at: Option<i64>,
     #[serde(default)]
@@ -3722,6 +3724,7 @@ pub async fn execute_tool(
                     skip_worktree: None,
                     created_at: now,
                     updated_at: now,
+                    stage_entered_at: Some(now),
                     completed_at: None,
                     position: None,
                     hook_states: None,

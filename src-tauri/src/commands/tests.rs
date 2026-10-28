@@ -802,6 +802,7 @@ use std::path::PathBuf;
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             position: None,
             hook_states: None,
@@ -838,6 +839,7 @@ use std::path::PathBuf;
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             position: None,
             hook_states: None,
@@ -1237,6 +1239,7 @@ use std::path::PathBuf;
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             handover_summary: None,
             attachments: None,
@@ -1278,6 +1281,7 @@ use std::path::PathBuf;
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             handover_summary: None,
             attachments: None,
@@ -1387,6 +1391,7 @@ use std::path::PathBuf;
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             handover_summary: None,
             attachments: None,
@@ -1453,6 +1458,7 @@ use std::path::PathBuf;
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             handover_summary: None,
             attachments: None,
@@ -1658,6 +1664,7 @@ Write code.
             skip_worktree: Some(true),
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             handover_summary: None,
             attachments: None,
@@ -1851,6 +1858,7 @@ Write code.
             skip_worktree: Some(false),
             created_at: 1000,
             updated_at: 1000,
+            stage_entered_at: None,
             completed_at: None,
             handover_summary: None,
             attachments: None,
@@ -2082,6 +2090,7 @@ Write code.
             skip_worktree: Some(true),
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             handover_summary: None,
             attachments: None,
@@ -2257,6 +2266,7 @@ Write code.
             skip_worktree: Some(true),
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             handover_summary: None,
             attachments: None,
@@ -2288,6 +2298,7 @@ Write code.
             skip_worktree: Some(true),
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             handover_summary: None,
             attachments: None,
@@ -2319,6 +2330,7 @@ Write code.
             skip_worktree: Some(true),
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             handover_summary: None,
             attachments: None,
@@ -2420,6 +2432,7 @@ Write code.
             skip_worktree: Some(true),
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             todos: None,
             attachments: None,
@@ -2556,6 +2569,7 @@ Write code.
             skip_worktree: Some(true),
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             todos: None,
             attachments: None,
@@ -2632,6 +2646,7 @@ Write code.
             skip_worktree: Some(false),
             created_at: chrono::Utc::now().timestamp_millis(),
             updated_at: chrono::Utc::now().timestamp_millis(),
+            stage_entered_at: None,
             completed_at: None,
             position: None,
             hook_states: None,
@@ -2713,6 +2728,7 @@ Write code.
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             position: None,
             hook_states: None,
@@ -2743,6 +2759,7 @@ Write code.
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             position: None,
             hook_states: None,
@@ -2973,6 +2990,7 @@ Write code.
             skip_worktree: Some(true),
             created_at: chrono::Utc::now().timestamp_millis(),
             updated_at: chrono::Utc::now().timestamp_millis(),
+            stage_entered_at: None,
             completed_at: None,
             position: None,
             hook_states: None,
@@ -3098,7 +3116,8 @@ Write code.
                 skip_worktree: Some(true),
                 created_at: 0,
                 updated_at: 0,
-                completed_at: None,
+                stage_entered_at: None,
+            completed_at: None,
                 position: None,
                 hook_states: None,
             },
@@ -3127,7 +3146,8 @@ Write code.
                 skip_worktree: Some(true),
                 created_at: 0,
                 updated_at: 0,
-                completed_at: None,
+                stage_entered_at: None,
+            completed_at: None,
                 position: None,
                 hook_states: None,
             },
@@ -3156,7 +3176,8 @@ Write code.
                 skip_worktree: Some(true),
                 created_at: 0,
                 updated_at: 0,
-                completed_at: None,
+                stage_entered_at: None,
+            completed_at: None,
                 position: None,
                 hook_states: None,
             },
@@ -3185,7 +3206,8 @@ Write code.
                 skip_worktree: Some(true),
                 created_at: 0,
                 updated_at: 0,
-                completed_at: None,
+                stage_entered_at: None,
+            completed_at: None,
                 position: None,
                 hook_states: None,
             },
@@ -3228,6 +3250,7 @@ Write code.
             skip_worktree: Some(true),
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             position: None,
             hook_states: None,
@@ -3257,6 +3280,7 @@ Write code.
             skip_worktree: Some(true),
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             position: None,
             hook_states: None,
@@ -3563,6 +3587,7 @@ Write code.
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             position: None,
             hook_states: None,
@@ -3594,6 +3619,7 @@ Write code.
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             position: None,
             hook_states: None,
@@ -3660,6 +3686,7 @@ Write code.
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             position: None,
             hook_states: None,
@@ -3689,6 +3716,7 @@ Write code.
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             position: None,
             hook_states: None,
@@ -3748,6 +3776,7 @@ Write code.
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             position: None,
             hook_states: None,
@@ -3782,6 +3811,7 @@ Write code.
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            stage_entered_at: None,
             completed_at: None,
             position: None,
             hook_states: None,
@@ -4037,6 +4067,7 @@ Write code.
             skip_worktree: Some(true),
             created_at: chrono::Utc::now().timestamp_millis(),
             updated_at: chrono::Utc::now().timestamp_millis(),
+            stage_entered_at: None,
             completed_at: None,
             position: None,
             hook_states: None,
@@ -4085,6 +4116,132 @@ Write code.
         let mut task_clone = db_task.clone();
         let changed_again = auto_complete_task_todos(&base, &mut task_clone, None);
         assert!(!changed_again, "auto_complete_task_todos must be idempotent and return false when already completed");
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_stage_entered_at_persistence_and_stage_transitions() {
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("tmp")
+            .join(format!("cvh_test_stage_entered_at_{}", uuid::Uuid::new_v4()));
+        let _ = tokio::fs::create_dir_all(&base).await;
+        let _ = tokio::fs::create_dir_all(base.join(".cvh")).await;
+
+        let boards_cfg = serde_json::json!({
+            "active_board_id": "development",
+            "boards": [
+                {
+                    "id": "development",
+                    "name": "Разработка",
+                    "columns": [
+                        { "id": "backlog", "title": "Бэклог", "auto_run": false },
+                        { "id": "dev", "title": "В работе", "auto_run": false },
+                        { "id": "ready", "title": "Готово", "terminal": true }
+                    ]
+                }
+            ]
+        });
+        tokio::fs::write(
+            base.join(".cvh").join("boards.json"),
+            serde_json::to_string_pretty(&boards_cfg).unwrap(),
+        )
+        .await
+        .expect("write boards.json");
+
+        let task_id = "CVH-998";
+        let task = internal_create_task(
+            &base,
+            "Timer Test Task".to_string(),
+            "Testing stage_entered_at persistence".to_string(),
+            "backlog".to_string(),
+            Some("development".to_string()),
+            Some(true),
+            None,
+            Some(task_id.to_string()),
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("create task");
+
+        // 1. Initial creation must set stage_entered_at
+        assert!(task.stage_entered_at.is_some(), "New task must have stage_entered_at set");
+        let initial_stage_entered_at = task.stage_entered_at.unwrap();
+        assert!(initial_stage_entered_at > 0);
+
+        // 2. Direct SQLite load must match
+        let db_task = crate::db::db_get_task(&base, task_id)
+            .expect("db_get_task")
+            .expect("task must exist in SQLite");
+        assert_eq!(db_task.stage_entered_at, Some(initial_stage_entered_at));
+
+        // 3. save_tasks from client (even with stage_entered_at: None) must preserve existing timestamp if stage unchanged
+        let mut client_task = db_task.clone();
+        client_task.stage_entered_at = None;
+        client_task.title = "Updated Title".to_string();
+        internal_save_tasks(&base, vec![client_task], None)
+            .await
+            .expect("save_tasks");
+
+        let db_after_save = crate::db::db_get_task(&base, task_id)
+            .expect("db_get_task")
+            .expect("task exists");
+        assert_eq!(
+            db_after_save.stage_entered_at,
+            Some(initial_stage_entered_at),
+            "save_tasks must preserve stage_entered_at when stage has not changed"
+        );
+        assert_eq!(db_after_save.title, "Updated Title");
+
+        // 4. Moving to a new stage ('dev') MUST update stage_entered_at
+        tokio::time::sleep(tokio::time::Duration::from_millis(15)).await;
+        let moved_task = internal_move_task_stage(
+            &base,
+            task_id,
+            "dev",
+            None,
+            Some("running".to_string()),
+            None,
+            None,
+            false,
+            None,
+        )
+        .await
+        .expect("move to dev");
+
+        assert_eq!(moved_task.stage_id, "dev");
+        assert!(moved_task.stage_entered_at.is_some());
+        let dev_stage_entered_at = moved_task.stage_entered_at.unwrap();
+        assert!(
+            dev_stage_entered_at > initial_stage_entered_at,
+            "stage_entered_at must be updated when stage changes"
+        );
+
+        // 5. Updating status within the same stage ('dev') must NOT reset stage_entered_at
+        tokio::time::sleep(tokio::time::Duration::from_millis(15)).await;
+        let same_stage_update = internal_move_task_stage(
+            &base,
+            task_id,
+            "dev",
+            None,
+            Some("idle".to_string()),
+            None,
+            None,
+            false,
+            None,
+        )
+        .await
+        .expect("update status in same stage");
+
+        assert_eq!(same_stage_update.stage_id, "dev");
+        assert_eq!(
+            same_stage_update.stage_entered_at,
+            Some(dev_stage_entered_at),
+            "stage_entered_at must NOT change when staying in the same stage"
+        );
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
