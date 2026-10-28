@@ -11,8 +11,8 @@ if not errorlevel 1 (
         set "HAS_DIRTY=1"
     )
     if defined HAS_DIRTY (
-        echo [CVH Sensor] ERROR: Uncommitted changes detected in working tree! >&2
-        echo [CVH Sensor] ERROR: All files must be committed to the feature branch before handover (Gate 6). >&2
+        echo [CVH Sensor] ERROR: Uncommitted changes detected in working tree. >&2
+        echo [CVH Sensor] ERROR: All files must be committed to the feature branch before handover [Gate 6]. >&2
         git status --short >&2
         exit /b 1
     )
