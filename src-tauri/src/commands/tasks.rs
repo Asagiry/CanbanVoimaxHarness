@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 /// Dynamically heals a single task against the given BoardsConfig:
@@ -346,16 +346,24 @@ pub async fn list_tasks(state: State<'_, AppState>) -> Result<Vec<Task>, String>
 #[tauri::command]
 pub async fn save_tasks(tasks: Vec<Task>, state: State<'_, AppState>) -> Result<(), String> {
     let root = resolve_actual_repo_root(&state.get_root());
+    internal_save_tasks(&root, tasks, Some(&state.tasks)).await
+}
+
+pub async fn internal_save_tasks(
+    root: &Path,
+    tasks: Vec<Task>,
+    state_tasks: Option<&Arc<Mutex<Vec<Task>>>>,
+) -> Result<(), String> {
     let incoming_ids: Vec<&str> = tasks.iter().map(|t| t.id.as_str()).collect();
     crate::logger::cvh_log_with_details(
-        Some(&root),
+        Some(root),
         "INFO",
         "SAVE_TASKS",
         &format!("save_tasks command: received {} tasks from client for root '{}'", tasks.len(), root.display()),
         Some(&format!("Incoming IDs: [{}]", incoming_ids.join(", "))),
     );
-    let disk_tasks = load_tasks_from_disk(&root).await;
-    let boards_cfg = crate::config::load_boards_config(&root).await.ok();
+    let disk_tasks = load_tasks_from_disk(root).await;
+    let boards_cfg = crate::config::load_boards_config(root).await.ok();
 
     // Defensive reconciliation: prevent stale frontend saves from destroying newly created
     // subtasks or wiping out active parent 'waiting_subtask' invariants (§ 2.2 & § 2.22).
@@ -420,18 +428,29 @@ pub async fn save_tasks(tasks: Vec<Task>, state: State<'_, AppState>) -> Result<
             if t.hook_states.is_none() && dt.hook_states.is_some() {
                 t.hook_states = dt.hook_states.clone();
             }
+            if t.worktree_path.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) && dt.worktree_path.is_some() {
+                t.worktree_path = dt.worktree_path.clone();
+            }
+            if t.branch.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) && dt.branch.is_some() {
+                t.branch = dt.branch.clone();
+            }
+            if t.parent_id.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) && dt.parent_id.is_some() {
+                t.parent_id = dt.parent_id.clone();
+            }
         }
     }
 
-    if let Ok(mut guard) = state.tasks.lock() {
-        *guard = merged_tasks.clone();
+    if let Some(st) = state_tasks {
+        if let Ok(mut guard) = st.lock() {
+            *guard = merged_tasks.clone();
+        }
     }
-    let res = save_tasks_to_disk(&root, &merged_tasks).await;
+    let res = save_tasks_to_disk(root, &merged_tasks).await;
     match &res {
         Ok(_) => {
             let merged_ids: Vec<&str> = merged_tasks.iter().map(|t| t.id.as_str()).collect();
             crate::logger::cvh_log_with_details(
-                Some(&root),
+                Some(root),
                 "INFO",
                 "SAVE_TASKS",
                 &format!("save_tasks command: successfully persisted {} merged tasks to disk", merged_tasks.len()),
@@ -440,7 +459,7 @@ pub async fn save_tasks(tasks: Vec<Task>, state: State<'_, AppState>) -> Result<
         }
         Err(e) => {
             crate::logger::cvh_log(
-                Some(&root),
+                Some(root),
                 "ERROR",
                 "SAVE_TASKS",
                 &format!("save_tasks command: FAILED to persist {} tasks: {}", merged_tasks.len(), e),
@@ -1096,6 +1115,24 @@ pub async fn internal_create_subtask(
     let root = &root_resolved;
     let mut tasks = load_tasks_from_disk(root).await;
 
+    // Merge in-memory tasks if state is available in app_handle to prevent stale data
+    if let Some(app) = app_handle {
+        if let Some(state_ref) = app.try_state::<AppState>() {
+            if let Ok(guard) = state_ref.tasks.lock() {
+                for mem_t in guard.iter() {
+                    if let Some(disk_t) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &mem_t.id)) {
+                        if disk_t.worktree_path.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) && mem_t.worktree_path.is_some() {
+                            disk_t.worktree_path = mem_t.worktree_path.clone();
+                        }
+                        if disk_t.branch.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) && mem_t.branch.is_some() {
+                            disk_t.branch = mem_t.branch.clone();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     let parent_idx = tasks
         .iter()
         .position(|t| task_id_matches(&t.id, parent_id))
@@ -1156,10 +1193,33 @@ pub async fn internal_create_subtask(
     let now = Utc::now().timestamp_millis();
 
     let parent_title = tasks[parent_idx].title.clone();
-    let parent_wt = tasks[parent_idx].worktree_path.clone();
-    let parent_branch = tasks[parent_idx].branch.clone();
+    let mut parent_wt = tasks[parent_idx].worktree_path.clone();
+    let mut parent_branch = tasks[parent_idx].branch.clone();
     let parent_model = tasks[parent_idx].model.clone();
     let parent_skip_wt = tasks[parent_idx].skip_worktree;
+
+    // If parent worktree is missing or empty, check filesystem heuristics
+    if parent_wt.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) {
+        let candidates = [
+            format!("worktrees/{}", parent_id),
+            format!("worktrees/{}", parent_id.to_lowercase()),
+            format!(".cvh/worktrees/{}", parent_id),
+            format!(".cvh/worktrees/{}", parent_id.to_lowercase()),
+        ];
+        for rel in &candidates {
+            if root.join(rel).exists() {
+                parent_wt = Some(rel.clone());
+                tasks[parent_idx].worktree_path = Some(rel.clone());
+                if parent_branch.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) {
+                    let fb = format!("feat/{}", parent_id);
+                    parent_branch = Some(fb.clone());
+                    tasks[parent_idx].branch = Some(fb);
+                }
+                let _ = crate::db::db_upsert_task(root, &tasks[parent_idx]);
+                break;
+            }
+        }
+    }
 
     // Update parent task: mark waiting for subtask, keep parent pinned in current stage (§ 2.2)
     tasks[parent_idx].waiting_for_subtask_id = Some(subtask_id.clone());
@@ -1223,6 +1283,9 @@ pub async fn internal_create_subtask(
 
     let parent_task_clone = tasks[parent_idx].clone();
     tasks.push(new_subtask.clone());
+
+    let _ = crate::db::db_upsert_task(root, &new_subtask);
+    let _ = crate::db::db_upsert_task(root, &parent_task_clone);
 
     if let Some(app) = app_handle {
         if let Some(state_ref) = app.try_state::<AppState>() {
@@ -3282,6 +3345,17 @@ pub async fn internal_advance_task_to_stage(
                             }));
                         }
                         apply_worktree_from_hook_stdout(&mut current_task, &res.stdout);
+                        let _ = crate::db::db_upsert_task(root, &current_task);
+                        if let Some(app) = app_handle {
+                            if let Some(state_ref) = app.try_state::<AppState>() {
+                                if let Ok(mut guard) = state_ref.tasks.lock() {
+                                    if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &current_task.id)) {
+                                        t.worktree_path = current_task.worktree_path.clone();
+                                        t.branch = current_task.branch.clone();
+                                    }
+                                }
+                            }
+                        }
                     }
                     Err(e) => {
                         let duration_ms = (chrono::Utc::now().timestamp_millis() - hook_started_at).max(0) as u64;
@@ -3556,6 +3630,17 @@ pub async fn internal_advance_task_to_stage(
                         }));
                     }
                     apply_worktree_from_hook_stdout(&mut current_task, &res.stdout);
+                    let _ = crate::db::db_upsert_task(root, &current_task);
+                    if let Some(app) = app_handle {
+                        if let Some(state_ref) = app.try_state::<AppState>() {
+                            if let Ok(mut guard) = state_ref.tasks.lock() {
+                                if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &current_task.id)) {
+                                    t.worktree_path = current_task.worktree_path.clone();
+                                    t.branch = current_task.branch.clone();
+                                }
+                            }
+                        }
+                    }
                 }
                 Err(e) => {
                     let duration_ms = (chrono::Utc::now().timestamp_millis() - hook_started_at).max(0) as u64;

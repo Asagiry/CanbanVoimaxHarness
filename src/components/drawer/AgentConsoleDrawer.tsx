@@ -40,8 +40,11 @@ export default function AgentConsoleDrawer() {
   const rawTask = tasks.find((t) => t.id === activeTaskId);
   const fallbackBoardId = useBoardStore.getState().activeBoardId || 'development';
   const fallbackColId = columns.find((c) => c.isIntake)?.id ?? columns[0]?.id ?? 'backlog';
+  const parentIdFromId = activeTaskId?.includes('.') ? activeTaskId.split('.')[0] : undefined;
+  const parentTaskForFallback = parentIdFromId ? tasks.find((t) => t.id === parentIdFromId) : undefined;
+
   // Resilient fallback: ensure task is never undefined if drawer is active
-  const task: KanbanTask = rawTask ?? {
+  const baseTask: KanbanTask = rawTask ?? {
     id: activeTaskId || 'task',
     title: activeTaskId || 'Task',
     columnId: fallbackColId,
@@ -49,8 +52,9 @@ export default function AgentConsoleDrawer() {
     persona: 'developer',
     status: 'idle',
     priority: 'high',
-    branch: `feat/${(activeTaskId || 'task').toLowerCase()}`,
-    worktreePath: `worktrees/${(activeTaskId || 'task').toLowerCase()}`,
+    parentId: parentIdFromId,
+    branch: parentTaskForFallback?.branch || `feat/${(parentIdFromId || activeTaskId || 'task').toLowerCase()}`,
+    worktreePath: parentTaskForFallback?.worktreePath || `worktrees/${(parentIdFromId || activeTaskId || 'task').toLowerCase()}`,
     createdAt: Date.now(),
     updatedAt: Date.now(),
     activeStageDuration: 0,
@@ -61,9 +65,16 @@ export default function AgentConsoleDrawer() {
     verdict: 'NONE',
   };
 
-  const rootTask = task.parentId
-    ? tasks.find((t) => t.id === task.parentId) || task
-    : task;
+  const rootTask = baseTask.parentId
+    ? tasks.find((t) => t.id === baseTask.parentId) || baseTask
+    : baseTask;
+
+  const task: KanbanTask = {
+    ...baseTask,
+    branch: baseTask.branch || rootTask.branch || `feat/${(rootTask.id || baseTask.id).toLowerCase()}`,
+    worktreePath: baseTask.worktreePath || rootTask.worktreePath || `worktrees/${(rootTask.id || baseTask.id).toLowerCase()}`,
+  };
+
   const subtasks = tasks.filter((t) => t.parentId === rootTask.id);
 
   // Reset error when switching tasks & load dialog history from disk

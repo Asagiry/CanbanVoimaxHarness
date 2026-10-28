@@ -236,15 +236,25 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
     ? raw.returnsCount
     : 0;
 
-  const skipWorktree = Boolean(raw.skipWorktree ?? raw.skip_worktree ?? raw.skipBacklogHook ?? raw.skip_backlog_hook ?? false);
-  const branch = typeof raw.branch === 'string' && raw.branch.trim() !== ''
-    ? raw.branch.trim()
-    : undefined;
-  const worktreePath = typeof raw.worktreePath === 'string' && raw.worktreePath.trim() !== ''
-    ? raw.worktreePath.trim()
-    : (typeof raw.worktree_path === 'string' && raw.worktree_path.trim() !== '' ? raw.worktree_path.trim() : undefined);
+  const rawParentId = (typeof raw.parentId === 'string' && raw.parentId.trim() !== '')
+    ? raw.parentId.trim()
+    : (typeof raw.parent_id === 'string' && raw.parent_id.trim() !== ''
+      ? raw.parent_id.trim()
+      : (typeof raw.id === 'string' && raw.id.includes('.') ? raw.id.split('.')[0] : undefined));
 
-  const rawParentId = raw.parentId ?? raw.parent_id ?? undefined;
+  const parentTask = rawParentId ? useBoardStore.getState().tasks.find((t) => t.id === rawParentId) : undefined;
+
+  const skipWorktree = Boolean(
+    raw.skipWorktree ?? raw.skip_worktree ?? raw.skipBacklogHook ?? raw.skip_backlog_hook ?? parentTask?.skipWorktree ?? false
+  );
+  const branch = (typeof raw.branch === 'string' && raw.branch.trim() !== '')
+    ? raw.branch.trim()
+    : parentTask?.branch;
+  const worktreePath = (typeof raw.worktreePath === 'string' && raw.worktreePath.trim() !== '')
+    ? raw.worktreePath.trim()
+    : ((typeof raw.worktree_path === 'string' && raw.worktree_path.trim() !== '')
+      ? raw.worktree_path.trim()
+      : parentTask?.worktreePath);
   const rawTitle = typeof raw.title === 'string' ? raw.title : '';
   const isReviewSubtask = Boolean(
     rawParentId ||
@@ -305,6 +315,13 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
       : (typeof raw.current_tokens === 'number' ? raw.current_tokens : undefined),
     skipWorktree,
     position: typeof raw.position === 'number' && Number.isFinite(raw.position) ? raw.position : undefined,
+    previousStageId: typeof raw.previousStageId === 'string' && raw.previousStageId.trim() !== ''
+      ? raw.previousStageId.trim()
+      : (typeof raw.previous_stage_id === 'string' && raw.previous_stage_id.trim() !== ''
+        ? raw.previous_stage_id.trim()
+        : (typeof raw.fromStage === 'string' && raw.fromStage.trim() !== ''
+          ? raw.fromStage.trim()
+          : (typeof raw.from_stage === 'string' && raw.from_stage.trim() !== '' ? raw.from_stage.trim() : undefined))),
     hookStates: (raw.hookStates || raw.hook_states) && typeof (raw.hookStates || raw.hook_states) === 'object'
       ? (raw.hookStates || raw.hook_states)
       : undefined,
@@ -929,6 +946,31 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         const prev = get().tasks.find((t) => t.id === resolvedTaskId || t.id.trim().toLowerCase() === resolvedTaskId.trim().toLowerCase()) ?? task;
         // Local-only timer/UX bookkeeping (backend has no timer fields).
         const sourceColId = options?.sourceColumnId ?? prev.columnId;
+        const sourceCol = columns.find((c) => c.id === sourceColId);
+        const sourceHasLeaveHook = Boolean(
+          sourceCol?.hooks?.['on_leave'] ||
+          sourceCol?.hooks?.['on_exit'] ||
+          sourceCol?.hooks?.['on_finish']
+        );
+        const targetHasEnterHook = Boolean(targetColDef?.hooks?.['on_enter']);
+
+        // Clean up hook states if departing stage had no on_leave hook, or entering stage had no on_enter hook
+        let nextTaskHookStates = mapped.hookStates
+          ? { ...mapped.hookStates }
+          : (prev.hookStates ? { ...prev.hookStates } : undefined);
+        if (!sourceHasLeaveHook && nextTaskHookStates?.on_leave) {
+          const cleaned = { ...nextTaskHookStates };
+          delete cleaned.on_leave;
+          nextTaskHookStates = Object.keys(cleaned).length > 0 ? cleaned : undefined;
+          get().clearHookState(resolvedTaskId, 'on_leave');
+        }
+        if (!targetHasEnterHook && nextTaskHookStates?.on_enter) {
+          const cleaned = { ...nextTaskHookStates };
+          delete cleaned.on_enter;
+          nextTaskHookStates = Object.keys(cleaned).length > 0 ? cleaned : undefined;
+          get().clearHookState(resolvedTaskId, 'on_enter');
+        }
+
         const sourceColIndex = columns.findIndex((c) => c.id === sourceColId);
         const targetColIndex = columns.findIndex((c) => c.id === targetStageId);
         const isRework =
@@ -944,6 +986,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         const merged: KanbanTask = {
           ...mapped,
           columnId: targetStageId,
+          previousStageId: sourceColId,
+          hookStates: nextTaskHookStates,
           boardId: mapped.boardId || prev.boardId || task.boardId || activeBoardId || 'development',
           persona: targetColDef?.persona || prev.persona,
           verdict: backendTask.verdict ? mapped.verdict : prev.verdict,

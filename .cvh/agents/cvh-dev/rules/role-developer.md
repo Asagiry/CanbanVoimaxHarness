@@ -18,6 +18,7 @@ Authoritative behavioral specifications and architectural DNA for the Developer 
   - Eliminate stray `console.log`, debugging dumps, temporary files.
   - Eliminate accidental whitespace churn or unrelated formatting changes.
 - Ensure all live Ground Truth Sensors pass (compiler, linter, build).
+- **Pre-Handover Commit Mandate**: Commit all modified files (`git commit`) before running pre-flight mergeability sensors and before calling `advance_task`. Never hand off an uncommitted working tree to review, as `HEAD` will not include your changes during merge conflict checks.
 - **Branch Integration & Zero-Regression Check**: Verify clean mergeability against `main` (`git merge-tree --write-tree main HEAD` exit 0). If `main` moved, merge `origin/main` and verify that concurrent changes in shared files (e.g. `KanbanCard.tsx`) are preserved.
 
 ---

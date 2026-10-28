@@ -163,16 +163,16 @@ export default function DrawerHeader({
           )}
 
           {/* Directly adjacent to the title/breadcrumbs, render the compact worktree/branch badges */}
-          {!activeSubagentId && !task?.skipWorktree && task?.worktreePath && (
+          {!activeSubagentId && !task?.skipWorktree && (task?.worktreePath || rootTask?.worktreePath) && (
             <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[11px] font-mono shrink-0">
               <FolderGit2 className="h-3 w-3 text-[#8f8f8f] dark:text-[#8b949e]" />
-              <span className="text-[#4d4d4d] dark:text-[#c9d1d9] max-w-[140px] truncate">{task.worktreePath}</span>
+              <span className="text-[#4d4d4d] dark:text-[#c9d1d9] max-w-[140px] truncate">{task?.worktreePath || rootTask?.worktreePath}</span>
             </div>
           )}
-          {!activeSubagentId && !task?.skipWorktree && task?.branch && (
+          {!activeSubagentId && !task?.skipWorktree && (task?.branch || rootTask?.branch) && (
             <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-md bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[11px] font-mono shrink-0">
               <GitBranch className="h-3 w-3 text-[#8f8f8f] dark:text-[#8b949e]" />
-              <span className="text-[#4d4d4d] dark:text-[#c9d1d9] max-w-[140px] truncate">{task.branch}</span>
+              <span className="text-[#4d4d4d] dark:text-[#c9d1d9] max-w-[140px] truncate">{task?.branch || rootTask?.branch}</span>
             </div>
           )}
         </div>

@@ -61,11 +61,22 @@ interface CardHookNodeProps {
   hookName: string;
   state?: HookExecutionState;
   stageTitle?: string;
+  sourceStageTitle?: string;
+  isTransition?: boolean;
   taskId: string;
   isDragging?: boolean;
 }
 
-function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle, isDragging }: CardHookNodeProps) {
+function CardHookNode({
+  side,
+  hookType: _hookType,
+  hookName,
+  state,
+  stageTitle,
+  sourceStageTitle,
+  isTransition,
+  isDragging,
+}: CardHookNodeProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -274,7 +285,11 @@ function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle, 
           {/* Header */}
           <div className="flex items-center justify-between gap-1.5 pb-2 border-b border-neutral-100 dark:border-[#21262d]">
             <span className="text-xs font-mono font-medium text-neutral-500 dark:text-neutral-400">
-              {side === 'left' ? 'Входной хук (on_enter)' : 'Выходной хук (on_leave)'}
+              {isTransition
+                ? 'Хук перехода (on_leave)'
+                : side === 'left'
+                ? 'Входной хук (on_enter)'
+                : 'Выходной хук (on_leave)'}
             </span>
             <div className="flex items-center gap-1">
               {status === 'running' && (
@@ -308,11 +323,15 @@ function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle, 
             {hookName}
           </div>
 
-          {stageTitle && (
+          {isTransition && sourceStageTitle ? (
+            <div className="text-xs text-neutral-500 dark:text-neutral-400 font-mono mt-0.5">
+              Переход из: {sourceStageTitle}
+            </div>
+          ) : stageTitle ? (
             <div className="text-xs text-neutral-500 dark:text-neutral-400 font-mono mt-0.5">
               Стадия: {stageTitle}
             </div>
-          )}
+          ) : null}
 
           {/* Error description if failed */}
           {status === 'failed' && errorText.length > 0 && (
@@ -344,6 +363,8 @@ function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle, 
             <div className="mt-2 text-xs text-neutral-500 dark:text-neutral-400 font-sans leading-relaxed">
               {status === 'running'
                 ? 'Выполняется скрипт жизненного цикла стадии...'
+                : isTransition
+                ? 'Скрипт перехода, выполненный при выходе из предыдущей стадии.'
                 : side === 'left'
                 ? 'Скрипт выполнится автоматически при входе в эту стадию.'
                 : 'Скрипт выполнится автоматически при выходе из этой стадии.'}
@@ -365,7 +386,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const zoom = useUiZoomStore((s) => s.zoom);
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const setHoveredTaskId = useBoardStore((s) => s.setHoveredTaskId);
-  const columns = useBoardStore((s) => s.columns);
+  const columns = useBoardStore(useShallow((s) => s.columns));
   const { language, t } = useTranslation();
   const isHighlighted = useBoardStore((s) => {
     const hId = s.hoveredTaskId;
@@ -416,12 +437,35 @@ function KanbanCard({ task, index }: KanbanCardProps) {
     taskColumn?.hooks?.['on_finish'];
   const leaveHookState = taskHooks?.on_leave;
 
+  // Check predecessor column in board order
+  const currentColIndex = columns.findIndex((c) => c.id === task.columnId);
+  const prevCol = currentColIndex > 0 ? columns[currentColIndex - 1] : null;
+
+  // Stale check: A transition hook must be from the predecessor stage and temporally
+  // tied to the moment this stage was entered. If the hook executed long before
+  // entering this stage, it is stale state from an earlier stage transition and must not leak.
+  const stageEntryTime = task.stageEnteredAt || task.updatedAt || 0;
+  const hookDuration = leaveHookState?.durationMs || 0;
+  const isRecentHook =
+    Boolean(leaveHookState?.startedAt) &&
+    stageEntryTime > 0 &&
+    (leaveHookState!.startedAt >= stageEntryTime - hookDuration - 10000 ||
+      Math.abs(stageEntryTime - leaveHookState!.startedAt) <= hookDuration + 10000);
+
+  // Match explicitly recorded previous stage, or fallback to predecessor column in board pipeline
+  const matchesPreviousStage = task.previousStageId
+    ? task.previousStageId === leaveHookState?.stageId
+    : Boolean(prevCol && prevCol.id === leaveHookState?.stageId);
+
   // If this task recently transitioned into this stage via an on_leave hook from previous column,
   // show that transition result on the left (entry) node if this column has no separate on_enter hook.
-  const isTransitionHookFromResult =
+  const isTransitionHookFromResult = Boolean(
     !enterHookState &&
     leaveHookState &&
-    leaveHookState.stageId !== task.columnId;
+    leaveHookState.stageId !== task.columnId &&
+    matchesPreviousStage &&
+    (isRecentHook || !stageEntryTime)
+  );
 
   const effectiveLeftState = enterHookState || (isTransitionHookFromResult ? leaveHookState : undefined);
   const effectiveLeftHookName =
@@ -429,6 +473,11 @@ function KanbanCard({ task, index }: KanbanCardProps) {
     effectiveLeftState?.hookName ||
     (isTransitionHookFromResult ? leaveHookState?.hookName : undefined);
   const hasLeftHook = Boolean(enterHookName || effectiveLeftState);
+
+  const sourceStageCol = effectiveLeftState?.stageId
+    ? columns.find((c) => c.id === effectiveLeftState.stageId)
+    : undefined;
+  const sourceStageTitle = sourceStageCol?.title || effectiveLeftState?.stageId;
 
   // Right node: exit hook from this column
   const hasRightHook = Boolean(
@@ -613,14 +662,17 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                   {task.model}
                 </div>
               )}
-              {task.branch ? (
-                <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
-                  <span className="inline-flex items-center gap-1 truncate text-[#8f8f8f] dark:text-[#8b949e] min-w-0">
-                    <GitBranch className="h-2.5 w-2.5 shrink-0" />
-                    <span className="truncate">{task.branch}</span>
-                  </span>
-                </div>
-              ) : null}
+              {(() => {
+                const cardBranch = task.branch || (task.parentId ? useBoardStore.getState().tasks.find((t) => t.id === task.parentId)?.branch : undefined);
+                return cardBranch ? (
+                  <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
+                    <span className="inline-flex items-center gap-1 truncate text-[#8f8f8f] dark:text-[#8b949e] min-w-0">
+                      <GitBranch className="h-2.5 w-2.5 shrink-0" />
+                      <span className="truncate">{cardBranch}</span>
+                    </span>
+                  </div>
+                ) : null;
+              })()}
               {(task.createdAt || currentTotalElapsed > 0 || (task.attachments && task.attachments.length > 0)) && (
                 <div className="mt-1 flex items-center justify-between gap-1 font-mono text-[10px] text-[#8f8f8f] dark:text-[#8b949e] tabular-nums whitespace-nowrap">
                   <div className="flex items-center gap-1 min-w-0 truncate">
@@ -741,6 +793,8 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                 hookName={effectiveLeftHookName}
                 state={effectiveLeftState}
                 stageTitle={taskColumn?.title || task.columnId}
+                sourceStageTitle={sourceStageTitle}
+                isTransition={isTransitionHookFromResult}
                 taskId={task.id}
                 isDragging={snapshot.isDragging}
               />
@@ -823,6 +877,7 @@ function areCardPropsEqual(prev: KanbanCardProps, next: KanbanCardProps): boolea
     a.stageEnteredAt === b.stageEnteredAt &&
     a.updatedAt === b.updatedAt &&
     a.createdAt === b.createdAt &&
+    a.previousStageId === b.previousStageId &&
     a.isTimerRunning === b.isTimerRunning &&
     a.returnsCount === b.returnsCount &&
     a.attachments === b.attachments &&
