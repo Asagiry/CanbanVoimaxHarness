@@ -22,6 +22,7 @@ interface KanbanColumnProps {
   isPinned?: boolean;
   onDeleteColumn?: (columnId: string) => void;
   doneParentIds?: Set<string>;
+  composerSlot?: React.ReactNode;
 }
 
 function KanbanColumn({
@@ -31,6 +32,7 @@ function KanbanColumn({
   isPinned: isPinnedProp,
   onDeleteColumn,
   doneParentIds,
+  composerSlot,
 }: KanbanColumnProps) {
   const zoom = useUiZoomStore((s) => s.zoom);
   // Клик по шапке больше не подсвечивает колонку и не трогает проводник
@@ -212,6 +214,7 @@ function KanbanColumn({
                 : 'bg-transparent'
             }`}
           >
+            {composerSlot}
             {visibleTasks.map((task, index) => (
               <KanbanCard key={task.id} task={task} index={index} />
             ))}
