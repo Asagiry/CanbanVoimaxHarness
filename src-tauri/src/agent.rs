@@ -1056,29 +1056,29 @@ pub async fn prune_spill_dir(spill_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Tool Output Spilling: if stdout/output exceeds 100 lines or 8KB, save full log to `.cvh/spill/<timestamp>-<tool>.log`,
-/// return head (first 20 lines) and tail (last 20 lines) + reference to spilled file.
+/// Tool Output Spilling: if stdout/output exceeds thresholds, save full log to `.cvh/spill/<timestamp>-<tool>.log`,
+/// return head and tail + reference to spilled file.
+/// Subagent and task history tools have a generous limit (5000 lines / 256KB), but are still safely spilled
+/// if they exceed that absolute ceiling to prevent context explosion.
 pub async fn maybe_spill_output(
     repo_root: &Path,
     tool_name: &str,
     output: String,
 ) -> Result<String> {
     let canonical = canonical_tool_name(tool_name);
-    // Subagent reports and rule/audit outputs must NEVER be truncated or spilled!
-    if canonical == "subagent"
+    let is_exempt = canonical == "subagent"
         || canonical == "subagent_bg"
         || canonical == "collect_subagent"
         || canonical == "subagent_list"
         || canonical == "load_rule"
-        || canonical == "get_task_history"
-    {
-        return Ok(output);
-    }
+        || canonical == "get_task_history";
 
     let lines_count = output.lines().count();
     let bytes_len = output.len();
 
-    let (max_lines, max_bytes) = if canonical == "read_file" {
+    let (max_lines, max_bytes) = if is_exempt {
+        (5000, 256 * 1024)
+    } else if canonical == "read_file" {
         (2000, 128 * 1024)
     } else {
         (500, 64 * 1024)
@@ -1096,17 +1096,19 @@ pub async fn maybe_spill_output(
         let _ = prune_spill_dir(&spill_dir).await;
 
         let all_lines: Vec<&str> = output.lines().collect();
-        let head = all_lines[..20.min(all_lines.len())].join("\n");
-        let tail = if all_lines.len() > 40 {
-            all_lines[all_lines.len() - 20..].join("\n")
+        let head_count = if is_exempt { 50 } else { 20 };
+        let tail_count = if is_exempt { 50 } else { 20 };
+        let head = all_lines[..head_count.min(all_lines.len())].join("\n");
+        let tail = if all_lines.len() > head_count + tail_count {
+            all_lines[all_lines.len() - tail_count..].join("\n")
         } else {
             String::new()
         };
 
         let rel_spill = format!(".cvh/spill/{}", filename);
         let spilled_msg = format!(
-            "[Output truncated: {} lines ({} bytes) spilled to {}]\n--- HEAD (first 20 lines) ---\n{}\n\n--- TAIL (last 20 lines) ---\n{}\n[Full log available at {}]",
-            lines_count, bytes_len, rel_spill, head, tail, rel_spill
+            "[Output truncated: {} lines ({} bytes) spilled to {}]\n--- HEAD (first {} lines) ---\n{}\n\n--- TAIL (last {} lines) ---\n{}\n[Full log available at {}]",
+            lines_count, bytes_len, rel_spill, head_count, head, tail_count, tail, rel_spill
         );
         Ok(spilled_msg)
     } else {
@@ -6483,10 +6485,12 @@ pub fn reconstruct_messages_from_dialog(
                 if let Some(ref c) = item.content {
                     let trimmed = c.trim();
                     if !trimmed.is_empty() {
-                        messages.push(ChatMessage::system(format!(
-                            "### [СВЕРНУТЫЙ КОНТЕКСТ / COMPACTED CONTEXT]\n{}",
-                            trimmed
-                        )));
+                        let formatted = if trimmed.starts_with("# Compacted Context Summary") {
+                            trimmed.to_string()
+                        } else {
+                            format!("# Compacted Context Summary\n\n{}", trimmed)
+                        };
+                        messages.push(ChatMessage::system(formatted));
                     }
                 }
             }
@@ -6843,8 +6847,9 @@ where
 
         let should_compact = current_tokens >= compaction_threshold;
         if should_compact {
-            let compaction_res = compactor::compact_conversation(&mut messages, None);
-            if compaction_res.saved_chars > 0 {
+            let target_window = (context_window * 3) / 4;
+            let compaction_res = compactor::compact_conversation_to_target(&mut messages, target_window, None);
+            if compaction_res.saved_chars > 0 || compactor::estimate_tokens(&messages) < current_tokens {
                 let tokens_after = compactor::estimate_tokens(&messages);
                 let saved_tokens = compaction_res.estimated_saved_tokens;
                 let stdout_msg = format!(
@@ -6893,7 +6898,15 @@ where
                         duration_ms: None,
                         images: None,
                     };
-                    let _ = crate::db::persist_compacted_dialog(&config.repo_root, &config.task_id, &compacted_item, Some(&tool_act_item), &[]);
+
+                    let existing_items = crate::db::load_dialog_items(&config.repo_root, &config.task_id).unwrap_or_default();
+                    let has_summary = messages.iter().any(|m| compactor::is_compacted_summary(&m.role, m.content.as_deref().unwrap_or("")));
+                    let non_recent_overhead = if has_summary { 3 } else { 2 };
+                    let recent_count = messages.len().saturating_sub(non_recent_overhead);
+                    let archive_count = existing_items.len().saturating_sub(recent_count);
+                    let ids_to_archive: Vec<String> = existing_items[..archive_count].iter().map(|it| it.id.clone()).collect();
+
+                    let _ = crate::db::persist_compacted_dialog(&config.repo_root, &config.task_id, &compacted_item, Some(&tool_act_item), &ids_to_archive);
                     let _ = app.emit(
                         "agent:tool_call",
                         serde_json::json!({
@@ -6914,6 +6927,16 @@ where
                         }),
                     );
                     let _ = app.emit("dialog:updated", serde_json::json!({ "taskId": config.task_id }));
+
+                    if let Some(state) = app.try_state::<crate::commands::AppState>() {
+                        if let Ok(map) = state.agent_contexts.lock() {
+                            if let Some(cs) = map.get(&config.task_id) {
+                                if let Ok(mut guard) = cs.lock() {
+                                    guard.messages = messages.clone();
+                                }
+                            }
+                        }
+                    }
                 }
 
                 event_sink(AgentEvent::Compacted {
@@ -6980,6 +7003,32 @@ where
         } else {
             Some(active_tools.clone())
         };
+
+        // Pre-Flight Hard Ceiling Guard:
+        // Guarantees that request tokens strictly do not exceed the upstream model ceiling
+        // (default 1,000,000 or context_window), preventing unrecoverable HTTP 400 Bad Request.
+        let mut req_tokens = compactor::estimate_request_tokens(&messages, tools.as_deref());
+        let model_ceiling = 1_000_000usize.min(context_window);
+
+        if req_tokens >= model_ceiling {
+            eprintln!(
+                "CVH [agent]: Pre-flight token guard: req_tokens ({}) >= model_ceiling ({}). Triggering emergency multi-tier compaction.",
+                req_tokens, model_ceiling
+            );
+            let emergency_target = (model_ceiling * 7) / 10;
+            compactor::compact_conversation_to_target(&mut messages, emergency_target, None);
+            req_tokens = compactor::estimate_request_tokens(&messages, tools.as_deref());
+
+            if req_tokens >= model_ceiling {
+                let err_msg = format!(
+                    "Pre-flight token guard: context size ({} tokens) exceeds model ceiling ({} tokens). Request aborted to prevent HTTP 400.",
+                    req_tokens, model_ceiling
+                );
+                eprintln!("CVH [agent]: {}", err_msg);
+                event_sink(AgentEvent::Error(err_msg.clone()));
+                bail!("{}", err_msg);
+            }
+        }
 
         let system_tokens = compactor::estimate_text_tokens(&system_prompt) as u64;
         let tool_tokens = compactor::estimate_tools_tokens(&tools) as u64;
