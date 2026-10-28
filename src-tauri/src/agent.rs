@@ -243,16 +243,20 @@ Identity & Core Directives:
 - Absolute Invariant: NEVER write or edit code outside the active worktree directory.
 - Ponytail Minimalism & Anti-Slop: zero dead code, no unused imports, no placeholder functions, clean idiomatic architecture.
 - Strict Error Handling: zero naked unwraps in production paths; use typed errors (`Result<T, AppError>`, `anyhow`, or `thiserror`).
+- Direct Coordinate Navigation: use exact target lines and files from planner summary; never read files sequentially from line 1.
+- Anti-Micro-Reading Mandate: never call read_file in 20-50 line increments to scroll files. Use grep for search, read targeted chunks of 100-300 lines.
+- Mandatory Commit Pre-Flight: always commit working tree changes (`git add -A && git commit`) before calling advance_task.
 
-Workflow (Explore -> Plan -> Code -> Verify -> Commit):
-1. Explore: locate relevant files using `glob` and `grep`. Never assume paths or API signatures.
-2. Plan: formulate targeted checklist with `path:line` targets before editing.
+Workflow (Explore -> Plan -> Code -> Verify -> Commit -> Handover):
+1. Explore: locate relevant files using `glob` and `grep` or planner coordinates.
+2. Plan: formulate targeted checklist with `path:line` targets via `todo_write` (batched updates).
 3. Code: execute surgical edits inside `worktrees/<task-slug>`.
-4. Verify with Ground Truth Sensors:
-   - Backend/Rust: `cargo check` and `cargo clippy -- -D warnings` must exit 0.
-   - Frontend/TS: `pnpm run build` (`tsc && vite build`) must exit 0.
-   - Subprocesses: test real subprocesses and verify stdout/stderr without assuming success.
-5. Commit: 1 atomic task = 1 feature commit. Never commit broken or unverified code.
+4. Commit: commit changes to the feature branch before verification.
+5. Verify with Ground Truth Sensors:
+   - Backend/Rust: `cargo check` and `cargo clippy -- -D warnings` must exit 0 (if backend touched).
+   - Frontend/TS: `npx tsc --noEmit` / `npm run build` must exit 0 (if frontend touched).
+   - Mergeability: `git merge-tree --write-tree main HEAD` must exit 0.
+6. Handover: advance to review with proof of passing sensors.
 
 Rationalization vs Reality:
 - State only what runtime sensors prove. If a sensor fails, report the exact error and fix root causes immediately.
@@ -2320,7 +2324,13 @@ pub async fn execute_tool(
                 .and_then(|v| v.as_u64())
                 .unwrap_or(default_timeout);
 
-            let res = run_scoped_command(worktree_dir, command_str, Duration::from_secs(timeout_secs), Arc::clone(&abort_handle)).await?;
+            let res = run_scoped_command(
+                worktree_dir,
+                command_str,
+                Duration::from_secs(timeout_secs),
+                Arc::clone(&abort_handle),
+                Some(repo_root),
+            ).await?;
             format!(
                 "[Exit Code: {}]\n--- STDOUT ---\n{}\n--- STDERR ---\n{}",
                 res.exit_code.unwrap_or(-1),
@@ -4166,7 +4176,13 @@ pub async fn execute_tool(
             let custom_tools = load_custom_tools(repo_root).await;
             if let Some(ct) = custom_tools.into_iter().find(|t| t.name == custom_tool) {
                 let cmd_str = ct.command.replace("{{args}}", &args.to_string());
-                let res = run_scoped_command(worktree_dir, &cmd_str, Duration::from_secs(60), Arc::clone(&abort_handle)).await?;
+                let res = run_scoped_command(
+                    worktree_dir,
+                    &cmd_str,
+                    Duration::from_secs(60),
+                    Arc::clone(&abort_handle),
+                    Some(repo_root),
+                ).await?;
                 format!(
                     "[Custom Tool: {} Exit: {}]\nSTDOUT: {}\nSTDERR: {}",
                     custom_tool,
@@ -5512,6 +5528,7 @@ async fn run_scoped_command(
     cmd_str: &str,
     timeout: Duration,
     abort_flag: Arc<AtomicBool>,
+    repo_root: Option<&Path>,
 ) -> Result<crate::hooks::HookExecutionResult> {
     #[cfg(target_os = "windows")]
     let mut cmd = {
@@ -5534,6 +5551,29 @@ async fn run_scoped_command(
     cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
+
+    // Inject shared CARGO_TARGET_DIR to prevent redundant cold compilations in worktrees
+    if let Ok(existing_target) = std::env::var("CARGO_TARGET_DIR") {
+        if !existing_target.trim().is_empty() {
+            cmd.env("CARGO_TARGET_DIR", existing_target);
+        }
+    } else if let Some(root) = repo_root {
+        cmd.env("CARGO_TARGET_DIR", root.join("src-tauri").join("target"));
+    } else {
+        let abs_cwd = if cwd.is_absolute() {
+            cwd.to_path_buf()
+        } else {
+            std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join(cwd)
+        };
+        for ancestor in abs_cwd.ancestors() {
+            if ancestor.file_name().and_then(|n| n.to_str()) == Some("worktrees") {
+                if let Some(root) = ancestor.parent() {
+                    cmd.env("CARGO_TARGET_DIR", root.join("src-tauri").join("target"));
+                    break;
+                }
+            }
+        }
+    }
 
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);

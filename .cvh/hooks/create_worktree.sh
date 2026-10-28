@@ -11,6 +11,11 @@ if [ -z "$CVH_TASK_ID" ]; then
     exit 1
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -z "$CARGO_TARGET_DIR" ]; then
+    export CARGO_TARGET_DIR="$(cd "$SCRIPT_DIR/../../src-tauri/target" 2>/dev/null && pwd || echo "$SCRIPT_DIR/../../src-tauri/target")"
+fi
+
 if [ "$CVH_SKIP_WORKTREE" = "true" ]; then
     echo "[CVH Worktree Hook] CVH_SKIP_WORKTREE is true. Skipping worktree creation."
     exit 0
