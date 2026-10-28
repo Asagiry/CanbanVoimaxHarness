@@ -4,6 +4,7 @@ import { Draggable } from '@hello-pangea/dnd';
 import { KanbanTask, TaskStatus, HookExecutionState, TodoItem, getHookScript, getHookDescription } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore, isDoneColumnDef } from '../../stores/boardStore';
+import { useCortexStore } from '../../stores/cortexStore';
 import { useTranslation, Language } from '../../stores/languageStore';
 import { useShallow } from 'zustand/react/shallow';
 import { GitBranch, ChevronDown, MessageSquare, GitFork, Check, X, Loader2, Terminal, Paperclip } from 'lucide-react';
@@ -441,9 +442,15 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const [isSubtasksOpen, setIsSubtasksOpen] = useState(false);
 
   const taskColumn = columns.find((c) => c.id === task.columnId);
+  const assignedPersonaColor = useCortexStore((s) =>
+    taskColumn?.persona ? s.agentPersonas.find((p) => p.role === taskColumn.persona)?.color : undefined
+  );
   const assignedAgentColor = taskColumn?.persona
-    ? getDeterministicAgentColor(taskColumn.persona)
+    ? (assignedPersonaColor || getDeterministicAgentColor(taskColumn.persona))
     : (taskColumn?.color || getDeterministicAgentColor(task.columnId));
+  const ringGlowColor = assignedAgentColor.startsWith('#') && assignedAgentColor.length === 7
+    ? `${assignedAgentColor}50`
+    : assignedAgentColor;
   const isDone = Boolean(task.status === 'done' || isDoneColumnDef(taskColumn));
 
   // Subtasks belonging to this task (queried only if card is in done column)
@@ -640,21 +647,26 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                   ? `${baseTransform} rotate(1.8deg) scale(1.025)`
                   : baseTransform,
               transition: provided.draggableProps.style?.transition
-                ? `${provided.draggableProps.style.transition}, transform 0.08s ease-out, box-shadow 0.15s ease-out`
-                : 'transform 0.08s ease-out, box-shadow 0.15s ease-out',
+                ? `${provided.draggableProps.style.transition}, transform 0.08s ease-out, box-shadow 0.15s ease-out, border-color 0.15s ease-out`
+                : 'transform 0.08s ease-out, box-shadow 0.15s ease-out, border-color 0.15s ease-out',
               borderColor: snapshot.isDragging
                 ? undefined
                 : isHighlighted
-                ? undefined
+                ? assignedAgentColor
                 : `${assignedAgentColor}50`,
+              boxShadow: snapshot.isDragging
+                ? undefined
+                : isHighlighted
+                ? `0 0 0 2px ${ringGlowColor}, 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)`
+                : undefined,
             }}
             className={`group relative mb-2 rounded-md border p-3 select-none ${
               snapshot.isDragging
                 ? 'scale-[1.02] rotate-[1.5deg] shadow-2xl ring-1 ring-black/10 dark:ring-white/20 cursor-grabbing z-50 border-[#171717] dark:border-[#30363d] bg-white dark:bg-[#161b22]'
-                : `transition-transform duration-100 ease-out cursor-pointer active:scale-[0.99] ${
+                : `transition-transform duration-100 ease-out cursor-pointer active:scale-[0.99] bg-white dark:bg-[#161b22] ${
                     isHighlighted
-                      ? 'border-[#8b5cf6] shadow-md ring-2 ring-[#8b5cf6]/50 bg-purple-50/20 dark:bg-[#1c1b29]'
-                      : 'border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] hover:border-[#d4d4d8] dark:hover:border-[#30363d] shadow-xs'
+                      ? 'shadow-md'
+                      : 'border-[#ebebeb] dark:border-[#21262d] hover:border-[#d4d4d8] dark:hover:border-[#30363d] shadow-xs'
                   }`
             }`}
           >
