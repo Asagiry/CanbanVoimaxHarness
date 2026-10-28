@@ -59,27 +59,12 @@
   }
 
   .dark ::selection {
-    background-color: #1e3a5f;
+    background-color: #21262d;
     color: #f0f6fc;
   }
-
-  :focus-visible {
-    outline: 2px solid #58a6ff;
-    outline-offset: 1px;
-  }
 }
 
-/* Minimalist scrollbar (Light & Dark, Cross-Engine) */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: #d4d4d8 transparent;
-}
-
-.dark,
-.dark * {
-  scrollbar-color: #30363d transparent;
-}
-
+/* Minimalist scrollbar (Light & Dark) */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -99,11 +84,11 @@
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background: #30363d;
+  background: #21262d;
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: #484f58;
+  background: #30363d;
 }
 
 /* Universal Monospace & Tabular figures */
@@ -177,27 +162,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  ::before,
-  ::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-  ::view-transition-group(*),
-  ::view-transition-old(*),
-  ::view-transition-new(*) {
-    animation: none !important;
-  }
-  .animate-silk-entrance,
-  .animate-in,
-  .animate-pulse,
-  .animate-spin,
-  .animate-ping {
-    animation: none !important;
-  }
   .motion-reduce\:animate-none {
-    animation: none !important;
+    animation: none;
   }
 }

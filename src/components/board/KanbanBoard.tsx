@@ -6,6 +6,7 @@ import { useCortexStore } from '../../stores/cortexStore';
 import KanbanColumn from './KanbanColumn';
 import { PipelineColumn, BoardDef, KanbanTask } from '../../types';
 import { Plus, X, Layout, Pencil, Trash2, Search, Paperclip, ImagePlus, ZoomIn } from 'lucide-react';
+import CreateBoardModal from './CreateBoardModal';
 import PersonaSelect from '../common/PersonaSelect';
 import ImageLightboxModal from '../drawer/ImageLightboxModal';
 import { compressImageFile } from '../../lib/imageCompression';
@@ -41,7 +42,6 @@ export default function KanbanBoard() {
     boards,
     activeBoardId,
     setActiveBoard,
-    createBoard,
     saveBoard,
     deleteBoard,
     saveCurrentBoard,
@@ -49,9 +49,8 @@ export default function KanbanBoard() {
   const { availableModels, settings } = useSettingsStore();
   const { t } = useTranslation();
 
-  const [isNewTaskComposerOpen, setIsNewTaskComposerOpen] = useState(false);
-  const [isCreatingBoard, setIsCreatingBoard] = useState(false);
-  const [newBoardName, setNewBoardName] = useState('');
+  const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
+  const [isCreateBoardModalOpen, setIsCreateBoardModalOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>(settings.model || 'gemini-3.8-flash-high');
 
   // New task form fields
@@ -107,18 +106,6 @@ export default function KanbanBoard() {
       await saveBoard({ ...board, name: trimmed });
     } catch (err) {
       console.info('saveBoard failed for rename:', err);
-    }
-  };
-
-  const handleCommitCreateBoard = async () => {
-    const trimmed = newBoardName.trim();
-    setIsCreatingBoard(false);
-    setNewBoardName('');
-    if (!trimmed) return;
-    try {
-      await createBoard(trimmed);
-    } catch (err) {
-      console.info('createBoard failed:', err);
     }
   };
 
@@ -407,11 +394,11 @@ export default function KanbanBoard() {
     setNewDescription('');
     setNewAttachments([]);
     setSelectedModel(settings.model || (availableModels.length > 0 ? availableModels[0] : 'gemini-3.8-flash-high'));
-    setIsNewTaskComposerOpen(true);
+    setIsNewTaskModalOpen(true);
   };
 
   const handleCloseAddTask = () => {
-    setIsNewTaskComposerOpen(false);
+    setIsNewTaskModalOpen(false);
     setNewAttachments([]);
     setPreviewLightbox(null);
   };
@@ -476,13 +463,6 @@ export default function KanbanBoard() {
 
   const handleModalKeyDown = useCallback(
     async (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        handleCloseAddTask();
-        return;
-      }
-
       const isV =
         e.key === 'v' ||
         e.key === 'V' ||
@@ -777,186 +757,6 @@ export default function KanbanBoard() {
     }
   }, []);
 
-  const targetIntakeColumnId =
-    columns.find((c) => c.isIntake)?.id ||
-    (columns.some((c) => c.id === 'backlog') ? 'backlog' : (columns[0]?.id ?? 'backlog'));
-
-  const inlineTaskComposer = isNewTaskComposerOpen ? (
-    <div
-      className="rounded-lg border border-[#171717] dark:border-[#58a6ff] bg-white dark:bg-[#161b22] p-3 shadow-md mb-2 flex flex-col gap-2.5 transition-colors select-text"
-      onPaste={handleModalPaste}
-      onKeyDown={handleModalKeyDown}
-    >
-      <div className="flex items-center justify-between pb-1.5 border-b border-[#ebebeb] dark:border-[#21262d]">
-        <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc]">
-          {t('newTask.modalTitle')}
-        </span>
-        <button
-          type="button"
-          onClick={handleCloseAddTask}
-          className="p-1 rounded text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer"
-          aria-label={t('common.close')}
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
-
-      <form onSubmit={handleCreateTask} className="flex flex-col gap-2.5 text-xs">
-        <div>
-          <input
-            type="text"
-            required
-            autoFocus
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (newTitle.trim()) {
-                  void handleCreateTask(e);
-                }
-              }
-            }}
-            placeholder={t('newTask.titlePlaceholder')}
-            className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-xs text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#58a6ff] font-sans transition"
-          />
-        </div>
-
-        <div>
-          <textarea
-            rows={3}
-            value={newDescription}
-            onChange={(e) => setNewDescription(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                if (newTitle.trim()) {
-                  void handleCreateTask(e);
-                }
-              }
-            }}
-            placeholder={t('newTask.descPlaceholder')}
-            className="w-full min-h-[56px] max-h-36 px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-xs text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#58a6ff] font-sans leading-relaxed resize-y transition"
-          />
-        </div>
-
-        {/* Attachments Section */}
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <span className="font-sans text-[11px] text-[#4d4d4d] dark:text-[#c9d1d9] font-medium">
-              {t('newTask.attachmentsLabel')}
-            </span>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-sans text-[#4d4d4d] dark:text-[#c9d1d9] bg-[#fafafa] dark:bg-[#0d1117] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] transition cursor-pointer"
-            >
-              <ImagePlus className="h-3 w-3" />
-              <span>{t('newTask.pasteHint')}</span>
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={handleFileInputChange}
-            />
-          </div>
-
-          {newAttachments.length > 0 ? (
-            <div className="flex flex-wrap gap-2 p-1.5 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#0d1117] max-h-32 overflow-y-auto mb-1">
-              {newAttachments.map((att, idx) => (
-                <div
-                  key={att.id}
-                  className="group relative flex flex-col items-center w-20 rounded overflow-hidden border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] shadow-2xs"
-                >
-                  <div
-                    className="relative w-full h-12 cursor-pointer overflow-hidden bg-black/5 dark:bg-white/5"
-                    onClick={() => setPreviewLightbox({ src: att.dataUrl, alt: att.name })}
-                    title={att.name}
-                  >
-                    <img
-                      src={att.dataUrl}
-                      alt={att.name}
-                      className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <ZoomIn className="h-3.5 w-3.5 text-white" />
-                    </div>
-                  </div>
-                  <div className="w-full px-1 py-0.5 flex items-center justify-between text-[9px] font-mono text-[#8f8f8f] dark:text-[#8b949e] border-t border-[#ebebeb] dark:border-[#30363d]">
-                    <span className="truncate max-w-[48px]" title={att.name}>
-                      #{idx + 1}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRemoveAttachment(att.id);
-                      }}
-                      className="p-0.5 rounded text-[#8f8f8f] hover:text-[#ef4444] dark:hover:text-[#f87171] transition cursor-pointer"
-                      aria-label={t('newTask.removeAttachment')}
-                    >
-                      <X className="h-2.5 w-2.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center justify-center gap-1.5 p-2 rounded-md border border-dashed border-[#d4d4d8] dark:border-[#30363d] bg-[#fafafa]/50 dark:bg-[#0d1117]/30 text-center cursor-pointer hover:bg-[#fafafa] dark:hover:bg-[#161b22] transition mb-1"
-            >
-              <Paperclip className="h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e]" />
-              <span className="text-[11px] font-sans text-[#666666] dark:text-[#8b949e]">
-                {t('newTask.pasteHint')}
-              </span>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-between text-[11px] font-mono text-[#71717a] dark:text-[#8b949e]">
-          <span>{t('newTask.modelLabel')}</span>
-          <select
-            value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
-            className="px-1.5 py-0.5 rounded bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] font-mono text-[11px] cursor-pointer"
-          >
-            {Array.from(new Set([selectedModel, ...(availableModels.length > 0 ? availableModels : [settings.model || 'gemini-3.8-flash-high'])])).map((m) => (
-              <option key={m} value={m} className="dark:bg-[#161b22] dark:text-[#f0f6fc]">
-                {m}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex items-center justify-between pt-1 border-t border-[#ebebeb] dark:border-[#21262d]">
-          <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e]">
-            Enter ↵ · Esc ⎋
-          </span>
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={handleCloseAddTask}
-              className="px-2.5 py-1 rounded text-xs text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer font-sans"
-            >
-              {t('common.cancel')}
-            </button>
-            <button
-              type="submit"
-              disabled={!newTitle.trim()}
-              className="px-3 py-1 rounded text-xs bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white disabled:opacity-40 transition cursor-pointer font-sans font-medium shadow-xs border border-transparent dark:border-[#30363d]"
-            >
-              {t('common.create')}
-            </button>
-          </div>
-        </div>
-      </form>
-    </div>
-  ) : null;
-
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#fafafa] dark:bg-[#090a0f] transition-colors">
       {/* Board Top Toolbar */}
@@ -1044,7 +844,7 @@ export default function KanbanBoard() {
                     <Layout className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate max-w-[140px]">{b.name}</span>
                     <span
-                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-medium shrink-0 tabular-nums ${
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-medium shrink-0 ${
                         isActive
                           ? 'bg-[#27272a] dark:bg-[#30363d] text-[#d4d4d8] dark:text-[#f0f6fc]'
                           : 'bg-[#e4e4e7] dark:bg-[#21262d] text-[#71717a] dark:text-[#8b949e]'
@@ -1058,46 +858,14 @@ export default function KanbanBoard() {
               </div>
             );
           })}
-          {isCreatingBoard ? (
-            <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-[#fafafa] dark:bg-[#161b22] border border-[#171717] dark:border-[#58a6ff]">
-              <Layout className="h-3.5 w-3.5 shrink-0 text-[#171717] dark:text-[#f0f6fc]" />
-              <input
-                type="text"
-                autoFocus
-                placeholder={t('createBoard.namePlaceholder') || 'Название доски...'}
-                value={newBoardName}
-                onChange={(e) => setNewBoardName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    void handleCommitCreateBoard();
-                  } else if (e.key === 'Escape') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setIsCreatingBoard(false);
-                    setNewBoardName('');
-                  }
-                }}
-                onBlur={() => {
-                  void handleCommitCreateBoard();
-                }}
-                className="px-1.5 py-0.5 rounded text-xs outline-hidden w-28 sm:w-36 font-sans bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] border border-[#d4d4d8] dark:border-[#30363d]"
-              />
-            </div>
-          ) : (
-            <button
-              onClick={() => {
-                setIsCreatingBoard(true);
-                setNewBoardName('');
-              }}
-              className="flex items-center space-x-1 px-2.5 py-1.5 rounded-md border border-dashed border-[#d4d4d8] dark:border-[#30363d] hover:border-[#171717] dark:hover:border-[#f0f6fc] text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] text-xs font-medium transition cursor-pointer select-none"
-              aria-label={t('board.newBoardTitle')}
-            >
-              <Plus className="h-3 w-3" />
-              <span>{t('board.newBoard')}</span>
-            </button>
-          )}
+          <button
+            onClick={() => setIsCreateBoardModalOpen(true)}
+            className="flex items-center space-x-1 px-2.5 py-1.5 rounded-md border border-dashed border-[#d4d4d8] dark:border-[#30363d] hover:border-[#171717] dark:hover:border-[#f0f6fc] text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] text-xs font-medium transition cursor-pointer select-none"
+            aria-label={t('board.newBoardTitle')}
+          >
+            <Plus className="h-3 w-3" />
+            <span>{t('board.newBoard')}</span>
+          </button>
         </div>
 
         {/* Right: Board Stats & Action Buttons */}
@@ -1294,7 +1062,6 @@ export default function KanbanBoard() {
                   isPinned={isPinned}
                   doneParentIds={doneParentIds}
                   onDeleteColumn={columns.length > 1 && !isPinned ? handleDeleteColumn : undefined}
-                  composerSlot={column.id === targetIntakeColumnId ? inlineTaskComposer : undefined}
                 />
               );
             })}
@@ -1304,6 +1071,176 @@ export default function KanbanBoard() {
           )}
         </Droppable>
       </DragDropContext>
+
+      {/* Add Task Modal */}
+      {isNewTaskModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 p-3 animate-in fade-in duration-100"
+          onKeyDown={handleModalKeyDown}
+        >
+          <div
+            className="relative flex flex-col w-[620px] max-w-[95vw] max-h-[90vh] rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-md p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors overflow-hidden"
+            onPaste={handleModalPaste}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#21262d] shrink-0">
+              <h3 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc]">
+                {t('newTask.modalTitle')}
+              </h3>
+              <button
+                type="button"
+                onClick={handleCloseAddTask}
+                className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
+                aria-label={t('common.close')}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleCreateTask}
+              className="mt-4 flex flex-col flex-1 min-h-0 overflow-y-auto space-y-4 text-xs pr-1"
+            >
+              <div>
+                <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">
+                  {t('newTask.titleLabel')}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder={t('newTask.titlePlaceholder')}
+                  className="w-full px-3 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-sans transition"
+                />
+              </div>
+
+              <div>
+                <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">
+                  {t('newTask.descLabel')}
+                </label>
+                <textarea
+                  rows={6}
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  placeholder={t('newTask.descPlaceholder')}
+                  className="w-full min-h-[130px] px-3 py-2 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-sans leading-relaxed resize-y transition"
+                />
+              </div>
+
+              {/* Attachments Section */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium">
+                    {t('newTask.attachmentsLabel')}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-sans text-[#4d4d4d] dark:text-[#c9d1d9] bg-[#fafafa] dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] transition cursor-pointer"
+                  >
+                    <ImagePlus className="h-3 w-3" />
+                    <span>{t('newTask.pasteHint')}</span>
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileInputChange}
+                  />
+                </div>
+
+                {/* Thumbnail gallery */}
+                {newAttachments.length > 0 ? (
+                  <div className="flex flex-wrap gap-2.5 p-2 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22]/50 max-h-40 overflow-y-auto">
+                    {newAttachments.map((att, idx) => (
+                      <div
+                        key={att.id}
+                        className="group relative flex flex-col items-center w-24 rounded-md overflow-hidden border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#0d1117] shadow-2xs hover:border-[#171717] dark:hover:border-[#f0f6fc] transition"
+                      >
+                        <div
+                          className="relative w-full h-16 cursor-pointer overflow-hidden bg-black/5 dark:bg-white/5"
+                          onClick={() => setPreviewLightbox({ src: att.dataUrl, alt: att.name })}
+                          title={att.name}
+                        >
+                          <img
+                            src={att.dataUrl}
+                            alt={att.name}
+                            className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                          />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <ZoomIn className="h-4 w-4 text-white drop-shadow" />
+                          </div>
+                        </div>
+                        <div className="w-full px-1.5 py-0.5 flex items-center justify-between text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] border-t border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22]">
+                          <span className="truncate max-w-[60px]" title={att.name}>
+                            #{idx + 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveAttachment(att.id);
+                            }}
+                            className="p-0.5 rounded text-[#8f8f8f] hover:text-[#ef4444] dark:hover:text-[#f87171] transition cursor-pointer"
+                            aria-label={t('newTask.removeAttachment')}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex flex-col items-center justify-center p-3 rounded-md border border-dashed border-[#d4d4d8] dark:border-[#30363d] bg-[#fafafa]/50 dark:bg-[#161b22]/30 text-center cursor-pointer hover:bg-[#fafafa] dark:hover:bg-[#161b22] transition"
+                  >
+                    <Paperclip className="h-4 w-4 text-[#8f8f8f] dark:text-[#8b949e] mb-1" />
+                    <span className="text-[11px] font-sans text-[#666666] dark:text-[#8b949e]">
+                      {t('newTask.pasteHint')}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block font-mono text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">
+                  {t('newTask.modelLabel')}
+                </label>
+                <select
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-mono text-xs cursor-pointer transition"
+                >
+                  {Array.from(new Set([selectedModel, ...(availableModels.length > 0 ? availableModels : [settings.model || 'gemini-3.8-flash-high'])])).map((m) => (
+                    <option key={m} value={m} className="dark:bg-[#161b22] dark:text-[#f0f6fc]">
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#ebebeb] dark:border-[#21262d] shrink-0">
+                <button
+                  type="button"
+                  onClick={handleCloseAddTask}
+                  className="px-3 py-1.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer font-sans"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  type="submit"
+                  className="px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white font-medium transition cursor-pointer font-sans shadow-xs border border-transparent dark:border-[#30363d]"
+                >
+                  {t('common.create')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Image Preview Lightbox */}
       {previewLightbox && (
@@ -1328,7 +1265,7 @@ export default function KanbanBoard() {
             onClick={(e) => e.stopPropagation()}
             onContextMenu={(e) => e.preventDefault()}
           >
-            <div className="px-3 py-1 text-[10px] font-medium text-[#71717a] dark:text-[#8b949e] border-b border-[#f4f4f5] dark:border-[#21262d] mb-1 truncate">
+            <div className="px-3 py-1 text-[10px] font-semibold text-[#a1a1aa] dark:text-[#8b949e] uppercase tracking-wider border-b border-[#f4f4f5] dark:border-[#21262d] mb-1 truncate">
               {t('board.boardContextMenu', { name: targetBoard.name })}
             </div>
             <button
@@ -1367,6 +1304,12 @@ export default function KanbanBoard() {
           </div>
         );
       })()}
+
+      {/* Create Board Modal */}
+      <CreateBoardModal
+        isOpen={isCreateBoardModalOpen}
+        onClose={() => setIsCreateBoardModalOpen(false)}
+      />
     </div>
   );
 }

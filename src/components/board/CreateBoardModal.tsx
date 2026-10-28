@@ -115,7 +115,9 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#161b22]">
           <div className="flex items-center space-x-2.5">
-            <Layers className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
+            <div className="p-1.5 rounded-lg bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] shadow-xs text-[#171717] dark:text-[#f0f6fc]">
+              <Layers className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
+            </div>
             <div>
               <h2 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">
                 {t('createBoard.title')}

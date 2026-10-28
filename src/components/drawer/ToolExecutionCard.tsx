@@ -160,10 +160,12 @@ function CompactContextExecutionCard({ tool }: { tool: ToolExecution }) {
           </button>
 
           {/* Icon */}
-          <Minimize2 className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+          <div className="p-1 rounded-sm bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/60 shrink-0">
+            <Minimize2 className="h-3 w-3" />
+          </div>
 
           {/* Badge */}
-          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium shrink-0 select-none bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60">
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold uppercase tracking-wider shrink-0 select-none bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60">
             Оптимизация
           </span>
 
@@ -494,7 +496,7 @@ function CollectSubagentExecutionCard({ tool }: { tool: ToolExecution }) {
         <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
           <FolderDown className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0 select-none" />
 
-          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border border-sky-200 dark:border-sky-800/60 bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 shrink-0">
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase border border-sky-200 dark:border-sky-800/60 bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 shrink-0">
             {t('tools.collect.badge')}
           </span>
 
@@ -520,7 +522,7 @@ function CollectSubagentExecutionCard({ tool }: { tool: ToolExecution }) {
                 return (
                   <span
                     key={id}
-                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border border-purple-200 dark:border-purple-800/60 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 shrink-0"
+                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase border border-purple-200 dark:border-purple-800/60 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 shrink-0"
                   >
                     {t('subagents.subagentWithNum', { index: num })}
                   </span>
@@ -621,7 +623,7 @@ function CollectSubagentExecutionCard({ tool }: { tool: ToolExecution }) {
 
                     <span
                       style={roleBadgeStyle}
-                      className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border shrink-0 select-none"
+                      className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase border shrink-0 select-none"
                     >
                       {formatSubagentRoleDisplay(sub.role, sub.number, sub.isBoardSubtask, language)}
                     </span>
@@ -859,7 +861,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
             <span
               style={roleBadgeStyle}
-              className="px-2 py-0.5 rounded text-[11px] font-mono font-medium border shrink-0 select-none"
+              className="px-2 py-0.5 rounded text-[11px] font-mono font-bold tracking-wider border shrink-0 select-none uppercase"
             >
               {formatSubagentRoleDisplay(rawRole, subagentNumber || 1, false, language)}
             </span>
@@ -996,7 +998,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
               <Users className="h-4 w-4 text-purple-600 dark:text-purple-400" />
             </div>
 
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border border-purple-200 dark:border-purple-800/60 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 shrink-0">
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider uppercase border border-purple-200 dark:border-purple-800/60 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 shrink-0">
               {t('tools.subagent_list.badge')}
             </span>
 
@@ -1078,7 +1080,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
 
                     <span
                       style={roleBadgeStyle}
-                      className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border shrink-0 select-none"
+                      className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider border shrink-0 select-none"
                     >
                       {formatSubagentRoleDisplay(sub.role, sub.number, false, language)}
                     </span>
@@ -1726,7 +1728,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
             </button>
 
             {/* Label: Analyzed (cyan/teal tactile badge) */}
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium shrink-0 select-none bg-[#ecfeff] dark:bg-[#083344] text-[#0e7490] dark:text-[#22d3ee] border border-[#a5f3fc] dark:border-[#155e75]">
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold uppercase tracking-wider shrink-0 select-none bg-[#ecfeff] dark:bg-[#083344] text-[#0e7490] dark:text-[#22d3ee] border border-[#a5f3fc] dark:border-[#155e75]">
               Analyzed
             </span>
 
@@ -1784,9 +1786,9 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
               />
             </button>
 
-            {/* Label: Created or Edited or Failed edit */}
+            {/* Label: Created or Edited or FAILED EDIT */}
             <span
-              className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-medium shrink-0 select-none ${
+              className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold uppercase tracking-wider shrink-0 select-none ${
                 isFailed
                   ? 'bg-[#fef2f2] dark:bg-[#3b1219] text-[#b91c1c] dark:text-[#ff7b72] border border-[#fecaca] dark:border-[#da3633]'
                   : opLabel === 'Created'
@@ -1794,7 +1796,7 @@ export default function ToolExecutionCard({ tool }: ToolExecutionCardProps) {
                   : 'bg-[#eff6ff] dark:bg-[#172554] text-[#1d4ed8] dark:text-[#60a5fa] border border-[#bfdbfe] dark:border-[#1e40af]'
               }`}
             >
-              {isFailed ? 'Failed edit' : opLabel}
+              {isFailed ? 'FAILED EDIT' : opLabel}
             </span>
 
             {/* Brand SVG language badge or document icon */}

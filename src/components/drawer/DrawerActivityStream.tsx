@@ -790,11 +790,11 @@ function AgentExplanationCard({
             <MarkdownContent content={effectiveLeadingText} />
           )}
           {effectiveTodos ? (
-            <div className="divide-y divide-[#f4f4f5] dark:divide-[#21262d]/60 pt-1">
+            <div className="space-y-1.5 pt-1">
               {effectiveTodos.map((item, i) => (
                 <div
                   key={item.id || i}
-                  className="flex items-start space-x-2 text-xs font-sans py-2"
+                  className="flex items-start space-x-2 text-xs font-sans p-2 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#f0f0f0] dark:border-[#21262d]"
                 >
                   <span className="mt-0.5 shrink-0">
                     {item.status === 'completed' ? (
@@ -814,7 +814,7 @@ function AgentExplanationCard({
                   >
                     {item.content}
                   </span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded border shrink-0 text-[#71717a] dark:text-[#8b949e] border-[#e4e4e7] dark:border-[#30363d]">
+                  <span className="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded border shrink-0 text-[#71717a] dark:text-[#8b949e] border-[#e4e4e7] dark:border-[#30363d]">
                     {item.status === 'completed'
                       ? t('status.done')
                       : item.status === 'in_progress'
@@ -1124,13 +1124,13 @@ export default function DrawerActivityStream({
                 <div className="flex items-center space-x-2 shrink-0">
                   <span
                     style={getRoleBadgeStyle(activeSubagentRole, matchedPersona?.color)}
-                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border"
+                    className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border"
                   >
-                    {activeSubagentRole || 'general'}
+                    {(activeSubagentRole || 'general').toUpperCase()}
                   </span>
                 </div>
               </div>
-              <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed select-text font-sans pt-1">
+              <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed select-text font-sans bg-[#fafafa] dark:bg-[#161b22] p-3 rounded-md border border-[#ebebeb] dark:border-[#30363d]">
                 <MarkdownContent
                   content={activeSubagentPrompt || t('drawer.subagentInstruction')}
                   onImageClick={handleOpenLightbox}
@@ -1157,7 +1157,7 @@ export default function DrawerActivityStream({
                           className="h-20 w-28 object-cover transition-transform group-hover:scale-105"
                         />
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-opacity opacity-0 group-hover:opacity-100">
-                          <ZoomIn className="h-4 w-4 text-white" />
+                          <ZoomIn className="h-4 w-4 text-white drop-shadow-md" />
                         </div>
                       </div>
                     ))}
@@ -1206,7 +1206,7 @@ export default function DrawerActivityStream({
                           className="h-20 w-28 object-cover transition-transform group-hover:scale-105"
                         />
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-opacity opacity-0 group-hover:opacity-100">
-                          <ZoomIn className="h-4 w-4 text-white" />
+                          <ZoomIn className="h-4 w-4 text-white drop-shadow-md" />
                         </div>
                       </div>
                     ))}
