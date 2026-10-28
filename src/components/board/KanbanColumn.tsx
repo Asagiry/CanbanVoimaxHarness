@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, memo } from 'react';
 import { Draggable, Droppable } from '@hello-pangea/dnd';
 import { ChevronDown } from 'lucide-react';
-import { PipelineColumn, KanbanTask } from '../../types';
+import { PipelineColumn, KanbanTask, getHookScript } from '../../types';
 import KanbanCard from '../card/KanbanCard';
 import ColumnContextMenu from './ColumnContextMenu';
+import ColumnHookBadge from './ColumnHookBadge';
 import { useCortexStore } from '../../stores/cortexStore';
 import { isDoneColumnDef, sortDoneTasksByCompletionDateDesc } from '../../stores/boardStore';
 import AgentIcon from '../common/AgentIcon';
@@ -93,6 +94,13 @@ function KanbanColumn({
     ? (assignedPersona?.color || getDeterministicAgentColor(column.persona))
     : (column.color || getDeterministicAgentColor(column.id));
 
+  const enterHookDef =
+    column.hooks?.['on_enter'] ?? (column.onEnterScript ? { script: column.onEnterScript } : undefined);
+  const leaveHookDef =
+    column.hooks?.['on_leave'] ?? column.hooks?.['on_exit'] ?? column.hooks?.['on_finish'];
+  const hasEnterHook = Boolean(getHookScript(enterHookDef));
+  const hasLeaveHook = Boolean(getHookScript(leaveHookDef));
+
   return (
     <Draggable draggableId={column.id} index={index} isDragDisabled={isPinned}>
       {(colProvided, colSnapshot) => {
@@ -143,13 +151,28 @@ function KanbanColumn({
             ? t('board.columnPinnedTitle')
             : t('board.columnDragTitle')
         }
-        className={`flex items-center h-9 px-3 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] hover:bg-[#fafafa] dark:hover:bg-[#1c2128] transition-colors ${
+        className={`flex items-center justify-between h-9 px-2.5 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] hover:bg-[#fafafa] dark:hover:bg-[#1c2128] transition-colors ${
           isPinned ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
         } group overflow-visible`}
       >
-        <div className="flex items-center gap-2 min-w-0 w-full">
+        {/* Left Slot: On Enter Hook Badge or invisible spacer */}
+        <div className="w-6 shrink-0 flex items-center justify-start">
+          {enterHookDef && hasEnterHook ? (
+            <ColumnHookBadge
+              side="left"
+              hookDef={enterHookDef}
+              columnTitle={column.title}
+              accentColor={assignedAgentColor}
+            />
+          ) : (
+            <span className="w-5 h-5 block" aria-hidden="true" />
+          )}
+        </div>
+
+        {/* Center Slot: Agent icon + Column Title + Task count */}
+        <div className="flex-1 min-w-0 flex items-center justify-center gap-1.5 px-1 overflow-hidden">
           <AgentIcon name={effectiveIcon} className="h-3.5 w-3.5 shrink-0 text-[#171717] dark:text-[#f0f6fc]" />
-          <h3 className="text-[13px] font-semibold text-[#171717] dark:text-[#f0f6fc] truncate leading-[1.35]">
+          <h3 className="text-[13px] font-semibold text-[#171717] dark:text-[#f0f6fc] truncate text-center leading-[1.35]">
             {column.title}
           </h3>
           {/* Task Counter (same baseline as the title) */}
@@ -160,6 +183,20 @@ function KanbanColumn({
           >
             {t('board.totalTasks', { count: displayTasks.length })}
           </span>
+        </div>
+
+        {/* Right Slot: On Leave Hook Badge or invisible spacer */}
+        <div className="w-6 shrink-0 flex items-center justify-end">
+          {leaveHookDef && hasLeaveHook ? (
+            <ColumnHookBadge
+              side="right"
+              hookDef={leaveHookDef}
+              columnTitle={column.title}
+              accentColor={assignedAgentColor}
+            />
+          ) : (
+            <span className="w-5 h-5 block" aria-hidden="true" />
+          )}
         </div>
       </div>
 
@@ -231,7 +268,9 @@ function areColumnPropsEqual(prev: KanbanColumnProps, next: KanbanColumnProps): 
     cA.icon !== cB.icon ||
     cA.persona !== cB.persona ||
     cA.wipLimit !== cB.wipLimit ||
-    cA.terminal !== cB.terminal
+    cA.terminal !== cB.terminal ||
+    cA.onEnterScript !== cB.onEnterScript ||
+    cA.hooks !== cB.hooks
   ) {
     return false;
   }
