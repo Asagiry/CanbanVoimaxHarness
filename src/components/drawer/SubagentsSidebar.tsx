@@ -41,13 +41,15 @@ export function formatSubagentDisplayTitle(title?: string | null, lang?: Languag
 
 function getSubagentRoleLabel(role: string, isRu: boolean): string {
   const r = role.trim().toLowerCase();
-  if (r === 'architect') return isRu ? 'АРХИТЕКТОР' : 'ARCHITECT';
-  if (r === 'developer' || r === 'dev') return isRu ? 'РАЗРАБОТЧИК' : 'DEVELOPER';
-  if (r === 'reviewer' || r === 'review') return isRu ? 'РЕВЬЮЕР' : 'REVIEWER';
-  if (r === 'scout') return isRu ? 'СКАУТ' : 'SCOUT';
-  if (r === 'explorer') return isRu ? 'ИССЛЕДОВАТЕЛЬ' : 'EXPLORER';
+  if (r === 'architect') return isRu ? 'Архитектор' : 'Architect';
+  if (r === 'developer' || r === 'dev') return isRu ? 'Разработчик' : 'Developer';
+  if (r === 'reviewer' || r === 'review') return isRu ? 'Ревьюер' : 'Reviewer';
+  if (r === 'scout') return isRu ? 'Скаут' : 'Scout';
+  if (r === 'explorer') return isRu ? 'Исследователь' : 'Explorer';
+  if (r === 'subtask') return isRu ? 'Подзадача' : 'Subtask';
+  if (r === 'subagent' || r === 'general' || !r) return isRu ? 'Субагент' : 'Subagent';
   if (r === 'cvh-dev') return 'CVH-DEV';
-  return role.trim().toUpperCase();
+  return role.trim().charAt(0).toUpperCase() + role.trim().slice(1);
 }
 
 export function formatSubagentRoleDisplay(
@@ -62,12 +64,12 @@ export function formatSubagentRoleDisplay(
     if (role && r && r !== 'general') {
       return getSubagentRoleLabel(role, isRu);
     }
-    return isRu ? 'ПОДЗАДАЧА' : 'SUBTASK';
+    return isRu ? 'Подзадача' : 'Subtask';
   }
 
   const r = (role || '').trim().toLowerCase();
   const hasRole = Boolean(role && r && r !== 'general');
-  const baseName = hasRole ? getSubagentRoleLabel(role!, isRu) : (isRu ? 'СУБАГЕНТ' : 'SUBAGENT');
+  const baseName = hasRole ? getSubagentRoleLabel(role!, isRu) : (isRu ? 'Субагент' : 'Subagent');
 
   if (subIndex != null) {
     return `${baseName} #${subIndex}`;
@@ -535,7 +537,7 @@ export default function SubagentsSidebar({
                       (p) => p.role.toLowerCase() === (sub.role || '').toLowerCase()
                     );
                     const roleBadgeStyle = getRoleBadgeStyle(sub.role, matchedPersona?.color);
-                    const stageBadge = (sub.role || 'developer').toUpperCase();
+                    const stageBadge = getSubagentRoleLabel(sub.role || 'developer', language === 'ru');
 
                     return (
                       <div
@@ -561,7 +563,7 @@ export default function SubagentsSidebar({
                             <GitBranch className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400 shrink-0" />
                             <span
                               style={roleBadgeStyle}
-                              className="px-2 py-0.5 rounded text-[11px] font-mono font-bold tracking-wider uppercase border shrink-0 select-none"
+                              className="px-2 py-0.5 rounded text-[11px] font-mono font-medium border shrink-0 select-none"
                             >
                               {stageBadge}
                             </span>
@@ -703,7 +705,7 @@ export default function SubagentsSidebar({
                             )}
                             <span
                               style={roleBadgeStyle}
-                              className="px-2 py-0.5 rounded text-[11px] font-mono font-bold tracking-wider uppercase border shrink-0 select-none"
+                              className="px-2 py-0.5 rounded text-[11px] font-mono font-medium border shrink-0 select-none"
                             >
                               {roleDisplay}
                             </span>

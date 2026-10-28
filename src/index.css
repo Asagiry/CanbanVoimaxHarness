@@ -32,10 +32,14 @@
   * {
     box-sizing: border-box;
     border-color: #ebebeb;
+    scrollbar-width: thin;
+    scrollbar-color: #d4d4d8 transparent;
   }
 
+  .dark,
   .dark * {
     border-color: #21262d;
+    scrollbar-color: #30363d transparent;
   }
 
   body {
@@ -59,8 +63,13 @@
   }
 
   .dark ::selection {
-    background-color: #21262d;
+    background-color: #1e3a5f;
     color: #f0f6fc;
+  }
+
+  :focus-visible {
+    outline: 2px solid #58a6ff;
+    outline-offset: 1px;
   }
 }
 
@@ -84,11 +93,11 @@
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background: #21262d;
+  background: #30363d;
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: #30363d;
+  background: #484f58;
 }
 
 /* Universal Monospace & Tabular figures */

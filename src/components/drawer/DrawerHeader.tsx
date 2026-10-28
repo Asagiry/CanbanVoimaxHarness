@@ -207,7 +207,7 @@ export default function DrawerHeader({
               </span>
               <span
                 style={getRoleBadgeStyle(activeSubagentRole, matchedPersona?.color)}
-                className="px-2 py-0.5 rounded text-[11px] font-mono font-bold uppercase tracking-wider border shrink-0 select-none"
+                className="px-2 py-0.5 rounded text-[11px] font-mono font-medium border shrink-0 select-none"
               >
                 {formatSubagentRoleDisplay(activeSubagentRole, subagentNumber || 1, isBoardSubtask, language)}
               </span>
