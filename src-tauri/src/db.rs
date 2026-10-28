@@ -149,6 +149,7 @@ pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
                  skip_worktree INTEGER NOT NULL DEFAULT 0,
                   created_at INTEGER NOT NULL,
                   updated_at INTEGER NOT NULL,
+                  completed_at INTEGER,
                   position REAL NOT NULL DEFAULT 0.0,
                   hook_states TEXT,
                   FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE CASCADE
@@ -208,6 +209,7 @@ pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
         let _ = conn.execute("ALTER TABLE tasks ADD COLUMN tags TEXT", []);
         let _ = conn.execute("ALTER TABLE tasks ADD COLUMN position REAL NOT NULL DEFAULT 0.0", []);
         let _ = conn.execute("ALTER TABLE tasks ADD COLUMN hook_states TEXT", []);
+        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN completed_at INTEGER", []);
         let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_stage_pos ON tasks(stage_id, position)", []);
 
         auto_migrate_if_needed(&mut conn, root);
@@ -275,8 +277,8 @@ fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) {
                             id, title, description, stage_id, board_id, worktree_path, branch, verdict,
                             custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
                             handover_summary, cover_image, priority, current_tokens, skip_worktree,
-                            created_at, updated_at, attachments, tags, position, hook_states
-                        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)",
+                            created_at, updated_at, completed_at, attachments, tags, position, hook_states
+                        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26)",
                         params![
                             t.id,
                             t.title,
@@ -299,6 +301,7 @@ fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) {
                             skip_wt,
                             t.created_at,
                             t.updated_at,
+                            t.completed_at,
                             attachments_json,
                             tags_json,
                             pos_val,
@@ -486,7 +489,7 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
             "SELECT id, title, description, stage_id, board_id, worktree_path, branch, verdict,
                     custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
                     handover_summary, cover_image, priority, current_tokens, skip_worktree,
-                    created_at, updated_at, attachments, tags, position, hook_states
+                    created_at, updated_at, attachments, tags, position, hook_states, completed_at
              FROM tasks
              ORDER BY position ASC, created_at ASC",
         )
@@ -519,12 +522,13 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
             let tags_raw: Option<String> = row.get(22).ok();
             let position: Option<f64> = row.get(23).ok();
             let hook_states_raw: Option<String> = row.get(24).ok();
+            let completed_at: Option<i64> = row.get(25).ok();
 
             Ok((
                 id, title, description, stage_id, board_id, worktree_path, branch, verdict,
                 custom_flow_raw, status, model, parent_id, subtask_index_i64, waiting_for_subtask_id,
                 handover_summary, cover_image, priority, current_tokens_i64, skip_worktree_i64,
-                created_at, updated_at, attachments_raw, tags_raw, position, hook_states_raw,
+                created_at, updated_at, attachments_raw, tags_raw, position, hook_states_raw, completed_at,
             ))
         })
         .map_err(|e| format!("Query tasks failed: {}", e))?;
@@ -554,7 +558,7 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
             id, title, description, stage_id, board_id, worktree_path, branch, verdict,
             custom_flow_raw, status, model, parent_id, subtask_index_i64, waiting_for_subtask_id,
             handover_summary, cover_image, priority, current_tokens_i64, skip_worktree_i64,
-            created_at, updated_at, attachments_raw, tags_raw, position, hook_states_raw,
+            created_at, updated_at, attachments_raw, tags_raw, position, hook_states_raw, completed_at,
         ) = row_res.map_err(|e| format!("Row extraction failed: {}", e))?;
 
         let custom_flow = custom_flow_raw.and_then(|s| serde_json::from_str(&s).ok());
@@ -588,6 +592,7 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
             skip_worktree: Some(skip_worktree_i64 != 0),
             created_at,
             updated_at,
+            completed_at,
             position,
             hook_states,
         });
@@ -604,7 +609,7 @@ pub fn db_get_task(root: &Path, task_id: &str) -> Result<Option<Task>, String> {
             "SELECT id, title, description, stage_id, board_id, worktree_path, branch, verdict,
                     custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
                     handover_summary, cover_image, priority, current_tokens, skip_worktree,
-                    created_at, updated_at, attachments, tags, position, hook_states
+                    created_at, updated_at, attachments, tags, position, hook_states, completed_at
              FROM tasks
              WHERE id = ?1 OR LOWER(id) = LOWER(?1)
              LIMIT 1",
@@ -645,6 +650,7 @@ pub fn db_get_task(root: &Path, task_id: &str) -> Result<Option<Task>, String> {
     let tags_raw: Option<String> = row.get(22).ok();
     let position: Option<f64> = row.get(23).ok();
     let hook_states_raw: Option<String> = row.get(24).ok();
+    let completed_at: Option<i64> = row.get(25).ok();
 
     // Load todos for this task
     let mut todo_stmt = conn
@@ -693,6 +699,7 @@ pub fn db_get_task(root: &Path, task_id: &str) -> Result<Option<Task>, String> {
         skip_worktree: Some(skip_worktree_i64 != 0),
         created_at,
         updated_at,
+        completed_at,
         position,
         hook_states,
     }))
@@ -719,8 +726,8 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
             id, title, description, stage_id, board_id, worktree_path, branch, verdict,
             custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
             handover_summary, cover_image, priority, current_tokens, skip_worktree,
-            created_at, updated_at, attachments, tags, position, hook_states
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)
+            created_at, updated_at, completed_at, attachments, tags, position, hook_states
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26)
         ON CONFLICT(id) DO UPDATE SET
             title = excluded.title,
             description = excluded.description,
@@ -741,6 +748,7 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
             current_tokens = excluded.current_tokens,
             skip_worktree = excluded.skip_worktree,
             updated_at = excluded.updated_at,
+            completed_at = excluded.completed_at,
             attachments = excluded.attachments,
             tags = excluded.tags,
             position = excluded.position,
@@ -767,6 +775,7 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
             skip_wt,
             task.created_at,
             task.updated_at,
+            task.completed_at,
             attachments_json,
             tags_json,
             pos_val,
@@ -817,8 +826,8 @@ pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
                 id, title, description, stage_id, board_id, worktree_path, branch, verdict,
                 custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
                 handover_summary, cover_image, priority, current_tokens, skip_worktree,
-                created_at, updated_at, attachments, tags, position, hook_states
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)
+                created_at, updated_at, completed_at, attachments, tags, position, hook_states
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26)
             ON CONFLICT(id) DO UPDATE SET
                 title = excluded.title,
                 description = excluded.description,
@@ -839,6 +848,7 @@ pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
                 current_tokens = excluded.current_tokens,
                 skip_worktree = excluded.skip_worktree,
                 updated_at = excluded.updated_at,
+                completed_at = excluded.completed_at,
                 attachments = excluded.attachments,
                 tags = excluded.tags,
                 position = excluded.position,
@@ -865,6 +875,7 @@ pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
                 skip_wt,
                 task.created_at,
                 task.updated_at,
+                task.completed_at,
                 attachments_json,
                 tags_json,
                 pos_val,
@@ -1749,6 +1760,7 @@ mod tests {
             skip_worktree: Some(false),
             created_at: 1000,
             updated_at: 1000,
+            completed_at: Some(1500),
             position: Some(0.0),
             hook_states: Some(serde_json::json!({
                 "on_enter": {
@@ -1830,6 +1842,7 @@ mod tests {
             skip_worktree: Some(false),
             created_at: 1010,
             updated_at: 1010,
+            completed_at: None,
             position: Some(1.0),
             hook_states: None,
         };
@@ -1837,6 +1850,8 @@ mod tests {
 
         let all_tasks = db_get_all_tasks(root).expect("get all tasks");
         assert_eq!(all_tasks.len(), 2);
+        assert_eq!(all_tasks[0].completed_at, Some(1500));
+        assert_eq!(all_tasks[1].completed_at, None);
 
         // Delete parent task -> cascade deletes subtask
         db_delete_task(root, "CVH-010").expect("delete parent");
@@ -1884,6 +1899,7 @@ mod tests {
             skip_worktree: None,
             created_at: 1000,
             updated_at: 1000,
+            completed_at: None,
             position: None,
             hook_states: None,
         };

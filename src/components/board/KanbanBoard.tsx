@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
-import { useBoardStore } from '../../stores/boardStore';
+import { useBoardStore, isDoneColumnDef, sortDoneTasksByCompletionDateDesc } from '../../stores/boardStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import KanbanColumn from './KanbanColumn';
@@ -176,12 +176,7 @@ export default function KanbanBoard() {
 
     const isDoneCol = (colId: string) => {
       const col = columns.find((c) => c.id === colId);
-      return Boolean(
-        col?.terminal ||
-        colId === 'ready' ||
-        col?.title.toLowerCase().includes('готов') ||
-        col?.title.toLowerCase().includes('done')
-      );
+      return isDoneColumnDef(col);
     };
 
     const firstColId = columns.find((c) => c.isIntake)?.id ?? columns[0]?.id ?? 'backlog';
@@ -197,11 +192,21 @@ export default function KanbanBoard() {
         }
         return false;
       });
-      return isDone ? colTasks.filter((t) => !t.parentId) : colTasks;
+      return isDone
+        ? colTasks
+            .filter((t) => !t.parentId)
+            .slice()
+            .sort(sortDoneTasksByCompletionDateDesc)
+        : colTasks;
     };
 
     if (sourceColId === destColId) {
       if (sourceIndex === destIndex) return;
+      if (isDoneCol(destColId)) {
+        // Done column tasks are strictly sorted by completion date (newest first).
+        // Manual reordering within Done column is a no-op to preserve chronological ordering.
+        return;
+      }
 
       const colDisplayTasks = getColumnDisplayTasks(destColId);
       const otherTasks = colDisplayTasks.filter((t) => t.id !== draggableId);
@@ -262,12 +267,7 @@ export default function KanbanBoard() {
     const [movedTask] = originalTasks.splice(taskPos, 1);
     const destColDef = columns.find((c) => c.id === destColId);
     const effectiveBoardId = activeBoardId || 'development';
-    const isDone = Boolean(
-      destColDef?.terminal ||
-      destColId === 'ready' ||
-      destColDef?.title.toLowerCase().includes('готов') ||
-      destColDef?.title.toLowerCase().includes('done')
-    );
+    const isDone = isDoneCol(destColId);
     const targetStatus = isDone
       ? 'done'
       : destColDef?.persona
@@ -280,6 +280,7 @@ export default function KanbanBoard() {
       boardId: effectiveBoardId,
       persona: destColDef?.persona || movedTask.persona,
       status: targetStatus,
+      completedAt: isDone ? (movedTask.completedAt || Date.now()) : undefined,
       updatedAt: Date.now(),
       stageEnteredAt: Date.now(),
     };
@@ -720,6 +721,36 @@ export default function KanbanBoard() {
     return set;
   }, [tasks]);
 
+  const handleBoardWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    // Zooming via Ctrl/Meta + wheel is handled globally by useUiZoom
+    if (e.ctrlKey || e.metaKey) {
+      return;
+    }
+
+    // Horizontal gestures (trackpad, tilt-wheel, or browser-remapped Shift+wheel)
+    // are handled natively by the container's overflow-x-auto
+    if (Math.abs(e.deltaX) > 0) {
+      return;
+    }
+
+    // Explicit horizontal scroll via Shift + Wheel
+    if (e.shiftKey && e.deltaY !== 0) {
+      e.currentTarget.scrollLeft += e.deltaY;
+      return;
+    }
+
+    // Ignore events originating inside any Kanban column (defense-in-depth)
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('[data-kanban-column]')) {
+      return;
+    }
+
+    // Scroll board horizontally only when scrolling over free canvas / board background
+    if (e.deltaY !== 0) {
+      e.currentTarget.scrollLeft += e.deltaY;
+    }
+  }, []);
+
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#fafafa] dark:bg-[#090a0f] transition-colors">
       {/* Board Top Toolbar */}
@@ -990,11 +1021,7 @@ export default function KanbanBoard() {
         <div
           ref={provided.innerRef}
           {...provided.droppableProps}
-          onWheel={(e) => {
-            if (e.deltaY !== 0) {
-              e.currentTarget.scrollLeft += e.deltaY;
-            }
-          }}
+          onWheel={handleBoardWheel}
           className="flex-1 overflow-x-auto overflow-y-hidden p-3.5 relative"
         >
           <div className="flex items-start space-x-3.5 h-full min-w-max pb-1">

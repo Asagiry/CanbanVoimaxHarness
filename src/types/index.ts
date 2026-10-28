@@ -23,6 +23,7 @@ export interface KanbanTask {
   attachments?: string[];
   createdAt?: number;
   updatedAt?: number;
+  completedAt?: number;
   stageEnteredAt?: number;
   priority: TaskPriority;
   columnId: string;
@@ -51,6 +52,7 @@ export interface KanbanTask {
   skipBacklogHook?: boolean;
   skip_backlog_hook?: boolean;
   position?: number;
+  previousStageId?: string;
   hookStates?: TaskHookStates;
 }
 

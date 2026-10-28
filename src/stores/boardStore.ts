@@ -116,6 +116,29 @@ export function sortTasksByPosition(a: KanbanTask, b: KanbanTask): number {
   return (a.createdAt || 0) - (b.createdAt || 0);
 }
 
+export function isDoneColumnDef(col?: { id: string; title?: string; terminal?: boolean } | null): boolean {
+  if (!col) return false;
+  return Boolean(
+    col.terminal ||
+    col.id === 'ready' ||
+    col.title?.toLowerCase().includes('готов') ||
+    col.title?.toLowerCase().includes('done')
+  );
+}
+
+export function getTaskCompletionTime(task: KanbanTask): number {
+  return task.completedAt || task.stageEnteredAt || task.updatedAt || task.createdAt || 0;
+}
+
+export function sortDoneTasksByCompletionDateDesc(a: KanbanTask, b: KanbanTask): number {
+  const timeA = getTaskCompletionTime(a);
+  const timeB = getTaskCompletionTime(b);
+  if (timeB !== timeA) {
+    return timeB - timeA;
+  }
+  return (b.createdAt || 0) - (a.createdAt || 0);
+}
+
 function normalizeKanbanTask(raw: any): KanbanTask | null {
   if (!raw || typeof raw.id !== 'string' || raw.id.trim() === '') return null;
   const { boards, activeBoardId, columns: currentColumns } = useBoardStore.getState();
@@ -187,6 +210,9 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
     : (typeof raw.stage_entered_at === 'number' && Number.isFinite(raw.stage_entered_at)
       ? raw.stage_entered_at
       : undefined);
+  const completedAt = typeof raw.completedAt === 'number' && Number.isFinite(raw.completedAt)
+    ? raw.completedAt
+    : (typeof raw.completed_at === 'number' && Number.isFinite(raw.completed_at) ? raw.completed_at : undefined);
 
   const stageStart = stageEnteredAt || updatedAt || createdAt;
   const isDoneTask = status === 'done';
@@ -253,6 +279,7 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
     attachments: Array.isArray(raw.attachments) ? raw.attachments.filter((a: unknown) => typeof a === 'string') : undefined,
     createdAt,
     updatedAt,
+    completedAt,
     stageEnteredAt,
     priority: (raw.priority as TaskPriority) || 'high',
     columnId,
@@ -288,6 +315,13 @@ function normalizeKanbanTask(raw: any): KanbanTask | null {
       : (typeof raw.current_tokens === 'number' ? raw.current_tokens : undefined),
     skipWorktree,
     position: typeof raw.position === 'number' && Number.isFinite(raw.position) ? raw.position : undefined,
+    previousStageId: typeof raw.previousStageId === 'string' && raw.previousStageId.trim() !== ''
+      ? raw.previousStageId.trim()
+      : (typeof raw.previous_stage_id === 'string' && raw.previous_stage_id.trim() !== ''
+        ? raw.previous_stage_id.trim()
+        : (typeof raw.fromStage === 'string' && raw.fromStage.trim() !== ''
+          ? raw.fromStage.trim()
+          : (typeof raw.from_stage === 'string' && raw.from_stage.trim() !== '' ? raw.from_stage.trim() : undefined))),
     hookStates: (raw.hookStates || raw.hook_states) && typeof (raw.hookStates || raw.hook_states) === 'object'
       ? (raw.hookStates || raw.hook_states)
       : undefined,
@@ -344,6 +378,7 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
         tags: t.tags ?? null,
         createdAt: t.createdAt || Date.now(),
         updatedAt: Date.now(),
+        completedAt: t.completedAt ?? null,
         skipWorktree: t.skipWorktree ?? false,
         hookStates: t.hookStates ?? null,
       };
@@ -911,6 +946,31 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         const prev = get().tasks.find((t) => t.id === resolvedTaskId || t.id.trim().toLowerCase() === resolvedTaskId.trim().toLowerCase()) ?? task;
         // Local-only timer/UX bookkeeping (backend has no timer fields).
         const sourceColId = options?.sourceColumnId ?? prev.columnId;
+        const sourceCol = columns.find((c) => c.id === sourceColId);
+        const sourceHasLeaveHook = Boolean(
+          sourceCol?.hooks?.['on_leave'] ||
+          sourceCol?.hooks?.['on_exit'] ||
+          sourceCol?.hooks?.['on_finish']
+        );
+        const targetHasEnterHook = Boolean(targetColDef?.hooks?.['on_enter']);
+
+        // Clean up hook states if departing stage had no on_leave hook, or entering stage had no on_enter hook
+        let nextTaskHookStates = mapped.hookStates
+          ? { ...mapped.hookStates }
+          : (prev.hookStates ? { ...prev.hookStates } : undefined);
+        if (!sourceHasLeaveHook && nextTaskHookStates?.on_leave) {
+          const cleaned = { ...nextTaskHookStates };
+          delete cleaned.on_leave;
+          nextTaskHookStates = Object.keys(cleaned).length > 0 ? cleaned : undefined;
+          get().clearHookState(resolvedTaskId, 'on_leave');
+        }
+        if (!targetHasEnterHook && nextTaskHookStates?.on_enter) {
+          const cleaned = { ...nextTaskHookStates };
+          delete cleaned.on_enter;
+          nextTaskHookStates = Object.keys(cleaned).length > 0 ? cleaned : undefined;
+          get().clearHookState(resolvedTaskId, 'on_enter');
+        }
+
         const sourceColIndex = columns.findIndex((c) => c.id === sourceColId);
         const targetColIndex = columns.findIndex((c) => c.id === targetStageId);
         const isRework =
@@ -926,6 +986,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         const merged: KanbanTask = {
           ...mapped,
           columnId: targetStageId,
+          previousStageId: sourceColId,
+          hookStates: nextTaskHookStates,
           boardId: mapped.boardId || prev.boardId || task.boardId || activeBoardId || 'development',
           persona: targetColDef?.persona || prev.persona,
           verdict: backendTask.verdict ? mapped.verdict : prev.verdict,
@@ -945,10 +1007,13 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           isTimerRunning: mapped.status === 'running',
           returnsCount: isRework ? prev.returnsCount + 1 : prev.returnsCount,
         };
-        const isTerminalMove = targetStageId === 'ready' || targetColDef?.terminal === true;
+        const isTerminalMove = isDoneColumnDef(targetColDef) || targetStageId === 'ready';
         if (isTerminalMove) {
           merged.waitingForSubtaskId = undefined;
           merged.status = 'done';
+          merged.completedAt = merged.completedAt || Date.now();
+        } else {
+          merged.completedAt = undefined;
         }
         const updatedTasks = get()
           .tasks.map((t) =>
@@ -1006,10 +1071,13 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         const mapped = mapBackendTaskToKanban(backendTask);
         const { tasks, columns } = get();
         const targetColDef = columns.find((c) => c.id === targetStageId);
-        const isTerminalMove = targetStageId === 'ready' || targetColDef?.terminal === true;
+        const isTerminalMove = isDoneColumnDef(targetColDef) || targetStageId === 'ready';
         if (isTerminalMove) {
           mapped.waitingForSubtaskId = undefined;
           mapped.status = 'done';
+          mapped.completedAt = mapped.completedAt || Date.now();
+        } else {
+          mapped.completedAt = undefined;
         }
         const prev = tasks.find((t) => t.id === mapped.id);
         const preservedTodos = mapped.todos !== undefined ? mapped.todos : prev?.todos;

@@ -823,6 +823,7 @@ pub async fn internal_create_task(
         skip_worktree: skip_worktree.or(Some(false)),
         created_at: now,
         updated_at: now,
+        completed_at: None,
         position: Some(next_pos),
         hook_states: None,
     };
@@ -1275,6 +1276,7 @@ pub async fn internal_create_subtask(
         skip_worktree: parent_skip_wt,
         created_at: now,
         updated_at: now,
+        completed_at: None,
         position: Some(next_subtask_pos),
         hook_states: tasks[parent_idx].hook_states.clone(),
     };
@@ -1648,6 +1650,9 @@ pub fn propagate_parent_subtask_advance(
     // 1. Ensure the completed subtask has status "done"
     if let Some(sub_idx) = tasks.iter().position(|t| task_id_matches(&t.id, completed_subtask_id)) {
         tasks[sub_idx].status = Some("done".to_string());
+        if tasks[sub_idx].completed_at.is_none() {
+            tasks[sub_idx].completed_at = Some(Utc::now().timestamp_millis());
+        }
         tasks[sub_idx].updated_at = Utc::now().timestamp_millis();
     }
 
@@ -1720,12 +1725,19 @@ pub fn propagate_parent_subtask_advance(
             tasks[parent_idx].stage_id = next_col.id.clone();
             tasks[parent_idx].verdict = Some(verdict.unwrap_or("APPROVED").to_string());
             tasks[parent_idx].status = Some("done".to_string());
+            if tasks[parent_idx].completed_at.is_none() {
+                tasks[parent_idx].completed_at = Some(Utc::now().timestamp_millis());
+            }
             tasks[parent_idx].updated_at = Utc::now().timestamp_millis();
 
             // Also mark any child subtasks of this parent as done so they collapse into parent (§ 3)
             for sub in tasks.iter_mut() {
                 if sub.parent_id.as_deref() == Some(&parent_id) {
                     sub.status = Some("done".to_string());
+                    if sub.completed_at.is_none() {
+                        sub.completed_at = Some(Utc::now().timestamp_millis());
+                    }
+                    sub.updated_at = Utc::now().timestamp_millis();
                 }
             }
 
@@ -1799,6 +1811,7 @@ pub fn propagate_parent_subtask_advance(
                 skip_worktree: parent_skip_wt,
                 created_at: now,
                 updated_at: now,
+                completed_at: None,
                 position: Some(next_subtask_pos),
                 hook_states: tasks[parent_idx].hook_states.clone(),
             };
@@ -2741,7 +2754,12 @@ pub async fn internal_move_task_stage(
         current_task.status = Some("idle".to_string());
     }
     if is_terminal_col || current_task.status.as_deref() == Some("done") {
+        if current_task.completed_at.is_none() {
+            current_task.completed_at = Some(Utc::now().timestamp_millis());
+        }
         current_task.waiting_for_subtask_id = None;
+    } else {
+        current_task.completed_at = None;
     }
     current_task.updated_at = Utc::now().timestamp_millis();
 
@@ -2768,10 +2786,16 @@ pub async fn internal_move_task_stage(
             if task_id_matches(&t.id, &cur_id) {
                 t.waiting_for_subtask_id = None;
                 t.status = Some("done".to_string());
+                if t.completed_at.is_none() {
+                    t.completed_at = Some(Utc::now().timestamp_millis());
+                }
                 t.updated_at = Utc::now().timestamp_millis();
             }
             if t.parent_id.as_deref() == Some(&cur_id) {
                 t.status = Some("done".to_string());
+                if t.completed_at.is_none() {
+                    t.completed_at = Some(Utc::now().timestamp_millis());
+                }
                 t.updated_at = Utc::now().timestamp_millis();
             }
         }
@@ -5612,6 +5636,8 @@ pub async fn compact_context(
                     new_messages.push(msg.clone());
                 }
             }
+            // Enforce safe ceiling guarantee on in-memory context as well
+            let _ = crate::agent::compactor::compact_conversation_to_target(&mut new_messages, 96_000, None);
             guard.messages = new_messages;
         }
     }

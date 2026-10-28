@@ -145,6 +145,10 @@ export const translations = {
     'card.expandSubtasks': 'Expand list of completed stages and subtasks',
     'card.openSubtaskDialog': 'Open dialogue and thoughts of subtask {id}',
     'card.todosProgress': '{completed}/{total} tasks completed ({percent}%)',
+    'card.todosCompleted': '{count} completed',
+    'card.todosPending': '{count} pending',
+    'card.stageChecklist': 'Stage checklist',
+    'card.clickToOpenTask': 'Click card to open console',
     'card.inProgressCount': '{count} in progress',
 
     // Drawer Header, Console & Steer Bar
@@ -699,6 +703,10 @@ export const translations = {
     'card.expandSubtasks': 'Раскрыть список завершенных этапов и подзадач',
     'card.openSubtaskDialog': 'Открыть диалог и мысли подзадачи {id}',
     'card.todosProgress': 'Выполнено {completed} из {total} ({percent}%)',
+    'card.todosCompleted': '{count} выполнено',
+    'card.todosPending': '{count} в очереди',
+    'card.stageChecklist': 'План текущего этапа',
+    'card.clickToOpenTask': 'Кликните, чтобы открыть консоль',
     'card.inProgressCount': '{count} в работе',
 
     // Drawer Header, Console & Steer Bar

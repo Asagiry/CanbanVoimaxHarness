@@ -802,6 +802,7 @@ use std::path::PathBuf;
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             position: None,
             hook_states: None,
         };
@@ -837,6 +838,7 @@ use std::path::PathBuf;
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             position: None,
             hook_states: None,
         };
@@ -1235,6 +1237,7 @@ use std::path::PathBuf;
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             handover_summary: None,
             attachments: None,
             cover_image: None,
@@ -1275,6 +1278,7 @@ use std::path::PathBuf;
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             handover_summary: None,
             attachments: None,
             cover_image: None,
@@ -1383,6 +1387,7 @@ use std::path::PathBuf;
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             handover_summary: None,
             attachments: None,
             cover_image: None,
@@ -1448,6 +1453,7 @@ use std::path::PathBuf;
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             handover_summary: None,
             attachments: None,
             cover_image: None,
@@ -1652,6 +1658,7 @@ Write code.
             skip_worktree: Some(true),
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             handover_summary: None,
             attachments: None,
             cover_image: None,
@@ -1844,6 +1851,7 @@ Write code.
             skip_worktree: Some(false),
             created_at: 1000,
             updated_at: 1000,
+            completed_at: None,
             handover_summary: None,
             attachments: None,
             cover_image: None,
@@ -2074,6 +2082,7 @@ Write code.
             skip_worktree: Some(true),
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             handover_summary: None,
             attachments: None,
             cover_image: None,
@@ -2248,6 +2257,7 @@ Write code.
             skip_worktree: Some(true),
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             handover_summary: None,
             attachments: None,
             cover_image: None,
@@ -2278,6 +2288,7 @@ Write code.
             skip_worktree: Some(true),
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             handover_summary: None,
             attachments: None,
             cover_image: None,
@@ -2308,6 +2319,7 @@ Write code.
             skip_worktree: Some(true),
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             handover_summary: None,
             attachments: None,
             cover_image: None,
@@ -2408,6 +2420,7 @@ Write code.
             skip_worktree: Some(true),
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             todos: None,
             attachments: None,
             cover_image: None,
@@ -2543,6 +2556,7 @@ Write code.
             skip_worktree: Some(true),
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             todos: None,
             attachments: None,
             cover_image: None,
@@ -2618,6 +2632,7 @@ Write code.
             skip_worktree: Some(false),
             created_at: chrono::Utc::now().timestamp_millis(),
             updated_at: chrono::Utc::now().timestamp_millis(),
+            completed_at: None,
             position: None,
             hook_states: None,
         };
@@ -2698,6 +2713,7 @@ Write code.
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             position: None,
             hook_states: None,
         };
@@ -2727,6 +2743,7 @@ Write code.
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             position: None,
             hook_states: None,
         };
@@ -2956,6 +2973,7 @@ Write code.
             skip_worktree: Some(true),
             created_at: chrono::Utc::now().timestamp_millis(),
             updated_at: chrono::Utc::now().timestamp_millis(),
+            completed_at: None,
             position: None,
             hook_states: None,
         };
@@ -3080,6 +3098,7 @@ Write code.
                 skip_worktree: Some(true),
                 created_at: 0,
                 updated_at: 0,
+                completed_at: None,
                 position: None,
                 hook_states: None,
             },
@@ -3108,6 +3127,7 @@ Write code.
                 skip_worktree: Some(true),
                 created_at: 0,
                 updated_at: 0,
+                completed_at: None,
                 position: None,
                 hook_states: None,
             },
@@ -3136,6 +3156,7 @@ Write code.
                 skip_worktree: Some(true),
                 created_at: 0,
                 updated_at: 0,
+                completed_at: None,
                 position: None,
                 hook_states: None,
             },
@@ -3164,6 +3185,7 @@ Write code.
                 skip_worktree: Some(true),
                 created_at: 0,
                 updated_at: 0,
+                completed_at: None,
                 position: None,
                 hook_states: None,
             },
@@ -3206,6 +3228,7 @@ Write code.
             skip_worktree: Some(true),
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             position: None,
             hook_states: None,
         };
@@ -3234,6 +3257,7 @@ Write code.
             skip_worktree: Some(true),
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             position: None,
             hook_states: None,
         };
@@ -3534,6 +3558,7 @@ Write code.
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             position: None,
             hook_states: None,
         };
@@ -3564,6 +3589,7 @@ Write code.
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             position: None,
             hook_states: None,
         };
@@ -3629,6 +3655,7 @@ Write code.
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             position: None,
             hook_states: None,
         };
@@ -3657,6 +3684,7 @@ Write code.
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             position: None,
             hook_states: None,
         };
@@ -3715,6 +3743,7 @@ Write code.
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             position: None,
             hook_states: None,
         };
@@ -3748,6 +3777,7 @@ Write code.
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             position: None,
             hook_states: None,
         };
@@ -3759,6 +3789,97 @@ Write code.
         assert_eq!(loaded_task.title, "Task with WT Updated Title");
         assert_eq!(loaded_task.worktree_path.as_deref(), Some("worktrees/CVH-777"), "worktree_path must NOT be wiped by client save");
         assert_eq!(loaded_task.branch.as_deref(), Some("feat/CVH-777"), "branch must NOT be wiped by client save");
+
+        let _ = tokio::fs::remove_dir_all(&tmp).await;
+    }
+
+    #[tokio::test]
+    async fn test_completed_at_lifecycle_on_stage_transitions() {
+        let tmp = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("tmp")
+            .join(format!("cvh_test_completed_at_{}", uuid::Uuid::new_v4()));
+        let _ = tokio::fs::create_dir_all(&tmp).await;
+        let _ = tokio::fs::create_dir_all(tmp.join(".cvh")).await;
+
+        let boards_cfg = serde_json::json!({
+            "active_board_id": "development",
+            "boards": [
+                {
+                    "id": "development",
+                    "name": "Разработка",
+                    "columns": [
+                        { "id": "backlog", "title": "Бэклог", "auto_run": false },
+                        { "id": "dev", "title": "В работе", "auto_run": false },
+                        { "id": "ready", "title": "Готово", "terminal": true }
+                    ]
+                }
+            ]
+        });
+        tokio::fs::write(
+            tmp.join(".cvh").join("boards.json"),
+            serde_json::to_string_pretty(&boards_cfg).unwrap(),
+        )
+        .await
+        .expect("write boards.json");
+
+        let task = internal_create_task(
+            &tmp,
+            "CompletedAt Lifecycle Task".to_string(),
+            "Testing completed_at tracking".to_string(),
+            "dev".to_string(),
+            Some("development".to_string()),
+            Some(true),
+            None,
+            Some("CVH-999".to_string()),
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("create task");
+
+        assert_eq!(task.completed_at, None, "Task in dev must have completed_at None");
+
+        // 1. Move to terminal 'ready'
+        let moved_to_ready = internal_move_task_stage(
+            &tmp,
+            "CVH-999",
+            "ready",
+            None,
+            None,
+            None,
+            None,
+            false,
+            Some("development".to_string()),
+        )
+        .await
+        .expect("move to ready");
+
+        assert_eq!(moved_to_ready.stage_id, "ready");
+        assert_eq!(moved_to_ready.status.as_deref(), Some("done"));
+        assert!(moved_to_ready.completed_at.is_some(), "Task in ready must have completed_at timestamp");
+
+        // 2. Move from 'ready' back to 'dev' (rework)
+        let moved_back_to_dev = internal_move_task_stage(
+            &tmp,
+            "CVH-999",
+            "dev",
+            None,
+            None,
+            None,
+            None,
+            false,
+            Some("development".to_string()),
+        )
+        .await
+        .expect("move back to dev");
+
+        assert_eq!(moved_back_to_dev.stage_id, "dev");
+        assert_eq!(moved_back_to_dev.completed_at, None, "Task moving out of terminal must reset completed_at to None");
+
+        let _ = tokio::fs::remove_dir_all(&tmp).await;
+    }
 
         let _ = tokio::fs::remove_dir_all(&tmp).await;
     }

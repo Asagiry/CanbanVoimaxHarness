@@ -3,11 +3,12 @@ import { createPortal } from 'react-dom';
 import { Draggable } from '@hello-pangea/dnd';
 import { KanbanTask, TaskStatus, HookExecutionState, TodoItem } from '../../types';
 import { useDrawerStore } from '../../stores/drawerStore';
-import { useBoardStore } from '../../stores/boardStore';
+import { useBoardStore, isDoneColumnDef } from '../../stores/boardStore';
 import { useTranslation, Language } from '../../stores/languageStore';
 import { useShallow } from 'zustand/react/shallow';
-import { GitBranch, CornerUpLeft, ChevronDown, MessageSquare, GitFork, Check, X, Loader2, Terminal, Paperclip, ListTodo, CheckCircle2 } from 'lucide-react';
+import { GitBranch, CornerUpLeft, ChevronDown, MessageSquare, GitFork, Check, X, Loader2, Terminal, Paperclip } from 'lucide-react';
 import TaskContextMenu from './TaskContextMenu';
+import { CardTodoProgress } from './CardTodoProgress';
 import { getDeterministicAgentColor } from '../../lib/agentPalette';
 import { useUiZoomStore, adjustDndTransformForZoom } from '../../hooks/useUiZoom';
 
@@ -60,11 +61,22 @@ interface CardHookNodeProps {
   hookName: string;
   state?: HookExecutionState;
   stageTitle?: string;
+  sourceStageTitle?: string;
+  isTransition?: boolean;
   taskId: string;
   isDragging?: boolean;
 }
 
-function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle, isDragging }: CardHookNodeProps) {
+function CardHookNode({
+  side,
+  hookType: _hookType,
+  hookName,
+  state,
+  stageTitle,
+  sourceStageTitle,
+  isTransition,
+  isDragging,
+}: CardHookNodeProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -273,7 +285,11 @@ function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle, 
           {/* Header */}
           <div className="flex items-center justify-between gap-1.5 pb-2 border-b border-neutral-100 dark:border-[#21262d]">
             <span className="text-xs font-mono font-medium text-neutral-500 dark:text-neutral-400">
-              {side === 'left' ? 'Входной хук (on_enter)' : 'Выходной хук (on_leave)'}
+              {isTransition
+                ? 'Хук перехода (on_leave)'
+                : side === 'left'
+                ? 'Входной хук (on_enter)'
+                : 'Выходной хук (on_leave)'}
             </span>
             <div className="flex items-center gap-1">
               {status === 'running' && (
@@ -307,11 +323,15 @@ function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle, 
             {hookName}
           </div>
 
-          {stageTitle && (
+          {isTransition && sourceStageTitle ? (
+            <div className="text-xs text-neutral-500 dark:text-neutral-400 font-mono mt-0.5">
+              Переход из: {sourceStageTitle}
+            </div>
+          ) : stageTitle ? (
             <div className="text-xs text-neutral-500 dark:text-neutral-400 font-mono mt-0.5">
               Стадия: {stageTitle}
             </div>
-          )}
+          ) : null}
 
           {/* Error description if failed */}
           {status === 'failed' && errorText.length > 0 && (
@@ -343,6 +363,8 @@ function CardHookNode({ side, hookType: _hookType, hookName, state, stageTitle, 
             <div className="mt-2 text-xs text-neutral-500 dark:text-neutral-400 font-sans leading-relaxed">
               {status === 'running'
                 ? 'Выполняется скрипт жизненного цикла стадии...'
+                : isTransition
+                ? 'Скрипт перехода, выполненный при выходе из предыдущей стадии.'
                 : side === 'left'
                 ? 'Скрипт выполнится автоматически при входе в эту стадию.'
                 : 'Скрипт выполнится автоматически при выходе из этой стадии.'}
@@ -364,7 +386,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const zoom = useUiZoomStore((s) => s.zoom);
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const setHoveredTaskId = useBoardStore((s) => s.setHoveredTaskId);
-  const columns = useBoardStore((s) => s.columns);
+  const columns = useBoardStore(useShallow((s) => s.columns));
   const { language, t } = useTranslation();
   const isHighlighted = useBoardStore((s) => {
     const hId = s.hoveredTaskId;
@@ -390,13 +412,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const assignedAgentColor = taskColumn?.persona
     ? getDeterministicAgentColor(taskColumn.persona)
     : (taskColumn?.color || getDeterministicAgentColor(task.columnId));
-  const isDone = Boolean(
-    task.status === 'done' ||
-    taskColumn?.terminal === true ||
-    task.columnId === 'ready' ||
-    taskColumn?.title?.toLowerCase().includes('готов') ||
-    taskColumn?.title?.toLowerCase().includes('done')
-  );
+  const isDone = Boolean(task.status === 'done' || isDoneColumnDef(taskColumn));
 
   // Subtasks belonging to this task (queried only if card is in done column)
   const subtasks = useBoardStore(
@@ -421,12 +437,35 @@ function KanbanCard({ task, index }: KanbanCardProps) {
     taskColumn?.hooks?.['on_finish'];
   const leaveHookState = taskHooks?.on_leave;
 
+  // Check predecessor column in board order
+  const currentColIndex = columns.findIndex((c) => c.id === task.columnId);
+  const prevCol = currentColIndex > 0 ? columns[currentColIndex - 1] : null;
+
+  // Stale check: A transition hook must be from the predecessor stage and temporally
+  // tied to the moment this stage was entered. If the hook executed long before
+  // entering this stage, it is stale state from an earlier stage transition and must not leak.
+  const stageEntryTime = task.stageEnteredAt || task.updatedAt || 0;
+  const hookDuration = leaveHookState?.durationMs || 0;
+  const isRecentHook =
+    Boolean(leaveHookState?.startedAt) &&
+    stageEntryTime > 0 &&
+    (leaveHookState!.startedAt >= stageEntryTime - hookDuration - 10000 ||
+      Math.abs(stageEntryTime - leaveHookState!.startedAt) <= hookDuration + 10000);
+
+  // Match explicitly recorded previous stage, or fallback to predecessor column in board pipeline
+  const matchesPreviousStage = task.previousStageId
+    ? task.previousStageId === leaveHookState?.stageId
+    : Boolean(prevCol && prevCol.id === leaveHookState?.stageId);
+
   // If this task recently transitioned into this stage via an on_leave hook from previous column,
   // show that transition result on the left (entry) node if this column has no separate on_enter hook.
-  const isTransitionHookFromResult =
+  const isTransitionHookFromResult = Boolean(
     !enterHookState &&
     leaveHookState &&
-    leaveHookState.stageId !== task.columnId;
+    leaveHookState.stageId !== task.columnId &&
+    matchesPreviousStage &&
+    (isRecentHook || !stageEntryTime)
+  );
 
   const effectiveLeftState = enterHookState || (isTransitionHookFromResult ? leaveHookState : undefined);
   const effectiveLeftHookName =
@@ -434,6 +473,11 @@ function KanbanCard({ task, index }: KanbanCardProps) {
     effectiveLeftState?.hookName ||
     (isTransitionHookFromResult ? leaveHookState?.hookName : undefined);
   const hasLeftHook = Boolean(enterHookName || effectiveLeftState);
+
+  const sourceStageCol = effectiveLeftState?.stageId
+    ? columns.find((c) => c.id === effectiveLeftState.stageId)
+    : undefined;
+  const sourceStageTitle = sourceStageCol?.title || effectiveLeftState?.stageId;
 
   // Right node: exit hook from this column
   const hasRightHook = Boolean(
@@ -452,25 +496,6 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const currentTotalElapsed = isRunning && stageStart
     ? (task.totalElapsed ?? 0) + Math.max(0, Math.floor((Date.now() - stageStart) / 1000))
     : (task.totalElapsed ?? 0);
-
-  const todos = task.todos ?? [];
-  const totalTodos = todos.length;
-  const completedTodos = todos.filter((t) => t.status === 'completed').length;
-  const inProgressTodos = todos.filter((t) => t.status === 'in_progress').length;
-  const hasTodos = totalTodos > 0;
-  const percent = hasTodos ? Math.round((completedTodos / totalTodos) * 100) : 0;
-  const isAllCompleted = hasTodos && completedTodos === totalTodos;
-
-  const todoTooltip = hasTodos
-    ? [
-        t('card.todosProgress', { completed: completedTodos, total: totalTodos, percent }),
-        ...todos.map((item, idx) => {
-          const symbol = item.status === 'completed' ? '✓' : item.status === 'in_progress' ? '▶' : '○';
-          const stepLabel = language === 'ru' ? `Шаг ${idx + 1}` : `Step ${idx + 1}`;
-          return `${symbol} ${item.content || stepLabel}`;
-        }),
-      ].join('\n')
-    : undefined;
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -619,44 +644,13 @@ function KanbanCard({ task, index }: KanbanCardProps) {
             </h4>
 
             {/* Todo checklist progress strip */}
-            {hasTodos && (
-              <div
-                className="mb-2 flex items-center gap-2 select-none cursor-default"
-                title={todoTooltip}
-                aria-label={t('card.todosProgress', { completed: completedTodos, total: totalTodos, percent })}
-              >
-                <div className="flex items-center gap-1 font-mono text-[10px] tabular-nums font-medium text-[#666666] dark:text-[#8b949e] shrink-0">
-                  {isAllCompleted ? (
-                    <CheckCircle2 className="h-3 w-3 text-[#15803d] dark:text-[#4ade80] shrink-0" />
-                  ) : (
-                    <ListTodo className="h-3 w-3 text-[#8f8f8f] dark:text-[#8b949e] shrink-0" />
-                  )}
-                  <span className={completedTodos > 0 ? 'text-[#15803d] dark:text-[#4ade80] font-semibold' : 'text-[#171717] dark:text-[#f0f6fc]'}>
-                    {completedTodos}
-                  </span>
-                  <span className="text-[#a1a1aa] dark:text-[#6e7681]">/</span>
-                  <span>{totalTodos}</span>
-                  {inProgressTodos > 0 && !isAllCompleted && (
-                    <span
-                      className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse ml-0.5"
-                      title={t('card.inProgressCount', { count: inProgressTodos })}
-                    />
-                  )}
-                </div>
-
-                {/* Micro Progress Bar */}
-                <div className="flex-1 h-1 rounded-full bg-[#f4f4f5] dark:bg-[#21262d] overflow-hidden border border-[#ebebeb]/60 dark:border-[#30363d]/60">
-                  <div
-                    className="h-full rounded-full bg-[#15803d] dark:bg-[#4ade80] transition-all duration-300"
-                    style={{ width: `${percent}%` }}
-                  />
-                </div>
-
-                <span className="font-mono text-[9px] tabular-nums text-[#8f8f8f] dark:text-[#8b949e] shrink-0">
-                  {percent}%
-                </span>
-              </div>
-            )}
+            <CardTodoProgress
+              todos={task.todos}
+              stageTitle={taskColumn?.title || task.columnId}
+              stageColor={assignedAgentColor}
+              isDragging={snapshot.isDragging}
+              taskId={task.id}
+            />
 
             {/* Footer: model, branch, created & elapsed time */}
             <div className="pt-2 border-t border-[#ebebeb] dark:border-[#21262d]">
@@ -799,6 +793,8 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                 hookName={effectiveLeftHookName}
                 state={effectiveLeftState}
                 stageTitle={taskColumn?.title || task.columnId}
+                sourceStageTitle={sourceStageTitle}
+                isTransition={isTransitionHookFromResult}
                 taskId={task.id}
                 isDragging={snapshot.isDragging}
               />
@@ -881,6 +877,7 @@ function areCardPropsEqual(prev: KanbanCardProps, next: KanbanCardProps): boolea
     a.stageEnteredAt === b.stageEnteredAt &&
     a.updatedAt === b.updatedAt &&
     a.createdAt === b.createdAt &&
+    a.previousStageId === b.previousStageId &&
     a.isTimerRunning === b.isTimerRunning &&
     a.returnsCount === b.returnsCount &&
     a.attachments === b.attachments &&

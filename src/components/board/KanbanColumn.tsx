@@ -5,6 +5,7 @@ import { PipelineColumn, KanbanTask } from '../../types';
 import KanbanCard from '../card/KanbanCard';
 import ColumnContextMenu from './ColumnContextMenu';
 import { useCortexStore } from '../../stores/cortexStore';
+import { isDoneColumnDef, sortDoneTasksByCompletionDateDesc } from '../../stores/boardStore';
 import AgentIcon from '../common/AgentIcon';
 import { getDeterministicAgentColor } from '../../lib/agentPalette';
 import { useTranslation } from '../../stores/languageStore';
@@ -39,16 +40,14 @@ function KanbanColumn({
     column.persona ? s.agentPersonas.find((p) => p.role === column.persona) : undefined
   );
   const effectiveIcon = (column.persona ? assignedPersona?.icon : column.icon) || column.icon || assignedPersona?.icon || 'Layers';
-  const isDoneColumn = Boolean(
-    column.terminal ||
-    column.id === 'ready' ||
-    column.title.toLowerCase().includes('готов') ||
-    column.title.toLowerCase().includes('done')
-  );
+  const isDoneColumn = isDoneColumnDef(column);
   // Схлопывание подзадач: в Done отображаются только корневые задачи;
   // в остальных колонках завершенные подзадачи (status === done или родитель в done) схлопываются в родителя (§ 3).
   const displayTasks = isDoneColumn
-    ? tasks.filter((t) => !t.parentId)
+    ? tasks
+        .filter((t) => !t.parentId)
+        .slice()
+        .sort(sortDoneTasksByCompletionDateDesc)
     : tasks.filter((t) => {
         if (!t.parentId) return true;
         if (doneParentIds && doneParentIds.has(t.parentId)) return false;
@@ -105,6 +104,13 @@ function KanbanColumn({
           <div
             ref={colProvided.innerRef}
             {...colProvided.draggableProps}
+            data-kanban-column={column.id}
+            onWheel={(e) => {
+              if (e.ctrlKey || e.metaKey) return;
+              if (!e.shiftKey) {
+                e.stopPropagation();
+              }
+            }}
             style={{
               ...colProvided.draggableProps.style,
               ...(baseColTransform ? { transform: baseColTransform } : {}),
@@ -163,7 +169,7 @@ function KanbanColumn({
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className={`flex-1 min-h-0 p-2 overflow-y-auto transition-colors ${
+            className={`flex-1 min-h-0 p-2 overflow-y-auto overscroll-y-contain transition-colors ${
               snapshot.isDraggingOver
                 ? 'bg-[#f4f4f5] dark:bg-[#161b22]/50 border border-dashed border-[#171717]/30 dark:border-[#30363d] rounded-b-lg'
                 : 'bg-transparent'

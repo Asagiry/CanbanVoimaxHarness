@@ -510,6 +510,7 @@ use super::*;
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             position: None,
             hook_states: None,
         };
@@ -628,6 +629,7 @@ use super::*;
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             position: None,
             hook_states: None,
         };
@@ -925,6 +927,7 @@ use super::*;
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             handover_summary: None,
             attachments: None,
             cover_image: None,
@@ -1107,6 +1110,7 @@ use super::*;
             skip_worktree: None,
             created_at: 0,
             updated_at: 0,
+            completed_at: None,
             handover_summary: None,
             attachments: None,
             cover_image: None,
@@ -3860,6 +3864,7 @@ data: [DONE]
             skip_worktree: None,
             created_at: 1000,
             updated_at: 2000,
+            completed_at: None,
             position: Some(0.0),
             hook_states: None,
         };
@@ -3889,6 +3894,7 @@ data: [DONE]
             skip_worktree: None,
             created_at: 1000,
             updated_at: 3000,
+            completed_at: None,
             position: Some(1.0),
             hook_states: None,
         };
@@ -3975,6 +3981,7 @@ data: [DONE]
             skip_worktree: None,
             created_at: 1000,
             updated_at: 2000,
+            completed_at: None,
             position: Some(0.0),
             hook_states: None,
         };
