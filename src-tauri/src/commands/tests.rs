@@ -3880,6 +3880,3 @@ Write code.
 
         let _ = tokio::fs::remove_dir_all(&tmp).await;
     }
-
-        let _ = tokio::fs::remove_dir_all(&tmp).await;
-    }
