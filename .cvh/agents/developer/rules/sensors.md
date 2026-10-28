@@ -42,13 +42,21 @@ npm run build
 
 ### 2.4 Branch Integration & Zero-Regression Pre-Flight Sensor
 ```bash
+# 1. Commit all working tree changes to the branch first:
+git commit -am "feat(<task-id>): <concise summary>"
+# 2. Verify clean mergeability against main:
 git merge-tree --write-tree main HEAD
+# (Alternatively, if checking before commit: TARGET=$(git stash create); git merge-tree --write-tree main ${TARGET:-HEAD})
 ```
 - **Acceptance Criteria**: Exit code `0` with zero merge conflicts.
 - **Concurrent Main Invariant (CLE)**:
   - **Cue**: When completing a task in an isolated worktree or touching shared components (`KanbanCard.tsx`, stores, migrations) while `main` advances with concurrent PRs.
   - **Lesson**: Always sync with `main` (`git merge origin/main`) and verify clean mergeability (`git merge-tree --write-tree main HEAD` exit 0) before handover; diff against `origin/main` to ensure concurrently merged features are never overwritten.
   - **Evidence**: Task CVH-022 rejected on Gate 6 & Gate 4 due to stale base `7b038b7` clobbering CVH-021's Todo progress bar in `KanbanCard.tsx` (resolved in `fa09d41`, approved in `37eae88`).
+- **Committed HEAD Pre-Flight Invariant (CLE)**:
+  - **Cue**: When executing `git merge-tree` or preparing to invoke `advance_task` with uncommitted changes in the worktree.
+  - **Lesson**: Commit all changes before handover; running `git merge-tree --write-tree main HEAD` on a dirty working tree tests the stale base commit instead of your changes, creating false-positive passing checks that break downstream in Review.
+  - **Evidence**: Task CVH-026 failed Gate 6 with `CHANGES_REQUESTED` because uncommitted changes in `tests.rs` hid an EOF conflict against CVH-025 on `main` until Reviewer committed them (resolved via `c31e5cb` and `ad43391`).
 
 ---
 

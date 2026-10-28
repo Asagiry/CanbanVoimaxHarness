@@ -6765,29 +6765,10 @@ where
         };
 
         let resume_msg = format!(
-            "### [ВОЗОБНОВЛЕНИЕ ЗАДАЧИ / TASK RESUMED]
-Задача перемещена на этап '{}' (роль: {}). Жди указа Человека.",
+            "### [ВОЗОБНОВЛЕНИЕ ЗАДАЧИ / TASK RESUMED]\nЗадача на этапе '{}' (роль: {}). Продолжай автономное выполнение задачи. Используй доступные инструменты.",
             stage_name, config.role
         );
-        messages.push(ChatMessage::user(resume_msg.clone()));
-
-        // Persist to SQLite dialog_items so history retains it
-        let resume_item = crate::db::ActivityItem {
-            id: uuid::Uuid::new_v4().to_string(),
-            item_type: "steer".to_string(),
-            timestamp: chrono::Utc::now().to_rfc3339(),
-            content: Some(resume_msg),
-            tool: None,
-            duration_ms: None,
-            images: None,
-        };
-        let _ = crate::db::append_dialog_items(&config.repo_root, &config.task_id, std::slice::from_ref(&resume_item));
-        if let Some(app) = config.app_handle.as_ref() {
-            let _ = app.emit("task:dialog", serde_json::json!({
-                "taskId": config.task_id,
-                "item": resume_item,
-            }));
-        }
+        messages.push(ChatMessage::user(resume_msg));
     }
 
     // 6. Synchronize active context state with AppState
@@ -6994,8 +6975,7 @@ where
                 config.stage_id.clone()
             };
             let resume_msg = format!(
-                "### [ВОЗОБНОВЛЕНИЕ ЗАДАЧИ / TASK RESUMED]
-Задача перемещена на этап '{}' (роль: {}). Жди указа Человека.",
+                "### [ВОЗОБНОВЛЕНИЕ ЗАДАЧИ / TASK RESUMED]\nЗадача на этапе '{}' (роль: {}). Продолжай автономное выполнение задачи. Используй доступные инструменты.",
                 stage_name, config.role
             );
             messages.push(ChatMessage::user(resume_msg));
