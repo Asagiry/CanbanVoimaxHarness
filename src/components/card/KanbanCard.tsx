@@ -6,8 +6,9 @@ import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useTranslation, Language } from '../../stores/languageStore';
 import { useShallow } from 'zustand/react/shallow';
-import { GitBranch, CornerUpLeft, ChevronDown, MessageSquare, GitFork, Check, X, Loader2, Terminal, Paperclip, ListTodo, CheckCircle2 } from 'lucide-react';
+import { GitBranch, CornerUpLeft, ChevronDown, MessageSquare, GitFork, Check, X, Loader2, Terminal, Paperclip } from 'lucide-react';
 import TaskContextMenu from './TaskContextMenu';
+import { CardTodoProgress } from './CardTodoProgress';
 import { getDeterministicAgentColor } from '../../lib/agentPalette';
 import { useUiZoomStore, adjustDndTransformForZoom } from '../../hooks/useUiZoom';
 
@@ -453,25 +454,6 @@ function KanbanCard({ task, index }: KanbanCardProps) {
     ? (task.totalElapsed ?? 0) + Math.max(0, Math.floor((Date.now() - stageStart) / 1000))
     : (task.totalElapsed ?? 0);
 
-  const todos = task.todos ?? [];
-  const totalTodos = todos.length;
-  const completedTodos = todos.filter((t) => t.status === 'completed').length;
-  const inProgressTodos = todos.filter((t) => t.status === 'in_progress').length;
-  const hasTodos = totalTodos > 0;
-  const percent = hasTodos ? Math.round((completedTodos / totalTodos) * 100) : 0;
-  const isAllCompleted = hasTodos && completedTodos === totalTodos;
-
-  const todoTooltip = hasTodos
-    ? [
-        t('card.todosProgress', { completed: completedTodos, total: totalTodos, percent }),
-        ...todos.map((item, idx) => {
-          const symbol = item.status === 'completed' ? '✓' : item.status === 'in_progress' ? '▶' : '○';
-          const stepLabel = language === 'ru' ? `Шаг ${idx + 1}` : `Step ${idx + 1}`;
-          return `${symbol} ${item.content || stepLabel}`;
-        }),
-      ].join('\n')
-    : undefined;
-
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -619,44 +601,13 @@ function KanbanCard({ task, index }: KanbanCardProps) {
             </h4>
 
             {/* Todo checklist progress strip */}
-            {hasTodos && (
-              <div
-                className="mb-2 flex items-center gap-2 select-none cursor-default"
-                title={todoTooltip}
-                aria-label={t('card.todosProgress', { completed: completedTodos, total: totalTodos, percent })}
-              >
-                <div className="flex items-center gap-1 font-mono text-[10px] tabular-nums font-medium text-[#666666] dark:text-[#8b949e] shrink-0">
-                  {isAllCompleted ? (
-                    <CheckCircle2 className="h-3 w-3 text-[#15803d] dark:text-[#4ade80] shrink-0" />
-                  ) : (
-                    <ListTodo className="h-3 w-3 text-[#8f8f8f] dark:text-[#8b949e] shrink-0" />
-                  )}
-                  <span className={completedTodos > 0 ? 'text-[#15803d] dark:text-[#4ade80] font-semibold' : 'text-[#171717] dark:text-[#f0f6fc]'}>
-                    {completedTodos}
-                  </span>
-                  <span className="text-[#a1a1aa] dark:text-[#6e7681]">/</span>
-                  <span>{totalTodos}</span>
-                  {inProgressTodos > 0 && !isAllCompleted && (
-                    <span
-                      className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse ml-0.5"
-                      title={t('card.inProgressCount', { count: inProgressTodos })}
-                    />
-                  )}
-                </div>
-
-                {/* Micro Progress Bar */}
-                <div className="flex-1 h-1 rounded-full bg-[#f4f4f5] dark:bg-[#21262d] overflow-hidden border border-[#ebebeb]/60 dark:border-[#30363d]/60">
-                  <div
-                    className="h-full rounded-full bg-[#15803d] dark:bg-[#4ade80] transition-all duration-300"
-                    style={{ width: `${percent}%` }}
-                  />
-                </div>
-
-                <span className="font-mono text-[9px] tabular-nums text-[#8f8f8f] dark:text-[#8b949e] shrink-0">
-                  {percent}%
-                </span>
-              </div>
-            )}
+            <CardTodoProgress
+              todos={task.todos}
+              stageTitle={taskColumn?.title || task.columnId}
+              stageColor={assignedAgentColor}
+              isDragging={snapshot.isDragging}
+              taskId={task.id}
+            />
 
             {/* Footer: model, branch, created & elapsed time */}
             <div className="pt-2 border-t border-[#ebebeb] dark:border-[#21262d]">
