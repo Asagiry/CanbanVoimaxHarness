@@ -48,6 +48,13 @@ const DEFAULT_BOARD: BoardDef = {
   columns: CANONICAL_BOARD_COLUMNS,
 };
 
+export interface ActiveQuestionInfo {
+  taskId: string;
+  questionId: string;
+  text: string;
+  timestamp: number;
+}
+
 interface BoardState {
   columns: PipelineColumn[];
   tasks: KanbanTask[];
@@ -62,8 +69,11 @@ interface BoardState {
   isLoadingBoards: boolean;
   isBoardsLoaded: boolean;
   hookStates: Record<string, TaskHookStates>;
+  activeQuestions: Record<string, ActiveQuestionInfo>;
 
   // Actions
+  setActiveQuestion: (payload: ActiveQuestionInfo) => void;
+  clearActiveQuestion: (taskId: string) => void;
   setHookStart: (payload: { taskId: string; stageId: string; hookType: 'on_enter' | 'on_leave'; hookName: string; description?: string }) => void;
   setHookFinish: (payload: { taskId: string; stageId: string; hookType: 'on_enter' | 'on_leave'; success: boolean; exitCode?: number | null; stdout?: string; stderr?: string; error?: string }) => void;
   clearHookState: (taskId: string, hookType?: 'on_enter' | 'on_leave') => void;
@@ -511,6 +521,25 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   isLoadingBoards: false,
   isBoardsLoaded: false,
   hookStates: loadCachedHookStates(),
+  activeQuestions: {},
+
+  setActiveQuestion: (payload) => {
+    set((state) => ({
+      activeQuestions: {
+        ...state.activeQuestions,
+        [payload.taskId]: payload,
+      },
+    }));
+  },
+
+  clearActiveQuestion: (taskId) => {
+    set((state) => {
+      if (!state.activeQuestions[taskId]) return state;
+      const next = { ...state.activeQuestions };
+      delete next[taskId];
+      return { activeQuestions: next };
+    });
+  },
 
   setHookStart: ({ taskId, stageId, hookType, hookName, description }) => {
     set((state) => {

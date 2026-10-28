@@ -138,6 +138,7 @@ export const translations = {
 
     // Card Details
     'card.parentTask': 'Parent task: {id}',
+    'card.agentQuestion': 'Agent Question',
     'card.model': 'Model: {model}',
     'card.created': 'created {date}',
     'card.elapsed': 'running {time}',
@@ -271,6 +272,17 @@ export const translations = {
     'settings.alreadyAdded': 'added',
     'settings.noModelsFound': 'No models found',
     'settings.addSelected': 'Add selected ({count})',
+    'settings.tabLlm': 'LLM Model',
+    'settings.tabNotifications': 'Notifications',
+    'settings.notificationsTitle': 'System Notifications',
+    'settings.notificationsDesc': 'Native Windows desktop notifications for background tasks and agent events.',
+    'settings.notifyWindowsMaster': 'Windows Notifications',
+    'settings.notifyOnQuestion': 'Agent question (question)',
+    'settings.notifyOnAdvanceTask': 'Stage transition (advance_task)',
+    'settings.notifyOnTaskCompleted': 'Task completed',
+    'notification.advanceTaskTitle': 'Task {taskId} moved to {stageTitle}',
+    'notification.taskCompletedTitle': 'Task {taskId} completed',
+    'notification.questionTitle': 'Question in task {taskId}',
 
     // Tool Policy Matrix Modal
     'toolPolicy.modalTitle': 'Tool Policy Matrix Settings',
@@ -698,6 +710,7 @@ export const translations = {
 
     // Card Details
     'card.parentTask': 'Родительская задача: {id}',
+    'card.agentQuestion': 'Вопрос от агента',
     'card.model': 'Модель: {model}',
     'card.created': 'созд. {date}',
     'card.elapsed': 'идёт {time}',
@@ -831,6 +844,17 @@ export const translations = {
     'settings.alreadyAdded': 'добавлена',
     'settings.noModelsFound': 'Модели не найдены',
     'settings.addSelected': 'Добавить выбранные ({count})',
+    'settings.tabLlm': 'Модель LLM',
+    'settings.tabNotifications': 'Уведомления',
+    'settings.notificationsTitle': 'Системные уведомления',
+    'settings.notificationsDesc': 'Нативные уведомления Windows о событиях задач и вопросах агентов в фоновом режиме.',
+    'settings.notifyWindowsMaster': 'Уведомления Windows',
+    'settings.notifyOnQuestion': 'Вопрос от агента (question)',
+    'settings.notifyOnAdvanceTask': 'Переход этапа (advance_task)',
+    'settings.notifyOnTaskCompleted': 'Завершение задачи',
+    'notification.advanceTaskTitle': 'Задача {taskId} перешла в колонку {stageTitle}',
+    'notification.taskCompletedTitle': 'Задача {taskId} завершена',
+    'notification.questionTitle': 'В задаче {taskId} вопрос от агента',
 
     // Tool Policy Matrix Modal
     'toolPolicy.modalTitle': 'Настройки матрицы инструментов',
