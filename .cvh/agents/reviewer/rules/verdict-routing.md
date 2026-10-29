@@ -1,3 +1,6 @@
+---
+description: Formal review verdict taxonomy (APPROVED, CHANGES_REQUESTED) and automated pipeline routing mechanics.
+---
 # Rule: Review Verdict & Stage Routing Protocol (verdict-routing.md)
 
 Authoritative guidelines for concluding code reviews and routing tasks for the **Reviewer** persona in CanbanVoimaxHarness.

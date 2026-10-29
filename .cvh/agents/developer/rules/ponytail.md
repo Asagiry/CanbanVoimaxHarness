@@ -1,3 +1,6 @@
+---
+description: Anti-overengineering doctrine, minimal surgical diff discipline, and contrastive self-audit requirements.
+---
 # JIT Rule: Minimal Surgical Diff and Over-Engineering Prevention (ponytail.md)
 
 Ponytail engineering discipline for the **Developer** persona: achieving requirements via the shortest reliable path, eliminating architectural baggage, preserving modular boundaries, and maintaining system robustness.

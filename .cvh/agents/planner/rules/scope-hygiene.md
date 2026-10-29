@@ -1,3 +1,6 @@
+---
+description: Scope containment invariants, anti-slop rules, read-only boundary enforcement, and command execution bans.
+---
 # Rule: Scope Hygiene & Anti-Slop Discipline (scope-hygiene.md)
 
 Guidelines for maintaining strict scope boundaries and avoiding speculative design in the **Planner** persona.

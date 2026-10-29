@@ -1,3 +1,6 @@
+---
+description: Frontend reactivity, memory leaks, theme contrast, event gateway compliance, and UI anti-slop review checklist.
+---
 # Rule: Frontend UI Invariants & Performance Audit (frontend-invariants.md)
 
 Authoritative frontend audit checklist for the **Reviewer** persona in CanbanVoimaxHarness.

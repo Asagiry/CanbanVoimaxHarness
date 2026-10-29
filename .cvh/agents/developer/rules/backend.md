@@ -1,3 +1,6 @@
+---
+description: Rust 2021 and Tauri v2 architecture, R2D2 SQLite persistence, nominal types, and 500-line module ceilings.
+---
 # Backend Architecture & Invariants (Rust 2021, Tauri v2, SQLite WAL)
 
 Authoritative backend engineering standards and architectural invariants of **CanbanVoimaxHarness (CVH)** located in `src-tauri/`.

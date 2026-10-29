@@ -1,3 +1,6 @@
+---
+description: Behavioral DNA and planning invariants for the Planner role, enforcing read-only analysis and tactical checklist design.
+---
 # Rule: Canonical Planner Behavioral Invariants (role-planner.md)
 
 Authoritative behavioral specifications and architectural DNA for the Planner role in CanbanVoimaxHarness.

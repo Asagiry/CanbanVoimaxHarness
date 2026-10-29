@@ -4175,25 +4175,39 @@ Rule: Strictly isolated worktrees.",
 
         let planner_rules = get_available_rules(repo_root, Some("planner"));
         println!("planner_rules: {:?}", planner_rules);
-        assert_eq!(planner_rules, vec!["architecture", "be-ambitious", "decomposition", "scope-hygiene"]);
+        assert_eq!(
+            planner_rules,
+            vec!["architecture", "backend_map", "be-ambitious", "decomposition", "frontend_map", "scope-hygiene"]
+        );
 
         let dev_rules = get_available_rules(repo_root, Some("developer"));
-        assert_eq!(dev_rules, vec!["backend", "frontend", "ponytail", "rules-sync", "sensors"]);
+        assert_eq!(
+            dev_rules,
+            vec!["backend", "backend_map", "frontend", "frontend_map", "ponytail", "rules-sync", "sensors"]
+        );
 
         let reviewer_rules = get_available_rules(repo_root, Some("reviewer"));
-        assert_eq!(reviewer_rules, vec!["backend-invariants", "frontend-invariants", "review-checklist", "verdict-routing"]);
+        assert_eq!(
+            reviewer_rules,
+            vec!["backend-invariants", "backend_map", "frontend-invariants", "frontend_map", "review-checklist", "verdict-routing"]
+        );
         assert!(!reviewer_rules.contains(&"boards".to_string()), "Reviewer must NOT have boards rule");
         assert!(!reviewer_rules.contains(&"retro".to_string()), "Reviewer must NOT have retro rule");
 
         let retro_rules = get_available_rules(repo_root, Some("retro"));
-        assert_eq!(retro_rules, vec!["reflection-methodology", "rule-evolution"]);
+        assert_eq!(
+            retro_rules,
+            vec!["backend_map", "frontend_map", "reflection-methodology", "rule-evolution"]
+        );
 
         let cvh_dev_rules = get_available_rules(repo_root, Some("cvh-dev"));
         assert_eq!(
             cvh_dev_rules,
             vec![
                 "agents",
+                "backend_map",
                 "boards",
+                "frontend_map",
                 "hooks",
                 "pipeline-setup",
                 "role-developer",

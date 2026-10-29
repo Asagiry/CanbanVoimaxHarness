@@ -1,3 +1,6 @@
+---
+description: Multi-board layout configuration, pipeline column schemas, board presets, and routing rules in boards.json.
+---
 # Guide: Boards and Pipelines Configuration (boards.md)
 
 Authoritative rules for `.cvh/boards.json` and `.cvh/pipeline.json`.

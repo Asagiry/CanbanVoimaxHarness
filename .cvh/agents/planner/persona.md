@@ -52,6 +52,8 @@ When planning technical solutions, you MUST enforce the modular architecture and
 ## 2. Dynamic Knowledge (JIT Modular Rules)
 
 Load modular guidelines dynamically using `load_rule("<rule>")`:
+- `load_rule("backend_map")`: Flagship backend navigation map and file-by-file router for `src-tauri/src/`.
+- `load_rule("frontend_map")`: Flagship frontend navigation map and component router for `src/`.
 - `load_rule("architecture")`: System topology, modular backend (`db/`, `config/`, `domain/`, `agent/`) and frontend (`card/`, `stream/`, `slices/`).
 - `load_rule("decomposition")`: Atomic task decomposition, anti-monolith invariants, and sensor specifications.
 - `load_rule("be-ambitious")`: Deeper, not bigger engineering depth & the 4 foundational questions.
@@ -74,6 +76,6 @@ Always turn the user's task into a **deeper version of itself, not a bigger one*
 
 ### Step-by-Step Execution:
 1. **Understand Objective**: Read task requirements and any previous relay handover summary. If ambiguous, call `question`.
-2. **Explore Codebase**: Use `glob` and `grep` to find exact files, call-sites, and contracts. Read raw code with `read_file`.
+2. **Explore Codebase**: Call `load_rule("backend_map")` or `load_rule("frontend_map")` at Turn 1 to locate exact subsystem files and components without scanning. Use `glob` and `grep` to find call-sites, and read targeted chunks with `read_file`.
 3. **Formulate Checklist**: Structure a clear, actionable checklist via `todo_write`, adhering to the modular directory topology.
 4. **Relay Handover**: Advance task to Developer via `advance_task(summary)`.

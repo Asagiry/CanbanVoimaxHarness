@@ -1,3 +1,6 @@
+---
+description: Rigorous 5-sensor gatekeeper verification protocol, presumption of guilt, and line-by-line review standards.
+---
 # Rule: Ultra-Strict Review Checklist & Harness2.0 Verification Protocol (review-checklist.md)
 
 Authoritative inspection checklist and governance protocol for the **Reviewer** persona in CanbanVoimaxHarness.

@@ -346,12 +346,12 @@ Identity & Core Directives:
 - Absolute Invariant: NEVER write or edit code outside the active worktree directory.
 - Ponytail Minimalism & Anti-Slop: zero dead code, no unused imports, no placeholder functions, clean idiomatic architecture.
 - Strict Error Handling: zero naked unwraps in production paths; use typed errors (`Result<T, AppError>`, `anyhow`, or `thiserror`).
-- Direct Coordinate Navigation: use exact target lines and files from planner summary; never read files sequentially from line 1.
+- Direct Coordinate Navigation: use exact target lines and files from planner summary; call `load_rule("backend_map")` or `load_rule("frontend_map")` at Turn 1 to locate exact files. Never read files sequentially from line 1.
 - Anti-Micro-Reading Mandate: never call read_file in 20-50 line increments to scroll files. Use grep for search, read targeted chunks of 100-300 lines.
 - Mandatory Commit Pre-Flight: always commit working tree changes (`git add -A && git commit`) before calling advance_task.
 
 Workflow (Explore -> Plan -> Code -> Verify -> Commit -> Handover):
-1. Explore: locate relevant files using `glob` and `grep` or planner coordinates.
+1. Explore: call `load_rule("backend_map")` or `load_rule("frontend_map")` at Turn 1 to locate exact subsystems and files, or use planner coordinates.
 2. Plan: formulate targeted checklist with `path:line` targets via `todo_write` (batched updates).
 3. Code: execute surgical edits inside `worktrees/<task-slug>`.
 4. Commit: commit changes to the feature branch before verification.
@@ -508,36 +508,57 @@ pub async fn compile_primed_system_prompt_with_tools(
         sections.push(format!("# Role Persona: {}\nYou are an expert AI agent in {}.", role, role));
     }
 
-    // 1b. Per-agent rules: `.cvh/agents/<role>/rules/*.md`, alphabetical.
+    // 1b. Per-agent rules: `.cvh/agents/<role>/rules/*.md` and global `.cvh/rules/*.md`, alphabetical.
     // Modular Rules (JIT On-Demand): If `load_rule` is active, decouple rule bodies from prompt to optimize tokens.
     let has_load_rule = resolved_tools.iter().any(|t| t == "load_rule");
     if has_load_rule {
+        let available = crate::agent::tool_schemas::get_available_rules_with_descriptions(repo_root, Some(role));
+        let mut rule_bullets = Vec::new();
+        for (r_name, r_desc) in available {
+            if let Some(desc) = r_desc {
+                rule_bullets.push(format!("- `{}`: {}", r_name, desc));
+            } else {
+                rule_bullets.push(format!("- `{}`", r_name));
+            }
+        }
+        let list_str = if rule_bullets.is_empty() {
+            String::new()
+        } else {
+            format!("\n\nAvailable rules for dynamic loading:\n{}", rule_bullets.join("\n"))
+        };
         sections.push(
-            "# Modular Rules (JIT On-Demand)\nArchitectural standards, domain invariants, and tech guidelines are decoupled from the prompt to optimize tokens.\nUse the `load_rule` tool to dynamically load rules when working on specific topics or technologies.".to_string(),
+            format!("# Modular Rules (JIT On-Demand)\nArchitectural standards, domain invariants, and tech guidelines are decoupled from the prompt to optimize tokens.\nUse the `load_rule` tool to dynamically load rules when working on specific topics or technologies.{list_str}"),
         );
     } else {
-        let rules_dir = crate::config::agent_rules_dir(repo_root, role);
-        if rules_dir.is_dir() {
-            if let Ok(mut entries) = tokio::fs::read_dir(&rules_dir).await {
-                let mut rules: Vec<(String, String)> = Vec::new();
-                while let Ok(Some(entry)) = entries.next_entry().await {
-                    let path = entry.path();
-                    if !path.is_file() {
-                        continue;
+        let mut rules: Vec<(String, String)> = Vec::new();
+        let mut rule_dirs = vec![crate::config::agent_rules_dir(repo_root, role)];
+        let global_rules = crate::config::global_rules_dir(repo_root);
+        if global_rules.is_dir() {
+            rule_dirs.push(global_rules);
+        }
+        for rules_dir in rule_dirs {
+            if rules_dir.is_dir() {
+                if let Ok(mut entries) = tokio::fs::read_dir(&rules_dir).await {
+                    while let Ok(Some(entry)) = entries.next_entry().await {
+                        let path = entry.path();
+                        if !path.is_file() {
+                            continue;
+                        }
+                        if path.extension().and_then(|e| e.to_str()) != Some("md") {
+                            continue;
+                        }
+                        let fname = entry.file_name().to_string_lossy().to_string();
+                        if let Ok(content) = tokio::fs::read_to_string(&path).await {
+                            rules.push((fname, content));
+                        }
                     }
-                    if path.extension().and_then(|e| e.to_str()) != Some("md") {
-                        continue;
-                    }
-                    let fname = entry.file_name().to_string_lossy().to_string();
-                    if let Ok(content) = tokio::fs::read_to_string(&path).await {
-                        rules.push((fname, content));
-                    }
-                }
-                rules.sort_by(|a, b| a.0.cmp(&b.0));
-                for (fname, content) in rules {
-                    sections.push(format!("## Rule: {}\n\n{}", fname, content.trim()));
                 }
             }
+        }
+        rules.sort_by(|a, b| a.0.cmp(&b.0));
+        rules.dedup_by(|a, b| a.0 == b.0);
+        for (fname, content) in rules {
+            sections.push(format!("## Rule: {}\n\n{}", fname, content.trim()));
         }
     }
 

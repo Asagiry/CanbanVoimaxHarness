@@ -1,3 +1,6 @@
+---
+description: Behavioral DNA and post-mortem reflection protocol for the Retrospective role, enforcing engine code prohibition.
+---
 # Rule: Canonical Retrospective Behavioral Invariants (role-retro.md)
 
 Authoritative behavioral specifications and architectural DNA for the Retro role in CanbanVoimaxHarness.

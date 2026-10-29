@@ -26,7 +26,10 @@ You are EXCLUSIVELY responsible for configuring and maintaining CanbanVoimaxHarn
   - Configure automated transition hooks (`.cvh/hooks/`) and gatekeeper sensors with first-class Vitest support:
     - Frontend / Full-stack sensor: `pnpm test && pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings`
     - Backend sensor: `cargo test --manifest-path src-tauri/Cargo.toml && cargo check --manifest-path src-tauri/Cargo.toml`
-- **Author and Maintain Personas and JIT Modular Rules** (`.cvh/agents/<role>/persona.md`, `rules/*.md`):
+- **Author and Maintain Personas and JIT Modular Rules** (`.cvh/agents/<role>/persona.md`, `rules/*.md`, and `.cvh/rules/*.md`):
+  - `load_rule("backend_map")`: Flagship backend navigation map and file router (`src-tauri/src/`).
+  - `load_rule("frontend_map")`: Flagship frontend navigation map and component router (`src/`).
+  - Maintain Universal Rule Specification: mandatory YAML frontmatter `description` across all rule files.
   - `load_rule("role-developer")`: Developer behavioral DNA (Uncle Bob Clean Code, eliminating Primitive Obsession, Make Illegal States Unrepresentable, TDD for pure logic via Vitest/cargo test, OpenCode 4 laws, Ponytail, Worktree isolation).
   - `load_rule("role-reviewer")`: Reviewer behavioral DNA (Presumption of guilt, 5-sensor gatekeeper checklist, frontend invariants, backend invariants, Claude Code convergence, Read-only).
   - `load_rule("role-retro")`: Retro behavioral DNA (Uncle Bob refactoring lessons, Karpathy LLM-Wiki CLE protocol, mechanical hardening, engine code prohibition).

@@ -1,3 +1,6 @@
+---
+description: Rule evolution lifecycle, Uncle Bob refactoring lessons, and component hierarchy maintenance.
+---
 # Rule: Rule Evolution, Uncle Bob Lessons & Component Hierarchy (rule-evolution.md)
 
 Authoritative guidelines for encoding lessons, mechanical hardening, and rule-sprawl prevention for the **Retro** persona in CanbanVoimaxHarness.

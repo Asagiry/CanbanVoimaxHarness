@@ -83,6 +83,35 @@ pub async fn get_cortex_tree(state: State<'_, AppState>) -> Result<Vec<CortexNod
         });
     }
 
+    // 2b. Global Shared Rules (.cvh/rules/)
+    let global_rules_dir = root.join(".cvh").join("rules");
+    if global_rules_dir.exists() {
+        let mut rule_children = Vec::new();
+        if let Ok(mut entries) = tokio::fs::read_dir(&global_rules_dir).await {
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.ends_with(".md") {
+                    let rel_path = format!(".cvh/rules/{}", name);
+                    rule_children.push(CortexNode {
+                        id: format!("global-rule-{}", name),
+                        name,
+                        path: rel_path,
+                        is_dir: false,
+                        children: None,
+                    });
+                }
+            }
+        }
+        rule_children.sort_by(|a, b| a.name.cmp(&b.name));
+        root_nodes.push(CortexNode {
+            id: "cortex-global-rules".to_string(),
+            name: "Global Rules".to_string(),
+            path: ".cvh/rules".to_string(),
+            is_dir: true,
+            children: Some(rule_children),
+        });
+    }
+
     // 3. Skills Repository (.agents/skills/)
     let skills_dir = root.join(".agents").join("skills");
     if skills_dir.exists() {
