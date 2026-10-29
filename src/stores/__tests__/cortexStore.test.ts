@@ -32,6 +32,7 @@ describe('cortexStore (Clean Deterministic Store Tests)', () => {
       })),
       agentStages: [],
       agentPersonas: [],
+      globalRules: [],
       activeFile: null,
       focusedStageId: null,
       isEditorOpen: false,
@@ -411,6 +412,174 @@ describe('cortexStore (Clean Deterministic Store Tests)', () => {
 
       expect(useCortexStore.getState().activeFile).toBeNull();
       expect(useCortexStore.getState().isEditorOpen).toBe(false);
+    });
+  });
+
+  describe('Global Rules Section CRUD Lifecycle', () => {
+    it('loadGlobalRules populates globalRules from list_global_rules IPC', async () => {
+      mockInvoke.mockImplementation(async (cmd) => {
+        if (cmd === 'list_global_rules') {
+          return [
+            { name: 'backend.md', path: '.cvh/rules/backend.md', fileType: 'rule' },
+            { name: 'frontend.md', path: '.cvh/rules/frontend.md', fileType: 'rule' },
+          ];
+        }
+        return null;
+      });
+
+      await useCortexStore.getState().loadGlobalRules();
+
+      const { globalRules } = useCortexStore.getState();
+      expect(globalRules).toHaveLength(2);
+      expect(globalRules[0].id).toBe('global-rule-backend.md');
+      expect(globalRules[0].name).toBe('backend.md');
+      expect(globalRules[0].stageId).toBe('global');
+      expect(globalRules[0].type).toBe('rule');
+      expect(globalRules[0].path).toBe('.cvh/rules/backend.md');
+      expect(globalRules[1].id).toBe('global-rule-frontend.md');
+    });
+
+    it('openFile opens global rule from globalRules via IPC read_cortex_file', async () => {
+      useCortexStore.setState({
+        globalRules: [
+          {
+            id: 'global-rule-backend.md',
+            name: 'backend.md',
+            stageId: 'global',
+            type: 'rule',
+            path: '.cvh/rules/backend.md',
+            content: '',
+            isDirty: false,
+          },
+        ],
+      });
+
+      mockInvoke.mockImplementation(async (cmd, args) => {
+        if (cmd === 'read_cortex_file' && (args as { path: string })?.path === '.cvh/rules/backend.md') {
+          return '# Backend Invariants';
+        }
+        return null;
+      });
+
+      await useCortexStore.getState().openFile('global-rule-backend.md');
+
+      const state = useCortexStore.getState();
+      expect(state.activeFile).toBeDefined();
+      expect(state.activeFile?.id).toBe('global-rule-backend.md');
+      expect(state.activeFile?.content).toBe('# Backend Invariants');
+      expect(state.isEditorOpen).toBe(true);
+      expect(state.globalRules[0].content).toBe('# Backend Invariants');
+    });
+
+    it('createGlobalRule validates name, generates English template, saves via IPC, and opens in editor', async () => {
+      mockInvoke.mockResolvedValue(true);
+
+      await useCortexStore.getState().createGlobalRule('sensors');
+
+      expect(mockInvoke).toHaveBeenCalledWith(
+        'save_cortex_file',
+        expect.objectContaining({
+          path: '.cvh/rules/sensors.md',
+          content: expect.stringContaining('# Rule: sensors'),
+        })
+      );
+
+      const state = useCortexStore.getState();
+      const created = state.globalRules.find((f) => f.name === 'sensors.md');
+      expect(created).toBeDefined();
+      expect(created?.stageId).toBe('global');
+      expect(created?.content).toContain('## Purpose');
+      expect(created?.content).toContain('## Invariants & Guidelines');
+      // English-only template invariant
+      expect(created?.content).not.toMatch(/[\u0400-\u04FF]/);
+
+      expect(state.activeFile?.id).toBe('global-rule-sensors.md');
+      expect(state.isEditorOpen).toBe(true);
+    });
+
+    it('createGlobalRule rejects invalid names and duplicates', async () => {
+      await expect(
+        useCortexStore.getState().createGlobalRule('bad name!')
+      ).rejects.toThrow('Только латиница, цифры, - и _');
+
+      useCortexStore.setState({
+        globalRules: [
+          {
+            id: 'global-rule-existing.md',
+            name: 'existing.md',
+            stageId: 'global',
+            type: 'rule',
+            path: '.cvh/rules/existing.md',
+            content: '# Existing',
+          },
+        ],
+      });
+
+      await expect(
+        useCortexStore.getState().createGlobalRule('existing')
+      ).rejects.toThrow('уже есть в глобальных правилах');
+    });
+
+    it('saveRules updates globalRules and resets isDirty', async () => {
+      mockInvoke.mockResolvedValue(true);
+
+      const ruleFile = {
+        id: 'global-rule-ponytail.md',
+        name: 'ponytail.md',
+        stageId: 'global',
+        type: 'rule' as const,
+        path: '.cvh/rules/ponytail.md',
+        content: '# Ponytail Invariants',
+        isDirty: true,
+      };
+
+      useCortexStore.setState({
+        globalRules: [ruleFile],
+        activeFile: { ...ruleFile, content: '# Updated Ponytail Invariants' },
+        isEditorOpen: true,
+      });
+
+      await useCortexStore.getState().saveRules();
+
+      const state = useCortexStore.getState();
+      expect(state.activeFile?.isDirty).toBe(false);
+      expect(state.globalRules[0].content).toBe('# Updated Ponytail Invariants');
+      expect(state.globalRules[0].isDirty).toBe(false);
+      expect(mockInvoke).toHaveBeenCalledWith('save_cortex_file', {
+        path: '.cvh/rules/ponytail.md',
+        content: '# Updated Ponytail Invariants',
+      });
+    });
+
+    it('deleteGlobalRule deletes via IPC, removes from globalRules, and closes editor if active', async () => {
+      mockInvoke.mockResolvedValue(true);
+
+      const ruleFile = {
+        id: 'global-rule-obsolete.md',
+        name: 'obsolete.md',
+        stageId: 'global',
+        type: 'rule' as const,
+        path: '.cvh/rules/obsolete.md',
+        content: '# Obsolete',
+        isDirty: false,
+      };
+
+      useCortexStore.setState({
+        globalRules: [ruleFile],
+        activeFile: ruleFile,
+        isEditorOpen: true,
+      });
+
+      await useCortexStore.getState().deleteGlobalRule('obsolete.md');
+
+      expect(mockInvoke).toHaveBeenCalledWith('delete_cortex_file', {
+        path: '.cvh/rules/obsolete.md',
+      });
+
+      const state = useCortexStore.getState();
+      expect(state.globalRules).toHaveLength(0);
+      expect(state.activeFile).toBeNull();
+      expect(state.isEditorOpen).toBe(false);
     });
   });
 });

@@ -35,6 +35,18 @@ export function buildRuleTemplate(baseName: string, stageTitle: string): string 
   );
 }
 
+// Concise English template for global shared rules in `.cvh/rules/`
+export function buildGlobalRuleTemplate(baseName: string): string {
+  return (
+    `# Rule: ${baseName}\n\n` +
+    `## Purpose\n` +
+    `Define the system standard or architectural invariant.\n\n` +
+    `## Invariants & Guidelines\n` +
+    `- Adhere strictly to project conventions.\n` +
+    `- Verify results with ground truth sensors.\n`
+  );
+}
+
 // Минимальный шаблон хука: момент в имени файла, расширение задаёт интерпретатор.
 export function buildHookTemplate(
   moment: CortexHookMoment,

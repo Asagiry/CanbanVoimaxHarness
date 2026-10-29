@@ -27,6 +27,7 @@ export const createCortexFilesSlice: StateCreator<
 > = (set, get) => ({
   stages: DEFAULT_CORTEX_STAGES,
   agentStages: [],
+  globalRules: [],
   activeFile: null,
   focusedStageId: null,
   isEditorOpen: false,
@@ -313,7 +314,56 @@ export const createCortexFilesSlice: StateCreator<
     set({ stages: boardStages, fileMissing: nextMissing });
   },
 
+  loadGlobalRules: async () => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const files = await invoke<Array<{ name: string; path: string; fileType: string }>>(
+        'list_global_rules'
+      );
+      const prevGlobalRules = get().globalRules;
+      const prevMap = new Map(prevGlobalRules.map((f) => [f.name, f]));
+      const mapped: CortexAgentFile[] = (files ?? []).map((file) => {
+        const prev = prevMap.get(file.name);
+        return {
+          id: `global-rule-${file.name}`,
+          name: file.name,
+          stageId: 'global',
+          type: 'rule',
+          path: file.path,
+          content: prev?.content ?? '',
+          isDirty: prev?.isDirty ?? false,
+        };
+      });
+      set({ globalRules: mapped });
+    } catch (err) {
+      console.info('loadGlobalRules not available or in web mode:', err);
+    }
+  },
+
   openFile: async (fileId) => {
+    // 0. Сначала проверяем глобальные правила проекта (.cvh/rules/)
+    const { globalRules } = get();
+    const globalFile = globalRules.find((f) => f.id === fileId);
+    if (globalFile) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const content = await invoke<string>('read_cortex_file', { path: globalFile.path });
+        const loaded: CortexAgentFile = { ...globalFile, content, isDirty: false };
+        set((state) => ({
+          globalRules: state.globalRules.map((f) => (f.id === fileId ? loaded : f)),
+          activeFile: loaded,
+          isEditorOpen: true,
+          saveFeedback: null,
+        }));
+      } catch (err) {
+        console.info('read_cortex_file failed for global rule:', err);
+        if (globalFile.content) {
+          set({ activeFile: { ...globalFile }, isEditorOpen: true, saveFeedback: null });
+        }
+      }
+      return;
+    }
+
     // Один флоу открытия на обе секции: ищем узел и в колонках, и в агентах.
     const { stages, agentStages } = get();
     const allStages = [...stages, ...agentStages];

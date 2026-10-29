@@ -7,6 +7,7 @@ import {
 } from '../types';
 import { CortexAgentFile } from '../../../types';
 import {
+  buildGlobalRuleTemplate,
   buildHookTemplate,
   buildRuleTemplate,
   cortexAgentDir,
@@ -114,6 +115,51 @@ export const createRulesSlice: StateCreator<
     }));
   },
 
+  createGlobalRule: async (rawName: string) => {
+    const { globalRules } = get();
+    const { base, fileName } = normalizeCortexFileName(rawName);
+    if (!base) throw new Error('Введите имя файла');
+    if (!/^[A-Za-z0-9-_]+$/.test(base)) {
+      throw new Error('Только латиница, цифры, - и _');
+    }
+
+    const targetPath = `.cvh/rules/${fileName}`;
+    const content = buildGlobalRuleTemplate(base);
+
+    const duplicate = globalRules.some(
+      (f) =>
+        f.name.toLowerCase() === fileName.toLowerCase() ||
+        f.path.toLowerCase() === targetPath.toLowerCase()
+    );
+    if (duplicate) throw new Error(`Файл ${fileName} уже есть в глобальных правилах`);
+
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('save_cortex_file', { path: targetPath, content });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(`Не удалось сохранить файл: ${detail}`);
+    }
+
+    const fileId = `global-rule-${fileName}`;
+    const created: CortexAgentFile = {
+      id: fileId,
+      name: fileName,
+      stageId: 'global',
+      type: 'rule',
+      path: targetPath,
+      content,
+      isDirty: false,
+    };
+
+    set((state) => ({
+      globalRules: [...state.globalRules, created].sort((a, b) => a.name.localeCompare(b.name)),
+      activeFile: created,
+      isEditorOpen: true,
+      saveFeedback: null,
+    }));
+  },
+
   updateActiveFileContent: (content) => {
     set((state) => {
       if (!state.activeFile) return state;
@@ -128,7 +174,7 @@ export const createRulesSlice: StateCreator<
   },
 
   saveRules: async () => {
-    const { activeFile, stages, agentStages } = get();
+    const { activeFile, stages, agentStages, globalRules } = get();
     if (!activeFile) return;
 
     set({ isSaving: true });
@@ -170,6 +216,11 @@ export const createRulesSlice: StateCreator<
         ),
       };
     });
+    const updatedGlobalRules = globalRules.map((file) =>
+      file.id === activeFile.id
+        ? { ...file, content: activeFile.content, isDirty: false }
+        : file
+    );
 
     const feedbackMsg = isBuiltin
       ? `Встроенный хук ${activeFile.name} обновлен`
@@ -180,6 +231,7 @@ export const createRulesSlice: StateCreator<
     set({
       stages: updatedStages,
       agentStages: updatedAgentStages,
+      globalRules: updatedGlobalRules,
       activeFile: { ...activeFile, isDirty: false },
       isSaving: false,
       saveFeedback: feedbackMsg,
@@ -191,6 +243,10 @@ export const createRulesSlice: StateCreator<
   },
 
   deleteRule: async (stageId: string, ruleName: string) => {
+    if (stageId === 'global') {
+      return get().deleteGlobalRule(ruleName);
+    }
+
     set((state) => {
       const filterFiles = (files: CortexAgentFile[]) =>
         files.filter((f) => !(f.type === 'rule' && (f.name === ruleName || f.id === ruleName)));
@@ -214,6 +270,27 @@ export const createRulesSlice: StateCreator<
         isEditorOpen: isActiveDeleted ? false : state.isEditorOpen,
       };
     });
+  },
+
+  deleteGlobalRule: async (fileName: string) => {
+    const { globalRules, activeFile } = get();
+    const target = globalRules.find((f) => f.name === fileName || f.id === fileName);
+    if (!target) return;
+
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('delete_cortex_file', { path: target.path });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(`Не удалось удалить файл: ${detail}`);
+    }
+
+    const isActiveDeleted = activeFile?.id === target.id;
+    set((state) => ({
+      globalRules: state.globalRules.filter((f) => f.id !== target.id),
+      activeFile: isActiveDeleted ? null : state.activeFile,
+      isEditorOpen: isActiveDeleted ? false : state.isEditorOpen,
+    }));
   },
 
   reorderRules: (stageId: string, ruleNames: string[]) => {

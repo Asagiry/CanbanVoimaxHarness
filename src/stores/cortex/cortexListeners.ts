@@ -28,11 +28,16 @@ export async function initCortexEventListeners(
       if (!store) return;
       store.getState().syncStagesFromColumns(useBoardStore.getState().columns);
     });
+    const uRules = await listen<unknown>('cortex:rules_updated', async () => {
+      if (!store) return;
+      await store.getState().loadGlobalRules();
+    });
     cortexListenersInitialized = true;
     return () => {
       uPersonas();
       uBoards();
       uPipeline();
+      uRules();
       cortexListenersInitialized = false;
     };
   } catch (e) {

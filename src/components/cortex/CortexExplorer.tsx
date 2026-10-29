@@ -24,6 +24,7 @@ import {
 import SectionHeader from './tree/SectionHeader';
 import ColumnStageCard from './cards/ColumnStageCard';
 import AgentStageCard from './cards/AgentStageCard';
+import GlobalRulesSection from './cards/GlobalRulesSection';
 import EditAgentPersonaModal from './modals/EditAgentPersonaModal';
 import CreateAgentModal from './modals/CreateAgentModal';
 
@@ -32,6 +33,7 @@ export default function CortexExplorer() {
     stages,
     agentStages,
     agentPersonas,
+    globalRules,
     activeFile,
     focusedStageId,
     toggleStageExpand,
@@ -42,6 +44,9 @@ export default function CortexExplorer() {
     createPersonaTemplate,
     createSettingTemplate,
     loadAgentPersonas,
+    loadGlobalRules,
+    createGlobalRule,
+    deleteGlobalRule,
     renameAgentPersona,
     deleteAgentPersona,
     setAgentPersonaColor,
@@ -52,7 +57,7 @@ export default function CortexExplorer() {
   const setColumns = useBoardStore((s) => s.setColumns);
   const { t } = useTranslation();
   const [filterQuery, setFilterQuery] = useState('');
-  const [openSections, setOpenSections] = useState({ columns: true, agents: true });
+  const [openSections, setOpenSections] = useState({ columns: true, agents: true, globalRules: true });
   const [openRulesFolders, setOpenRulesFolders] = useState<Record<string, boolean>>({});
   const [openHooksFolders, setOpenHooksFolders] = useState<Record<string, boolean>>({});
   const [creatingStageId, setCreatingStageId] = useState<string | null>(null);
@@ -77,7 +82,7 @@ export default function CortexExplorer() {
     if (isRefreshingPersonas) return;
     setIsRefreshingPersonas(true);
     try {
-      await loadAgentPersonas();
+      await Promise.all([loadAgentPersonas(), loadGlobalRules()]);
     } finally {
       if (refreshTimerRef.current) {
         clearTimeout(refreshTimerRef.current);
@@ -185,7 +190,12 @@ export default function CortexExplorer() {
     void loadAgentPersonas();
   }, [loadAgentPersonas]);
 
-  const toggleSection = (key: 'columns' | 'agents') => {
+  // Источник глобальных правил — invoke('list_global_rules')
+  useEffect(() => {
+    void loadGlobalRules();
+  }, [loadGlobalRules]);
+
+  const toggleSection = (key: 'columns' | 'agents' | 'globalRules') => {
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
@@ -291,6 +301,21 @@ export default function CortexExplorer() {
     if (matchingFiles.length === 0) return null;
     return { ...stage, isExpanded: true, files: matchingFiles };
   }).filter(Boolean) as CortexAgentStage[];
+
+  // Секция 3: глобальные правила проекта (.cvh/rules/)
+  const filteredGlobalRules = globalRules.filter((f) => !isSearching || matchFile(f));
+
+  const handleDeleteGlobalRule = async (fileName: string) => {
+    if (!window.confirm(t('cortex.deleteGlobalRuleConfirm', { name: fileName }))) {
+      return;
+    }
+    try {
+      await deleteGlobalRule(fileName);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(t('cortex.deleteGlobalRuleError', { msg }));
+    }
+  };
 
   const sharedFolders = {
     openRulesFolders,
@@ -470,6 +495,19 @@ export default function CortexExplorer() {
             </div>
           )}
         </section>
+
+        {/* СЕКЦИЯ 3: Глобальные правила */}
+        <GlobalRulesSection
+          rules={filteredGlobalRules}
+          totalCount={globalRules.length}
+          isOpen={openSections.globalRules}
+          onToggle={() => toggleSection('globalRules')}
+          activeFileId={activeFile?.id ?? null}
+          onOpenFile={handleOpenFile}
+          onCreateRule={createGlobalRule}
+          onDeleteRule={handleDeleteGlobalRule}
+          isSearching={isSearching}
+        />
       </div>
 
       {/* Контекстное меню агента (ПКМ) */}

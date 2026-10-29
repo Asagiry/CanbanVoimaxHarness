@@ -323,5 +323,95 @@ pub async fn save_cortex_file(
         let _ = app.emit("agent:personas_updated", &list);
     }
 
+    if norm_path.contains(".cvh/rules") || norm_path.contains("/rules/") {
+        let _ = app.emit("cortex:rules_updated", serde_json::json!({ "path": &norm_path }));
+    }
+
+    Ok(())
+}
+
+pub async fn list_global_rules_in(root: &Path) -> Result<Vec<CortexDiskFile>, String> {
+    let global_rules_dir = crate::config::global_rules_dir(root);
+    if !global_rules_dir.exists() {
+        let _ = tokio::fs::create_dir_all(&global_rules_dir).await;
+    }
+    let mut files = Vec::new();
+    if let Ok(mut entries) = tokio::fs::read_dir(&global_rules_dir).await {
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let p = entry.path();
+            if p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("md") {
+                if let Some(name) = entry.file_name().to_str() {
+                    files.push(CortexDiskFile {
+                        name: name.to_string(),
+                        path: format!(".cvh/rules/{}", name),
+                        file_type: "rule".to_string(),
+                    });
+                }
+            }
+        }
+    }
+    files.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(files)
+}
+
+#[tauri::command]
+pub async fn list_global_rules(
+    state: State<'_, AppState>,
+) -> Result<Vec<CortexDiskFile>, String> {
+    let root = state.get_root();
+    list_global_rules_in(&root).await
+}
+
+pub async fn delete_cortex_file_at(root: &Path, rel_path: &str) -> Result<(), String> {
+    let norm = rel_path.replace('\\', "/");
+    let trimmed = norm.trim_start_matches('/');
+
+    // Security invariant: only files inside .cvh/rules/ or .cvh/agents/ may be deleted
+    if !trimmed.starts_with(".cvh/rules/") && !trimmed.starts_with(".cvh/agents/") {
+        return Err("Forbidden: file path must be inside .cvh/rules/ or .cvh/agents/".to_string());
+    }
+
+    // Security invariant: strictly reject path traversal attempts
+    if Path::new(trimmed).components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+        return Err("Forbidden: directory traversal detected".to_string());
+    }
+
+    let target = root.join(trimmed);
+    if !target.exists() {
+        return Err(format!("File does not exist: {}", rel_path));
+    }
+
+    let root_canon = root.canonicalize().map_err(|e| format!("Root path error: {}", e))?;
+    let target_canon = target.canonicalize().map_err(|e| format!("Target path error: {}", e))?;
+    if !target_canon.starts_with(&root_canon) {
+        return Err("Forbidden: path outside repository root".to_string());
+    }
+
+    tokio::fs::remove_file(&target_canon)
+        .await
+        .map_err(|e| format!("Failed to delete cortex file {:?}: {}", target_canon, e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_cortex_file(
+    path: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let root = state.get_root();
+    delete_cortex_file_at(&root, &path).await?;
+
+    let norm = path.replace('\\', "/");
+    let trimmed = norm.trim_start_matches('/');
+    if trimmed.starts_with(".cvh/rules/") || trimmed.contains("/rules/") {
+        let _ = app.emit("cortex:rules_updated", serde_json::json!({ "path": &path }));
+    }
+    if trimmed.starts_with(".cvh/agents/") {
+        let list = list_agent_personas_in(&root).await;
+        let _ = app.emit("agent:personas_updated", &list);
+    }
+
     Ok(())
 }

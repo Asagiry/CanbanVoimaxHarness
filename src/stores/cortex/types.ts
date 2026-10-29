@@ -55,9 +55,11 @@ export interface RulesActions {
     kind: 'rule' | 'hook',
     opts?: { hookMoment?: CortexHookMoment; hookExt?: CortexHookExt },
   ) => Promise<void>;
+  createGlobalRule: (rawName: string) => Promise<void>;
   updateActiveFileContent: (content: string) => void;
   saveRules: () => Promise<void>;
   deleteRule: (stageId: string, ruleName: string) => Promise<void>;
+  deleteGlobalRule: (fileName: string) => Promise<void>;
   reorderRules: (stageId: string, ruleNames: string[]) => void;
 }
 
@@ -66,6 +68,7 @@ export type RulesSlice = RulesState & RulesActions;
 export interface CortexFilesState {
   stages: CortexAgentStage[];
   agentStages: CortexAgentStage[];
+  globalRules: CortexAgentFile[];
   activeFile: CortexAgentFile | null;
   focusedStageId: string | null;
   isEditorOpen: boolean;
@@ -79,6 +82,7 @@ export interface CortexFilesActions {
   expandStage: (stageId: string) => void;
   focusStage: (stageId: string) => void;
   syncStagesFromColumns: (columns: PipelineColumn[]) => void;
+  loadGlobalRules: () => Promise<void>;
   openFile: (fileId: string) => Promise<void>;
   createPersonaTemplate: (fileId: string) => Promise<void>;
   createSettingTemplate: (fileId: string) => Promise<void>;
