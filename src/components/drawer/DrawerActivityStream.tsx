@@ -2,24 +2,18 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import type { KanbanTask } from '../../types';
 import type { DrawerActivityItem } from '../../stores/drawerStore';
 import ToolExecutionCard from './ToolExecutionCard';
-import ThinkingCard, { formatDurationCompact } from './ThinkingCard';
 import QuestionPromptCard from './QuestionPromptCard';
 import CompactedContextCard from './CompactedContextCard';
 import ImageLightboxModal from './ImageLightboxModal';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
-import { useCortexStore } from '../../stores/cortexStore';
 import { useTranslation } from '../../stores/languageStore';
-import AgentIcon from '../common/AgentIcon';
-import { getRoleBadgeStyle } from '../../lib/agentPalette';
 import {
   ArrowDown,
   ChevronDown,
   ChevronRight,
   CheckCheck,
   Check,
-  User,
-  ShieldAlert,
   AlertTriangle,
   Info,
   Target,
@@ -33,196 +27,20 @@ import {
   ZoomIn,
   Paperclip,
 } from 'lucide-react';
-import { formatSubagentDisplayTitle } from './SubagentsSidebar';
+import {
+  ThoughtStreamCard,
+  SteerDirectiveCard,
+  SubagentActivityCard,
+  formatDurationCompact,
+} from './stream';
+import {
+  parseMarkdownTokens,
+  parseInlineTokens,
+  tryExtractTodos,
+  type InlineNode,
+} from '../../lib/markdown';
 
 export const LightboxContext = React.createContext<((src: string, alt?: string) => void) | null>(null);
-
-// Inline Markdown Parser Types & Helpers
-interface InlineTextNode {
-  type: 'text';
-  text: string;
-}
-interface InlineCodeNode {
-  type: 'code';
-  text: string;
-}
-interface InlineBoldNode {
-  type: 'bold';
-  children: InlineNode[];
-}
-interface InlineItalicNode {
-  type: 'italic';
-  children: InlineNode[];
-}
-interface InlineLinkNode {
-  type: 'link';
-  text: string;
-  url: string;
-  children: InlineNode[];
-}
-type InlineNode = InlineTextNode | InlineCodeNode | InlineBoldNode | InlineItalicNode | InlineLinkNode;
-
-function isValidInlineCode(code: string): boolean {
-  if (!code || code.length > 120) return false;
-  if (/[\r\n]/.test(code)) return false;
-  // Suspicious if it spans sentence boundaries:
-  if (/[.!?]\s+/.test(code)) return false;
-  // Disallow inner backticks:
-  if (code.includes('`')) return false;
-  // Conversational Cyrillic prose (multiple Cyrillic words without quotes):
-  if (/[а-яА-ЯёЁ]{2,}\s+[а-яА-ЯёЁ]{2,}/.test(code) && !/^["'].*["']$/.test(code.trim())) {
-    return false;
-  }
-  return true;
-}
-
-function parseInlineTokens(text: string, depth = 0): InlineNode[] {
-  const nodes: InlineNode[] = [];
-  let i = 0;
-  let textBuf = '';
-
-  const flushText = () => {
-    if (textBuf) {
-      nodes.push({ type: 'text', text: textBuf });
-      textBuf = '';
-    }
-  };
-
-  while (i < text.length) {
-    // 1. Inline code `code`
-    if (text[i] === '`') {
-      const closeIdx = text.indexOf('`', i + 1);
-      if (closeIdx !== -1) {
-        const candidate = text.slice(i + 1, closeIdx);
-        if (isValidInlineCode(candidate)) {
-          flushText();
-          nodes.push({ type: 'code', text: candidate });
-          i = closeIdx + 1;
-          continue;
-        }
-      }
-      // Stray or invalid backtick: treat as plain text
-      textBuf += text[i];
-      i++;
-      continue;
-    }
-
-    // 2. Inline links: [label](url)
-    if (depth < 2 && text[i] === '[' && (i === 0 || text[i - 1] !== '!')) {
-      const closeBracketIdx = text.indexOf('](', i + 1);
-      if (closeBracketIdx !== -1) {
-        const candidateLabel = text.slice(i + 1, closeBracketIdx);
-        if (
-          !candidateLabel.includes('\n') &&
-          !candidateLabel.includes('[') &&
-          candidateLabel.length > 0 &&
-          candidateLabel.length <= 300
-        ) {
-          let parenDepth = 1;
-          let closeParenIdx = -1;
-          for (let p = closeBracketIdx + 2; p < text.length; p++) {
-            if (text[p] === '(') parenDepth++;
-            else if (text[p] === ')') {
-              parenDepth--;
-              if (parenDepth === 0) {
-                closeParenIdx = p;
-                break;
-              }
-            } else if (text[p] === ' ' || text[p] === '\n') {
-              break;
-            }
-          }
-          if (closeParenIdx !== -1) {
-            const candidateUrl = text.slice(closeBracketIdx + 2, closeParenIdx).trim();
-            if (candidateUrl.length > 0) {
-              flushText();
-              nodes.push({
-                type: 'link',
-                text: candidateLabel,
-                url: candidateUrl,
-                children: parseInlineTokens(candidateLabel, depth + 1),
-              });
-              i = closeParenIdx + 1;
-              continue;
-            }
-          }
-        }
-      }
-    }
-
-    // 3. Bold: **text** or __text__
-    if (depth < 2 && text.startsWith('**', i)) {
-      const closeIdx = text.indexOf('**', i + 2);
-      if (closeIdx !== -1) {
-        const candidate = text.slice(i + 2, closeIdx);
-        if (candidate.length > 0 && candidate.length <= 300 && !candidate.startsWith(' ') && !candidate.endsWith(' ')) {
-          flushText();
-          nodes.push({ type: 'bold', children: parseInlineTokens(candidate, depth + 1) });
-          i = closeIdx + 2;
-          continue;
-        }
-      }
-    }
-
-    if (depth < 2 && text.startsWith('__', i)) {
-      const prevChar = i > 0 ? text[i - 1] : ' ';
-      if (!/\w/.test(prevChar)) {
-        const closeIdx = text.indexOf('__', i + 2);
-        if (closeIdx !== -1) {
-          const nextChar = closeIdx + 2 < text.length ? text[closeIdx + 2] : ' ';
-          if (!/\w/.test(nextChar)) {
-            const candidate = text.slice(i + 2, closeIdx);
-            if (candidate.length > 0 && candidate.length <= 300 && !candidate.startsWith(' ') && !candidate.endsWith(' ')) {
-              flushText();
-              nodes.push({ type: 'bold', children: parseInlineTokens(candidate, depth + 1) });
-              i = closeIdx + 2;
-              continue;
-            }
-          }
-        }
-      }
-    }
-
-    // 3. Italic: *text* or _text_
-    if (depth < 2 && text[i] === '*' && !text.startsWith('**', i)) {
-      const closeIdx = text.indexOf('*', i + 1);
-      if (closeIdx !== -1 && !text.startsWith('**', closeIdx)) {
-        const candidate = text.slice(i + 1, closeIdx);
-        if (candidate.length > 0 && candidate.length <= 200 && !candidate.startsWith(' ') && !candidate.endsWith(' ')) {
-          flushText();
-          nodes.push({ type: 'italic', children: parseInlineTokens(candidate, depth + 1) });
-          i = closeIdx + 1;
-          continue;
-        }
-      }
-    }
-
-    if (depth < 2 && text[i] === '_' && !text.startsWith('__', i)) {
-      const prevChar = i > 0 ? text[i - 1] : ' ';
-      if (!/\w/.test(prevChar)) {
-        const closeIdx = text.indexOf('_', i + 1);
-        if (closeIdx !== -1 && !text.startsWith('__', closeIdx)) {
-          const nextChar = closeIdx + 1 < text.length ? text[closeIdx + 1] : ' ';
-          if (!/\w/.test(nextChar)) {
-            const candidate = text.slice(i + 1, closeIdx);
-            if (candidate.length > 0 && candidate.length <= 200 && !candidate.startsWith(' ') && !candidate.endsWith(' ')) {
-              flushText();
-              nodes.push({ type: 'italic', children: parseInlineTokens(candidate, depth + 1) });
-              i = closeIdx + 1;
-              continue;
-            }
-          }
-        }
-      }
-    }
-
-    textBuf += text[i];
-    i++;
-  }
-
-  flushText();
-  return nodes;
-}
 
 function renderInlineNodes(nodes: InlineNode[], prefix: string): React.ReactNode[] {
   return nodes.map((node, i) => {
@@ -287,300 +105,200 @@ export function MarkdownContent({
   const contextOnImageClick = React.useContext(LightboxContext);
   const handleImageClick = onImageClick || contextOnImageClick;
 
-  const elements = useMemo(() => {
-    const cleanContent = (content ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    const lines = cleanContent.split('\n');
-    const result: React.ReactNode[] = [];
-    let inCodeBlock = false;
-    let codeLanguage = '';
-    let codeBuffer: string[] = [];
+  const tokens = useMemo(() => parseMarkdownTokens(content ?? ''), [content]);
 
-    const splitTableRow = (row: string): string[] => {
-      let t = row.trim();
-      if (t.startsWith('|')) t = t.slice(1);
-      if (t.endsWith('|')) t = t.slice(0, -1);
-      return t.split('|').map((c) => c.trim());
-    };
+  return (
+    <div className="space-y-1 select-text font-sans">
+      {tokens.map((token, index) => {
+        switch (token.type) {
+          case 'code':
+            return (
+              <div
+                key={`code-${index}`}
+                className={
+                  token.unfinished
+                    ? 'my-2.5 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] overflow-hidden font-mono text-[13px]'
+                    : 'my-2.5 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22] overflow-hidden font-mono text-[13px]'
+                }
+              >
+                {token.language && (
+                  <div
+                    className={
+                      token.unfinished
+                        ? 'px-3 py-1 bg-[#f4f4f5] dark:bg-[#161b22] border-b border-[#ebebeb] dark:border-[#21262d] text-xs text-[#666666] dark:text-[#8b949e] font-medium flex justify-between items-center'
+                        : 'px-3 py-1 bg-[#f4f4f5] dark:bg-[#0d1117] border-b border-[#ebebeb] dark:border-[#30363d] text-xs text-[#666666] dark:text-[#8b949e] font-medium flex justify-between items-center'
+                    }
+                  >
+                    <span>{token.language}</span>
+                  </div>
+                )}
+                <pre className="p-3 text-[#171717] dark:text-[#f0f6fc] overflow-x-auto leading-relaxed select-text font-mono text-[13px]">
+                  {token.code}
+                </pre>
+              </div>
+            );
 
-    const parseDelimiterRow = (row: string): Array<'left' | 'center' | 'right'> | null => {
-      const cells = splitTableRow(row);
-      if (cells.length === 0) return null;
-      const aligns: Array<'left' | 'center' | 'right'> = [];
-      for (const c of cells) {
-        if (!/^:?-+:?$/.test(c)) return null;
-        if (c.startsWith(':') && c.endsWith(':') && c.length >= 3) aligns.push('center');
-        else if (c.endsWith(':')) aligns.push('right');
-        else aligns.push('left');
-      }
-      return aligns;
-    };
-
-    const isHrLine = (row: string): boolean => {
-      const nospace = row.trim().replace(/\s+/g, '');
-      return /^(-{3,}|\*{3,}|_{3,})$/.test(nospace);
-    };
-
-    const bulletRegex = /^(\s*)([-*+•]|\u2022)\s+(.*)$/;
-    const numberedRegex = /^(\s*)(\d+(\.\d+)*[.)])\s+(.*)$/;
-
-    for (let index = 0; index < lines.length; index++) {
-      const line = lines[index];
-      const trimmedLine = line.trim();
-
-      // Code block start / end (supports indented fences)
-      if (trimmedLine.startsWith('```')) {
-        if (!inCodeBlock) {
-          inCodeBlock = true;
-          codeLanguage = trimmedLine.slice(3).trim();
-          codeBuffer = [];
-        } else {
-          inCodeBlock = false;
-          result.push(
-            <div
-              key={`code-${index}`}
-              className="my-2.5 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22] overflow-hidden font-mono text-[13px]"
-            >
-              {codeLanguage && (
-                <div className="px-3 py-1 bg-[#f4f4f5] dark:bg-[#0d1117] border-b border-[#ebebeb] dark:border-[#30363d] text-xs text-[#666666] dark:text-[#8b949e] font-medium flex justify-between items-center">
-                  <span>{codeLanguage}</span>
-                </div>
-              )}
-              <pre className="p-3 text-[#171717] dark:text-[#f0f6fc] overflow-x-auto leading-relaxed select-text font-mono text-[13px]">
-                {codeBuffer.join('\n')}
-              </pre>
-            </div>
-          );
-        }
-        continue;
-      }
-
-      if (inCodeBlock) {
-        codeBuffer.push(line);
-        continue;
-      }
-
-      // GFM table: header with `|` + delimiter row, then data rows with `|`
-      if (line.includes('|') && index + 1 < lines.length) {
-        const aligns = parseDelimiterRow(lines[index + 1]);
-        if (aligns) {
-          const headerCells = splitTableRow(line);
-          const colCount = Math.max(headerCells.length, aligns.length);
-          const normAligns: Array<'left' | 'center' | 'right'> = Array.from(
-            { length: colCount },
-            (_, k) => aligns[k] ?? 'left'
-          );
-          const normHeader: string[] = Array.from(
-            { length: colCount },
-            (_, k) => headerCells[k] ?? ''
-          );
-          const bodyRows: string[][] = [];
-          let j = index + 2;
-          while (j < lines.length && lines[j].includes('|') && lines[j].trim() !== '' && !lines[j].trim().startsWith('```')) {
-            const cells = splitTableRow(lines[j]);
-            bodyRows.push(Array.from({ length: colCount }, (_, k) => cells[k] ?? ''));
-            j++;
-          }
-          result.push(
-            <div
-              key={`table-${index}`}
-              className="my-2 overflow-x-auto rounded-md border border-[#ebebeb]"
-            >
-              <table className="w-full border-collapse text-[13px] font-mono tabular-nums">
-                <thead>
-                  <tr>
-                    {normHeader.map((cell, k) => (
-                      <th
-                        key={k}
-                        style={{ textAlign: normAligns[k] }}
-                        className="border border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#161b22] px-2 py-1.5 font-semibold text-[#171717] dark:text-[#f0f6fc]"
-                      >
-                        {formatInline(cell, `th-${index}-${k}`)}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {bodyRows.map((row, r) => (
-                    <tr key={r}>
-                      {row.map((cell, k) => (
-                        <td
+          case 'table':
+            return (
+              <div
+                key={`table-${index}`}
+                className="my-2 overflow-x-auto rounded-md border border-[#ebebeb]"
+              >
+                <table className="w-full border-collapse text-[13px] font-mono tabular-nums">
+                  <thead>
+                    <tr>
+                      {token.header.map((cell, k) => (
+                        <th
                           key={k}
-                          style={{ textAlign: normAligns[k] }}
-                          className="border border-[#ebebeb] dark:border-[#21262d] px-2 py-1.5 text-[#171717] dark:text-[#f0f6fc]"
+                          style={{ textAlign: token.aligns[k] }}
+                          className="border border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#161b22] px-2 py-1.5 font-semibold text-[#171717] dark:text-[#f0f6fc]"
                         >
-                          {formatInline(cell, `td-${index}-${r}-${k}`)}
-                        </td>
+                          {formatInline(cell, `th-${index}-${k}`)}
+                        </th>
                       ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          );
-          index = j - 1;
-          continue;
-        }
-      }
-
-      // Thematic break outside tables
-      if (isHrLine(line)) {
-        result.push(<hr key={index} className="border-[#ebebeb] dark:border-[#21262d] my-2.5" />);
-        continue;
-      }
-
-      // Blockquotes: lines starting with `> quote`
-      if (trimmedLine.startsWith('>')) {
-        const quoteLines: string[] = [];
-        let j = index;
-        while (j < lines.length && lines[j].trim().startsWith('>')) {
-          quoteLines.push(lines[j].trim().replace(/^>\s?/, ''));
-          j++;
-        }
-        result.push(
-          <blockquote
-            key={`quote-${index}`}
-            className="my-2 border-l-2 border-[#7c3aed]/50 bg-[#f9f9fb] dark:bg-[#161b22]/40 rounded-r-md px-3.5 py-2 text-sm italic text-[#666666] dark:text-[#8b949e] space-y-1"
-          >
-            {quoteLines.map((ql, qIdx) => (
-              <div key={qIdx} className="leading-relaxed">
-                {ql.trim() === '' ? <div className="h-1" /> : formatInline(ql, `quote-${index}-${qIdx}`)}
+                  </thead>
+                  <tbody>
+                    {token.rows.map((row, r) => (
+                      <tr key={r}>
+                        {row.map((cell, k) => (
+                          <td
+                            key={k}
+                            style={{ textAlign: token.aligns[k] }}
+                            className="border border-[#ebebeb] dark:border-[#21262d] px-2 py-1.5 text-[#171717] dark:text-[#f0f6fc]"
+                          >
+                            {formatInline(cell, `td-${index}-${r}-${k}`)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            ))}
-          </blockquote>
-        );
-        index = j - 1;
-        continue;
-      }
+            );
 
-      // Image line: ![alt](url)
-      const imgMatch = line.trim().match(/^!\[(.*?)\]\((.*?)\)$/);
-      if (imgMatch) {
-        const imgSrc = imgMatch[2];
-        const imgAlt = imgMatch[1] || 'Image';
-        result.push(
-          <div
-            key={`img-${index}`}
-            onClick={() => handleImageClick?.(imgSrc, imgAlt)}
-            className="my-2 rounded-lg overflow-hidden border border-[#ebebeb] dark:border-[#21262d] max-w-lg bg-[#f4f4f5] dark:bg-[#161b22] shadow-xs group cursor-zoom-in"
-          >
-            <img
-              src={imgSrc}
-              alt={imgAlt}
-              className="w-full max-h-80 object-contain cursor-zoom-in group-hover:scale-[1.01] transition-transform duration-200"
-            />
-          </div>
-        );
-        continue;
-      }
+          case 'hr':
+            return <hr key={`hr-${index}`} className="border-[#ebebeb] dark:border-[#21262d] my-2.5" />;
 
-      // Headings
-      if (trimmedLine.startsWith('#### ')) {
-        result.push(
-          <h5 key={index} className="text-[13px] md:text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] mt-2 mb-1">
-            {formatInline(trimmedLine.slice(5), `h5-${index}`)}
-          </h5>
-        );
-      } else if (trimmedLine.startsWith('### ')) {
-        result.push(
-          <h4 key={index} className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] mt-2.5 mb-1">
-            {formatInline(trimmedLine.slice(4), `h4-${index}`)}
-          </h4>
-        );
-      } else if (trimmedLine.startsWith('## ')) {
-        result.push(
-          <h3 key={index} className="text-sm md:text-base font-semibold text-[#171717] dark:text-[#f0f6fc] mt-3 mb-1">
-            {formatInline(trimmedLine.slice(3), `h3-${index}`)}
-          </h3>
-        );
-      } else if (trimmedLine.startsWith('# ')) {
-        result.push(
-          <h2 key={index} className="text-base md:text-lg font-bold text-[#171717] dark:text-[#f0f6fc] mt-3.5 mb-1.5">
-            {formatInline(trimmedLine.slice(2), `h2-${index}`)}
-          </h2>
-        );
-      } else if (numberedRegex.test(line)) {
-        const numMatch = line.match(numberedRegex)!;
-        const indent = numMatch[1].length;
-        const mlClass = indent >= 4 ? 'ml-8' : indent >= 2 ? 'ml-6' : 'ml-4';
-        result.push(
-          <div key={`num-${index}`} className={`${mlClass} text-sm leading-relaxed text-[#171717] dark:text-[#f0f6fc] flex items-start gap-1.5`}>
-            <span className="font-semibold text-[#171717] dark:text-[#f0f6fc] select-none shrink-0 font-mono text-[13px]">
-              {numMatch[2]}
-            </span>
-            <span className="flex-1 min-w-0">{formatInline(numMatch[4], `num-${index}`)}</span>
-          </div>
-        );
-      } else if (bulletRegex.test(line)) {
-        const bulletMatch = line.match(bulletRegex)!;
-        const indent = bulletMatch[1].length;
-        const mlClass = indent >= 4 ? 'ml-8' : indent >= 2 ? 'ml-6' : 'ml-4';
-        const taskMatch = bulletMatch[3].match(/^\[([ xX])\]\s*(.*)$/);
-        if (taskMatch) {
-          const isChecked = taskMatch[1].toLowerCase() === 'x';
-          const taskText = taskMatch[2];
-          result.push(
-            <div
-              key={`task-${index}`}
-              className={`${mlClass} text-sm leading-relaxed flex items-start gap-2 my-0.5`}
-            >
-              {isChecked ? (
-                <span className="w-4 h-4 rounded bg-[#7c3aed]/15 dark:bg-[#7c3aed]/25 border border-[#7c3aed]/50 text-[#7c3aed] dark:text-[#a78bfa] flex items-center justify-center shrink-0 mt-0.5 select-none">
-                  <Check className="w-2.5 h-2.5 stroke-[3]" />
-                </span>
-              ) : (
-                <span className="w-4 h-4 rounded border border-[#d4d4d8] dark:border-[#30363d] bg-transparent shrink-0 mt-0.5 select-none" />
-              )}
-              <span
-                className={`flex-1 min-w-0 ${
-                  isChecked ? 'line-through text-[#71717a] dark:text-[#8b949e]' : 'text-[#171717] dark:text-[#f0f6fc]'
-                }`}
+          case 'blockquote':
+            return (
+              <blockquote
+                key={`quote-${index}`}
+                className="my-2 border-l-2 border-[#7c3aed]/50 bg-[#f9f9fb] dark:bg-[#161b22]/40 rounded-r-md px-3.5 py-2 text-sm italic text-[#666666] dark:text-[#8b949e] space-y-1"
               >
-                {formatInline(taskText, `task-${index}`)}
-              </span>
-            </div>
-          );
-        } else {
-          result.push(
-            <div key={`bullet-${index}`} className={`${mlClass} text-sm leading-relaxed text-[#171717] dark:text-[#f0f6fc] flex items-start gap-2`}>
-              <span className="text-[#666666] dark:text-[#8b949e] select-none shrink-0 leading-relaxed">•</span>
-              <span className="flex-1 min-w-0">{formatInline(bulletMatch[3], `bullet-${index}`)}</span>
-            </div>
-          );
+                {token.lines.map((ql, qIdx) => (
+                  <div key={qIdx} className="leading-relaxed">
+                    {ql.trim() === '' ? <div className="h-1" /> : formatInline(ql, `quote-${index}-${qIdx}`)}
+                  </div>
+                ))}
+              </blockquote>
+            );
+
+          case 'image':
+            return (
+              <div
+                key={`img-${index}`}
+                onClick={() => handleImageClick?.(token.src, token.alt)}
+                className="my-2 rounded-lg overflow-hidden border border-[#ebebeb] dark:border-[#21262d] max-w-lg bg-[#f4f4f5] dark:bg-[#161b22] shadow-xs group cursor-zoom-in"
+              >
+                <img
+                  src={token.src}
+                  alt={token.alt}
+                  className="w-full max-h-80 object-contain cursor-zoom-in group-hover:scale-[1.01] transition-transform duration-200"
+                />
+              </div>
+            );
+
+          case 'heading': {
+            if (token.level === 5) {
+              return (
+                <h5 key={`h5-${index}`} className="text-[13px] md:text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] mt-2 mb-1">
+                  {formatInline(token.text, `h5-${index}`)}
+                </h5>
+              );
+            }
+            if (token.level === 4) {
+              return (
+                <h4 key={`h4-${index}`} className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] mt-2.5 mb-1">
+                  {formatInline(token.text, `h4-${index}`)}
+                </h4>
+              );
+            }
+            if (token.level === 3) {
+              return (
+                <h3 key={`h3-${index}`} className="text-sm md:text-base font-semibold text-[#171717] dark:text-[#f0f6fc] mt-3 mb-1">
+                  {formatInline(token.text, `h3-${index}`)}
+                </h3>
+              );
+            }
+            return (
+              <h2 key={`h2-${index}`} className="text-base md:text-lg font-bold text-[#171717] dark:text-[#f0f6fc] mt-3.5 mb-1.5">
+                {formatInline(token.text, `h2-${index}`)}
+              </h2>
+            );
+          }
+
+          case 'numbered': {
+            const mlClass = token.indent >= 4 ? 'ml-8' : token.indent >= 2 ? 'ml-6' : 'ml-4';
+            return (
+              <div key={`num-${index}`} className={`${mlClass} text-sm leading-relaxed text-[#171717] dark:text-[#f0f6fc] flex items-start gap-1.5`}>
+                <span className="font-semibold text-[#171717] dark:text-[#f0f6fc] select-none shrink-0 font-mono text-[13px]">
+                  {token.number}
+                </span>
+                <span className="flex-1 min-w-0">{formatInline(token.text, `num-${index}`)}</span>
+              </div>
+            );
+          }
+
+          case 'task': {
+            const mlClass = token.indent >= 4 ? 'ml-8' : token.indent >= 2 ? 'ml-6' : 'ml-4';
+            return (
+              <div
+                key={`task-${index}`}
+                className={`${mlClass} text-sm leading-relaxed flex items-start gap-2 my-0.5`}
+              >
+                {token.checked ? (
+                  <span className="w-4 h-4 rounded bg-[#7c3aed]/15 dark:bg-[#7c3aed]/25 border border-[#7c3aed]/50 text-[#7c3aed] dark:text-[#a78bfa] flex items-center justify-center shrink-0 mt-0.5 select-none">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </span>
+                ) : (
+                  <span className="w-4 h-4 rounded border border-[#d4d4d8] dark:border-[#30363d] bg-transparent shrink-0 mt-0.5 select-none" />
+                )}
+                <span
+                  className={`flex-1 min-w-0 ${
+                    token.checked ? 'line-through text-[#71717a] dark:text-[#8b949e]' : 'text-[#171717] dark:text-[#f0f6fc]'
+                  }`}
+                >
+                  {formatInline(token.text, `task-${index}`)}
+                </span>
+              </div>
+            );
+          }
+
+          case 'bullet': {
+            const mlClass = token.indent >= 4 ? 'ml-8' : token.indent >= 2 ? 'ml-6' : 'ml-4';
+            return (
+              <div key={`bullet-${index}`} className={`${mlClass} text-sm leading-relaxed text-[#171717] dark:text-[#f0f6fc] flex items-start gap-2`}>
+                <span className="text-[#666666] dark:text-[#8b949e] select-none shrink-0 leading-relaxed">•</span>
+                <span className="flex-1 min-w-0">{formatInline(token.text, `bullet-${index}`)}</span>
+              </div>
+            );
+          }
+
+          case 'blank':
+            return <div key={`blank-${index}`} className="h-1.5" />;
+
+          case 'paragraph':
+          default:
+            return (
+              <p key={`p-${index}`} className="text-sm leading-relaxed text-[#171717] dark:text-[#f0f6fc]">
+                {formatInline(token.text, `p-${index}`)}
+              </p>
+            );
         }
-      } else if (line.trim() === '') {
-        result.push(<div key={index} className="h-1.5" />);
-      } else {
-        result.push(
-          <p key={index} className="text-sm leading-relaxed text-[#171717] dark:text-[#f0f6fc]">
-            {formatInline(line, `p-${index}`)}
-          </p>
-        );
-      }
-    }
-
-    // Flush unfinished streaming code block at EOF
-    if (inCodeBlock) {
-      result.push(
-        <div
-          key="code-unfinished"
-          className="my-2.5 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] overflow-hidden font-mono text-[13px]"
-        >
-          {codeLanguage && (
-            <div className="px-3 py-1 bg-[#f4f4f5] dark:bg-[#161b22] border-b border-[#ebebeb] dark:border-[#21262d] text-xs text-[#666666] dark:text-[#8b949e] font-medium flex justify-between items-center">
-              <span>{codeLanguage}</span>
-            </div>
-          )}
-          <pre className="p-3 text-[#171717] dark:text-[#f0f6fc] overflow-x-auto leading-relaxed select-text font-mono text-[13px]">
-            {codeBuffer.join('\n')}
-          </pre>
-        </div>
-      );
-    }
-
-    return result;
-  }, [content]);
-
-  return <div className="space-y-1 select-text font-sans">{elements}</div>;
+      })}
+    </div>
+  );
 }
 
 // Clean prompt helper: strips legacy appended [USER STEER] or [USER]: blocks for pure prompt display
@@ -650,82 +368,6 @@ function isFinalResponseItem(
 
   return false;
 }
-
-interface ParsedTodoItem {
-  id: string;
-  content: string;
-  status: 'pending' | 'in_progress' | 'completed';
-}
-
-function tryExtractTodos(text: string): { leadingText?: string; todos: ParsedTodoItem[] } | null {
-  if (!text) return null;
-  const trimmed = text.trim();
-
-  let candidate = trimmed;
-  const fenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
-  if (fenceMatch) {
-    candidate = fenceMatch[1].trim();
-  }
-
-  const toTodos = (arr: unknown[]): ParsedTodoItem[] | null => {
-    if (!Array.isArray(arr) || arr.length === 0) return null;
-    const items: ParsedTodoItem[] = [];
-    for (let i = 0; i < arr.length; i++) {
-      const item = arr[i];
-      if (!item || typeof item !== 'object') return null;
-      const rec = item as Record<string, unknown>;
-      const content = rec.content ?? rec.title ?? rec.text ?? rec.task;
-      if (typeof content !== 'string') return null;
-      const statusRaw = String(rec.status || 'pending').toLowerCase();
-      const status: 'pending' | 'in_progress' | 'completed' =
-        statusRaw === 'completed' || statusRaw === 'done'
-          ? 'completed'
-          : statusRaw === 'in_progress' || statusRaw === 'active'
-          ? 'in_progress'
-          : 'pending';
-      items.push({
-        id: String(rec.id || `todo-${i + 1}`),
-        content,
-        status,
-      });
-    }
-    return items;
-  };
-
-  if (candidate.startsWith('[') || candidate.startsWith('{')) {
-    try {
-      const parsed = JSON.parse(candidate);
-      if (Array.isArray(parsed)) {
-        const todos = toTodos(parsed);
-        if (todos) return { todos };
-      } else if (parsed && typeof parsed === 'object') {
-        const todos = toTodos((parsed as any).todos || (parsed as any).tasks);
-        if (todos) return { todos };
-      }
-    } catch {
-      // not direct JSON
-    }
-  }
-
-  const arrayStart = trimmed.indexOf('[');
-  const arrayEnd = trimmed.lastIndexOf(']');
-  if (arrayStart !== -1 && arrayEnd > arrayStart) {
-    const jsonSub = trimmed.slice(arrayStart, arrayEnd + 1);
-    try {
-      const parsed = JSON.parse(jsonSub);
-      const todos = toTodos(parsed);
-      if (todos) {
-        const leading = trimmed.slice(0, arrayStart).trim();
-        return { leadingText: leading || undefined, todos };
-      }
-    } catch {
-      // not JSON array
-    }
-  }
-
-  return null;
-}
-
 interface AgentExplanationCardProps {
   activity: DrawerActivityItem;
   content?: string;
@@ -852,10 +494,6 @@ export default function DrawerActivityStream({
     activeSubagentRole,
     activeSubagentPrompt,
   } = useDrawerStore();
-  const agentPersonas = useCortexStore((s) => s.agentPersonas);
-  const matchedPersona = agentPersonas.find(
-    (p) => p.role.toLowerCase() === (activeSubagentRole || '').toLowerCase()
-  );
   const { t } = useTranslation();
 
   const effectiveAttachments =
@@ -1113,58 +751,14 @@ export default function DrawerActivityStream({
         <div className="max-w-4xl mx-auto space-y-3.5">
           {activeSubagentId ? (
             /* Subagent Atomic Objective Card */
-            <div className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-4 shadow-xs">
-              <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#ebebeb] dark:border-[#21262d]">
-                <div className="flex items-center space-x-2 min-w-0">
-                  <AgentIcon name={matchedPersona?.icon} className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
-                  <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans truncate">
-                    {t('drawer.subagentObjective', { title: formatSubagentDisplayTitle(activeSubagentTitle) })}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2 shrink-0">
-                  <span
-                    style={getRoleBadgeStyle(activeSubagentRole, matchedPersona?.color)}
-                    className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border"
-                  >
-                    {(activeSubagentRole || 'general').toUpperCase()}
-                  </span>
-                </div>
-              </div>
-              <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed select-text font-sans bg-[#fafafa] dark:bg-[#161b22] p-3 rounded-md border border-[#ebebeb] dark:border-[#30363d]">
-                <MarkdownContent
-                  content={activeSubagentPrompt || t('drawer.subagentInstruction')}
-                  onImageClick={handleOpenLightbox}
-                />
-              </div>
-
-              {/* Subagent Attachments Gallery */}
-              {effectiveAttachments && effectiveAttachments.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-[#ebebeb] dark:border-[#21262d]">
-                  <div className="text-[11px] font-mono font-medium text-[#666666] dark:text-[#8b949e] mb-2 flex items-center gap-1.5">
-                    <Paperclip className="h-3 w-3" />
-                    <span>{t('newTask.attachmentsLabel')} ({effectiveAttachments.length})</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {effectiveAttachments.map((att, idx) => (
-                      <div
-                        key={idx}
-                        onClick={() => handleOpenLightbox(att, `Attachment ${idx + 1}`)}
-                        className="relative group rounded-md overflow-hidden border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22] cursor-pointer hover:border-[#171717] dark:hover:border-[#f0f6fc] transition shadow-2xs"
-                      >
-                        <img
-                          src={att}
-                          alt={`Attachment ${idx + 1}`}
-                          className="h-20 w-28 object-cover transition-transform group-hover:scale-105"
-                        />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-opacity opacity-0 group-hover:opacity-100">
-                          <ZoomIn className="h-4 w-4 text-white drop-shadow-md" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            <SubagentActivityCard
+              activeSubagentId={activeSubagentId}
+              activeSubagentTitle={activeSubagentTitle}
+              activeSubagentRole={activeSubagentRole}
+              activeSubagentPrompt={activeSubagentPrompt}
+              effectiveAttachments={effectiveAttachments}
+              onImageClick={handleOpenLightbox}
+            />
           ) : (
             /* a) Task Goal / User Objective Card */
             <div className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-4 shadow-xs">
@@ -1257,18 +851,14 @@ export default function DrawerActivityStream({
             if (activity?.type === 'thought') {
               const isLastActivity = idx === ((displayActivities?.length ?? 1) - 1);
               return (
-                <div
+                <ThoughtStreamCard
                   key={key}
-                  className="animate-silk-entrance motion-reduce:animate-none"
-                >
-                  <ThinkingCard
-                    thought={activity}
-                    isTaskRunning={isRunning}
-                    isLive={isRunning && isLastActivity}
-                    taskId={task.id}
-                    durationMs={activityDurations[idx] || activity.durationMs}
-                  />
-                </div>
+                  activity={activity}
+                  isTaskRunning={isRunning}
+                  isLive={isRunning && isLastActivity}
+                  taskId={task.id}
+                  durationMs={activityDurations[idx] || activity.durationMs}
+                />
               );
             }
 
@@ -1292,91 +882,24 @@ export default function DrawerActivityStream({
 
             // User steer message or Gatekeeper Sensor rejection
             if (activity?.type === 'user' || activity?.type === 'steer') {
-              const images = Array.isArray(activity?.images) ? activity.images : [];
-              const isSensorRejection = Boolean(
-                activity?.content?.includes('[ОТКЛОНЕНО СЕНСОРОМ') ||
-                activity?.content?.includes('[SENSOR REJECTED') ||
-                activity?.content?.includes('SENSOR REJECTED:')
-              );
-
-              if (isSensorRejection) {
-                return (
-                  <div
-                    key={key}
-                    className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-amber-500/20 bg-amber-500/10 p-3.5 shadow-xs"
-                  >
-                    <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-amber-500/20 text-[10px] font-mono">
-                      <div className="flex items-center space-x-1.5 text-amber-500 dark:text-amber-400 font-medium">
-                        <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
-                        <span>{t('drawer.sensorRejection')}</span>
-                      </div>
-                    </div>
-                    {images.length > 0 && (
-                      <div className="flex items-center gap-2 mb-2.5 flex-wrap">
-                        {images.map((imgUrl, i) => (
-                          <div
-                            key={i}
-                            onClick={() => handleOpenLightbox(imgUrl, `${t('drawer.attachImage')} ${i + 1}`)}
-                            className="relative rounded-lg overflow-hidden border border-amber-500/20 max-w-[240px] max-h-40 bg-[#f4f4f5] dark:bg-[#161b22] shadow-xs group cursor-zoom-in"
-                          >
-                            <img
-                              src={imgUrl}
-                              alt={`${t('drawer.attachImage')} ${i + 1}`}
-                              className="w-full h-full max-h-40 object-cover group-hover:scale-105 transition-transform duration-200 cursor-zoom-in"
-                            />
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none">
-                              <span className="p-1 rounded-full bg-black/60 text-white shadow-xs">
-                                <ZoomIn className="w-3.5 h-3.5" />
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed select-text font-sans">
-                      <MarkdownContent content={activity?.content ?? ''} onImageClick={handleOpenLightbox} />
-                    </div>
-                  </div>
-                );
-              }
-
               return (
-                <div
+                <SteerDirectiveCard
                   key={key}
-                  className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#0d1117] p-3.5 shadow-xs"
-                >
-                  <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-[#ebebeb] dark:border-[#21262d] text-[10px] font-mono text-[#666666] dark:text-[#8b949e]">
-                    <div className="flex items-center space-x-1.5 text-[#171717] dark:text-[#f0f6fc] font-medium">
-                      <User className="h-3 w-3" />
-                      <span>{t('drawer.userSteer')}</span>
-                    </div>
-                  </div>
-                  {images.length > 0 && (
-                    <div className="flex items-center gap-2 mb-2.5 flex-wrap">
-                      {images.map((imgUrl, i) => (
-                        <div
-                          key={i}
-                          onClick={() => handleOpenLightbox(imgUrl, `${t('drawer.attachImage')} ${i + 1}`)}
-                          className="relative rounded-lg overflow-hidden border border-[#ebebeb] dark:border-[#21262d] max-w-[240px] max-h-40 bg-[#f4f4f5] dark:bg-[#161b22] shadow-xs group cursor-zoom-in"
-                        >
-                          <img
-                            src={imgUrl}
-                            alt={`${t('drawer.attachImage')} ${i + 1}`}
-                            className="w-full h-full max-h-40 object-cover group-hover:scale-105 transition-transform duration-200 cursor-zoom-in"
-                          />
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none">
-                            <span className="p-1 rounded-full bg-black/60 text-white shadow-xs">
-                              <ZoomIn className="w-3.5 h-3.5" />
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed select-text font-sans">
-                    <MarkdownContent content={activity?.content ?? ''} onImageClick={handleOpenLightbox} />
-                  </div>
-                </div>
+                  activity={activity}
+                  onImageClick={handleOpenLightbox}
+                />
+              );
+            }
+
+            // Subagent Activity / Report Item
+            if ((activity?.type as string) === 'subagent') {
+              return (
+                <SubagentActivityCard
+                  key={key}
+                  activity={activity}
+                  durationMs={activityDurations[idx] || activity.durationMs}
+                  onImageClick={handleOpenLightbox}
+                />
               );
             }
 

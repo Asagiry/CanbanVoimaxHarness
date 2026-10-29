@@ -4245,3 +4245,47 @@ Write code.
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
+
+    #[tokio::test]
+    async fn test_create_task_model_and_task_id_order_regression() {
+        let tmp = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("tmp")
+            .join(format!("cvh_test_model_order_{}", uuid::Uuid::new_v4()));
+        let _ = tokio::fs::create_dir_all(&tmp).await;
+
+        save_task_sequence(&tmp, 1).await.expect("save initial sequence");
+
+        let task = internal_create_task(
+            &tmp,
+            "Regression Test Task".to_string(),
+            "Assert model and task_id parameters do not get swapped".to_string(),
+            "backlog".to_string(),
+            Some("development".to_string()),
+            Some(true),
+            Some("gemini-3.8-flash-high".to_string()),
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("create task with model and no task_id must succeed");
+
+        assert!(
+            task.id.starts_with("CVH-"),
+            "Task ID must start with 'CVH-', but was '{}'",
+            task.id
+        );
+        assert_ne!(
+            task.id, "gemini-3.8-flash-high",
+            "Task ID must NOT be the model name 'gemini-3.8-flash-high'"
+        );
+        assert_eq!(
+            task.model,
+            Some("gemini-3.8-flash-high".to_string()),
+            "Task model must be preserved as Some('gemini-3.8-flash-high')"
+        );
+
+        let _ = tokio::fs::remove_dir_all(&tmp).await;
+    }

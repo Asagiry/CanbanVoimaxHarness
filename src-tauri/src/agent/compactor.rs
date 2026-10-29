@@ -82,108 +82,252 @@ pub fn format_conversation_for_compaction(messages: &[ChatMessage]) -> String {
     out
 }
 
-pub fn generate_fallback_compaction_report(
-    task_id: &str,
-    messages: &[ChatMessage],
-) -> String {
-    let mut primary_intent = format!("Task {} execution", task_id);
-    let mut files_modified: Vec<(String, String)> = Vec::new();
-    let mut files_inspected: Vec<String> = Vec::new();
-    let mut commands_run: Vec<(String, String)> = Vec::new();
-    let mut tests_passed: Vec<String> = Vec::new();
-    let mut tests_failed: Vec<String> = Vec::new();
-    let mut todos: Vec<(String, String)> = Vec::new();
-    let mut errors_found: Vec<String> = Vec::new();
-    let mut last_action: Option<String> = None;
+/// Helper extractor for typed tool call arguments (file paths, search patterns, commands, and checklists).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ToolCallSummaryExtractor {
+    pub file_path: Option<String>,
+    pub pattern: Option<String>,
+    pub command: Option<String>,
+}
 
+impl ToolCallSummaryExtractor {
+    /// Extracts typed tool arguments from a `serde_json::Value`.
+    pub fn from_value(val: &serde_json::Value) -> Self {
+        Self {
+            file_path: Self::extract_file_path(val),
+            pattern: Self::extract_pattern(val),
+            command: Self::extract_command(val),
+        }
+    }
+
+    /// Extracts typed tool arguments from a raw JSON arguments string.
+    pub fn from_raw_json(raw: &str) -> Self {
+        serde_json::from_str::<serde_json::Value>(raw)
+            .map(|val| Self::from_value(&val))
+            .unwrap_or_default()
+    }
+
+    /// Extracts file path from known keys: "file_path", "path", "target_file", or "file".
+    pub fn extract_file_path(val: &serde_json::Value) -> Option<String> {
+        val.get("file_path")
+            .or_else(|| val.get("path"))
+            .or_else(|| val.get("target_file"))
+            .or_else(|| val.get("file"))
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+    }
+
+    /// Extracts search or match pattern from "pattern", "regex", or "query".
+    pub fn extract_pattern(val: &serde_json::Value) -> Option<String> {
+        val.get("pattern")
+            .or_else(|| val.get("regex"))
+            .or_else(|| val.get("query"))
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+    }
+
+    /// Extracts shell command from "command" or "cmd".
+    pub fn extract_command(val: &serde_json::Value) -> Option<String> {
+        val.get("command")
+            .or_else(|| val.get("cmd"))
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+    }
+
+    /// Extracts todos array `[(content, status)]`.
+    pub fn extract_todos(val: &serde_json::Value) -> Vec<(String, String)> {
+        val.get("todos")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|t| {
+                        let content = t.get("content").and_then(|v| v.as_str())?.trim();
+                        let status = t.get("status").and_then(|v| v.as_str()).unwrap_or("pending").trim();
+                        if !content.is_empty() {
+                            Some((content.to_string(), status.to_string()))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+}
+
+/// Helper to extract embedded `[Tool Call: <name> with arguments: <json>]` calls from string content.
+pub fn parse_embedded_tool_calls(content: &str) -> Vec<(String, serde_json::Value)> {
+    let mut calls = Vec::new();
+    if !content.contains("[Tool Call:") {
+        return calls;
+    }
+
+    let mut start = 0;
+    while let Some(call_start) = content[start..].find("[Tool Call:") {
+        let idx = start + call_start;
+        if let Some(call_end) = content[idx..].find(']') {
+            let inner = &content[idx + 11..idx + call_end];
+            let parts: Vec<&str> = inner.splitn(2, " with arguments: ").collect();
+            let tool_name = parts[0].trim().to_string();
+            let tool_args = if parts.len() > 1 { parts[1].trim() } else { "{}" };
+
+            if let Ok(args_val) = serde_json::from_str::<serde_json::Value>(tool_args) {
+                calls.push((tool_name, args_val));
+            }
+            start = idx + call_end + 1;
+        } else {
+            break;
+        }
+    }
+    calls
+}
+
+/// Extracts primary user intent/objective from the first non-empty user message.
+pub fn extract_primary_intent(messages: &[ChatMessage], task_id: &str) -> String {
+    let default_intent = format!("Task {} execution", task_id);
     for msg in messages {
-        if msg.role == Role::User && primary_intent == format!("Task {} execution", task_id) {
+        if msg.role == Role::User {
             if let Some(ref c) = msg.content {
                 let first_line = c.lines().next().unwrap_or("Task execution").trim();
                 if !first_line.is_empty() {
-                    primary_intent = first_line.to_string();
+                    return first_line.to_string();
                 }
             }
         }
+    }
+    default_intent
+}
 
-        // 1. Inspect direct tool_calls on Assistant messages
+/// Extracts files touched (modified and inspected) across all messages and tool invocations.
+pub fn extract_touched_files(messages: &[ChatMessage]) -> (Vec<(String, String)>, Vec<String>) {
+    let mut files_modified: Vec<(String, String)> = Vec::new();
+    let mut files_inspected: Vec<String> = Vec::new();
+
+    for msg in messages {
+        // 1. Direct tool_calls on messages
         if let Some(ref tool_calls) = msg.tool_calls {
             for tc in tool_calls {
                 let name = tc.function.name.as_str();
-                let args_val: serde_json::Value =
-                    serde_json::from_str(&tc.function.arguments).unwrap_or(serde_json::Value::Null);
-
-                match name {
-                    "edit_file" | "str_replace" | "edit" => {
-                        let path = args_val
-                            .get("file_path")
-                            .or_else(|| args_val.get("path"))
-                            .or_else(|| args_val.get("target_file"))
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
-                        if !path.is_empty() && !files_modified.iter().any(|(p, _)| p == &path) {
-                            files_modified.push((path.clone(), "Modified via edit_file".to_string()));
-                            last_action = Some(format!("Edited `{}`", path));
-                        }
-                    }
-                    "write_file" | "write" => {
-                        let path = args_val
-                            .get("file_path")
-                            .or_else(|| args_val.get("path"))
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
-                        if !path.is_empty() && !files_modified.iter().any(|(p, _)| p == &path) {
-                            files_modified.push((path.clone(), "Written via write_file".to_string()));
-                            last_action = Some(format!("Created/Wrote `{}`", path));
-                        }
-                    }
-                    "read_file" | "read" => {
-                        let path = args_val
-                            .get("file_path")
-                            .or_else(|| args_val.get("path"))
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
-                        if !path.is_empty() && !files_inspected.contains(&path) {
-                            files_inspected.push(path.clone());
-                            last_action = Some(format!("Read `{}`", path));
-                        }
-                    }
-                    "execute_command" | "bash" | "pwsh" => {
-                        let cmd = args_val
-                            .get("command")
-                            .or_else(|| args_val.get("cmd"))
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
-                        if !cmd.is_empty() && !commands_run.iter().any(|(c, _)| c == &cmd) {
-                            commands_run.push((cmd.clone(), "Executed".to_string()));
-                            last_action = Some(format!("Ran command `{}`", cmd));
-                        }
-                    }
-                    "todo_write" => {
-                        if let Some(todos_arr) = args_val.get("todos").and_then(|v| v.as_array()) {
-                            let mut parsed_todos = Vec::new();
-                            for t in todos_arr {
-                                let content = t.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                                let status = t.get("status").and_then(|v| v.as_str()).unwrap_or("pending").to_string();
-                                if !content.is_empty() {
-                                    parsed_todos.push((content, status));
-                                }
-                            }
-                            if !parsed_todos.is_empty() {
-                                todos = parsed_todos;
+                let extractor = ToolCallSummaryExtractor::from_raw_json(&tc.function.arguments);
+                if let Some(path) = extractor.file_path {
+                    match name {
+                        "edit_file" | "str_replace" | "edit" => {
+                            if !files_modified.iter().any(|(p, _)| p == &path) {
+                                files_modified.push((path, "Modified via edit_file".to_string()));
                             }
                         }
+                        "write_file" | "write" => {
+                            if !files_modified.iter().any(|(p, _)| p == &path) {
+                                files_modified.push((path, "Written via write_file".to_string()));
+                            }
+                        }
+                        "read_file" | "read" if !files_inspected.contains(&path) => {
+                            files_inspected.push(path);
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
             }
         }
 
-        // 2. Inspect tool outputs (Role::Tool)
+        // 2. Embedded tool calls in text content
+        if let Some(ref c) = msg.content {
+            for (tool_name, args_val) in parse_embedded_tool_calls(c) {
+                let extractor = ToolCallSummaryExtractor::from_value(&args_val);
+                if let Some(p) = extractor.file_path {
+                    match tool_name.as_str() {
+                        "edit_file" | "str_replace" | "edit" | "write_file" | "write" => {
+                            if !files_modified.iter().any(|(f, _)| f == &p) {
+                                files_modified.push((p, format!("Modified via {}", tool_name)));
+                            }
+                        }
+                        "read_file" | "read" if !files_inspected.contains(&p) => {
+                            files_inspected.push(p);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            // Word-level scan for files mentioned if no explicit tool calls found
+            if files_modified.is_empty() && files_inspected.is_empty() {
+                for word in c.split_whitespace() {
+                    let clean = word.trim_matches(|ch: char| {
+                        ch == '`' || ch == '"' || ch == '\'' || ch == ',' || ch == '(' || ch == ')' || ch == ':'
+                    });
+                    if (clean.contains('/')
+                        || clean.contains('\\')
+                        || clean.ends_with(".rs")
+                        || clean.ends_with(".tsx")
+                        || clean.ends_with(".ts")
+                        || clean.ends_with(".json")
+                        || clean.ends_with(".md"))
+                        && clean.len() > 3
+                        && !files_inspected.contains(&clean.to_string())
+                    {
+                        files_inspected.push(clean.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    (files_modified, files_inspected)
+}
+
+/// Extracts shell commands executed across all messages and tool invocations.
+pub fn extract_executed_commands(messages: &[ChatMessage]) -> Vec<(String, String)> {
+    let mut commands_run: Vec<(String, String)> = Vec::new();
+
+    for msg in messages {
+        // 1. Direct tool_calls on messages
+        if let Some(ref tool_calls) = msg.tool_calls {
+            for tc in tool_calls {
+                let name = tc.function.name.as_str();
+                if matches!(name, "execute_command" | "bash" | "pwsh") {
+                    let extractor = ToolCallSummaryExtractor::from_raw_json(&tc.function.arguments);
+                    if let Some(cmd) = extractor.command {
+                        if !commands_run.iter().any(|(c, _)| c == &cmd) {
+                            commands_run.push((cmd, "Executed".to_string()));
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Embedded tool calls in text content
+        if let Some(ref c) = msg.content {
+            for (tool_name, args_val) in parse_embedded_tool_calls(c) {
+                if matches!(tool_name.as_str(), "execute_command" | "bash" | "pwsh") {
+                    let extractor = ToolCallSummaryExtractor::from_value(&args_val);
+                    if let Some(cmd) = extractor.command {
+                        if !commands_run.iter().any(|(c, _)| c == &cmd) {
+                            commands_run.push((cmd, "Executed".to_string()));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    commands_run
+}
+
+/// Extracts passed tests, failed tests, and compiler error diagnostics from tool responses.
+pub fn extract_diagnostics_and_tests(
+    messages: &[ChatMessage],
+) -> (Vec<String>, Vec<String>, Vec<String>) {
+    let mut tests_passed: Vec<String> = Vec::new();
+    let mut tests_failed: Vec<String> = Vec::new();
+    let mut errors_found: Vec<String> = Vec::new();
+
+    for msg in messages {
         if msg.role == Role::Tool {
             if let Some(ref c) = msg.content {
                 let lower = c.to_lowercase();
@@ -201,8 +345,14 @@ pub fn generate_fallback_compaction_report(
                         tests_passed.push(summary);
                     }
                 }
-                if lower.contains("test result: failed") || lower.contains("failures:") || lower.contains("test failed") {
-                    let summary = if let Some(line) = c.lines().find(|l| l.to_lowercase().contains("failures:") || l.to_lowercase().contains("test result: failed")) {
+                if lower.contains("test result: failed")
+                    || lower.contains("failures:")
+                    || lower.contains("test failed")
+                {
+                    let summary = if let Some(line) = c.lines().find(|l| {
+                        l.to_lowercase().contains("failures:")
+                            || l.to_lowercase().contains("test result: failed")
+                    }) {
                         line.trim().to_string()
                     } else {
                         "Test failure detected".to_string()
@@ -214,7 +364,9 @@ pub fn generate_fallback_compaction_report(
                 if lower.contains("error[e") || lower.contains("error:") || c.contains("FAILED") {
                     for line in c.lines() {
                         let l_trim = line.trim();
-                        if (l_trim.contains("error[E") || l_trim.starts_with("error:") || l_trim.contains("FAILED"))
+                        if (l_trim.contains("error[E")
+                            || l_trim.starts_with("error:")
+                            || l_trim.contains("FAILED"))
                             && l_trim.len() < 160
                             && !errors_found.contains(&l_trim.to_string())
                         {
@@ -224,82 +376,95 @@ pub fn generate_fallback_compaction_report(
                 }
             }
         }
+    }
 
-        // 3. Inspect text content for formatted [Tool Call: ...] or embedded file paths
-        if let Some(ref c) = msg.content {
-            if c.contains("[Tool Call:") {
-                let mut start = 0;
-                while let Some(call_start) = c[start..].find("[Tool Call:") {
-                    let idx = start + call_start;
-                    if let Some(call_end) = c[idx..].find(']') {
-                        let inner = &c[idx + 11..idx + call_end];
-                        let parts: Vec<&str> = inner.splitn(2, " with arguments: ").collect();
-                        let tool_name = parts[0].trim();
-                        let tool_args = if parts.len() > 1 { parts[1].trim() } else { "{}" };
+    (tests_passed, tests_failed, errors_found)
+}
 
-                        if let Ok(args_val) = serde_json::from_str::<serde_json::Value>(tool_args) {
-                            if tool_name == "edit_file" || tool_name == "write_file" || tool_name == "edit" || tool_name == "write" {
-                                if let Some(p) = args_val.get("file_path").or_else(|| args_val.get("path")).and_then(|v| v.as_str()) {
-                                    if !p.is_empty() && !files_modified.iter().any(|(f, _)| f == p) {
-                                        files_modified.push((p.to_string(), format!("Modified via {}", tool_name)));
-                                    }
-                                }
-                            } else if tool_name == "read_file" || tool_name == "read" {
-                                if let Some(p) = args_val.get("file_path").or_else(|| args_val.get("path")).and_then(|v| v.as_str()) {
-                                    if !p.is_empty() && !files_inspected.contains(&p.to_string()) {
-                                        files_inspected.push(p.to_string());
-                                    }
-                                }
-                            } else if tool_name == "execute_command" || tool_name == "bash" || tool_name == "pwsh" {
-                                if let Some(cmd) = args_val.get("command").or_else(|| args_val.get("cmd")).and_then(|v| v.as_str()) {
-                                    if !cmd.is_empty() && !commands_run.iter().any(|(c, _)| c == cmd) {
-                                        commands_run.push((cmd.to_string(), "Executed".to_string()));
-                                    }
-                                }
-                            } else if tool_name == "todo_write" {
-                                if let Some(todos_arr) = args_val.get("todos").and_then(|v| v.as_array()) {
-                                    let mut parsed_todos = Vec::new();
-                                    for t in todos_arr {
-                                        let content = t.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                                        let status = t.get("status").and_then(|v| v.as_str()).unwrap_or("pending").to_string();
-                                        if !content.is_empty() {
-                                            parsed_todos.push((content, status));
-                                        }
-                                    }
-                                    if !parsed_todos.is_empty() {
-                                        todos = parsed_todos;
-                                    }
-                                }
+/// Extracts todos checklist and the last completed action from tool invocations.
+pub fn extract_todos_and_last_action(
+    messages: &[ChatMessage],
+) -> (Vec<(String, String)>, Option<String>) {
+    let mut todos: Vec<(String, String)> = Vec::new();
+    let mut last_action: Option<String> = None;
+
+    for msg in messages {
+        // Direct tool_calls
+        if let Some(ref tool_calls) = msg.tool_calls {
+            for tc in tool_calls {
+                let name = tc.function.name.as_str();
+                let extractor = ToolCallSummaryExtractor::from_raw_json(&tc.function.arguments);
+
+                match name {
+                    "edit_file" | "str_replace" | "edit" => {
+                        if let Some(path) = extractor.file_path {
+                            last_action = Some(format!("Edited `{}`", path));
+                        }
+                    }
+                    "write_file" | "write" => {
+                        if let Some(path) = extractor.file_path {
+                            last_action = Some(format!("Created/Wrote `{}`", path));
+                        }
+                    }
+                    "read_file" | "read" => {
+                        if let Some(path) = extractor.file_path {
+                            last_action = Some(format!("Read `{}`", path));
+                        }
+                    }
+                    "execute_command" | "bash" | "pwsh" => {
+                        if let Some(cmd) = extractor.command {
+                            last_action = Some(format!("Ran command `{}`", cmd));
+                        }
+                    }
+                    "todo_write" => {
+                        if let Ok(args_val) = serde_json::from_str::<serde_json::Value>(&tc.function.arguments) {
+                            let parsed_todos = ToolCallSummaryExtractor::extract_todos(&args_val);
+                            if !parsed_todos.is_empty() {
+                                todos = parsed_todos;
                             }
                         }
-                        start = idx + call_end + 1;
-                    } else {
-                        break;
                     }
+                    _ => {}
                 }
             }
+        }
 
-            // Word-level scan for files mentioned if no explicit tool calls found
-            if files_modified.is_empty() && files_inspected.is_empty() {
-                for word in c.split_whitespace() {
-                    let clean = word.trim_matches(|ch: char| ch == '`' || ch == '"' || ch == '\'' || ch == ',' || ch == '(' || ch == ')' || ch == ':');
-                    if (clean.contains('/') || clean.contains('\\') || clean.ends_with(".rs") || clean.ends_with(".tsx") || clean.ends_with(".ts") || clean.ends_with(".json") || clean.ends_with(".md"))
-                        && clean.len() > 3
-                        && !files_inspected.contains(&clean.to_string())
-                    {
-                        files_inspected.push(clean.to_string());
+        // Embedded tool calls in text
+        if let Some(ref c) = msg.content {
+            for (tool_name, args_val) in parse_embedded_tool_calls(c) {
+                if tool_name == "todo_write" {
+                    let parsed_todos = ToolCallSummaryExtractor::extract_todos(&args_val);
+                    if !parsed_todos.is_empty() {
+                        todos = parsed_todos;
                     }
                 }
             }
         }
     }
 
+    (todos, last_action)
+}
+
+/// Formats extracted compaction sections into Markdown bullet points and returns the complete report.
+#[allow(clippy::too_many_arguments)]
+pub fn format_compaction_bullet_points(
+    task_id: &str,
+    primary_intent: &str,
+    files_modified: &[(String, String)],
+    files_inspected: &[String],
+    commands_run: &[(String, String)],
+    tests_passed: &[String],
+    tests_failed: &[String],
+    errors_found: &[String],
+    todos: &[(String, String)],
+    last_action: Option<&str>,
+) -> String {
     // Build Files and Code section
     let mut files_lines = Vec::new();
-    for (f, op) in &files_modified {
+    for (f, op) in files_modified {
         files_lines.push(format!("- `{}`: {}", f, op));
     }
-    for f in &files_inspected {
+    for f in files_inspected {
         if !files_modified.iter().any(|(m, _)| m == f) {
             files_lines.push(format!("- `{}`: Inspected and analyzed", f));
         }
@@ -312,13 +477,13 @@ pub fn generate_fallback_compaction_report(
 
     // Build Errors and Fixes section
     let mut error_lines = Vec::new();
-    for t in &tests_passed {
+    for t in tests_passed {
         error_lines.push(format!("- [TEST PASSED] {}", t));
     }
-    for t in &tests_failed {
+    for t in tests_failed {
         error_lines.push(format!("- [TEST FAILED] {}", t));
     }
-    for e in &errors_found {
+    for e in errors_found {
         error_lines.push(format!("- [DIAGNOSTIC] `{}`", e));
     }
     let errors_md = if error_lines.is_empty() {
@@ -346,7 +511,7 @@ pub fn generate_fallback_compaction_report(
         let mut next_todo: Option<String> = None;
         let mut in_prog_todo: Option<String> = None;
 
-        for (content, status) in &todos {
+        for (content, status) in todos {
             match status.as_str() {
                 "completed" => current_step_lines.push(format!("- [x] {}", content)),
                 "in_progress" => {
@@ -371,7 +536,7 @@ pub fn generate_fallback_compaction_report(
         } else {
             current_step_lines.push("\n- Immediate Next Step: All planned checklist items completed. Proceed with verification sensors.".to_string());
         }
-    } else if let Some(ref la) = last_action {
+    } else if let Some(la) = last_action {
         current_step_lines.push(format!("- Intermediate turns compacted. Last action completed: {}.", la));
         current_step_lines.push("- Immediate Next Step: Continue task implementation and execute verification sensors.".to_string());
     } else {
@@ -383,6 +548,30 @@ pub fn generate_fallback_compaction_report(
     format!(
         "## Primary Request and Intent\n         - Task: {}\n         - Objective: {}\n\n         ## Key Technical Concepts\n         - High-Density State-Preserving Context Compaction with zero amnesia.\n         - Native Git worktree isolation and multi-agent pipeline routing.\n\n         ## Files and Code\n         {}\n\n         ## Errors and Fixes\n         {}\n\n         ## Pending Jobs & Subagents\n         {}\n\n         ## Current Work & Next Step\n         {}\n\n         ## Critical Invariants\n         - Ground Truth Sensor verification (cargo check, cargo test, npx tsc).\n         - Tactile obsidian dark theme aesthetics per AGENTS.md.\n         - Strict AND-semantics tool policy matrix.",
         task_id, primary_intent, files_md, errors_md, pending_md, current_work_md
+    )
+}
+
+pub fn generate_fallback_compaction_report(
+    task_id: &str,
+    messages: &[ChatMessage],
+) -> String {
+    let primary_intent = extract_primary_intent(messages, task_id);
+    let (files_modified, files_inspected) = extract_touched_files(messages);
+    let commands_run = extract_executed_commands(messages);
+    let (tests_passed, tests_failed, errors_found) = extract_diagnostics_and_tests(messages);
+    let (todos, last_action) = extract_todos_and_last_action(messages);
+
+    format_compaction_bullet_points(
+        task_id,
+        &primary_intent,
+        &files_modified,
+        &files_inspected,
+        &commands_run,
+        &tests_passed,
+        &tests_failed,
+        &errors_found,
+        &todos,
+        last_action.as_deref(),
     )
 }
 
@@ -1687,5 +1876,108 @@ test result: ok. 14 passed; 0 failed"),
         // Immutable anchors must stay intact
         assert_eq!(messages[0].content.as_deref().unwrap(), system_prompt);
         assert_eq!(messages[1].content.as_deref().unwrap(), user_spec);
+    }
+
+    #[test]
+    fn test_tool_call_summary_extractor_aliases_and_todos() {
+        // Direct canonical keys
+        let json_canonical = serde_json::json!({
+            "file_path": "src/main.rs",
+            "command": "cargo build",
+            "pattern": "fn main"
+        });
+        let ext1 = ToolCallSummaryExtractor::from_value(&json_canonical);
+        assert_eq!(ext1.file_path.as_deref(), Some("src/main.rs"));
+        assert_eq!(ext1.command.as_deref(), Some("cargo build"));
+        assert_eq!(ext1.pattern.as_deref(), Some("fn main"));
+
+        // Fallback / legacy alias keys
+        let json_aliases = serde_json::json!({
+            "path": "src/lib.rs",
+            "cmd": "cargo test",
+            "regex": "test_.*"
+        });
+        let ext2 = ToolCallSummaryExtractor::from_value(&json_aliases);
+        assert_eq!(ext2.file_path.as_deref(), Some("src/lib.rs"));
+        assert_eq!(ext2.command.as_deref(), Some("cargo test"));
+        assert_eq!(ext2.pattern.as_deref(), Some("test_.*"));
+
+        // Raw json string parsing
+        let raw_json = r#"{"target_file": "src/agent/compactor.rs", "query": "struct Extractor"}"#;
+        let ext3 = ToolCallSummaryExtractor::from_raw_json(raw_json);
+        assert_eq!(ext3.file_path.as_deref(), Some("src/agent/compactor.rs"));
+        assert_eq!(ext3.pattern.as_deref(), Some("struct Extractor"));
+
+        // Todos array extraction
+        let todos_val = serde_json::json!({
+            "todos": [
+                { "content": "Refactor compactor", "status": "completed" },
+                { "content": "Run tests", "status": "in_progress" }
+            ]
+        });
+        let todos = ToolCallSummaryExtractor::extract_todos(&todos_val);
+        assert_eq!(todos.len(), 2);
+        assert_eq!(todos[0], ("Refactor compactor".to_string(), "completed".to_string()));
+        assert_eq!(todos[1], ("Run tests".to_string(), "in_progress".to_string()));
+    }
+
+    #[test]
+    fn test_extract_touched_files_and_executed_commands() {
+        let messages = vec![
+            ChatMessage::assistant(
+                None,
+                Some(vec![
+                    ToolCall {
+                        id: "call_1".to_string(),
+                        call_type: "function".to_string(),
+                        function: FunctionCall {
+                            name: "edit_file".to_string(),
+                            arguments: r#"{"file_path": "src/foo.rs"}"#.to_string(),
+                        },
+                    },
+                    ToolCall {
+                        id: "call_2".to_string(),
+                        call_type: "function".to_string(),
+                        function: FunctionCall {
+                            name: "write_file".to_string(),
+                            arguments: r#"{"path": "src/bar.rs"}"#.to_string(),
+                        },
+                    },
+                    ToolCall {
+                        id: "call_3".to_string(),
+                        call_type: "function".to_string(),
+                        function: FunctionCall {
+                            name: "read_file".to_string(),
+                            arguments: r#"{"file_path": "src/baz.rs"}"#.to_string(),
+                        },
+                    },
+                    ToolCall {
+                        id: "call_4".to_string(),
+                        call_type: "function".to_string(),
+                        function: FunctionCall {
+                            name: "execute_command".to_string(),
+                            arguments: r#"{"command": "cargo check"}"#.to_string(),
+                        },
+                    },
+                ]),
+            ),
+            // Text containing embedded tool call
+            ChatMessage::assistant(
+                Some(r#"[Tool Call: execute_command with arguments: {"command": "cargo clippy"}]"#.to_string()),
+                None,
+            ),
+        ];
+
+        let (modified, inspected) = extract_touched_files(&messages);
+        assert_eq!(modified.len(), 2);
+        assert_eq!(modified[0].0, "src/foo.rs");
+        assert_eq!(modified[1].0, "src/bar.rs");
+        assert_eq!(inspected.len(), 1);
+        assert_eq!(inspected[0], "src/baz.rs");
+
+        let commands = extract_executed_commands(&messages);
+        assert_eq!(commands.len(), 2);
+        assert_eq!(commands[0].0, "cargo check");
+        assert_eq!(commands[1].0, "cargo clippy");
     }
 }

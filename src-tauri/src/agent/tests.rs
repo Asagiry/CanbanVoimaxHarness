@@ -1,5 +1,6 @@
     use crate::config::{BoardDef, BoardsConfig, PipelineColumn, ToolPolicyConfig};
-use super::*;
+    use crate::llm::ToolCall;
+    use super::*;
 
     #[tokio::test]
     async fn test_system_prompt_is_lean_cvh_only() {
@@ -4454,4 +4455,41 @@ Rule: Strictly isolated worktrees.",
         assert!(regular_text.contains("Done!"));
     }
 
+    #[test]
+    fn test_task_status_adt_and_domain_methods() {
+        let mut task = Task {
+            id: "CVH-123".to_string(),
+            title: "Test Task".to_string(),
+            status: None,
+            ..Default::default()
+        };
+
+        // Default status is Idle
+        assert_eq!(task.get_status(), TaskStatus::Idle);
+        assert!(!task.is_done());
+        assert!(!task.is_running());
+        assert!(!task.is_waiting_subtask());
+
+        // Set status Running
+        task.set_status(TaskStatus::Running);
+        assert_eq!(task.get_status(), TaskStatus::Running);
+        assert!(task.is_running());
+        assert_eq!(task.status.as_deref(), Some("running"));
+
+        // Set status WaitingSubtask
+        task.set_status(TaskStatus::WaitingSubtask);
+        assert_eq!(task.get_status(), TaskStatus::WaitingSubtask);
+        assert!(task.is_waiting_subtask());
+
+        // Set status Done
+        task.set_status(TaskStatus::Done);
+        assert_eq!(task.get_status(), TaskStatus::Done);
+        assert!(task.is_done());
+        assert_eq!(task.status.as_deref(), Some("done"));
+
+        // Custom status
+        task.set_status(TaskStatus::Custom("reviewing".to_string()));
+        assert_eq!(task.get_status(), TaskStatus::Custom("reviewing".to_string()));
+        assert_eq!(task.get_status().as_str(), "reviewing");
+    }
 

@@ -1,794 +1,25 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   GitCompare,
   GitBranch,
   RefreshCw,
   PanelRightClose,
   PanelRightOpen,
-  CheckCircle2,
-  Copy,
-  Check,
-  AlertCircle,
-  ChevronDown,
-  ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
-  Image as ImageIcon,
-  ZoomIn,
-  ZoomOut,
-  X,
-  Loader2,
+  AlertCircle,
 } from 'lucide-react';
-import { DiffFile, TaskGitDiff, GitImageDiff } from '../../types';
-import { useTranslation, Language } from '../../stores/languageStore';
+import { TaskGitDiff } from '../../types';
+import { useTranslation } from '../../stores/languageStore';
+import { DiffFileList, isCvhPath, formatFilesCount } from './diff';
 
-interface GitDiffSidebarProps {
+export { ImageDiffViewer, isImageFile } from './diff';
+
+export interface GitDiffSidebarProps {
   taskId: string;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   className?: string;
-}
-
-interface ParsedDiffLine {
-  type: 'hunk' | 'add' | 'del' | 'context';
-  text: string;
-  oldNum: number | null;
-  newNum: number | null;
-}
-
-/**
- * Parses unified diff into clean hunks, stripping all git metadata noise
- * (diff --git, index, --- /dev/null, +++ b/..., new file mode, etc.)
- */
-function parseCleanDiff(patch?: string | null): ParsedDiffLine[] {
-  if (!patch || typeof patch !== 'string') return [];
-  const lines = patch.split('\n');
-  const result: ParsedDiffLine[] = [];
-  let oldLine = 0;
-  let newLine = 0;
-  let seenFirstHunk = false;
-
-  for (const line of lines) {
-    // 1. Hunk header: starts with @@
-    if (line.startsWith('@@')) {
-      seenFirstHunk = true;
-      const match = line.match(/@@\s+-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@/);
-      if (match) {
-        oldLine = parseInt(match[1], 10);
-        newLine = parseInt(match[2], 10);
-      }
-      result.push({ type: 'hunk', text: line, oldNum: null, newNum: null });
-      continue;
-    }
-
-    // 2. Ignore any git metadata noise before or between hunks
-    if (!seenFirstHunk) {
-      continue;
-    }
-
-    if (
-      line.startsWith('diff --git') ||
-      line.startsWith('index ') ||
-      line.startsWith('--- ') ||
-      line.startsWith('+++ ') ||
-      line.startsWith('new file ') ||
-      line.startsWith('deleted file ') ||
-      line.startsWith('similarity index') ||
-      line.startsWith('rename from') ||
-      line.startsWith('rename to') ||
-      line.startsWith('\\ No newline')
-    ) {
-      continue;
-    }
-
-    // 3. Diff content lines
-    if (line.startsWith('+')) {
-      result.push({ type: 'add', text: line.slice(1), oldNum: null, newNum: newLine });
-      newLine++;
-    } else if (line.startsWith('-')) {
-      result.push({ type: 'del', text: line.slice(1), oldNum: oldLine, newNum: null });
-      oldLine++;
-    } else {
-      const text = line.startsWith(' ') ? line.slice(1) : line;
-      result.push({ type: 'context', text, oldNum: oldLine, newNum: newLine });
-      oldLine++;
-      newLine++;
-    }
-  }
-
-  return result;
-}
-
-const isCvhPath = (p: string): boolean => {
-  if (!p) return false;
-  const norm = p.replace(/\\/g, '/').trim();
-  if (!norm) return false;
-
-  // 1. Always hide runtime, secret, database, and log artifacts
-  if (
-    norm.includes('harness.db') ||
-    norm.startsWith('worktrees/') ||
-    norm.includes('/worktrees/') ||
-    norm.endsWith('llm.json') ||
-    norm.includes('/llm.json') ||
-    norm.startsWith('.cvh/spill/') ||
-    norm.includes('/.cvh/spill/') ||
-    norm.startsWith('spill/') ||
-    norm.includes('/spill/') ||
-    norm.startsWith('.cvh/logs/') ||
-    norm.includes('/.cvh/logs/') ||
-    norm.startsWith('logs/') ||
-    norm.includes('/logs/') ||
-    norm.endsWith('.log') ||
-    norm.startsWith('.cvh/dialogs/') ||
-    norm.includes('/.cvh/dialogs/') ||
-    norm.includes('/dialogs/') ||
-    norm.endsWith('tasks.json') ||
-    norm.includes('/tasks.json') ||
-    norm.startsWith('.cvh/tasks/') ||
-    norm.includes('/.cvh/tasks/') ||
-    norm.includes('/tasks/') ||
-    norm.endsWith('.secret') ||
-    norm.includes('.secret/') ||
-    norm.includes('/.secret') ||
-    norm.endsWith('.key') ||
-    norm.includes('.key/') ||
-    norm.includes('/.key')
-  ) {
-    return true;
-  }
-
-  // 2. Bare .cvh directory itself is hidden
-  if (norm === '.cvh' || norm === '.cvh/' || norm.endsWith('/.cvh') || norm.endsWith('/.cvh/')) {
-    return true;
-  }
-
-  // 3. Explicitly allowed CVH configuration files & directories:
-  //    .cvh/rules/, .cvh/agents/, .cvh/settings/, .cvh/tools/, .cvh/hooks/,
-  //    .cvh/boards.json, .cvh/pipeline.json
-  const isCvhConfig =
-    norm.startsWith('.cvh/rules/') ||
-    norm.includes('/.cvh/rules/') ||
-    norm.startsWith('.cvh/agents/') ||
-    norm.includes('/.cvh/agents/') ||
-    norm.startsWith('.cvh/settings/') ||
-    norm.includes('/.cvh/settings/') ||
-    norm.startsWith('.cvh/tools/') ||
-    norm.includes('/.cvh/tools/') ||
-    norm.startsWith('.cvh/hooks/') ||
-    norm.includes('/.cvh/hooks/') ||
-    norm === '.cvh/boards.json' ||
-    norm.endsWith('/.cvh/boards.json') ||
-    norm === '.cvh/pipeline.json' ||
-    norm.endsWith('/.cvh/pipeline.json');
-
-  if (isCvhConfig) {
-    return false;
-  }
-
-  // 4. Any other file inside .cvh is considered internal runtime and hidden
-  if (norm.startsWith('.cvh/') || norm.includes('/.cvh/')) {
-    return true;
-  }
-
-  // 5. Standard workspace files outside .cvh are visible
-  return false;
-};
-
-function formatFilesCount(count: number, lang: Language = 'en'): string {
-  if (lang === 'en') {
-    return count === 1 ? '1 file' : `${count} files`;
-  }
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod100 >= 11 && mod100 <= 19) return `${count} файлов`;
-  if (mod10 === 1) return `${count} файл`;
-  if (mod10 >= 2 && mod10 <= 4) return `${count} файла`;
-  return `${count} файлов`;
-}
-
-const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp', 'ico', 'avif']);
-
-export function isImageFile(filePath: string): boolean {
-  const ext = filePath.split('.').pop()?.toLowerCase();
-  return ext ? IMAGE_EXTENSIONS.has(ext) : false;
-}
-
-function formatBytes(bytes?: number | null): string {
-  if (bytes === null || bytes === undefined) return '';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-}
-
-interface ImageDiffViewerProps {
-  taskId: string;
-  filePath: string;
-}
-
-function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
-  const { t } = useTranslation();
-  const [data, setData] = useState<GitImageDiff | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'2up' | 'new' | 'old'>('2up');
-  const [currentDims, setCurrentDims] = useState<{ width: number; height: number } | null>(null);
-  const [prevDims, setPrevDims] = useState<{ width: number; height: number } | null>(null);
-  const [lightbox, setLightbox] = useState<{ url: string; title: string } | null>(null);
-  const [lightboxZoom, setLightboxZoom] = useState(false);
-
-  useEffect(() => {
-    let isMounted = true;
-    setIsLoading(true);
-    setError(null);
-
-    const loadImageDiff = async () => {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const res = await invoke<GitImageDiff>('get_task_image_diff', {
-          taskId,
-          path: filePath,
-        });
-        if (isMounted) {
-          setData(res);
-          if (res.currentDataUrl && res.previousDataUrl) {
-            setViewMode('2up');
-          } else if (res.currentDataUrl) {
-            setViewMode('new');
-          } else if (res.previousDataUrl) {
-            setViewMode('old');
-          }
-        }
-      } catch (err: any) {
-        if (isMounted) {
-          console.error('get_task_image_diff failed:', err);
-          setError(typeof err === 'string' ? err : err?.message || 'Failed to load image preview');
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    loadImageDiff();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [taskId, filePath]);
-
-  useEffect(() => {
-    if (!lightbox) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setLightbox(null);
-        setLightboxZoom(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [lightbox]);
-
-  if (isLoading) {
-    return (
-      <div className="border-t border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-5 flex flex-col items-center justify-center space-y-2 text-[#8f8f8f] dark:text-[#8b949e]">
-        <Loader2 className="h-4 w-4 animate-spin text-amber-500" />
-        <span className="text-xs font-mono">{t('gitDiff.imageLoading')}</span>
-      </div>
-    );
-  }
-
-  if (error || !data) {
-    return (
-      <div className="border-t border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-4 flex flex-col items-center justify-center space-y-1.5 text-rose-500">
-        <AlertCircle className="h-4 w-4" />
-        <span className="text-xs font-mono text-center">{error || t('gitDiff.imageFailed')}</span>
-      </div>
-    );
-  }
-
-  const hasBoth = Boolean(data.currentDataUrl && data.previousDataUrl);
-  const isDeleted = !data.currentDataUrl && Boolean(data.previousDataUrl);
-  const isAdded = Boolean(data.currentDataUrl) && !data.previousDataUrl;
-
-  const checkerboardClasses =
-    'relative flex items-center justify-center p-2 rounded overflow-hidden select-none ' +
-    'bg-[#f8fafc] dark:bg-[#090d16] ' +
-    '[background-image:linear-gradient(45deg,#e2e8f0_25%,transparent_25%),linear-gradient(-45deg,#e2e8f0_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#e2e8f0_75%),linear-gradient(-45deg,transparent_75%,#e2e8f0_75%)] ' +
-    'dark:[background-image:linear-gradient(45deg,#1c2128_25%,transparent_25%),linear-gradient(-45deg,#1c2128_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#1c2128_75%),linear-gradient(-45deg,transparent_75%,#1c2128_75%)] ' +
-    '[background-size:16px_16px] [background-position:0_0,0_8px,8px_-8px,-8px_0px] border border-[#e5e7eb] dark:border-[#21262d]';
-
-  const bytesDelta =
-    data.currentBytes && data.previousBytes ? data.currentBytes - data.previousBytes : null;
-
-  return (
-    <div className="border-t border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] font-mono text-xs select-text overflow-hidden">
-      {/* Subheader Toolbar: Mode Toggles & Size Badges */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#ebebeb] dark:border-[#21262d] bg-[#fcfcfc] dark:bg-[#161b22] text-[11px]">
-        {hasBoth ? (
-          <div className="flex items-center border border-[#e5e7eb] dark:border-[#30363d] rounded p-0.5 bg-[#f4f4f5] dark:bg-[#0d1117]">
-            <button
-              type="button"
-              onClick={() => setViewMode('2up')}
-              className={`px-2 py-0.5 rounded text-[10px] font-semibold transition cursor-pointer ${
-                viewMode === '2up'
-                  ? 'bg-white dark:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] shadow-xs'
-                  : 'text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
-              }`}
-            >
-              {t('gitDiff.image2Up')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('new')}
-              className={`px-2 py-0.5 rounded text-[10px] font-semibold transition cursor-pointer ${
-                viewMode === 'new'
-                  ? 'bg-white dark:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] shadow-xs'
-                  : 'text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
-              }`}
-            >
-              {t('gitDiff.imageNew')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('old')}
-              className={`px-2 py-0.5 rounded text-[10px] font-semibold transition cursor-pointer ${
-                viewMode === 'old'
-                  ? 'bg-white dark:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] shadow-xs'
-                  : 'text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
-              }`}
-            >
-              {t('gitDiff.imageOld')}
-            </button>
-          </div>
-        ) : isAdded ? (
-          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] border border-[#bbf7d0] dark:border-[#238636]">
-            {t('gitDiff.imageAdded')}
-          </span>
-        ) : isDeleted ? (
-          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#fef2f2] dark:bg-[#3b1219] text-[#b91c1c] dark:text-[#ff7b72] border border-[#fecaca] dark:border-[#da3633]">
-            {t('gitDiff.imageDeleted')}
-          </span>
-        ) : (
-          <span className="text-[#8f8f8f] dark:text-[#8b949e] text-[10px]">
-            {data.mimeType}
-          </span>
-        )}
-
-        {/* Size Metrics & Delta */}
-        <div className="flex items-center space-x-2 tabular-nums text-[10px]">
-          {data.previousBytes && !hasBoth && (
-            <span className="text-[#8f8f8f] dark:text-[#8b949e]">
-              {formatBytes(data.previousBytes)}
-            </span>
-          )}
-          {data.currentBytes && !hasBoth && (
-            <span className="text-[#8f8f8f] dark:text-[#8b949e]">
-              {formatBytes(data.currentBytes)}
-            </span>
-          )}
-          {hasBoth && bytesDelta !== null && (
-            <span
-              className={`font-semibold ${
-                bytesDelta > 0
-                  ? 'text-[#b91c1c] dark:text-[#ff7b72]'
-                  : bytesDelta < 0
-                  ? 'text-[#15803d] dark:text-[#7ee787]'
-                  : 'text-[#8f8f8f] dark:text-[#8b949e]'
-              }`}
-            >
-              {bytesDelta > 0 ? `+${formatBytes(bytesDelta)}` : bytesDelta < 0 ? `-${formatBytes(Math.abs(bytesDelta))}` : '±0 B'}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Main Diff Content Container */}
-      {hasBoth && viewMode === '2up' ? (
-        <div className="grid grid-cols-2 gap-2 p-2.5">
-          {/* Old / Previous */}
-          <div className="flex flex-col space-y-1">
-            <div className="flex items-center justify-between text-[10px] px-0.5">
-              <span className="text-[#b91c1c] dark:text-[#ff7b72] font-semibold">
-                {t('gitDiff.imageOld')}
-              </span>
-              <div className="flex items-center space-x-1.5 text-[#8f8f8f] dark:text-[#8b949e] tabular-nums text-[9px]">
-                {data.previousBytes && <span>{formatBytes(data.previousBytes)}</span>}
-                {prevDims && <span>{prevDims.width}×{prevDims.height}</span>}
-              </div>
-            </div>
-            <div
-              className={`${checkerboardClasses} cursor-zoom-in group min-h-[140px]`}
-              onClick={() => setLightbox({ url: data.previousDataUrl!, title: `${filePath} (${t('gitDiff.imageOld')})` })}
-              title={t('gitDiff.imageClickToZoom')}
-            >
-              <img
-                src={data.previousDataUrl!}
-                alt="Previous version"
-                className="max-h-[220px] max-w-full object-contain group-hover:scale-[1.02] transition-transform"
-                onLoad={(e) => setPrevDims({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
-              />
-            </div>
-          </div>
-
-          {/* New / Current */}
-          <div className="flex flex-col space-y-1">
-            <div className="flex items-center justify-between text-[10px] px-0.5">
-              <span className="text-[#15803d] dark:text-[#7ee787] font-semibold">
-                {t('gitDiff.imageNew')}
-              </span>
-              <div className="flex items-center space-x-1.5 text-[#8f8f8f] dark:text-[#8b949e] tabular-nums text-[9px]">
-                {data.currentBytes && <span>{formatBytes(data.currentBytes)}</span>}
-                {currentDims && <span>{currentDims.width}×{currentDims.height}</span>}
-              </div>
-            </div>
-            <div
-              className={`${checkerboardClasses} cursor-zoom-in group min-h-[140px]`}
-              onClick={() => setLightbox({ url: data.currentDataUrl!, title: `${filePath} (${t('gitDiff.imageNew')})` })}
-              title={t('gitDiff.imageClickToZoom')}
-            >
-              <img
-                src={data.currentDataUrl!}
-                alt="Current version"
-                className="max-h-[220px] max-w-full object-contain group-hover:scale-[1.02] transition-transform"
-                onLoad={(e) => setCurrentDims({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
-              />
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* Single View Mode (New or Old) */
-        <div className="p-2.5 flex flex-col space-y-1">
-          {(() => {
-            const isShowingNew = viewMode === 'new' || isAdded;
-            const activeUrl = isShowingNew ? data.currentDataUrl : data.previousDataUrl;
-            const activeBytes = isShowingNew ? data.currentBytes : data.previousBytes;
-            const activeDims = isShowingNew ? currentDims : prevDims;
-
-            if (!activeUrl) {
-              return (
-                <div className="p-4 text-center text-[#8f8f8f] dark:text-[#8b949e] text-xs">
-                  {t('gitDiff.imageNoPreview')}
-                </div>
-              );
-            }
-
-            return (
-              <>
-                <div className="flex items-center justify-between text-[10px] px-0.5">
-                  <span
-                    className={`font-semibold ${
-                      isShowingNew
-                        ? 'text-[#15803d] dark:text-[#7ee787]'
-                        : 'text-[#b91c1c] dark:text-[#ff7b72]'
-                    }`}
-                  >
-                    {isShowingNew ? t('gitDiff.imageNew') : t('gitDiff.imageOld')}
-                  </span>
-                  <div className="flex items-center space-x-1.5 text-[#8f8f8f] dark:text-[#8b949e] tabular-nums text-[9px]">
-                    {activeBytes && <span>{formatBytes(activeBytes)}</span>}
-                    {activeDims && <span>{activeDims.width}×{activeDims.height} px</span>}
-                  </div>
-                </div>
-                <div
-                  className={`${checkerboardClasses} cursor-zoom-in group min-h-[160px]`}
-                  onClick={() =>
-                    setLightbox({
-                      url: activeUrl,
-                      title: `${filePath} (${isShowingNew ? t('gitDiff.imageNew') : t('gitDiff.imageOld')})`,
-                    })
-                  }
-                  title={t('gitDiff.imageClickToZoom')}
-                >
-                  <img
-                    src={activeUrl}
-                    alt={filePath}
-                    className="max-h-[300px] max-w-full object-contain group-hover:scale-[1.02] transition-transform"
-                    onLoad={(e) => {
-                      const dims = {
-                        width: e.currentTarget.naturalWidth,
-                        height: e.currentTarget.naturalHeight,
-                      };
-                      if (isShowingNew) setCurrentDims(dims);
-                      else setPrevDims(dims);
-                    }}
-                  />
-                </div>
-              </>
-            );
-          })()}
-        </div>
-      )}
-
-      {/* Lightbox Modal (Hoisted via createPortal per AGENTS.md § 2.13) */}
-      {lightbox &&
-        createPortal(
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-sm flex flex-col animate-in fade-in duration-150"
-            onClick={() => {
-              setLightbox(null);
-              setLightboxZoom(false);
-            }}
-          >
-            {/* Lightbox Toolbar */}
-            <div
-              className="flex items-center justify-between px-4 py-3 bg-[#0d1117]/95 border-b border-[#30363d] select-none text-white z-10 shrink-0"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center space-x-2.5 min-w-0 mr-4">
-                <ImageIcon className="h-4 w-4 text-[#8b949e] shrink-0" />
-                <span className="font-mono text-xs font-semibold truncate text-[#f0f6fc]">
-                  {lightbox.title}
-                </span>
-              </div>
-
-              <div className="flex items-center space-x-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setLightboxZoom((prev) => !prev)}
-                  className="flex items-center space-x-1 px-2.5 py-1 rounded bg-[#21262d] hover:bg-[#30363d] text-xs font-mono text-[#f0f6fc] transition cursor-pointer"
-                >
-                  {lightboxZoom ? (
-                    <ZoomOut className="h-3.5 w-3.5" />
-                  ) : (
-                    <ZoomIn className="h-3.5 w-3.5" />
-                  )}
-                  <span>{lightboxZoom ? '100%' : 'Fit'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLightbox(null);
-                    setLightboxZoom(false);
-                  }}
-                  className="p-1 rounded bg-[#21262d] hover:bg-[#30363d] text-[#8b949e] hover:text-[#f0f6fc] transition cursor-pointer"
-                  aria-label="Close"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Lightbox Image Stage with Checkerboard */}
-            <div
-              className="flex-1 overflow-auto p-4 flex items-center justify-center min-h-0"
-              onClick={() => {
-                setLightbox(null);
-                setLightboxZoom(false);
-              }}
-            >
-              <div
-                className={`${checkerboardClasses} shadow-2xl max-w-full max-h-full cursor-default`}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <img
-                  src={lightbox.url}
-                  alt={lightbox.title}
-                  className={`transition-all duration-150 ${
-                    lightboxZoom
-                      ? 'max-w-none'
-                      : 'max-h-[82vh] max-w-[85vw] object-contain'
-                  }`}
-                />
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-    </div>
-  );
-}
-
-interface AccordionFileItemProps {
-  taskId: string;
-  file: DiffFile;
-  isExpanded: boolean;
-  onToggle: () => void;
-}
-
-function AccordionFileItem({ taskId, file, isExpanded, onToggle }: AccordionFileItemProps) {
-  const [copied, setCopied] = useState(false);
-  const { t } = useTranslation();
-  const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (copiedTimeoutRef.current) {
-        clearTimeout(copiedTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const isImage = isImageFile(file.path);
-
-  const parsedLines = useMemo(() => {
-    if (isImage) return [];
-    return parseCleanDiff(file.patch);
-  }, [file.patch, isImage]);
-
-  const lastSlashIndex = file.path.lastIndexOf('/');
-  const dirPart = lastSlashIndex !== -1 ? file.path.slice(0, lastSlashIndex + 1) : '';
-  const filePart = lastSlashIndex !== -1 ? file.path.slice(lastSlashIndex + 1) : file.path;
-
-  const statusColor =
-    file.status === 'A'
-      ? 'bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] border-[#bbf7d0] dark:border-[#238636]'
-      : file.status === 'D'
-      ? 'bg-[#fef2f2] dark:bg-[#3b1219] text-[#b91c1c] dark:text-[#ff7b72] border-[#fecaca] dark:border-[#da3633]'
-      : 'bg-[#fffbeb] dark:bg-[#2d2208] text-[#b45309] dark:text-[#d29922] border-[#fde68a] dark:border-[#9e6a03]';
-
-  const handleCopyPatch = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!file.patch) return;
-    try {
-      await navigator.clipboard.writeText(file.patch);
-      setCopied(true);
-      if (copiedTimeoutRef.current) {
-        clearTimeout(copiedTimeoutRef.current);
-      }
-      copiedTimeoutRef.current = setTimeout(() => {
-        setCopied(false);
-        copiedTimeoutRef.current = null;
-      }, 1500);
-    } catch {
-      // ignore
-    }
-  };
-
-  return (
-    <div className="rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] overflow-hidden shadow-xs transition duration-150">
-      {/* File Header Row (Clickable Accordion Trigger) */}
-      <div
-        onClick={onToggle}
-        className="flex items-center justify-between px-3 py-2 bg-[#fcfcfc] dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#1c2128] cursor-pointer transition select-none"
-      >
-        <div className="flex items-center space-x-2 min-w-0 mr-2">
-          {isExpanded ? (
-            <ChevronDown className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
-          )}
-
-          <span
-            className={`px-1.5 py-0.2 rounded text-[10px] font-bold border shrink-0 font-mono ${statusColor}`}
-          >
-            {file.status}
-          </span>
-
-          {isImage && (
-            <ImageIcon className="h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e] shrink-0" />
-          )}
-
-          <span className="truncate text-xs font-mono" title={file.path}>
-            {dirPart && <span className="text-[#8f8f8f] dark:text-[#8b949e]">{dirPart}</span>}
-            <span className="font-semibold text-[#171717] dark:text-[#f0f6fc]">{filePart}</span>
-          </span>
-        </div>
-
-        <div className="flex items-center space-x-2 shrink-0 font-mono text-[11px] tabular-nums">
-          {(file.additions ?? 0) > 0 && (
-            <span className="text-[#15803d] dark:text-[#4ade80] font-medium">+{file.additions}</span>
-          )}
-          {(file.deletions ?? 0) > 0 && (
-            <span className="text-[#b91c1c] dark:text-[#f87171] font-medium">-{file.deletions}</span>
-          )}
-
-          {file.patch ? (
-            <button
-              type="button"
-              onClick={handleCopyPatch}
-              className="p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb] dark:hover:bg-[#21262d] transition cursor-pointer"
-              aria-label={copied ? t('gitDiff.patchCopied') : t('gitDiff.copyPatch')}
-            >
-              {copied ? (
-                <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-              ) : (
-                <Copy className="h-3 w-3" />
-              )}
-            </button>
-          ) : null}
-        </div>
-      </div>
-
-      {/* Expanded Diff View: ImageDiffViewer for images, text diff otherwise */}
-      {isExpanded && (
-        isImage ? (
-          <ImageDiffViewer taskId={taskId} filePath={file.path} />
-        ) : (
-          <div className="border-t border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] font-mono text-[11px] leading-relaxed select-text overflow-x-auto max-h-[460px] overflow-y-auto">
-          {parsedLines.length === 0 ? (
-            <div className="p-3 text-center text-[#8f8f8f] dark:text-[#8b949e] text-xs">
-              {t('gitDiff.noTextChanges')}
-            </div>
-          ) : (
-            parsedLines.map((line, idx) => {
-              if (line.type === 'hunk') {
-                return (
-                  <div
-                    key={idx}
-                    className="bg-[#f4f4f5] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] border-y border-[#ebebeb] dark:border-[#21262d] my-0.5 py-0.5 px-2 text-[10px] font-semibold select-text"
-                  >
-                    {line.text}
-                  </div>
-                );
-              }
-
-              if (line.type === 'add') {
-                return (
-                  <div
-                    key={idx}
-                    className="flex items-start bg-[#f0fdf4] dark:bg-[#12281e] text-[#166534] dark:text-[#7ee787] hover:bg-[#dcfce7] dark:hover:bg-[#173a2b] py-0.5"
-                  >
-                    <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] dark:text-[#8b949e] select-none text-[10px]">
-                      {/* empty old line */}
-                    </span>
-                    <span className="w-8 shrink-0 text-right pr-2 text-[#16a34a] dark:text-[#7ee787] select-none text-[10px] tabular-nums font-mono">
-                      {line.newNum}
-                    </span>
-                    <span className="w-4 shrink-0 text-center text-[#16a34a] dark:text-[#7ee787] font-bold select-none">
-                      +
-                    </span>
-                    <span className="flex-1 whitespace-pre-wrap break-all pr-2">
-                      {line.text}
-                    </span>
-                  </div>
-                );
-              }
-
-              if (line.type === 'del') {
-                return (
-                  <div
-                    key={idx}
-                    className="flex items-start bg-[#fef2f2] dark:bg-[#3b1219] text-[#991b1b] dark:text-[#ff7b72] hover:bg-[#fee2e2] dark:hover:bg-[#4d1922] py-0.5"
-                  >
-                    <span className="w-8 shrink-0 text-right pr-2 text-[#ef4444] dark:text-[#ff7b72] select-none text-[10px] tabular-nums font-mono">
-                      {line.oldNum}
-                    </span>
-                    <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] dark:text-[#8b949e] select-none text-[10px]">
-                      {/* empty new line */}
-                    </span>
-                    <span className="w-4 shrink-0 text-center text-[#ef4444] dark:text-[#ff7b72] font-bold select-none">
-                      -
-                    </span>
-                    <span className="flex-1 whitespace-pre-wrap break-all pr-2">
-                      {line.text}
-                    </span>
-                  </div>
-                );
-              }
-
-              // Context line
-              return (
-                <div
-                  key={idx}
-                  className="flex items-start hover:bg-[#f9f9f9] dark:hover:bg-[#161b22] py-0.5 text-[#171717] dark:text-[#f0f6fc]"
-                >
-                  <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] dark:text-[#8b949e] select-none text-[10px] tabular-nums font-mono">
-                    {line.oldNum}
-                  </span>
-                  <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] dark:text-[#8b949e] select-none text-[10px] tabular-nums font-mono">
-                    {line.newNum}
-                  </span>
-                  <span className="w-4 shrink-0 text-center text-[#8f8f8f] dark:text-[#8b949e] select-none">
-                    {' '}
-                  </span>
-                  <span className="flex-1 whitespace-pre-wrap break-all pr-2">
-                    {line.text}
-                  </span>
-                </div>
-              );
-            })
-          )}
-        </div>
-        )
-      )}
-    </div>
-  );
 }
 
 const DEFAULT_SIDEBAR_WIDTH = 480;
@@ -826,8 +57,8 @@ export default function GitDiffSidebar({
   const startXRef = useRef(0);
   const startWidthRef = useRef(sidebarWidth);
 
-  // Bug Fix: Track initial load and explicit user-collapsed state
-  // Background syncs on tool events MUST NOT re-open files intentionally collapsed by user!
+  // Track initial load and explicit user-collapsed state
+  // Background syncs on tool events MUST NOT re-open files intentionally collapsed by user
   const hasInitialLoadedRef = useRef(false);
   const userCollapsedFilesRef = useRef<Set<string>>(new Set());
 
@@ -859,7 +90,7 @@ export default function GitDiffSidebar({
           setExpandedFiles(new Set());
         } else {
           // Background sync (subsequent fetch on live tool events, etc.):
-          // NEVER forcibly re-expand files that the user intentionally collapsed!
+          // NEVER forcibly re-expand files that the user intentionally collapsed
           // Maintain currently expanded files, purging any paths no longer in diff
           setExpandedFiles((prev) => {
             const next = new Set<string>();
@@ -877,9 +108,14 @@ export default function GitDiffSidebar({
       } else {
         setExpandedFiles(new Set());
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.info('get_task_git_diff invoke failed or web mode:', err);
-      const msg = err?.message || (typeof err === 'string' ? err : 'Ошибка загрузки Git Diff');
+      const msg =
+        typeof err === 'string'
+          ? err
+          : err instanceof Error
+          ? err.message
+          : 'Ошибка загрузки Git Diff';
       setError(msg);
     } finally {
       hasInitialLoadedRef.current = true;
@@ -927,7 +163,7 @@ export default function GitDiffSidebar({
           const eventTaskId = p?.taskId;
           const isMatchingTask =
             eventTaskId === taskId ||
-            (eventTaskId && (eventTaskId.startsWith(`${taskId}.`) || eventTaskId.startsWith(`${taskId}:`)));
+            (eventTaskId && (eventTaskId.startsWith(taskId + '.') || eventTaskId.startsWith(taskId + ':')));
           if (!isMatchingTask) return;
 
           const toolName = (p?.name || '').toLowerCase().trim();
@@ -947,7 +183,7 @@ export default function GitDiffSidebar({
           const eventTaskId = p?.taskId;
           const isMatchingTask =
             eventTaskId === taskId ||
-            (eventTaskId && (eventTaskId.startsWith(`${taskId}.`) || eventTaskId.startsWith(`${taskId}:`)));
+            (eventTaskId && (eventTaskId.startsWith(taskId + '.') || eventTaskId.startsWith(taskId + ':')));
           if (isMatchingTask) {
             scheduleFetch();
           }
@@ -1051,7 +287,6 @@ export default function GitDiffSidebar({
     [displayFiles]
   );
   const filesCount = displayFiles.length;
-  const files = displayFiles;
 
   const handleExpandAll = () => {
     if (!displayFiles.length) return;
@@ -1068,17 +303,15 @@ export default function GitDiffSidebar({
   // Single unified aside: smooth CSS width transitions without unmounting
   return (
     <aside
-      style={{ width: `${isCollapsed ? 44 : sidebarWidth}px` }}
-      className={`relative shrink-0 mt-1 mr-1.5 rounded-tl-xl rounded-tr-xl border-t border-x border-[#ebebeb] dark:border-[#21262d] shadow-2xs bg-[#fafafa] dark:bg-[#090a0f] flex flex-col min-h-0 h-[calc(100%-0.25rem)] text-[#171717] dark:text-[#f0f6fc] overflow-hidden select-none transition-colors ${
-        isResizing ? 'select-none' : 'transition-[width] duration-200 ease-out'
-      } ${className || ''}`}
+      style={{ width: (isCollapsed ? 44 : sidebarWidth) + 'px' }}
+      className={'relative shrink-0 mt-1 mr-1.5 rounded-tl-xl rounded-tr-xl border-t border-x border-[#ebebeb] dark:border-[#21262d] shadow-2xs bg-[#fafafa] dark:bg-[#090a0f] flex flex-col min-h-0 h-[calc(100%-0.25rem)] text-[#171717] dark:text-[#f0f6fc] overflow-hidden select-none transition-colors ' +
+        (isResizing ? 'select-none' : 'transition-[width] duration-200 ease-out') + ' ' + (className || '')}
       aria-label={t('gitDiff.panelAria')}
     >
       {/* Collapsed Rail View (44px wide, smoothly fades in when collapsed) */}
       <div
-        className={`absolute inset-0 w-11 bg-white dark:bg-[#0d1117] flex flex-col items-center py-3 select-none transition-opacity duration-200 ${
-          isCollapsed ? 'opacity-100 pointer-events-auto z-10' : 'opacity-0 pointer-events-none -z-10'
-        }`}
+        className={'absolute inset-0 w-11 bg-white dark:bg-[#0d1117] flex flex-col items-center py-3 select-none transition-opacity duration-200 ' +
+          (isCollapsed ? 'opacity-100 pointer-events-auto z-10' : 'opacity-0 pointer-events-none -z-10')}
       >
         <button
           type="button"
@@ -1091,11 +324,10 @@ export default function GitDiffSidebar({
 
         <div className="mt-4 flex flex-col items-center space-y-2">
           <GitCompare
-            className={`h-4 w-4 ${
-              isLoading
+            className={'h-4 w-4 ' +
+              (isLoading
                 ? 'animate-pulse text-emerald-500'
-                : 'text-[#8f8f8f] dark:text-[#8b949e]'
-            }`}
+                : 'text-[#8f8f8f] dark:text-[#8b949e]')}
           />
           {!hasInitialLoaded ? (
             <span className="w-3.5 h-3.5 rounded-full border-2 border-emerald-500/20 border-t-emerald-500 animate-spin" />
@@ -1133,10 +365,9 @@ export default function GitDiffSidebar({
 
       {/* Expanded Content View (Fixed layout width = sidebarWidth, stays mounted, fades out when collapsed) */}
       <div
-        style={{ width: `${sidebarWidth}px` }}
-        className={`h-full flex flex-col min-h-0 overflow-hidden transition-opacity duration-200 ${
-          isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'
-        }`}
+        style={{ width: sidebarWidth + 'px' }}
+        className={'h-full flex flex-col min-h-0 overflow-hidden transition-opacity duration-200 ' +
+          (isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto')}
       >
         {/* Left Resize Drag Handle (Only active when expanded) */}
         {!isCollapsed && (
@@ -1146,182 +377,133 @@ export default function GitDiffSidebar({
             aria-label="Изменить ширину панели Git Diff"
           >
             <div
-              className={`w-0.5 h-8 rounded-full transition-colors ${
-                isResizing ? 'bg-emerald-500' : 'bg-transparent group-hover/handle:bg-[#00000025]'
-              }`}
+              className={'w-0.5 h-8 rounded-full transition-colors ' +
+                (isResizing ? 'bg-emerald-500' : 'bg-transparent group-hover/handle:bg-[#00000025]')}
             />
           </div>
         )}
 
         {/* 1. Header: Title, Badges, Expand/Collapse All, Refresh, Panel Collapse */}
         <header className="px-3 py-2 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] flex flex-wrap items-center justify-between gap-1.5 shrink-0 shadow-xs min-w-0 transition-colors">
-        {/* Left Section: Title, File count, Diff stats */}
-        <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-          <div className="flex items-center gap-1.5 shrink-0">
-            <GitCompare className="h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e] shrink-0" />
-            <span className="font-semibold text-xs text-[#171717] dark:text-[#f0f6fc] tracking-tight font-sans">
-              Git Diff
+          {/* Left Section: Title, File count, Diff stats */}
+          <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <GitCompare className="h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e] shrink-0" />
+              <span className="font-semibold text-xs text-[#171717] dark:text-[#f0f6fc] tracking-tight font-sans">
+                Git Diff
+              </span>
+            </div>
+
+            {/* Changed files count badge */}
+            <span
+              className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-[#f4f4f5] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] border border-[#ebebeb] dark:border-[#30363d] shrink-0 whitespace-nowrap"
+              title={t('gitDiff.changedFiles', { count: filesCount })}
+            >
+              {formatFilesCount(filesCount, language)}
             </span>
-          </div>
 
-          {/* Changed files count badge */}
-          <span
-            className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-[#f4f4f5] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] border border-[#ebebeb] dark:border-[#30363d] shrink-0 whitespace-nowrap"
-            title={t('gitDiff.changedFiles', { count: filesCount })}
-          >
-            {formatFilesCount(filesCount, language)}
-          </span>
-
-          {/* Additions / deletions badges */}
-          {(totalAdditions > 0 || totalDeletions > 0) && (
-            <div className="flex items-center gap-1 text-[10px] font-mono tabular-nums font-semibold shrink-0">
-              {totalAdditions > 0 && (
-                <span className="text-[#15803d] dark:text-[#4ade80]" title={t('gitDiff.linesAdded', { count: totalAdditions })}>
-                  +{totalAdditions}
-                </span>
-              )}
-              {totalDeletions > 0 && (
-                <span className="text-[#b91c1c] dark:text-[#f87171]" title={t('gitDiff.linesDeleted', { count: totalDeletions })}>
-                  -{totalDeletions}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Right Section: Branch badge & Action buttons */}
-        <div className="flex items-center gap-1 shrink-0 ml-auto">
-          {/* Branch badge with clean truncation and tooltip */}
-          {diff?.branch && (
-            <div
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[10px] font-mono text-[#666666] dark:text-[#8b949e] max-w-[130px] min-w-0 cursor-default"
-              title={t('gitDiff.currentBranch', { branch: diff.branch })}
-            >
-              <GitBranch className="h-3 w-3 text-[#8f8f8f] dark:text-[#8b949e] shrink-0" />
-              <span className="truncate">{diff.branch}</span>
-            </div>
-          )}
-
-          {/* Expand / Collapse All Quick Actions */}
-          {filesCount > 1 && (
-            <div className="flex items-center border border-[#ebebeb] dark:border-[#30363d] rounded bg-white dark:bg-[#161b22]">
-              <button
-                type="button"
-                onClick={handleExpandAll}
-                className="p-1 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer"
-                aria-label={t('gitDiff.expandAllTitle')}
-              >
-                <ChevronsUpDown className="h-3 w-3" />
-              </button>
-              <div className="w-px h-3 bg-[#ebebeb] dark:bg-[#30363d]" />
-              <button
-                type="button"
-                onClick={handleCollapseAll}
-                className="p-1 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer"
-                aria-label={t('gitDiff.collapseAllTitle')}
-              >
-                <ChevronsDownUp className="h-3 w-3" />
-              </button>
-            </div>
-          )}
-
-          {/* Refresh button */}
-          <button
-            type="button"
-            onClick={fetchDiff}
-            disabled={isLoading}
-            className="p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] disabled:opacity-50 transition cursor-pointer"
-            aria-label={t('gitDiff.refresh')}
-          >
-            <RefreshCw
-              className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin text-emerald-600' : ''}`}
-            />
-          </button>
-
-          {/* Collapse sidebar button */}
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            className="p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition-colors cursor-pointer"
-            aria-label={t('gitDiff.collapsePanel')}
-          >
-            <PanelRightClose className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </header>
-
-      {/* Error state */}
-      {error && (
-        <div className="p-2.5 bg-[#fef2f2] dark:bg-[#450a0a]/40 border-b border-[#fecaca] dark:border-[#991b1b] text-[#991b1b] dark:text-[#f87171] text-xs font-mono flex items-center space-x-2 shrink-0">
-          <AlertCircle className="h-4 w-4 text-[#dc2626] shrink-0" />
-          <span className="flex-1 truncate">{error}</span>
-          <button
-            type="button"
-            onClick={fetchDiff}
-            className="underline hover:text-[#171717] dark:hover:text-[#f0f6fc] cursor-pointer ml-1 text-[11px]"
-          >
-            Повторить
-          </button>
-        </div>
-      )}
-
-      {/* 2. Main Content Area: Accordion File List or Loading Skeleton */}
-      {!hasInitialLoaded ? (
-        <div className="flex-1 overflow-y-auto p-3 space-y-2.5 min-h-0 bg-[#fafafa] dark:bg-[#090a0f]">
-          <div className="flex items-center justify-center py-4 space-x-2 text-xs text-[#8f8f8f] dark:text-[#8b949e]">
-            <RefreshCw className="h-3.5 w-3.5 animate-spin text-emerald-600 dark:text-emerald-400" />
-            <span>{t('gitDiff.loadingChanges')}</span>
-          </div>
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-3 animate-pulse space-y-2"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="h-3.5 w-3.5 bg-[#e5e7eb] dark:bg-[#21262d] rounded" />
-                  <div className="h-3 w-36 bg-[#e5e7eb] dark:bg-[#21262d] rounded" />
-                </div>
-                <div className="h-3 w-10 bg-[#e5e7eb] dark:bg-[#21262d] rounded" />
+            {/* Additions / deletions badges */}
+            {(totalAdditions > 0 || totalDeletions > 0) && (
+              <div className="flex items-center gap-1 text-[10px] font-mono tabular-nums font-semibold shrink-0">
+                {totalAdditions > 0 && (
+                  <span className="text-[#15803d] dark:text-[#4ade80]" title={t('gitDiff.linesAdded', { count: totalAdditions })}>
+                    +{totalAdditions}
+                  </span>
+                )}
+                {totalDeletions > 0 && (
+                  <span className="text-[#b91c1c] dark:text-[#f87171]" title={t('gitDiff.linesDeleted', { count: totalDeletions })}>
+                    -{totalDeletions}
+                  </span>
+                )}
               </div>
-              <div className="h-2 w-24 bg-[#f3f4f6] dark:bg-[#161b22] rounded" />
-            </div>
-          ))}
-        </div>
-      ) : filesCount === 0 ? (
-        // Clean empty state placeholder
-        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center bg-[#fafafa] dark:bg-[#090a0f]">
-          <div className="h-12 w-12 rounded-full bg-[#f0fdf4] dark:bg-[#052e16]/50 border border-[#bbf7d0] dark:border-[#166534] flex items-center justify-center mb-3">
-            <CheckCircle2 className="h-6 w-6 text-[#15803d] dark:text-[#4ade80]" />
+            )}
           </div>
-          <h3 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">{t('gitDiff.cleanWorktree')}</h3>
-          <p className="text-xs text-[#666666] dark:text-[#8b949e] mt-1 max-w-[260px] leading-relaxed">
-            {t('gitDiff.noChanges')}
-          </p>
-          {diff?.branch && (
-            <div className="mt-4 px-2.5 py-1 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[11px] font-mono text-[#666666] dark:text-[#8b949e] flex items-center space-x-1.5">
-              <GitBranch className="h-3 w-3 text-[#8f8f8f] dark:text-[#8b949e]" />
-              <span>{t('gitDiff.branch', { branch: diff.branch })}</span>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0 bg-[#fafafa] dark:bg-[#090a0f]">
-          {files.map((file) => {
-            if (!file?.path) return null;
-            const isExpanded = expandedFiles.has(file.path);
-            return (
-              <AccordionFileItem
-                key={file.path}
-                taskId={taskId}
-                file={file}
-                isExpanded={isExpanded}
-                onToggle={() => toggleFile(file.path)}
+
+          {/* Right Section: Branch badge & Action buttons */}
+          <div className="flex items-center gap-1 shrink-0 ml-auto">
+            {/* Branch badge with clean truncation and tooltip */}
+            {diff?.branch && (
+              <div
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[10px] font-mono text-[#666666] dark:text-[#8b949e] max-w-[130px] min-w-0 cursor-default"
+                title={t('gitDiff.currentBranch', { branch: diff.branch })}
+              >
+                <GitBranch className="h-3 w-3 text-[#8f8f8f] dark:text-[#8b949e] shrink-0" />
+                <span className="truncate">{diff.branch}</span>
+              </div>
+            )}
+
+            {/* Expand / Collapse All Quick Actions */}
+            {filesCount > 1 && (
+              <div className="flex items-center border border-[#ebebeb] dark:border-[#30363d] rounded bg-white dark:bg-[#161b22]">
+                <button
+                  type="button"
+                  onClick={handleExpandAll}
+                  className="p-1 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer"
+                  aria-label={t('gitDiff.expandAllTitle')}
+                >
+                  <ChevronsUpDown className="h-3 w-3" />
+                </button>
+                <div className="w-px h-3 bg-[#ebebeb] dark:bg-[#30363d]" />
+                <button
+                  type="button"
+                  onClick={handleCollapseAll}
+                  className="p-1 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer"
+                  aria-label={t('gitDiff.collapseAllTitle')}
+                >
+                  <ChevronsDownUp className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+
+            {/* Refresh button */}
+            <button
+              type="button"
+              onClick={fetchDiff}
+              disabled={isLoading}
+              className="p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] disabled:opacity-50 transition cursor-pointer"
+              aria-label={t('gitDiff.refresh')}
+            >
+              <RefreshCw
+                className={'h-3.5 w-3.5 ' + (isLoading ? 'animate-spin text-emerald-600' : '')}
               />
-            );
-          })}
-        </div>
-      )}
+            </button>
+
+            {/* Collapse sidebar button */}
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className="p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition-colors cursor-pointer"
+              aria-label={t('gitDiff.collapsePanel')}
+            >
+              <PanelRightClose className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </header>
+
+        {/* Error state */}
+        {error && (
+          <div className="p-2.5 bg-[#fef2f2] dark:bg-[#450a0a]/40 border-b border-[#fecaca] dark:border-[#991b1b] text-[#991b1b] dark:text-[#f87171] text-xs font-mono flex items-center space-x-2 shrink-0">
+            <AlertCircle className="h-4 w-4 text-[#dc2626] shrink-0" />
+            <span className="flex-1 truncate">{error}</span>
+            <button
+              type="button"
+              onClick={fetchDiff}
+              className="underline hover:text-[#171717] dark:hover:text-[#f0f6fc] cursor-pointer ml-1 text-[11px]"
+            >
+              Повторить
+            </button>
+          </div>
+        )}
+
+        {/* 2. Main Content Area: DiffFileList */}
+        <DiffFileList
+          taskId={taskId}
+          files={displayFiles}
+          hasInitialLoaded={hasInitialLoaded}
+          expandedFiles={expandedFiles}
+          onToggleFile={toggleFile}
+          branch={diff?.branch}
+        />
       </div>
     </aside>
   );

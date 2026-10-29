@@ -497,7 +497,14 @@ export default function ContextGauge({
     const setupListener = async () => {
       try {
         const { listen } = await import('@tauri-apps/api/event');
-        unlisten = await listen<any>('agent:compacted', (event) => {
+        type CompactedEventPayload = {
+          tokens_after?: number;
+          tokensAfter?: number;
+          saved_tokens?: number;
+          estimatedSavedTokens?: number;
+          savedTokens?: number;
+        };
+        unlisten = await listen<CompactedEventPayload>('agent:compacted', (event) => {
           if (event.payload) {
             const p = event.payload;
             const after = p.tokens_after ?? p.tokensAfter;

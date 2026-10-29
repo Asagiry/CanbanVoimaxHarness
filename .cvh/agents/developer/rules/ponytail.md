@@ -1,13 +1,18 @@
 # JIT Rule: Minimal Surgical Diff and Over-Engineering Prevention (ponytail.md)
 
-Ponytail engineering discipline for the **Developer** persona: achieving requirements via the shortest reliable path, eliminating architectural baggage, and preserving system robustness.
+Ponytail engineering discipline for the **Developer** persona: achieving requirements via the shortest reliable path, eliminating architectural baggage, preserving modular boundaries, and maintaining system robustness.
 
 ---
 
-## 1. Minimal Diff Invariant (1–3 Lines)
+## 1. Minimal Diff Invariant & Anti-Monolith Boundary
 - If a bug or feature can be resolved by editing 1–3 lines in an existing file, implement the solution strictly in place.
 - Do not create new classes, contexts, custom hooks, helper modules, or service layers if the logic naturally belongs inside an existing component.
-- Creating a new file requires explicit justification that the responsibility exceeds the existing file's boundary.
+- **Modularity is NOT Over-Engineering**:
+  - Ponytail minimalism does **NOT** mean stuffing 500 lines into `App.tsx`, `KanbanBoard.tsx`, `KanbanCard.tsx`, or monolithic `db/mod.rs` / `config/mod.rs`.
+  - Creating a focused new file is mandatory when logic crosses a Single Responsibility Principle (SRP) boundary or exceeds size ceilings:
+    - **Backend Module Ceiling**: Maximum **350–500 lines** per Rust module (`src-tauri/src/db/`, `config/`, `domain/`, `agent/`).
+    - **Frontend Component Ceiling**: Maximum **250–350 lines** per React component (`src/components/card/`, `drawer/stream/`, `stores/*/slices/`).
+  - Modular decomposition into dedicated widgets (e.g. `CardTimerBadge.tsx`, `CardHookNode.tsx`, `domain::ids`) prevents unmaintainable monolithic drift while keeping individual files minimal and surgical.
 
 ---
 
@@ -33,8 +38,7 @@ Ponytail engineering discipline for the **Developer** persona: achieving require
 ## 4. Preservation of System Robustness
 Ponytail simplification governs solution structure, never compromising runtime reliability:
 - **Rust Backend**: Strongly typed error handling via `Result<T, AppError>`. Zero `.unwrap()` or `.expect()` in production paths. SQLite WAL transaction boundaries with atomic transactions.
-- **React Frontend**: Mandatory `useShallow` on Zustand store selectors returning arrays or objects. Clean timer and subscription teardowns in `useEffect`. Monospace `.tabular-nums` on dynamic telemetry and timers.
-
+- **React Frontend**: Centralized `tauriEventGateway` for typed events. Domain Value Objects from `src/types/domain.ts`. Mandatory `useShallow` on Zustand store selectors returning arrays or objects. Clean timer and subscription teardowns in `useEffect`. Monospace `.tabular-nums` on dynamic telemetry and timers.
 
 ---
 
@@ -45,7 +49,7 @@ Language models suffer from pathological over-defensiveness: stuffing defensive 
    - For boundary or concurrency issues that are mathematically or structurally improbable, explain the likelihood and only add checks after explicit user confirmation.
    - Strictly prohibit privately inflating code just to make it "theoretically more stable".
 2. **Law 2: Single Validation at Boundary (Entry-Point Guard)**:
-   - External data (IPC payloads, HTTP requests, CLI flags, file reads) is validated **strictly once at the system boundary**.
+   - External data (IPC payloads, HTTP requests, CLI flags, file reads) is validated **strictly once at the system boundary** using domain factories (`toTaskId`, `toStageId`, `toTaskState`).
    - Internally, rely 100% on the strict type system (TypeScript / Rust). Layered redundant null/undefined checks across internal functions and helpers are strictly banned.
 3. **Law 3: Reject Premature Abstraction**:
    - For logic used only in a single location, inline it directly by the call site.
@@ -71,4 +75,4 @@ Before calling `advance_task(summary)` or declaring work complete:
 - Execute `git diff` (and `git status`) inside the worktree.
 - Scrutinize every line of changed code against the task requirements.
 - Eradicate stray `console.log` statements, debugging dumps, temporary scratch files, and accidental formatting/whitespace churn.
-- Ensure the diff contains ONLY the surgical solution to the requested task.
+- Ensure the diff contains ONLY the surgical solution to the requested task within proper modular boundaries.

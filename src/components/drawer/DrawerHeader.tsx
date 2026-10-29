@@ -34,7 +34,7 @@ export interface DrawerHeaderProps {
   isDiffCollapsed?: boolean;
   isSubagentsCollapsed?: boolean;
   subagentsCount?: number;
-  onClose: () => void;
+  onClose?: () => void;
   onAbort?: () => void;
   onAbortAgent?: () => void;
   onToggleDiff?: () => void;
@@ -74,7 +74,7 @@ export default function DrawerHeader({
   const activeSubagentId = useDrawerStore((s) => s.activeSubagentId);
   const activeSubagentTitle = useDrawerStore((s) => s.activeSubagentTitle);
   const activeSubagentRole = useDrawerStore((s) => s.activeSubagentRole);
-  const closeSubagent = useDrawerStore((s) => s.closeSubagent);
+  const goBackDrawer = useDrawerStore((s) => s.goBackDrawer);
   const storeSubagents = useDrawerStore((s) => s.subagents);
   const toolExecutions = useDrawerStore((s) => s.toolExecutions);
   const toolIdToSubagentId = useDrawerStore((s) => s.toolIdToSubagentId);
@@ -130,12 +130,12 @@ export default function DrawerHeader({
             data-no-drag
             type="button"
             onMouseDown={(e) => e.stopPropagation()}
-            onClick={activeSubagentId ? closeSubagent : onClose}
+            onClick={onClose || goBackDrawer}
             className="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] border border-[#ebebeb] dark:border-[#30363d] transition font-sans text-xs font-medium cursor-pointer shadow-xs select-none pointer-events-auto"
-            aria-label={activeSubagentId ? t('drawer.backToTask') : t('drawer.backToBoard')}
+            aria-label={activeSubagentId || (rootTask && rootTask.id !== task?.id) ? t('drawer.backToTask') : t('drawer.backToBoard')}
           >
             <ArrowLeft className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
-            <span>{activeSubagentId ? t('drawer.backToTask') : t('drawer.backToBoard')}</span>
+            <span>{activeSubagentId || (rootTask && rootTask.id !== task?.id) ? t('drawer.backToTask') : t('drawer.backToBoard')}</span>
           </button>
 
           {/* Breadcrumbs / Task badge (only when NOT in subagent mode) */}

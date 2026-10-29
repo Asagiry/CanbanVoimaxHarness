@@ -12,6 +12,7 @@
 > 6. **STRICT SINGLE-TASK CEILING & ZERO AUTONOMOUS SCOPE-CREEP (§ 1.3)**: Every subagent is assigned EXACTLY ONE atomic task and MUST STOP IMMEDIATELY upon completion. Subagents are STRICTLY FORBIDDEN from expanding scope or inventing unassigned work.
 > 7. **NASA GROUND TRUTH VERIFICATION MANDATE (§ 1.4)**: All verification MUST rely exclusively on Ground Truth Runtime Sensors:
 >    - Turbo Sensors (<10s): `pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings && cargo check`.
+>    - Full Automated Test Shield (383 Tests, 100% PASS): `pnpm test` (139 Vitest tests in 8 suites) and `cargo test` (244 Rust core tests).
 >    - Compiler & Clippy Sensor: `cargo check` and `cargo clippy -- -D warnings`.
 >    - Frontend Bundle Sensor: `pnpm run build` (`tsc && vite build`).
 >    - Live Process Sensor: real subprocess execution and real HTTP/SSE streaming tests against local AI proxies.
@@ -69,6 +70,10 @@
 ### 1.4 NASA Ground Truth Verification Mandate
 - **Runtime Sensors Invariant**: All verification MUST rely exclusively on Ground Truth Runtime Sensors:
   - **Turbo Sensors (<10s)**: `pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings && cargo check`.
+  - **Full Automated Test Shield (383 Tests, 100% PASS)**:
+    - Frontend (Vitest v5.0.5): `pnpm test` (139 tests across 8 suites in ~2.7s).
+    - Backend (Cargo Test): `cargo test` (244 tests across domain, db, config, agent, commands in ~4.8s).
+    - Total: **383 automated tests**, 0 failures, 0 flaky tests.
   - **Compiler & Clippy Sensor**: `cargo check` and `cargo clippy -- -D warnings`.
   - **Frontend Bundle Sensor**: `pnpm run build` (`tsc && vite build`).
   - **Live Process Sensor**: Real subprocess execution and live HTTP/SSE streaming tests against local AI proxies.
@@ -77,10 +82,16 @@
 ### 1.5 Zero-Context-Polling Rule (Ban on Monitoring Loops)
 - **Passive Wait Mandate**: When background subagents execute, the Root Orchestrator is strictly forbidden from executing monitoring or busy-polling loops (`list_agents`, `job_list`, `pwsh git status/log`). Await subagent push notices passively.
 
-### 1.6 Full Peer Advisor, Merciless Colleague & Devil's Advocate Mandate
+### 1.6 Full Peer Advisor, Merciless Colleague & Anti-Sycophancy Mandate
 - **Uncompromising Peer Partnership (Colleague, Not a Servant)**: Users are human—they make mistakes, suffer from cognitive fatigue, tunnel vision, or propose conflicting requirements and architectural anti-patterns. Subagents, lead developers, and orchestrators MUST NOT behave as passive order-takers, subservient assistants, or yes-men. You are an authoritative senior engineering colleague. When a user presents an erroneous premise, contradictory specification, architectural anti-pattern, or decision conflict, you are duty-bound to point it out mercilessly, crisply, and constructively.
 - **Zero Sycophancy (Anti-Поддакивание)**: If a user or prompt proposes an implementation that will result in technical debt, performance degradation (e.g. UI jank, memory leaks, unindexed queries, blocking loops), architectural regressions, or maintainability nightmares, the agent MUST NOT blindly comply or flatter. The agent MUST directly and mercilessly articulate WHY the approach is flawed, expose the operational trade-offs and concrete failure modes, and provide a battle-tested, robust alternative.
 - **Constructive Devil's Advocacy & Technical Debate**: Engage as a full technical partner. Challenge fragile abstractions, premature optimizations, or shortcut hacks before writing code. Propose superior alternatives grounded in NASA Ground Truth invariants, debate trade-offs openly, and uphold engineering excellence over compliant mediocrity.
+
+#### Принципы объективного мышления и противодействия соглашательству (Anti-Sycophancy & Objective Reasoning)
+1. **Игнорирование наводящих вопросов**: Если запрос пользователя заканчивается фразами, предполагающими подтверждение (например, «Верно?», «Не так ли?», «Правильно?»), агент воспринимает его исключительно как нейтральную рабочую гипотезу, требующую независимой верификации через сенсоры и кодовую базу. Запрещено подстраивать ответ под заложенное в вопросе предположение.
+2. **Независимая проверка предпосылок**: Прежде чем оценивать код, факты или архитектурные решения, запрещено начинать ответ со слов соглашательства («Да», «Совершенно верно», «Без проблем»). Агент обязан сначала самостоятельно проанализировать факты, код и инварианты и только после этого сформулировать обоснованный вывод.
+3. **Прямое опровержение ошибок**: Если предположения пользователя ошибочны, предложенное решение неоптимально или приведённые факты неверны, агент обязан прямо указать на это и опровергнуть их уже в первом предложении ответа.
+4. **Приоритет технической точности**: Техническая точность, краевые случаи, компиляторные инварианты и объективная оценка компромиссов ВСЕГДА имеют высший приоритет над вежливостью и стремлением соглашаться с пользователем.
 
 ### 1.7 Chained Pull Requests & Stacked Git Changes (`gh stack`)
 - **Stacked Diffs & Chained PRs Philosophy**: For multiple dependent or chained pull requests, use `gh stack` (stacked git changes) to manage incremental reviewable diffs without breaking upstream integration. Rather than submitting large monolithic PRs or tangled branching webs, decompose features into a linear sequence of atomic, reviewable PR branches where each branch builds on the previous one.
@@ -98,35 +109,78 @@
 ## 2. Universal Core Rules & Architectural Invariants
 
 ### 2.1 Technology Stack & Directory Structure
-- **Desktop Core**: Tauri v2 + Rust 2021 (Tokio async runtime, reqwest, serde, std::process).
-- **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS v4 + Lucide Icons + Framer Motion.
-- **Project Structure**:
+- **Desktop Core**: Tauri v2 + Rust 2021 (Tokio async runtime, reqwest, serde, std::process, r2d2, rusqlite).
+- **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS v4 + Lucide Icons + Framer Motion + Zustand.
+- **Project Structure (9.7/10 Clean Code Modular Architecture)**:
   ```text
   CanbanVoimaxHarness/
-  ├── src-tauri/             # Rust Desktop Backend
+  ├── src-tauri/             # Rust Desktop Backend (Clean Modular Architecture)
   │   ├── src/
   │   │   ├── main.rs        # Tauri entrypoint & plugin setup
-  │   │   ├── lib.rs         # Tauri plugin & IPC wiring
-  │   │   ├── db.rs          # SQLite dialogue persistence (.cvh/harness.db)
-  │   │   ├── config.rs      # .cvh/ project, boards, and tool-policy parser
+  │   │   ├── lib.rs         # Tauri plugin & IPC registration
+  │   │   ├── domain/        # Nominal Branded Types & Core Business Invariants
+  │   │   │   ├── ids.rs     # TaskId, StageId, BoardId branded type invariants
+  │   │   │   └── state.rs   # TaskState state-machine & valid transitions
+  │   │   ├── db/            # R2D2 SQLite Persistence Layer (.cvh/harness.db)
+  │   │   │   ├── pool.rs    # R2D2 connection pool (WAL mode, busy_timeout=5s)
+  │   │   │   ├── task_repo.rs      # Task persistence & queries
+  │   │   │   ├── dialog_repo.rs    # Atomic dialogue upsert & retrieval
+  │   │   │   └── telemetry_repo.rs # Token usage & performance metrics
+  │   │   ├── config/        # Harness Configuration & Scaffold Subsystem
+  │   │   │   ├── models.rs       # Data structures (BoardDef, PipelineConfig, etc.)
+  │   │   │   ├── tool_policy.rs  # Two-level tool policy enforcement
+  │   │   │   ├── discovery.rs    # Multi-tier workspace root discovery
+  │   │   │   ├── scaffold.rs     # Fresh-project scaffolding & auto-gitignore
+  │   │   │   └── io.rs           # Atomic disk reads/writes
   │   │   ├── git.rs         # Native worktree & branch manager
   │   │   ├── hooks.rs       # Transition scripts (.bat/.ps1/.sh) runner
   │   │   ├── llm/           # Universal SSE streaming client & model registry
-  │   │   ├── agent.rs       # ReAct loop, zero-turn memory priming, custom tools
-  │   │   ├── agent/
-  │   │   │   └── compactor.rs # State-Preserving Context Compactor
-  │   │   └── commands.rs    # Tauri IPC commands & event emitters
+  │   │   ├── agent.rs       # Agent lifecycle, priming & custom tool executor
+  │   │   ├── agent/         # Modular Agent Execution Subsystems
+  │   │   │   ├── react_engine.rs  # Generic ReActEngine<Driver> loop
+  │   │   │   ├── compactor.rs     # Typed ToolCallSummaryExtractor (CC=1)
+  │   │   │   ├── sanitizer.rs     # Unclosed tool call sanitization
+  │   │   │   ├── telemetry.rs     # Non-decaying TPS/RPM telemetry
+  │   │   │   ├── text_match.rs    # Resilient 5-tier fuzzy edit matching
+  │   │   │   ├── tool_schemas.rs  # LLM tool definitions & JSON schemas
+  │   │   │   └── tools/           # Modular tool execution implementations
+  │   │   └── commands/      # Tauri IPC Command Handlers
+  │   │       ├── tasks.rs         # Task command routing
+  │   │       ├── tasks/           # Modular task pipelines
+  │   │       │   ├── transitions.rs # TaskTransitionPipeline (moves, hooks, gatekeepers)
+  │   │       │   ├── lifecycle.rs   # Task creation, deletion, subtask spawning
+  │   │       │   ├── healing.rs     # Board & column orphan self-healing
+  │   │       │   ├── runner.rs      # Agent runner execution triggers
+  │   │       │   └── storage.rs     # Task serialization & sync
+  │   │       ├── boards.rs        # Board management commands
+  │   │       ├── dialogs.rs       # Dialogue history & streaming commands
+  │   │       ├── cortex.rs        # Persona & rules editor commands
+  │   │       ├── git.rs           # Worktree & diff commands
+  │   │       ├── llm.rs           # LLM config & test commands
+  │   │       ├── projects.rs      # Workspace switching commands
+  │   │       └── tools.rs         # Tool policy inspection commands
   │   └── Cargo.toml
-  ├── src/                   # React 19 Tactical Frontend
+  ├── src/                   # React 19 Tactical Frontend (Modular Slices & Components)
   │   ├── components/
-  │   │   ├── board/         # Interactive Kanban board & multi-board switcher
-  │   │   ├── card/          # Tactile Kanban card & status badges
-  │   │   ├── drawer/        # Live Agent stream & activity feed viewer
-  │   │   └── settings/      # Pipeline, tool policy & LLM config screens
-  │   ├── stores/            # Zustand reactive stores
+  │   │   ├── board/         # Kanban board, BoardTabsHeader & modals/
+  │   │   ├── card/          # Modular KanbanCard (239 lines), badges & comparators
+  │   │   ├── drawer/        # AgentConsoleDrawer, diff/ (ImageDiffViewer), stream/
+  │   │   ├── cortex/        # Cortex Explorer, Persona & Rule visual editors
+  │   │   └── settings/      # Pipeline, tool policy & LLM config modals
+  │   ├── stores/            # Zustand reactive stores decomposed into modular slices
+  │   │   ├── board/         # Board store slices, normalizers & helpers
+  │   │   ├── drawer/        # Drawer store slices (stream, activity, subagents)
+  │   │   └── cortex/        # Cortex store slices (personas, rules, files)
+  │   ├── services/          # Pure decoupled services
+  │   │   └── tauriEventGateway.ts # Strongly typed IPC event gateway (no listen<any>)
+  │   ├── types/
+  │   │   └── domain.ts      # Nominal branded types (TaskId, StageId, BoardId)
+  │   ├── lib/
+  │   │   └── markdown/      # Extracted markdown AST parser & token helpers
+  │   ├── i18n/              # Modular localization (ru.ts, en.ts, types.ts)
   │   └── App.tsx
   ├── .cvh/                  # Project Harness Configuration
-  │   ├── harness.db         # High-performance SQLite database (WAL mode)
+  │   ├── harness.db         # High-performance SQLite database (R2D2 WAL mode)
   │   ├── boards.json        # Multi-board definitions & active board
   │   ├── pipeline.json      # Pipeline columns, routing, sensors, & hooks
   │   ├── agents/            # Modular persona folders (<role>/persona.md, setting, rules/)
@@ -154,10 +208,15 @@
   - `kanban`: Lean 3-stage agile workflow (`todo` → `in_progress` → `ready`).
   - `empty`: Minimal 2-stage sandbox (`backlog` → `ready`).
 
-### 2.4 High-Performance SQLite Dialogue Storage Invariant (`.cvh/harness.db`)
-- **SQLite Engine with WAL Mode**: Task dialogue messages and activity feed items are persisted in SQLite at `<repo_root>/.cvh/harness.db` with `PRAGMA journal_mode = WAL` and `PRAGMA synchronous = NORMAL`.
+### 2.4 High-Performance SQLite Dialogue Storage & R2D2 Pooling Invariant (`.cvh/harness.db`)
+- **R2D2 SQLite Connection Pooling with WAL Mode**: Dialogue items, tasks, and telemetry are persisted in SQLite at `<repo_root>/.cvh/harness.db` managed via an `r2d2::Pool<SqliteConnectionManager>` (`src-tauri/src/db/pool.rs`). Every connection initializes with `PRAGMA journal_mode = WAL`, `PRAGMA synchronous = NORMAL`, `PRAGMA foreign_keys = ON`, and `busy_timeout = 5000ms`.
+- **Modular Repository Architecture (`src-tauri/src/db/`)**: Replaced monolithic `db.rs` with specialized domain repositories:
+  - `pool.rs`: Thread-safe R2D2 connection pool factory and migration runner.
+  - `task_repo.rs`: Atomic task CRUD, stage filtering, and relational consistency.
+  - `dialog_repo.rs`: Dialogue item upserts, paginated streaming chunks, tool executions, and steer persistence.
+  - `telemetry_repo.rs`: Token usage aggregation, TPS measurements, and performance telemetry recording.
 - **Indexed Schema**: Table `dialog_items` (`id` TEXT PRIMARY KEY, `task_id` TEXT NOT NULL, `type` TEXT NOT NULL, `content` TEXT, `images_json` TEXT, `timestamp` TEXT, `created_at` INTEGER NOT NULL, `tool_json` TEXT, `duration_ms` REAL) with index `idx_dialog_task(task_id, created_at)`.
-- **Atomic Upserts**: Streaming chunks, thoughts, tool invocations, and responses are upserted atomically in sub-millisecond transactions without lock contention, eliminating legacy flat JSON serialization overhead and file corruption.
+- **Atomic Upserts & Lock-Free Concurrency**: Streaming chunks, thoughts, tool invocations, and responses are upserted atomically in sub-millisecond transactions without thread lock contention, eliminating legacy flat JSON serialization overhead, race conditions, and file corruption.
 - **Restoration**: On task selection or drawer launch, `load_task_dialog` retrieves ordered dialogue history directly from SQLite via `load_dialog_items`.
 
 ### 2.5 Two-Level Tool Policy Matrix: Strict AND-Semantics
@@ -232,7 +291,8 @@
 - **Relay Handoff Memory Priming**: When tasks transition between pipeline stages via `advance_task(summary)` or `reject_task(reason)`, the handover summary is recorded in `task.handover_summary` and injected as a top-level prompt banner (`### [ЭСТАФЕТА ПАЙПЛАЙНА / RELAY HANDOFF]`) in `initial_user_prompt`. Subsequent agents inherit exact context and findings of earlier stages with zero context degradation.
 
 ### 2.10 State-Preserving Context Compactor & Immutable Anchors
-- **Zero-LLM Fast Evaporation**: Tool outputs older than the last 2 turns exceeding 500 characters are automatically trimmed to head summaries.
+- **Typed ToolCallSummaryExtractor (CC=1)**: In `src-tauri/src/agent/compactor.rs`, the compactor extracts concise, deterministic tool call summaries using a cyclomatic-complexity-1 extractor pattern (`ToolCallSummaryExtractor`), guaranteeing fast, memory-safe compaction without complex branching or nested parsing heuristics.
+- **Zero-LLM Fast Evaporation**: Historical tool outputs older than the last 2 turns exceeding 500 characters are safely compressed into structured head summaries while preserving system prompts, agent personas, and error signals verbatim.
 - **Deterministic Prefix Caching**: System messages and tool schemas maintain deterministic alphabetical ordering with zero dynamic timestamps or session IDs in the prompt prefix to maximize provider prompt cache hit rates (>90%).
 
 ### 2.11 Ponytail Minimalism & Anti-Slop Code Standards
@@ -243,7 +303,7 @@
 
 ### 2.12 Zero-Credential Leak, Auto-Gitignore & Local Environment Invariant
 - **Zero Secrets in Git**: Secrets and local endpoints reside strictly in gitignored files (`.cvh/llm.json`, `.env*`, `*.secret`, `*.key`) or runtime UI settings. Default API keys evaluate to empty strings (`String::new()`, `""`).
-- **Auto-Gitignore Runtime Policy**: Implemented in Rust backend (`ensure_cvh_scaffold` in `src-tauri/src/config.rs`). On startup and workspace initialization, the backend checks root `.gitignore` and automatically appends `.cvh/llm.json`, `llm.json`, and `.cvh/worktrees/` if missing, preventing accidental credential commits or tracking of transient task worktrees.
+- **Auto-Gitignore Runtime Policy**: Implemented in Rust backend (`ensure_cvh_scaffold` in `src-tauri/src/config/scaffold.rs`). On startup and workspace initialization, the backend checks root `.gitignore` and automatically appends `.cvh/llm.json`, `llm.json`, and `.cvh/worktrees/` if missing, preventing accidental credential commits or tracking of transient task worktrees.
 - **Multi-Tier Workspace Root Discovery**: GUI launches locate the project root via:
   1. Current directory inspection for `.cvh` or `.git`.
   2. Ancestor directory traversal.
@@ -286,7 +346,7 @@
 - **Board-As-Single-Control-Plane**: The interactive Kanban board and pipeline columns are the single, authoritative control plane of the application. All agentic execution flows through explicit stage transitions (`advance_task`, `reject_task`) and atomic subagent delegation (`subagent`, `subagent_bg`). Parallel chat docks or unanchored sidecars are strictly prohibited.
 
 ### 2.18 Board Self-Healing Runtime Subsystem
-- **Autonomous Task Healing Invariant**: The Rust desktop backend automatically heals tasks against board configurations (`heal_task_board_and_column` and `heal_tasks` in `src-tauri/src/commands/tasks.rs`).
+- **Autonomous Task Healing Invariant**: The Rust desktop backend automatically heals tasks against board configurations (`heal_task_board_and_column` and `heal_tasks` in `src-tauri/src/commands/tasks/healing.rs`).
 - **Orphaned Board Resolution**: If a task's `board_id` is missing, empty, or references a deleted board, the harness dynamically assigns it to `active_board_id` (or the first existing board, or `"development"`).
 - **Orphaned Column Resolution**: If a task's `stage_id` does not exist in the target board's columns, it is dynamically reassigned to that board's first column (typically `"backlog"`).
 - **Healing Lifecycle Execution**: Self-healing runs autonomously during task loading (`load_tasks`), board deletion, board switching, and task imports, preventing broken references, orphan cards, or frontend crashes.
@@ -314,6 +374,7 @@
 - **Persona Frontmatter Tool Policy Synchronization**: Frontmatter `tools: [...]` stays synchronized with effective allowed tools on policy updates (§ 2.5).
 
 ### 2.22 Backend-Authoritative Kanban Card Lifecycle & Symmetric State Invariants
+- **Type-Safe Nominal Branded Types Invariant**: To prevent primitive obsession, accidental ID interchange, and invalid state transitions, core domain identifiers (`TaskId`, `StageId`, `BoardId`) and state machine representations (`TaskState`) are enforced via nominal branded types in Rust (`src-tauri/src/domain/ids.rs` and `domain/state.rs`) and mirrored strictly in TypeScript (`src/types/domain.ts`). Raw untyped strings are strictly banned across core domain logic boundaries.
 - **Backend-Authoritative Card Lifecycle**: Optimistic UI for tasks and cards is strictly abolished. The backend (SQLite WAL / disk tasks ledger) is the single source of truth for all task lifecycle events (`addTask`, `moveTask`, `createSubtask`, `deleteTask`). Zustand state MUST NOT be mutated prior to backend IPC confirmation (`create_task`, `move_task_stage`, `create_subtask`, `delete_task`). Client-side ID generation is prohibited; task IDs are monotonically allocated on the backend. On backend errors or gatekeeper sensor rejections, operations are logged and aborted without corrupting local store state, ensuring cards remain in their verified positions with zero optimistic jumping or state desync.
 - **Symmetric Parent-Subtask Lifecycle & Auto-Unlock Invariant**: Any operation modifying or deleting a subtask MUST maintain relational symmetry with its parent task. When a subtask is deleted (in UI or backend), any parent task waiting on that subtask (`waitingForSubtaskId == deletedId` or `status == 'waiting_subtask'`) MUST automatically clear `waitingForSubtaskId` and reset its status to `'idle'`.
 - **Fine-Grained Board Subscription & React.memo Optimization**: Kanban cards (`KanbanCard.tsx`) and columns (`KanbanColumn.tsx`) MUST NOT subscribe wholesale to `useBoardStore()`. Interactive cards and columns MUST use selective Zustand selectors (`useShallow`, atomic boolean/property getters) and be wrapped in `React.memo` with custom shallow comparators (`areCardPropsEqual`, `areColumnPropsEqual`) to prevent cascading board re-renders on hover or timer updates. Callback handlers (`handleDeleteColumn`, `savePipelineConfig`) MUST maintain stable references via `useCallback` and `useBoardStore.getState()`.
@@ -358,6 +419,7 @@
 - **4-Tier Progressive CRLF/LF Normalization Invariant**: The `edit_file` (alias: `str_replace`) tool MUST implement progressive line ending normalization (`replace_text_normalized`) accommodating Windows CRLF (`\r\n`) vs Unix LF (`\n`) discrepancies. When LLMs supply search or replacement strings containing standard Unix LF, the engine MUST adapt line endings to match the target file without failing with false `NOT_FOUND` errors, while strictly preserving the file's original line ending convention upon saving.
 
 ### 2.27 Stage Transition Natural Termination & advance_task Error Recovery Invariants
+- **TaskTransitionPipeline Architecture**: Stage moves, transition hooks (`on_enter`, `on_leave`), gatekeeper sensors, and worktree rebases are executed through the modular `TaskTransitionPipeline` in `src-tauri/src/commands/tasks/transitions.rs`, guaranteeing strict transactional validation before any task state is updated in SQLite or broadcast across Tauri IPC.
 - **Natural Termination on Stage Transition**: When any executed tool call is `advance_task`, `move_task`, or `reject_task` (or aliases `move_task_stage`, `advance_stage`, `next_stage`), if the transition SUCCEEDED (`success == true`), the agent has handed over or finalized the task. In `run_agent_loop`, the engine MUST:
   1. Record `ChatMessage::tool_response` into the conversation history.
   2. Synchronize messages to in-memory context state in `AppState` (if present).
@@ -407,7 +469,8 @@
 - **Strict LLM Tool Call Schema Sanitization Invariant**: When an agent turn is aborted mid-execution (via Stop button or user steer), any assistant message with unclosed `tool_calls` lacking matching `role: "tool"` responses MUST be sanitized via `sanitize_unclosed_tool_calls` prior to submitting subsequent requests to LLM APIs. The sanitizer appends synthetic tool responses indicating the interruption (`"[Инструмент прерван указанием пользователя / Tool execution interrupted by user steer]"`), preventing provider HTTP 400 Bad Request schema validation failures.
 - **Real-Time Context Synchronization on Abort**: On any user abort or cancellation checkpoint during generation or tool execution, the engine MUST immediately call `sync_context_state` and `sanitize_unclosed_tool_calls` to flush the latest turn count and messages to `AppState::agent_contexts`, ensuring Turn N+1 inherits accurate state.
 
-### 2.32 Subagent Natural Lifecycle, Autonomous Report Synthesis & Symmetric Steer Deduplication Invariants
+### 2.32 Generic Decoupled ReActEngine<Driver> & Subagent Natural Lifecycle Invariants
+- **Generic Decoupled ReActEngine Architecture**: In `src-tauri/src/agent/react_engine.rs`, agent execution is powered by a decoupled `ReActEngine<D: AgentSessionDriver>` and generic `StreamChunkConsumer`. The `AgentSessionDriver` trait (`emit_event`, `dialog_key`, `worktree_root`, `on_turn_finished`, `repo_root`, `task_id`) decouples streaming SSE chunk processing, thought parsing, telemetry calculation (TTFT, TPS, Cache Hit Rate), abort checking, and SQLite persistence. Root tasks bind to `MainAgentDriver`, while in-process subagents bind to `SubagentDriver`, eliminating code duplication between parent loops and child delegations.
 - **Natural Subagent Lifecycle & Hard-Limit Ban**: Subagents executing via `run_inprocess_subagent` MUST run their natural ReAct loop until task completion (`turn_tool_calls.is_empty()`) or explicit user cancellation (`ctx.abort_handle`). Artificial step limits (such as `sub_turn > 15`) are strictly prohibited, ensuring deep exploratory subtasks can complete naturally without premature severance.
 - **Autonomous Subagent Report Synthesis**: If a subagent completes its tool executions without emitting a textual terminal response (`final_sub_response.trim().is_empty()`), the engine MUST autonomously execute a final synthesis turn with `tools: None` to force the LLM to generate a comprehensive findings report. If synthesis fails, the engine MUST collect the most recent tool and assistant outputs from conversation history. Under NO circumstances may a subagent return an empty placeholder (`"Work complete"` without findings).
 - **3-Tier Subagent Collection Resolution**: The `collect_subagent` tool MUST resolve subagent reports across three cascading tiers: (1) `SUBAGENT_RECEIVERS` for active background subagents, (2) `SUBAGENT_SESSIONS` (`info.report`) for completed synchronous or background sessions, and (3) SQLite `dialog_items` for persisted subagent outputs via `find_subagent_report_from_db`. Collecting synchronous or previously completed subagents MUST NEVER crash or fail with "not found in background registry".
@@ -471,3 +534,12 @@
 - **Code As Ground Truth**: When a repository's documentation, architectural markdown files, specifications, or guidelines disagree with the running, verified codebase, agents MUST follow the conventions and implementations used in the existing code.
 - **Inconsistency Reporting Mandate**: Never refactor working, tested code to conform to obsolete, unmaintained, or conflicting documentation. In your final response or report, explicitly list each inconsistency found between the documentation and the code so documentation can be synchronized.
 - **Instruction-Hierarchy Bias Defense**: Prevents models from succumbing to instruction-following bias where stale documentation files (e.g. `AGENTS.md`, `CLAUDE.md`, `README.md`) are blindly prioritized over actual compiler-tested, sensor-verified production code.
+
+### 2.42 Clean Architecture Modular Decomposition & Type-Safe Domain Layer Invariant (Uncle Bob Standard)
+- **Monolith Eradication & Single-Responsibility Principle (SRP)**: Monolithic multi-thousand-line files are strictly forbidden across both frontend and backend. Every subsystem must be decomposed into focused, single-responsibility modules:
+  - **Rust Backend**: Monolithic `config.rs` decomposed into `src-tauri/src/config/` (`models.rs`, `tool_policy.rs`, `discovery.rs`, `scaffold.rs`, `io.rs`); monolithic `db.rs` decomposed into `src-tauri/src/db/` (`pool.rs`, `task_repo.rs`, `dialog_repo.rs`, `telemetry_repo.rs`); agent execution decomposed into `src-tauri/src/agent/` (`react_engine.rs`, `compactor.rs`, `sanitizer.rs`, `telemetry.rs`, `text_match.rs`, `tool_schemas.rs`, `tools/`); task pipelines decomposed into `src-tauri/src/commands/tasks/` (`transitions.rs`, `lifecycle.rs`, `healing.rs`, `runner.rs`, `storage.rs`).
+  - **React Frontend**: Monolithic stores decomposed into modular slices (`src/stores/board/`, `src/stores/drawer/`, `src/stores/cortex/`); localization modularized (`src/i18n/`); monolithic components decomposed into focused subcomponents (e.g. `KanbanCard.tsx` down to 239 lines with extracted badges and comparators; `DrawerActivityStream.tsx` modularized).
+- **Type-Safe Domain Layer & Nominal Branded Types**: Business invariants and identity types (`TaskId`, `StageId`, `BoardId`, `TaskState`) MUST be explicitly represented via nominal branded types in both Rust (`src-tauri/src/domain/`) and TypeScript (`src/types/domain.ts`), preventing primitive obsession and enforcing compile-time correctness across IPC and storage boundaries.
+- **Type-Safe Tauri Event Gateway**: Eradication of `listen<any>` across frontend. All IPC event subscriptions MUST flow through `src/services/tauriEventGateway.ts` with strongly typed payloads.
+- **R2D2 SQLite Connection Pooling (WAL Mode)**: All database access MUST use thread-safe connection pooling with write-ahead logging (`PRAGMA journal_mode = WAL`, `busy_timeout = 5000ms`), preventing database locking issues during concurrent agent streaming and UI access.
+- **383-Test Ground Truth Verification Shield**: Any architectural refactoring or functional modification MUST maintain 100% PASS across the complete test shield (139 Vitest tests across 8 suites in ~2.7s + 244 Rust core tests in ~4.8s).

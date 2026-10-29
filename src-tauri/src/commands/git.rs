@@ -492,12 +492,19 @@ pub async fn resolve_task_worktree(
     }
 
     let branch = if is_worktree {
-        match crate::git::get_current_branch(&workdir).await {
-            Ok(b) if !b.trim().is_empty() && b != "HEAD" => b.trim().to_string(),
-            _ => task.branch.clone().unwrap_or_else(|| {
+        if workdir.join(".git").exists() {
+            match crate::git::get_current_branch(&workdir).await {
+                Ok(b) if !b.trim().is_empty() && b != "HEAD" => b.trim().to_string(),
+                _ => task.branch.clone().unwrap_or_else(|| {
+                    let slug = parent_id_candidate.as_deref().unwrap_or(&task.id);
+                    format!("feat/{}", slug)
+                }),
+            }
+        } else {
+            task.branch.clone().unwrap_or_else(|| {
                 let slug = parent_id_candidate.as_deref().unwrap_or(&task.id);
                 format!("feat/{}", slug)
-            }),
+            })
         }
     } else {
         match crate::git::get_current_branch(&workdir).await {

@@ -28,6 +28,8 @@ tauri-plugin-notification = "2"
 tauri-plugin-single-instance = "2"
 rusqlite = { version = "0.32", features = ["bundled"] }
 base64 = "0.22"
+r2d2 = "0.8"
+r2d2_sqlite = "0.25"
 
 [features]
 default = ["custom-protocol"]

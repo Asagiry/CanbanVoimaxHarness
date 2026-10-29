@@ -21,6 +21,7 @@ export default function AgentConsoleDrawer() {
     streamEntries,
     toolExecutions,
     closeDrawer,
+    goBackDrawer,
     openDrawer,
     appendOutput,
     activeSubagentId,
@@ -275,17 +276,17 @@ export default function AgentConsoleDrawer() {
     };
   }, [task?.id, updateTask]);
 
-  // Esc key listener to close drawer
+  // Esc key listener to navigate back or close drawer
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        closeDrawer();
+        goBackDrawer();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, closeDrawer]);
+  }, [isOpen, goBackDrawer]);
 
   // Unified Chronological Activity List (Parent stream or Nested Subagent stream)
   const unifiedActivities = useMemo(() => {
@@ -606,7 +607,7 @@ export default function AgentConsoleDrawer() {
               isDiffCollapsed={isDiffCollapsed}
               isSubagentsCollapsed={isSubagentsCollapsed}
               subagentsCount={subagentsCount}
-              onClose={closeDrawer}
+              onClose={goBackDrawer}
               onAbort={handleAbortAgent}
               onToggleDiff={() => setIsDiffCollapsed((prev) => !prev)}
               onToggleSubagents={() => setIsSubagentsCollapsed((prev) => !prev)}

@@ -1,3 +1,5 @@
+export * from './domain';
+
 export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
 
 export interface TodoItem {
@@ -53,7 +55,86 @@ export interface KanbanTask {
   skip_backlog_hook?: boolean;
   position?: number;
   previousStageId?: string;
+  coverImage?: string;
   hookStates?: TaskHookStates;
+}
+
+/**
+ * Authoritative boundary DTO representing task payloads from the Rust Tauri IPC backend.
+ * Accommodates camelCase and snake_case properties returned across IPC boundaries.
+ */
+export interface BackendTaskDTO {
+  id: string;
+  title: string;
+  description?: string;
+  stageId?: string;
+  stage_id?: string;
+  columnId?: string;
+  boardId?: string;
+  board_id?: string;
+  worktreePath?: string;
+  worktree_path?: string;
+  branch?: string;
+  verdict?: string;
+  customFlow?: string[];
+  custom_flow?: string[];
+  status?: string;
+  model?: string;
+  parentId?: string;
+  parent_id?: string;
+  subtaskIndex?: number;
+  subtask_index?: number;
+  waitingForSubtaskId?: string;
+  waiting_for_subtask_id?: string;
+  handoverSummary?: string;
+  handover_summary?: string;
+  coverImage?: string;
+  cover_image?: string;
+  attachments?: string[];
+  todos?: Array<{
+    id?: string;
+    content?: string;
+    status?: string;
+  }>;
+  priority?: string;
+  tags?: string[];
+  currentTokens?: number;
+  current_tokens?: number;
+  skipWorktree?: boolean;
+  skip_worktree?: boolean;
+  skipBacklogHook?: boolean;
+  skip_backlog_hook?: boolean;
+  createdAt?: number;
+  created_at?: number;
+  updatedAt?: number;
+  updated_at?: number;
+  stageEnteredAt?: number;
+  stage_entered_at?: number;
+  completedAt?: number;
+  completed_at?: number;
+  position?: number;
+  previousStageId?: string;
+  previous_stage_id?: string;
+  fromStage?: string;
+  from_stage?: string;
+  activeStageDuration?: number;
+  stageDurations?: Record<string, number>;
+  totalElapsed?: number;
+  isTimerRunning?: boolean;
+  returnsCount?: number;
+  persona?: string;
+  verdictNote?: string;
+  hookStates?: TaskHookStates;
+  hook_states?: TaskHookStates;
+}
+
+/**
+ * Strict boundary type-guard validating that an incoming payload is a valid BackendTaskDTO.
+ */
+export function isBackendTaskDTO(raw: unknown): raw is BackendTaskDTO {
+  if (!raw || typeof raw !== 'object') return false;
+  const candidate = raw as Record<string, unknown>;
+  return typeof candidate.id === 'string' && candidate.id.trim() !== '';
 }
 
 export interface PipelineColumn {

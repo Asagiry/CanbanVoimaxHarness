@@ -4,7 +4,16 @@ Authoritative behavioral specifications and architectural DNA for the Developer 
 
 ---
 
-## 1. The OpenCode 4 Laws Against LLM Over-Defensiveness
+## 1. Uncle Bob Clean Code & Architectural Invariants
+1. **Eliminate Primitive Obsession**: Never pass raw primitive strings/numbers through core domain boundaries. Use Domain Value Objects (`domain::ids::TaskId`, `StageId`, `BoardId`) with boundary normalization and validation.
+2. **Make Illegal States Unrepresentable**: Model lifecycles using Algebraic Data Types (`domain::state::TaskState`: `Idle`, `Running { model }`, `WaitingSubtask { subtask_id }`, `Done { verdict }`). Eliminate conflicting booleans and optional ID pairs.
+3. **Automated Unit Testing & Anti-Mock Policy**: Author deterministic unit tests in Vitest (`pnpm test`) for pure utilities, text parsers, diff logic, and Zustand store slices. Author `cargo test` suites for Rust domain logic. Never substitute live runtime sensor verification with synthetic mocks or purely simulated tests.
+4. **Single Responsibility & Size Limits**: React components MUST NOT exceed 350 lines (decompose into subcomponents, extracted custom hooks, or utility helpers). Backend Rust modules MUST NOT exceed 500 lines (strictly follow modular SRP packages `db/`, `config/`, `domain/`, `agent/`).
+5. **Frontend Gateway Invariant**: Never call `listen<any>` directly in components or stores. All Tauri event subscriptions MUST route through `src/services/tauriEventGateway.ts`.
+
+---
+
+## 2. The OpenCode 4 Laws Against LLM Over-Defensiveness
 1. **Prevent Over-Defensiveness**: Do NOT add defensive checks for boundary or concurrency conditions that are mathematically or structurally improbable. Explain probability and only add upon explicit confirmation. Prohibit privately inflating code just to make it "theoretically more stable".
 2. **Single Validation at Boundary**: External data (IPC payloads, HTTP requests, CLI flags, file reads) is validated **strictly once at the system boundary**. Internally, rely 100% on the strict type system. Layered redundant null/undefined checks across internal functions and helpers are strictly banned.
 3. **Reject Premature Abstraction**: Logic used in a single location must be inlined locally. Casually splitting code into speculative helper functions ahead of time is prohibited.
@@ -12,25 +21,20 @@ Authoritative behavioral specifications and architectural DNA for the Developer 
 
 ---
 
-## 2. Ponytail Minimalism & Contrastive Diff Self-Audit
+## 3. Ponytail Minimalism & Contrastive Diff Self-Audit
 - Solve the exact requirement formulated in the task. No opportunistic refactoring of untouched files.
 - Before calling `advance_task`, run `git diff` and audit every single changed line:
   - Eliminate stray `console.log`, debugging dumps, temporary files.
   - Eliminate accidental whitespace churn or unrelated formatting changes.
-- Ensure all live Ground Truth Sensors pass (compiler, linter, build).
+- Ensure all live Ground Truth Sensors pass (Turbo Sensors: `tsc`, `oxlint`, `cargo check`; Automated Test Shield: `pnpm test`, `cargo test`).
 - **Pre-Handover Commit Mandate**: Commit all modified files (`git commit`) before running pre-flight mergeability sensors and before calling `advance_task`. Never hand off an uncommitted working tree to review, as `HEAD` will not include your changes during merge conflict checks.
 - **Branch Integration & Zero-Regression Check**: Verify clean mergeability against `main` (`git merge-tree --write-tree main HEAD` exit 0). If `main` moved, merge `origin/main` and verify that concurrent changes in shared files (e.g. `KanbanCard.tsx`) are preserved.
 
 ---
 
-## 3. Code Simplifier & Zero Silent Failures (ECC Invariants)
+## 4. Code Simplifier & Zero Silent Failures (ECC Invariants)
 - **Zero Silent Failures**: Never swallow errors via empty `catch {}`, `let _ = ...`, or deceptive fallback defaults (`.catch(() => [])`, `Err(_) => Default::default()`). Distinguish expected absence from failure. Always preserve error causality and diagnostic context.
 - **Code Simplifier Refactoring**: Favor early returns (guard clauses) over nested ladders; inline single-use helpers; break complex chains into clear intermediate variables; clarity over cleverness.
-
----
-
-## 4. Zero-TDD Mandate
-- Never author synthetic unit tests with mocks (`*.test.ts`). Verification relies 100% on live Ground Truth Sensors (compiler, linter, build bundle, static audit invariants).
 
 ---
 
@@ -41,5 +45,5 @@ Authoritative behavioral specifications and architectural DNA for the Developer 
 
 ## 6. Command Execution Discipline (Zero Unnecessary Commands)
 - **No Startup Commands**: Never execute `cargo check`, `npx tsc`, `npm run build`, or test commands on startup or during exploration. Initial inspection is strictly static (`read_file`, `glob`, `grep`).
-- **Subsystem-Targeted Verification**: Run compiler/linter sensors strictly at the verification stage, and ONLY for the subsystems touched (do NOT run backend checks for frontend-only changes; do NOT run frontend builds for backend-only changes).
+- **Subsystem-Targeted Verification**: Run compiler/linter/test sensors strictly at the verification stage, and ONLY for the subsystems touched (do NOT run backend checks for frontend-only changes; do NOT run frontend builds for backend-only changes).
 - **No Speculative Execution**: Shell commands must be strictly purposeful; never run commands without necessity.
