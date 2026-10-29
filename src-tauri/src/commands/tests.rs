@@ -4289,3 +4289,64 @@ Write code.
 
         let _ = tokio::fs::remove_dir_all(&tmp).await;
     }
+
+    #[tokio::test]
+    async fn test_list_global_rules_in() {
+        let base = PathBuf::from("target").join(format!("cvh_global_rules_test_{}", uuid::Uuid::new_v4()));
+        let rules_dir = base.join(".cvh").join("rules");
+        tokio::fs::create_dir_all(&rules_dir).await.expect("rules dir");
+
+        tokio::fs::write(rules_dir.join("b_rule.md"), "# Rule B").await.expect("write b_rule.md");
+        tokio::fs::write(rules_dir.join("a_rule.md"), "# Rule A").await.expect("write a_rule.md");
+        tokio::fs::write(rules_dir.join("ignored.txt"), "not markdown").await.expect("write ignored.txt");
+
+        let files = list_global_rules_in(&base).await.expect("list_global_rules_in");
+        assert_eq!(files.len(), 2);
+        assert_eq!(files[0].name, "a_rule.md");
+        assert_eq!(files[0].path, ".cvh/rules/a_rule.md");
+        assert_eq!(files[0].file_type, "rule");
+
+        assert_eq!(files[1].name, "b_rule.md");
+        assert_eq!(files[1].path, ".cvh/rules/b_rule.md");
+        assert_eq!(files[1].file_type, "rule");
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_delete_cortex_file_security_and_traversal_protection() {
+        let base = PathBuf::from("target").join(format!("cvh_del_cortex_test_{}", uuid::Uuid::new_v4()));
+        let rules_dir = base.join(".cvh").join("rules");
+        let agents_dir = base.join(".cvh").join("agents").join("developer").join("rules");
+        tokio::fs::create_dir_all(&rules_dir).await.expect("rules dir");
+        tokio::fs::create_dir_all(&agents_dir).await.expect("agents dir");
+
+        let global_rule = rules_dir.join("temp.md");
+        tokio::fs::write(&global_rule, "# Temp").await.expect("write temp.md");
+        let agent_rule = agents_dir.join("agent_rule.md");
+        tokio::fs::write(&agent_rule, "# Agent Rule").await.expect("write agent_rule.md");
+
+        // 1. Deleting outside .cvh/rules/ or .cvh/agents/ is forbidden
+        let err1 = delete_cortex_file_at(&base, "src/main.rs").await.unwrap_err();
+        assert!(err1.contains("Forbidden"));
+
+        // 2. Directory traversal with .. is strictly forbidden
+        let err2 = delete_cortex_file_at(&base, ".cvh/rules/../../secret.txt").await.unwrap_err();
+        assert!(err2.contains("traversal"));
+
+        // 3. Deleting non-existent file returns error
+        let err3 = delete_cortex_file_at(&base, ".cvh/rules/missing.md").await.unwrap_err();
+        assert!(err3.contains("does not exist"));
+
+        // 4. Valid global rule deletion succeeds
+        assert!(global_rule.exists());
+        delete_cortex_file_at(&base, ".cvh/rules/temp.md").await.expect("delete global rule");
+        assert!(!global_rule.exists());
+
+        // 5. Valid agent rule deletion succeeds
+        assert!(agent_rule.exists());
+        delete_cortex_file_at(&base, ".cvh/agents/developer/rules/agent_rule.md").await.expect("delete agent rule");
+        assert!(!agent_rule.exists());
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }

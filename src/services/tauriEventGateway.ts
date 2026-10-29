@@ -201,6 +201,7 @@ export interface AgentEventMap {
   'agent:personas_updated': unknown;
   'boards:updated': unknown;
   'pipeline:updated': unknown;
+  'cortex:rules_updated': unknown;
   'subagent:spawned': SubagentSpawnedPayload;
   'subagent:finished': SubagentFinishedPayload;
   'subagent:error': SubagentErrorPayload;

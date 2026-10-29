@@ -67,6 +67,8 @@ pub fn run() {
             read_cortex_file,
             save_cortex_file,
             list_cortex_agent_files,
+            list_global_rules,
+            delete_cortex_file,
             list_tasks,
             save_tasks,
             save_task_dialog,
