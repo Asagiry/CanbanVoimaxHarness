@@ -138,3 +138,22 @@ const isRunning = task.status === 'running' || hasRunningTool || isAgentActive;
 | **React UI** | `src/components/drawer/ContextGauge.tsx` | **675** | Графика и поповер контекста. Вынести поповер декомпозиции токенов в отдельный компонент. |
 | **React UI** | `src/components/cortex/CortexExplorer.tsx` | **532** | Дерево файлов проводника Cortex. Вынести элементы дерева и модалки создания файлов. |
 | **React UI** | `src/components/drawer/diff/DiffFileList.tsx` | **410** | Оптимизация UX: если в диффе только один тип изменений (например, только Modified), скрывать избыточные дублирующие кнопки фильтра. |
+---
+
+### Задача CVH-048: Исправление окружения команд на Windows и устранение шума в тестах
+
+#### 1. Проблема запуска команд и кракозябр в `run_scoped_command`
+- **Ненайденный `pnpm`**: Когда агент на Windows запускает `pnpm test` через инструмент `bash` (`run_scoped_command`), `cmd.exe` падает с кодом 1, так как `pnpm` часто установлен в пользовательских директориях (`%USERPROFILE%\.cargo\bin`, `%APPDATA%\npm`, `%LOCALAPPDATA%\pnpm`), которых нет в урезанном системном PATH дочернего процесса Tauri.
+- **Кракозябры в STDERR (`"pnpm"  ...`)**: `cmd.exe` при сбое внутреннего резолвера команд выводит системное сообщение в кодировке OEM (CP866 на русской Windows), а Rust-бэкенд считывает буфер через `String::from_utf8_lossy`, превращая русский текст в знаки вопросов.
+- **Решение**:
+  1. В `src-tauri/src/agent.rs` в `run_scoped_command` перед запуском `cmd.exe` гарантированно обогащать переменную окружения `PATH` стандартными путями:
+     - `%APPDATA%\npm`
+     - `%LOCALAPPDATA%\pnpm`
+     - `%USERPROFILE%\.cargo\bin`
+     - `C:\Program Files\nodejs`
+  2. Добавить resilient fallback декодирования: при ошибке декодирования UTF-8 пробовать декодировать через `encoding_rs::WINDOWS_1251` или `IBM866`, чтобы агенты получали читаемые русские ошибки вместо кракозябр.
+
+#### 2. Варнинги в тестах Vitest (`[boardStore] saveCurrentBoard aborted: boards are not loaded yet!`)
+- **Причина**: В `src/stores/__tests__/cortexStore.test.ts` в хуке `beforeEach` состояние `useBoardStore` инициализируется полями `boards`, `columns`, `tasks`, но забыто поле `isBoardsLoaded: true` (оно остаётся `false`).
+- При вызове методов персон (`loadAgentPersonas`, `setAgentPersonaColor`, `setAgentPersonaIcon`) стор пытается каскадно обновить цвета доски через `saveCurrentBoard`, который проверяет `if (!isBoardsLoaded)` и пишет `console.warn` в STDERR.
+- **Решение**: В `src/stores/__tests__/cortexStore.test.ts` в `beforeEach` явно прописать `isBoardsLoaded: true`.
