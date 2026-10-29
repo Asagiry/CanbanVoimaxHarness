@@ -17,6 +17,7 @@
     ".cvh/**",
     "worktrees/**",
     "target/**",
-    "src-tauri/**"
+    "src-tauri/**",
+    "Python/**"
   ]
 }

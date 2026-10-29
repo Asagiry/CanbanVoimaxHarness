@@ -20,6 +20,7 @@ src-tauri/gen/
 # Toolchain & Worktrees
 .toolchain/
 worktrees/
+Python/
 
 # OS / IDE
 .DS_Store
