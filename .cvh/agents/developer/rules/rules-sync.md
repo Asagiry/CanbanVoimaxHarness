@@ -19,6 +19,7 @@ Code is authoritatively described by its types, tests, and interfaces. Prose rul
 Update rules **ONLY** when:
 1. **Universal Architecture Shift**: A fundamental architectural redesign of a core subsystem (e.g. replacing SQLite with an alternative engine, changing desktop windowing architectures, rewriting the agent ReAct loop).
 2. **Public Contract Invariants**: Adding or breaking global architectural contracts that all agents across the system must strictly obey.
+3. **Architectural Map & Subsystem Synchronization**: Whenever adding, removing, renaming, or relocating modules or files in `src-tauri/src/` or `src/`, you MUST update `.cvh/rules/backend_map.md` or `.cvh/rules/frontend_map.md` in the exact same diff/commit. Navigation maps must remain 100% faithful to the filesystem.
 
 Do **NOT** update rules for:
 - Routine feature implementations, normal UI screens, or standard bugfixes.

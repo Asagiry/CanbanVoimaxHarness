@@ -96,3 +96,5 @@ Authoritative directory topology, component mapping table, and modular store arc
 3. **Tactile Obsidian Dark Theme**: Deep obsidian palette (`#07090e`, `#0d1117`, `#161b22`, `#30363d`). All form inputs, selects, and dialogs must declare paired dark tokens.
 4. **Monospace Numerals**: Timers, token counts, TPS, and cadence indicators must enforce `tabular-nums` and monospace styling.
 5. **No Native Browser Tooltips**: Never use native `title="..."` attributes on buttons or interactive controls; use custom dark popovers or self-explanatory iconography.
+6. **Architectural Map Synchronization Mandate**: Whenever adding, removing, renaming, or relocating files in `src/` or `src-tauri/src/`, this navigation map MUST be updated in the exact same commit. The Level 2 Reviewer rejects diffs with `CHANGES_REQUESTED` if files were altered without map synchronization.
+7. **Direct Coordinate Navigation**: Jump directly to mapped files with `read_file` when coordinates or paths are known. Targeted `grep` for specific symbols (components, hooks, store actions) remains a natural, valid tool.

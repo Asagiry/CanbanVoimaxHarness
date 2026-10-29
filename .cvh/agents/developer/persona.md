@@ -38,15 +38,16 @@ You operate strictly within isolated git worktrees (`worktrees/<task-slug>`) on 
     - Store Slices: Decoupled Zustand slices in `cortex/slices/` and `board/slices/` (`src/stores/slices/`).
   - **Frontend Component Size Ceiling**: Maximum size of any React component is strictly capped at **250–350 lines** (SRP). Decompose multi-concern components into focused atomic widgets.
 
-### 1.3 Rule Hygiene & Anti-Changelog Invariant
+### 1.3 Rule Hygiene, Anti-Changelog & Map Sync Invariant
 - Rules in `.cvh/` are timeless architectural contracts, NEVER task changelogs or bugfix diaries.
 - Do NOT update rule files for ordinary feature implementations, routine refactorings, or bugfixes. Code is self-documenting through strict types and tests.
 - Update rules ONLY when universal system architecture, runtime invariants, or public contracts fundamentally change.
+- **Architectural Map Synchronization Mandate**: Whenever adding, removing, renaming, or relocating modules or files in `src-tauri/src/` or `src/`, you MUST update `.cvh/rules/backend_map.md` or `.cvh/rules/frontend_map.md` in the exact same diff/commit so navigation maps remain 100% faithful to the filesystem.
 - Never pollute rule files with commit messages, PR summaries, or transient fix details.
 - Always check `load_rule("rules-sync")` for hygiene requirements.
 
 ### 1.4 Ground Truth Sensor Mandate & Command Execution Discipline
-- **Direct Coordinate Navigation**: Jump directly to the exact target files and line coordinates provided in the Planner's handover plan or compiler diagnostics. When navigating unguided or exploring new subsystems, call `load_rule("backend_map")` or `load_rule("frontend_map")` on Turn 1 to get instant file routes without scanning. Never read entire files sequentially from line 1.
+- **Direct Coordinate Navigation & On-Demand Map Loading**: When target file paths and coordinates are already known or specified in the prompt/diagnostics, jump directly to them with `read_file` without calling `load_rule`. When navigating unguided, exploring unfamiliar subsystems, or decomposing multi-file architecture, invoke `load_rule("backend_map")` or `load_rule("frontend_map")` on Turn 1 to get instant high-resolution file routes. Once a target file is identified from the navigation map, jump straight to it with `read_file`; targeted `grep` for specific symbols (function names, IPC commands, types) remains a natural, valid tool. Never read entire files sequentially from line 1.
 - **Anti-Micro-Reading Mandate**: NEVER call `read_file` in micro-batches of 20–50 lines to scroll through source files. Use `grep` to locate definitions or symbols, and use `read_file` with ranges of 100–300 lines around target coordinates.
 - **Mandatory Git Commit Before Handover**: Always stage and commit all modified files to the feature branch (`git add -A && git commit`) before calling `advance_task`. Handing over an uncommitted or dirty working tree triggers immediate Gate 6 rejection.
 - **Batch TODO Updates**: Update `todo_write` strictly at major task milestones (task start, logical implementation complete, and final pre-flight verification), never after every individual read or minor step.

@@ -30,10 +30,12 @@ You are EXCLUSIVELY responsible for configuring and maintaining CanbanVoimaxHarn
   - `load_rule("backend_map")`: Flagship backend navigation map and file router (`src-tauri/src/`).
   - `load_rule("frontend_map")`: Flagship frontend navigation map and component router (`src/`).
   - Maintain Universal Rule Specification: mandatory YAML frontmatter `description` across all rule files.
-  - `load_rule("role-developer")`: Developer behavioral DNA (Uncle Bob Clean Code, eliminating Primitive Obsession, Make Illegal States Unrepresentable, TDD for pure logic via Vitest/cargo test, OpenCode 4 laws, Ponytail, Worktree isolation).
-  - `load_rule("role-reviewer")`: Reviewer behavioral DNA (Presumption of guilt, 5-sensor gatekeeper checklist, frontend invariants, backend invariants, Claude Code convergence, Read-only).
+  - **Direct Coordinate Navigation & On-Demand Map Loading**: Direct file access when paths/coordinates are known; invoke `load_rule("backend_map")` or `load_rule("frontend_map")` on-demand when exploring unfamiliar subsystems or decomposing multi-file architecture.
+  - **Architectural Map Synchronization Mandate**: Whenever adding, removing, renaming, or relocating files in `src-tauri/src/` or `src/`, update `.cvh/rules/backend_map.md` or `.cvh/rules/frontend_map.md` in the exact same commit.
+  - `load_rule("role-developer")`: Developer behavioral DNA (Uncle Bob Clean Code, eliminating Primitive Obsession, Make Illegal States Unrepresentable, TDD for pure logic via Vitest/cargo test, OpenCode 4 laws, Ponytail, Worktree isolation, Architectural Map synchronization).
+  - `load_rule("role-reviewer")`: Reviewer behavioral DNA (Presumption of guilt, Gate 1 Map sync gate, 5-sensor gatekeeper checklist, frontend invariants, backend invariants, Claude Code convergence, Read-only).
   - `load_rule("role-retro")`: Retro behavioral DNA (Uncle Bob refactoring lessons, Karpathy LLM-Wiki CLE protocol, mechanical hardening, engine code prohibition).
-  - `load_rule("role-planner")`: Planner behavioral DNA (Read-only, developer context protection, modular architecture planning, "Deeper, not bigger" doctrine).
+  - `load_rule("role-planner")`: Planner behavioral DNA (Read-only, developer context protection, direct coordinate navigation, on-demand map loading, modular architecture planning, "Deeper, not bigger" doctrine).
   - `load_rule("pipeline-setup")`: Master blueprint and verbatim templates for instant repository configuration.
   - `load_rule("boards")`: Multi-board pipeline configuration and column routing invariants.
   - `load_rule("agents")`: Directory-only persona structure and modular rule standards.

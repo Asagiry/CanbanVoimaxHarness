@@ -48,7 +48,8 @@ Shared architectural contracts, system-wide standards, and flagship navigation m
 ```
 - **Universal Availability**: Global rules in `.cvh/rules/` are accessible to all agents via `load_rule("<rule_stem>")` without requiring a role prefix.
 - **Zero Duplication**: Shared architectural contracts, router maps, and cross-cutting specifications belong in `.cvh/rules/` rather than duplicated across role directories.
-- **Turn 1 Navigation Map Mandate**: Agents working across frontend or backend MUST invoke `load_rule("backend_map")` or `load_rule("frontend_map")` at Turn 1 to navigate directly to target files and coordinates.
+- **Direct Coordinate Navigation & On-Demand Map Loading**: When target file paths and coordinates are already known or specified in the prompt/diagnostics, navigate directly without calling `load_rule`. Invoke `load_rule("backend_map")` or `load_rule("frontend_map")` on Turn 1 when exploring unfamiliar subsystems, navigating unguided, or decomposing multi-file architecture.
+- **Architectural Map Synchronization Mandate**: All agents adding, removing, or relocating files in `src-tauri/src/` or `src/` MUST update `.cvh/rules/backend_map.md` or `.cvh/rules/frontend_map.md` in the same commit. The Level 2 Reviewer rejects diffs where file structure changed without map updates.
 
 ---
 

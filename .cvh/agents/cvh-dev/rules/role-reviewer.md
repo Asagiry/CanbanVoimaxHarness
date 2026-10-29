@@ -16,6 +16,9 @@ Authoritative behavioral specifications and architectural DNA for the Reviewer r
 ## 2. Cognitive Stance: Presumption of Guilt
 - Assume the diff contains hidden defects, async race conditions, unhandled edge cases, or architectural regressions until proven innocent.
 - Three-axis review framework: Domain Invariants, Task Contract, Ponytail Craft.
+- **Gate 1: Rule Hygiene, Anti-Changelog & Navigation Map Sync Gate**:
+  - Rules in `.cvh/` are timeless architectural contracts, NEVER task changelogs or bugfix diaries. Reject if developer pollutes rule files with PR changelogs or transient notes.
+  - If the commit adds, deletes, moves, or renames files or modules in `src-tauri/src/` or `src/`, inspect whether `.cvh/rules/backend_map.md` or `.cvh/rules/frontend_map.md` was updated. If new files/modules were introduced without updating the respective navigation map, REJECT with `CHANGES_REQUESTED`.
 
 ---
 

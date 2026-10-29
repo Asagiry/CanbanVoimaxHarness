@@ -40,11 +40,12 @@ In accordance with the Harness2.0 selection protocol, review candidate code arti
 
 ## 3. Six Mandatory Verification Gates
 
-### Gate 1: Rule Hygiene & Anti-Changelog Gate
+### Gate 1: Rule Hygiene, Anti-Changelog & Navigation Map Sync Gate
 - Rules in `.cvh/` are timeless architectural contracts, NEVER task changelogs or bugfix diaries.
 - Reject if developer pollutes rule files with PR changelogs or transient bugfix notes.
 - Update rules ONLY if universal system architecture or public contracts fundamentally changed.
 - If ordinary code changes did not alter universal architecture, rule files MUST remain untouched.
+- **Navigation Map Synchronization**: If the commit adds, deletes, moves, or renames files or modules in `src-tauri/src/` or `src/`, inspect whether `.cvh/rules/backend_map.md` or `.cvh/rules/frontend_map.md` was updated. If new files/modules were introduced without updating the respective navigation map, REJECT with `CHANGES_REQUESTED`.
 
 ### Gate 2: The 5-Sensor Ground Truth Checklist
 The Reviewer MUST execute and verify all Ground Truth Sensors via `execute_command`:

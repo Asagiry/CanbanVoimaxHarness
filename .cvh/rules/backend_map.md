@@ -27,6 +27,13 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 | **Agent Runner Trigger & Steer** | `src-tauri/src/commands/tasks/runner.rs` | `run_agent`, `steer_agent`, active task registry. |
 | **Task Serialization & Storage** | `src-tauri/src/commands/tasks/storage.rs` | `load_tasks`, `sync_tasks_to_disk`. |
 | **Board & Column Self-Healing** | `src-tauri/src/commands/tasks/healing.rs` | Orphan board/column resolution on load. |
+| **Cortex File Tree & Rules/Personas IPC** | `src-tauri/src/commands/cortex.rs` | Persona/rules file operations, YAML frontmatter. |
+| **Boards & Pipeline IPC** | `src-tauri/src/commands/boards.rs` | Multi-board CRUD, column settings, pipeline sync. |
+| **Dialogs History & Stream IPC** | `src-tauri/src/commands/dialogs.rs` | Dialogue history retrieval, steer persistence. |
+| **Git Worktree & Branch IPC** | `src-tauri/src/commands/git.rs` | Worktree lifecycle, branch diffs, commit queries. |
+| **LLM Settings & Test IPC** | `src-tauri/src/commands/llm.rs` | Endpoint config, model verification, test calls. |
+| **Project Workspace Switching IPC** | `src-tauri/src/commands/projects.rs` | Workspace root switching, recent projects list. |
+| **Tool Policy IPC** | `src-tauri/src/commands/tools.rs` | Tool policy inspection, two-level matrix updates. |
 | **Generic ReAct Engine Loop** | `src-tauri/src/agent/react_engine.rs` | `ReActEngine<Driver>`, unified streaming. |
 | **State-Preserving Context Compactor**| `src-tauri/src/agent/compactor.rs` | `ToolCallSummaryExtractor` (CC=1), 100% ceiling. |
 | **Unclosed Tool Call Sanitizer** | `src-tauri/src/agent/sanitizer.rs` | Tag stripping, unclosed JSON repairs. |
@@ -64,12 +71,19 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 - **`scaffold.rs`**: Initial project initialization (`ensure_cvh_scaffold`, `ensure_cvh_dev_scaffold`). Enforces auto-gitignore entries (`.cvh/llm.json`, `.cvh/worktrees/`) and seeds initial 3-column boards.
 - **`io.rs`**: Atomic disk operations. `atomic_write_file` writes via transient temp files and renames to prevent partial corruption.
 
-### 2.3 Task Pipeline & Command Subsystem (`src-tauri/src/commands/tasks/`)
-- **`transitions.rs`**: Modular `TaskTransitionPipeline`. Executes stage movement, triggers `on_leave` and `on_enter` scripts, runs `gatekeeperSensor` commands in isolated worktrees, and routes on verdicts (`routes.on_approved`, `routes.on_changes_requested`).
-- **`lifecycle.rs`**: Task creation and destruction commands. Enforces monotonic task numbers, parent-subtask waiting locks, and symmetric worktree teardown.
-- **`runner.rs`**: Agent execution initiation (`run_agent`, `run_agent_loop`). Resolves active model hierarchy, prepares primed system messages, and tracks active agent runs.
-- **`storage.rs`**: Task serialization and synchronization with disk ledgers and frontend subscribers via `tasks:updated`.
-- **`healing.rs`**: Autonomous self-healing (`heal_task_board_and_column`, `heal_tasks`). Rescues orphan tasks assigned to non-existent boards or columns without failing.
+### 2.3 Task Pipeline & Command Subsystem (`src-tauri/src/commands/`)
+- **`tasks/transitions.rs`**: Modular `TaskTransitionPipeline`. Executes stage movement, triggers `on_leave` and `on_enter` scripts, runs `gatekeeperSensor` commands in isolated worktrees, and routes on verdicts (`routes.on_approved`, `routes.on_changes_requested`).
+- **`tasks/lifecycle.rs`**: Task creation and destruction commands. Enforces monotonic task numbers, parent-subtask waiting locks, and symmetric worktree teardown.
+- **`tasks/runner.rs`**: Agent execution initiation (`run_agent`, `run_agent_loop`). Resolves active model hierarchy, prepares primed system messages, and tracks active agent runs.
+- **`tasks/storage.rs`**: Task serialization and synchronization with disk ledgers and frontend subscribers via `tasks:updated`.
+- **`tasks/healing.rs`**: Autonomous self-healing (`heal_task_board_and_column`, `heal_tasks`). Rescues orphan tasks assigned to non-existent boards or columns without failing.
+- **`cortex.rs`**: Cortex tree hierarchy and file CRUD for personas, modular rules, and hooks.
+- **`boards.rs`**: Multi-board CRUD (`.cvh/boards.json`), active board switching, and pipeline column management.
+- **`dialogs.rs`**: Dialogue item retrieval, paginated history loading, and steer event storage.
+- **`git.rs`**: Git worktree manager, branch listings, unified diff calculations, and working tree checks.
+- **`llm.rs`**: LLM configuration management (`.cvh/llm.json`), live connectivity ping, and model catalogs.
+- **`projects.rs`**: Project workspace root switching, recent projects history, and environment inspection.
+- **`tools.rs`**: Two-level tool policy matrix queries and persistent updates (`.cvh/settings/tool-policy.json`).
 
 ### 2.4 Domain Layer (`src-tauri/src/domain/`)
 - **`ids.rs`**: Strongly typed nominal branded types: `TaskId`, `StageId`, `BoardId`. Prevents primitive obsession and accidental string interchange.
@@ -90,3 +104,5 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 3. **Nominal Branded Types**: Always accept and pass `TaskId`, `StageId`, and `BoardId` across domain boundaries. Never use naked strings for entity keys.
 4. **Isolated Worktrees**: All file edits and compiler checks execute inside task worktrees (`worktrees/<slug>`). Never modify the root working directory during task execution.
 5. **Windows Process Hygiene**: Shell commands and hook scripts must execute with process tree isolation and explicit timeouts; on Windows, use `taskkill /F /T /PID` on teardown.
+6. **Architectural Map Synchronization Mandate**: Whenever adding, removing, renaming, or relocating files in `src-tauri/src/` or `src/`, this navigation map MUST be updated in the exact same commit. The Level 2 Reviewer rejects diffs with `CHANGES_REQUESTED` if files were altered without map synchronization.
+7. **Direct Coordinate Navigation**: Jump directly to mapped files with `read_file` when coordinates or paths are known. Targeted `grep` for specific symbols (function names, types, commands) remains a natural, valid tool.

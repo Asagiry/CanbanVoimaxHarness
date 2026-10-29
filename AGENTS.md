@@ -183,6 +183,7 @@
   │   ├── harness.db         # High-performance SQLite database (R2D2 WAL mode)
   │   ├── boards.json        # Multi-board definitions & active board
   │   ├── pipeline.json      # Pipeline columns, routing, sensors, & hooks
+  │   ├── rules/             # Global shared architectural rules & navigation maps
   │   ├── agents/            # Modular persona folders (<role>/persona.md, setting, rules/)
   │   ├── settings/          # Enforced settings (tool-policy.json)
   │   ├── tools/             # Custom executable tools (<tool>.json)
@@ -543,3 +544,7 @@
 - **Type-Safe Tauri Event Gateway**: Eradication of `listen<any>` across frontend. All IPC event subscriptions MUST flow through `src/services/tauriEventGateway.ts` with strongly typed payloads.
 - **R2D2 SQLite Connection Pooling (WAL Mode)**: All database access MUST use thread-safe connection pooling with write-ahead logging (`PRAGMA journal_mode = WAL`, `busy_timeout = 5000ms`), preventing database locking issues during concurrent agent streaming and UI access.
 - **383-Test Ground Truth Verification Shield**: Any architectural refactoring or functional modification MUST maintain 100% PASS across the complete test shield (139 Vitest tests across 8 suites in ~2.7s + 244 Rust core tests in ~4.8s).
+
+### 2.43 Architectural Map Synchronization Mandate & On-Demand Navigation Guidance
+- **Direct Coordinate Navigation & On-Demand Map Loading**: When target file paths and coordinates are already known or specified in the prompt/diagnostics, navigate directly without calling `load_rule`. Invoke `load_rule("backend_map")` or `load_rule("frontend_map")` on Turn 1 when exploring unfamiliar subsystems, navigating unguided, or decomposing multi-file architecture.
+- **Architectural Map Synchronization Mandate**: All agents adding, removing, or relocating files in `src-tauri/src/` or `src/` MUST update `.cvh/rules/backend_map.md` or `.cvh/rules/frontend_map.md` in the same commit. The Level 2 Reviewer rejects diffs where file structure changed without map updates.

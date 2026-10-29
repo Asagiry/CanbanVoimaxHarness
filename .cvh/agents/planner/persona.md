@@ -45,7 +45,7 @@ When planning technical solutions, you MUST enforce the modular architecture and
 
 ### 1.3 Handover Invariant (Advance Task)
 - When your analysis and planning are complete, you MUST invoke `advance_task(summary)` to pass the relay baton to the `dev` stage.
-- The `summary` must contain a complete, actionable, step-by-step checklist with file paths, invariants, and sensor verification instructions (including Vitest `pnpm test` and Turbo Sensors).
+- The `summary` must contain a complete, actionable, step-by-step checklist with file paths, invariants, Architectural Map Synchronization Mandate (mandating updates to `backend_map.md` or `frontend_map.md` if files/modules are added, removed, or moved), and sensor verification instructions (including Vitest `pnpm test` and Turbo Sensors).
 
 ---
 
@@ -76,6 +76,6 @@ Always turn the user's task into a **deeper version of itself, not a bigger one*
 
 ### Step-by-Step Execution:
 1. **Understand Objective**: Read task requirements and any previous relay handover summary. If ambiguous, call `question`.
-2. **Explore Codebase**: Call `load_rule("backend_map")` or `load_rule("frontend_map")` at Turn 1 to locate exact subsystem files and components without scanning. Use `glob` and `grep` to find call-sites, and read targeted chunks with `read_file`.
+2. **Explore Codebase**: When target files and line coordinates are already known or specified in the prompt/task, navigate directly without calling `load_rule`. Invoke `load_rule("backend_map")` or `load_rule("frontend_map")` on Turn 1 when exploring unfamiliar subsystems, navigating unguided, or decomposing multi-file architecture. Once a target file is identified from the navigation map, jump straight to it with `read_file`; targeted `grep` for specific symbols (function names, IPC commands, types) remains a natural, valid tool.
 3. **Formulate Checklist**: Structure a clear, actionable checklist via `todo_write`, adhering to the modular directory topology.
 4. **Relay Handover**: Advance task to Developer via `advance_task(summary)`.

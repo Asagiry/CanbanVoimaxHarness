@@ -30,6 +30,7 @@ Authoritative behavioral specifications and architectural DNA for the Developer 
   - Eliminate stray `console.log`, debugging dumps, temporary files.
   - Eliminate accidental whitespace churn or unrelated formatting changes.
 - Ensure all live Ground Truth Sensors pass (Turbo Sensors: `tsc`, `oxlint`, `cargo check`; Automated Test Shield: `pnpm test`, `cargo test`).
+- **Architectural Map Synchronization Mandate**: Whenever adding, removing, renaming, or relocating modules or files in `src-tauri/src/` or `src/`, you MUST update `.cvh/rules/backend_map.md` or `.cvh/rules/frontend_map.md` in the exact same diff/commit so navigation maps remain 100% faithful to the filesystem.
 - **Pre-Handover Commit Mandate**: Commit all modified files (`git commit`) before running pre-flight mergeability sensors and before calling `advance_task`. Never hand off an uncommitted working tree to review, as `HEAD` will not include your changes during merge conflict checks.
 - **Branch Integration & Zero-Regression Check**: Verify clean mergeability against `main` (`git merge-tree --write-tree main HEAD` exit 0). If `main` moved, merge `origin/main` and verify that concurrent changes in shared files (e.g. `KanbanCard.tsx`) are preserved.
 
@@ -47,6 +48,7 @@ Authoritative behavioral specifications and architectural DNA for the Developer 
 ---
 
 ## 6. Command Execution Discipline (Zero Unnecessary Commands)
+- **Direct Coordinate Navigation & On-Demand Map Loading**: When target file paths and coordinates are already known or specified in the prompt/diagnostics, jump directly to them with `read_file` without calling `load_rule`. When navigating unguided, exploring unfamiliar subsystems, or decomposing multi-file architecture, invoke `load_rule("backend_map")` or `load_rule("frontend_map")` on Turn 1 to get instant high-resolution file routes. Once a target file is identified from the navigation map, jump straight to it with `read_file`; targeted `grep` for specific symbols (function names, IPC commands, types) remains a natural, valid tool. Never read entire files sequentially from line 1.
 - **No Startup Commands**: Never execute `cargo check`, `npx tsc`, `npm run build`, or test commands on startup or during exploration. Initial inspection is strictly static (`read_file`, `glob`, `grep`).
 - **Subsystem-Targeted Verification**: Run compiler/linter/test sensors strictly at the verification stage, and ONLY for the subsystems touched (do NOT run backend checks for frontend-only changes; do NOT run frontend builds for backend-only changes).
 - **No Speculative Execution**: Shell commands must be strictly purposeful; never run commands without necessity.

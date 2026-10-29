@@ -42,7 +42,8 @@ When `cvh-dev` instantiates or configures roles under `.cvh/agents/<role>/`, gen
 **Zero-Context-Pollution Invariant**: Never load a monolithic rule covering all roles! Load ONLY the specific modular rule needed for the stage being configured:
 - **For Developer** (`dev`, fast-track, lean solo): `load_rule("role-developer")`
   - **Uncle Bob Clean Code & Craftsmanship**: Eliminate Primitive Obsession via Domain Value Objects (`domain::ids`), Make Illegal States Unrepresentable via Algebraic Data Types (`domain::state`).
-  - **Turn 1 Navigation Map Mandate**: Call `load_rule("backend_map")` or `load_rule("frontend_map")` at Turn 1 to locate exact files, components, and subsystem coordinates without scanning.
+  - **Direct Coordinate Navigation & On-Demand Map Loading**: When target file paths and coordinates are already known or specified in the prompt/diagnostics, navigate directly without calling `load_rule`. Invoke `load_rule("backend_map")` or `load_rule("frontend_map")` on Turn 1 when exploring unfamiliar subsystems, navigating unguided, or decomposing multi-file architecture.
+  - **Architectural Map Synchronization Mandate**: Whenever adding, removing, renaming, or relocating modules or files in `src-tauri/src/` or `src/`, update `.cvh/rules/backend_map.md` or `.cvh/rules/frontend_map.md` in the exact same diff/commit so navigation maps remain 100% faithful to the filesystem.
   - **TDD for Pure Logic & Store Slices**: Author deterministic unit tests with Vitest (`pnpm test`) for pure utilities and store slices; `cargo test` for Rust domain models. Live process verification for IPC/APIs.
   - **Sizing Boundaries**: Components must not exceed 350 lines; backend files must not exceed 500 lines. Decompose early.
   - **Frontend Gateway Invariant**: Never call `listen<any>` directly; strictly route through `src/services/tauriEventGateway.ts`.
@@ -52,6 +53,7 @@ When `cvh-dev` instantiates or configures roles under `.cvh/agents/<role>/`, gen
 - **For Reviewer** (`review`, Red Team auditor): `load_rule("role-reviewer")`
   - **Read-Only Operational Boundary**: `edit_file` and `write_file` physically stripped from tool schema (Tool Policy Level B).
   - **Presumption of Guilt**: Three-axis review (Invariants, Contract, Ponytail).
+  - **Gate 1 Map Sync Enforcement**: Reject diffs with `CHANGES_REQUESTED` if files/modules in `src-tauri/src/` or `src/` were added, deleted, moved, or renamed without synchronizing `.cvh/rules/backend_map.md` or `.cvh/rules/frontend_map.md`.
   - **5-Sensor Gatekeeper Checklist**: Mandatory execution of `pnpm test` (Vitest), `pnpm exec tsc --noEmit`, `pnpm exec oxlint --deny-warnings`, `cargo test`, and `cargo check`.
   - **Frontend Invariants Audit**: Strict ban on `listen<any>` (only `tauriEventGateway`), max 350 lines per component, Vitest test coverage for pure utilities and store slices.
   - **Backend Invariants Audit**: Strict SRP validation across `db/`, `config/`, `agent/`, `domain/`, max 500 lines per module/file, mandatory use of `domain::ids` and `domain::state`.
@@ -64,7 +66,7 @@ When `cvh-dev` instantiates or configures roles under `.cvh/agents/<role>/`, gen
   - **Rule-Sprawl Filter**: Mechanical sensor hardening over verbose prose.
 - **For Planner** (`plan`, technical architect — when requested): `load_rule("role-planner")`
   - **Read-Only Scope**: Context window protection for developer; static inspection only.
-  - **Turn 1 Navigation Map Mandate**: Call `load_rule("backend_map")` or `load_rule("frontend_map")` at Turn 1 to locate subsystem boundaries and coordinates without scanning.
+  - **Direct Coordinate Navigation & On-Demand Map Loading**: Jump directly to target files when paths/coordinates are known; invoke `load_rule("backend_map")` or `load_rule("frontend_map")` on Turn 1 when exploring unfamiliar subsystems, planning unguided, or mapping multi-file architecture.
   - **Modular Architecture Planning**: Identifying domain boundaries, Value Objects, state machine transitions, and component/module sizing limits.
   - **"Deeper, Not Bigger" (be-ambitious) Protocol**: 4 foundational deepening questions.
 
