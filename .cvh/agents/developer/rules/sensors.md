@@ -1,3 +1,6 @@
+---
+description: Ground truth compiler, linter, test suite, and Turbo sensor execution protocols for pre-review verification.
+---
 # Rule: Ground Truth Compiler & Test Sensors (sensors.md)
 
 Authoritative guidelines for compiler, test, and runtime verification for the **Developer** persona in CanbanVoimaxHarness.

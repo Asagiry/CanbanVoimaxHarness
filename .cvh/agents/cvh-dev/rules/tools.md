@@ -1,3 +1,6 @@
+---
+description: Authoritative standard tool definitions, tool policy governance, argument schemas, and output spilling invariants.
+---
 # Guide: Authoritative Tools Catalog and Execution Rules (tools.md)
 
 Authoritative guide for agent tools in CanbanVoimaxHarness.

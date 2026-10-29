@@ -1,3 +1,6 @@
+---
+description: Backend security, concurrency, SQLite WAL pooling, error propagation, and memory safety review checklist.
+---
 # Rule: Backend Architectural Invariants & Security Audit (backend-invariants.md)
 
 Authoritative backend audit checklist for the **Reviewer** persona in CanbanVoimaxHarness.

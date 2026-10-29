@@ -1,3 +1,6 @@
+---
+description: Task decomposition methodology, atomic subagent scoping, and verifiable checklist generation.
+---
 # Rule: Task Decomposition & Planning Methodology (decomposition.md)
 
 Authoritative guidelines for the **Planner** persona in CanbanVoimaxHarness.

@@ -1,3 +1,6 @@
+---
+description: Authoritative directory structure, persona definitions, setting schemas, and modular rule conventions for CVH agents.
+---
 # Guide: Agent Personas and Modular Rules (agents.md)
 
 Authoritative rules for `.cvh/agents/<role>/`.
@@ -33,6 +36,34 @@ Each agent directory `.cvh/agents/<role>/setting` contains JSON configuration wi
 - **Priority & Precedence**: Values defined in `setting` take precedence over YAML frontmatter defaults.
 - **Color Invariants**: Gray (`#64748b`) and green (`#10b981`) colors are strictly reserved for system stages `backlog` and `ready` and forbidden for agents.
 
+---
+
+## 2. Global Shared Rules (`.cvh/rules/`)
+Shared architectural contracts, system-wide standards, and flagship navigation maps reside in `.cvh/rules/`:
+```text
+.cvh/rules/
+├── backend_map.md    # Flagship backend navigation map and file-by-file router (src-tauri/src/)
+├── frontend_map.md   # Flagship frontend navigation map and component router (src/)
+└── ...
+```
+- **Universal Availability**: Global rules in `.cvh/rules/` are accessible to all agents via `load_rule("<rule_stem>")` without requiring a role prefix.
+- **Zero Duplication**: Shared architectural contracts, router maps, and cross-cutting specifications belong in `.cvh/rules/` rather than duplicated across role directories.
+- **Turn 1 Navigation Map Mandate**: Agents working across frontend or backend MUST invoke `load_rule("backend_map")` or `load_rule("frontend_map")` at Turn 1 to navigate directly to target files and coordinates.
+
+---
+
+## 3. Universal Rule Specification & Metadata Invariant
+Every modular rule file in `.cvh/rules/*.md` and `.cvh/agents/<role>/rules/*.md` MUST strictly adhere to the Universal Rule Specification:
+1. **Mandatory YAML Frontmatter**: Every rule MUST begin with YAML frontmatter declaring a concise, one-sentence `description`:
+   ```markdown
+   ---
+   description: Authoritative 1-sentence summary of rule invariants and domain scope.
+   ---
+   # Rule Title...
+   ```
+2. **Dynamic JIT Prompt Integration**: The backend automatically extracts frontmatter descriptions to populate the `load_rule` tool instructions in system prompts, giving agents full awareness of what each rule governs without burning context on full bodies.
+3. **English-Only Content Invariant**: All rule files MUST be authored 100% in clear, concise, authoritative English.
+4. **Timeless Contract Invariant**: Rules represent eternal architectural standards. NEVER record transient bug histories, commit messages, or task changelogs in rule files.
 
 ---
 

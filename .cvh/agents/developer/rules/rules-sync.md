@@ -1,3 +1,6 @@
+---
+description: Architectural rule hygiene, timeless contracts invariant, and ban on commit-log rule pollution.
+---
 # Rule: Architectural Rule Hygiene & Timeless Contracts (rules-sync.md)
 
 Authoritative protocol for maintaining clean, timeless architectural rules in `.cvh/`.

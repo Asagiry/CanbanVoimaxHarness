@@ -24,31 +24,36 @@ pub async fn execute_load_rule(
     let rule_clean = rule_raw.strip_suffix(".md").unwrap_or(rule_raw);
     let role = ctx.role.unwrap_or("general");
 
-    // Look for rule in prioritized order:
-    // 1) repo_root/.cvh/agents/<role>/rules/<rule>.md
-    // 2) repo_root/.cvh/rules/<rule>.md
-    // 3) repo_root/.cvh/agents/<role>/rules/<rule>
-    let mut candidates = vec![
-        repo_root.join(".cvh").join("agents").join(role).join("rules").join(format!("{}.md", rule_clean)),
-        repo_root.join(".cvh").join("rules").join(format!("{}.md", rule_clean)),
-        repo_root.join(".cvh").join("agents").join(role).join("rules").join(rule_raw),
-    ];
+    let mut candidates = Vec::new();
 
-    // If running in an isolated worktree or test dir:
+    // 1) Worktree overrides take precedence if executing in an isolated worktree
     if worktree_dir != repo_root {
         candidates.push(worktree_dir.join(".cvh").join("agents").join(role).join("rules").join(format!("{}.md", rule_clean)));
         candidates.push(worktree_dir.join(".cvh").join("rules").join(format!("{}.md", rule_clean)));
         candidates.push(worktree_dir.join(".cvh").join("agents").join(role).join("rules").join(rule_raw));
     }
 
-    // Fallback: search across any agents' rules directory
-    let agents_base = repo_root.join(".cvh").join("agents");
-    if agents_base.is_dir() {
-        if let Ok(entries) = std::fs::read_dir(&agents_base) {
-            for entry in entries.flatten() {
-                let path = entry.path().join("rules").join(format!("{}.md", rule_clean));
-                if !candidates.contains(&path) {
-                    candidates.push(path);
+    // 2) repo_root prioritized locations:
+    //    a) repo_root/.cvh/agents/<role>/rules/<rule>.md
+    //    b) repo_root/.cvh/rules/<rule>.md
+    //    c) repo_root/.cvh/agents/<role>/rules/<rule>
+    candidates.push(repo_root.join(".cvh").join("agents").join(role).join("rules").join(format!("{}.md", rule_clean)));
+    candidates.push(repo_root.join(".cvh").join("rules").join(format!("{}.md", rule_clean)));
+    candidates.push(repo_root.join(".cvh").join("agents").join(role).join("rules").join(rule_raw));
+
+    // Fallback: search across any agents' rules directory in worktree and repo_root
+    let mut search_bases = vec![repo_root.join(".cvh").join("agents")];
+    if worktree_dir != repo_root {
+        search_bases.insert(0, worktree_dir.join(".cvh").join("agents"));
+    }
+    for agents_base in search_bases {
+        if agents_base.is_dir() {
+            if let Ok(entries) = std::fs::read_dir(&agents_base) {
+                for entry in entries.flatten() {
+                    let path = entry.path().join("rules").join(format!("{}.md", rule_clean));
+                    if !candidates.contains(&path) {
+                        candidates.push(path);
+                    }
                 }
             }
         }

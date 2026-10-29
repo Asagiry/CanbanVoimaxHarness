@@ -363,8 +363,31 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
     ]
 }
 
-pub fn get_available_rules(repo_root: &Path, role: Option<&str>) -> Vec<String> {
-    let mut rules = Vec::new();
+/// Extracts the 1-sentence description from YAML frontmatter (`description: ...`).
+pub fn extract_frontmatter_description(content: &str) -> Option<String> {
+    let trimmed = content.trim_start();
+    let rest = trimmed.strip_prefix("---")?;
+    let end_idx = rest.find("\n---")?;
+    let fm_block = &rest[..end_idx];
+    for line in fm_block.lines() {
+        let trimmed_line = line.trim();
+        if let Some(val) = trimmed_line.strip_prefix("description:") {
+            let cleaned = val.trim().trim_matches(|c| c == '\'' || c == '"').trim();
+            if !cleaned.is_empty() {
+                return Some(cleaned.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Discovers available rules for an agent, collecting their stems and optional frontmatter descriptions.
+/// Checks `<repo_root>/.cvh/agents/<role>/rules/*.md` and global shared `<repo_root>/.cvh/rules/*.md`.
+pub fn get_available_rules_with_descriptions(
+    repo_root: &Path,
+    role: Option<&str>,
+) -> Vec<(String, Option<String>)> {
+    let mut rules: Vec<(String, Option<String>)> = Vec::new();
     let mut dirs_to_scan = Vec::new();
 
     if let Some(r) = role.filter(|s| !s.trim().is_empty()) {
@@ -379,7 +402,10 @@ pub fn get_available_rules(repo_root: &Path, role: Option<&str>) -> Vec<String> 
                     let path = entry.path();
                     if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("md") {
                         if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                            rules.push(stem.to_string());
+                            let desc = std::fs::read_to_string(&path)
+                                .ok()
+                                .and_then(|text| extract_frontmatter_description(&text));
+                            rules.push((stem.to_string(), desc));
                         }
                     }
                 }
@@ -399,7 +425,10 @@ pub fn get_available_rules(repo_root: &Path, role: Option<&str>) -> Vec<String> 
                                 let path = re.path();
                                 if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("md") {
                                     if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                                        rules.push(stem.to_string());
+                                        let desc = std::fs::read_to_string(&path)
+                                            .ok()
+                                            .and_then(|text| extract_frontmatter_description(&text));
+                                        rules.push((stem.to_string(), desc));
                                     }
                                 }
                             }
@@ -410,9 +439,16 @@ pub fn get_available_rules(repo_root: &Path, role: Option<&str>) -> Vec<String> 
         }
     }
 
-    rules.sort();
-    rules.dedup();
+    rules.sort_by(|a, b| a.0.cmp(&b.0));
+    rules.dedup_by(|a, b| a.0 == b.0);
     rules
+}
+
+pub fn get_available_rules(repo_root: &Path, role: Option<&str>) -> Vec<String> {
+    get_available_rules_with_descriptions(repo_root, role)
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect()
 }
 
 pub fn get_load_rule_tool(repo_root: &Path, role: Option<&str>) -> ToolDefinition {

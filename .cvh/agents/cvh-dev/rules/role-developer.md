@@ -1,3 +1,6 @@
+---
+description: Behavioral DNA and coding invariants for the Developer role, including Clean Code, Ponytail, and worktree isolation.
+---
 # Rule: Canonical Developer Behavioral Invariants (role-developer.md)
 
 Authoritative behavioral specifications and architectural DNA for the Developer role in CanbanVoimaxHarness.

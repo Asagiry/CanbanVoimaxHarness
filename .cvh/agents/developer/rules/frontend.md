@@ -1,3 +1,6 @@
+---
+description: React 19, Tailwind CSS v4, Zustand store slices, typed event gateway, and 350-line component ceilings.
+---
 # Frontend Architecture & UI Invariants (React 19, Tailwind v4, Zustand 5, TypeScript)
 
 Authoritative frontend engineering standards and UI invariants of **CanbanVoimaxHarness (CVH)** located in `src/`.

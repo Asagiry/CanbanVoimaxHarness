@@ -1,3 +1,6 @@
+---
+description: Deep architectural planning principles, root-cause investigation doctrine, and zero-shallow-fix discipline.
+---
 # Rule: Be Ambitious — Deeper, Not Bigger (be-ambitious.md)
 
 Authoritative engineering depth and specification protocol for the **Planner** persona.

@@ -1,3 +1,6 @@
+---
+description: Interactive pipeline setup protocol, persona behavioral DNA infusion, and technology stack detection guidelines.
+---
 # Rule: Interactive Pipeline Setup & Persona Behavioral DNA (pipeline-setup.md)
 
 Authoritative, industrial-grade engineering manual for `cvh-dev` when configuring boards, execution pipelines, agent roles, and physical governance policies for any repository.
@@ -39,6 +42,7 @@ When `cvh-dev` instantiates or configures roles under `.cvh/agents/<role>/`, gen
 **Zero-Context-Pollution Invariant**: Never load a monolithic rule covering all roles! Load ONLY the specific modular rule needed for the stage being configured:
 - **For Developer** (`dev`, fast-track, lean solo): `load_rule("role-developer")`
   - **Uncle Bob Clean Code & Craftsmanship**: Eliminate Primitive Obsession via Domain Value Objects (`domain::ids`), Make Illegal States Unrepresentable via Algebraic Data Types (`domain::state`).
+  - **Turn 1 Navigation Map Mandate**: Call `load_rule("backend_map")` or `load_rule("frontend_map")` at Turn 1 to locate exact files, components, and subsystem coordinates without scanning.
   - **TDD for Pure Logic & Store Slices**: Author deterministic unit tests with Vitest (`pnpm test`) for pure utilities and store slices; `cargo test` for Rust domain models. Live process verification for IPC/APIs.
   - **Sizing Boundaries**: Components must not exceed 350 lines; backend files must not exceed 500 lines. Decompose early.
   - **Frontend Gateway Invariant**: Never call `listen<any>` directly; strictly route through `src/services/tauriEventGateway.ts`.
@@ -60,6 +64,7 @@ When `cvh-dev` instantiates or configures roles under `.cvh/agents/<role>/`, gen
   - **Rule-Sprawl Filter**: Mechanical sensor hardening over verbose prose.
 - **For Planner** (`plan`, technical architect — when requested): `load_rule("role-planner")`
   - **Read-Only Scope**: Context window protection for developer; static inspection only.
+  - **Turn 1 Navigation Map Mandate**: Call `load_rule("backend_map")` or `load_rule("frontend_map")` at Turn 1 to locate subsystem boundaries and coordinates without scanning.
   - **Modular Architecture Planning**: Identifying domain boundaries, Value Objects, state machine transitions, and component/module sizing limits.
   - **"Deeper, Not Bigger" (be-ambitious) Protocol**: 4 foundational deepening questions.
 

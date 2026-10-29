@@ -1,3 +1,6 @@
+---
+description: First-Time-Right (FTR) root cause analysis, Karpathy LLM-Wiki CLE protocol, and mechanical rule hardening.
+---
 # Rule: Retrospective Reflection Methodology (reflection-methodology.md)
 
 Authoritative guidelines for the **Retro** persona in CanbanVoimaxHarness, based on the Harness2.0 experience reflection pattern.

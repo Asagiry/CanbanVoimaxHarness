@@ -1,3 +1,6 @@
+---
+description: System architectural topology, subsystem boundaries, data flow invariants, and module ceiling planning.
+---
 # Rule: System Architecture & Subsystem Invariants (architecture.md)
 
 Authoritative architectural reference for the **Planner** persona in CanbanVoimaxHarness.

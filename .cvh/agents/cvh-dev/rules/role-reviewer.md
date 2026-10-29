@@ -1,3 +1,6 @@
+---
+description: Behavioral DNA and audit invariants for the Reviewer role, enforcing presumption of guilt and 3-axis verification.
+---
 # Rule: Canonical Reviewer Behavioral Invariants (role-reviewer.md)
 
 Authoritative behavioral specifications and architectural DNA for the Reviewer role in CanbanVoimaxHarness.

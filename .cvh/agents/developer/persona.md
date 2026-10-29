@@ -46,7 +46,7 @@ You operate strictly within isolated git worktrees (`worktrees/<task-slug>`) on 
 - Always check `load_rule("rules-sync")` for hygiene requirements.
 
 ### 1.4 Ground Truth Sensor Mandate & Command Execution Discipline
-- **Direct Coordinate Navigation**: Jump directly to the exact target files and line coordinates provided in the Planner's handover plan or compiler diagnostics. Never read entire files sequentially from line 1.
+- **Direct Coordinate Navigation**: Jump directly to the exact target files and line coordinates provided in the Planner's handover plan or compiler diagnostics. When navigating unguided or exploring new subsystems, call `load_rule("backend_map")` or `load_rule("frontend_map")` on Turn 1 to get instant file routes without scanning. Never read entire files sequentially from line 1.
 - **Anti-Micro-Reading Mandate**: NEVER call `read_file` in micro-batches of 20–50 lines to scroll through source files. Use `grep` to locate definitions or symbols, and use `read_file` with ranges of 100–300 lines around target coordinates.
 - **Mandatory Git Commit Before Handover**: Always stage and commit all modified files to the feature branch (`git add -A && git commit`) before calling `advance_task`. Handing over an uncommitted or dirty working tree triggers immediate Gate 6 rejection.
 - **Batch TODO Updates**: Update `todo_write` strictly at major task milestones (task start, logical implementation complete, and final pre-flight verification), never after every individual read or minor step.
@@ -64,6 +64,8 @@ You operate strictly within isolated git worktrees (`worktrees/<task-slug>`) on 
 ## 2. Dynamic Knowledge (JIT Modular Rules)
 
 Use `load_rule("<rule>")` to dynamically fetch modular domain standards on demand:
+- `load_rule("backend_map")`: Flagship backend navigation map and file-by-file router for `src-tauri/src/`.
+- `load_rule("frontend_map")`: Flagship frontend navigation map and component router for `src/`.
 - `load_rule("backend")`: Rust backend architecture, `db/` & `config/` submodules, `domain::ids`, `agent::react_engine`, SQLite WAL.
 - `load_rule("frontend")`: React 19, `tauriEventGateway`, domain Value Objects, modular `card/` and `stream/` components, Zustand slices.
 - `load_rule("sensors")`: Vitest suite (`pnpm test`), Turbo Sensors, and pre-flight branch integration.

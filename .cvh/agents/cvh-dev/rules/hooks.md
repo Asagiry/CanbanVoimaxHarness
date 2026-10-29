@@ -1,3 +1,6 @@
+---
+description: Lifecycle hooks, transition scripts, environment variable bindings, and gatekeeper sensor execution rules.
+---
 # Guide: Lifecycle Hooks and Transition Scripts (hooks.md)
 
 Authoritative rules for `.cvh/hooks/` and column lifecycle scripts.
