@@ -204,7 +204,8 @@ impl AgentSessionDriver for SubagentDriver {
                     duration_ms: None,
                     images: None,
                 };
-                let _ = crate::db::append_dialog_items(&self.repo_root, &self.subagent_dialog_id, std::slice::from_ref(&th_item));
+                // Intermediate streaming thought chunks are buffered in memory and written to SQLite
+                // strictly upon turn finalization (finalize_turn_thoughts) to avoid SQLite WAL I/O thrashing.
                 if let Some(ref app) = self.app_handle {
                     let _ = app.emit("subagent:activity", serde_json::json!({
                         "parentTaskId": &self.parent_task_id,

@@ -40,6 +40,7 @@ pub fn append_dialog_items(root: &Path, task_id: &str, items: &[ActivityItem]) -
                     id, task_id, type, content, images_json, timestamp, created_at, tool_json, duration_ms
                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
                 ON CONFLICT(id) DO UPDATE SET
+                    type = excluded.type,
                     content = excluded.content,
                     images_json = excluded.images_json,
                     timestamp = excluded.timestamp,
@@ -94,7 +95,7 @@ pub fn load_dialog_items(root: &Path, task_id: &str) -> Result<Vec<ActivityItem>
             "SELECT id, type, content, images_json, timestamp, tool_json, duration_ms
              FROM dialog_items
              WHERE task_id = ?1 AND type != 'compacted_archived'
-             ORDER BY created_at ASC",
+             ORDER BY created_at ASC, rowid ASC",
         )
         .map_err(|e| format!("Failed to prepare select statement: {}", e))?;
 
@@ -450,6 +451,74 @@ pub fn list_subagent_dialog_keys(
         .map_err(|e| format!("Query failed: {}", e))?;
     let keys = rows.flatten().collect();
     Ok(keys)
+}
+
+/// Targeted update of a single tool execution result without deserializing or rewriting the entire dialog history.
+pub fn db_update_dialog_tool_result(
+    root: &Path,
+    task_id: &str,
+    tool_id: &str,
+    tool_json: &str,
+    duration_ms: Option<f64>,
+) -> Result<(), String> {
+    let conn = get_db_conn(root).map_err(|e| format!("Failed to open database: {}", e))?;
+    let like_pattern = format!("%{}%", tool_id);
+
+    let rows = conn
+        .execute(
+            "UPDATE dialog_items
+             SET tool_json = ?1, duration_ms = COALESCE(?2, duration_ms)
+             WHERE task_id = ?3 AND (id = ?4 OR tool_json LIKE ?5)",
+            params![tool_json, duration_ms, task_id, tool_id, like_pattern],
+        )
+        .map_err(|e| format!("Failed to update dialog tool result: {}", e))?;
+
+    if rows == 0 {
+        let new_item = ActivityItem {
+            id: tool_id.to_string(),
+            item_type: "tool".to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            content: None,
+            tool: serde_json::from_str(tool_json).ok(),
+            duration_ms,
+            images: None,
+        };
+        append_dialog_items(root, task_id, std::slice::from_ref(&new_item))?;
+    }
+    Ok(())
+}
+
+/// Pool-based variant for targeted tool result updates.
+pub fn db_update_dialog_tool_result_pool(
+    pool: &r2d2::Pool<r2d2_sqlite::SqliteConnectionManager>,
+    task_id: &str,
+    tool_id: &str,
+    tool_json: &str,
+    duration_ms: f64,
+) -> anyhow::Result<()> {
+    let conn = pool.get().map_err(|e| anyhow::anyhow!("Failed to acquire connection: {}", e))?;
+    let like_pattern = format!("%{}%", tool_id);
+    conn.execute(
+        "UPDATE dialog_items
+         SET tool_json = ?1, duration_ms = ?2
+         WHERE task_id = ?3 AND (id = ?4 OR tool_json LIKE ?5)",
+        params![tool_json, duration_ms, task_id, tool_id, like_pattern],
+    )?;
+    Ok(())
+}
+
+/// Retrieves the tool JSON value for a specific tool ID in a task dialogue.
+pub fn db_get_dialog_tool_json(root: &Path, task_id: &str, tool_id: &str) -> Option<serde_json::Value> {
+    let conn = get_db_conn(root).ok()?;
+    let like_pattern = format!("%{}%", tool_id);
+    let raw: Option<String> = conn
+        .query_row(
+            "SELECT tool_json FROM dialog_items WHERE task_id = ?1 AND (id = ?2 OR tool_json LIKE ?3) LIMIT 1",
+            params![task_id, tool_id, like_pattern],
+            |row| row.get(0),
+        )
+        .ok()?;
+    raw.and_then(|s| serde_json::from_str(&s).ok())
 }
 
 // Aliases for convenience

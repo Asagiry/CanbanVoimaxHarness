@@ -249,8 +249,8 @@ fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) {
         }
 
         if let Some(tasks) = loaded_tasks {
+            let _ = conn.execute_batch("PRAGMA foreign_keys = OFF;");
             if let Ok(tx) = conn.transaction_with_behavior(TransactionBehavior::Immediate) {
-                let _ = tx.execute("PRAGMA foreign_keys = OFF", []);
                 for t in &tasks {
                     let custom_flow_json = t.custom_flow.as_ref().and_then(|v| serde_json::to_string(v).ok());
                     let attachments_json = t.attachments.as_ref().and_then(|v| serde_json::to_string(v).ok());
@@ -310,9 +310,9 @@ fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) {
                         }
                     }
                 }
-                let _ = tx.execute("PRAGMA foreign_keys = ON", []);
                 let _ = tx.commit();
             }
+            let _ = conn.execute_batch("PRAGMA foreign_keys = ON;");
         }
     }
 

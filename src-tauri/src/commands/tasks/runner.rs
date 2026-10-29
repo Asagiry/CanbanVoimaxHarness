@@ -547,7 +547,7 @@ pub async fn run_agent(
                             &result[tail_start..]
                         )
                     } else {
-                        result
+                        result.clone()
                     };
                     let _ = app_inner.emit(
                         "agent:tool_result",
@@ -555,43 +555,27 @@ pub async fn run_agent(
                     );
 
                     let status_str = if success { "success" } else { "failed" };
-                    let mut updated_item = None;
-                    if let Ok(items) = crate::db::load_dialog_items(&root_inner, &tid_inner) {
-                        if let Some(mut existing) = items.into_iter().find(|it| it.id == id) {
-                            let mut tool_val = existing.tool.take().unwrap_or_else(|| serde_json::json!({}));
-                            if let Some(obj) = tool_val.as_object_mut() {
-                                obj.insert("status".to_string(), serde_json::json!(status_str));
-                                obj.insert("stdout".to_string(), serde_json::json!(&sanitized_result));
-                                obj.insert("result".to_string(), serde_json::json!(&sanitized_result));
-                                if !success {
-                                    obj.insert("stderr".to_string(), serde_json::json!(&sanitized_result));
-                                }
-                            }
-                            existing.tool = Some(tool_val);
-                            updated_item = Some(existing);
-                        }
-                    }
-                    let item_to_save = updated_item.unwrap_or_else(|| {
-                        let tool_obj = serde_json::json!({
+                    let mut tool_obj = crate::db::db_get_dialog_tool_json(&root_inner, &tid_inner, &id)
+                        .unwrap_or_else(|| serde_json::json!({
                             "id": &id,
                             "toolName": &name,
                             "name": &name,
-                            "status": status_str,
-                            "stdout": &sanitized_result,
-                            "result": &sanitized_result,
                             "timestamp": chrono::Utc::now().to_rfc3339(),
-                        });
-                        crate::db::ActivityItem {
-                            id: id.clone(),
-                            item_type: "tool".to_string(),
-                            timestamp: chrono::Utc::now().to_rfc3339(),
-                            content: None,
-                            tool: Some(tool_obj),
-                            duration_ms: None,
-                            images: None,
+                        }));
+
+                    if let Some(obj) = tool_obj.as_object_mut() {
+                        obj.insert("status".to_string(), serde_json::json!(status_str));
+                        // Invariant § 2.20 & Defect 7: Persist FULL output in SQLite, keeping sanitized only for IPC
+                        obj.insert("stdout".to_string(), serde_json::json!(&result));
+                        obj.insert("result".to_string(), serde_json::json!(&result));
+                        if !success {
+                            obj.insert("stderr".to_string(), serde_json::json!(&result));
                         }
-                    });
-                    let _ = crate::db::append_dialog_items(&root_inner, &tid_inner, std::slice::from_ref(&item_to_save));
+                    }
+
+                    let tool_json_str = serde_json::to_string(&tool_obj).unwrap_or_default();
+                    // Invariant § 2.4 & Defect 6: Targeted update without deserializing/rewriting entire dialog history
+                    let _ = crate::db::db_update_dialog_tool_result(&root_inner, &tid_inner, &id, &tool_json_str, None);
                 }
                 AgentEvent::TurnStart { turn } => {
                     let _ = app_inner.emit(

@@ -339,12 +339,14 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
 /// Atomically upserts a batch of tasks into SQLite in a single transaction.
 pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
     let mut conn = get_db_conn(root).map_err(|e| format!("Failed to open database: {}", e))?;
-    let tx = conn
-        .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
-    // Disable foreign keys temporarily during bulk batch update to accommodate unordered cascades
-    let _ = tx.execute("PRAGMA foreign_keys = OFF", []);
+    // Disable foreign keys strictly BEFORE starting transaction to allow unordered cascades
+    let _ = conn.execute_batch("PRAGMA foreign_keys = OFF;");
+
+    let res = (|| -> Result<(), String> {
+        let tx = conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
     for task in tasks {
         let custom_flow_json = task.custom_flow.as_ref().and_then(|v| serde_json::to_string(v).ok());
@@ -435,10 +437,14 @@ pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
         }
     }
 
-    let _ = tx.execute("PRAGMA foreign_keys = ON", []);
     tx.commit()
         .map_err(|e| format!("Failed to commit batch task upsert: {}", e))?;
     Ok(())
+    })();
+
+    // Always restore foreign keys on connection after transaction commits or drops
+    let _ = conn.execute_batch("PRAGMA foreign_keys = ON;");
+    res
 }
 
 /// Deletes a task and all associated cascaded subtasks and todos from SQLite.
@@ -457,8 +463,20 @@ pub fn db_delete_task(root: &Path, task_id: &str) -> Result<(), String> {
         params![task_id],
     );
 
-    // 2. Cascade delete subtasks where parent_id matches or id starts with "{task_id}."
+    // 2. Cascade delete subtasks (dialogs, telemetry, todos, tasks)
     let subtask_pattern = format!("{}.%", task_id);
+    let _ = tx.execute(
+        "DELETE FROM dialog_items WHERE task_id IN (
+            SELECT id FROM tasks WHERE parent_id = ?1 OR LOWER(parent_id) = LOWER(?1) OR id LIKE ?2
+        )",
+        params![task_id, subtask_pattern],
+    );
+    let _ = tx.execute(
+        "DELETE FROM telemetry WHERE task_id IN (
+            SELECT id FROM tasks WHERE parent_id = ?1 OR LOWER(parent_id) = LOWER(?1) OR id LIKE ?2
+        )",
+        params![task_id, subtask_pattern],
+    );
     let _ = tx.execute(
         "DELETE FROM task_todos WHERE task_id IN (
             SELECT id FROM tasks WHERE parent_id = ?1 OR LOWER(parent_id) = LOWER(?1) OR id LIKE ?2
@@ -470,7 +488,9 @@ pub fn db_delete_task(root: &Path, task_id: &str) -> Result<(), String> {
         params![task_id, subtask_pattern],
     );
 
-    // 3. Delete target task and its todos
+    // 3. Delete target task and its dialogs, telemetry, and todos
+    let _ = tx.execute("DELETE FROM dialog_items WHERE task_id = ?1 OR LOWER(task_id) = LOWER(?1)", params![task_id]);
+    let _ = tx.execute("DELETE FROM telemetry WHERE task_id = ?1 OR LOWER(task_id) = LOWER(?1)", params![task_id]);
     let _ = tx.execute("DELETE FROM task_todos WHERE task_id = ?1 OR LOWER(task_id) = LOWER(?1)", params![task_id]);
     tx.execute("DELETE FROM tasks WHERE id = ?1 OR LOWER(id) = LOWER(?1)", params![task_id])
         .map_err(|e| format!("Failed to delete task {}: {}", task_id, e))?;

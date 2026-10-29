@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useCallback } from 'react';
 import { Paperclip } from 'lucide-react';
 import { KanbanTask, TaskStatus } from '../../types';
 import { useTranslation, Language } from '../../stores/languageStore';
@@ -86,11 +86,13 @@ export const CardTimerBadge = memo(function CardTimerBadge({
   const isRunning = status === 'running';
   const currentStageDuration = calculateStageDuration(task, isRunning);
 
-  // Check waiting subtask state
-  const waitingSub = useMemo(() => {
-    if (!task.waitingForSubtaskId) return null;
-    return useBoardStore.getState().tasks.find((t) => t.id === task.waitingForSubtaskId) || null;
-  }, [task.waitingForSubtaskId]);
+  // Check waiting subtask state reactively (Invariant § 2.22 & Defect 12)
+  const waitingSub = useBoardStore(
+    useCallback(
+      (s) => (task.waitingForSubtaskId ? s.tasks.find((t) => t.id === task.waitingForSubtaskId) : undefined),
+      [task.waitingForSubtaskId]
+    )
+  );
 
   const waitingSubCol = useMemo(() => {
     if (!waitingSub) return null;

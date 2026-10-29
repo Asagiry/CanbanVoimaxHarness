@@ -219,7 +219,7 @@ export const createTasksCrudSlice: StateCreator<
       console.info('Tauri list_tasks not available or returned empty:', err);
     }
 
-    set({ tasks: [], isLoadingTasks: false });
+    set({ isLoadingTasks: false });
   },
 
   moveTask: async (taskId, targetColumnId, options) => {
@@ -766,6 +766,20 @@ export const createTasksCrudSlice: StateCreator<
     }
     const ids = [...toDelete];
 
+    // Invariant § 2.25: Unconditional drawer auto-close and memory eviction BEFORE backend IPC
+    const drawerActiveTaskId = useDrawerStore.getState().activeTaskId;
+    if (drawerActiveTaskId && toDelete.has(drawerActiveTaskId)) {
+      useDrawerStore.getState().closeDrawer();
+    }
+
+    for (const id of ids) {
+      try {
+        await useDrawerStore.getState().clearTaskLogs(id);
+      } catch (logErr) {
+        console.warn('Failed to clear task logs for deleted task:', id, logErr);
+      }
+    }
+
     logEvent('INFO', 'BOARD_STORE', `deleteTask: requesting backend delete for "${resolvedId}"`, JSON.stringify(ids));
 
     try {
@@ -804,19 +818,6 @@ export const createTasksCrudSlice: StateCreator<
       hookStates: nextHookStates,
       selectedTaskId: toDelete.has(prevSelectedTaskId ?? '') ? null : prevSelectedTaskId,
     });
-
-    const drawerActiveTaskId = useDrawerStore.getState().activeTaskId;
-    if (drawerActiveTaskId && toDelete.has(drawerActiveTaskId)) {
-      useDrawerStore.getState().closeDrawer();
-    }
-
-    for (const id of ids) {
-      try {
-        await useDrawerStore.getState().clearTaskLogs(id);
-      } catch (logErr) {
-        console.warn('Failed to clear task logs for deleted task:', id, logErr);
-      }
-    }
   },
 
   runTaskAgent: async (taskId, prompt) => {

@@ -22,9 +22,9 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const setHoveredTaskId = useBoardStore((s) => s.setHoveredTaskId);
   const columns = useBoardStore(useShallow((s) => s.columns));
-  const activeQuestions = useBoardStore(useShallow((s) => s.activeQuestions));
-  const directQuestion = activeQuestions[task.id];
-  const subtaskQuestion = task.waitingForSubtaskId ? activeQuestions[task.waitingForSubtaskId] : undefined;
+  // Invariant § 2.22 & Defect 10: Targeted selector prevents cascading board re-renders on unrelated question updates
+  const directQuestion = useBoardStore((s) => s.activeQuestions[task.id]);
+  const subtaskQuestion = useBoardStore((s) => (task.waitingForSubtaskId ? s.activeQuestions[task.waitingForSubtaskId] : undefined));
   const activeQuestion = directQuestion || subtaskQuestion;
   const activeQuestionTargetId = directQuestion ? task.id : task.waitingForSubtaskId;
   const { t } = useTranslation();
@@ -146,7 +146,6 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                     }
                   }}
                   className="mb-2 flex items-center gap-1.5 px-2 py-1.5 rounded bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 dark:hover:bg-amber-500/30 transition cursor-pointer text-left overflow-hidden shadow-xs"
-                  title={activeQuestion.text}
                 >
                   <span className="relative flex h-2 w-2 shrink-0">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
