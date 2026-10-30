@@ -289,9 +289,13 @@ export const ru = {
   'settings.notifyOnQuestion': 'Вопрос от агента (question)',
   'settings.notifyOnAdvanceTask': 'Переход этапа (advance_task)',
   'settings.notifyOnTaskCompleted': 'Завершение задачи',
+  'settings.sendTestNotification': 'Отправить тестовое уведомление',
   'notification.advanceTaskTitle': 'Задача {taskId} перешла в колонку {stageTitle}',
   'notification.taskCompletedTitle': 'Задача {taskId} завершена',
   'notification.questionTitle': 'В задаче {taskId} вопрос от агента',
+  'notification.testTitle': 'CanbanVoimaxHarness',
+  'notification.testBody': 'Тестовое системное уведомление доставлено успешно.',
+  'notification.taskRejectedTitle': 'Задача {taskId} возвращена на доработку',
 
   // Tool Policy Matrix Modal
   'toolPolicy.modalTitle': 'Настройки матрицы инструментов',

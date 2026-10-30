@@ -2,6 +2,7 @@ import { useState, useId, useMemo, useRef, useEffect } from 'react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useTranslation } from '../../stores/languageStore';
 import { useUiZoom, getZoomOverlayStyle } from '../../hooks/useUiZoom';
+import { showTestNotification } from '../../services/notificationService';
 import {
   X,
   Check,
@@ -443,6 +444,18 @@ export default function SettingsModal() {
                     ariaLabel={t('settings.notifyOnTaskCompleted')}
                   />
                 </div>
+              </div>
+
+              {/* Test Notification Button */}
+              <div className="pt-2 border-t border-[#ebebeb] dark:border-[#21262d]">
+                <button
+                  type="button"
+                  onClick={() => void showTestNotification()}
+                  className="flex items-center space-x-2 px-3 py-1.5 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] text-xs font-sans transition cursor-pointer"
+                >
+                  <Bell className="w-3.5 h-3.5 text-[#666666] dark:text-[#8b949e]" />
+                  <span>{t('settings.sendTestNotification')}</span>
+                </button>
               </div>
             </div>
             )}
