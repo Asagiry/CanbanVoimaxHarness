@@ -57,12 +57,30 @@ pub async fn internal_save_tasks(
         &format!("save_tasks command: received {} tasks from client for root '{}'", tasks.len(), root.display()),
         Some(&format!("Incoming IDs: [{}]", incoming_ids.join(", "))),
     );
+    let actual_root = resolve_actual_repo_root(root);
+    let foreign_incoming = super::storage::find_foreign_task_ids(&tasks, &actual_root);
+    let mut valid_incoming = tasks;
+    if !foreign_incoming.is_empty() {
+        crate::logger::cvh_log(
+            Some(&actual_root),
+            "WARN",
+            "SAVE_TASKS",
+            &format!(
+                "Dropping {} foreign tasks from incoming save_tasks payload for root '{}': [{}]",
+                foreign_incoming.len(),
+                actual_root.display(),
+                foreign_incoming.iter().cloned().collect::<Vec<_>>().join(", ")
+            ),
+        );
+        valid_incoming.retain(|t| !foreign_incoming.contains(&t.id));
+    }
+
     let disk_tasks = load_tasks_from_disk(root).await;
     let boards_cfg = crate::config::load_boards_config(root).await.ok();
 
     // Defensive reconciliation: prevent stale frontend saves from destroying newly created
     // subtasks or wiping out active parent 'waiting_subtask' invariants (§ 2.2 & § 2.22).
-    let mut merged_tasks = tasks;
+    let mut merged_tasks = valid_incoming;
 
     // 1. Preserve existing subtasks or recent tasks from disk if missing from incoming tasks:
     // (delete_task has its own dedicated IPC command and is the ONLY authorized deletion path).

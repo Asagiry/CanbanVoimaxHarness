@@ -2451,3 +2451,126 @@ use std::path::PathBuf;
     }
 
 
+    #[tokio::test]
+    async fn test_foreign_project_tasks_isolation_and_purge() {
+        let base1 = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target").join(format!("cvh_foreign_proj1_{}", uuid::Uuid::new_v4()));
+        let base2 = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target").join(format!("cvh_foreign_proj2_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base1.join(".cvh")).await.expect("test dir 1");
+        tokio::fs::create_dir_all(base2.join(".cvh")).await.expect("test dir 2");
+
+        // Create tasks in proj1: one local, one alien parent, one alien child (pointing to proj2 worktree)
+        let local_task = Task {
+            id: "CVH-001".to_string(),
+            title: "Local Task in Proj1".to_string(),
+            description: "".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: Some(base1.join("worktrees").join("CVH-001").to_string_lossy().to_string()),
+            branch: Some("feat/CVH-001".to_string()),
+            verdict: None,
+            custom_flow: None,
+            status: Some("idle".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: None,
+            created_at: 100,
+            updated_at: 100,
+            stage_entered_at: None,
+            completed_at: None,
+            handover_summary: None,
+            attachments: None,
+            cover_image: None,
+            position: None,
+            hook_states: None,
+        };
+
+        let foreign_parent = Task {
+            id: "CVH-099".to_string(),
+            title: "Alien Parent Task".to_string(),
+            description: "".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("idle".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: Some("CVH-099.1".to_string()),
+            todos: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: None,
+            created_at: 200,
+            updated_at: 200,
+            stage_entered_at: None,
+            completed_at: None,
+            handover_summary: None,
+            attachments: None,
+            cover_image: None,
+            position: None,
+            hook_states: None,
+        };
+
+        let foreign_child = Task {
+            id: "CVH-099.1".to_string(),
+            title: "Alien Child Subtask in Proj2".to_string(),
+            description: "".to_string(),
+            stage_id: "review".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: Some(base2.join("worktrees").join("CVH-099.1").to_string_lossy().to_string()),
+            branch: Some("feat/CVH-099".to_string()),
+            verdict: None,
+            custom_flow: None,
+            status: Some("running".to_string()),
+            model: None,
+            parent_id: Some("CVH-099".to_string()),
+            subtask_index: Some(1),
+            waiting_for_subtask_id: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: None,
+            created_at: 300,
+            updated_at: 300,
+            stage_entered_at: None,
+            completed_at: None,
+            handover_summary: None,
+            attachments: None,
+            cover_image: None,
+            position: None,
+            hook_states: None,
+        };
+
+        // Directly insert foreign tasks into Proj1's SQLite to simulate contamination
+        crate::db::db_upsert_all_tasks(&base1, &[local_task.clone(), foreign_parent.clone(), foreign_child.clone()]).expect("upsert tasks into db");
+
+        // Verify contaminated DB has 3 tasks
+        let contaminated = crate::db::db_get_all_tasks(&base1).expect("read db");
+        assert_eq!(contaminated.len(), 3);
+
+        // load_tasks_from_disk on base1 must detect and purge the foreign tasks!
+        let sanitized = load_tasks_from_disk(&base1).await;
+        assert_eq!(sanitized.len(), 1, "Must contain ONLY local tasks after auto-purge");
+        assert_eq!(sanitized[0].id, "CVH-001");
+
+        // Verify DB was cleaned up (alien tasks deleted)
+        let db_after = crate::db::db_get_all_tasks(&base1).expect("read db after");
+        assert_eq!(db_after.len(), 1);
+        assert_eq!(db_after[0].id, "CVH-001");
+
+        let _ = tokio::fs::remove_dir_all(&base1).await;
+        let _ = tokio::fs::remove_dir_all(&base2).await;
+    }
+
+

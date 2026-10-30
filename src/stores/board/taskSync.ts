@@ -2,22 +2,40 @@ import { KanbanTask, TodoItem, TaskStatus } from '../../types';
 import { useDrawerStore } from '../drawerStore';
 import { logEvent } from '../../lib/logger';
 import { useBoardStore } from '../boardStore';
+import { isTaskForeign } from './taskNormalizer';
 
 export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
+  const store = useBoardStore.getState();
+  if (store.isLoadingTasks) {
+    logEvent('DEBUG', 'BOARD_STORE', 'syncTasksBackend: skipping save while tasks are loading/switching');
+    return;
+  }
+
   try {
+    const { useProjectStore } = await import('../projectStore');
+    const activeRoot = useProjectStore.getState().activeProject?.rootPath;
+    const projectTasks = activeRoot
+      ? tasks.filter((t) => !isTaskForeign(t, activeRoot))
+      : tasks;
+
+    if (tasks.length > 0 && projectTasks.length === 0) {
+      logEvent('WARN', 'BOARD_STORE', 'syncTasksBackend: suppressed save of tasks belonging to foreign projects');
+      return;
+    }
+
     const { invoke } = await import('@tauri-apps/api/core');
     const { activeBoardId, boards } = useBoardStore.getState();
     const fallbackBoardId = activeBoardId || boards[0]?.id || 'development';
     logEvent(
       'DEBUG',
       'BOARD_STORE',
-      `syncTasksBackend: syncing ${tasks.length} tasks to save_tasks`,
-      JSON.stringify(tasks.map((t) => t.id))
+      `syncTasksBackend: syncing ${projectTasks.length} tasks to save_tasks`,
+      JSON.stringify(projectTasks.map((t) => t.id))
     );
     // NOTE: send ONLY canonical camelCase keys. Sending both stageId+columnId
     // makes Rust serde fail with "duplicate field `stageId`" and save_tasks
     // silently never persists (this broke run_agent with "Task not found").
-    const backendPayload = tasks.map((t) => {
+    const backendPayload = projectTasks.map((t) => {
       const hasBoard = boards.some((b) => b.id === t.boardId);
       const effectiveBoardId = hasBoard ? t.boardId : fallbackBoardId;
       const isTerminalTask = t.columnId === 'ready' || t.status === 'done';

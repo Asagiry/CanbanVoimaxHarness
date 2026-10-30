@@ -27,6 +27,7 @@ export {
 export {
   normalizeKanbanTask,
   mapBackendTaskToKanban,
+  isTaskForeign,
 } from './board/taskNormalizer';
 
 export {

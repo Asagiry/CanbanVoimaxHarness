@@ -12,6 +12,27 @@ import { CANONICAL_BOARD_COLUMNS, DEFAULT_BOARD } from './boardConstants';
 import { logEvent } from '../../lib/logger';
 import { useBoardStore } from '../boardStore';
 
+/**
+ * Detects if a task belongs to a foreign project outside the current active project root.
+ * Tasks with absolute worktree paths that do not start with projectRoot are flagged as foreign.
+ */
+export function isTaskForeign(
+  task: { worktreePath?: string; worktree_path?: string },
+  projectRoot?: string
+): boolean {
+  if (!projectRoot || typeof projectRoot !== 'string') return false;
+  const wt = (task.worktreePath || task.worktree_path || '').trim();
+  if (!wt) return false;
+  // Absolute path check (Windows drive letter C:\ or UNC \\ or Unix /)
+  const isAbs = /^(?:[a-zA-Z]:[\\/]|\\\\|\/)/.test(wt);
+  if (!isAbs) return false;
+
+  const normWt = wt.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '');
+  const normRoot = projectRoot.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '');
+
+  return !normWt.startsWith(normRoot + '/') && normWt !== normRoot;
+}
+
 export function normalizeKanbanTask(
   raw: BackendTaskDTO | unknown,
   context?: {
@@ -19,9 +40,14 @@ export function normalizeKanbanTask(
     activeBoardId?: string;
     columns?: PipelineColumn[];
     tasks?: KanbanTask[];
+    activeProjectRoot?: string;
   }
 ): KanbanTask | null {
   if (!isBackendTaskDTO(raw)) return null;
+
+  if (context?.activeProjectRoot && isTaskForeign(raw, context.activeProjectRoot)) {
+    return null;
+  }
 
   const storeState = typeof useBoardStore?.getState === 'function' ? useBoardStore.getState() : undefined;
   const boards = context?.boards ?? storeState?.boards ?? [DEFAULT_BOARD];
@@ -244,6 +270,7 @@ export function mapBackendTaskToKanban(
     activeBoardId?: string;
     columns?: PipelineColumn[];
     tasks?: KanbanTask[];
+    activeProjectRoot?: string;
   }
 ): KanbanTask | null {
   const normalized = normalizeKanbanTask(t, context);

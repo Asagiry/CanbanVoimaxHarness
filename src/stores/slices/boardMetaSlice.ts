@@ -50,17 +50,20 @@ export const createBoardMetaSlice: StateCreator<
 
         // Dynamic Self-Healing: Verify all tasks in store against the loaded boards
         const currentTasks = get().tasks;
-        const healedTasks = currentTasks.map((t) => {
-          const hasBoard = rawBoards.some((b) => b.id === t.boardId);
-          const effectiveBoardId = hasBoard ? t.boardId : activeId;
-          const targetBoard = rawBoards.find((b) => b.id === effectiveBoardId) ?? currentBoard;
-          const colExists = targetBoard.columns.some((c) => c.id === t.columnId);
-          const effectiveColId = colExists ? t.columnId : (targetBoard.columns.find((c) => c.isIntake)?.id ?? targetBoard.columns[0]?.id ?? 'backlog');
-          if (effectiveBoardId !== t.boardId || effectiveColId !== t.columnId) {
-            return { ...t, boardId: effectiveBoardId, columnId: effectiveColId };
-          }
-          return t;
-        });
+        let healedTasks = currentTasks;
+        if (!get().isLoadingTasks && currentTasks.length > 0) {
+          healedTasks = currentTasks.map((t) => {
+            const hasBoard = rawBoards.some((b) => b.id === t.boardId);
+            const effectiveBoardId = hasBoard ? t.boardId : activeId;
+            const targetBoard = rawBoards.find((b) => b.id === effectiveBoardId) ?? currentBoard;
+            const colExists = targetBoard.columns.some((c) => c.id === t.columnId);
+            const effectiveColId = colExists ? t.columnId : (targetBoard.columns.find((c) => c.isIntake)?.id ?? targetBoard.columns[0]?.id ?? 'backlog');
+            if (effectiveBoardId !== t.boardId || effectiveColId !== t.columnId) {
+              return { ...t, boardId: effectiveBoardId, columnId: effectiveColId };
+            }
+            return t;
+          });
+        }
 
         set({
           boards: rawBoards,

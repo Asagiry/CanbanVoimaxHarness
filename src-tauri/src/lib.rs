@@ -111,6 +111,7 @@ pub fn run() {
             select_project_folder,
             choose_project_folder,
             set_active_project,
+            switch_project,
             set_project_root,
             list_projects,
             open_project,

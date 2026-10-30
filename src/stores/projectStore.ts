@@ -83,6 +83,73 @@ const DEFAULT_PROJECT: ProjectInfo = {
   worktreesCount: 0,
 };
 
+export async function performProjectSwitch(targetProject: ProjectInfo): Promise<void> {
+  const cleanPath = targetProject.rootPath?.trim();
+  if (!cleanPath || isInvalidProjectPath(cleanPath)) return;
+
+  logEvent('INFO', 'PROJECT_STORE', `performProjectSwitch: switching to project "${targetProject.name}"`, cleanPath);
+
+  // 1. Close drawer immediately to avoid stale task interaction
+  try {
+    const drawer = useDrawerStore.getState();
+    drawer.closeDrawer();
+  } catch (err) {
+    console.warn('Failed to close drawer before project switch:', err);
+  }
+
+  // 2. Clear tasks/boards and lock board with isLoadingTasks: true to prevent auto-saving
+  useBoardStore.setState({
+    tasks: [],
+    columns: [],
+    boards: [],
+    isLoadingTasks: true,
+    isLoadingBoards: true,
+    selectedTaskId: null,
+    hoveredTaskId: null,
+  });
+
+  // 3. Update activeProject state in projectStore
+  useProjectStore.setState({
+    activeProject: targetProject,
+    hasActiveProject: true,
+  });
+
+  // 4. Invoke backend to switch project root and SQLite connection pool
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    try {
+      await invoke('switch_project', { projectPath: cleanPath });
+    } catch {
+      await invoke('set_active_project', { path: cleanPath });
+    }
+  } catch (err) {
+    console.error('Failed to invoke switch_project/set_active_project on backend:', err);
+  }
+
+  // 5. Sequentially reload isolated entities for the new project
+  try {
+    const board = useBoardStore.getState();
+    await board.loadBoards();
+    await board.loadTasks();
+
+    const cortex = useCortexStore.getState();
+    await cortex.loadAgentPersonas?.();
+    await cortex.loadGlobalRules?.();
+    cortex.syncStagesFromColumns(useBoardStore.getState().columns);
+
+    try {
+      const { useToolPolicyStore } = await import('./toolPolicyStore');
+      await useToolPolicyStore.getState().loadFromTauri?.();
+    } catch {
+      // tool policy store optional
+    }
+  } catch (err) {
+    console.error('Error reloading project entities:', err);
+  } finally {
+    useBoardStore.setState({ isLoadingTasks: false, isLoadingBoards: false });
+  }
+}
+
 export const useProjectStore = create<ProjectState>((set, get) => ({
   activeProject: initialCandidate || DEFAULT_PROJECT,
   availableProjects: initialProjects,
@@ -95,27 +162,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       (p) => (p.id === projectId || p.rootPath.toLowerCase() === projectId.toLowerCase()) && !isInvalidProjectPath(p.rootPath)
     );
     if (!found) return;
-
-    logEvent('INFO', 'PROJECT_STORE', `switchProject: switching to project "${projectId}"`, found.rootPath);
-    set({ activeProject: found, hasActiveProject: true });
-
-    if (found.rootPath) {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('set_active_project', { path: found.rootPath });
-      } catch (err) {
-        console.warn('Failed to invoke set_active_project on switch:', err);
-      }
-    }
-
-    // When switching projects, close drawer and clear/reload board, tasks, and cortex agents
-    useDrawerStore.getState().closeDrawer();
-    const board = useBoardStore.getState();
-    board.setTasks([]);
-    await board.loadBoards();
-    await board.loadTasks();
-    await useCortexStore.getState().loadAgentPersonas();
-    useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
+    await performProjectSwitch(found);
   },
 
   updateActiveProject: (partial: Partial<ProjectInfo>) => {
@@ -241,12 +288,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     let projName = name;
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const cfg = await invoke<{ name: string; version: string }>('set_active_project', { path: cleanPath });
+      const cfg = await invoke<{ name: string; version: string }>('get_project_config_cmd').catch(() => null);
       if (cfg?.name) {
         projName = cfg.name;
       }
-    } catch (err) {
-      console.error('Failed to set active project by path in Tauri:', err);
+    } catch {
+      // ignore
     }
 
     const proj: ProjectInfo = {
@@ -268,21 +315,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       : [...state.availableProjects.filter((p) => !isInvalidProjectPath(p.rootPath)), proj];
 
     set({
-      activeProject: proj,
       availableProjects: updatedProjects,
-      hasActiveProject: true,
     });
     persistStoredProjects(updatedProjects);
-    logEvent('INFO', 'PROJECT_STORE', `setActiveProjectByPath: project active "${proj.name}" (${proj.rootPath})`);
 
-    // When setting active project by path, close drawer and reload board, tasks, and cortex agents
-    useDrawerStore.getState().closeDrawer();
-    const board = useBoardStore.getState();
-    board.setTasks([]);
-    await board.loadBoards();
-    await board.loadTasks();
-    await useCortexStore.getState().loadAgentPersonas();
-    useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
+    await performProjectSwitch(proj);
   },
 
   removeProjectFromHistory: async (projectId: string) => {
@@ -310,28 +347,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       logEvent('INFO', 'PROJECT_STORE', `removeProjectFromHistory: active project removed, switching to "${nextProject.name}"`);
 
       set({
-        activeProject: nextProject,
         availableProjects: updatedProjects,
-        hasActiveProject: !isInvalidProjectPath(nextProject.rootPath),
       });
 
-      if (nextProject.rootPath && !isInvalidProjectPath(nextProject.rootPath)) {
-        try {
-          const { invoke } = await import('@tauri-apps/api/core');
-          await invoke('set_active_project', { path: nextProject.rootPath });
-        } catch (err) {
-          console.warn('Failed to invoke set_active_project on removeProjectFromHistory:', err);
-        }
-      }
-
-      // When switching project, close drawer and clear/reload board, tasks, and cortex agents
-      useDrawerStore.getState().closeDrawer();
-      const board = useBoardStore.getState();
-      board.setTasks([]);
-      await board.loadBoards();
-      await board.loadTasks();
-      await useCortexStore.getState().loadAgentPersonas();
-      useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
+      await performProjectSwitch(nextProject);
     } else {
       set({ availableProjects: updatedProjects });
     }

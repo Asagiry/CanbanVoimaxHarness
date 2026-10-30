@@ -58,6 +58,10 @@ impl AppState {
             .unwrap_or_else(|_| discover_project_root())
     }
 
+    pub fn get_project_root(&self) -> PathBuf {
+        self.get_root()
+    }
+
     pub fn set_root(&self, new_root: PathBuf) -> Result<(), String> {
         if crate::config::is_binary_or_target_dir(&new_root) {
             return Err(format!("Cannot set binary or build directory as project root: {:?}", new_root));
@@ -78,6 +82,10 @@ impl AppState {
             }
         }
         Ok(())
+    }
+
+    pub fn set_project_root(&self, new_root: PathBuf) -> Result<(), String> {
+        self.set_root(new_root)
     }
 
     /// Returns the underlying r2d2 connection pool, initializing it if absent.

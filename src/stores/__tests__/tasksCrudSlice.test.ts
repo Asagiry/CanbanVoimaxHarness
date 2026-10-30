@@ -66,6 +66,44 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
       expect(state.tasks[1].id).toBe('CVH-002');
     });
 
+    it('loadTasks strictly and unconditionally replaces store tasks without merging prior state', async () => {
+      // 1. Initial state has Task from Project A
+      const staleTask = createSampleTask({ id: 'CVH-001', title: 'Stale Project A Task' });
+      useBoardStore.getState().setTasks([staleTask]);
+      expect(useBoardStore.getState().tasks).toHaveLength(1);
+
+      // 2. Mock list_tasks returning tasks from Project B
+      mockInvoke.mockImplementation(async (cmd) => {
+        if (cmd === 'list_tasks') {
+          return [
+            {
+              id: 'CVH-001',
+              title: 'Fresh Project B Task',
+              stageId: 'dev',
+              status: 'running',
+              boardId: 'development',
+            },
+            {
+              id: 'CVH-002',
+              title: 'Another Project B Task',
+              stageId: 'backlog',
+              status: 'idle',
+              boardId: 'development',
+            },
+          ] satisfies BackendTaskDTO[];
+        }
+        return null;
+      });
+
+      await useBoardStore.getState().loadTasks();
+
+      const currentTasks = useBoardStore.getState().tasks;
+      expect(currentTasks).toHaveLength(2);
+      expect(currentTasks[0].title).toBe('Fresh Project B Task');
+      expect(currentTasks[0].columnId).toBe('dev');
+      expect(currentTasks[1].title).toBe('Another Project B Task');
+    });
+
     it('upsertBackendTask inserts a new task when not existing in store', () => {
       const dto: BackendTaskDTO = {
         id: 'CVH-005',

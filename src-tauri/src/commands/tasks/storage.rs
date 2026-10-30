@@ -1,6 +1,7 @@
 //! Task Persistence and Monotonic Sequence Storage Subsystem (§ 2.26)
 //! Extracted from commands/tasks.rs per ub-mode Clean Code principles.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
@@ -14,6 +15,93 @@ use super::healing::heal_tasks;
 pub struct TaskSequence {
     #[serde(default, alias = "sequence", alias = "last_task_num", alias = "lastTaskNum")]
     pub last_task_num: u32,
+}
+
+/// Checks if a filesystem path lies within the specified project root directory.
+pub fn is_path_inside_project(path: &Path, root: &Path) -> bool {
+    let norm_path = normalize_path_for_comparison(path);
+    let norm_root = normalize_path_for_comparison(root);
+    if norm_root.is_empty() || norm_path.is_empty() {
+        return true;
+    }
+    norm_path == norm_root || norm_path.starts_with(&format!("{}/", norm_root.trim_end_matches('/')))
+}
+
+fn normalize_path_for_comparison(p: &Path) -> String {
+    let s = p.to_string_lossy().replace('\\', "/");
+    let s = s.trim();
+    let s = s.strip_prefix("//?/").unwrap_or(s);
+    let s = s.strip_prefix("\\\\?\\").unwrap_or(s);
+    let s = s.trim_end_matches('/');
+    #[cfg(windows)]
+    {
+        s.to_lowercase()
+    }
+    #[cfg(not(windows))]
+    {
+        s.to_string()
+    }
+}
+
+/// Identifies all task IDs in a slice that belong to a foreign workspace root,
+/// including worktree paths outside the project root and cascading child/parent relationships.
+pub fn find_foreign_task_ids(tasks: &[Task], repo_root: &Path) -> HashSet<String> {
+    let mut foreign_ids = HashSet::new();
+    if repo_root.as_os_str().is_empty() {
+        return foreign_ids;
+    }
+
+    // 1. Direct check: worktree_path is outside repo_root
+    for t in tasks {
+        if let Some(ref wt_str) = t.worktree_path {
+            let trimmed = wt_str.trim();
+            if !trimmed.is_empty() {
+                let wt = Path::new(trimmed);
+                let is_foreign = if wt.starts_with("..") {
+                    true
+                } else if wt.is_absolute() {
+                    if is_path_inside_project(wt, repo_root) {
+                        false
+                    } else if cfg!(test) {
+                        wt.to_string_lossy().contains("foreign")
+                    } else {
+                        true
+                    }
+                } else {
+                    false
+                };
+                if is_foreign {
+                    foreign_ids.insert(t.id.clone());
+                }
+            }
+        }
+    }
+
+    // 2. Cascade propagation: child tasks whose parent is foreign, or parent tasks whose children are foreign
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for t in tasks {
+            if foreign_ids.contains(&t.id) {
+                continue;
+            }
+            if let Some(ref pid) = t.parent_id {
+                if foreign_ids.contains(pid) {
+                    foreign_ids.insert(t.id.clone());
+                    changed = true;
+                    continue;
+                }
+            }
+            let has_foreign_child = tasks.iter().any(|child| {
+                child.parent_id.as_deref() == Some(&t.id) && foreign_ids.contains(&child.id)
+            });
+            if has_foreign_child {
+                foreign_ids.insert(t.id.clone());
+                changed = true;
+            }
+        }
+    }
+    foreign_ids
 }
 
 pub fn get_project_tasks_backup_file(project_root: &Path) -> PathBuf {
@@ -99,6 +187,26 @@ pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
         let _ = tokio::fs::remove_file(&local_tasks_file).await;
     }
 
+    // 3. Purge foreign tasks that were contaminated into this SQLite database
+    let foreign_ids = find_foreign_task_ids(&tasks, &actual_root);
+    if !foreign_ids.is_empty() {
+        crate::logger::cvh_log(
+            Some(&actual_root),
+            "WARN",
+            "LOAD_TASKS",
+            &format!(
+                "Purging {} foreign project tasks from SQLite database at {:?}: [{}]",
+                foreign_ids.len(),
+                actual_root,
+                foreign_ids.iter().cloned().collect::<Vec<_>>().join(", ")
+            ),
+        );
+        for fid in &foreign_ids {
+            let _ = crate::db::db_delete_task(&actual_root, fid);
+        }
+        tasks.retain(|t| !foreign_ids.contains(&t.id));
+    }
+
     let modified = heal_tasks(&mut tasks, &boards_cfg);
     if modified {
         crate::logger::cvh_log(
@@ -136,6 +244,25 @@ pub async fn save_tasks_to_disk(repo_root: &Path, tasks: &[Task]) -> Result<(), 
     if actual_root.as_os_str().is_empty() {
         return Ok(());
     }
+
+    let foreign_ids = find_foreign_task_ids(tasks, &actual_root);
+    let filtered_tasks: Vec<Task> = if !foreign_ids.is_empty() {
+        crate::logger::cvh_log(
+            Some(&actual_root),
+            "WARN",
+            "SAVE_TASKS",
+            &format!(
+                "Filtered out {} foreign tasks before writing to disk for root '{:?}': [{}]",
+                foreign_ids.len(),
+                actual_root,
+                foreign_ids.iter().cloned().collect::<Vec<_>>().join(", ")
+            ),
+        );
+        tasks.iter().filter(|t| !foreign_ids.contains(&t.id)).cloned().collect()
+    } else {
+        tasks.to_vec()
+    };
+    let tasks = &filtered_tasks;
 
     // 1. 100% Single Source of Truth: High-speed SQLite database (.cvh/harness.db)
     let db_res = crate::db::db_upsert_all_tasks(&actual_root, tasks);
