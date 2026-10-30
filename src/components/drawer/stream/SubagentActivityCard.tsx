@@ -6,7 +6,7 @@ import { getRoleBadgeStyle } from '../../../lib/agentPalette';
 import AgentIcon from '../../common/AgentIcon';
 import { formatSubagentDisplayTitle } from '../SubagentsSidebar';
 import { Paperclip, ZoomIn, Clock } from 'lucide-react';
-import { MarkdownContent, LightboxContext } from '../DrawerActivityStream';
+import { MarkdownContent, LightboxContext } from './MarkdownContent';
 import { formatDurationCompact } from './ThoughtStreamCard';
 
 export interface SubagentActivityCardProps {

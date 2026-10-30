@@ -38,6 +38,12 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Thought Stream Block Card** | `src/components/drawer/stream/ThoughtStreamCard.tsx` | Collapsible reasoning stream card with duration badge. |
 | **Steer Directive Card** | `src/components/drawer/stream/SteerDirectiveCard.tsx` | In-stream steer instruction indicator. |
 | **Subagent Activity Card** | `src/components/drawer/stream/SubagentActivityCard.tsx` | Child agent delegation summary and report view. |
+| **Markdown Content Renderer** | `src/components/drawer/stream/MarkdownContent.tsx` | Streaming markdown tokens, copyable codeblocks, lightbox. |
+| **Agent Explanation Card** | `src/components/drawer/stream/AgentExplanationCard.tsx` | Intermediate step commentary, action plan, and todo list. |
+| **Terminal Response Card** | `src/components/drawer/stream/TerminalResponseCard.tsx` | Prominent final response card with copy and duration. |
+| **Task Objective Card** | `src/components/drawer/stream/TaskObjectiveCard.tsx` | Task goal, clean prompt, and attachment gallery. |
+| **Execution Error Banner** | `src/components/drawer/stream/ExecutionErrorBanner.tsx` | In-stream error banner with retry and dismiss controls. |
+| **Stream Filtering Helpers** | `src/components/drawer/stream/streamHelpers.ts` | Stream activity dedup, prompt cleanup, duration helpers. |
 | **File Operations Tool Card** | `src/components/drawer/tools/FileOpsToolCard.tsx` | `read_file`, `write_file`, `edit_file` diff display. |
 | **Shell Command Tool Card** | `src/components/drawer/tools/CommandToolCard.tsx` | Command invocation, exit code, spilled logs link. |
 | **Subagent Tool Card** | `src/components/drawer/tools/SubagentToolCard.tsx` | Child agent execution card with progress spinner. |
@@ -73,7 +79,14 @@ Authoritative directory topology, component mapping table, and modular store arc
 
 ### 2.2 Console Drawer Subsystem (`src/components/drawer/`)
 - **`AgentConsoleDrawer.tsx`**: Slide-out execution console. Rendered at root fragment level with `position: fixed` outside any transformed or flex-row containers to prevent clipping. Enforces `min-h-0` and `min-w-0` on scrollable flex children.
-- **`DrawerActivityStream.tsx`**: Renders chronological conversation and execution events. Distinguishes intermediate step commentary (`isFinal: false`) from prominent terminal response cards (`isFinal: true`).
+- **`DrawerActivityStream.tsx`**: Slim orchestration layer for chronological activity feed, scroll management, and activity card dispatching.
+- **`stream/` Subsystem**: Decomposed streaming components:
+  - **`MarkdownContent.tsx`**: Lightweight markdown token renderer, tabular monospace tables, and copyable code blocks.
+  - **`AgentExplanationCard.tsx`**: Intermediate assistant thoughts, action plans, and todo checklist rendering.
+  - **`TerminalResponseCard.tsx`**: Collapsible terminal response card with model badge, duration, copy button, and full markdown rendering.
+  - **`TaskObjectiveCard.tsx`**: Initial task goal and attachment preview gallery card.
+  - **`ExecutionErrorBanner.tsx`**: Execution failure alert banner with retry trigger.
+  - **`streamHelpers.ts`**: Pure helper functions for activity filtering, question deduplication (§ 2.20), prompt cleaning, and duration calculations.
 - **`ContextGauge.tsx`**: Real-time context window capacity meter. Resolves window capacity from persona settings (`context_window`), proportional segment allocations (System, Tools, Messages), with emerald (`#10b981`) ring under 60% capacity.
 - **`ContextPopover.tsx`**: Extracted hover card popover displaying segmented token breakdown (System, Tools, Messages) and trigger action for context compaction.
 - **`diff/ImageDiffViewer.tsx`**: Interactive image diffing component with side-by-side, swipe-slider, and opacity-blend modes.

@@ -2,7 +2,7 @@ import { memo, useContext, useMemo } from 'react';
 import type { DrawerActivityItem } from '../../../stores/drawerStore';
 import { useTranslation } from '../../../stores/languageStore';
 import { ShieldAlert, User, ZoomIn, Clock } from 'lucide-react';
-import { MarkdownContent, LightboxContext } from '../DrawerActivityStream';
+import { MarkdownContent, LightboxContext } from './MarkdownContent';
 
 export interface SteerDirectiveCardProps {
   activity: DrawerActivityItem;
