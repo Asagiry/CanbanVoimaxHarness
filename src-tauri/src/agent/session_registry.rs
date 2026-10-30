@@ -98,15 +98,19 @@ impl AgentSessionRegistry {
             .collect()
     }
 
-    /// Checks if a given task has any active (non-Finished) session.
+    /// Checks if a given task has any active (non-Finished) session (including subtasks/subagents).
     pub fn has_active_session(&self, task_id: &str) -> bool {
         let id_clean = task_id.trim();
         let map = self.sessions.read().unwrap_or_else(|p| p.into_inner());
         map.values().any(|e| {
-            (e.summary.task_id == id_clean
+            let is_match = e.summary.task_id == id_clean
                 || e.summary.task_id.eq_ignore_ascii_case(id_clean)
-                || e.summary.session_id == id_clean)
-                && e.summary.status != SessionStatus::Finished
+                || e.summary.session_id == id_clean
+                || e.summary.task_id.starts_with(&format!("{}.", id_clean))
+                || e.summary.task_id.starts_with(&format!("{}:sub:", id_clean))
+                || e.summary.task_id.starts_with(&format!("{}.sub-", id_clean));
+
+            is_match && e.summary.status != SessionStatus::Finished
         })
     }
 
