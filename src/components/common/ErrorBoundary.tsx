@@ -7,6 +7,8 @@ interface ErrorBoundaryProps {
   onClose?: () => void;
   /** Подпись блока, где произошло падение (для текста ошибки). */
   scopeLabel?: string;
+  /** Флаг модального/оверлейного отображения ошибки (центрированный fixed оверлей с z-[100]). */
+  isOverlay?: boolean;
 }
 
 interface ErrorBoundaryState {
@@ -37,9 +39,14 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
   render() {
     if (!this.state.hasError) return this.props.children;
 
-    const { onClose, scopeLabel } = this.props;
+    const { onClose, scopeLabel, isOverlay } = this.props;
+    const isModalOverlay = Boolean(isOverlay || scopeLabel === 'Консоль задачи');
+    const containerClasses = isModalOverlay
+      ? 'fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-xs'
+      : 'flex-1 flex items-center justify-center p-6 bg-[#fafafa] dark:bg-[#090a0f]';
+
     return (
-      <div className="flex-1 flex items-center justify-center p-6 bg-[#fafafa] dark:bg-[#090a0f]">
+      <div className={containerClasses}>
         <div className="max-w-md w-full rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-4 shadow-xs">
           <div className="flex items-center space-x-2 pb-2 mb-2 border-b border-[#ebebeb] dark:border-[#21262d]">
             <AlertTriangle className="h-4 w-4 text-[#b91c1c] dark:text-[#ff7b72] shrink-0" />
