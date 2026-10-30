@@ -819,6 +819,7 @@ export function setupTauriEventGateway(): () => void {
         await useBoardStore.getState().loadBoards();
         await useBoardStore.getState().loadTasks();
         await useCortexStore.getState().loadAgentPersonas();
+        await useCortexStore.getState().loadGlobalRules();
         useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
       });
 

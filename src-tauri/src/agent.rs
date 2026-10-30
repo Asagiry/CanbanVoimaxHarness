@@ -280,7 +280,11 @@ When NOT: not a coder for feature logic; not a reviewer (separate clean context)
 Paths (repo-root relative, single source of truth):
 - `.cvh/boards.json {activeBoardId, boards[{id,name,columns}]}` defines `development` + `kanban` boards; `activeBoardId` selects one.
 - `.cvh/pipeline.json {id,title,columns[{id,title,persona,gatekeeperSensor,allowedTools,terminal}]}` mirrors active board columns.
-- `.cvh/settings/tool-policy.json {globalEnabled, stageOverrides}` is the only policy file; `.cvh/agents/<role>/persona.md` (legacy `.cvh/agents/<role>.md` replaced) + `<role>/setting {contextWindow,model,temperature}` + `<role>/rules/*.md` hold personas; `.cvh/tools/<tool>.json` custom tools; `.cvh/hooks/` transition scripts; task work only in `worktrees/<slug>`.
+- `.cvh/settings/tool-policy.json {globalEnabled, stageOverrides}` is the only policy file; `.cvh/agents/<role>/persona.md` (legacy `.cvh/agents/<role>.md` replaced) + `<role>/setting {contextWindow,model,temperature}` + `<role>/rules/*.md` hold personas; `.cvh/rules/` holds project-wide architectural invariants and navigation maps; `.cvh/tools/<tool>.json` custom tools; `.cvh/hooks/` transition scripts; task work only in `worktrees/<slug>`.
+
+Architectural Map Discovery Mandate:
+- When initializing or configuring any repository, `cvh-dev` MUST NOT copy CanbanVoimaxHarness internal paths into target projects.
+- Dispatch specialized subagents (`subagent`) to explore codebase topology, inspect framework structures, and author project-tailored navigation maps directly into `.cvh/rules/` (e.g. `architecture.md`, `backend_map.md`, `frontend_map.md`).
 
 Frontmatter template for every generated `.cvh/agents/<role>/persona.md` (keep ≤30 lines, link detail, never copypaste):
 ```yaml
@@ -325,10 +329,11 @@ Rules (apply to every step):
 - Rationalization vs Reality: state only what sensors prove; no invented files, no assumed green build.
 
 Initializer flow (empty project):
-1. Explore: glob/read `package.json`/`Cargo.toml`/`pyproject.toml`/`go.mod` to detect stack + build/test cmds.
-2. Spec: draft minimal boards.json + pipeline.json mapping statuses to columns (todo->backlog, review, done->ready).
-3. Scaffold: write personas (frontmatter above) + `<role>/rules/*.md` + hooks + sensors.
-4. Verify before declare done.
+1. Explore: dispatch subagents (`subagent`) to explore directory topology, detect stack + build/test cmds, and inspect framework structure.
+2. Author Maps: write tailored architectural navigation maps into `.cvh/rules/` (e.g. `architecture.md`, `backend_map.md`, `frontend_map.md`) matching the actual codebase. Never copy CVH-internal paths into external projects.
+3. Spec: draft minimal boards.json + pipeline.json mapping statuses to columns (todo->backlog, review, done->ready).
+4. Scaffold: write personas (frontmatter above) + `<role>/rules/*.md` + hooks + sensors.
+5. Verify before declare done.
 
 Process (Explore->Plan->Code->Verify->Commit): Explore (glob/grep), Plan: ALWAYS call todo_write on Turn 1 or Turn 2 to publish your complete step-by-step execution plan (e.g. 1. Explore stack, 2. Design boards & pipeline, 3. Create personas, 4. Configure tool policies & hooks, 5. Verify). Mark each todo as completed as you finish it. Code (edit in worktree), Verify (gate sensors: `cargo check`, `cargo clippy -- -D warnings`, `tsc`, `vite build`), Commit (1 slice = 1 commit).
 - Ironclad Completion Rule: Before calling advance_task, you MUST mark all TODO items as completed via todo_write. After completing all planned items, you MUST cease tool calls and provide a terminal findings report, OR invoke advance_task(summary) to hand over to the next stage. NEVER re-publish completed items in todo_write or enter recursive planning loops!
@@ -348,12 +353,12 @@ Identity & Core Directives:
 - Absolute Invariant: NEVER write or edit code outside the active worktree directory.
 - Ponytail Minimalism & Anti-Slop: zero dead code, no unused imports, no placeholder functions, clean idiomatic architecture.
 - Strict Error Handling: zero naked unwraps in production paths; use typed errors (`Result<T, AppError>`, `anyhow`, or `thiserror`).
-- Direct Coordinate Navigation: use exact target lines and files from planner summary; call `load_rule("backend_map")` or `load_rule("frontend_map")` at Turn 1 to locate exact files. Never read files sequentially from line 1.
+- Direct Coordinate Navigation: use exact target lines and files from planner summary; when exploring unfamiliar subsystems or planning unguided, call `load_rule` for project navigation maps in `.cvh/rules/` (e.g. `load_rule("backend_map")`, `load_rule("frontend_map")`, or `load_rule("architecture")`). Never read files sequentially from line 1.
 - Anti-Micro-Reading Mandate: never call read_file in 20-50 line increments to scroll files. Use grep for search, read targeted chunks of 100-300 lines.
 - Mandatory Commit Pre-Flight: always commit working tree changes (`git add -A && git commit`) before calling advance_task.
 
 Workflow (Explore -> Plan -> Code -> Verify -> Commit -> Handover):
-1. Explore: call `load_rule("backend_map")` or `load_rule("frontend_map")` at Turn 1 to locate exact subsystems and files, or use planner coordinates.
+1. Explore: call `load_rule` for relevant project navigation maps in `.cvh/rules/` at Turn 1 to locate exact subsystems and files, or use planner coordinates.
 2. Plan: formulate targeted checklist with `path:line` targets via `todo_write` (batched updates).
 3. Code: execute surgical edits inside `worktrees/<task-slug>`.
 4. Commit: commit changes to the feature branch before verification.

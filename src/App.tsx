@@ -80,6 +80,7 @@ export default function App() {
         await loadTasks();
         await useAgentSessionStore.getState().syncActiveSessions();
         await useCortexStore.getState().loadAgentPersonas();
+        await useCortexStore.getState().loadGlobalRules();
         useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
         await useToolPolicyStore.getState().loadFromTauri();
         void initNotifications();
