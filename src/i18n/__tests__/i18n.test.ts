@@ -28,8 +28,8 @@ describe('i18n SRP decomposition', () => {
     const enKeys = Object.keys(en);
     const ruKeys = Object.keys(ru);
 
-    expect(enKeys.length).toBe(540);
-    expect(ruKeys.length).toBe(540);
+    expect(enKeys.length).toBe(544);
+    expect(ruKeys.length).toBe(544);
 
     const missingInRu = enKeys.filter((k) => !(k in ru));
     const missingInEn = ruKeys.filter((k) => !(k in en));

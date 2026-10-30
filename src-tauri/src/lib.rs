@@ -43,6 +43,8 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .manage(state)
         .setup(|_app| {
+            #[cfg(target_os = "windows")]
+            commands::notifications::ensure_windows_start_menu_shortcut();
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -87,6 +89,7 @@ pub fn run() {
             move_task_stage,
             reorder_task,
             advance_task,
+            show_system_notification,
             focus_main_window,
             run_agent,
             abort_agent,
