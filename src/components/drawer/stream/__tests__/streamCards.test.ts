@@ -4,7 +4,22 @@ import {
   ThoughtStreamCard,
   SteerDirectiveCard,
   SubagentActivityCard,
+  MarkdownContent,
+  LightboxContext,
+  renderInlineNodes,
+  formatInline,
+  AgentExplanationCard,
+  TerminalResponseCard,
+  TaskObjectiveCard,
+  ExecutionErrorBanner,
+  getCleanPrompt,
+  isFinalResponseItem,
+  hasNearbyTodoWrite,
+  shouldSuppressExplanation,
+  filterDisplayActivities,
+  computeActivityDurations,
 } from '../index';
+import type { DrawerActivityItem } from '../../../../stores/drawerStore';
 
 describe('ThoughtStreamCard & formatDurationCompact', () => {
   it('handles null, undefined, 0, or negative milliseconds gracefully', () => {
@@ -42,10 +57,152 @@ describe('ThoughtStreamCard & formatDurationCompact', () => {
   });
 });
 
-describe('Stream Cards Exports', () => {
-  it('exports ThoughtStreamCard, SteerDirectiveCard, SubagentActivityCard correctly', () => {
+describe('Stream Cards and Markdown Exports', () => {
+  it('exports all decomposed stream components and contexts correctly', () => {
     expect(ThoughtStreamCard).toBeDefined();
     expect(SteerDirectiveCard).toBeDefined();
     expect(SubagentActivityCard).toBeDefined();
+    expect(MarkdownContent).toBeDefined();
+    expect(LightboxContext).toBeDefined();
+    expect(renderInlineNodes).toBeDefined();
+    expect(formatInline).toBeDefined();
+    expect(AgentExplanationCard).toBeDefined();
+    expect(TerminalResponseCard).toBeDefined();
+    expect(TaskObjectiveCard).toBeDefined();
+    expect(ExecutionErrorBanner).toBeDefined();
+  });
+});
+
+describe('formatInline & renderInlineNodes', () => {
+  it('formats inline markdown nodes correctly', () => {
+    const nodes = formatInline('Hello **bold** and *italic* and `code` and [link](https://example.com)');
+    expect(nodes).toBeDefined();
+    expect(nodes.length).toBeGreaterThan(0);
+  });
+
+  it('handles empty text', () => {
+    expect(formatInline('')).toEqual([]);
+  });
+});
+
+describe('streamHelpers', () => {
+  describe('getCleanPrompt', () => {
+    it('returns description if present and trims', () => {
+      expect(getCleanPrompt('  Do something  ', 'Title')).toBe('Do something');
+    });
+
+    it('falls back to title if description is empty', () => {
+      expect(getCleanPrompt('', 'Task Title')).toBe('Task Title');
+    });
+
+    it('strips [USER STEER] or [USER] suffix blocks', () => {
+      const prompt = 'Initial goal\n\n[USER STEER]: Please also check tests';
+      expect(getCleanPrompt(prompt, '')).toBe('Initial goal');
+
+      const prompt2 = 'Initial goal\n[USER]: change approach';
+      expect(getCleanPrompt(prompt2, '')).toBe('Initial goal');
+    });
+  });
+
+  describe('isFinalResponseItem', () => {
+    it('returns false if activity type is not output', () => {
+      const act = { id: '1', type: 'thought', content: 'thinking' } as DrawerActivityItem;
+      expect(isFinalResponseItem(act, 0, [act], false)).toBe(false);
+    });
+
+    it('returns true if output has ended and not running', () => {
+      const act = { id: '1', type: 'output', content: 'Final text' } as DrawerActivityItem;
+      expect(isFinalResponseItem(act, 0, [act], false)).toBe(true);
+    });
+
+    it('returns false if running and no following steer/user item', () => {
+      const act = { id: '1', type: 'output', content: 'Streaming text' } as DrawerActivityItem;
+      expect(isFinalResponseItem(act, 0, [act], true)).toBe(false);
+    });
+
+    it('returns false if intervening tool exists after output', () => {
+      const act1 = { id: '1', type: 'output', content: 'Intermediate step' } as DrawerActivityItem;
+      const act2 = { id: '2', type: 'tool', tool: { toolName: 'read_file' } } as any;
+      expect(isFinalResponseItem(act1, 0, [act1, act2], false)).toBe(false);
+    });
+  });
+
+  describe('hasNearbyTodoWrite', () => {
+    it('returns true if todo_write tool is within 3 items', () => {
+      const activities: DrawerActivityItem[] = [
+        { id: '1', type: 'tool', tool: { toolName: 'todo_write' } } as any,
+        { id: '2', type: 'thought', content: 'thinking' } as any,
+        { id: '3', type: 'output', content: 'todos planned' } as any,
+      ];
+      expect(hasNearbyTodoWrite(2, activities)).toBe(true);
+    });
+
+    it('returns false if no todo_write nearby', () => {
+      const activities: DrawerActivityItem[] = [
+        { id: '1', type: 'tool', tool: { toolName: 'read_file' } } as any,
+        { id: '2', type: 'output', content: 'file read' } as any,
+      ];
+      expect(hasNearbyTodoWrite(1, activities)).toBe(false);
+    });
+  });
+
+  describe('shouldSuppressExplanation', () => {
+    it('suppresses empty explanations', () => {
+      const act = { id: '1', type: 'output', content: '   ' } as DrawerActivityItem;
+      expect(shouldSuppressExplanation(act, 0, [act])).toBe(true);
+    });
+
+    it('suppresses explanation matching advance_task summary', () => {
+      const actTool = {
+        id: '1',
+        type: 'tool',
+        tool: { toolName: 'advance_task', params: { summary: 'Task completed successfully' } },
+      } as any;
+      const actExp = {
+        id: '2',
+        type: 'output',
+        content: 'Task completed successfully',
+      } as any;
+      expect(shouldSuppressExplanation(actExp, 1, [actTool, actExp])).toBe(true);
+    });
+  });
+
+  describe('filterDisplayActivities', () => {
+    it('deduplicates question items and tool calls for the same question', () => {
+      const qAct = {
+        id: 'q-123',
+        type: 'question',
+        tool: { questionId: 'q-123', toolName: 'question', params: { questionId: 'q-123' } },
+      } as any;
+      const toolAct = {
+        id: 't-123',
+        type: 'tool',
+        tool: { id: 't-123', toolName: 'question', params: { questionId: 'q-123' } },
+      } as any;
+      const result = filterDisplayActivities([qAct, toolAct]);
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('question');
+    });
+  });
+
+  describe('computeActivityDurations', () => {
+    it('computes durations from explicit durationMs or timestamps', () => {
+      const activities: DrawerActivityItem[] = [
+        { id: '1', type: 'thought', durationMs: 250 } as any,
+        {
+          id: '2',
+          type: 'tool',
+          timestamp: '2026-10-30T10:00:00.000Z',
+        } as any,
+        {
+          id: '3',
+          type: 'output',
+          timestamp: '2026-10-30T10:00:02.000Z',
+        } as any,
+      ];
+      const durations = computeActivityDurations(activities, false);
+      expect(durations[0]).toBe(250);
+      expect(durations[1]).toBe(2000);
+    });
   });
 });

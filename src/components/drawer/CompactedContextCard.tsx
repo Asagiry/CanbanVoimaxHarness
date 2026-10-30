@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { DrawerActivityItem } from '../../stores/drawerStore';
-import { MarkdownContent } from './DrawerActivityStream';
+import { MarkdownContent } from './stream';
 import { useTranslation } from '../../stores/languageStore';
 import {
   ChevronRight,
