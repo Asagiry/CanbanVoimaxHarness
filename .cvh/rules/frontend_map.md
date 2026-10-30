@@ -55,6 +55,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Global Settings Modal** | `src/components/settings/SettingsModal.tsx` | LLM endpoints, active model, and app settings. |
 | **Window Titlebar & Controls** | `src/components/layout/WindowControls.tsx` | Tauri window controls (minimize, maximize, close). |
 | **Top Navigation Bar** | `src/components/layout/Topbar.tsx` | Board selector, active project, search filter. |
+| **Task DTO Normalizer & Persona Resolver** | `src/stores/board/taskNormalizer.ts` | Dynamic persona mapping for terminal/working stages, parent-child linking. |
 | **Tasks CRUD Store Slice** | `src/stores/slices/tasksCrudSlice.ts` | Backend-authoritative task CRUD, monotonic IDs. |
 | **Board Meta Store Slice** | `src/stores/slices/boardMetaSlice.ts` | Active board, board switching, column layout. |
 | **Drawer Meta Store Slice** | `src/stores/drawer/slices/drawerMetaSlice.ts` | `activeTaskId`, drawer open/close, view mode. |

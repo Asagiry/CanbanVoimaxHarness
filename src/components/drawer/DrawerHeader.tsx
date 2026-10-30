@@ -115,6 +115,9 @@ export default function DrawerHeader({
     (c) => !c.isIntake && c.id !== 'backlog' && c.id !== 'ready' && !c.terminal
   );
   const currentStageIdx = columns.findIndex((c) => c?.id === task?.columnId);
+  const isTerminalRoot = rootTask
+    ? (rootTask.columnId === 'ready' || rootTask.columnId === 'done' || Boolean(columns.find((c) => c.id === rootTask.columnId)?.terminal))
+    : false;
 
   return (
     <header
@@ -221,7 +224,9 @@ export default function DrawerHeader({
                 const matchingSubtask = subtasks.find(
                   (s) => s.columnId === col.id || (s as any).stageId === col.id
                 );
-                const isRootStage = rootTask ? rootTask.columnId === col.id : false;
+                const isRootStage = rootTask
+                  ? (rootTask.columnId === col.id || (isTerminalRoot && idx === 0) || idx === 0)
+                  : false;
                 const targetTaskId = matchingSubtask
                   ? matchingSubtask.id
                   : isRootStage && rootTask
@@ -235,6 +240,7 @@ export default function DrawerHeader({
                 const isPassed =
                   Boolean(targetTaskId) &&
                   (matchingSubtask?.status === 'done' ||
+                    (isTerminalRoot && idx === 0) ||
                     (currentStageIdx >= 0 &&
                       columns.findIndex((c) => c.id === col.id) < currentStageIdx));
 
