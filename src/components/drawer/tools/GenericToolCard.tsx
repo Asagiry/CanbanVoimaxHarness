@@ -50,7 +50,7 @@ export default function GenericToolCard({ tool }: ToolCardProps) {
           isExpanded ? 'border-b border-[#ebebeb] dark:border-[#21262d]' : ''
         }`}
       >
-        <div className="flex items-center space-x-1.5 min-w-0 flex-1 overflow-hidden">
+        <div className="flex items-center space-x-1.5 min-w-0 flex-1">
           <button
             type="button"
             className="p-0.5 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] rounded shrink-0 transition cursor-pointer"

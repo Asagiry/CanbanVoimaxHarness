@@ -191,10 +191,10 @@ export function CollectSubagentExecutionCard({ tool }: { tool: ToolExecution }) 
         onClick={() => setIsExpanded((prev) => !prev)}
         className="flex items-center justify-between gap-2.5 cursor-pointer"
       >
-        <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
+        <div className="flex items-center space-x-2 min-w-0 flex-1">
           <FolderDown className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0 select-none" />
 
-          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border border-sky-200 dark:border-sky-800/60 bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 shrink-0">
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border border-sky-200 dark:border-sky-800/60 bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 shrink-0">
             {t('tools.collect.badge')}
           </span>
 
@@ -220,14 +220,14 @@ export function CollectSubagentExecutionCard({ tool }: { tool: ToolExecution }) 
                 return (
                   <span
                     key={id}
-                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border border-purple-200 dark:border-purple-800/60 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 shrink-0"
+                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border border-purple-200 dark:border-purple-800/60 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 shrink-0"
                   >
                     {t('subagents.subagentWithNum', { index: num })}
                   </span>
                 );
               })
             ) : (
-              <span className="font-mono text-[11px] text-[#71717a] dark:text-[#8b949e] px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] truncate">
+              <span className="inline-flex items-center font-mono text-[11px] text-[#71717a] dark:text-[#8b949e] px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] truncate">
                 {t('tools.collect.all')}
               </span>
             )}
@@ -304,7 +304,7 @@ export function CollectSubagentExecutionCard({ tool }: { tool: ToolExecution }) 
                   className="group flex items-center justify-between gap-2.5 px-3 py-2 rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#21262d] hover:border-[#171717]/40 dark:hover:border-[#30363d] cursor-pointer transition-colors text-xs"
                 >
                   {/* Left: Role icon & badge + Title */}
-                  <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
+                  <div className="flex items-center space-x-2 min-w-0 flex-1">
                     {sub.isBg ? (
                       <div className="relative shrink-0 flex items-center justify-center">
                         <Layers className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
@@ -321,7 +321,7 @@ export function CollectSubagentExecutionCard({ tool }: { tool: ToolExecution }) 
 
                     <span
                       style={roleBadgeStyle}
-                      className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border shrink-0 select-none"
+                      className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border shrink-0 select-none"
                     >
                       {formatSubagentRoleDisplay(sub.role, sub.number, sub.isBoardSubtask, language)}
                     </span>
@@ -340,7 +340,7 @@ export function CollectSubagentExecutionCard({ tool }: { tool: ToolExecution }) 
                       </div>
                     )}
 
-                    <span className="font-mono text-[10px] text-[#71717a] dark:text-[#8b949e] px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] shrink-0 tabular-nums">
+                    <span className="inline-flex items-center font-mono text-[10px] text-[#71717a] dark:text-[#8b949e] px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] shrink-0 tabular-nums">
                       {formatSteps(sub.stepsCount, language)}
                     </span>
 
@@ -488,12 +488,12 @@ export default function SubagentToolCard({ tool }: ToolCardProps) {
     return (
       <div className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] p-3 shadow-xs my-2 select-none">
         <div className="flex items-center justify-between gap-2.5">
-          <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
+          <div className="flex items-center space-x-2 min-w-0 flex-1">
             <div className="relative shrink-0 flex items-center justify-center">
               <Users className="h-4 w-4 text-purple-600 dark:text-purple-400" />
             </div>
 
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border border-purple-200 dark:border-purple-800/60 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 shrink-0">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border border-purple-200 dark:border-purple-800/60 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 shrink-0">
               {t('tools.subagent_list.badge')}
             </span>
 
@@ -501,7 +501,7 @@ export default function SubagentToolCard({ tool }: ToolCardProps) {
               subagent_list
             </span>
 
-            <span className="font-mono text-[11px] text-[#71717a] dark:text-[#8b949e] px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] truncate">
+            <span className="inline-flex items-center font-mono text-[11px] text-[#71717a] dark:text-[#8b949e] px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] truncate">
               {t('tools.subagent_list.total', { count: discoveredList.length })}
             </span>
           </div>
@@ -559,7 +559,7 @@ export default function SubagentToolCard({ tool }: ToolCardProps) {
                   }}
                   className="group flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#21262d] hover:border-[#171717]/40 dark:hover:border-[#30363d] cursor-pointer transition-colors text-xs"
                 >
-                  <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
+                  <div className="flex items-center space-x-2 min-w-0 flex-1">
                     {sub.isBg ? (
                       <div className="relative shrink-0 flex items-center justify-center">
                         <Layers className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
@@ -574,7 +574,7 @@ export default function SubagentToolCard({ tool }: ToolCardProps) {
 
                     <span
                       style={roleBadgeStyle}
-                      className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border shrink-0 select-none"
+                      className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border shrink-0 select-none"
                     >
                       {formatSubagentRoleDisplay(sub.role, sub.number, false, language)}
                     </span>
@@ -748,7 +748,7 @@ export default function SubagentToolCard({ tool }: ToolCardProps) {
       className="group rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] hover:bg-[#f9f9f9] dark:hover:bg-[#1c2128] hover:border-[#171717]/40 dark:hover:border-[#30363d] p-3 shadow-xs transition-all duration-150 cursor-pointer select-none my-2"
     >
       <div className="flex items-center justify-between gap-2.5">
-        <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
+        <div className="flex items-center space-x-2 min-w-0 flex-1">
           {isBg ? (
             <div className="relative shrink-0 flex items-center justify-center">
               <Layers className="h-4 w-4 text-purple-600 dark:text-purple-400" />
@@ -763,7 +763,7 @@ export default function SubagentToolCard({ tool }: ToolCardProps) {
 
           <span
             style={roleBadgeStyle}
-            className="px-2 py-0.5 rounded text-[11px] font-mono font-medium border shrink-0 select-none"
+            className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono font-medium border shrink-0 select-none"
           >
             {formatSubagentRoleDisplay(rawRole, subagentNumber || 1, false, language)}
           </span>
