@@ -1206,7 +1206,7 @@ pub async fn internal_abort_agent(
 
     // 6. Update task status on disk & memory to "idle"
     let mut tasks = load_tasks_from_disk(root).await;
-    // MERGE IN-MEMORY TASKS (AGENTS.md):
+    // MERGE IN-MEMORY TASKS:
     // Merge in-memory tasks from state.tasks before updating status to avoid wiping unsaved disk tasks (§ 2.22)
     if let Ok(guard) = state.tasks.lock() {
         for mem_t in guard.iter() {

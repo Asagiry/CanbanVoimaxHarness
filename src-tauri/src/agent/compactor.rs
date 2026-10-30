@@ -546,7 +546,7 @@ pub fn format_compaction_bullet_points(
     let current_work_md = current_step_lines.join("\n");
 
     format!(
-        "## Primary Request and Intent\n         - Task: {}\n         - Objective: {}\n\n         ## Key Technical Concepts\n         - High-Density State-Preserving Context Compaction with zero amnesia.\n         - Native Git worktree isolation and multi-agent pipeline routing.\n\n         ## Files and Code\n         {}\n\n         ## Errors and Fixes\n         {}\n\n         ## Pending Jobs & Subagents\n         {}\n\n         ## Current Work & Next Step\n         {}\n\n         ## Critical Invariants\n         - Ground Truth Sensor verification (cargo check, cargo test, npx tsc).\n         - Tactile obsidian dark theme aesthetics per AGENTS.md.\n         - Strict AND-semantics tool policy matrix.",
+        "## Primary Request and Intent\n         - Task: {}\n         - Objective: {}\n\n         ## Key Technical Concepts\n         - High-Density State-Preserving Context Compaction with zero amnesia.\n         - Native Git worktree isolation and multi-agent pipeline routing.\n\n         ## Files and Code\n         {}\n\n         ## Errors and Fixes\n         {}\n\n         ## Pending Jobs & Subagents\n         {}\n\n         ## Current Work & Next Step\n         {}\n\n         ## Critical Invariants\n         - Ground Truth Sensor verification (cargo check, cargo test, npx tsc).\n         - Tactile obsidian dark theme aesthetics per design invariants.\n         - Strict AND-semantics tool policy matrix.",
         task_id, primary_intent, files_md, errors_md, pending_md, current_work_md
     )
 }
