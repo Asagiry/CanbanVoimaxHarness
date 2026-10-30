@@ -1,6 +1,7 @@
 import { useBoardStore, initBoardEventListeners } from '../stores/boardStore';
 import { useDrawerStore } from '../stores/drawerStore';
 import { useCortexStore, initCortexEventListeners } from '../stores/cortexStore';
+import { useAgentSessionStore, type AgentSessionSummary } from '../stores/agentSessionStore';
 import {
   showAdvanceTaskNotification,
   showQuestionNotification,
@@ -188,6 +189,7 @@ export interface AgentEventMap {
   'agent:finished': AgentFinishedPayload;
   'agent:error': AgentErrorPayload;
   'agent:status': AgentStatusPayload;
+  'agent:session_status': AgentSessionSummary;
   'agent:autorun': AgentAutoRunPayload;
   'agent:compacted': AgentCompactedPayload;
   'task:created': TaskCreatedPayload;
@@ -699,6 +701,15 @@ export function setupTauriEventGateway(): () => void {
           }
         }
         void useBoardStore.getState().loadTasks();
+      });
+
+      // 10b. agent:session_status
+      await addListener('agent:session_status', (payload) => {
+        if (!payload || !payload.sessionId) return;
+        useAgentSessionStore.getState().handleSessionStatus(payload);
+        if (payload.taskId && payload.status === 'running') {
+          ensureTaskRunningOnBoard(payload.taskId);
+        }
       });
 
       // 11. task:created

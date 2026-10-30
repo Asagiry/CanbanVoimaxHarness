@@ -17,9 +17,16 @@ pub type AgentEntry = ActiveAgentHandle;
 pub struct AppState {
     pub repo_root: RwLock<PathBuf>,
     pub active_agents: Mutex<HashMap<String, ActiveAgentHandle>>,
+    pub session_registry: Arc<crate::agent::session_registry::AgentSessionRegistry>,
     pub agent_contexts: Mutex<HashMap<String, Arc<Mutex<crate::agent::compactor::AgentContextState>>>>,
     pub tasks: Arc<Mutex<Vec<Task>>>,
     pub db_pool: RwLock<Option<DbPool>>,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self::new(PathBuf::new())
+    }
 }
 
 impl AppState {
@@ -37,6 +44,7 @@ impl AppState {
         Self {
             repo_root: RwLock::new(actual_root),
             active_agents: Mutex::new(HashMap::new()),
+            session_registry: Arc::new(crate::agent::session_registry::AgentSessionRegistry::new()),
             agent_contexts: Mutex::new(HashMap::new()),
             tasks: Arc::new(Mutex::new(Vec::new())),
             db_pool: RwLock::new(db_pool),

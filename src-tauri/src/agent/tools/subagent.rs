@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use anyhow::{bail, Context, Result};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tokio::sync::oneshot;
 
 use crate::agent::{
@@ -120,9 +120,22 @@ pub async fn execute_subagent(
     });
     *sub_join_slot.lock().await = Some(join_h);
 
-    // Register into state.active_agents so abort_agent can track/abort it
+    // Register into state.active_agents and session_registry
     if let Some(ref app) = ctx.app_handle {
         if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+            let sub_summary = crate::agent::session_registry::AgentSessionSummary {
+                session_id: subagent_id.clone(),
+                task_id: subagent_id.clone(),
+                stage_id: None,
+                started_at: chrono::Utc::now().timestamp_millis() as u64,
+                status: crate::agent::session_registry::SessionStatus::Running,
+            };
+            state_ref.session_registry.register(
+                sub_summary.clone(),
+                Arc::clone(&sub_abort_handle),
+                Arc::clone(&sub_join_slot),
+            );
+            let _ = app.emit("agent:session_status", &sub_summary);
             if let Ok(mut map) = state_ref.active_agents.lock() {
                 map.insert(
                     subagent_id.clone(),
@@ -161,6 +174,14 @@ pub async fn execute_subagent(
             }
         }
     };
+    if let Some(ref app) = ctx.app_handle {
+        if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+            state_ref.session_registry.update_status(&subagent_id, crate::agent::session_registry::SessionStatus::Finished);
+            if let Some(summary) = state_ref.session_registry.get_session(&subagent_id) {
+                let _ = app.emit("agent:session_status", &summary);
+            }
+        }
+    }
     Ok(clean_report)
 }
 
@@ -274,9 +295,22 @@ pub async fn execute_subagent_bg(
     });
     *sub_join_slot.lock().await = Some(join_h);
 
-    // Register into state.active_agents so abort_agent can track/abort it
+    // Register into state.active_agents and session_registry
     if let Some(ref app) = ctx.app_handle {
         if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+            let sub_summary = crate::agent::session_registry::AgentSessionSummary {
+                session_id: subagent_id.clone(),
+                task_id: subagent_id.clone(),
+                stage_id: None,
+                started_at: chrono::Utc::now().timestamp_millis() as u64,
+                status: crate::agent::session_registry::SessionStatus::Running,
+            };
+            state_ref.session_registry.register(
+                sub_summary.clone(),
+                Arc::clone(&sub_abort_handle),
+                Arc::clone(&sub_join_slot),
+            );
+            let _ = app.emit("agent:session_status", &sub_summary);
             if let Ok(mut map) = state_ref.active_agents.lock() {
                 map.insert(
                     subagent_id.clone(),

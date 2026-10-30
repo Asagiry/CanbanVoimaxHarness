@@ -372,10 +372,24 @@ pub async fn run_agent(
 
     let abort_flag = Arc::new(AtomicBool::new(false));
     let join_slot = Arc::new(tokio::sync::Mutex::new(None));
+    let session_id = format!("sess-{}-{}", task_id, Utc::now().timestamp_millis());
+    let session_started_at = Utc::now().timestamp_millis() as u64;
+    let session_summary = crate::agent::session_registry::AgentSessionSummary {
+        session_id: session_id.clone(),
+        task_id: task_id.clone(),
+        stage_id: Some(task.stage_id.clone()),
+        started_at: session_started_at,
+        status: crate::agent::session_registry::SessionStatus::Running,
+    };
 
-    // Store in active agents registry
+    // Store in active agents registry & authoritative session registry
     {
         let state = app_handle.state::<AppState>();
+        state.session_registry.register(
+            session_summary.clone(),
+            Arc::clone(&abort_flag),
+            Arc::clone(&join_slot),
+        );
         let mut map = state
             .active_agents
             .lock()
@@ -423,6 +437,7 @@ pub async fn run_agent(
         "agent:status",
         serde_json::json!({ "taskId": task.id, "status": "running" }),
     );
+    let _ = app_handle.emit("agent:session_status", &session_summary);
 
     let mut initial_description = task.description.clone();
     if task
@@ -463,6 +478,7 @@ pub async fn run_agent(
     let app = app_handle.clone();
     let root_task = root.clone();
     let abort_flag_task = Arc::clone(&abort_flag);
+    let session_id_task = session_id.clone();
 
     let handle = tokio::spawn(async move {
         let app_inner = app.clone();
@@ -813,8 +829,15 @@ pub async fn run_agent(
             }
         }
 
-        // Clean up from active_agents registry upon agent completion only if this entry still belongs to this run
+        // Clean up from active_agents and session_registry upon agent completion only if this entry still belongs to this run
         if let Some(state_ref) = app.try_state::<AppState>() {
+            state_ref.session_registry.update_status(
+                &session_id_task,
+                crate::agent::session_registry::SessionStatus::Finished,
+            );
+            if let Some(summary) = state_ref.session_registry.get_session(&session_id_task) {
+                let _ = app.emit("agent:session_status", &summary);
+            }
             if let Ok(mut map) = state_ref.active_agents.lock() {
                 if let Some(entry) = map.get(&tid) {
                     if Arc::ptr_eq(&entry.abort_flag, &abort_flag_task) {
@@ -945,7 +968,16 @@ pub async fn internal_abort_agent(
             matched
         };
 
-        let had_entry = !matching_handles.is_empty();
+        let aborted_sids = state.session_registry.abort_task(p_trim);
+        if let Some(app) = app_handle {
+            for sid in &aborted_sids {
+                if let Some(summary) = state.session_registry.get_session(sid) {
+                    let _ = app.emit("agent:session_status", &summary);
+                }
+            }
+        }
+
+        let had_entry = !matching_handles.is_empty() || !aborted_sids.is_empty();
 
         for (_k, agent_entry) in matching_handles {
             agent_entry.abort_flag.store(true, Ordering::SeqCst);
@@ -1023,6 +1055,15 @@ pub async fn internal_abort_agent(
             }
         }
 
+        for sid in &aborted_sids {
+            state.session_registry.update_status(sid, crate::agent::session_registry::SessionStatus::Finished);
+            if let Some(app) = app_handle {
+                if let Some(summary) = state.session_registry.get_session(sid) {
+                    let _ = app.emit("agent:session_status", &summary);
+                }
+            }
+        }
+
         if let Some(app) = app_handle {
             let _ = app.emit(
                 "subagent:status",
@@ -1070,7 +1111,16 @@ pub async fn internal_abort_agent(
         matched
     };
 
-    let had_entry = !matching_handles.is_empty();
+    let aborted_session_ids = state.session_registry.abort_task(p_trim);
+    if let Some(app) = app_handle {
+        for sid in &aborted_session_ids {
+            if let Some(summary) = state.session_registry.get_session(sid) {
+                let _ = app.emit("agent:session_status", &summary);
+            }
+        }
+    }
+
+    let had_entry = !matching_handles.is_empty() || !aborted_session_ids.is_empty();
 
     // 2. Abort all active agent handles and wait with timeout
     for (_k, agent_entry) in matching_handles {
@@ -1188,6 +1238,15 @@ pub async fn internal_abort_agent(
         }
     }
 
+    for sid in &aborted_session_ids {
+        state.session_registry.update_status(sid, crate::agent::session_registry::SessionStatus::Finished);
+        if let Some(app) = app_handle {
+            if let Some(summary) = state.session_registry.get_session(sid) {
+                let _ = app.emit("agent:session_status", &summary);
+            }
+        }
+    }
+
     if let Some(app) = app_handle {
         let _ = app.emit(
             "agent:status",
@@ -1229,6 +1288,12 @@ pub async fn abort_agent(
         );
     }
     Ok(())
+}
+
+pub async fn get_active_sessions(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::agent::session_registry::AgentSessionSummary>, String> {
+    Ok(state.session_registry.get_active_sessions())
 }
 
 pub async fn compact_task_context(

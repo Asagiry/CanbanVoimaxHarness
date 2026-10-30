@@ -12,6 +12,8 @@ pub mod tools;
 pub use tools::*;
 pub mod react_engine;
 pub use react_engine::*;
+pub mod session_registry;
+pub use session_registry::*;
 
 use crate::config::{
     agent_allows_tool, is_tool_allowed, load_agent_setting, load_tool_policies,
@@ -1857,6 +1859,15 @@ Messages count: {}
             }
         }
 
+        if let Some(ref app) = ctx.app_handle {
+            if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+                state_ref.session_registry.update_status(&subagent_id, crate::agent::session_registry::SessionStatus::Finished);
+                if let Some(summary) = state_ref.session_registry.get_session(&subagent_id) {
+                    let _ = app.emit("agent:session_status", &summary);
+                }
+            }
+        }
+
         bail!("Subagent [{}] error: {}", subagent_id, err_msg);
     }
 
@@ -1978,6 +1989,12 @@ Subagent [{}] '{}' report:
             }
         }
         if let Some(ref app) = ctx.app_handle {
+            if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+                state_ref.session_registry.update_status(&subagent_id, crate::agent::session_registry::SessionStatus::Finished);
+                if let Some(summary) = state_ref.session_registry.get_session(&subagent_id) {
+                    let _ = app.emit("agent:session_status", &summary);
+                }
+            }
             let _ = app.emit(
                 "subagent:aborted",
                 serde_json::json!({
@@ -2006,6 +2023,12 @@ Subagent [{}] '{}' report:
     prune_subagent_sessions_cache().await;
 
     if let Some(ref app) = ctx.app_handle {
+        if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+            state_ref.session_registry.update_status(&subagent_id, crate::agent::session_registry::SessionStatus::Finished);
+            if let Some(summary) = state_ref.session_registry.get_session(&subagent_id) {
+                let _ = app.emit("agent:session_status", &summary);
+            }
+        }
         let _ = app.emit(
             "subagent:finished",
             serde_json::json!({
