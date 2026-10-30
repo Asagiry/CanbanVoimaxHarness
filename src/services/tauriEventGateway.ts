@@ -210,6 +210,7 @@ export interface AgentEventMap {
   'hook:start': HookStartPayload;
   'hook:finish': HookFinishPayload;
   'project:changed': unknown;
+  'project:switched': unknown;
   'agent:personas_updated': unknown;
   'boards:updated': unknown;
   'pipeline:updated': unknown;
@@ -832,14 +833,21 @@ export function setupTauriEventGateway(): () => void {
         }
       });
 
-      // 19. project:changed
-      await addListener('project:changed', async () => {
+      // 19. project:changed & project:switched
+      const handleProjectSwitched = async () => {
+        // If frontend project transition is actively in progress, suppress duplicate reload
+        if (useBoardStore.getState().isLoadingTasks) {
+          return;
+        }
         await useBoardStore.getState().loadBoards();
         await useBoardStore.getState().loadTasks();
         await useCortexStore.getState().loadAgentPersonas();
         await useCortexStore.getState().loadGlobalRules();
         useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
-      });
+      };
+
+      await addListener('project:changed', handleProjectSwitched);
+      await addListener('project:switched', handleProjectSwitched);
 
       // 20. agent:personas_updated
       await addListener('agent:personas_updated', async () => {

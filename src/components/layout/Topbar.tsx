@@ -145,7 +145,10 @@ export default function Topbar() {
                   key={project.id || project.rootPath}
                   data-no-drag
                   onMouseDown={(e) => e.stopPropagation()}
-                  onClick={() => void switchProject(project.rootPath || project.id)}
+                  onClick={() => {
+                    if (isActive) return;
+                    void switchProject(project.rootPath || project.id);
+                  }}
                   title={project.rootPath || project.name}
                   className={`group flex items-center space-x-1.5 px-2 py-1 rounded-md text-xs transition cursor-pointer select-none shrink-0 border ${
                     isActive

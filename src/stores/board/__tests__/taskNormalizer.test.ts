@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeKanbanTask } from '../taskNormalizer';
+import { normalizeKanbanTask, isTaskForeign } from '../taskNormalizer';
 import { PipelineColumn, BoardDef, BackendTaskDTO } from '../../../types';
 
 describe('taskNormalizer dynamic persona resolution', () => {
@@ -215,5 +215,40 @@ describe('taskNormalizer dynamic persona resolution', () => {
     });
 
     expect(task?.persona).toBe('system-architect');
+  });
+
+  it('correctly identifies foreign tasks outside active project root', () => {
+    const activeRoot = 'C:/Users/Voimax/Projects/CanbanVoimaxHarness';
+    const foreignTask = {
+      worktreePath: 'C:/Users/Voimax/Projects/CarSmash/worktrees/CVH-003.1',
+    };
+    const localTask = {
+      worktreePath: 'C:/Users/Voimax/Projects/CanbanVoimaxHarness/worktrees/CVH-046',
+    };
+    const relativeTask = {
+      worktreePath: 'worktrees/CVH-046',
+    };
+
+    expect(isTaskForeign(foreignTask, activeRoot)).toBe(true);
+    expect(isTaskForeign(localTask, activeRoot)).toBe(false);
+    expect(isTaskForeign(relativeTask, activeRoot)).toBe(false);
+  });
+
+  it('filters out foreign tasks during normalizeKanbanTask when activeProjectRoot is provided', () => {
+    const activeRoot = 'C:/Users/Voimax/Projects/CanbanVoimaxHarness';
+    const foreignDto: BackendTaskDTO = {
+      id: 'CVH-003.1',
+      title: 'CarSmash Subtask',
+      stageId: 'dev',
+      boardId: 'development',
+      worktreePath: 'C:\\Users\\Voimax\\Projects\\CarSmash\\worktrees\\CVH-003.1',
+      status: 'running',
+    };
+
+    const task = normalizeKanbanTask(foreignDto, {
+      activeProjectRoot: activeRoot,
+    });
+
+    expect(task).toBeNull();
   });
 });

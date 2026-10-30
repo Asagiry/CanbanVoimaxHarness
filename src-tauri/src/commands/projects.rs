@@ -174,6 +174,24 @@ pub async fn set_active_project(
         .await
         .map_err(|e| format!("Failed to scaffold .cvh structure: {}", e))?;
 
+    // Abort active agents from previous project
+    if let Ok(agents) = state.active_agents.lock() {
+        for (task_id, handle) in agents.iter() {
+            crate::logger::cvh_log(
+                Some(&old_root),
+                "WARN",
+                "PROJECT",
+                &format!("Aborting active agent for task '{}' due to project switch", task_id),
+            );
+            handle.abort_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    // Clear state.tasks cache before changing root so stale tasks are never returned
+    if let Ok(mut guard) = state.tasks.lock() {
+        guard.clear();
+    }
+
     // Update AppState repo_root using write lock
     state.set_root(new_path.clone())?;
 
@@ -214,14 +232,13 @@ pub async fn set_active_project(
         },
     };
 
-    // Emit event to notify frontend of project switch
-    let _ = app_handle.emit(
-        "project:changed",
-        serde_json::json!({
-            "rootPath": new_path.to_string_lossy().to_string(),
-            "name": proj_cfg.name
-        }),
-    );
+    // Emit events to notify frontend of project switch
+    let event_payload = serde_json::json!({
+        "rootPath": new_path.to_string_lossy().to_string(),
+        "name": proj_cfg.name
+    });
+    let _ = app_handle.emit("project:changed", event_payload.clone());
+    let _ = app_handle.emit("project:switched", event_payload);
 
     Ok(proj_cfg)
 }
@@ -268,6 +285,20 @@ pub async fn set_project_root(
     persist_active_project(&PathBuf::from(path.trim())).await;
     let _cfg = set_active_project(path.clone(), state, app_handle).await?;
     Ok(path)
+}
+
+/// Project switching command (switches project root, loads its SQLite pool and tasks)
+#[tauri::command]
+pub async fn switch_project(
+    project_path: Option<String>,
+    path: Option<String>,
+    state: State<'_, AppState>,
+    app_handle: AppHandle,
+) -> Result<ProjectConfig, String> {
+    let target = project_path
+        .or(path)
+        .ok_or_else(|| "Missing project_path argument".to_string())?;
+    set_active_project(target, state, app_handle).await
 }
 
 /// Project opening command (ensures .gitignore synchronization and switches active project)

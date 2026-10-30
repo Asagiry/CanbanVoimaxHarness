@@ -11,7 +11,7 @@ import { BoardState, TasksCrudSlice } from './types';
 import { sortTasksByPosition, isDoneColumnDef } from '../board/boardHelpers';
 import { CANONICAL_BOARD_COLUMNS } from '../board/boardConstants';
 import { loadCachedHookStates, saveCachedHookStates } from '../board/hookStorage';
-import { mapBackendTaskToKanban } from '../board/taskNormalizer';
+import { mapBackendTaskToKanban, isTaskForeign } from '../board/taskNormalizer';
 import { syncTasksBackend, triggerRunAgent } from '../board/taskSync';
 import { useDrawerStore } from '../drawerStore';
 import { logEvent } from '../../lib/logger';
@@ -178,25 +178,22 @@ export const createTasksCrudSlice: StateCreator<
       const rawTasks = await invoke<BackendTaskDTO[]>('list_tasks');
       logEvent('INFO', 'BOARD_STORE', `loadTasks: received ${Array.isArray(rawTasks) ? rawTasks.length : 0} tasks from backend`);
       if (Array.isArray(rawTasks)) {
-        const prevTasks = get().tasks;
+        let activeRoot: string | undefined;
+        try {
+          const { useProjectStore } = await import('../projectStore');
+          activeRoot = useProjectStore.getState().activeProject?.rootPath;
+        } catch {
+          // ignore in standalone test environments
+        }
+
         const mapped: KanbanTask[] = [];
         for (const raw of rawTasks) {
           if (!isBackendTaskDTO(raw)) continue;
-          const prev = prevTasks.find((p) => p.id === raw.id);
-          const rawCol = raw.stageId || raw.stage_id || raw.columnId;
-          if (prev && (!rawCol || prev.columnId === rawCol)) {
-            if (prev.stageEnteredAt && !raw.stageEnteredAt && !raw.stage_entered_at) {
-              raw.stageEnteredAt = prev.stageEnteredAt;
-            }
-            if (prev.stageDurations && !raw.stageDurations) {
-              raw.stageDurations = prev.stageDurations;
-            }
+          if (activeRoot && isTaskForeign(raw, activeRoot)) {
+            continue;
           }
           const task = mapBackendTaskToKanban(raw);
           if (task) {
-            if (prev?.todos && (task.todos === undefined || task.todos.length === 0)) {
-              task.todos = prev.todos;
-            }
             mapped.push(task);
           }
         }
@@ -212,6 +209,7 @@ export const createTasksCrudSlice: StateCreator<
           }
         }
         saveCachedHookStates(nextHookStates);
+        // Unconditional hard overwrite: never merge with stale tasks from prior projects!
         set({ tasks: mapped, hookStates: nextHookStates, isTauriConnected: true, isLoadingTasks: false });
         return;
       }
@@ -219,7 +217,7 @@ export const createTasksCrudSlice: StateCreator<
       console.info('Tauri list_tasks not available or returned empty:', err);
     }
 
-    set({ isLoadingTasks: false });
+    set({ tasks: [], isLoadingTasks: false });
   },
 
   moveTask: async (taskId, targetColumnId, options) => {
