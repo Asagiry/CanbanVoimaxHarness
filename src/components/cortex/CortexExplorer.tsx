@@ -327,7 +327,7 @@ export default function CortexExplorer() {
   return (
     <aside className="w-64 shrink-0 h-full flex flex-col bg-[#f9f9f9] dark:bg-[#0d1117] border-r border-[#ebebeb] dark:border-[#21262d] select-none text-[#171717] dark:text-[#f0f6fc]">
       {/* Sidebar Header */}
-      <div className="px-3.5 py-2.5 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] flex items-center justify-between">
+      <div className="h-12 shrink-0 px-3.5 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] flex items-center justify-between transition-colors">
         <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc]">
           {t('cortex.title')}
         </span>
