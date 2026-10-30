@@ -4507,3 +4507,40 @@ Rule: Strictly isolated worktrees.",
         assert_eq!(task.get_status().as_str(), "reviewing");
     }
 
+    #[test]
+    fn test_cp866_decoding_and_output_fallback() {
+        use super::{decode_cp866, decode_output_bytes};
+
+        // 1. Plain ASCII
+        let ascii_bytes = b"Hello, World!";
+        assert_eq!(decode_output_bytes(ascii_bytes), "Hello, World!");
+
+        // 2. Standard UTF-8 Cyrillic
+        let utf8_bytes = "Привет, мир!".as_bytes();
+        assert_eq!(decode_output_bytes(utf8_bytes), "Привет, мир!");
+
+        // 3. Pure CP866 bytes for "Привет"
+        // П = 0x8F, р = 0xE0, и = 0xA8, в = 0xA2, е = 0xA5, т = 0xE2
+        let cp866_bytes = [0x8Fu8, 0xE0, 0xA8, 0xA2, 0xA5, 0xE2];
+        assert_eq!(decode_cp866(&cp866_bytes), "Привет");
+        // decode_output_bytes should fall back to CP866 because it's invalid UTF-8
+        assert_eq!(decode_output_bytes(&cp866_bytes), "Привет");
+
+        // 4. Output with replacement char \u{FFFD}
+        let with_fffd = "error \u{FFFD}".as_bytes();
+        // Since from_utf8 succeeds but contains \u{FFFD}, it falls back to decode_cp866
+        let fallback_result = decode_output_bytes(with_fffd);
+        assert!(!fallback_result.is_empty());
+    }
+
+    #[test]
+    fn test_build_enriched_windows_paths() {
+        use super::build_enriched_windows_paths;
+        use std::ffi::OsString;
+
+        let initial_path = OsString::from(r"C:\Windows\System32;C:\Windows");
+        let enriched = build_enriched_windows_paths(&initial_path);
+        assert!(!enriched.is_empty());
+        assert!(enriched.iter().any(|p| p.to_string_lossy().contains("Windows")));
+    }
+

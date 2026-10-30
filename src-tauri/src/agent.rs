@@ -2120,6 +2120,92 @@ pub async fn retry_subagent_execution(
     Ok(())
 }
 
+/// Mapping table for CP866 (IBM866 OEM Cyrillic) bytes 0x80..=0xFF to Unicode char.
+pub const CP866_TABLE: [char; 128] = [
+    'А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ж', 'З', 'И', 'Й', 'К', 'Л', 'М', 'Н', 'О', 'П',
+    'Р', 'С', 'Т', 'У', 'Ф', 'Х', 'Ц', 'Ч', 'Ш', 'Щ', 'Ъ', 'Ы', 'Ь', 'Э', 'Ю', 'Я',
+    'а', 'б', 'в', 'г', 'д', 'е', 'ж', 'з', 'и', 'й', 'к', 'л', 'м', 'н', 'о', 'п',
+    '░', '▒', '▓', '│', '┤', '╡', '╢', '╖', '╕', '╣', '║', '╗', '╝', '╜', '╛', '┐',
+    '└', '┴', '┬', '├', '─', '┼', '╞', '╟', '╚', '╔', '╩', '╦', '╠', '═', '╬', '╧',
+    '╨', '╤', '╥', '╙', '╘', '╒', '╓', '╫', '╪', '┘', '┌', '█', '▄', '▌', '▐', '▀',
+    'р', 'с', 'т', 'у', 'ф', 'х', 'ц', 'ч', 'ш', 'щ', 'ъ', 'ы', 'ь', 'э', 'ю', 'я',
+    'Ё', 'ё', 'Є', 'є', 'Ї', 'ї', 'Ў', 'ў', '°', '∙', '·', '√', '№', '¤', '■', '\u{00A0}',
+];
+
+/// Decodes CP866 (OEM code page 866 used by Russian Windows cmd.exe) bytes into valid UTF-8.
+pub fn decode_cp866(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len());
+    for &b in bytes {
+        if b < 0x80 {
+            out.push(b as char);
+        } else {
+            out.push(CP866_TABLE[(b - 0x80) as usize]);
+        }
+    }
+    out
+}
+
+/// Decodes command output bytes (stdout/stderr) with resilient fallback for CP866 on Russian Windows cmd.exe.
+/// If `String::from_utf8(buf)` fails or contains replacement characters (`\u{FFFD}`), decodes using CP866.
+pub fn decode_output_bytes(buf: &[u8]) -> String {
+    match String::from_utf8(buf.to_vec()) {
+        Ok(s) => {
+            if s.contains('\u{FFFD}') {
+                decode_cp866(buf)
+            } else {
+                s
+            }
+        }
+        Err(_) => decode_cp866(buf),
+    }
+}
+
+/// Resolves standard runtime locations and enriches Windows PATH if missing.
+pub fn build_enriched_windows_paths(current_path: &std::ffi::OsStr) -> Vec<PathBuf> {
+    let mut paths: Vec<PathBuf> = std::env::split_paths(current_path).collect();
+    let mut candidates = Vec::new();
+
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        if !appdata.trim().is_empty() {
+            candidates.push(PathBuf::from(appdata).join("npm"));
+        }
+    }
+    if let Ok(localappdata) = std::env::var("LOCALAPPDATA") {
+        if !localappdata.trim().is_empty() {
+            candidates.push(PathBuf::from(localappdata).join("pnpm"));
+        }
+    }
+    if let Ok(userprofile) = std::env::var("USERPROFILE") {
+        if !userprofile.trim().is_empty() {
+            candidates.push(PathBuf::from(userprofile).join(".cargo").join("bin"));
+        }
+    }
+    let program_files = std::env::var("ProgramFiles").unwrap_or_else(|_| r"C:\Program Files".to_string());
+    if !program_files.trim().is_empty() {
+        candidates.push(PathBuf::from(program_files).join("nodejs"));
+    }
+
+    for candidate in candidates {
+        let candidate_str = candidate.to_string_lossy();
+        let already_present = paths.iter().any(|p| {
+            p.to_string_lossy().eq_ignore_ascii_case(&candidate_str)
+        });
+        if !already_present {
+            paths.push(candidate);
+        }
+    }
+    paths
+}
+
+#[cfg(target_os = "windows")]
+pub fn enrich_windows_path(cmd: &mut Command) {
+    let current_path = std::env::var_os("PATH").unwrap_or_default();
+    let paths = build_enriched_windows_paths(&current_path);
+    if let Ok(new_path) = std::env::join_paths(paths) {
+        cmd.env("PATH", new_path);
+    }
+}
+
 pub async fn run_scoped_command(
     cwd: &Path,
     cmd_str: &str,
@@ -2134,6 +2220,7 @@ pub async fn run_scoped_command(
         c.raw_arg("/S");
         c.raw_arg("/C");
         c.raw_arg(format!("\"chcp 65001 >nul && {}\"", cmd_str));
+        enrich_windows_path(&mut c);
         c
     };
 
@@ -2185,15 +2272,14 @@ pub async fn run_scoped_command(
         let stdout_drain = async {
             let mut buf = Vec::new();
             let _ = stdout_pipe.read_to_end(&mut buf).await;
-            String::from_utf8_lossy(&buf).to_string()
+            decode_output_bytes(&buf)
         };
 
         let stderr_drain = async {
             let mut buf = Vec::new();
             let _ = stderr_pipe.read_to_end(&mut buf).await;
-            String::from_utf8_lossy(&buf).to_string()
+            decode_output_bytes(&buf)
         };
-
         let (stdout_str, stderr_str) = tokio::join!(stdout_drain, stderr_drain);
         let status = child.wait().await?;
         Ok::<crate::hooks::HookExecutionResult, anyhow::Error>(crate::hooks::HookExecutionResult {

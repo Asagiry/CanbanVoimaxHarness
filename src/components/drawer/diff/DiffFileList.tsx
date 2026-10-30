@@ -259,6 +259,14 @@ export function DiffFileList({
     return { all: files.length, A: added, M: modified, D: deleted };
   }, [files]);
 
+  const hasMultipleStatuses = useMemo(() => {
+    let nonZeroTypes = 0;
+    if (statusCounts.A > 0) nonZeroTypes++;
+    if (statusCounts.M > 0) nonZeroTypes++;
+    if (statusCounts.D > 0) nonZeroTypes++;
+    return nonZeroTypes > 1;
+  }, [statusCounts]);
+
   const filteredFiles = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return files.filter((f) => {
@@ -319,7 +327,7 @@ export function DiffFileList({
   }
 
   // Show filter toolbar when there are more than 3 files or an active filter exists
-  const showToolbar = files.length > 3 || searchQuery !== '' || statusFilter !== 'all';
+  const showToolbar = files.length > 3 || searchQuery !== '' || (hasMultipleStatuses && statusFilter !== 'all');
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[#fafafa] dark:bg-[#090a0f]">
@@ -348,54 +356,56 @@ export function DiffFileList({
           </div>
 
           {/* Status Pills */}
-          <div className="flex items-center gap-1 text-[10px] font-mono">
-            <button
-              type="button"
-              onClick={() => setStatusFilter('all')}
-              className={'px-1.5 py-0.5 rounded cursor-pointer transition ' +
-                (statusFilter === 'all'
-                  ? 'bg-[#171717] text-white dark:bg-[#f0f6fc] dark:text-[#090d16] font-semibold'
-                  : 'bg-[#f4f4f5] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d]')}
-            >
-              Все ({statusCounts.all})
-            </button>
-            {statusCounts.A > 0 && (
+          {hasMultipleStatuses && (
+            <div className="flex items-center gap-1 text-[10px] font-mono">
               <button
                 type="button"
-                onClick={() => setStatusFilter('A')}
+                onClick={() => setStatusFilter('all')}
                 className={'px-1.5 py-0.5 rounded cursor-pointer transition ' +
-                  (statusFilter === 'A'
-                    ? 'bg-[#15803d] text-white font-semibold'
-                    : 'bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] hover:bg-[#dcfce7] dark:hover:bg-[#173a2b]')}
+                  (statusFilter === 'all'
+                    ? 'bg-[#171717] text-white dark:bg-[#f0f6fc] dark:text-[#090d16] font-semibold'
+                    : 'bg-[#f4f4f5] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d]')}
               >
-                +Добавлено ({statusCounts.A})
+                Все ({statusCounts.all})
               </button>
-            )}
-            {statusCounts.M > 0 && (
-              <button
-                type="button"
-                onClick={() => setStatusFilter('M')}
-                className={'px-1.5 py-0.5 rounded cursor-pointer transition ' +
-                  (statusFilter === 'M'
-                    ? 'bg-[#b45309] text-white font-semibold'
-                    : 'bg-[#fffbeb] dark:bg-[#2d2208] text-[#b45309] dark:text-[#d29922] hover:bg-[#fef3c7] dark:hover:bg-[#3b2d0b]')}
-              >
-                ~Изменено ({statusCounts.M})
-              </button>
-            )}
-            {statusCounts.D > 0 && (
-              <button
-                type="button"
-                onClick={() => setStatusFilter('D')}
-                className={'px-1.5 py-0.5 rounded cursor-pointer transition ' +
-                  (statusFilter === 'D'
-                    ? 'bg-[#b91c1c] text-white font-semibold'
-                    : 'bg-[#fef2f2] dark:bg-[#3b1219] text-[#b91c1c] dark:text-[#ff7b72] hover:bg-[#fee2e2] dark:hover:bg-[#4d1922]')}
-              >
-                -Удалено ({statusCounts.D})
-              </button>
-            )}
-          </div>
+              {statusCounts.A > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('A')}
+                  className={'px-1.5 py-0.5 rounded cursor-pointer transition ' +
+                    (statusFilter === 'A'
+                      ? 'bg-[#15803d] text-white font-semibold'
+                      : 'bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] hover:bg-[#dcfce7] dark:hover:bg-[#173a2b]')}
+                >
+                  +Добавлено ({statusCounts.A})
+                </button>
+              )}
+              {statusCounts.M > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('M')}
+                  className={'px-1.5 py-0.5 rounded cursor-pointer transition ' +
+                    (statusFilter === 'M'
+                      ? 'bg-[#b45309] text-white font-semibold'
+                      : 'bg-[#fffbeb] dark:bg-[#2d2208] text-[#b45309] dark:text-[#d29922] hover:bg-[#fef3c7] dark:hover:bg-[#3b2d0b]')}
+                >
+                  ~Изменено ({statusCounts.M})
+                </button>
+              )}
+              {statusCounts.D > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('D')}
+                  className={'px-1.5 py-0.5 rounded cursor-pointer transition ' +
+                    (statusFilter === 'D'
+                      ? 'bg-[#b91c1c] text-white font-semibold'
+                      : 'bg-[#fef2f2] dark:bg-[#3b1219] text-[#b91c1c] dark:text-[#ff7b72] hover:bg-[#fee2e2] dark:hover:bg-[#4d1922]')}
+                >
+                  -Удалено ({statusCounts.D})
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 

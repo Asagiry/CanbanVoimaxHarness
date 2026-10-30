@@ -86,6 +86,8 @@ The Reviewer MUST execute and verify all Ground Truth Sensors via `execute_comma
 - Code Simplifier: favor early returns over deep nested ladders; unwind single-use pass-through wrapper functions.
 
 ### Gate 6: Clean Merge, Origin Integration & Stage Routing Protocol
+- **Branch Diff Inspection Mandate**: The Reviewer MUST inspect the branch diff using `git diff main...HEAD` (or `git log -p main..HEAD`). A bare `git diff` only inspects uncommitted working tree changes, which produces a deceptive empty diff when developer changes are committed.
+- **Main Integration & Conflict Check**: Run `git merge main` to integrate latest upstream changes into the feature branch and verify zero merge conflicts before concluding the audit.
 - **Clean Mergeability Check**: Verify clean mergeability against `main` (`git merge-tree --write-tree main HEAD` exits 0). Reject immediately with `CHANGES_REQUESTED` if merge conflicts exist.
 - **Pre-Handover Clean Working Tree Check**: The feature branch MUST contain all task commits and the working tree must be completely clean (`git status --porcelain` is empty).
 - **Merge & Origin Integration**: Merge approved feature branch into `main`, push to remote `origin` (`git push origin main`), and execute routing verdict (see `verdict-routing.md`).

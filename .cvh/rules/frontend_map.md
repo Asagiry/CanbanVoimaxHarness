@@ -30,7 +30,8 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Drawer Header & Action Stepper** | `src/components/drawer/DrawerHeader.tsx` | Task title, tactile stage stepper, abort/run controls. |
 | **Activity Stream & Comment Cards** | `src/components/drawer/DrawerActivityStream.tsx` | Step commentary vs prominent terminal response card. |
 | **Steer Instruction Prompt Bar** | `src/components/drawer/DrawerSteerBar.tsx` | Interactive steer input bar, optimistic submission. |
-| **Proportional Context Gauge & Popover**| `src/components/drawer/ContextGauge.tsx` | Context token gauge, popover breakdown, compact trigger. |
+| **Context Gauge Status Ring** | `src/components/drawer/ContextGauge.tsx` | Real-time context token gauge, status bar & header ring. |
+| **Context Gauge Hover Popover** | `src/components/drawer/ContextPopover.tsx` | Proportional segment breakdown popover, compaction trigger. |
 | **Subagents Execution Sidebar** | `src/components/drawer/SubagentsSidebar.tsx` | Subagent hierarchy, active status, subtask logs. |
 | **Git Diff Viewer (Unified & Image)** | `src/components/drawer/diff/ImageDiffViewer.tsx` | Visual image diffs, side-by-side and slider modes. |
 | **Git Diff File List Sidebar** | `src/components/drawer/diff/DiffFileList.tsx` | Changed files sidebar, line additions/deletions. |
@@ -73,7 +74,8 @@ Authoritative directory topology, component mapping table, and modular store arc
 ### 2.2 Console Drawer Subsystem (`src/components/drawer/`)
 - **`AgentConsoleDrawer.tsx`**: Slide-out execution console. Rendered at root fragment level with `position: fixed` outside any transformed or flex-row containers to prevent clipping. Enforces `min-h-0` and `min-w-0` on scrollable flex children.
 - **`DrawerActivityStream.tsx`**: Renders chronological conversation and execution events. Distinguishes intermediate step commentary (`isFinal: false`) from prominent terminal response cards (`isFinal: true`).
-- **`ContextGauge.tsx`**: Real-time context window capacity meter. Resolves window capacity from persona settings (`context_window`), proportional segment allocations (System, Tools, Messages), and provides an interactive compaction popover.
+- **`ContextGauge.tsx`**: Real-time context window capacity meter. Resolves window capacity from persona settings (`context_window`), proportional segment allocations (System, Tools, Messages), with emerald (`#10b981`) ring under 60% capacity.
+- **`ContextPopover.tsx`**: Extracted hover card popover displaying segmented token breakdown (System, Tools, Messages) and trigger action for context compaction.
 - **`diff/ImageDiffViewer.tsx`**: Interactive image diffing component with side-by-side, swipe-slider, and opacity-blend modes.
 
 ### 2.3 Store Slices & State Hygiene (`src/stores/`)

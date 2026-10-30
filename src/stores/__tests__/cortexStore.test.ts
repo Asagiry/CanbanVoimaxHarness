@@ -21,6 +21,7 @@ describe('cortexStore (Clean Deterministic Store Tests)', () => {
     useBoardStore.setState({
       boards: [DEFAULT_BOARD],
       activeBoardId: 'development',
+      isBoardsLoaded: true,
       columns: CANONICAL_BOARD_COLUMNS.map((c) => ({ ...c })),
       tasks: [],
     });
