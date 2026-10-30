@@ -53,7 +53,7 @@ export default function CommandToolCard({ tool }: ToolCardProps) {
           isExpanded ? 'border-b border-[#ebebeb] dark:border-[#21262d]' : ''
         }`}
       >
-        <div className="flex items-center space-x-1.5 min-w-0 flex-1 overflow-hidden">
+        <div className="flex items-center space-x-1.5 min-w-0 flex-1">
           <button
             type="button"
             className="p-0.5 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] rounded shrink-0 transition cursor-pointer"
@@ -74,7 +74,7 @@ export default function CommandToolCard({ tool }: ToolCardProps) {
             <Terminal className="h-3.5 w-3.5" />
           </span>
 
-          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium shrink-0 select-none bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60">
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium shrink-0 select-none bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60">
             {toolName === 'execute_command' ? 'bash' : toolName}
           </span>
 

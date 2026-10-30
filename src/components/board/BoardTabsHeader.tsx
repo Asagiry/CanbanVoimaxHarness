@@ -105,7 +105,7 @@ export default function BoardTabsHeader({
 
   return (
     <>
-      <div className="flex items-center justify-between px-3.5 py-2 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] text-xs select-none transition-colors">
+      <div className="h-12 shrink-0 flex items-center justify-between px-3.5 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] text-xs select-none transition-colors">
         {/* Left: Search first, then board name tabs */}
         <div className="flex items-center space-x-1.5 overflow-x-auto py-0.5">
           <div className="relative w-44 sm:w-52 shrink-0">
@@ -243,7 +243,7 @@ export default function BoardTabsHeader({
         </div>
 
         {/* Right: Board Stats & Action Buttons */}
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3 shrink-0">
           <div className="hidden sm:flex items-center space-x-1.5 text-[#666666] dark:text-[#8b949e] text-xs">
             <span>{t('board.tasksOnBoard')}</span>
             <span className="text-[#171717] dark:text-[#f0f6fc] font-semibold tabular-nums font-mono">

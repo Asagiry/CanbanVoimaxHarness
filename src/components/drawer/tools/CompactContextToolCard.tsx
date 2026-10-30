@@ -104,7 +104,7 @@ export default function CompactContextToolCard({ tool }: ToolCardProps) {
           isExpanded ? 'border-b border-[#ebebeb] dark:border-[#21262d]' : ''
         }`}
       >
-        <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
+        <div className="flex items-center space-x-2 min-w-0 flex-1">
           <button
             type="button"
             className="p-0.5 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] rounded shrink-0 transition cursor-pointer"
@@ -125,7 +125,7 @@ export default function CompactContextToolCard({ tool }: ToolCardProps) {
           <Minimize2 className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
 
           {/* Badge */}
-          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium shrink-0 select-none bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60">
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium shrink-0 select-none bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60">
             Оптимизация
           </span>
 
@@ -136,7 +136,7 @@ export default function CompactContextToolCard({ tool }: ToolCardProps) {
 
           {/* Saved tokens badge when finished */}
           {isSuccess && formattedSaved && (
-            <span className="font-mono tabular-nums text-[#15803d] dark:text-[#7ee787] text-[11px] bg-[#ecfdf5] dark:bg-[#12281e] px-1.5 py-0.2 rounded border border-[#a7f3d0] dark:border-[#238636] font-medium shrink-0">
+            <span className="inline-flex items-center font-mono tabular-nums text-[#15803d] dark:text-[#7ee787] text-[11px] bg-[#ecfdf5] dark:bg-[#12281e] px-1.5 py-0.2 rounded border border-[#a7f3d0] dark:border-[#238636] font-medium shrink-0">
               Освобождено -{formattedSaved} токенов
             </span>
           )}
