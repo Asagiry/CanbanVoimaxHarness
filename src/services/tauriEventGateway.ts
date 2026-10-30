@@ -86,6 +86,8 @@ export interface AgentErrorPayload {
 export interface AgentStatusPayload {
   taskId?: string;
   status?: string;
+  response?: string;
+  error?: string;
 }
 
 export interface AgentAutoRunPayload {
@@ -683,12 +685,24 @@ export function setupTauriEventGateway(): () => void {
 
       // 10. agent:status
       await addListener('agent:status', (payload) => {
-        const { taskId, status } = payload || {};
+        const { taskId, status, response } = payload || {};
         if (taskId && (status === 'finished' || status === 'aborted' || status === 'error')) {
           useBoardStore.getState().clearActiveQuestion(taskId);
           if (isTaskActiveInDrawer(taskId)) {
             bufferManager.flushTask(taskId);
             useDrawerStore.getState().setActiveAgentTask(taskId, false);
+            if (status === 'finished' && response && typeof response === 'string' && response.trim().length > 0) {
+              const trimmedResp = response.trim();
+              const feed = useDrawerStore.getState().activityFeed[taskId] || [];
+              const alreadyHas = feed.some(
+                (item) =>
+                  (item.type === 'output' || (item.type as string) === 'summary') &&
+                  (item.content?.trim() === trimmedResp || item.content?.includes(trimmedResp))
+              );
+              if (!alreadyHas) {
+                useDrawerStore.getState().markFinalResponse(taskId, trimmedResp);
+              }
+            }
             useDrawerStore.getState().flushSaveDialog(taskId);
             useDrawerStore.getState().setThinkingStartTime(taskId, null);
           } else {

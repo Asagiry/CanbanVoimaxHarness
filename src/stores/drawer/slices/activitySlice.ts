@@ -43,7 +43,7 @@ export const createActivitySlice: StateCreator<
 
       let lastOutputIdx = -1;
       for (let i = updatedFeed.length - 1; i >= 0; i--) {
-        if (updatedFeed[i].type === 'output') {
+        if (updatedFeed[i].type === 'output' || (updatedFeed[i].type as string) === 'summary') {
           lastOutputIdx = i;
           break;
         }

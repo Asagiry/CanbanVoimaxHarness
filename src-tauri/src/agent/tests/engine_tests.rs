@@ -408,9 +408,12 @@ data: [DONE]
         // 2. Only 1 request was sent to the LLM (zero extra turns)
         assert_eq!(request_counter.load(Ordering::SeqCst), 1, "Expected exactly 1 request to LLM, no extra turns");
 
-        // 3. Emitted events must contain Finished with final_response == result
+        // 3. Emitted events must contain Finished with final_response == result and Output
         {
             let captured = events.lock().unwrap();
+            let output_event = captured.iter().find(|e| matches!(e, AgentEvent::Output(ref out) if out == "Feature implemented successfully"));
+            assert!(output_event.is_some(), "AgentEvent::Output must be emitted for advance_task summary");
+
             let finished_event = captured.iter().find(|e| matches!(e, AgentEvent::Finished { .. }));
             assert!(finished_event.is_some(), "AgentEvent::Finished must be emitted");
             if let Some(AgentEvent::Finished { final_response }) = finished_event {

@@ -125,6 +125,17 @@ describe('streamHelpers', () => {
       const act2 = { id: '2', type: 'tool', tool: { toolName: 'read_file' } } as any;
       expect(isFinalResponseItem(act1, 0, [act1, act2], false)).toBe(false);
     });
+
+    it('returns true for summary type when not running and no intervening tools', () => {
+      const actTool = { id: '1', type: 'tool', tool: { toolName: 'advance_task' } } as any;
+      const actSummary = { id: '2', type: 'summary', content: 'Task completed' } as any;
+      expect(isFinalResponseItem(actSummary, 1, [actTool, actSummary], false)).toBe(true);
+    });
+
+    it('returns true for output when activity.isFinal is true even if isRunning is true', () => {
+      const act = { id: '1', type: 'output', content: 'Final response', isFinal: true } as DrawerActivityItem;
+      expect(isFinalResponseItem(act, 0, [act], true)).toBe(true);
+    });
   });
 
   describe('hasNearbyTodoWrite', () => {
@@ -152,7 +163,7 @@ describe('streamHelpers', () => {
       expect(shouldSuppressExplanation(act, 0, [act])).toBe(true);
     });
 
-    it('suppresses explanation matching advance_task summary', () => {
+    it('does not suppress explanation matching advance_task summary', () => {
       const actTool = {
         id: '1',
         type: 'tool',
@@ -163,7 +174,13 @@ describe('streamHelpers', () => {
         type: 'output',
         content: 'Task completed successfully',
       } as any;
-      expect(shouldSuppressExplanation(actExp, 1, [actTool, actExp])).toBe(true);
+      expect(shouldSuppressExplanation(actExp, 1, [actTool, actExp])).toBe(false);
+    });
+
+    it('suppresses duplicate explanation identical to previous output', () => {
+      const act1 = { id: '1', type: 'output', content: 'Step completed' } as DrawerActivityItem;
+      const act2 = { id: '2', type: 'output', content: 'Step completed' } as DrawerActivityItem;
+      expect(shouldSuppressExplanation(act2, 1, [act1, act2])).toBe(true);
     });
   });
 
