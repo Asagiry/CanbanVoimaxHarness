@@ -108,13 +108,15 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       }
     }
 
-    // When switching projects, close drawer and clear/reload board, tasks, and cortex agents
+    // When switching projects, close drawer, editor and clear/reload board, tasks, and cortex agents/rules
     useDrawerStore.getState().closeDrawer();
+    useCortexStore.getState().closeEditor();
     const board = useBoardStore.getState();
     board.setTasks([]);
     await board.loadBoards();
     await board.loadTasks();
     await useCortexStore.getState().loadAgentPersonas();
+    await useCortexStore.getState().loadGlobalRules();
     useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
   },
 
@@ -275,13 +277,15 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     persistStoredProjects(updatedProjects);
     logEvent('INFO', 'PROJECT_STORE', `setActiveProjectByPath: project active "${proj.name}" (${proj.rootPath})`);
 
-    // When setting active project by path, close drawer and reload board, tasks, and cortex agents
+    // When setting active project by path, close drawer, editor and reload board, tasks, and cortex agents/rules
     useDrawerStore.getState().closeDrawer();
+    useCortexStore.getState().closeEditor();
     const board = useBoardStore.getState();
     board.setTasks([]);
     await board.loadBoards();
     await board.loadTasks();
     await useCortexStore.getState().loadAgentPersonas();
+    await useCortexStore.getState().loadGlobalRules();
     useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
   },
 
@@ -324,13 +328,15 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         }
       }
 
-      // When switching project, close drawer and clear/reload board, tasks, and cortex agents
+      // When switching project, close drawer, editor and clear/reload board, tasks, and cortex agents/rules
       useDrawerStore.getState().closeDrawer();
+      useCortexStore.getState().closeEditor();
       const board = useBoardStore.getState();
       board.setTasks([]);
       await board.loadBoards();
       await board.loadTasks();
       await useCortexStore.getState().loadAgentPersonas();
+      await useCortexStore.getState().loadGlobalRules();
       useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
     } else {
       set({ availableProjects: updatedProjects });

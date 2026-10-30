@@ -318,7 +318,7 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
       >
         {isReadOp ? (
           /* Read operation tactile card: [Analyzed C# Transit.cs #L4270-4300] */
-          <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
+          <div className="flex items-center space-x-2 min-w-0 flex-1">
             <button
               type="button"
               className="p-0.5 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] rounded shrink-0 transition cursor-pointer"
@@ -336,7 +336,7 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
             </button>
 
             {/* Label: Analyzed (cyan/teal tactile badge) */}
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium shrink-0 select-none bg-[#ecfeff] dark:bg-[#083344] text-[#0e7490] dark:text-[#22d3ee] border border-[#a5f3fc] dark:border-[#155e75]">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium shrink-0 select-none bg-[#ecfeff] dark:bg-[#083344] text-[#0e7490] dark:text-[#22d3ee] border border-[#a5f3fc] dark:border-[#155e75]">
               Analyzed
             </span>
 
@@ -377,7 +377,7 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
           </div>
         ) : (
           /* File write / edit operation card: [Edited MainWindow.xaml +4 -2] */
-          <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
+          <div className="flex items-center space-x-2 min-w-0 flex-1">
             <button
               type="button"
               className="p-0.5 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] rounded shrink-0 transition cursor-pointer"
@@ -396,7 +396,7 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
 
             {/* Label: Created or Edited or Failed edit */}
             <span
-              className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-medium shrink-0 select-none ${
+              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium shrink-0 select-none ${
                 isFailed
                   ? 'bg-[#fef2f2] dark:bg-[#3b1219] text-[#b91c1c] dark:text-[#ff7b72] border border-[#fecaca] dark:border-[#da3633]'
                   : opLabel === 'Created'
@@ -430,12 +430,12 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
             {(additions > 0 || deletions > 0) && (
               <div className="flex items-center space-x-1 font-mono text-[11px] tabular-nums font-semibold shrink-0 ml-1">
                 {additions > 0 && (
-                  <span className="text-[#16a34a] dark:text-[#7ee787] bg-[#f0fdf4] dark:bg-[#12281e] px-1 py-0.2 rounded border border-[#bbf7d0] dark:border-[#238636]">
+                  <span className="inline-flex items-center text-[#16a34a] dark:text-[#7ee787] bg-[#f0fdf4] dark:bg-[#12281e] px-1 py-0.2 rounded border border-[#bbf7d0] dark:border-[#238636]">
                     +{additions}
                   </span>
                 )}
                 {deletions > 0 && (
-                  <span className="text-[#dc2626] dark:text-[#ff7b72] bg-[#fef2f2] dark:bg-[#3b1219] px-1 py-0.2 rounded border border-[#fecaca] dark:border-[#da3633]">
+                  <span className="inline-flex items-center text-[#dc2626] dark:text-[#ff7b72] bg-[#fef2f2] dark:bg-[#3b1219] px-1 py-0.2 rounded border border-[#fecaca] dark:border-[#da3633]">
                     -{deletions}
                   </span>
                 )}

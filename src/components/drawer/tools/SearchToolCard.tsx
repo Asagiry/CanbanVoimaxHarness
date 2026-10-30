@@ -54,7 +54,7 @@ export default function SearchToolCard({ tool }: ToolCardProps) {
           isExpanded ? 'border-b border-[#ebebeb] dark:border-[#21262d]' : ''
         }`}
       >
-        <div className="flex items-center space-x-1.5 min-w-0 flex-1 overflow-hidden">
+        <div className="flex items-center space-x-1.5 min-w-0 flex-1">
           <button
             type="button"
             className="p-0.5 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] rounded shrink-0 transition cursor-pointer"
@@ -75,7 +75,7 @@ export default function SearchToolCard({ tool }: ToolCardProps) {
             <IconComponent className="h-3.5 w-3.5" />
           </span>
 
-          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium shrink-0 select-none bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium shrink-0 select-none bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
             {toolName}
           </span>
 
