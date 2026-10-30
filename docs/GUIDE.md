@@ -5,7 +5,7 @@
 > **работает** — подтверждено кодом; **частично** — работает не полностью / фронт и бэк расходятся / есть мёртвые поля;
 > **задумано** — описано в `docs/`/персонах, но в коде реализации нет.
 > Связанные доки не копипастятся — на них даются ссылки: `docs/agents.md`, `docs/board.md`, `docs/hooks.md`,
-> `AGENTS.md`, `README.md` (все этапы дорожной карты CVH-001—CVH-014 и архитектурные концепции Live Diff и Cortex Memory Ledger полностью реализованы в кодовой базе).
+> `README.md` (все этапы дорожной карты CVH-001—CVH-014 и архитектурные концепции Live Diff и Cortex Memory Ledger полностью реализованы в кодовой базе).
 
 ---
 
@@ -45,7 +45,7 @@
 **CanbanVoimaxHarness (CVH)** — десктопный оркестратор ИИ-агентов (Rust + Tauri v2 + React 19).
 Фундаментальный инвариант: **колонки Kanban-доски — это агенты**. У колонки есть поле `persona: "<role>"`;
 перетаскивание карточки в такую колонку запускает `run_agent` с системным промптом из
-`.cvh/agents/<role>.md`. Подробнее философия расписана в `docs/board.md` и `AGENTS.md` (§2.2) — здесь только механика.
+`.cvh/agents/<role>.md`. Подробнее философия расписана в `docs/board.md` и `.cvh/rules/` — здесь только механика.
 
 **`.cvh/`** — вся конфигурация харнесса для одного проекта (лежит в корне репозитория проекта).
 Открытие папки проекта в CVH (`select_project_folder` / `set_active_project`) вызывает
@@ -396,13 +396,10 @@ legacy-модели `ToolPermissions { globalAllowedTools, stageAllowedTools }`.
 Динамика (id, title, description, worktree) — **только** в user-сообщении
 (`# Objective: <title>\n\n<description>` + `[HOOK]`-маркер).
 
-> **Важно, расхождение с `docs/agents.md` (§1 п.2 и §5 шаг 3)**: дока утверждает
-> `SystemMessage = Persona + AGENTS.md + .agents/skills/* + Task Prompt` и «авт odd-компиляцию скиллов».
-> Код **намеренно НЕ инжектит** корневой `AGENTS.md` и `.agents/skills`
+> **Важно, расхождение с историческими черновиками**:
+> Код **намеренно НЕ инжектит** устаревшие корневые файлы правил или внешние `.agents/skills`
 > (регрессионный тест `test_system_prompt_is_lean_cvh_only`). Источник правды — код.
-> Каталог `.agents/skills/` (в репозитории: `agent-developer`, `agent-developer-reviewer`,
-> `agent-retro-verifier`, `development`, `llm-streaming-expert`, `react-tailwind-artisan`,
-> `tauri-rust-engineer`) и `AGENTS.md` существуют и видны в Проводнике разума, но в LLM-контекст не уходят.
+> Модульные правила живут исключительно в `.cvh/rules/` и `.cvh/agents/<role>/rules/`.
 
 ### 5.2 Телеметрия — **работает**
 
@@ -460,7 +457,7 @@ DnD карточек → `boardStore.moveTask` (§3.2). Карточка: мон
 с узлами `agent.md` (шаблон персоны), `setting`, `rules/`, `hooks/`; `backlog` — системный узел
 (показывает свои хуки); колонки без персоны (напр. `ready`) пропускаются; свежий проект
 (backlog+ready без персон) даёт пустое состояние. Бэкенд-сторона: `get_cortex_tree` отдаёт
-`Personas (.cvh/agents)` / `Transition Hooks (.cvh/hooks)` / `Skills (.agents/skills)` / `AGENTS.md`,
+`Personas (.cvh/agents)` / `Global Rules (.cvh/rules)` / `Transition Hooks (.cvh/hooks)` / `Skills (.agents/skills)`,
 `read/save_cortex_file` читают/пишут произвольный относительный путь (создавая каталоги).
 Редактор: подсветка, счётчики, `Ctrl+S`. Создание из UI: правило (`rules/<имя>.md` + автосуффикс),
 хук (`hooks/on_enter[-<имя>].<bat|ps1|py|sh>` с шаблонами под момент), персона/настройка — шаблоны.
@@ -557,7 +554,7 @@ routes: on_approved→retro, on_changes_requested→dev) → retro (persona: ret
 если надо ужать права — `agents/developer/setting` с `allowed_tools` (пересечение, §4.2).
 
 > Оговорка про `retro` — **задумано**: персона `retro.md` описывает запись в
-> `.agents/tasks-history.json` и `.agents/knowledge-graph.json` и патчинг `AGENTS.md`,
+> `.agents/tasks-history.json` и `.agents/knowledge-graph.json` и патчинг правил в `.cvh/rules/`,
 > `docs/board.md` (§2 п.4) это повторяет — но `grep` по `src-tauri/src` не находит ни одной записи
 > в эти файлы (`resolve_allowed_tools|tasks-history|knowledge-graph` — тишина, кроме комментариев).
 > Файлы `.agents/tasks-history.json` / `.agents/knowledge-graph.json` в репозитории существуют,
@@ -670,7 +667,7 @@ routes: on_approved→retro, on_changes_requested→dev) → retro (persona: ret
 `run_agent` (steer, fallback persona `developer`, приоритеты модели/температуры/baseUrl, worktree-fallback в корень,
 `[HOOK]`-маркер, вердикты, сабтаски, routes, terminal); `list/create_agent_persona` (flat-путь, валидация, шаблон);
 custom tools CRUD + исполнение `{{args}}`; `execute_hook` env/интерпретаторы/таймауты; stdout-протокол;
-системник (персона + rules по алфавиту + mandate, без AGENTS.md/skills — намеренно); 10 стандартных тулов
+системник (персона + rules по алфавиту + mandate, без внешних skills/монолитов — намеренно); 10 стандартных тулов
 с параметрами; `todo_write` (persist + событие); spill; 3-tier диалогов; `normalize_pipeline_columns`;
 boards CRUD + слаги + защита последней доски + реассайна задач; `boards.json` ↔ `pipeline.json` синк;
 Cortex tree/read/save; Git Diff; drawer/телеметрия/steer; оба ПКМ-меню (+защита `backlog`/`ready`);
@@ -680,13 +677,13 @@ Cortex tree/read/save; Git Diff; drawer/телеметрия/steer; оба ПК�
 `column.allowedTools`/`resolve_allowed_tools` (декларативно, gate не смотрит); `compact_task_context`
 и `compact_context` для живых сессий (синтетика); `max_turns` (мёртвое поле); шаблоны досок из `docs/board.md`
 (`development`/`kanban`/`simple`/`empty` — кода нет, есть canonical+modeler+скаффолд);
-формула системника из `docs/agents.md` (AGENTS.md/skills — устарело); Google/Bing fallback (только DDG);
+формула системника из `docs/agents.md` (очищена от устаревших ссылок); Google/Bing fallback (только DDG);
 `retro`-оверрайд (есть в сторе/файле, нет в бэкенд-дефолте); `routes.on_finished`, `fastTrack`, `wipLimit`
 (фронт-only); узел `agent.md` Проводника vs flat-персона; двухколоночный Live Diff (`GitDiffSidebar` — полностью интегрирован);
 пример `tool-policy.json` в `docs/agents.md` (без `todo_write`); env-таблица `docs/hooks.md` (без `CVH_BOARD_ID`,
 без `CVH_WORKTREE=` в примерах).
 
-**Задумано** — автозапись `.agents/tasks-history.json` / `.agents/knowledge-graph.json` и патчинг `AGENTS.md`
+**Задумано** — автозапись `.agents/tasks-history.json` / `.agents/knowledge-graph.json` и патчинг правил в `.cvh/rules/`
 ретро-агентом (управляется агентом-верификатором); удаление/переименование персон командой
 (только ручное); трёхшаговые шаблоны `todo→in_progress→ready` как отдельные `template`-ветки.
 (Все основные вехи дорожной карты CVH-001—CVH-014 и архитектурные концепции Live Diff и SQLite WAL леджера памяти переведены в статус «работает»).

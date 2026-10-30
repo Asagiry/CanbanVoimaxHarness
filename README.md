@@ -263,7 +263,6 @@ CanbanVoimaxHarness enforces zero-regression engineering through an unyielding 3
 
 ```text
 CanbanVoimaxHarness/
-├── AGENTS.md                  # Developer & Multi-Agent Governance Manual (Invariants & Standards)
 ├── README.md                  # Showcase Presentation & Architecture Guide
 ├── package.json               # Frontend dependencies (React 19, Tailwind v4, Vite, Zustand)
 ├── pnpm-lock.yaml             # Deterministic pnpm dependency lockfile
@@ -274,6 +273,7 @@ CanbanVoimaxHarness/
 │   ├── harness.db             # High-performance SQLite database (R2D2 WAL mode)
 │   ├── boards.json            # Multi-board definitions & active board
 │   ├── pipeline.json          # Pipeline columns, routing, sensors, & hooks
+│   ├── rules/                 # Global architectural rules & navigation maps
 │   ├── agents/                # Modular persona definitions (<role>/persona.md, setting, rules/)
 │   ├── settings/              # Tool Policy Matrix (tool-policy.json) & sequence allocators
 │   ├── tools/                 # Dynamic custom CLI tools (<tool>.json)
@@ -364,7 +364,7 @@ CanbanVoimaxHarness/
 - **[📋 docs/board.md](docs/board.md)**: Board Control Plane invariants, multi-board templates, and automatic verdict routing.
 - **[⚡ docs/hooks.md](docs/hooks.md)**: Column transition scripts, gatekeeper sensors, and context environment variables.
 - **[🏛️ docs/references/ecc-patterns.md](docs/references/ecc-patterns.md)**: Everything-Claw-Code (ECC) patterns, specialized roles, and Progressive Disclosure architecture.
-- **[🚨 AGENTS.md](AGENTS.md)**: Developer & Agent Engineering Manual, invariants, and code hygiene standards.
+- **[🧠 .cvh/agents/ & .cvh/rules/](.cvh/)**: Modular persona definitions, role-specific rules, and global architectural invariants.
 
 ---
 
