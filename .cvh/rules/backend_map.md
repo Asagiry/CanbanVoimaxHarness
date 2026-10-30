@@ -34,6 +34,7 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 | **LLM Settings & Test IPC** | `src-tauri/src/commands/llm.rs` | Endpoint config, model verification, test calls. |
 | **Project Workspace Switching IPC** | `src-tauri/src/commands/projects.rs` | Workspace root switching, recent projects list. |
 | **Tool Policy IPC** | `src-tauri/src/commands/tools.rs` | Tool policy inspection, two-level matrix updates. |
+| **Desktop Notifications & Windows Fallback** | `src-tauri/src/commands/notifications.rs` | Native WinRT toasts with PowerShell fallback, AUMID registration. |
 | **Generic ReAct Engine Loop** | `src-tauri/src/agent/react_engine.rs` | `ReActEngine<Driver>`, unified streaming. |
 | **State-Preserving Context Compactor**| `src-tauri/src/agent/compactor.rs` | `ToolCallSummaryExtractor` (CC=1), 100% ceiling. |
 | **Unclosed Tool Call Sanitizer** | `src-tauri/src/agent/sanitizer.rs` | Tag stripping, unclosed JSON repairs. |
@@ -84,6 +85,7 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 - **`llm.rs`**: LLM configuration management (`.cvh/llm.json`), live connectivity ping, and model catalogs.
 - **`projects.rs`**: Project workspace root switching, recent projects history, and environment inspection.
 - **`tools.rs`**: Two-level tool policy matrix queries and persistent updates (`.cvh/settings/tool-policy.json`).
+- **`notifications.rs`**: Multi-tier desktop notifications (`show_system_notification`), native WinRT via `NotificationExt`, headless PowerShell toast fallback, and Start Menu AUMID shortcut registration (`ensure_windows_start_menu_shortcut`).
 
 ### 2.4 Domain Layer (`src-tauri/src/domain/`)
 - **`ids.rs`**: Strongly typed nominal branded types: `TaskId`, `StageId`, `BoardId`. Prevents primitive obsession and accidental string interchange.

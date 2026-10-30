@@ -582,5 +582,53 @@ describe('cortexStore (Clean Deterministic Store Tests)', () => {
       expect(state.activeFile).toBeNull();
       expect(state.isEditorOpen).toBe(false);
     });
+
+    it('loadGlobalRules replaces previous project global rules and closeEditor resets activeFile on project switch', async () => {
+      // 1. Seed store with an active rule from a previous project
+      useCortexStore.setState({
+        globalRules: [
+          {
+            id: 'global-rule-old_project.md',
+            name: 'old_project.md',
+            stageId: 'global',
+            type: 'rule',
+            path: '.cvh/rules/old_project.md',
+            content: '# Old Project Rules',
+            isDirty: false,
+          },
+        ],
+        activeFile: {
+          id: 'global-rule-old_project.md',
+          name: 'old_project.md',
+          stageId: 'global',
+          type: 'rule',
+          path: '.cvh/rules/old_project.md',
+          content: '# Old Project Rules',
+          isDirty: false,
+        },
+        isEditorOpen: true,
+      });
+
+      // 2. Mock IPC list_global_rules for the newly selected project (e.g., CarSmash)
+      mockInvoke.mockImplementation(async (cmd) => {
+        if (cmd === 'list_global_rules') {
+          return [
+            { name: 'carsmash_physics.md', path: '.cvh/rules/carsmash_physics.md', fileType: 'rule' },
+          ];
+        }
+        return null;
+      });
+
+      // 3. Simulate project switch: closeEditor and loadGlobalRules
+      useCortexStore.getState().closeEditor();
+      await useCortexStore.getState().loadGlobalRules();
+
+      const state = useCortexStore.getState();
+      expect(state.isEditorOpen).toBe(false);
+      expect(state.activeFile).toBeNull();
+      expect(state.globalRules).toHaveLength(1);
+      expect(state.globalRules[0].name).toBe('carsmash_physics.md');
+      expect(state.globalRules[0].path).toBe('.cvh/rules/carsmash_physics.md');
+    });
   });
 });

@@ -77,18 +77,9 @@ pub async fn ensure_cvh_dev_scaffold(repo_root: &Path) -> Result<(), anyhow::Err
         let _ = tokio::fs::remove_file(&legacy_canonical_roles_path).await;
     }
 
-    // Global shared navigation maps in .cvh/rules/
+    // Global shared rules directory in .cvh/rules/
     let global_rules_dir = repo_root.join(".cvh").join("rules");
     tokio::fs::create_dir_all(&global_rules_dir).await?;
-
-    let backend_map_path = global_rules_dir.join("backend_map.md");
-    if !backend_map_path.exists() {
-        atomic_write_file(&backend_map_path, DEFAULT_RULE_BACKEND_MAP_MD).await?;
-    }
-    let frontend_map_path = global_rules_dir.join("frontend_map.md");
-    if !frontend_map_path.exists() {
-        atomic_write_file(&frontend_map_path, DEFAULT_RULE_FRONTEND_MAP_MD).await?;
-    }
 
     Ok(())
 }

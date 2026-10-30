@@ -89,10 +89,11 @@ export async function performProjectSwitch(targetProject: ProjectInfo): Promise<
 
   logEvent('INFO', 'PROJECT_STORE', `performProjectSwitch: switching to project "${targetProject.name}"`, cleanPath);
 
-  // 1. Close drawer immediately to avoid stale task interaction
+  // 1. Close drawer and editor immediately to avoid stale task/file interaction
   try {
     const drawer = useDrawerStore.getState();
     drawer.closeDrawer();
+    useCortexStore.getState().closeEditor?.();
   } catch (err) {
     console.warn('Failed to close drawer before project switch:', err);
   }

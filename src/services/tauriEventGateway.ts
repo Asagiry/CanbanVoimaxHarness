@@ -5,6 +5,7 @@ import { useAgentSessionStore, type AgentSessionSummary } from '../stores/agentS
 import {
   showAdvanceTaskNotification,
   showQuestionNotification,
+  showRejectTaskNotification,
   type TaskAdvancedPayload,
 } from './notificationService';
 import type { BackendTaskDTO, TodoItem } from '../types';
@@ -113,6 +114,13 @@ export interface TaskCreatedPayload {
 export interface TaskMovedPayload {
   task?: BackendTaskDTO;
   fromStage?: string;
+  taskId?: string;
+  toStage?: string;
+  stageId?: string;
+  rejected?: boolean;
+  reason?: string;
+  verdict?: string;
+  status?: string;
 }
 
 export interface HookStartPayload {
@@ -744,6 +752,16 @@ export function setupTauriEventGateway(): () => void {
           }
           useBoardStore.getState().upsertBackendTask(rawTask);
         }
+        if (payload?.rejected) {
+          const taskId = payload.taskId || payload.task?.id;
+          if (taskId) {
+            void showRejectTaskNotification({
+              taskId,
+              reason: payload.reason,
+              toStage: payload.toStage || payload.stageId || payload.task?.stage_id,
+            });
+          }
+        }
         void useBoardStore.getState().loadTasks();
       });
 
@@ -824,6 +842,7 @@ export function setupTauriEventGateway(): () => void {
         await useBoardStore.getState().loadBoards();
         await useBoardStore.getState().loadTasks();
         await useCortexStore.getState().loadAgentPersonas();
+        await useCortexStore.getState().loadGlobalRules();
         useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
       };
 

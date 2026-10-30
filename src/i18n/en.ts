@@ -287,9 +287,13 @@ export const en = {
   'settings.notifyOnQuestion': 'Agent question (question)',
   'settings.notifyOnAdvanceTask': 'Stage transition (advance_task)',
   'settings.notifyOnTaskCompleted': 'Task completed',
+  'settings.sendTestNotification': 'Send test notification',
   'notification.advanceTaskTitle': 'Task {taskId} moved to {stageTitle}',
   'notification.taskCompletedTitle': 'Task {taskId} completed',
   'notification.questionTitle': 'Question in task {taskId}',
+  'notification.testTitle': 'CanbanVoimaxHarness',
+  'notification.testBody': 'Test system notification delivered successfully.',
+  'notification.taskRejectedTitle': 'Task {taskId} returned for rework',
 
   // Tool Policy Matrix Modal
   'toolPolicy.modalTitle': 'Tool Policy Matrix Settings',

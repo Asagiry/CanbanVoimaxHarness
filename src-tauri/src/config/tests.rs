@@ -63,6 +63,33 @@ use std::path::{Path, PathBuf};
             assert!(entry.path().is_dir(), "Expected only directories in agents/, found: {:?}", entry.path());
         }
 
+        // Verify .cvh/rules/ exists as an empty directory without hardcoded CVH maps
+        let rules_dir = cvh.join("rules");
+        assert!(rules_dir.is_dir());
+        assert!(!rules_dir.join("backend_map.md").exists(), "Fresh scaffold must NOT seed CVH backend_map.md");
+        assert!(!rules_dir.join("frontend_map.md").exists(), "Fresh scaffold must NOT seed CVH frontend_map.md");
+
+        let _ = tokio::fs::remove_dir_all(&base_dir).await;
+    }
+
+    #[tokio::test]
+    async fn test_scaffold_creates_empty_rules_directory_without_cvh_maps() {
+        let base_dir = std::path::PathBuf::from("target").join(format!("cvh_rules_test_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base_dir).await.expect("Failed to create test dir");
+
+        scaffold_cvh_project(&base_dir).await.expect("Scaffold failed");
+
+        let rules_dir = base_dir.join(".cvh").join("rules");
+        assert!(rules_dir.is_dir(), ".cvh/rules/ directory must be created");
+
+        // Count entries in .cvh/rules/
+        let mut entries = tokio::fs::read_dir(&rules_dir).await.expect("read_dir failed");
+        let mut count = 0;
+        while let Ok(Some(_)) = entries.next_entry().await {
+            count += 1;
+        }
+        assert_eq!(count, 0, ".cvh/rules/ must be initially empty without hardcoded maps");
+
         let _ = tokio::fs::remove_dir_all(&base_dir).await;
     }
 
@@ -89,6 +116,12 @@ use std::path::{Path, PathBuf};
         // Calling it again is idempotent
         ensure_cvh_dev_scaffold(&base_dir).await.expect("ensure_cvh_dev_scaffold re-run failed");
         assert!(cvh_dev.join("persona.md").is_file());
+
+        // Verify .cvh/rules/ exists and contains no hardcoded maps
+        let rules_dir = base_dir.join(".cvh").join("rules");
+        assert!(rules_dir.is_dir());
+        assert!(!rules_dir.join("backend_map.md").exists());
+        assert!(!rules_dir.join("frontend_map.md").exists());
 
         let _ = tokio::fs::remove_dir_all(&base_dir).await;
     }

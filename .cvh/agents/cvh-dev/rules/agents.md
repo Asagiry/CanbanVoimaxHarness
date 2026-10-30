@@ -38,18 +38,18 @@ Each agent directory `.cvh/agents/<role>/setting` contains JSON configuration wi
 
 ---
 
-## 2. Global Shared Rules (`.cvh/rules/`)
-Shared architectural contracts, system-wide standards, and flagship navigation maps reside in `.cvh/rules/`:
+## 2. Global Shared Rules & Architectural Navigation Maps (`.cvh/rules/`)
+Shared architectural contracts, system-wide invariants, and repository navigation maps reside in `.cvh/rules/`:
 ```text
 .cvh/rules/
-├── backend_map.md    # Flagship backend navigation map and file-by-file router (src-tauri/src/)
-├── frontend_map.md   # Flagship frontend navigation map and component router (src/)
+├── <topic>.md          # System-wide architectural invariants or standards
+├── architecture.md     # Overall project topology and component maps
 └── ...
 ```
 - **Universal Availability**: Global rules in `.cvh/rules/` are accessible to all agents via `load_rule("<rule_stem>")` without requiring a role prefix.
 - **Zero Duplication**: Shared architectural contracts, router maps, and cross-cutting specifications belong in `.cvh/rules/` rather than duplicated across role directories.
-- **Direct Coordinate Navigation & On-Demand Map Loading**: When target file paths and coordinates are already known or specified in the prompt/diagnostics, navigate directly without calling `load_rule`. Invoke `load_rule("backend_map")` or `load_rule("frontend_map")` on Turn 1 when exploring unfamiliar subsystems, navigating unguided, or decomposing multi-file architecture.
-- **Architectural Map Synchronization Mandate**: All agents adding, removing, or relocating files in `src-tauri/src/` or `src/` MUST update `.cvh/rules/backend_map.md` or `.cvh/rules/frontend_map.md` in the same commit. The Level 2 Reviewer rejects diffs where file structure changed without map updates.
+- **Subagent Codebase Discovery Mandate**: When initializing or configuring a project, `cvh-dev` MUST NOT copy CVH-specific internal paths (e.g. `src-tauri/`, Tauri IPC, React stores) into external repositories. Instead, `cvh-dev` must dispatch specialized subagents (`subagent`) to explore the directory structure, identify key frameworks, and author tailored, project-specific navigation maps directly into `.cvh/rules/`.
+- **Architectural Map Synchronization Mandate**: Whenever agents add, remove, rename, or relocate modules/files in the project, they MUST update the corresponding project navigation maps in `.cvh/rules/` in the exact same diff/commit so navigation maps remain 100% faithful to the filesystem.
 
 ---
 

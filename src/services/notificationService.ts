@@ -19,9 +19,15 @@ export interface QuestionNotificationPayload {
   text: string;
 }
 
-export interface NotificationData {
-  type: 'advance_task' | 'question';
+export interface TaskRejectedPayload {
   taskId: string;
+  reason?: string;
+  toStage?: string;
+}
+
+export interface NotificationData {
+  type: 'advance_task' | 'question' | 'reject_task' | 'test';
+  taskId?: string;
   targetTaskId?: string;
   questionId?: string;
 }
@@ -30,12 +36,12 @@ let isInitialized = false;
 let notificationCounter = 1;
 const notificationDataMap = new Map<number, NotificationData>();
 
-async function handleNotificationClick(data?: NotificationData) {
+export async function handleNotificationClick(data?: NotificationData): Promise<void> {
   try {
     const { invoke } = await import('@tauri-apps/api/core');
     await invoke('focus_main_window');
   } catch (err) {
-    console.warn('focus_main_window error:', err);
+    console.warn('[NotificationService] focus_main_window error:', err);
   }
 
   const targetTaskId = data?.targetTaskId || data?.taskId;
@@ -49,13 +55,7 @@ export async function initNotifications(): Promise<void> {
   isInitialized = true;
 
   try {
-    const { isPermissionGranted, requestPermission, onAction } = await import('@tauri-apps/plugin-notification');
-    let granted = await isPermissionGranted();
-    if (!granted) {
-      const permission = await requestPermission();
-      granted = permission === 'granted';
-    }
-
+    const { onAction } = await import('@tauri-apps/plugin-notification');
     await onAction((action) => {
       const notifId = action.notification?.id;
       const extraData = action.notification?.extra as NotificationData | undefined;
@@ -63,7 +63,20 @@ export async function initNotifications(): Promise<void> {
       void handleNotificationClick(data);
     });
   } catch (err) {
-    console.info('Notification plugin initialization notice:', err);
+    console.info('[NotificationService] Notification action listener registration notice:', err);
+  }
+}
+
+async function sendSystemNotification(title: string, body?: string, taskId?: string): Promise<void> {
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('show_system_notification', {
+      title,
+      body: body || null,
+      taskId: taskId || null,
+    });
+  } catch (err) {
+    console.warn('[NotificationService] Failed to show system notification via IPC:', err);
   }
 }
 
@@ -99,24 +112,7 @@ export async function showAdvanceTaskNotification(payload: TaskAdvancedPayload):
     if (oldestKey !== undefined) notificationDataMap.delete(oldestKey);
   }
 
-  try {
-    const { sendNotification, isPermissionGranted, requestPermission } = await import('@tauri-apps/plugin-notification');
-    let granted = await isPermissionGranted();
-    if (!granted) {
-      const permission = await requestPermission();
-      granted = permission === 'granted';
-    }
-    if (granted) {
-      sendNotification({
-        id,
-        title,
-        body: body || undefined,
-        extra: data as unknown as Record<string, unknown>,
-      });
-    }
-  } catch (err) {
-    console.warn('Failed to send advance_task notification:', err);
-  }
+  await sendSystemNotification(title, body || undefined, payload.taskId);
 }
 
 export async function showQuestionNotification(payload: QuestionNotificationPayload): Promise<void> {
@@ -141,22 +137,47 @@ export async function showQuestionNotification(payload: QuestionNotificationPayl
     if (oldestKey !== undefined) notificationDataMap.delete(oldestKey);
   }
 
-  try {
-    const { sendNotification, isPermissionGranted, requestPermission } = await import('@tauri-apps/plugin-notification');
-    let granted = await isPermissionGranted();
-    if (!granted) {
-      const permission = await requestPermission();
-      granted = permission === 'granted';
-    }
-    if (granted) {
-      sendNotification({
-        id,
-        title,
-        body: body || undefined,
-        extra: data as unknown as Record<string, unknown>,
-      });
-    }
-  } catch (err) {
-    console.warn('Failed to send question notification:', err);
+  await sendSystemNotification(title, body || undefined, payload.taskId);
+}
+
+export async function showRejectTaskNotification(payload: TaskRejectedPayload): Promise<void> {
+  const { notificationSettings } = useSettingsStore.getState();
+  if (!notificationSettings.enabled) return;
+
+  const title = `Задача ${payload.taskId} возвращена на доработку.`;
+  const cleanReason = payload.reason ? payload.reason.trim() : '';
+  const body = cleanReason.length > 150 ? cleanReason.slice(0, 147) + '...' : cleanReason;
+
+  const id = ++notificationCounter;
+  const data: NotificationData = {
+    type: 'reject_task',
+    taskId: payload.taskId,
+    targetTaskId: payload.taskId,
+  };
+
+  notificationDataMap.set(id, data);
+  if (notificationDataMap.size > 50) {
+    const oldestKey = notificationDataMap.keys().next().value;
+    if (oldestKey !== undefined) notificationDataMap.delete(oldestKey);
   }
+
+  await sendSystemNotification(title, body || undefined, payload.taskId);
+}
+
+export async function showTestNotification(): Promise<void> {
+  const title = 'CanbanVoimaxHarness';
+  const body = 'Тестовое системное уведомление доставлено успешно.';
+
+  const id = ++notificationCounter;
+  const data: NotificationData = {
+    type: 'test',
+  };
+
+  notificationDataMap.set(id, data);
+  if (notificationDataMap.size > 50) {
+    const oldestKey = notificationDataMap.keys().next().value;
+    if (oldestKey !== undefined) notificationDataMap.delete(oldestKey);
+  }
+
+  await sendSystemNotification(title, body);
 }
