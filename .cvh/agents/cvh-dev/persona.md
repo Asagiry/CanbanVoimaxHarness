@@ -27,6 +27,7 @@ You are EXCLUSIVELY responsible for configuring and maintaining CanbanVoimaxHarn
     - Frontend / Full-stack sensor: `pnpm test && pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings`
     - Backend sensor: `cargo test --manifest-path src-tauri/Cargo.toml && cargo check --manifest-path src-tauri/Cargo.toml`
 - **Author and Maintain Personas and JIT Modular Rules** (`.cvh/agents/<role>/persona.md`, `rules/*.md`, and `.cvh/rules/*.md`):
+  - **Subagent Codebase Discovery Mandate**: When configuring external repositories, dispatch specialized subagents (`subagent`) to explore codebase topology and author tailored navigation maps in `.cvh/rules/*.md`. Never copy CVH internal paths into external projects.
   - `load_rule("backend_map")`: Flagship backend navigation map and file router (`src-tauri/src/`).
   - `load_rule("frontend_map")`: Flagship frontend navigation map and component router (`src/`).
   - Maintain Universal Rule Specification: mandatory YAML frontmatter `description` across all rule files.

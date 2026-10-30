@@ -24,13 +24,13 @@ When an operator instructs `cvh-dev` to configure or optimize a repository (e.g.
      ]
    }
    ```
-3. **Analyze the Project's Technology Stack & Testing Infrastructure**:
-   Before generating files, inspect the repository root:
+3. **Analyze the Project's Technology Stack via Subagent Discovery**:
+   Before generating files, explore the repository topology using subagents (`subagent`):
    - **TypeScript/JavaScript & Testing**: look for `package.json`, `tsconfig.json`, `vite.config.ts`. Check for Vitest support (`vitest` in dependencies, `"test": "vitest run"` in scripts). If Vitest is present, ensure `pnpm test` is wired into gatekeepers and developer workflows.
-   - **Rust Backend Modular Structure**: look for `Cargo.toml`, `src-tauri/`. Inspect whether the backend adheres to modular subpackages (`src-tauri/src/db/`, `config/`, `domain/`, `agent/`). Wire `cargo test` and `cargo check` into backend gatekeepers.
+   - **Rust Backend Modular Structure**: look for `Cargo.toml`, `src-tauri/` or crate structure (`src/`, modular subpackages). Wire `cargo test` and `cargo check` into backend gatekeepers.
    - **Python**: look for `pyproject.toml`, `requirements.txt`, `main.py`, `pytest` or `ruff`.
    - **Go/C++/Other**: detect native build tools, test suites, and linters.
-   Tailor all gatekeeper sensors and persona instructions to the *actual detected toolchain*.
+   - **Project Navigation Maps Authoring**: Author project-specific navigation maps directly into `.cvh/rules/` (e.g. `architecture.md`, `backend_map.md`, `frontend_map.md`, or domain-specific maps) matching the actual codebase layout. NEVER copy CanbanVoimaxHarness's own internal architecture or file paths into external target projects.
    - **Leverage Local `docs/ecc/` Rule Catalog**:
      When configuring rules for a specific programming language or framework (e.g. Python, Go, C++, TypeScript, Rust, React, Swift, etc.), do not invent rules from scratch. Use the repository's local catalog at `docs/ecc/rules/<language>/` (and `docs/ecc/agents/`) as an authoritative, battle-tested source for coding style, security invariants, and patterns, adapting them directly into `.cvh/agents/<role>/rules/<topic>.md`.
 
@@ -41,22 +41,20 @@ When an operator instructs `cvh-dev` to configure or optimize a repository (e.g.
 When `cvh-dev` instantiates or configures roles under `.cvh/agents/<role>/`, generating shallow, generic prompts is **strictly forbidden**.
 **Zero-Context-Pollution Invariant**: Never load a monolithic rule covering all roles! Load ONLY the specific modular rule needed for the stage being configured:
 - **For Developer** (`dev`, fast-track, lean solo): `load_rule("role-developer")`
-  - **Uncle Bob Clean Code & Craftsmanship**: Eliminate Primitive Obsession via Domain Value Objects (`domain::ids`), Make Illegal States Unrepresentable via Algebraic Data Types (`domain::state`).
-  - **Direct Coordinate Navigation & On-Demand Map Loading**: When target file paths and coordinates are already known or specified in the prompt/diagnostics, navigate directly without calling `load_rule`. Invoke `load_rule("backend_map")` or `load_rule("frontend_map")` on Turn 1 when exploring unfamiliar subsystems, navigating unguided, or decomposing multi-file architecture.
-  - **Architectural Map Synchronization Mandate**: Whenever adding, removing, renaming, or relocating modules or files in `src-tauri/src/` or `src/`, update `.cvh/rules/backend_map.md` or `.cvh/rules/frontend_map.md` in the exact same diff/commit so navigation maps remain 100% faithful to the filesystem.
-  - **TDD for Pure Logic & Store Slices**: Author deterministic unit tests with Vitest (`pnpm test`) for pure utilities and store slices; `cargo test` for Rust domain models. Live process verification for IPC/APIs.
-  - **Sizing Boundaries**: Components must not exceed 350 lines; backend files must not exceed 500 lines. Decompose early.
-  - **Frontend Gateway Invariant**: Never call `listen<any>` directly; strictly route through `src/services/tauriEventGateway.ts`.
+  - **Uncle Bob Clean Code & Craftsmanship**: Eliminate Primitive Obsession via Domain Value Objects, Make Illegal States Unrepresentable via Algebraic Data Types.
+  - **Direct Coordinate Navigation & On-Demand Map Loading**: When target file paths and coordinates are already known or specified in the prompt/diagnostics, navigate directly without calling `load_rule`. Invoke `load_rule("<map_name>")` (from `.cvh/rules/`) on Turn 1 when exploring unfamiliar subsystems, navigating unguided, or decomposing multi-file architecture.
+  - **Architectural Map Synchronization Mandate**: Whenever adding, removing, renaming, or relocating modules or files, update the project navigation maps in `.cvh/rules/` in the exact same diff/commit so navigation maps remain 100% faithful to the filesystem.
+  - **TDD for Pure Logic & Store Slices**: Author deterministic unit tests with test runner (e.g. `pnpm test`, `cargo test`, `pytest`) for pure utilities and store slices; live process verification for IPC/APIs.
+  - **Sizing Boundaries**: Components and modules must adhere to Single Responsibility Principle. Decompose early.
+  - **Frontend Gateway Invariant**: (For fullstack/Tauri projects) Never call `listen<any>` directly; strictly route through typed event gateways.
   - **OpenCode 4 Laws**: Single validation at boundary, ban on speculative null checks, control complexity, inline single-use logic.
   - **Ponytail Minimalism**: Contrastive diff self-audit, zero dead code, surgical diffs.
   - **Isolated Worktrees**: Dedicated git worktree per task.
 - **For Reviewer** (`review`, Red Team auditor): `load_rule("role-reviewer")`
   - **Read-Only Operational Boundary**: `edit_file` and `write_file` physically stripped from tool schema (Tool Policy Level B).
   - **Presumption of Guilt**: Three-axis review (Invariants, Contract, Ponytail).
-  - **Gate 1 Map Sync Enforcement**: Reject diffs with `CHANGES_REQUESTED` if files/modules in `src-tauri/src/` or `src/` were added, deleted, moved, or renamed without synchronizing `.cvh/rules/backend_map.md` or `.cvh/rules/frontend_map.md`.
-  - **5-Sensor Gatekeeper Checklist**: Mandatory execution of `pnpm test` (Vitest), `pnpm exec tsc --noEmit`, `pnpm exec oxlint --deny-warnings`, `cargo test`, and `cargo check`.
-  - **Frontend Invariants Audit**: Strict ban on `listen<any>` (only `tauriEventGateway`), max 350 lines per component, Vitest test coverage for pure utilities and store slices.
-  - **Backend Invariants Audit**: Strict SRP validation across `db/`, `config/`, `agent/`, `domain/`, max 500 lines per module/file, mandatory use of `domain::ids` and `domain::state`.
+  - **Gate 1 Map Sync Enforcement**: Reject diffs with `CHANGES_REQUESTED` if project files/modules were added, deleted, moved, or renamed without synchronizing `.cvh/rules/` navigation maps.
+  - **Sensor Gatekeeper Checklist**: Mandatory execution of project compiler, test runner, and linters.
   - **Anthropic Claude Code Convergence Protocol**: Immunity to pre-existing historical bugs, diff-only re-review, actionable `file:line` references, anti-nitpicking.
   - **Zero Silent Failures Audit**: Reject empty catch blocks, silent fallbacks, or discarded results.
 - **For Retro** (`retro`, continuous improvement — when requested): `load_rule("role-retro")`
@@ -66,7 +64,8 @@ When `cvh-dev` instantiates or configures roles under `.cvh/agents/<role>/`, gen
   - **Rule-Sprawl Filter**: Mechanical sensor hardening over verbose prose.
 - **For Planner** (`plan`, technical architect — when requested): `load_rule("role-planner")`
   - **Read-Only Scope**: Context window protection for developer; static inspection only.
-  - **Direct Coordinate Navigation & On-Demand Map Loading**: Jump directly to target files when paths/coordinates are known; invoke `load_rule("backend_map")` or `load_rule("frontend_map")` on Turn 1 when exploring unfamiliar subsystems, planning unguided, or mapping multi-file architecture.
+  - **Direct Coordinate Navigation & On-Demand Map Loading**: Jump directly to target files when paths/coordinates are known; invoke `load_rule("<map_name>")` on Turn 1 when exploring unfamiliar subsystems, planning unguided, or mapping multi-file architecture.
+  - **Subagent Codebase Discovery**: Dispatch specialized subagents (`subagent`) to explore codebase architecture and discover exact file coordinates.
   - **Modular Architecture Planning**: Identifying domain boundaries, Value Objects, state machine transitions, and component/module sizing limits.
   - **"Deeper, Not Bigger" (be-ambitious) Protocol**: 4 foundational deepening questions.
 
@@ -130,6 +129,8 @@ When the operator approves a pipeline topology, `cvh-dev` generates:
 │   └── tool-policy.json     # Two-level tool permissions matrix
 ├── hooks/
 │   └── gatekeeper.bat       # Fast sensor scripts executed on card moves
+├── rules/
+│   └── architecture.md      # Tailored navigation maps authored via subagents
 └── agents/
     ├── <role_1>/
     │   ├── persona.md       # Frontmatter (icon, color, tools) + Core mandate
