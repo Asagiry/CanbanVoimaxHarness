@@ -201,4 +201,7 @@ mod compactor_tests;
 mod engine_tests;
 mod session_tests;
 mod telemetry_tests;
-mod tools_tests;
+mod tools_policy_tests;
+mod tools_pipeline_tests;
+mod tools_fs_tests;
+mod tools_cmd_tests;

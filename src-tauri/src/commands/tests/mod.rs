@@ -51,4 +51,7 @@ mod boards_tests;
 mod cortex_tests;
 mod dialogs_tests;
 mod git_tests;
-mod tasks_tests;
+mod tasks_id_tests;
+mod tasks_lifecycle_tests;
+mod tasks_subtasks_tests;
+mod tasks_runner_tests;
