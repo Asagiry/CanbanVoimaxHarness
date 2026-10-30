@@ -90,6 +90,7 @@ pub fn run() {
             focus_main_window,
             run_agent,
             abort_agent,
+            get_active_sessions,
             cleanup_task_worktree,
             get_task_git_diff,
             get_task_image_diff,

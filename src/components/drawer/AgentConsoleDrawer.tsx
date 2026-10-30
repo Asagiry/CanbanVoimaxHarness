@@ -4,6 +4,7 @@ import { useDrawerStore, DrawerActivityItem } from '../../stores/drawerStore';
 import { useBoardStore, syncTasksBackend } from '../../stores/boardStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useToolPolicyStore } from '../../stores/toolPolicyStore';
+import { useAgentSessionStore } from '../../stores/agentSessionStore';
 import ErrorBoundary from '../common/ErrorBoundary';
 import DrawerHeader from './DrawerHeader';
 import DrawerActivityStream from './DrawerActivityStream';
@@ -366,6 +367,13 @@ export default function AgentConsoleDrawer() {
 
   if (!isOpen || !task) return null;
 
+  const isAuthoritativeSessionRunning = useAgentSessionStore((s) => {
+    if (!task?.id) return false;
+    if (s.isSessionRunning(task.id)) return true;
+    if (activeSubagentId && s.isSessionRunning(activeSubagentId)) return true;
+    return false;
+  });
+
   const hasRunningTool = Boolean(
     toolExecutions[task.id]?.some((t) => t.status === 'running') ||
     (activeSubagentId && toolExecutions[activeSubagentId]?.some((t) => t.status === 'running'))
@@ -376,7 +384,7 @@ export default function AgentConsoleDrawer() {
     (activeSubagentId && activeAgentTaskIds?.[activeSubagentId])
   );
 
-  const isRunning = task.status === 'running' || hasRunningTool || isAgentActive;
+  const isRunning = isAuthoritativeSessionRunning || task.status === 'running' || hasRunningTool || isAgentActive;
 
   const handleRunAgent = async () => {
     setRunError(null);

@@ -22,7 +22,8 @@ pub use lifecycle::{
     record_task_hook_result,
 };
 pub use runner::{
-    internal_abort_agent, is_matching_subagent_key, resolve_task_active_agent_model,
+    get_active_sessions as internal_get_active_sessions, internal_abort_agent,
+    is_matching_subagent_key, resolve_task_active_agent_model,
 };
 pub use storage::*;
 pub use transitions::{
@@ -182,6 +183,13 @@ pub async fn abort_agent(
     app_handle: AppHandle,
 ) -> Result<(), String> {
     runner::abort_agent(task_id, state, app_handle).await
+}
+
+#[tauri::command]
+pub async fn get_active_sessions(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::agent::session_registry::AgentSessionSummary>, String> {
+    runner::get_active_sessions(state).await
 }
 
 #[tauri::command]

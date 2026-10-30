@@ -13,6 +13,7 @@ import { useProjectStore } from './stores/projectStore';
 import { useDrawerStore } from './stores/drawerStore';
 import { useCortexStore } from './stores/cortexStore';
 import { useToolPolicyStore } from './stores/toolPolicyStore';
+import { useAgentSessionStore } from './stores/agentSessionStore';
 import { useUiZoom } from './hooks/useUiZoom';
 import { initNotifications } from './services/notificationService';
 import { setupTauriEventGateway } from './services/tauriEventGateway';
@@ -77,6 +78,7 @@ export default function App() {
         // Boards and columns first: task mapping (columnId fallback, persona, status) resolves via columns
         await loadBoards();
         await loadTasks();
+        await useAgentSessionStore.getState().syncActiveSessions();
         await useCortexStore.getState().loadAgentPersonas();
         useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
         await useToolPolicyStore.getState().loadFromTauri();
@@ -92,6 +94,14 @@ export default function App() {
 
   useEffect(() => {
     return setupTauriEventGateway();
+  }, []);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      void useAgentSessionStore.getState().syncActiveSessions();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, []);
 
   return (
