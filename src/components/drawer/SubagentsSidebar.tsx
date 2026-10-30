@@ -179,7 +179,7 @@ function getSubagentsForTask(
     const isReviewSubtask = child.title.toLowerCase().includes('ревью') || child.title.toLowerCase().includes('review');
     const childStageId = (child as any).stageId || child.columnId;
     const col = (cols || []).find((c) => c.id === childStageId);
-    const resolvedRole = isReviewSubtask ? 'reviewer' : (col?.persona || 'developer');
+    const resolvedRole = child.persona || col?.persona || (isReviewSubtask ? 'reviewer' : 'general');
     map.set(child.id, {
       id: child.id,
       parentTaskId: taskId,
@@ -537,7 +537,7 @@ export default function SubagentsSidebar({
                       (p) => p.role.toLowerCase() === (sub.role || '').toLowerCase()
                     );
                     const roleBadgeStyle = getRoleBadgeStyle(sub.role, matchedPersona?.color);
-                    const stageBadge = getSubagentRoleLabel(sub.role || 'developer', language === 'ru');
+                    const stageBadge = getSubagentRoleLabel(sub.role || 'general', language === 'ru');
 
                     return (
                       <div
