@@ -35,6 +35,13 @@ export default function AgentConsoleDrawer() {
   const isToolAllowed = useToolPolicyStore((s) => s.isToolAllowed);
   const openToolPolicyModal = useToolPolicyStore((s) => s.openModal);
 
+  const isAuthoritativeSessionRunning = useAgentSessionStore((s) => {
+    if (!activeTaskId) return false;
+    if (s.isSessionRunning(activeTaskId)) return true;
+    if (activeSubagentId && s.isSessionRunning(activeSubagentId)) return true;
+    return false;
+  });
+
   const [runError, setRunError] = useState<string | null>(null);
   const [isDiffCollapsed, setIsDiffCollapsed] = useState(false);
   const [isSubagentsCollapsed, setIsSubagentsCollapsed] = useState(false);
@@ -366,13 +373,6 @@ export default function AgentConsoleDrawer() {
   }, [task, activityFeed, toolExecutions, streamEntries]);
 
   if (!isOpen || !task) return null;
-
-  const isAuthoritativeSessionRunning = useAgentSessionStore((s) => {
-    if (!task?.id) return false;
-    if (s.isSessionRunning(task.id)) return true;
-    if (activeSubagentId && s.isSessionRunning(activeSubagentId)) return true;
-    return false;
-  });
 
   const hasRunningTool = Boolean(
     toolExecutions[task.id]?.some((t) => t.status === 'running') ||

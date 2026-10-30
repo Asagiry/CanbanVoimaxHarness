@@ -131,7 +131,7 @@ export default function App() {
       <SettingsModal />
 
       {/* Fullscreen Modal: Real-Time Agent Console (rendered at root level outside zoomed container to avoid position: fixed breakage and clipping) */}
-      <ErrorBoundary scopeLabel="Консоль задачи" onClose={() => useDrawerStore.getState().closeDrawer()}>
+      <ErrorBoundary isOverlay scopeLabel="Консоль задачи" onClose={() => useDrawerStore.getState().closeDrawer()}>
         <AgentConsoleDrawer />
       </ErrorBoundary>
 
