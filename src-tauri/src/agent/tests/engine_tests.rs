@@ -303,19 +303,19 @@ use std::sync::Arc;
         println!("planner_rules: {:?}", planner_rules);
         assert_eq!(
             planner_rules,
-            vec!["architecture", "backend_map", "be-ambitious", "decomposition", "frontend_map", "scope-hygiene"]
+            vec!["anti-sycophancy", "architecture", "backend_map", "be-ambitious", "decomposition", "frontend_map", "scope-hygiene"]
         );
 
         let dev_rules = get_available_rules(repo_root, Some("developer"));
         assert_eq!(
             dev_rules,
-            vec!["backend", "backend_map", "frontend", "frontend_map", "ponytail", "rules-sync", "sensors"]
+            vec!["anti-sycophancy", "backend", "backend_map", "frontend", "frontend_map", "ponytail", "rules-sync", "sensors"]
         );
 
         let reviewer_rules = get_available_rules(repo_root, Some("reviewer"));
         assert_eq!(
             reviewer_rules,
-            vec!["backend-invariants", "backend_map", "frontend-invariants", "frontend_map", "review-checklist", "verdict-routing"]
+            vec!["anti-sycophancy", "backend-invariants", "backend_map", "frontend-invariants", "frontend_map", "review-checklist", "verdict-routing"]
         );
         assert!(!reviewer_rules.contains(&"boards".to_string()), "Reviewer must NOT have boards rule");
         assert!(!reviewer_rules.contains(&"retro".to_string()), "Reviewer must NOT have retro rule");
@@ -323,7 +323,7 @@ use std::sync::Arc;
         let retro_rules = get_available_rules(repo_root, Some("retro"));
         assert_eq!(
             retro_rules,
-            vec!["backend_map", "frontend_map", "reflection-methodology", "rule-evolution"]
+            vec!["anti-sycophancy", "backend_map", "frontend_map", "reflection-methodology", "rule-evolution"]
         );
 
         let cvh_dev_rules = get_available_rules(repo_root, Some("cvh-dev"));
@@ -331,6 +331,7 @@ use std::sync::Arc;
             cvh_dev_rules,
             vec![
                 "agents",
+                "anti-sycophancy",
                 "backend_map",
                 "boards",
                 "frontend_map",
