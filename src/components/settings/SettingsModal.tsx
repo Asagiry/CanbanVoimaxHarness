@@ -17,6 +17,41 @@ import {
   Bell,
 } from 'lucide-react';
 
+export function NotificationToggle({
+  checked,
+  onChange,
+  disabled = false,
+  ariaLabel,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  disabled?: boolean;
+  ariaLabel?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-label={ariaLabel}
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={onChange}
+      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-hidden ${
+        disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
+      } ${
+        checked ? 'bg-[#10b981]' : 'bg-[#e5e7eb] dark:bg-[#30363d]'
+      }`}
+    >
+      <span
+        aria-hidden="true"
+        className={`pointer-events-none block h-4 w-4 transform rounded-full bg-white shadow-xs transition-transform duration-200 ease-in-out ${
+          checked ? 'translate-x-4' : 'translate-x-0'
+        }`}
+      />
+    </button>
+  );
+}
+
 export default function SettingsModal() {
   const { zoom } = useUiZoom();
   const {
@@ -361,48 +396,26 @@ export default function SettingsModal() {
                     {t('settings.notificationsDesc')}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={notificationSettings.enabled}
-                  onClick={() => setNotificationSettings({ enabled: !notificationSettings.enabled })}
-                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                    notificationSettings.enabled ? 'bg-[#10b981]' : 'bg-[#e5e7eb] dark:bg-[#30363d]'
-                  }`}
-                >
-                  <span
-                    aria-hidden="true"
-                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                      notificationSettings.enabled ? 'translate-x-4' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
+                <NotificationToggle
+                  checked={notificationSettings.enabled}
+                  onChange={() => setNotificationSettings({ enabled: !notificationSettings.enabled })}
+                  ariaLabel={t('settings.notifyWindowsMaster')}
+                />
               </div>
 
               {/* Sub-toggles */}
-              <div className={`space-y-2 pl-1 transition-opacity ${notificationSettings.enabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+              <div className={`space-y-2 px-3 transition-opacity ${notificationSettings.enabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
                 {/* On Question */}
                 <div className="flex items-center justify-between py-1.5 border-b border-[#f4f4f5] dark:border-[#21262d]">
                   <span className="text-xs text-[#171717] dark:text-[#f0f6fc] font-sans">
                     {t('settings.notifyOnQuestion')}
                   </span>
-                  <button
-                    type="button"
-                    role="switch"
+                  <NotificationToggle
+                    checked={notificationSettings.onQuestion}
                     disabled={!notificationSettings.enabled}
-                    aria-checked={notificationSettings.onQuestion}
-                    onClick={() => setNotificationSettings({ onQuestion: !notificationSettings.onQuestion })}
-                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                      notificationSettings.onQuestion && notificationSettings.enabled ? 'bg-[#10b981]' : 'bg-[#e5e7eb] dark:bg-[#30363d]'
-                    }`}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                        notificationSettings.onQuestion && notificationSettings.enabled ? 'translate-x-4' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
+                    onChange={() => setNotificationSettings({ onQuestion: !notificationSettings.onQuestion })}
+                    ariaLabel={t('settings.notifyOnQuestion')}
+                  />
                 </div>
 
                 {/* On Advance Task */}
@@ -410,23 +423,12 @@ export default function SettingsModal() {
                   <span className="text-xs text-[#171717] dark:text-[#f0f6fc] font-sans">
                     {t('settings.notifyOnAdvanceTask')}
                   </span>
-                  <button
-                    type="button"
-                    role="switch"
+                  <NotificationToggle
+                    checked={notificationSettings.onAdvanceTask}
                     disabled={!notificationSettings.enabled}
-                    aria-checked={notificationSettings.onAdvanceTask}
-                    onClick={() => setNotificationSettings({ onAdvanceTask: !notificationSettings.onAdvanceTask })}
-                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                      notificationSettings.onAdvanceTask && notificationSettings.enabled ? 'bg-[#10b981]' : 'bg-[#e5e7eb] dark:bg-[#30363d]'
-                    }`}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                        notificationSettings.onAdvanceTask && notificationSettings.enabled ? 'translate-x-4' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
+                    onChange={() => setNotificationSettings({ onAdvanceTask: !notificationSettings.onAdvanceTask })}
+                    ariaLabel={t('settings.notifyOnAdvanceTask')}
+                  />
                 </div>
 
                 {/* On Task Completed */}
@@ -434,23 +436,12 @@ export default function SettingsModal() {
                   <span className="text-xs text-[#171717] dark:text-[#f0f6fc] font-sans">
                     {t('settings.notifyOnTaskCompleted')}
                   </span>
-                  <button
-                    type="button"
-                    role="switch"
+                  <NotificationToggle
+                    checked={notificationSettings.onTaskCompleted}
                     disabled={!notificationSettings.enabled}
-                    aria-checked={notificationSettings.onTaskCompleted}
-                    onClick={() => setNotificationSettings({ onTaskCompleted: !notificationSettings.onTaskCompleted })}
-                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                      notificationSettings.onTaskCompleted && notificationSettings.enabled ? 'bg-[#10b981]' : 'bg-[#e5e7eb] dark:bg-[#30363d]'
-                    }`}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                        notificationSettings.onTaskCompleted && notificationSettings.enabled ? 'translate-x-4' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
+                    onChange={() => setNotificationSettings({ onTaskCompleted: !notificationSettings.onTaskCompleted })}
+                    ariaLabel={t('settings.notifyOnTaskCompleted')}
+                  />
                 </div>
               </div>
             </div>
