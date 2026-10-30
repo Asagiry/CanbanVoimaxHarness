@@ -70,8 +70,20 @@ export default function DrawerSteerBar({
   const boards = useBoardStore((s) => s.boards);
   const columns = useBoardStore((s) => s.columns);
   const taskBoard = boards.find((b) => b.id === task.boardId);
-  const taskColumn = taskBoard?.columns.find((c) => c.id === task.columnId) || columns.find((c) => c.id === task.columnId);
-  const taskPersona = task.persona || taskColumn?.persona || 'developer';
+  const boardCols = taskBoard?.columns && taskBoard.columns.length > 0 ? taskBoard.columns : columns;
+  const taskColumn = boardCols.find((c) => c.id === task.columnId) || columns.find((c) => c.id === task.columnId);
+
+  const workingCols = boardCols.filter(
+    (c) => !c.isIntake && c.id !== 'backlog' && !c.terminal && c.id !== 'ready' && c.id !== 'done'
+  );
+  const firstStagePersona = workingCols[0]?.persona;
+  const defaultWorkingPersona = firstStagePersona || 'general';
+
+  const isTerminalTask = Boolean(taskColumn?.terminal || task.columnId === 'ready' || task.columnId === 'done');
+  const effectivePersonaCandidate = (!task.parentId && (isTerminalTask || !taskColumn?.persona))
+    ? (firstStagePersona || task.persona)
+    : (task.persona || taskColumn?.persona);
+  const taskPersona = effectivePersonaCandidate || defaultWorkingPersona;
   const activePersona = activeSubagentRole || taskPersona;
   const effectiveGaugeTaskId = activeSubagentId || task.id;
   const effectiveGaugePersona = activeSubagentId ? (activeSubagentRole || 'general') : activePersona;

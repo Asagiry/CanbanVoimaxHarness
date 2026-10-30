@@ -1,5 +1,5 @@
 //! Telemetry computation utilities for agent turns and subagents.
-//! Adheres to ub-mode (Dryer & Zero-Risk Pure Extraction) and AGENTS.md § 2.24.
+//! Adheres to ub-mode (Dryer & Zero-Risk Pure Extraction) and Telemetry Accuracy Invariants.
 
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
@@ -11,7 +11,7 @@ pub struct TurnTelemetry {
     pub tps: f32,
 }
 
-/// Compute safe prompt cache hit rate percentage according to AGENTS.md § 2.24.
+/// Compute safe prompt cache hit rate percentage according to telemetry invariants.
 ///
 /// Guaranteed to never produce NaN, infinite or negative values.
 #[inline]

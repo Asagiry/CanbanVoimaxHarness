@@ -53,7 +53,7 @@ export default function ContextGauge({
           useBoardStore.getState().columns.find(
             (c) => c.id === taskId || c.id === useBoardStore.getState().tasks.find((t) => t.id === taskId)?.columnId
           )?.persona ||
-          'developer';
+          'general';
         const pInfo = useCortexStore.getState().agentPersonas?.find(
           (p) => p.role.toLowerCase() === role.toLowerCase()
         );

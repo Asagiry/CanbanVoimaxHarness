@@ -49,6 +49,7 @@ export default function AgentConsoleDrawer() {
   const rawTask = tasks.find((t) => t.id === activeTaskId);
   const fallbackBoardId = useBoardStore.getState().activeBoardId || 'development';
   const fallbackColId = columns.find((c) => c.isIntake)?.id ?? columns[0]?.id ?? 'backlog';
+  const fallbackPersona = columns.find((c) => !c.isIntake && c.id !== 'backlog' && !c.terminal)?.persona || 'general';
   const parentIdFromId = activeTaskId?.includes('.') ? activeTaskId.split('.')[0] : undefined;
   const parentTaskForFallback = parentIdFromId ? tasks.find((t) => t.id === parentIdFromId) : undefined;
 
@@ -58,7 +59,7 @@ export default function AgentConsoleDrawer() {
     title: activeTaskId || 'Task',
     columnId: fallbackColId,
     boardId: fallbackBoardId,
-    persona: 'developer',
+    persona: fallbackPersona,
     status: 'idle',
     priority: 'high',
     parentId: parentIdFromId,

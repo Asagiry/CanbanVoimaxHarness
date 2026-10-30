@@ -146,17 +146,35 @@ export function normalizeKanbanTask(
     : ((typeof raw.worktree_path === 'string' && raw.worktree_path.trim() !== '')
       ? raw.worktree_path.trim()
       : parentTask?.worktreePath);
-  const rawTitle = typeof raw.title === 'string' ? raw.title : '';
-  const isReviewSubtask = Boolean(
-    rawParentId ||
-    rawTitle.toLowerCase().includes('ревью') ||
-    rawTitle.toLowerCase().includes('review')
+  const rawPersona = typeof raw.persona === 'string' && raw.persona.trim() !== '' ? raw.persona.trim() : undefined;
+  const workingCols = effectiveColumns.filter(
+    (c) => !c.isIntake && c.id !== 'backlog' && !c.terminal && c.id !== 'ready' && c.id !== 'done'
   );
-  const fallbackPersona = isReviewSubtask ? 'reviewer' : 'developer';
-  const rawPersona = typeof raw.persona === 'string' && raw.persona.trim() !== '' ? raw.persona : undefined;
-  const effectivePersona = (col?.persona && !isReviewSubtask)
-    ? col.persona
-    : (rawPersona ?? (col?.persona || fallbackPersona));
+
+  const prevStageId = typeof raw.previousStageId === 'string' && raw.previousStageId.trim() !== ''
+    ? raw.previousStageId.trim()
+    : (typeof raw.previous_stage_id === 'string' && raw.previous_stage_id.trim() !== ''
+      ? raw.previous_stage_id.trim()
+      : (typeof raw.fromStage === 'string' && raw.fromStage.trim() !== ''
+        ? raw.fromStage.trim()
+        : (typeof raw.from_stage === 'string' && raw.from_stage.trim() !== '' ? raw.from_stage.trim() : undefined)));
+  const prevCol = prevStageId ? effectiveColumns.find((c) => c.id === prevStageId) : undefined;
+
+  const isTerminalCol = Boolean(col?.terminal || columnId === 'ready' || columnId === 'done');
+
+  let effectivePersona: string;
+  if (col?.persona) {
+    effectivePersona = col.persona;
+  } else if (isTerminalCol && !rawParentId) {
+    // Root parent task in terminal column represents the first working pipeline stage (e.g. planner)
+    effectivePersona = workingCols[0]?.persona ?? rawPersona ?? 'general';
+  } else if (isTerminalCol && rawParentId) {
+    // Child subtask in terminal column (if ever moved there) resolves to its previous stage persona or raw persona
+    effectivePersona = prevCol?.persona ?? rawPersona ?? workingCols[0]?.persona ?? 'general';
+  } else {
+    // Columns without explicit persona (e.g. intake / backlog)
+    effectivePersona = rawPersona ?? workingCols[0]?.persona ?? 'general';
+  }
 
   const isTerminalTask = columnId === 'ready' || status === 'done';
   const effectiveWaitingForSubtaskId = isTerminalTask

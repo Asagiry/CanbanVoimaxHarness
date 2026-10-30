@@ -19,8 +19,8 @@
      ```text
      SystemMessage = Persona (.cvh/agents/<role>/persona.md) 
                    + Правила роли (.cvh/agents/<role>/rules/*.md)
-                   + Архитектурные правила проекта (AGENTS.md) 
-                   + Активные скиллы (.agents/skills/*) 
+                   + Общие правила проекта (.cvh/rules/*.md) 
+                   + Инструкции инструментов (Tools)
                    + Контекст задачи (Task Prompt)
      ```
    - **Relay Handoff Memory Priming**: При переходе карточки между этапами через `advance_task(summary)` или `reject_task(reason)`, итоговое саммари этапа автоматически встраивается в вершину промпта нового агента баннером:

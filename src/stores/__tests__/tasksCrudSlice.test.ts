@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest';
 import { useBoardStore } from '../boardStore';
 import { useDrawerStore } from '../../stores/drawerStore';
-import { KanbanTask, BackendTaskDTO } from '../../types';
+import { KanbanTask, BackendTaskDTO, PipelineColumn } from '../../types';
 import { CANONICAL_BOARD_COLUMNS, DEFAULT_BOARD } from '../board/boardConstants';
 
 const mockInvoke = vi.fn();
@@ -330,6 +330,48 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
       expect(current?.waitingForSubtaskId).toBeUndefined();
       expect(current?.completedAt).toBeDefined();
       expect(current?.totalElapsed).toBeGreaterThanOrEqual(59);
+    });
+
+    it('moveTask to ready retains first working stage persona (planner) on multi-stage pipeline', async () => {
+      const multiColumns: PipelineColumn[] = [
+        { id: 'backlog', title: 'Backlog', color: '#888', icon: 'Inbox', persona: null, isIntake: true, modelOverride: null },
+        { id: 'plan', title: 'Planning', color: '#0284c7', icon: 'Compass', persona: 'planner', modelOverride: null },
+        { id: 'dev', title: 'Dev', color: '#3b82f6', icon: 'Code', persona: 'developer', modelOverride: null },
+        { id: 'ready', title: 'Ready', color: '#10b981', icon: 'Check', persona: null, terminal: true, modelOverride: null },
+      ];
+      useBoardStore.setState({
+        boards: [{ id: 'pipeline', name: 'Pipeline', columns: multiColumns }],
+        activeBoardId: 'pipeline',
+        columns: multiColumns,
+      });
+
+      const task = createSampleTask({
+        id: 'CVH-040',
+        columnId: 'plan',
+        boardId: 'pipeline',
+        persona: 'planner',
+      });
+      useBoardStore.getState().setTasks([task]);
+
+      mockInvoke.mockImplementation(async (cmd, args) => {
+        if (cmd === 'move_task_stage') {
+          const payload = args as { taskId: string; targetStageId: string };
+          return {
+            id: payload.taskId,
+            title: task.title,
+            stageId: payload.targetStageId,
+            boardId: 'pipeline',
+            status: 'done',
+          } satisfies BackendTaskDTO;
+        }
+        return null;
+      });
+
+      await useBoardStore.getState().moveTask('CVH-040', 'ready');
+
+      const current = useBoardStore.getState().tasks.find((t) => t.id === 'CVH-040');
+      expect(current?.columnId).toBe('ready');
+      expect(current?.persona).toBe('planner');
     });
 
     it('moveTask backward increments returnsCount (Rework Tracking)', async () => {

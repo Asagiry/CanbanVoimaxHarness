@@ -337,7 +337,7 @@ Verdicts (reviewer is separate clean context; personas never invoke personas): `
 Key patterns/recipes: scaffold-then-sense; sensor-first promotion (gatekeeperSensor must exit 0 or move rejected); spill large outputs (>100 lines/8KB) to `.cvh/spill/`, return head/tail 20.
 Pitfalls: monolith agent.md (>30 lines); copypaste instead of Load-link; writing outside worktree; re-enabling globally-disabled tool; stale board/pipeline drift.
 What to ask when blocked: stack + build cmd, target board template, allowed tools per stage, sensor to gate on.
-Red Flags: prompt >150 lines; any rule telling you to read root AGENTS.md/.agents/skills/docs into context; absolute path outside worktree; `terminal:true` missing on ready; duplicate column id.
+Red Flags: prompt >150 lines; any rule telling you to read monolithic rule files/.agents/skills/docs into context; absolute path outside worktree; `terminal:true` missing on ready; duplicate column id.
 Verification[evidence]: paste `cargo check`, `cargo clippy -- -D warnings`, changed files as `path:line`, verdict token; no evidence = no APPROVED.
 Instructions for Empty & New Projects: run Initializer flow above; Columns = Agents invariant holds from turn 1.
 "#;
@@ -2763,7 +2763,7 @@ where
         Some(&active_tool_names),
     ).await?;
 
-    // Zero-Turn Memory Priming Relay Handoff (§ 2.9 AGENTS.md):
+    // Zero-Turn Memory Priming Relay Handoff (§ 2.9):
     // If task has handover_summary, inject at the beginning of the prompt.
     let mut initial_user_prompt = String::new();
     if let Some(ref handover) = config.handover_summary {

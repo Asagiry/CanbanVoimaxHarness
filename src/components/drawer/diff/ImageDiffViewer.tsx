@@ -495,7 +495,7 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
         </div>
       )}
 
-      {/* Lightbox Modal (Hoisted via createPortal per AGENTS.md § 2.13) */}
+      {/* Lightbox Modal (Hoisted via createPortal per .cvh/rules/) */}
       {lightbox &&
         createPortal(
           <div
