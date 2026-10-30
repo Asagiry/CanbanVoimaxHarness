@@ -3547,6 +3547,9 @@ Messages count: {}
 
                 let final_resp = display_summary.unwrap_or_else(|| result_str.clone());
 
+                if !final_resp.trim().is_empty() {
+                    event_sink(AgentEvent::Output(final_resp.clone()));
+                }
                 event_sink(AgentEvent::Finished {
                     final_response: final_resp,
                 });

@@ -22,7 +22,7 @@ export function isFinalResponseItem(
   activities: DrawerActivityItem[],
   isRunning: boolean
 ): boolean {
-  if (activity.type !== 'output') return false;
+  if (activity.type !== 'output' && (activity.type as string) !== 'summary') return false;
 
   let turnHasEnded = false;
   let hasInterveningToolsOrOutputs = false;
@@ -33,7 +33,12 @@ export function isFinalResponseItem(
       turnHasEnded = true;
       break;
     }
-    if (next.type === 'tool' || (next as any).tool || next.type === 'output') {
+    if (
+      next.type === 'tool' ||
+      (next as any).tool ||
+      next.type === 'output' ||
+      (next.type as string) === 'summary'
+    ) {
       hasInterveningToolsOrOutputs = true;
       break;
     }
@@ -41,6 +46,10 @@ export function isFinalResponseItem(
 
   if (hasInterveningToolsOrOutputs) {
     return false;
+  }
+
+  if (activity.isFinal) {
+    return true;
   }
 
   if (!turnHasEnded && isRunning) {
@@ -74,7 +83,9 @@ export function hasNearbyTodoWrite(idx: number, activities: DrawerActivityItem[]
 
 /**
  * Determines whether an intermediate explanation should be suppressed
- * (e.g., duplicated summary from advance_task / move_task / reject_task or identical repeated messages).
+ * (e.g., duplicated identical repeated messages).
+ * Note: Summary text from advance_task / move_task / reject_task represents
+ * the agent's final response and must never be suppressed.
  */
 export function shouldSuppressExplanation(
   activity: DrawerActivityItem,
@@ -104,57 +115,6 @@ export function shouldSuppressExplanation(
       const prevText = (act.content || '').trim();
       if (prevText && (prevText === explanationText || prevText.toLowerCase() === expLower)) {
         return true;
-      }
-    }
-  }
-
-  const windowSize = 2;
-  const start = Math.max(0, idx - windowSize);
-  const end = Math.min(activities.length - 1, idx + windowSize);
-
-  for (let i = start; i <= end; i++) {
-    if (i === idx) continue;
-    const act = activities[i];
-    if (act?.type === 'tool') {
-      const tName = act.tool?.toolName || (act.tool as any)?.name || (act.tool as any)?.tool;
-      if (tName === 'advance_task' || tName === 'move_task' || tName === 'reject_task') {
-        const params = (act.tool as any)?.params || (act.tool as any)?.arguments || {};
-        const parsedParams = typeof params === 'string'
-          ? (() => { try { return JSON.parse(params); } catch { return {}; } })()
-          : params;
-        const summary = (parsedParams?.summary || parsedParams?.reason || '').trim().toLowerCase();
-
-        if (summary) {
-          if (
-            expLower === summary ||
-            expLower.includes(summary) ||
-            summary.includes(expLower)
-          ) {
-            return true;
-          }
-          const cleanExp = expLower.replace(/[\s\r\n\t.,;:!?-]+/g, ' ').trim();
-          const cleanSum = summary.replace(/[\s\r\n\t.,;:!?-]+/g, ' ').trim();
-          if (cleanExp === cleanSum || cleanExp.includes(cleanSum) || cleanSum.includes(cleanExp)) {
-            return true;
-          }
-        }
-        return true;
-      }
-    }
-  }
-
-  for (const act of activities) {
-    if (act?.type === 'tool') {
-      const tName = act.tool?.toolName || (act.tool as any)?.name || (act.tool as any)?.tool;
-      if (tName === 'advance_task' || tName === 'move_task' || tName === 'reject_task') {
-        const params = (act.tool as any)?.params || (act.tool as any)?.arguments || {};
-        const parsedParams = typeof params === 'string'
-          ? (() => { try { return JSON.parse(params); } catch { return {}; } })()
-          : params;
-        const summary = (parsedParams?.summary || parsedParams?.reason || '').trim().toLowerCase();
-        if (summary && (expLower === summary || (summary.length > 20 && expLower.includes(summary)))) {
-          return true;
-        }
       }
     }
   }
