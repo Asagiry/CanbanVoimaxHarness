@@ -1,3 +1,6 @@
+---
+description: Authoritative Ubiquitous Language dictionary and domain model (Stage vs Column, Task vs Card, Persona vs Agent, Relay Handoff).
+---
 # CanbanVoimaxHarness — Ubiquitous Language Glossary (DDD)
 
 > **Authoritative Ubiquitous Language Dictionary** for CanbanVoimaxHarness (CVH).  
