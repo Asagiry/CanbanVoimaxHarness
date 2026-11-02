@@ -703,6 +703,19 @@ pub fn is_review_column(col: &crate::config::PipelineStage) -> bool {
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Strips trailing parenthesized stage names from title (e.g. "Task (Plan) (Dev)" -> "Task")
+pub fn clean_task_parent_title(title: &str) -> String {
+    let mut s = title.trim();
+    while s.ends_with(')') {
+        if let Some(open_idx) = s.rfind('(') {
+            s = s[..open_idx].trim_end();
+        } else {
+            break;
+        }
+    }
+    s.to_string()
+}
+
 pub async fn internal_create_subtask(
     root: &Path,
     parent_id: &str,
@@ -792,7 +805,7 @@ pub async fn internal_create_subtask(
     let subtask_id = format!("{}.{}", parent_id, next_subtask_idx);
     let now = Utc::now().timestamp_millis();
 
-    let parent_title = tasks[parent_idx].title.clone();
+    let clean_parent_title = clean_task_parent_title(&tasks[parent_idx].title);
     let mut parent_wt = tasks[parent_idx].worktree_path.clone();
     let mut parent_branch = tasks[parent_idx].branch.clone();
     let parent_model = tasks[parent_idx].model.clone();
@@ -828,7 +841,7 @@ pub async fn internal_create_subtask(
 
     let subtask_title = title
         .map(|s| s.to_string())
-        .unwrap_or_else(|| format!("{} ({})", parent_title, target_col.title));
+        .unwrap_or_else(|| format!("{} ({})", clean_parent_title, target_col.title));
 
     let subtask_desc = handover_summary
         .map(|s| s.to_string())
@@ -1140,5 +1153,28 @@ pub async fn delete_task(
     );
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_clean_task_parent_title_single_stage() {
+        assert_eq!(clean_task_parent_title("My Task (Planning)"), "My Task");
+        assert_eq!(clean_task_parent_title("My Task (Planning) "), "My Task");
+    }
+
+    #[test]
+    fn test_clean_task_parent_title_multiple_stacked_stages() {
+        assert_eq!(clean_task_parent_title("My Task (Plan) (Dev)"), "My Task");
+        assert_eq!(clean_task_parent_title("My Task (Planning) (CVH Development) (Review)"), "My Task");
+    }
+
+    #[test]
+    fn test_clean_task_parent_title_preserves_middle_parentheses() {
+        assert_eq!(clean_task_parent_title("Task (refactor) details"), "Task (refactor) details");
+        assert_eq!(clean_task_parent_title("Simple Task"), "Simple Task");
+    }
 }
 

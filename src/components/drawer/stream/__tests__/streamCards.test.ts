@@ -18,6 +18,9 @@ import {
   shouldSuppressExplanation,
   filterDisplayActivities,
   computeActivityDurations,
+  stripDuplicateStageInTitle,
+  getCleanSummaryContent,
+  getStageSummaryLabel,
 } from '../index';
 import type { DrawerActivityItem } from '../../../../stores/drawerStore';
 
@@ -220,6 +223,92 @@ describe('streamHelpers', () => {
       const durations = computeActivityDurations(activities, false);
       expect(durations[0]).toBe(250);
       expect(durations[1]).toBe(2000);
+    });
+  });
+
+  describe('stripDuplicateStageInTitle', () => {
+    it('strips matching trailing stage title in parentheses (case-insensitive)', () => {
+      expect(stripDuplicateStageInTitle('Feature Task (Planning)', 'Planning')).toBe('Feature Task');
+      expect(stripDuplicateStageInTitle('Feature Task (planning)', 'Planning')).toBe('Feature Task');
+      expect(stripDuplicateStageInTitle('Feature Task (Planning)  ', 'Planning')).toBe('Feature Task');
+    });
+
+    it('preserves title when stage does not match or is absent', () => {
+      expect(stripDuplicateStageInTitle('Feature Task (Dev)', 'Planning')).toBe('Feature Task (Dev)');
+      expect(stripDuplicateStageInTitle('Feature Task', undefined)).toBe('Feature Task');
+      expect(stripDuplicateStageInTitle('Feature Task', '')).toBe('Feature Task');
+      expect(stripDuplicateStageInTitle(undefined, 'Planning')).toBe('');
+    });
+  });
+
+  describe('getCleanSummaryContent', () => {
+    it('strips redundant leading stage summary headers', () => {
+      const input = '### Саммари этапа: Planning\n\nAll tasks completed successfully.';
+      expect(getCleanSummaryContent(input)).toBe('All tasks completed successfully.');
+    });
+
+    it('strips redundant parenthetical handover headers', () => {
+      const input = '### Саммари этапа (передано на CVH-048.2 CVH Development):\n\nPlan finalized and ready.';
+      expect(getCleanSummaryContent(input)).toBe('Plan finalized and ready.');
+    });
+
+    it('strips redundant finalization headers', () => {
+      const input = '### Саммари финализации задачи CVH-048: Готово\n\nEverything done.';
+      expect(getCleanSummaryContent(input)).toBe('Everything done.');
+    });
+
+    it('preserves clean content without leading headers', () => {
+      const input = 'Normal summary text with no leading heading.';
+      expect(getCleanSummaryContent(input)).toBe('Normal summary text with no leading heading.');
+      expect(getCleanSummaryContent(undefined)).toBe('');
+    });
+  });
+
+  describe('getStageSummaryLabel', () => {
+    const dummyTask: any = { id: 'CVH-1', title: 'Main Task', stageId: 'plan', persona: 'planner' };
+
+    it('resolves Planner, Developer, Reviewer, and Retro labels in ru and en', () => {
+      const planAct: any = { content: '### Саммари этапа: Planning\n\nPlan text' };
+      expect(getStageSummaryLabel(planAct, dummyTask, [], [], 'ru')).toBe('Саммари планера');
+      expect(getStageSummaryLabel(planAct, dummyTask, [], [], 'en')).toBe('Planner Summary');
+
+      const devAct: any = { content: '### Саммари этапа: CVH Development\n\nCode written' };
+      expect(getStageSummaryLabel(devAct, dummyTask, [], [], 'ru')).toBe('Саммари девелопера');
+      expect(getStageSummaryLabel(devAct, dummyTask, [], [], 'en')).toBe('Developer Summary');
+
+      const reviewAct: any = { content: '### Саммари этапа: Review\n\nCode verified' };
+      expect(getStageSummaryLabel(reviewAct, dummyTask, [], [], 'ru')).toBe('Саммари ревьюера');
+      expect(getStageSummaryLabel(reviewAct, dummyTask, [], [], 'en')).toBe('Reviewer Summary');
+
+      const retroAct: any = { content: '### Саммари этапа: Retrospective\n\nLessons learned' };
+      expect(getStageSummaryLabel(retroAct, dummyTask, [], [], 'ru')).toBe('Саммари ретро');
+      expect(getStageSummaryLabel(retroAct, dummyTask, [], [], 'en')).toBe('Retro Summary');
+    });
+
+    it('resolves final summary and custom stage labels', () => {
+      const finalAct: any = { content: '### Саммари финализации задачи CVH-1: Готово\n\nDone' };
+      expect(getStageSummaryLabel(finalAct, dummyTask, [], [], 'ru')).toBe('Финальное саммари');
+      expect(getStageSummaryLabel(finalAct, dummyTask, [], [], 'en')).toBe('Final Summary');
+
+      const customAct: any = { content: '### Саммари этапа: Security Audit\n\nPassed' };
+      expect(getStageSummaryLabel(customAct, dummyTask, [], [], 'ru')).toBe('Саммари этапа: Security Audit');
+      expect(getStageSummaryLabel(customAct, dummyTask, [], [], 'en')).toBe('Stage Summary: Security Audit');
+    });
+
+    it('resolves handover target heuristics', () => {
+      const handoverToDev: any = { content: '### Саммари этапа (передано на CVH-1.2 CVH Development):\n\nPlan ready' };
+      expect(getStageSummaryLabel(handoverToDev, dummyTask, [], [], 'ru')).toBe('Саммари планера');
+      expect(getStageSummaryLabel(handoverToDev, dummyTask, [], [], 'en')).toBe('Planner Summary');
+    });
+
+    it('falls back to subtask context or default label', () => {
+      const subtask: any = { id: 'CVH-1.2', parentId: 'CVH-1', stageId: 'dev', persona: 'developer' };
+      const emptyAct: any = { content: 'Just raw text without headers' };
+      expect(getStageSummaryLabel(emptyAct, subtask, [], [], 'ru')).toBe('Саммари девелопера');
+
+      const unknownTask: any = { id: 'CVH-2', stageId: 'unknown-col' };
+      expect(getStageSummaryLabel(emptyAct, unknownTask, [], [], 'ru')).toBe('Саммари этапа');
+      expect(getStageSummaryLabel(emptyAct, unknownTask, [], [], 'en')).toBe('Stage Summary');
     });
   });
 });

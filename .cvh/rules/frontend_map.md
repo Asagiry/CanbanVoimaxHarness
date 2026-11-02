@@ -43,6 +43,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Terminal Response Card** | `src/components/drawer/stream/TerminalResponseCard.tsx` | Prominent final response card with copy and duration. |
 | **Task Objective Card** | `src/components/drawer/stream/TaskObjectiveCard.tsx` | Task goal, clean prompt, and attachment gallery. |
 | **Execution Error Banner** | `src/components/drawer/stream/ExecutionErrorBanner.tsx` | In-stream error banner with retry and dismiss controls. |
+| **Stage Summary Handover Card** | `src/components/drawer/stream/StageSummaryCard.tsx` | Stage handover summary with dynamic stage label and duration. |
 | **Stream Filtering Helpers** | `src/components/drawer/stream/streamHelpers.ts` | Stream activity dedup, prompt cleanup, duration helpers. |
 | **File Operations Tool Card** | `src/components/drawer/tools/FileOpsToolCard.tsx` | `read_file`, `write_file`, `edit_file` diff display. |
 | **Shell Command Tool Card** | `src/components/drawer/tools/CommandToolCard.tsx` | Command invocation, exit code, spilled logs link. |
@@ -88,6 +89,7 @@ Authoritative directory topology, component mapping table, and modular store arc
   - **`TerminalResponseCard.tsx`**: Collapsible terminal response card with model badge, duration, copy button, and full markdown rendering.
   - **`TaskObjectiveCard.tsx`**: Initial task goal and attachment preview gallery card.
   - **`ExecutionErrorBanner.tsx`**: Execution failure alert banner with retry trigger.
+  - **`StageSummaryCard.tsx`**: Handover stage summary card with dynamic stage naming, duration badge, and markdown body.
   - **`streamHelpers.ts`**: Pure helper functions for activity filtering, question deduplication (§ 2.20), prompt cleaning, and duration calculations.
 - **`ContextGauge.tsx`**: Real-time context window capacity meter. Resolves window capacity from persona settings (`context_window`), proportional segment allocations (System, Tools, Messages), with emerald (`#10b981`) ring under 60% capacity.
 - **`ContextPopover.tsx`**: Extracted hover card popover displaying segmented token breakdown (System, Tools, Messages) and trigger action for context compaction.

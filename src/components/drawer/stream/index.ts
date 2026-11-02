@@ -22,6 +22,9 @@ export type { TaskObjectiveCardProps } from './TaskObjectiveCard';
 export { ExecutionErrorBanner } from './ExecutionErrorBanner';
 export type { ExecutionErrorBannerProps } from './ExecutionErrorBanner';
 
+export { StageSummaryCard } from './StageSummaryCard';
+export type { StageSummaryCardProps } from './StageSummaryCard';
+
 export {
   getCleanPrompt,
   isFinalResponseItem,
@@ -29,4 +32,9 @@ export {
   shouldSuppressExplanation,
   filterDisplayActivities,
   computeActivityDurations,
+  stripDuplicateStageInTitle,
+  getCleanSummaryContent,
+  getStageSummaryLabel,
+  classifyStageRole,
 } from './streamHelpers';
+export type { ColumnSummaryInfo } from './streamHelpers';
