@@ -1,13 +1,6 @@
 import type { CortexHookMoment } from '../../stores/cortexStore';
 import type { PipelineColumn, PipelineConfig, CortexAgentStage } from '../../types';
 
-export interface SharedFolderState {
-  openRulesFolders: Record<string, boolean>;
-  openHooksFolders: Record<string, boolean>;
-  creatingStageId: string | null;
-  creatingKind: 'rule' | 'hook';
-}
-
 export function hookMomentOf(fileName: string): CortexHookMoment | null {
   if (fileName.startsWith('on_enter')) return 'on_enter';
   if (fileName.startsWith('on_leave')) return 'on_leave';

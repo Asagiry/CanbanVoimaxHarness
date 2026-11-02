@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import {
   CortexState,
+  createCortexSlice,
   createCortexFilesSlice,
   createPersonasSlice,
   createRulesSlice,
@@ -8,6 +9,12 @@ import {
 } from './cortex';
 
 // Ub-mode Re-exports for zero breaking changes across codebase
+export {
+  createCortexSlice,
+  createCortexFilesSlice,
+  createPersonasSlice,
+  createRulesSlice,
+};
 export {
   DEFAULT_CORTEX_STAGES,
   SCRIPT_EXTENSIONS,
@@ -52,9 +59,7 @@ export type {
 } from './cortex/types';
 
 export const useCortexStore = create<CortexState>()((...a) => ({
-  ...createCortexFilesSlice(...a),
-  ...createPersonasSlice(...a),
-  ...createRulesSlice(...a),
+  ...createCortexSlice(...a),
 }));
 
 registerCortexStore(useCortexStore);

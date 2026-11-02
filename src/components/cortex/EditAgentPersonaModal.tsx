@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Palette, X, Check } from 'lucide-react';
-import AgentIcon from '../../common/AgentIcon';
-import { useTranslation } from '../../../stores/languageStore';
+import AgentIcon from '../common/AgentIcon';
+import { useTranslation } from '../../stores/languageStore';
 import {
   AGENT_PALETTE,
   AGENT_ICONS,
   getDeterministicAgentColor,
   isAllowedAgentColor,
-} from '../../../lib/agentPalette';
-import type { AgentPersonaInfo } from '../../../stores/cortexStore';
+} from '../../lib/agentPalette';
+import type { AgentPersonaInfo } from '../../stores/cortexStore';
 
 export interface EditAgentPersonaModalProps {
   isOpen: boolean;

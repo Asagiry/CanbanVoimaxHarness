@@ -1,32 +1,45 @@
 import { StateCreator } from 'zustand';
-import { CortexFilesSlice, CortexState } from '../types';
-import { CortexAgentFile, CortexAgentStage } from '../../../types';
-import { DEFAULT_CORTEX_STAGES } from '../cortexConstants';
+import {
+  CortexHookExt,
+  CortexHookMoment,
+  CortexState,
+  RawAgentPersona,
+  AgentPersonaInfo,
+} from './types';
+import { CortexAgentFile, CortexAgentStage } from '../../types';
+import { DEFAULT_CORTEX_STAGES } from './cortexConstants';
 import {
   buildBuiltinHookDescription,
   buildCommandHookDescription,
+  buildGlobalRuleTemplate,
+  buildHookTemplate,
   buildPersonaTemplate,
+  buildRuleTemplate,
   buildScriptTemplate,
   buildSettingTemplate,
   cortexAgentDir,
   extractScriptPath,
-} from '../cortexHelpers';
+  normalizeCortexFileName,
+} from './cortexHelpers';
 import {
   BACKLOG_COLOR,
   READY_COLOR,
   getDeterministicAgentColor,
   isAllowedAgentColor,
-} from '../../../lib/agentPalette';
-import { getDefaultColumnIcon } from '../../../lib/columnIcons';
+} from '../../lib/agentPalette';
+import { getDefaultColumnIcon } from '../../lib/columnIcons';
+import { useBoardStore } from '../boardStore';
 
-export const createCortexFilesSlice: StateCreator<
+export const createCortexSlice: StateCreator<
   CortexState,
   [],
   [],
-  CortexFilesSlice
+  CortexState
 > = (set, get) => ({
+  // --- INITIAL STATE ---
   stages: DEFAULT_CORTEX_STAGES,
   agentStages: [],
+  agentPersonas: [],
   globalRules: [],
   activeFile: null,
   focusedStageId: null,
@@ -35,6 +48,7 @@ export const createCortexFilesSlice: StateCreator<
   saveFeedback: null,
   fileMissing: {},
 
+  // --- STAGE EXPANSION & NAVIGATION ---
   toggleStageExpand: (stageId) => {
     // Один флоу на обе секции: id колонок и агентов (`agent:<role>`) не пересекаются.
     set((state) => ({
@@ -77,6 +91,7 @@ export const createCortexFilesSlice: StateCreator<
     }, 2500);
   },
 
+  // --- COLUMN & STAGE SYNCHRONIZATION ---
   syncStagesFromColumns: (columns) => {
     const prevStages = get().stages;
     const prevStageById = new Map(prevStages.map((st) => [st.stageId, st]));
@@ -91,13 +106,6 @@ export const createCortexFilesSlice: StateCreator<
       }
     }
 
-    // Каждая колонка — стадия в проводнике разума. Все колонки из columns
-    // остаются в boardStages проводника разума (дедупа по persona здесь нет:
-    // дедуп живёт только в секции агентов).
-    // Системные узлы (backlog + ready/terminal без персоны) показывают свои hooks
-    // из колонки и personaName: 'система'.
-    // Колонки без выбранного агента отображаются со статусом personaName: 'без агента',
-    // сохраняя файлы хуков/правил стадии.
     const boardStages: CortexAgentStage[] = [];
     for (const col of columns) {
       const persona = col.persona?.trim() ?? '';
@@ -168,10 +176,6 @@ export const createCortexFilesSlice: StateCreator<
           isDirty: false,
         };
       });
-      // Ранее созданные файлы стадии (правила/хуки новой схемы) — пережить пересборку.
-      // Фильтр по префиксу каталога агента: файлы чужой роли и старой схемы
-      // (`.cvh/rules/...`, `.cvh/agents/<role>.md`) в дерево НЕ возвращаются.
-      // Если персона снята, сохраняем хуки и правила этой стадии.
       const extras = (prevExtrasByStage.get(col.id) ?? [])
         .filter(
           (f) =>
@@ -274,13 +278,9 @@ export const createCortexFilesSlice: StateCreator<
 
     if (boardStages.length === 0) {
       if (columns.length === 0) {
-        // Fallback для web-preview без бэкенда: мок-стадии.
-        // Секцию агентов не трогаем: agentStages живут отдельно.
         set({ stages: DEFAULT_CORTEX_STAGES });
         return;
       }
-      // Свежий проект без агентов (только backlog+ready без persona):
-      // пустое состояние секции колонок. Пометы agentStages не сбрасываем.
       set((state) => {
         const aliveAgentIds = new Set(
           state.agentStages.flatMap((s) => s.files.map((f) => f.id)),
@@ -294,9 +294,6 @@ export const createCortexFilesSlice: StateCreator<
       return;
     }
 
-    // Сохранить пометки об отсутствующих файлах для переживших пересборку узлов.
-    // Встроенный маркер `builtin:create_worktree` — не файл: пометку не переносим.
-    // Пометы секции агентов переживают пересборку колонок без изменений.
     const prevMissing = get().fileMissing;
     const prevAgentStages = get().agentStages;
     const nextMissing: Record<string, boolean> = {};
@@ -314,6 +311,257 @@ export const createCortexFilesSlice: StateCreator<
     set({ stages: boardStages, fileMissing: nextMissing });
   },
 
+  // --- AGENT PERSONAS ---
+  loadAgentPersonas: async () => {
+    let raw: RawAgentPersona[] = [];
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const list = await invoke<RawAgentPersona[]>('list_agent_personas');
+      if (Array.isArray(list)) raw = list;
+    } catch {
+      raw = [];
+    }
+    const seen = new Set<string>();
+    const personas: AgentPersonaInfo[] = [];
+    for (const item of raw) {
+      if (!item || typeof item.role !== 'string') continue;
+      const role = item.role.trim();
+      if (!role || seen.has(role)) continue;
+      seen.add(role);
+      const roleColor = isAllowedAgentColor(item.color)
+        ? item.color!
+        : getDeterministicAgentColor(role);
+      personas.push({
+        role,
+        hasPrompt: item.hasPrompt ?? item.has_prompt ?? true,
+        isBuiltin: item.isBuiltin ?? item.is_builtin ?? (role === 'cvh-dev'),
+        personaFile: item.personaFile ?? item.persona_file ?? 'persona.md',
+        rules: Array.isArray(item.rules) ? item.rules : [],
+        hooks: Array.isArray(item.hooks) ? item.hooks : [],
+        icon: item.icon,
+        color: roleColor,
+        contextWindow: item.contextWindow ?? item.context_window,
+      });
+    }
+    personas.sort((a, b) => a.role.localeCompare(b.role));
+
+    const prev = get().agentStages;
+    const prevByRole = new Map(prev.map((st) => [st.personaName, st]));
+    const nextStages: CortexAgentStage[] = personas.map((p) => {
+      const dir = cortexAgentDir(p.role, p.role);
+      const stageId = `agent:${p.role}`;
+      const prevStage = prevByRole.get(p.role);
+      const prevFiles = prevStage?.files ?? [];
+      const prevById = new Map(prevFiles.map((f) => [f.id, f]));
+      const personaFileName = p.personaFile ?? 'persona.md';
+      const personaId = `${stageId}-persona`;
+      const settingsId = `${stageId}-settings`;
+      const prevPersona = prevById.get(personaId);
+      const prevSettings = prevById.get(settingsId);
+
+      const diskRules = (p.rules ?? []).map((ruleName) => {
+        const ruleId = `${stageId}-rule-${ruleName}`;
+        const prevRule = prevById.get(ruleId);
+        return {
+          id: ruleId,
+          name: ruleName,
+          stageId,
+          type: 'rule' as const,
+          path: `${dir}/rules/${ruleName}`,
+          content: prevRule?.content ?? '',
+          isDirty: prevRule?.isDirty ?? false,
+        };
+      });
+
+      const inMemoryExtras = prevFiles.filter(
+        (f) =>
+          f.id !== personaId &&
+          f.id !== settingsId &&
+          f.type === 'rule' &&
+          !diskRules.some((dr) => dr.name === f.name),
+      );
+
+      const allRules = [...diskRules, ...inMemoryExtras].sort((a, b) =>
+        a.name.localeCompare(b.name),
+      );
+
+      const isBuiltin = p.role === 'cvh-dev' || Boolean(p.isBuiltin);
+      return {
+        stageId,
+        stageTitle: p.role,
+        color: p.color || getDeterministicAgentColor(p.role),
+        icon: p.icon || (isBuiltin ? 'Cpu' : 'Bot'),
+        personaName: p.role,
+        isExpanded: prevStage?.isExpanded ?? false,
+        isBuiltin,
+        files: [
+          {
+            id: personaId,
+            name: personaFileName,
+            stageId,
+            type: 'persona',
+            path: `${dir}/${personaFileName}`,
+            content: prevPersona?.content ?? '',
+            isDirty: prevPersona?.isDirty ?? false,
+          },
+          ...allRules,
+          {
+            id: settingsId,
+            name: 'setting',
+            stageId,
+            type: 'settings',
+            path: `${dir}/setting`,
+            content: prevSettings?.content ?? '',
+            isDirty: prevSettings?.isDirty ?? false,
+          },
+        ],
+      };
+    });
+
+    const alive = new Set(nextStages.flatMap((s) => s.files.map((f) => f.id)));
+    for (const st of get().stages) {
+      for (const f of st.files) alive.add(f.id);
+    }
+    const prunedMissing: Record<string, boolean> = {};
+    for (const [id, value] of Object.entries(get().fileMissing)) {
+      if (alive.has(id)) prunedMissing[id] = value;
+    }
+    set({ agentPersonas: personas, agentStages: nextStages, fileMissing: prunedMissing });
+
+    const boardState = useBoardStore.getState();
+    const currentCols = boardState.columns;
+    let colsChanged = false;
+    const nextCols = currentCols.map((col) => {
+      if (!col.persona) return col;
+      const matched = personas.find((p) => p.role === col.persona?.trim());
+      if (!matched) return col;
+      const newIcon = matched.icon || col.icon;
+      const newColor = matched.color || col.color;
+      if (col.icon !== newIcon || col.color !== newColor) {
+        colsChanged = true;
+        return { ...col, icon: newIcon, color: newColor };
+      }
+      return col;
+    });
+
+    if (colsChanged) {
+      boardState.setColumns(nextCols);
+      void boardState.saveCurrentBoard(nextCols);
+    }
+
+    get().syncStagesFromColumns(nextCols);
+  },
+
+  syncAgentPersonas: async () => {
+    await get().loadAgentPersonas();
+  },
+
+  setAgentPersonaColor: async (role: string, color: string) => {
+    if (!isAllowedAgentColor(color)) {
+      throw new Error('Серый и зеленый цвета зарезервированы за Backlog и Ready и запрещены для агентов');
+    }
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('set_agent_persona_color', { role, color });
+    } catch (err) {
+      console.info('set_agent_persona_color IPC not available or failed:', err);
+    }
+    set((state) => ({
+      agentPersonas: state.agentPersonas.map((p) =>
+        p.role === role ? { ...p, color } : p
+      ),
+      agentStages: state.agentStages.map((st) =>
+        st.personaName === role ? { ...st, color } : st
+      ),
+    }));
+
+    const boardStore = useBoardStore.getState();
+    const prevCols = boardStore.columns;
+    let changed = false;
+    const nextCols = prevCols.map((c) => {
+      if (c.persona === role && c.id !== 'backlog' && c.id !== 'ready') {
+        changed = true;
+        return { ...c, color };
+      }
+      return c;
+    });
+    if (changed) {
+      boardStore.setColumns(nextCols);
+      get().syncStagesFromColumns(nextCols);
+      void boardStore.saveCurrentBoard(nextCols);
+    } else {
+      get().syncStagesFromColumns(prevCols);
+    }
+  },
+
+  setAgentPersonaIcon: async (role: string, icon: string) => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('set_agent_persona_icon', { role, icon });
+    } catch (err) {
+      console.info('set_agent_persona_icon IPC not available or failed:', err);
+    }
+    set((state) => ({
+      agentPersonas: state.agentPersonas.map((p) =>
+        p.role === role ? { ...p, icon } : p
+      ),
+      agentStages: state.agentStages.map((st) =>
+        st.personaName === role ? { ...st, icon } : st
+      ),
+    }));
+
+    const boardStore = useBoardStore.getState();
+    const prevCols = boardStore.columns;
+    let changed = false;
+    const nextCols = prevCols.map((c) => {
+      if (c.persona === role) {
+        changed = true;
+        return { ...c, icon };
+      }
+      return c;
+    });
+    if (changed) {
+      boardStore.setColumns(nextCols);
+      get().syncStagesFromColumns(nextCols);
+      void boardStore.saveCurrentBoard(nextCols);
+    } else {
+      get().syncStagesFromColumns(prevCols);
+    }
+  },
+
+  renameAgentPersona: async (oldRole: string, newRole: string) => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('rename_agent_persona', { oldRole, newRole });
+    } catch (err) {
+      console.info('rename_agent_persona IPC not available or failed:', err);
+      throw err;
+    }
+    await get().loadAgentPersonas();
+    try {
+      await useBoardStore.getState().loadBoards();
+    } catch (err) {
+      console.info('Failed to reload boards after agent rename:', err);
+    }
+  },
+
+  deleteAgentPersona: async (role: string) => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('delete_agent_persona', { role });
+    } catch (err) {
+      console.info('delete_agent_persona IPC not available or failed:', err);
+      throw err;
+    }
+    await get().loadAgentPersonas();
+    try {
+      await useBoardStore.getState().loadBoards();
+    } catch (err) {
+      console.info('Failed to reload boards after agent delete:', err);
+    }
+  },
+
+  // --- GLOBAL RULES ---
   loadGlobalRules: async () => {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
@@ -340,8 +588,8 @@ export const createCortexFilesSlice: StateCreator<
     }
   },
 
+  // --- FILE OPEN & TEMPLATE CREATION ---
   openFile: async (fileId) => {
-    // 0. Сначала проверяем глобальные правила проекта (.cvh/rules/)
     const { globalRules } = get();
     const globalFile = globalRules.find((f) => f.id === fileId);
     if (globalFile) {
@@ -364,14 +612,12 @@ export const createCortexFilesSlice: StateCreator<
       return;
     }
 
-    // Один флоу открытия на обе секции: ищем узел и в колонках, и в агентах.
     const { stages, agentStages } = get();
     const allStages = [...stages, ...agentStages];
     for (const stage of allStages) {
       const file = stage.files.find((f) => f.id === fileId);
       if (!file) continue;
 
-      // 1. Встроенные хуки (builtin:create_worktree и др.)
       if (file.path.startsWith('builtin:')) {
         const content =
           file.content && file.content.trim().length > 0
@@ -396,11 +642,9 @@ export const createCortexFilesSlice: StateCreator<
         return;
       }
 
-      // 2. Хуки стадий: скрипты или системные команды
       if (file.type === 'hook') {
         const scriptPath = extractScriptPath(file.path);
         if (scriptPath) {
-          // Хук является скриптом: пробуем прочитать его реальный исходный код с диска
           try {
             const { invoke } = await import('@tauri-apps/api/core');
             const content = await invoke<string>('read_cortex_file', { path: scriptPath });
@@ -420,7 +664,6 @@ export const createCortexFilesSlice: StateCreator<
               isEditorOpen: true,
               saveFeedback: null,
             }));
-            // Файл найден: снимаем пометку отсутствия
             set((state) => {
               if (!state.fileMissing[fileId]) return state;
               const next = { ...state.fileMissing };
@@ -453,7 +696,6 @@ export const createCortexFilesSlice: StateCreator<
             return;
           }
         } else {
-          // Прямая команда (напр. "cargo check", "npm run build") — формируем структурированное описание
           const content =
             file.content && file.content.trim().length > 0
               ? file.content
@@ -478,7 +720,6 @@ export const createCortexFilesSlice: StateCreator<
         }
       }
 
-      // 3. Обычные текстовые файлы (persona, rule, settings)
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         const content = await invoke<string>('read_cortex_file', { path: file.path });
@@ -508,7 +749,6 @@ export const createCortexFilesSlice: StateCreator<
           isEditorOpen: true,
           saveFeedback: null,
         }));
-        // Файл на месте: снять пометку об отсутствии, если была
         set((state) => {
           if (!state.fileMissing[fileId]) return state;
           const next = { ...state.fileMissing };
@@ -518,12 +758,9 @@ export const createCortexFilesSlice: StateCreator<
       } catch (err) {
         console.info('read_cortex_file not available or file is missing:', err);
         if (file.content) {
-          // Fallback для web-preview без бэкенда: открыть содержимое из памяти
           set({ activeFile: { ...file }, isEditorOpen: true, saveFeedback: null });
           return;
         }
-        // Файла нет на диске: показать в дереве плейсхолдер «нет файла»
-        // с кнопкой создания по существующему флоу шаблонов
         set((state) => ({
           fileMissing: { ...state.fileMissing, [fileId]: true },
         }));
@@ -546,7 +783,6 @@ export const createCortexFilesSlice: StateCreator<
       } catch (err) {
         console.info('save_cortex_file not available or in web mode:', err);
       }
-      // Перезагрузить узел: обновить содержимое, снять пометку, открыть в редакторе
       const loaded: CortexAgentFile = { ...file, content: template, isDirty: false };
       set((state) => {
         const nextMissing = { ...state.fileMissing };
@@ -598,7 +834,6 @@ export const createCortexFilesSlice: StateCreator<
       } catch (err) {
         console.info('save_cortex_file not available or in web mode:', err);
       }
-      // Перезагрузить узел: обновить содержимое, снять пометку, открыть в редакторе
       const loaded: CortexAgentFile = { ...file, content: template, isDirty: false };
       set((state) => {
         const nextMissing = { ...state.fileMissing };
@@ -641,4 +876,312 @@ export const createCortexFilesSlice: StateCreator<
       saveFeedback: null,
     });
   },
+
+  // --- RULES & FILES CRUD ---
+  createCortexFile: async (stageId, rawName, kind, opts) => {
+    const { stages, agentStages } = get();
+    const stage =
+      stages.find((st) => st.stageId === stageId) ??
+      agentStages.find((st) => st.stageId === stageId);
+    if (!stage) throw new Error('Стадия не найдена');
+
+    const role = (stage.personaName ?? '').trim() || stageId;
+    const dir = cortexAgentDir(stage.personaName, stageId);
+
+    let targetPath: string;
+    let content: string;
+    let fileName: string;
+    let fileType: CortexAgentFile['type'];
+
+    if (kind === 'rule') {
+      const { base, fileName: ruleName } = normalizeCortexFileName(rawName);
+      if (!base) throw new Error('Введите имя файла');
+      if (!/^[A-Za-z0-9-_]+$/.test(base)) {
+        throw new Error('Только латиница, цифры, - и _');
+      }
+      fileName = ruleName;
+      fileType = 'rule';
+      targetPath = `${dir}/rules/${fileName}`;
+      content = buildRuleTemplate(base, stage.stageTitle);
+    } else {
+      const moment: CortexHookMoment = opts?.hookMoment ?? 'on_enter';
+      const ext: CortexHookExt = opts?.hookExt ?? 'bat';
+      if (moment !== 'on_enter' && moment !== 'on_leave' && moment !== 'on_finish') {
+        throw new Error('Момент хука: on_enter или on_leave');
+      }
+      if (ext !== 'bat' && ext !== 'ps1' && ext !== 'py' && ext !== 'sh') {
+        throw new Error('Расширение хука: .bat, .ps1, .py или .sh');
+      }
+      const typed = rawName.trim().replace(/\.[A-Za-z0-9]+$/, '').trim();
+      if (typed && !/^[A-Za-z0-9-_]+$/.test(typed)) {
+        throw new Error('Только латиница, цифры, - и _');
+      }
+      fileName = typed ? `${moment}-${typed}.${ext}` : `${moment}.${ext}`;
+      fileType = 'hook';
+      targetPath = `${dir}/hooks/${fileName}`;
+      content = buildHookTemplate(moment, ext, typed || moment, role, stage.stageTitle);
+    }
+
+    const duplicate = stage.files.some(
+      (f) => f.name.toLowerCase() === fileName.toLowerCase() || f.path.toLowerCase() === targetPath.toLowerCase()
+    );
+    if (duplicate) throw new Error(`Файл ${fileName} уже есть в стадии`);
+
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('save_cortex_file', { path: targetPath, content });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(`Не удалось сохранить файл: ${detail}`);
+    }
+
+    const idBase = `${stageId}-${kind}-${fileName}`;
+    let fileId = idBase;
+    let suffix = 2;
+    const existingIds = new Set(stage.files.map((f) => f.id));
+    while (existingIds.has(fileId)) {
+      fileId = `${idBase}-${suffix}`;
+      suffix += 1;
+    }
+
+    const created: CortexAgentFile = {
+      id: fileId,
+      name: fileName,
+      stageId,
+      type: fileType,
+      path: targetPath,
+      content,
+      isDirty: false,
+    };
+
+    set((state) => ({
+      stages: state.stages.map((st) =>
+        st.stageId === stageId ? { ...st, files: [...st.files, created] } : st
+      ),
+      agentStages: state.agentStages.map((st) =>
+        st.stageId === stageId ? { ...st, files: [...st.files, created] } : st
+      ),
+      activeFile: created,
+      isEditorOpen: true,
+      saveFeedback: null,
+    }));
+  },
+
+  createGlobalRule: async (rawName: string) => {
+    const { globalRules } = get();
+    const { base, fileName } = normalizeCortexFileName(rawName);
+    if (!base) throw new Error('Введите имя файла');
+    if (!/^[A-Za-z0-9-_]+$/.test(base)) {
+      throw new Error('Только латиница, цифры, - и _');
+    }
+
+    const targetPath = `.cvh/rules/${fileName}`;
+    const content = buildGlobalRuleTemplate(base);
+
+    const duplicate = globalRules.some(
+      (f) =>
+        f.name.toLowerCase() === fileName.toLowerCase() ||
+        f.path.toLowerCase() === targetPath.toLowerCase()
+    );
+    if (duplicate) throw new Error(`Файл ${fileName} уже есть в глобальных правилах`);
+
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('save_cortex_file', { path: targetPath, content });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(`Не удалось сохранить файл: ${detail}`);
+    }
+
+    const fileId = `global-rule-${fileName}`;
+    const created: CortexAgentFile = {
+      id: fileId,
+      name: fileName,
+      stageId: 'global',
+      type: 'rule',
+      path: targetPath,
+      content,
+      isDirty: false,
+    };
+
+    set((state) => ({
+      globalRules: [...state.globalRules, created].sort((a, b) => a.name.localeCompare(b.name)),
+      activeFile: created,
+      isEditorOpen: true,
+      saveFeedback: null,
+    }));
+  },
+
+  updateActiveFileContent: (content) => {
+    set((state) => {
+      if (!state.activeFile) return state;
+      return {
+        activeFile: {
+          ...state.activeFile,
+          content,
+          isDirty: true,
+        },
+      };
+    });
+  },
+
+  saveRules: async () => {
+    const { activeFile, stages, agentStages, globalRules } = get();
+    if (!activeFile) return;
+
+    set({ isSaving: true });
+
+    const isBuiltin = activeFile.path.startsWith('builtin:');
+    const scriptPath = extractScriptPath(activeFile.path);
+    const isDirectCommand = activeFile.type === 'hook' && !isBuiltin && !scriptPath;
+
+    if (!isBuiltin && !isDirectCommand) {
+      const targetPath = scriptPath ?? activeFile.path;
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('save_cortex_file', { path: targetPath, content: activeFile.content });
+      } catch (err) {
+        console.info('save_cortex_file not available or in web mode:', err);
+      }
+    }
+
+    const updatedStages = stages.map((stage) => {
+      if (stage.stageId !== activeFile.stageId) return stage;
+      return {
+        ...stage,
+        files: stage.files.map((file) =>
+          file.id === activeFile.id
+            ? { ...file, content: activeFile.content, isDirty: false }
+            : file
+        ),
+      };
+    });
+    const updatedAgentStages = agentStages.map((stage) => {
+      if (stage.stageId !== activeFile.stageId) return stage;
+      return {
+        ...stage,
+        files: stage.files.map((file) =>
+          file.id === activeFile.id
+            ? { ...file, content: activeFile.content, isDirty: false }
+            : file
+        ),
+      };
+    });
+    const updatedGlobalRules = globalRules.map((file) =>
+      file.id === activeFile.id
+        ? { ...file, content: activeFile.content, isDirty: false }
+        : file
+    );
+
+    const feedbackMsg = isBuiltin
+      ? `Встроенный хук ${activeFile.name} обновлен`
+      : isDirectCommand
+      ? `Команда ${activeFile.name} обновлена`
+      : `Файл ${activeFile.name} сохранен`;
+
+    set({
+      stages: updatedStages,
+      agentStages: updatedAgentStages,
+      globalRules: updatedGlobalRules,
+      activeFile: { ...activeFile, isDirty: false },
+      isSaving: false,
+      saveFeedback: feedbackMsg,
+    });
+
+    setTimeout(() => {
+      set({ saveFeedback: null });
+    }, 2800);
+  },
+
+  deleteRule: async (stageId: string, ruleName: string) => {
+    if (stageId === 'global') {
+      return get().deleteGlobalRule(ruleName);
+    }
+
+    set((state) => {
+      const filterFiles = (files: CortexAgentFile[]) =>
+        files.filter((f) => !(f.type === 'rule' && (f.name === ruleName || f.id === ruleName)));
+
+      const nextStages = state.stages.map((st) =>
+        st.stageId === stageId ? { ...st, files: filterFiles(st.files) } : st
+      );
+      const nextAgentStages = state.agentStages.map((st) =>
+        st.stageId === stageId ? { ...st, files: filterFiles(st.files) } : st
+      );
+
+      const isActiveDeleted =
+        state.activeFile?.stageId === stageId &&
+        state.activeFile?.type === 'rule' &&
+        (state.activeFile.name === ruleName || state.activeFile.id === ruleName);
+
+      return {
+        stages: nextStages,
+        agentStages: nextAgentStages,
+        activeFile: isActiveDeleted ? null : state.activeFile,
+        isEditorOpen: isActiveDeleted ? false : state.isEditorOpen,
+      };
+    });
+  },
+
+  deleteGlobalRule: async (fileName: string) => {
+    const { globalRules, activeFile } = get();
+    const target = globalRules.find((f) => f.name === fileName || f.id === fileName);
+    if (!target) return;
+
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('delete_cortex_file', { path: target.path });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(`Не удалось удалить файл: ${detail}`);
+    }
+
+    const isActiveDeleted = activeFile?.id === target.id;
+    set((state) => ({
+      globalRules: state.globalRules.filter((f) => f.id !== target.id),
+      activeFile: isActiveDeleted ? null : state.activeFile,
+      isEditorOpen: isActiveDeleted ? false : state.isEditorOpen,
+    }));
+  },
+
+  reorderRules: (stageId: string, ruleNames: string[]) => {
+    set((state) => {
+      const reorderList = (files: CortexAgentFile[]) => {
+        const rules = files.filter((f) => f.type === 'rule');
+        const nonRules = files.filter((f) => f.type !== 'rule');
+
+        rules.sort((a, b) => {
+          const idxA = ruleNames.indexOf(a.name);
+          const idxB = ruleNames.indexOf(b.name);
+          if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+          if (idxA !== -1) return -1;
+          if (idxB !== -1) return 1;
+          return a.name.localeCompare(b.name);
+        });
+
+        const personaFiles = nonRules.filter((f) => f.type === 'persona');
+        const hookFiles = nonRules.filter((f) => f.type === 'hook');
+        const settingFiles = nonRules.filter((f) => f.type === 'settings');
+        const otherFiles = nonRules.filter(
+          (f) => f.type !== 'persona' && f.type !== 'hook' && f.type !== 'settings'
+        );
+
+        return [...personaFiles, ...hookFiles, ...rules, ...otherFiles, ...settingFiles];
+      };
+
+      return {
+        stages: state.stages.map((st) =>
+          st.stageId === stageId ? { ...st, files: reorderList(st.files) } : st
+        ),
+        agentStages: state.agentStages.map((st) =>
+          st.stageId === stageId ? { ...st, files: reorderList(st.files) } : st
+        ),
+      };
+    });
+  },
 });
+
+// Backward-compatible slice creators for zero regressions
+export const createCortexFilesSlice = createCortexSlice;
+export const createPersonasSlice = createCortexSlice;
+export const createRulesSlice = createCortexSlice;
