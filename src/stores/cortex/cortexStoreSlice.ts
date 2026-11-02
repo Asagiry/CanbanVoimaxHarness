@@ -92,6 +92,7 @@ export const createCortexSlice: StateCreator<
   },
 
   // --- COLUMN & STAGE SYNCHRONIZATION ---
+  syncStagesFromStages: (stages) => get().syncStagesFromColumns(stages),
   syncStagesFromColumns: (columns) => {
     const prevStages = get().stages;
     const prevStageById = new Map(prevStages.map((st) => [st.stageId, st]));

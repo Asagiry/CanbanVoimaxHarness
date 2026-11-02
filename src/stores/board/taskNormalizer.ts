@@ -2,13 +2,14 @@ import {
   BackendTaskDTO,
   isBackendTaskDTO,
   KanbanTask,
+  PipelineStage,
   PipelineColumn,
   TaskPriority,
   TaskStatus,
   TaskVerdict,
   BoardDef,
 } from '../../types';
-import { CANONICAL_BOARD_COLUMNS, DEFAULT_BOARD } from './boardConstants';
+import { CANONICAL_BOARD_STAGES, DEFAULT_BOARD } from './boardConstants';
 import { logEvent } from '../../lib/logger';
 import { useBoardStore } from '../boardStore';
 
@@ -38,6 +39,7 @@ export function normalizeKanbanTask(
   context?: {
     boards?: BoardDef[];
     activeBoardId?: string;
+    stages?: PipelineStage[];
     columns?: PipelineColumn[];
     tasks?: KanbanTask[];
     activeProjectRoot?: string;
@@ -52,7 +54,7 @@ export function normalizeKanbanTask(
   const storeState = typeof useBoardStore?.getState === 'function' ? useBoardStore.getState() : undefined;
   const boards = context?.boards ?? storeState?.boards ?? [DEFAULT_BOARD];
   const activeBoardId = context?.activeBoardId ?? storeState?.activeBoardId ?? 'development';
-  const currentColumns = context?.columns ?? storeState?.columns ?? CANONICAL_BOARD_COLUMNS;
+  const currentColumns = context?.stages ?? context?.columns ?? storeState?.stages ?? storeState?.columns ?? CANONICAL_BOARD_STAGES;
   const existingTasks = context?.tasks ?? storeState?.tasks ?? [];
 
   // Dynamic board resolution:
@@ -65,9 +67,10 @@ export function normalizeKanbanTask(
 
   // Determine target board's columns to validate stageId
   const targetBoard = boards.find((b) => b.id === boardId);
-  const targetColumns = targetBoard?.columns && targetBoard.columns.length > 0
-    ? targetBoard.columns
-    : (currentColumns && currentColumns.length > 0 ? currentColumns : CANONICAL_BOARD_COLUMNS);
+  const targetBoardStages = targetBoard?.stages ?? targetBoard?.columns;
+  const targetColumns = targetBoardStages && targetBoardStages.length > 0
+    ? targetBoardStages
+    : (currentColumns && currentColumns.length > 0 ? currentColumns : CANONICAL_BOARD_STAGES);
 
   const rawId: string | undefined = raw.stageId || raw.stage_id || raw.columnId;
 
@@ -79,7 +82,8 @@ export function normalizeKanbanTask(
 
   if (!knownCol && activeBoardId && activeBoardId !== boardId) {
     const activeBoardDef = boards.find((b) => b.id === activeBoardId);
-    const activeCols = activeBoardDef?.columns && activeBoardDef.columns.length > 0 ? activeBoardDef.columns : currentColumns;
+    const activeBoardStages = activeBoardDef?.stages ?? activeBoardDef?.columns;
+    const activeCols = activeBoardStages && activeBoardStages.length > 0 ? activeBoardStages : currentColumns;
     const colInActive = activeCols.find((c) => c.id === rawId || c.id.toLowerCase() === rawId?.toLowerCase());
     if (colInActive) {
       effectiveBoardId = activeBoardId;
@@ -269,6 +273,7 @@ export function mapBackendTaskToKanban(
   context?: {
     boards?: BoardDef[];
     activeBoardId?: string;
+    stages?: PipelineStage[];
     columns?: PipelineColumn[];
     tasks?: KanbanTask[];
     activeProjectRoot?: string;

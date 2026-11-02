@@ -1153,7 +1153,7 @@ pub async fn get_stage_personas(repo_root: &Path) -> HashMap<String, String> {
     let mut map = HashMap::new();
     if let Ok(boards_cfg) = crate::config::load_boards_config(repo_root).await {
         if let Some(active) = boards_cfg.boards.iter().find(|b| b.id == boards_cfg.active_board_id) {
-            for c in &active.columns {
+            for c in &active.stages {
                 if let Some(ref p) = c.persona {
                     map.insert(c.id.clone(), p.clone());
                 }
@@ -1161,7 +1161,7 @@ pub async fn get_stage_personas(repo_root: &Path) -> HashMap<String, String> {
         }
         for b in &boards_cfg.boards {
             if b.id != boards_cfg.active_board_id {
-                for c in &b.columns {
+                for c in &b.stages {
                     if let Some(ref p) = c.persona {
                         map.entry(c.id.clone()).or_insert_with(|| p.clone());
                     }
@@ -1170,7 +1170,7 @@ pub async fn get_stage_personas(repo_root: &Path) -> HashMap<String, String> {
         }
     }
     if let Ok(pipeline) = crate::config::load_pipeline_config(repo_root).await {
-        for c in pipeline.columns {
+        for c in pipeline.stages {
             if let Some(p) = c.persona {
                 map.entry(c.id).or_insert(p);
             }
@@ -2954,7 +2954,7 @@ where
     // when resuming a task without a steer prompt.
     if messages.last().map(|m| m.role == Role::Assistant).unwrap_or(false) {
         let stage_name = if let Ok(pipe) = crate::config::load_pipeline_config(&config.repo_root).await {
-            pipe.columns
+            pipe.stages
                 .into_iter()
                 .find(|c| c.id == config.stage_id)
                 .map(|c| c.title)
@@ -3165,7 +3165,7 @@ where
         // Safety guard: guarantee request never ends with an Assistant turn (Gemini HTTP 400).
         if messages.last().map(|m| m.role == Role::Assistant).unwrap_or(false) {
             let stage_name = if let Ok(pipe) = crate::config::load_pipeline_config(&config.repo_root).await {
-                pipe.columns
+                pipe.stages
                     .into_iter()
                     .find(|c| c.id == config.stage_id)
                     .map(|c| c.title)

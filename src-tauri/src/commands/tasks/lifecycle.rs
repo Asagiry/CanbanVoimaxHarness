@@ -104,7 +104,7 @@ pub async fn internal_save_tasks(
                 || t.status.as_deref() == Some("done")
                 || boards_cfg.as_ref().is_some_and(|cfg| {
                     cfg.boards.iter().any(|b| {
-                        b.columns.iter().any(|c| stage_id_matches(&c.id, &t.stage_id) && c.terminal == Some(true))
+                        b.stages.iter().any(|c| stage_id_matches(&c.id, &t.stage_id) && c.terminal == Some(true))
                     })
                 });
 
@@ -413,14 +413,14 @@ pub async fn internal_create_task(
         let col_from_board = boards_cfg.as_ref().and_then(|bc| {
             let b = bc.boards.iter().find(|b| b.id == effective_board_id)
                 .or_else(|| bc.boards.iter().find(|b| b.id == bc.active_board_id));
-            b.and_then(|b| b.columns.iter().find(|c| c.id == stage_id).cloned())
+            b.and_then(|b| b.stages.iter().find(|c| c.id == stage_id).cloned())
         });
-        let col_opt: Option<crate::config::PipelineColumn> = match col_from_board {
+        let col_opt: Option<crate::config::PipelineStage> = match col_from_board {
             Some(c) => Some(c),
             None => load_pipeline_config(root)
                 .await
                 .ok()
-                .and_then(|p| p.columns.into_iter().find(|c| c.id == stage_id)),
+                .and_then(|p| p.stages.into_iter().find(|c| c.id == stage_id)),
         };
         if let Some(col) = col_opt {
             trigger_column_on_enter_script(&col, &new_task, &stage_id, None, root).await;
@@ -691,11 +691,15 @@ pub async fn internal_create_task(
     Ok(new_task)
 }
 
-pub fn is_review_column(col: &crate::config::PipelineColumn) -> bool {
-    col.persona.as_deref() == Some("reviewer")
-        || stage_id_matches(&col.id, "review")
-        || col.id.to_lowercase().contains("review")
-        || col.id.to_lowercase().contains("ревью")
+pub fn is_review_stage(stage: &crate::config::PipelineStage) -> bool {
+    stage.persona.as_deref() == Some("reviewer")
+        || stage_id_matches(&stage.id, "review")
+        || stage.id.to_lowercase().contains("review")
+        || stage.id.to_lowercase().contains("ревью")
+}
+
+pub fn is_review_column(col: &crate::config::PipelineStage) -> bool {
+    is_review_stage(col)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -749,7 +753,7 @@ pub async fn internal_create_subtask(
 
     let target_col = if let Some(target_id) = target_stage_id {
         let from_board = effective_board.as_ref().and_then(|b| {
-            b.columns.iter().find(|c| stage_id_matches(&c.id, target_id)).cloned()
+            b.stages.iter().find(|c| stage_id_matches(&c.id, target_id)).cloned()
         });
         match from_board {
             Some(c) => c,
@@ -758,7 +762,7 @@ pub async fn internal_create_subtask(
                     .await
                     .unwrap_or_else(|_| crate::config::default_pipeline_config());
                 pipeline
-                    .columns
+                    .stages
                     .into_iter()
                     .find(|c| stage_id_matches(&c.id, target_id))
                     .ok_or_else(|| format!("Target column {} not found in pipeline", target_id))?
@@ -766,12 +770,12 @@ pub async fn internal_create_subtask(
         }
     } else {
         let cols = if let Some(ref b) = effective_board {
-            b.columns.clone()
+            b.stages.clone()
         } else {
             let pipeline = load_pipeline_config(root)
                 .await
                 .unwrap_or_else(|_| crate::config::default_pipeline_config());
-            pipeline.columns
+            pipeline.stages
         };
         let parent_col_idx = cols
             .iter()

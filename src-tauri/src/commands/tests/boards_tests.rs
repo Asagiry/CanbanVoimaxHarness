@@ -109,7 +109,7 @@ use std::path::PathBuf;
                 BoardDef {
                     id: "feature-board".to_string(),
                     name: "Feature Board".to_string(),
-                    columns: vec![
+                    stages: vec![
                         PipelineColumn {
                             id: "backlog".to_string(),
                             title: "Backlog".to_string(),

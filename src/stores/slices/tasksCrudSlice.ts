@@ -844,7 +844,9 @@ export const createTasksCrudSlice: StateCreator<
 
     const effectiveBoardId = task.boardId || activeBoardId;
     const taskBoard = boards.find((b) => b.id === effectiveBoardId);
-    const targetColumns = (taskBoard?.columns && taskBoard.columns.length > 0)
+    const targetColumns = (taskBoard?.stages && taskBoard.stages.length > 0)
+      ? taskBoard.stages
+      : (taskBoard?.columns && taskBoard.columns.length > 0)
       ? taskBoard.columns
       : (activeColumns && activeColumns.length > 0 ? activeColumns : CANONICAL_BOARD_COLUMNS);
     const taskCol = targetColumns.find(

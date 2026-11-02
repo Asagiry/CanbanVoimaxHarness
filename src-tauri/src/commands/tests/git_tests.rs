@@ -43,7 +43,7 @@ use std::path::PathBuf;
             .expect("read pipeline");
         let pipe: crate::config::PipelineConfig =
             serde_json::from_str(&raw).expect("parse pipeline");
-        let backlog = pipe.columns.iter().find(|c| c.id == "backlog").expect("backlog");
+        let backlog = pipe.stages.iter().find(|c| c.id == "backlog").expect("backlog");
         assert!(backlog.hooks.is_empty());
 
         // Repeated scaffold preserves existing pipeline.json
@@ -63,7 +63,7 @@ use std::path::PathBuf;
             .expect("read pipeline");
         let pipe_n: crate::config::PipelineConfig =
             serde_json::from_str(&raw_n).expect("parse pipeline");
-        let backlog_n = pipe_n.columns.iter().find(|c| c.id == "backlog").expect("backlog");
+        let backlog_n = pipe_n.stages.iter().find(|c| c.id == "backlog").expect("backlog");
         assert!(backlog_n.hooks.is_empty());
 
         let _ = tokio::fs::remove_dir_all(&with_git).await;

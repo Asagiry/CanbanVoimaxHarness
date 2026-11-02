@@ -398,7 +398,7 @@ use std::path::PathBuf;
             boards: vec![crate::config::BoardDef {
                 id: "test-board".to_string(),
                 name: "Test Board".to_string(),
-                columns: vec![backlog_col, dev_col, ready_col],
+                stages: vec![backlog_col, dev_col, ready_col],
             }],
         };
         crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
@@ -410,12 +410,12 @@ use std::path::PathBuf;
 
         // Check boards.json updated
         let loaded_boards = crate::config::load_boards_config(&base).await.expect("load boards");
-        let dev_col = loaded_boards.boards[0].columns.iter().find(|c| c.id == "dev").unwrap();
+        let dev_col = loaded_boards.boards[0].stages.iter().find(|c| c.id == "dev").unwrap();
         assert_eq!(dev_col.persona.as_deref(), Some("agent-b"));
 
         // Check pipeline.json updated
         let loaded_pipe = crate::config::load_pipeline_config(&base).await.expect("load pipeline");
-        let pipe_dev_col = loaded_pipe.columns.iter().find(|c| c.id == "dev").unwrap();
+        let pipe_dev_col = loaded_pipe.stages.iter().find(|c| c.id == "dev").unwrap();
         assert_eq!(pipe_dev_col.persona.as_deref(), Some("agent-b"));
 
         // Delete agent-b and verify references reset to None
@@ -423,7 +423,7 @@ use std::path::PathBuf;
         assert!(!agents_dir.join("agent-b").exists());
 
         let loaded_boards_after_del = crate::config::load_boards_config(&base).await.expect("load boards after del");
-        let dev_col_del = loaded_boards_after_del.boards[0].columns.iter().find(|c| c.id == "dev").unwrap();
+        let dev_col_del = loaded_boards_after_del.boards[0].stages.iter().find(|c| c.id == "dev").unwrap();
         assert_eq!(dev_col_del.persona, None);
 
         let _ = tokio::fs::remove_dir_all(&base).await;

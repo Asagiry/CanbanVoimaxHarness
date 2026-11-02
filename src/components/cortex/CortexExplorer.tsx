@@ -128,7 +128,7 @@ export default function CortexExplorer() {
 
     const assignedList: string[] = [];
     for (const b of boards) {
-      for (const c of b.columns) {
+      for (const c of (b.stages ?? b.columns ?? [])) {
         if (c.persona === role) {
           assignedList.push(t('cortex.boardColumnFormat', { board: b.name, column: c.title }));
         }

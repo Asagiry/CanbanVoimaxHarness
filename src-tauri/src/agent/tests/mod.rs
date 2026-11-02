@@ -90,7 +90,7 @@ pub(crate) fn make_test_board(_base: &Path) -> (BoardsConfig, Vec<PipelineColumn
         boards: vec![BoardDef {
             id: "test-board".to_string(),
             name: "Test Board".to_string(),
-            columns: b_cols.clone(),
+            stages: b_cols.clone(),
         }],
     };
 

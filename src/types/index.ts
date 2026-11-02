@@ -16,7 +16,9 @@ export type TaskVerdict = 'NONE' | 'APPROVED' | 'APPROVED_WITH_CAVEATS' | 'CHANG
 export interface BoardDef {
   id: string;
   name: string;
-  columns: PipelineColumn[];
+  stages: PipelineStage[];
+  /** @deprecated Use stages instead */
+  columns?: PipelineStage[];
 }
 
 export interface TaskInput {
@@ -155,16 +157,16 @@ export function isBackendTaskDTO(raw: unknown): raw is BackendTaskDTO {
   return typeof candidate.id === 'string' && candidate.id.trim() !== '';
 }
 
-export interface PipelineColumn {
+export interface PipelineStage {
   id: string;
   title: string;
   color: string;
   icon: string;
   persona: string | null;
   onEnterScript?: string | null;
-  // Column = agent: autoRun triggers run_agent on entry (default: !!persona),
-  // terminal marks a sink column (task becomes done, no further promotion).
-  // isIntake marks column 0 / intake stage.
+  // Stage = agent: autoRun triggers run_agent on entry (default: !!persona),
+  // terminal marks a sink stage (task becomes done, no further promotion).
+  // isIntake marks stage 0 / intake stage.
   autoRun?: boolean;
   terminal?: boolean;
   isIntake?: boolean;
@@ -177,6 +179,10 @@ export interface PipelineColumn {
   hooks?: Record<string, HookDefinition>;
   routes?: Record<string, string>;
 }
+
+export type PipelineColumn = PipelineStage;
+export type StageDef = PipelineStage;
+export type ColumnDef = PipelineStage;
 
 export type HookDefinition = string | {
   script: string;
@@ -216,7 +222,9 @@ export interface TaskHookStates {
 export interface PipelineConfig {
   id: string;
   title: string;
-  columns: PipelineColumn[];
+  stages: PipelineStage[];
+  /** @deprecated Use stages instead */
+  columns?: PipelineStage[];
 }
 
 export interface CortexAgentFile {

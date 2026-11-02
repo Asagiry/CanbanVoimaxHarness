@@ -140,16 +140,16 @@ use std::path::{Path, PathBuf};
             .await
             .expect("pipeline.json missing");
         let pipe: PipelineConfig = serde_json::from_str(&pipe_raw).expect("pipeline parse");
-        assert_eq!(pipe.columns.len(), 3, "minimal scaffold must have exactly 3 columns");
-        assert_eq!(pipe.columns[0].id, "backlog");
-        assert_eq!(pipe.columns[0].title, "Backlog");
-        assert_eq!(pipe.columns[0].persona, None, "backlog must have no persona");
-        assert_eq!(pipe.columns[1].id, "dev");
-        assert_eq!(pipe.columns[1].title, "CVH Development");
-        assert_eq!(pipe.columns[1].persona.as_deref(), Some("cvh-dev"), "dev must have cvh-dev persona");
-        assert_eq!(pipe.columns[2].id, "ready");
-        assert_eq!(pipe.columns[2].title, "Ready");
-        assert_eq!(pipe.columns[2].terminal, Some(true), "ready must be terminal last");
+        assert_eq!(pipe.stages.len(), 3, "minimal scaffold must have exactly 3 columns");
+        assert_eq!(pipe.stages[0].id, "backlog");
+        assert_eq!(pipe.stages[0].title, "Backlog");
+        assert_eq!(pipe.stages[0].persona, None, "backlog must have no persona");
+        assert_eq!(pipe.stages[1].id, "dev");
+        assert_eq!(pipe.stages[1].title, "CVH Development");
+        assert_eq!(pipe.stages[1].persona.as_deref(), Some("cvh-dev"), "dev must have cvh-dev persona");
+        assert_eq!(pipe.stages[2].id, "ready");
+        assert_eq!(pipe.stages[2].title, "Ready");
+        assert_eq!(pipe.stages[2].terminal, Some(true), "ready must be terminal last");
 
         // Verify boards.json is also created and has 3 columns with cvh-dev
         let boards_raw = tokio::fs::read_to_string(cvh.join("boards.json"))
@@ -157,8 +157,8 @@ use std::path::{Path, PathBuf};
             .expect("boards.json missing");
         let boards_cfg: BoardsConfig = serde_json::from_str(&boards_raw).expect("boards parse");
         assert_eq!(boards_cfg.boards.len(), 1);
-        assert_eq!(boards_cfg.boards[0].columns.len(), 3);
-        assert_eq!(boards_cfg.boards[0].columns[1].persona.as_deref(), Some("cvh-dev"));
+        assert_eq!(boards_cfg.boards[0].stages.len(), 3);
+        assert_eq!(boards_cfg.boards[0].stages[1].persona.as_deref(), Some("cvh-dev"));
 
         // cvh-dev setting must have context_window 200000
         let cvh_dev = cvh.join("agents").join("cvh-dev");
@@ -405,7 +405,7 @@ use std::path::{Path, PathBuf};
         assert_eq!(cfg.boards.len(), 1);
         assert_eq!(cfg.boards[0].id, "development");
         assert_eq!(cfg.boards[0].name, "cvh-board");
-        assert_eq!(cfg.boards[0].columns.len(), 3);
+        assert_eq!(cfg.boards[0].stages.len(), 3);
     }
 
     #[test]
@@ -450,7 +450,7 @@ use std::path::{Path, PathBuf};
         cfg.boards.push(BoardDef {
             id: "modeler".to_string(),
             name: "3D Моделирование".to_string(),
-            columns: modeler_cols,
+            stages: modeler_cols,
         });
         cfg.active_board_id = "modeler".to_string();
 
@@ -461,7 +461,7 @@ use std::path::{Path, PathBuf};
         // Verify pipeline.json synchronized with active board (normalized with mandatory backlog and ready)
         let pipe = load_pipeline_config(&base_dir).await.expect("load pipeline");
         assert_eq!(pipe.title, "3D Моделирование");
-        assert_eq!(pipe.columns.len(), 4);
+        assert_eq!(pipe.stages.len(), 4);
 
         // Load boards config back
         let reloaded = load_boards_config(&base_dir).await.expect("load boards");
@@ -509,7 +509,7 @@ use std::path::{Path, PathBuf};
         assert_eq!(boards_cfg.active_board_id, "development");
         assert_eq!(boards_cfg.boards.len(), 1);
         assert_eq!(boards_cfg.boards[0].name, "Мой пайплайн");
-        assert_eq!(boards_cfg.boards[0].columns.len(), 1);
+        assert_eq!(boards_cfg.boards[0].stages.len(), 1);
 
         let _ = tokio::fs::remove_dir_all(&base_dir).await;
     }
@@ -743,4 +743,38 @@ use std::path::{Path, PathBuf};
         assert_eq!(col.hooks.get("on_leave").unwrap().description(), Some("Creates worktree"));
         assert_eq!(col.hooks.get("on_enter").unwrap().script(), ".cvh/hooks/on_enter.bat");
         assert_eq!(col.hooks.get("on_enter").unwrap().description(), None);
+    }
+
+    #[test]
+    fn test_pipeline_stage_and_serde_alias_compatibility() {
+        let legacy_board_json = r#"{
+            "id": "legacy",
+            "name": "Legacy Board",
+            "columns": [
+                { "id": "backlog", "title": "Backlog" },
+                { "id": "ready", "title": "Ready", "terminal": true }
+            ]
+        }"#;
+
+        let parsed_board: BoardDef = serde_json::from_str(legacy_board_json).expect("deserialize legacy board with columns");
+        assert_eq!(parsed_board.stages.len(), 2);
+        assert_eq!(parsed_board.columns().len(), 2);
+        assert_eq!(parsed_board.stages[0].id, "backlog");
+        assert_eq!(parsed_board.stages[1].id, "ready");
+
+        let legacy_pipe_json = r#"{
+            "id": "default",
+            "title": "Pipeline",
+            "columns": [
+                { "id": "backlog", "title": "Backlog" }
+            ]
+        }"#;
+
+        let parsed_pipe: PipelineConfig = serde_json::from_str(legacy_pipe_json).expect("deserialize legacy pipeline with columns");
+        assert_eq!(parsed_pipe.stages.len(), 1);
+        assert_eq!(parsed_pipe.columns().len(), 1);
+
+        // Verification of helper functions alias equivalence
+        assert_eq!(get_canonical_board_stages(), get_canonical_board_columns());
+        assert_eq!(get_board_template_stages("modeler"), get_board_template_columns("modeler"));
     }

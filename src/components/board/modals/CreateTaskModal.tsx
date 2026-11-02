@@ -4,25 +4,33 @@ import { useBoardStore } from '../../../stores/boardStore';
 import { useSettingsStore } from '../../../stores/settingsStore';
 import { useTranslation } from '../../../stores/languageStore';
 import { compressImageFile } from '../../../lib/imageCompression';
-import { PipelineColumn } from '../../../types';
+import { PipelineStage, PipelineColumn } from '../../../types';
 import ImageLightboxModal from './ImageLightboxModal';
 
 export interface CreateTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
+  stages?: PipelineStage[];
+  /** @deprecated Use stages instead */
   columns?: PipelineColumn[];
+  defaultStageId?: string;
+  /** @deprecated Use defaultStageId instead */
   defaultColumnId?: string;
 }
 
 export default function CreateTaskModal({
   isOpen,
   onClose,
+  stages,
   columns,
+  defaultStageId,
   defaultColumnId,
 }: CreateTaskModalProps) {
   const { addTask, activeBoardId } = useBoardStore();
   const { availableModels, settings } = useSettingsStore();
   const { t } = useTranslation();
+  const effectiveStages = stages ?? columns;
+  const initialStage = defaultStageId ?? defaultColumnId;
 
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
@@ -41,15 +49,15 @@ export default function CreateTaskModal({
       setNewDescription('');
       setNewAttachments([]);
       setSelectedModel(settings.model || (availableModels.length > 0 ? availableModels[0] : 'gemini-3.8-flash-high'));
-      const intakeCol = columns?.find((c) => c.isIntake);
+      const intakeCol = effectiveStages?.find((c) => c.isIntake);
       const fallbackId =
         intakeCol?.id ||
-        (columns?.some((c) => c.id === 'backlog') ? 'backlog' : (columns?.[0]?.id ?? 'backlog'));
-      setSelectedColumnId(defaultColumnId || fallbackId);
+        (effectiveStages?.some((c) => c.id === 'backlog') ? 'backlog' : (effectiveStages?.[0]?.id ?? 'backlog'));
+      setSelectedColumnId(initialStage || fallbackId);
       setPreviewLightbox(null);
       setIsSubmitting(false);
     }
-  }, [isOpen, defaultColumnId, columns, settings.model, availableModels]);
+  }, [isOpen, initialStage, effectiveStages, settings.model, availableModels]);
 
   // Global Escape key listener (only when lightbox is not active)
   useEffect(() => {

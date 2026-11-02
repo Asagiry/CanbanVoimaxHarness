@@ -1,4 +1,4 @@
-import { CortexAgentFile, CortexAgentStage, PipelineColumn } from '../../types';
+import { CortexAgentFile, CortexAgentStage, PipelineStage, PipelineColumn } from '../../types';
 
 export type CortexHookMoment = 'on_enter' | 'on_leave' | 'on_finish';
 export type CortexHookExt = 'bat' | 'ps1' | 'py' | 'sh';
@@ -83,6 +83,7 @@ export interface CortexFilesActions {
   toggleStageExpand: (stageId: string) => void;
   expandStage: (stageId: string) => void;
   focusStage: (stageId: string) => void;
+  syncStagesFromStages?: (stages: PipelineStage[]) => void;
   syncStagesFromColumns: (columns: PipelineColumn[]) => void;
   loadGlobalRules: () => Promise<void>;
   openFile: (fileId: string) => Promise<void>;

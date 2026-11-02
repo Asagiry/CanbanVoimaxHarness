@@ -36,7 +36,7 @@ pub async fn load_boards_config(root_path: impl AsRef<Path>) -> Result<BoardsCon
                 let def_board = BoardDef {
                     id: "development".to_string(),
                     name: if pipe.title.trim().is_empty() { "Разработка".to_string() } else { pipe.title },
-                    columns: if pipe.columns.is_empty() { default_pipeline_config().columns } else { pipe.columns },
+                    stages: if pipe.stages.is_empty() { default_pipeline_config().stages } else { pipe.stages },
                 };
                 return Ok(BoardsConfig {
                     active_board_id: "development".to_string(),
@@ -54,7 +54,7 @@ pub async fn save_boards_config(root_path: impl AsRef<Path>, config: &BoardsConf
     let root = root_path.as_ref();
     let mut normalized_config = config.clone();
     for board in &mut normalized_config.boards {
-        board.columns = normalize_pipeline_columns(std::mem::take(&mut board.columns))
+        board.stages = normalize_pipeline_stages(std::mem::take(&mut board.stages))
             .map_err(|e| anyhow::anyhow!("{}", e))?;
     }
     let boards_file = root.join(".cvh").join("boards.json");
@@ -66,7 +66,7 @@ pub async fn save_boards_config(root_path: impl AsRef<Path>, config: &BoardsConf
     pipeline.boards = Some(normalized_config.boards.clone());
     pipeline.active_board_id = Some(normalized_config.active_board_id.clone());
     if let Some(active_board) = normalized_config.boards.iter().find(|b| b.id == normalized_config.active_board_id) {
-        pipeline.columns = active_board.columns.clone();
+        pipeline.stages = active_board.stages.clone();
         pipeline.title = active_board.name.clone();
     }
     save_pipeline_config(root, &pipeline).await?;
@@ -262,11 +262,11 @@ pub async fn load_pipeline_config(root_path: impl AsRef<Path>) -> Result<Pipelin
 pub async fn save_pipeline_config(root_path: impl AsRef<Path>, config: &PipelineConfig) -> Result<()> {
     let root = root_path.as_ref();
     let mut normalized = config.clone();
-    normalized.columns = normalize_pipeline_columns(std::mem::take(&mut normalized.columns))
+    normalized.stages = normalize_pipeline_stages(std::mem::take(&mut normalized.stages))
         .map_err(|e| anyhow::anyhow!("{}", e))?;
     if let Some(ref mut boards) = normalized.boards {
         for b in boards.iter_mut() {
-            b.columns = normalize_pipeline_columns(std::mem::take(&mut b.columns))
+            b.stages = normalize_pipeline_stages(std::mem::take(&mut b.stages))
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
         }
     }
@@ -286,7 +286,7 @@ pub async fn save_pipeline_config(root_path: impl AsRef<Path>, config: &Pipeline
         }
     } else if let Ok(mut boards_cfg) = load_boards_config(root).await {
         if let Some(active_board) = boards_cfg.boards.iter_mut().find(|b| b.id == boards_cfg.active_board_id) {
-            active_board.columns = normalized.columns.clone();
+            active_board.stages = normalized.stages.clone();
             if let Ok(serialized_boards) = serde_json::to_string_pretty(&boards_cfg) {
                 let _ = atomic_write_file(&boards_file, &serialized_boards).await;
             }

@@ -20,6 +20,7 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
     useBoardStore.setState({
       boards: [DEFAULT_BOARD],
       activeBoardId: 'development',
+      stages: CANONICAL_BOARD_COLUMNS,
       columns: CANONICAL_BOARD_COLUMNS,
       tasks: [],
       selectedTaskId: null,
@@ -378,8 +379,9 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
         { id: 'ready', title: 'Ready', color: '#10b981', icon: 'Check', persona: null, terminal: true, modelOverride: null },
       ];
       useBoardStore.setState({
-        boards: [{ id: 'pipeline', name: 'Pipeline', columns: multiColumns }],
+        boards: [{ id: 'pipeline', name: 'Pipeline', stages: multiColumns, columns: multiColumns }],
         activeBoardId: 'pipeline',
+        stages: multiColumns,
         columns: multiColumns,
       });
 

@@ -123,7 +123,7 @@ use std::path::PathBuf;
             boards: vec![crate::config::BoardDef {
                 id: "development".to_string(),
                 name: "Development".to_string(),
-                columns: vec![
+                stages: vec![
                     test_col("backlog"),
                     test_col("dev"),
                     test_col("ready"),

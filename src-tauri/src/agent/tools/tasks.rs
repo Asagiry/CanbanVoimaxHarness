@@ -182,7 +182,7 @@ pub async fn execute_create_task(
     let now = chrono::Utc::now().timestamp_millis();
     let mut next_num = crate::commands::tasks::allocate_next_task_num(repo_root, &tasks).await;
 
-    let pipe_cols = crate::config::load_pipeline_config(repo_root).await.ok().map(|p| p.columns);
+    let pipe_cols = crate::config::load_pipeline_config(repo_root).await.ok().map(|p| p.stages);
 
     for input in inputs {
         while tasks.iter().any(|t| t.id == format!("CVH-{:03}", next_num)) {
@@ -204,7 +204,7 @@ pub async fn execute_create_task(
         };
 
         let target_board_cols = boards_cfg.as_ref().and_then(|bc| {
-            bc.boards.iter().find(|b| b.id == effective_board_id).map(|b| b.columns.clone())
+            bc.boards.iter().find(|b| b.id == effective_board_id).map(|b| b.stages.clone())
         });
 
         // Resolve column (defaults to "backlog" or target board's backlog column)
@@ -384,7 +384,7 @@ pub async fn execute_complete_task(
         } else {
             bc.boards.iter().find(|b| b.id == bc.active_board_id)
         };
-        b.map(|b| b.columns.clone())
+        b.map(|b| b.stages.clone())
     });
 
     // Find terminal column (ready / done)
@@ -393,7 +393,7 @@ pub async fn execute_complete_task(
         None => {
             let pipeline = crate::config::load_pipeline_config(repo_root).await
                 .context("Failed to load pipeline configuration")?;
-            pipeline.columns
+            pipeline.stages
         }
     };
 

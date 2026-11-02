@@ -59,6 +59,7 @@ describe('taskNormalizer dynamic persona resolution', () => {
   const multiStageBoard: BoardDef = {
     id: 'canban-pipeline',
     name: 'CanbanVoimaxHarness',
+    stages: multiStageColumns,
     columns: multiStageColumns,
   };
 
@@ -94,6 +95,7 @@ describe('taskNormalizer dynamic persona resolution', () => {
   const cvhBoard: BoardDef = {
     id: 'development',
     name: 'cvh-board',
+    stages: cvhBoardColumns,
     columns: cvhBoardColumns,
   };
 
@@ -197,6 +199,7 @@ describe('taskNormalizer dynamic persona resolution', () => {
     const customBoard: BoardDef = {
       id: 'custom-board',
       name: 'Custom',
+      stages: customColumns,
       columns: customColumns,
     };
 
@@ -250,5 +253,25 @@ describe('taskNormalizer dynamic persona resolution', () => {
     });
 
     expect(task).toBeNull();
+  });
+
+  it('normalizes task using stages context property', () => {
+    const rawDto: BackendTaskDTO = {
+      id: 'CVH-STAGES-01',
+      title: 'Task using stages',
+      stageId: 'dev',
+      boardId: 'development',
+      status: 'idle',
+    };
+
+    const task = normalizeKanbanTask(rawDto, {
+      boards: [cvhBoard],
+      activeBoardId: 'development',
+      stages: cvhBoardColumns,
+    });
+
+    expect(task).not.toBeNull();
+    expect(task?.stageId).toBe('dev');
+    expect(task?.persona).toBe('cvh-dev');
   });
 });

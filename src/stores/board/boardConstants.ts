@@ -1,6 +1,6 @@
-import { BoardDef, PipelineColumn } from '../../types';
+import { BoardDef, PipelineStage, PipelineColumn } from '../../types';
 
-export const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
+export const CANONICAL_BOARD_STAGES: PipelineStage[] = [
   {
     id: 'backlog',
     title: 'Backlog',
@@ -37,8 +37,11 @@ export const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = [
   },
 ];
 
+export const CANONICAL_BOARD_COLUMNS: PipelineColumn[] = CANONICAL_BOARD_STAGES;
+
 export const DEFAULT_BOARD: BoardDef = {
   id: 'development',
   name: 'cvh-board',
-  columns: CANONICAL_BOARD_COLUMNS,
+  stages: CANONICAL_BOARD_STAGES,
+  columns: CANONICAL_BOARD_STAGES,
 };

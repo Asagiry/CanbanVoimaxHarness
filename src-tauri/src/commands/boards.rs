@@ -1,6 +1,7 @@
 use crate::config::{
-    atomic_write_file, get_board_template_columns, load_boards_config, load_pipeline_config,
-    normalize_pipeline_columns, save_boards_config, save_pipeline_config, BoardDef, PipelineConfig,
+    atomic_write_file, get_board_template_stages, load_boards_config,
+    load_pipeline_config, normalize_pipeline_stages,
+    save_boards_config, save_pipeline_config, BoardDef, PipelineConfig,
 };
 use crate::commands::state::AppState;
 use crate::commands::tasks::{heal_tasks, load_tasks_from_disk, save_tasks_to_disk};
@@ -56,9 +57,9 @@ pub fn deterministic_color_for_role(role: &str) -> String {
     AGENT_PALETTE[hash % AGENT_PALETTE.len()].to_string()
 }
 
-/// Дефолтная иконка для колонки по её идентификатору
-pub fn default_column_icon(col_id: &str) -> String {
-    match col_id {
+/// Дефолтная иконка для стадии/колонки по её идентификатору
+pub fn default_stage_icon(stage_id: &str) -> String {
+    match stage_id {
         "backlog" => "Inbox".to_string(),
         "dev" => "Code2".to_string(),
         "review" => "ShieldCheck".to_string(),
@@ -66,6 +67,10 @@ pub fn default_column_icon(col_id: &str) -> String {
         "ready" => "CheckCircle2".to_string(),
         _ => "Layers".to_string(),
     }
+}
+
+pub fn default_column_icon(col_id: &str) -> String {
+    default_stage_icon(col_id)
 }
 
 /// Извлекает иконку из YAML frontmatter (между первыми `---` и вторыми `---`)
@@ -583,14 +588,14 @@ pub async fn delete_agent_persona_file(root: &Path, role: &str) -> Result<(), St
         return Err(format!("Персона '{}' не найдена", role));
     }
 
-    // Сброс ссылок на persona в boards.json и pipeline.json с возвратом дефолтной иконки колонки
+    // Сброс ссылок на persona в boards.json и pipeline.json с возвратом дефолтной иконки стадии
     if let Ok(mut boards_cfg) = crate::config::load_boards_config(root).await {
         let mut changed = false;
         for board in &mut boards_cfg.boards {
-            for col in &mut board.columns {
+            for col in &mut board.stages {
                 if col.persona.as_deref() == Some(role) {
                     col.persona = None;
-                    col.icon = Some(default_column_icon(&col.id));
+                    col.icon = Some(default_stage_icon(&col.id));
                     changed = true;
                 }
             }
@@ -601,19 +606,19 @@ pub async fn delete_agent_persona_file(root: &Path, role: &str) -> Result<(), St
     }
     if let Ok(mut pipeline_cfg) = crate::config::load_pipeline_config(root).await {
         let mut changed = false;
-        for col in &mut pipeline_cfg.columns {
+        for col in &mut pipeline_cfg.stages {
             if col.persona.as_deref() == Some(role) {
                 col.persona = None;
-                col.icon = Some(default_column_icon(&col.id));
+                col.icon = Some(default_stage_icon(&col.id));
                 changed = true;
             }
         }
         if let Some(boards) = &mut pipeline_cfg.boards {
             for board in boards {
-                for col in &mut board.columns {
+                for col in &mut board.stages {
                     if col.persona.as_deref() == Some(role) {
                         col.persona = None;
-                        col.icon = Some(default_column_icon(&col.id));
+                        col.icon = Some(default_stage_icon(&col.id));
                         changed = true;
                     }
                 }
@@ -674,7 +679,7 @@ pub async fn rename_agent_persona_file(root: &Path, old_role: &str, new_role: &s
     if let Ok(mut boards_cfg) = crate::config::load_boards_config(root).await {
         let mut changed = false;
         for board in &mut boards_cfg.boards {
-            for col in &mut board.columns {
+            for col in &mut board.stages {
                 if col.persona.as_deref() == Some(old_role) {
                     col.persona = Some(new_role.to_string());
                     changed = true;
@@ -687,7 +692,7 @@ pub async fn rename_agent_persona_file(root: &Path, old_role: &str, new_role: &s
     }
     if let Ok(mut pipeline_cfg) = crate::config::load_pipeline_config(root).await {
         let mut changed = false;
-        for col in &mut pipeline_cfg.columns {
+        for col in &mut pipeline_cfg.stages {
             if col.persona.as_deref() == Some(old_role) {
                 col.persona = Some(new_role.to_string());
                 changed = true;
@@ -695,7 +700,7 @@ pub async fn rename_agent_persona_file(root: &Path, old_role: &str, new_role: &s
         }
         if let Some(boards) = &mut pipeline_cfg.boards {
             for board in boards {
-                for col in &mut board.columns {
+                for col in &mut board.stages {
                     if col.persona.as_deref() == Some(old_role) {
                         col.persona = Some(new_role.to_string());
                         changed = true;
@@ -843,7 +848,7 @@ pub async fn save_pipeline(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
-    pipeline.columns = normalize_pipeline_columns(pipeline.columns)?;
+    pipeline.stages = normalize_pipeline_stages(pipeline.stages)?;
     let root = state.get_root();
     save_pipeline_config(&root, &pipeline)
         .await
@@ -911,13 +916,13 @@ pub async fn create_board(
     }
 
     let tmpl = template.as_deref().unwrap_or("canonical");
-    let raw_cols = get_board_template_columns(tmpl);
-    let columns = normalize_pipeline_columns(raw_cols)?;
+    let raw_stages = get_board_template_stages(tmpl);
+    let stages = normalize_pipeline_stages(raw_stages)?;
 
     let new_board = BoardDef {
         id: unique_id.clone(),
         name: trimmed_name.to_string(),
-        columns,
+        stages,
     };
 
     config.boards.push(new_board.clone());
@@ -959,7 +964,7 @@ pub async fn save_board(
         return Err("Название доски не может быть пустым".to_string());
     }
     board.name = trimmed_name.to_string();
-    board.columns = normalize_pipeline_columns(board.columns)?;
+    board.stages = normalize_pipeline_stages(board.stages)?;
 
     let root = state.get_root();
     let mut config = load_boards_config(&root)

@@ -83,12 +83,13 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
       if (created) {
         if (selectedPersona) {
           const matched = personas.find((p) => p.role === selectedPersona);
-          const updatedColumns = created.columns.map((c) =>
+          const curStages = created.stages ?? created.columns ?? [];
+          const updatedColumns = curStages.map((c) =>
             c.id === 'dev'
               ? { ...c, persona: selectedPersona, icon: matched?.icon || c.icon }
               : c,
           );
-          await saveBoard({ ...created, columns: updatedColumns });
+          await saveBoard({ ...created, stages: updatedColumns, columns: updatedColumns });
           useCortexStore.getState().syncStagesFromColumns(updatedColumns);
         }
         setBoardName('');

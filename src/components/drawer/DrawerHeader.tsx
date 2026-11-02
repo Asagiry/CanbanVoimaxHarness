@@ -1,5 +1,5 @@
 import React from 'react';
-import type { KanbanTask, PipelineColumn } from '../../types';
+import type { KanbanTask, PipelineStage, PipelineColumn } from '../../types';
 import Logo from '../common/Logo';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
@@ -26,7 +26,9 @@ import { useTranslation } from '../../stores/languageStore';
 
 export interface DrawerHeaderProps {
   task: KanbanTask;
-  columns: PipelineColumn[];
+  stages?: PipelineStage[];
+  /** @deprecated Use stages instead */
+  columns?: PipelineColumn[];
   subtasks: KanbanTask[];
   rootTask: KanbanTask | null;
   activeTaskId: string | null;
@@ -46,7 +48,8 @@ export interface DrawerHeaderProps {
 
 export default function DrawerHeader({
   task,
-  columns,
+  stages,
+  columns: columnsProp,
   subtasks,
   rootTask,
   activeTaskId,
@@ -63,6 +66,7 @@ export default function DrawerHeader({
   onOpenToolPolicy,
   onOpenSettings,
 }: DrawerHeaderProps) {
+  const columns = stages ?? columnsProp ?? [];
   const handleHeaderDoubleClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     if (target.closest('button, input, select, textarea, [data-no-drag]')) {

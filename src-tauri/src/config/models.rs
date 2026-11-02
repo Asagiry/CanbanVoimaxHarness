@@ -8,7 +8,9 @@ use std::path::{Path, PathBuf};
 
 use crate::config::discovery::{is_app_own_directory, is_binary_or_target_dir};
 
-pub type ColumnDef = PipelineColumn;
+pub type PipelineColumn = PipelineStage;
+pub type ColumnDef = PipelineStage;
+pub type StageDef = PipelineStage;
 pub type PersonaDefinition = AgentSetting;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -153,7 +155,7 @@ impl From<String> for HookConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
-pub struct PipelineColumn {
+pub struct PipelineStage {
     pub id: String,
     pub title: String,
     #[serde(default)]
@@ -192,7 +194,18 @@ pub struct PipelineColumn {
 pub struct BoardDef {
     pub id: String,
     pub name: String,
-    pub columns: Vec<PipelineColumn>,
+    #[serde(alias = "columns")]
+    pub stages: Vec<PipelineStage>,
+}
+
+impl BoardDef {
+    pub fn columns(&self) -> &[PipelineStage] {
+        &self.stages
+    }
+
+    pub fn columns_mut(&mut self) -> &mut Vec<PipelineStage> {
+        &mut self.stages
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -213,11 +226,22 @@ pub struct PipelineConfig {
     pub title: String,
     #[serde(rename = "toolPermissions", default)]
     pub tool_permissions: Option<ToolPermissions>,
-    pub columns: Vec<PipelineColumn>,
+    #[serde(alias = "columns")]
+    pub stages: Vec<PipelineStage>,
     #[serde(default)]
     pub boards: Option<Vec<BoardDef>>,
     #[serde(rename = "activeBoardId", default)]
     pub active_board_id: Option<String>,
+}
+
+impl PipelineConfig {
+    pub fn columns(&self) -> &[PipelineStage] {
+        &self.stages
+    }
+
+    pub fn columns_mut(&mut self) -> &mut Vec<PipelineStage> {
+        &mut self.stages
+    }
 }
 
 // ============================================================================
@@ -278,83 +302,7 @@ pub fn default_pipeline_config() -> PipelineConfig {
         id: "default-engineering".to_string(),
         title: "cvh-board".to_string(),
         tool_permissions: None,
-        columns: vec![
-            PipelineColumn {
-                id: "backlog".to_string(),
-                title: "Backlog".to_string(),
-                color: Some("#64748b".to_string()),
-                icon: Some("Inbox".to_string()),
-                persona: None,
-                on_enter_script: None,
-                context_window: None,
-                model_override: None,
-                reasoning_effort: None,
-                temperature: None,
-                gatekeeper_sensor: None,
-                allowed_tools: Some(vec![
-                    "read_file".to_string(),
-                    "glob".to_string(),
-                    "grep".to_string(),
-                    "web_search".to_string(),
-                    "web_fetch".to_string(),
-                ]),
-                hooks: HashMap::new(),
-                routes: None,
-                auto_run: None,
-                terminal: None,
-                is_intake: Some(true),
-            },
-            PipelineColumn {
-                id: "dev".to_string(),
-                title: "CVH Development".to_string(),
-                color: Some("#6366f1".to_string()),
-                icon: Some("Bot".to_string()),
-                persona: Some("cvh-dev".to_string()),
-                on_enter_script: None,
-                context_window: None,
-                model_override: None,
-                reasoning_effort: None,
-                temperature: Some(0.2),
-                gatekeeper_sensor: None,
-                allowed_tools: Some(vec![
-                    "execute_command".to_string(),
-                    "read_file".to_string(),
-                    "edit_file".to_string(),
-                    "write_file".to_string(),
-                    "glob".to_string(),
-                    "grep".to_string(),
-                    "web_search".to_string(),
-                ]),
-                hooks: HashMap::new(),
-                routes: None,
-                auto_run: None,
-                terminal: None,
-                is_intake: None,
-            },
-            PipelineColumn {
-                id: "ready".to_string(),
-                title: "Ready".to_string(),
-                color: Some("#10b981".to_string()),
-                icon: Some("CheckCircle2".to_string()),
-                persona: None,
-                on_enter_script: None,
-                context_window: None,
-                model_override: None,
-                reasoning_effort: None,
-                temperature: None,
-                gatekeeper_sensor: None,
-                allowed_tools: Some(vec![
-                    "read_file".to_string(),
-                    "glob".to_string(),
-                    "grep".to_string(),
-                ]),
-                hooks: HashMap::new(),
-                routes: None,
-                auto_run: None,
-                terminal: Some(true),
-                is_intake: None,
-            },
-        ],
+        stages: get_canonical_board_stages(),
         boards: None,
         active_board_id: None,
     }
@@ -364,7 +312,7 @@ pub fn default_board_def() -> BoardDef {
     BoardDef {
         id: "development".to_string(),
         name: "cvh-board".to_string(),
-        columns: default_pipeline_config().columns,
+        stages: get_canonical_board_stages(),
     }
 }
 
@@ -375,9 +323,9 @@ pub fn default_boards_config() -> BoardsConfig {
     }
 }
 
-pub fn get_canonical_board_columns() -> Vec<PipelineColumn> {
+pub fn get_canonical_board_stages() -> Vec<PipelineStage> {
     vec![
-        PipelineColumn {
+        PipelineStage {
             id: "backlog".to_string(),
             title: "Backlog".to_string(),
             color: Some("#64748b".to_string()),
@@ -402,7 +350,7 @@ pub fn get_canonical_board_columns() -> Vec<PipelineColumn> {
             terminal: None,
             is_intake: Some(true),
         },
-        PipelineColumn {
+        PipelineStage {
             id: "dev".to_string(),
             title: "CVH Development".to_string(),
             color: Some("#6366f1".to_string()),
@@ -429,7 +377,7 @@ pub fn get_canonical_board_columns() -> Vec<PipelineColumn> {
             terminal: None,
             is_intake: None,
         },
-        PipelineColumn {
+        PipelineStage {
             id: "ready".to_string(),
             title: "Ready".to_string(),
             color: Some("#10b981".to_string()),
@@ -455,10 +403,14 @@ pub fn get_canonical_board_columns() -> Vec<PipelineColumn> {
     ]
 }
 
-pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
+pub fn get_canonical_board_columns() -> Vec<PipelineStage> {
+    get_canonical_board_stages()
+}
+
+pub fn get_board_template_stages(template: &str) -> Vec<PipelineStage> {
     match template.to_lowercase().as_str() {
         "modeler" | "3d" | "3d-modeler" => vec![
-            PipelineColumn {
+            PipelineStage {
                 id: "concept".to_string(),
                 title: "Концепт".to_string(),
                 color: Some("#a855f7".to_string()),
@@ -481,7 +433,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 terminal: None,
                 is_intake: Some(true),
             },
-            PipelineColumn {
+            PipelineStage {
                 id: "modeling".to_string(),
                 title: "Моделирование".to_string(),
                 color: Some("#3b82f6".to_string()),
@@ -507,7 +459,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 terminal: None,
                 is_intake: None,
             },
-            PipelineColumn {
+            PipelineStage {
                 id: "texturing".to_string(),
                 title: "Текстурирование".to_string(),
                 color: Some("#f59e0b".to_string()),
@@ -533,7 +485,7 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 terminal: None,
                 is_intake: None,
             },
-            PipelineColumn {
+            PipelineStage {
                 id: "ready".to_string(),
                 title: "Готово".to_string(),
                 color: Some("#10b981".to_string()),
@@ -557,22 +509,25 @@ pub fn get_board_template_columns(template: &str) -> Vec<PipelineColumn> {
                 is_intake: None,
             },
         ],
-_ => get_canonical_board_columns(),
+        _ => get_canonical_board_stages(),
     }
 }
 
+pub fn get_board_template_columns(template: &str) -> Vec<PipelineStage> {
+    get_board_template_stages(template)
+}
 
-/// Normalizes pipeline columns according to dynamic column invariants:
-/// - Validates unique column IDs (duplicate IDs return an Err).
-/// - If empty, falls back to canonical board columns.
-/// - Preserves user column ordering verbatim without injecting synthetic backlog/ready.
-/// - Sets column 0 `is_intake = Some(true)` if unset.
-/// - Sets final column `terminal = Some(true)`.
-pub fn normalize_pipeline_columns(
-    columns: Vec<PipelineColumn>,
-) -> Result<Vec<PipelineColumn>, String> {
+/// Normalizes pipeline stages according to dynamic stage invariants:
+/// - Validates unique stage IDs (duplicate IDs return an Err).
+/// - If empty, falls back to canonical board stages.
+/// - Preserves user stage ordering verbatim without injecting synthetic backlog/ready.
+/// - Sets stage 0 `is_intake = Some(true)` if unset.
+/// - Sets final stage `terminal = Some(true)`.
+pub fn normalize_pipeline_stages(
+    stages: Vec<PipelineStage>,
+) -> Result<Vec<PipelineStage>, String> {
     let mut seen = std::collections::HashSet::new();
-    for c in &columns {
+    for c in &stages {
         if !seen.insert(c.id.clone()) {
             return Err(format!(
                 "Дублирующийся id колонки: '{}' — id колонок должны быть уникальными",
@@ -581,11 +536,11 @@ pub fn normalize_pipeline_columns(
         }
     }
 
-    if columns.is_empty() {
-        return Ok(get_canonical_board_columns());
+    if stages.is_empty() {
+        return Ok(get_canonical_board_stages());
     }
 
-    let mut out = columns;
+    let mut out = stages;
     if out[0].is_intake.is_none() {
         out[0].is_intake = Some(true);
     }
@@ -593,6 +548,12 @@ pub fn normalize_pipeline_columns(
     out[last_idx].terminal = Some(true);
 
     Ok(out)
+}
+
+pub fn normalize_pipeline_columns(
+    columns: Vec<PipelineStage>,
+) -> Result<Vec<PipelineStage>, String> {
+    normalize_pipeline_stages(columns)
 }
 
 
@@ -724,93 +685,10 @@ pub fn resolve_hook_path(
 }
 
 
-/// Minimal fresh-project pipeline: 3 columns — `backlog` (no persona, first),
+/// Minimal fresh-project pipeline: 3 stages — `backlog` (no persona, first),
 /// `dev` (CVH Development with `cvh-dev` persona, middle), and `ready` (terminal, last).
 pub fn minimal_pipeline_config() -> PipelineConfig {
-    PipelineConfig {
-        id: "default-engineering".to_string(),
-        title: "cvh-board".to_string(),
-        tool_permissions: None,
-        columns: vec![
-            PipelineColumn {
-                id: "backlog".to_string(),
-                title: "Backlog".to_string(),
-                color: Some("#64748b".to_string()),
-                icon: Some("Inbox".to_string()),
-                persona: None,
-                on_enter_script: None,
-                context_window: None,
-                model_override: None,
-                reasoning_effort: None,
-                temperature: None,
-                gatekeeper_sensor: None,
-                allowed_tools: Some(vec![
-                    "read_file".to_string(),
-                    "glob".to_string(),
-                    "grep".to_string(),
-                    "web_search".to_string(),
-                    "web_fetch".to_string(),
-                ]),
-                hooks: HashMap::new(),
-                routes: None,
-                auto_run: None,
-                terminal: None,
-                is_intake: Some(true),
-            },
-            PipelineColumn {
-                id: "dev".to_string(),
-                title: "CVH Development".to_string(),
-                color: Some("#6366f1".to_string()),
-                icon: Some("Bot".to_string()),
-                persona: Some("cvh-dev".to_string()),
-                on_enter_script: None,
-                context_window: None,
-                model_override: None,
-                reasoning_effort: None,
-                temperature: Some(0.2),
-                gatekeeper_sensor: None,
-                allowed_tools: Some(vec![
-                    "execute_command".to_string(),
-                    "read_file".to_string(),
-                    "edit_file".to_string(),
-                    "write_file".to_string(),
-                    "glob".to_string(),
-                    "grep".to_string(),
-                    "web_search".to_string(),
-                ]),
-                hooks: HashMap::new(),
-                routes: None,
-                auto_run: None,
-                terminal: None,
-                is_intake: None,
-            },
-            PipelineColumn {
-                id: "ready".to_string(),
-                title: "Ready".to_string(),
-                color: Some("#10b981".to_string()),
-                icon: Some("CheckCircle2".to_string()),
-                persona: None,
-                on_enter_script: None,
-                context_window: None,
-                model_override: None,
-                reasoning_effort: None,
-                temperature: None,
-                gatekeeper_sensor: None,
-                allowed_tools: Some(vec![
-                    "read_file".to_string(),
-                    "glob".to_string(),
-                    "grep".to_string(),
-                ]),
-                hooks: HashMap::new(),
-                routes: None,
-                auto_run: None,
-                terminal: Some(true),
-                is_intake: None,
-            },
-        ],
-        boards: None,
-        active_board_id: None,
-    }
+    default_pipeline_config()
 }
 
 

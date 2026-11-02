@@ -3,7 +3,7 @@ import { X, Check } from 'lucide-react';
 import { useBoardStore } from '../../../stores/boardStore';
 import { useCortexStore } from '../../../stores/cortexStore';
 import { useTranslation } from '../../../stores/languageStore';
-import { PipelineColumn } from '../../../types';
+import { PipelineStage, PipelineColumn } from '../../../types';
 import PersonaSelect from '../../common/PersonaSelect';
 import AgentIcon from '../../common/AgentIcon';
 import { slugifyTitle, uniqueColumnId } from '../../../lib/slug';
@@ -29,15 +29,21 @@ const NEW_AGENT_OPTION = '__new__';
 export interface CreateColumnModalProps {
   isOpen: boolean;
   onClose: () => void;
-  columns: PipelineColumn[];
+  stages?: PipelineStage[];
+  /** @deprecated Use stages instead */
+  columns?: PipelineColumn[];
 }
+
+export type CreateStageModalProps = CreateColumnModalProps;
 
 export default function CreateColumnModal({
   isOpen,
   onClose,
+  stages,
   columns,
 }: CreateColumnModalProps) {
-  const { setColumns, saveCurrentBoard } = useBoardStore();
+  const effectiveStages = stages ?? columns ?? [];
+  const { setStages, saveCurrentBoard } = useBoardStore();
   const { t } = useTranslation();
 
   const [newColumnTitle, setNewColumnTitle] = useState('');
@@ -107,7 +113,7 @@ export default function CreateColumnModal({
     if (personaColor && isAllowedAgentColor(personaColor)) {
       return personaColor;
     }
-    return AGENT_PALETTE[columns.length % AGENT_PALETTE.length];
+    return AGENT_PALETTE[effectiveStages.length % AGENT_PALETTE.length];
   })();
   const effectiveColor = selectedColor || autoColor;
 
@@ -144,11 +150,11 @@ export default function CreateColumnModal({
       personaName = newColumnPersona.trim();
     }
 
-    const taken = new Set(columns.map((c) => c.id));
+    const taken = new Set(effectiveStages.map((c) => c.id));
     const id = uniqueColumnId(slugifyTitle(title), taken);
     const finalPersona = personaName || 'developer';
 
-    const newCol: PipelineColumn = {
+    const newCol: PipelineStage = {
       id,
       title,
       color: effectiveColor,
@@ -158,20 +164,20 @@ export default function CreateColumnModal({
       hooks: {},
     };
 
-    const prev = columns;
+    const prev = effectiveStages;
     const terminalIdx = prev.findIndex((c) => Boolean(c.terminal));
     const readyIdx = prev.findIndex((c) => c.id === 'ready');
     const insertIdx =
       terminalIdx !== -1 ? terminalIdx : readyIdx !== -1 ? readyIdx : prev.length;
     const next = [...prev.slice(0, insertIdx), newCol, ...prev.slice(insertIdx)];
 
-    setColumns(next);
+    setStages(next);
     useCortexStore.getState().syncStagesFromColumns(next);
     try {
       await saveCurrentBoard(next);
       onClose();
     } catch (err) {
-      setColumns(prev);
+      setStages(prev);
       useCortexStore.getState().syncStagesFromColumns(prev);
       setColumnFormError(t('board.errSaveColumnRollback'));
       console.info('saveCurrentBoard failed, rolling back:', err);

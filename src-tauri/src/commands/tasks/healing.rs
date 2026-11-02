@@ -60,12 +60,12 @@ pub fn heal_task_board_and_column(task: &mut Task, config: &BoardsConfig) -> boo
     // 2. Resolve column / stage_id within target board
     if let Some(target_board) = config.boards.iter().find(|b| b.id == target_board_id) {
         let col_exists = target_board
-            .columns
+            .stages
             .iter()
             .any(|c| stage_id_matches(&c.id, &task.stage_id));
         if !col_exists {
             let fallback_col = target_board
-                .columns
+                .stages
                 .first()
                 .map(|c| c.id.as_str())
                 .unwrap_or("backlog");
@@ -99,7 +99,7 @@ pub fn heal_tasks(tasks: &mut [Task], config: &BoardsConfig) -> bool {
             || stage_id_matches(&t.stage_id, "done")
             || t.status.as_deref() == Some("done")
             || config.boards.iter().any(|b| {
-                b.columns.iter().any(|c| stage_id_matches(&c.id, &t.stage_id) && c.terminal == Some(true))
+                b.stages.iter().any(|c| stage_id_matches(&c.id, &t.stage_id) && c.terminal == Some(true))
             });
 
         if is_terminal {

@@ -93,7 +93,7 @@ use std::sync::Arc;
                 crate::config::BoardDef {
                     id: "dev-board".to_string(),
                     name: "Development".to_string(),
-                    columns: b_cols,
+                    stages: b_cols,
                 },
             ],
         };
@@ -514,7 +514,7 @@ use std::sync::Arc;
         }
 
         if let Some(board) = boards_cfg.boards.iter_mut().find(|b| b.id == "test-board") {
-            if let Some(col) = board.columns.iter_mut().find(|c| c.id == "review") {
+            if let Some(col) = board.stages.iter_mut().find(|c| c.id == "review") {
                 col.hooks.insert("on_enter".to_string(), hook_filename.into());
             }
         }

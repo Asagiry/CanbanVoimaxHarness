@@ -88,7 +88,7 @@ pub async fn execute_reject_task(
             } else {
                 bc.boards.iter().find(|b| b.id == bc.active_board_id)
             };
-            b.map(|b| b.columns.clone())
+            b.map(|b| b.stages.clone())
         });
         match from_board {
             Some(cols) => cols,
@@ -96,7 +96,7 @@ pub async fn execute_reject_task(
                 let pipeline = crate::config::load_pipeline_config(repo_root)
                     .await
                     .context("Failed to load pipeline configuration")?;
-                pipeline.columns
+                pipeline.stages
             }
         }
     };

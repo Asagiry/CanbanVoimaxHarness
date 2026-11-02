@@ -351,7 +351,8 @@ export default function KanbanBoard() {
     }
     // 3. Self-heal: If declared board does NOT have task's column, but active board DOES,
     // show on active board (prevents vanishing tasks when moved across boards or boardId drifted).
-    const boardHasCol = matchingBoard.columns.some(
+    const boardStages = matchingBoard.stages ?? matchingBoard.columns ?? [];
+    const boardHasCol = boardStages.some(
       (c) => c.id === task.stageId || c.id.toLowerCase() === task.stageId?.toLowerCase()
     );
     const activeHasCol = columns.some(
@@ -471,12 +472,14 @@ export default function KanbanBoard() {
                   return (
                     <KanbanColumn
                       key={`${activeBoardId}-${column.id}`}
+                      stage={column}
                       column={column}
                       tasks={columnTasks}
                       index={index}
                       totalColumns={columns.length}
                       isPinned={isPinned}
                       doneParentIds={doneParentIds}
+                      onDeleteStage={columns.length > 1 && !isPinned ? handleDeleteColumn : undefined}
                       onDeleteColumn={columns.length > 1 && !isPinned ? handleDeleteColumn : undefined}
                     />
                   );

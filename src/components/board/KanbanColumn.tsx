@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect, memo } from 'react';
 import { Draggable, Droppable } from '@hello-pangea/dnd';
 import { ChevronDown } from 'lucide-react';
-import { PipelineColumn, KanbanTask, getHookScript } from '../../types';
+import { PipelineStage, KanbanTask, getHookScript } from '../../types';
 import KanbanCard from '../card/KanbanCard';
-import ColumnContextMenu from './ColumnContextMenu';
-import ColumnHookBadge from './ColumnHookBadge';
+import StageContextMenu from './StageContextMenu';
+import StageHookBadge from './StageHookBadge';
 import { useCortexStore } from '../../stores/cortexStore';
 import { isDoneColumnDef, sortDoneTasksByCompletionDateDesc } from '../../stores/boardStore';
 import AgentIcon from '../common/AgentIcon';
@@ -14,24 +14,32 @@ import { useUiZoomStore, adjustDndTransformForZoom } from '../../hooks/useUiZoom
 
 const PAGE_SIZE = 10;
 
-interface KanbanColumnProps {
-  column: PipelineColumn;
+export interface KanbanColumnProps {
+  stage?: PipelineStage;
+  /** @deprecated Use stage instead */
+  column?: PipelineStage;
   tasks: KanbanTask[];
   index: number;
   totalColumns?: number;
   isPinned?: boolean;
+  onDeleteStage?: (stageId: string) => void;
+  /** @deprecated Use onDeleteStage instead */
   onDeleteColumn?: (columnId: string) => void;
   doneParentIds?: Set<string>;
 }
 
 function KanbanColumn({
-  column,
+  stage: stageProp,
+  column: columnProp,
   tasks,
   index,
   isPinned: isPinnedProp,
+  onDeleteStage,
   onDeleteColumn,
   doneParentIds,
 }: KanbanColumnProps) {
+  const column = stageProp ?? columnProp!;
+  const handleDelete = onDeleteStage ?? onDeleteColumn;
   const zoom = useUiZoomStore((s) => s.zoom);
   // Клик по шапке больше не подсвечивает колонку и не трогает проводник
   // (фокус из проводника в доску оставлен, обратного нет).
@@ -158,10 +166,10 @@ function KanbanColumn({
         {/* Left Slot: On Enter Hook Badge or invisible spacer */}
         <div className="w-6 shrink-0 flex items-center justify-start">
           {enterHookDef && hasEnterHook ? (
-            <ColumnHookBadge
+            <StageHookBadge
               side="left"
               hookDef={enterHookDef}
-              columnTitle={column.title}
+              stageTitle={column.title}
               accentColor={assignedAgentColor}
             />
           ) : (
@@ -188,10 +196,10 @@ function KanbanColumn({
         {/* Right Slot: On Leave Hook Badge or invisible spacer */}
         <div className="w-6 shrink-0 flex items-center justify-end">
           {leaveHookDef && hasLeaveHook ? (
-            <ColumnHookBadge
+            <StageHookBadge
               side="right"
               hookDef={leaveHookDef}
-              columnTitle={column.title}
+              stageTitle={column.title}
               accentColor={assignedAgentColor}
             />
           ) : (
@@ -230,12 +238,12 @@ function KanbanColumn({
         )}
       </Droppable>
       {menuPos && (
-        <ColumnContextMenu
-          column={column}
+        <StageContextMenu
+          stage={column}
           x={menuPos.x}
           y={menuPos.y}
           onClose={() => setMenuPos(null)}
-          onDeleteColumn={onDeleteColumn}
+          onDeleteStage={handleDelete}
         />
       )}
     </div>
@@ -249,7 +257,9 @@ function areColumnPropsEqual(prev: KanbanColumnProps, next: KanbanColumnProps): 
   if (prev.index !== next.index) return false;
   if (prev.isPinned !== next.isPinned) return false;
   if (prev.totalColumns !== next.totalColumns) return false;
-  if (prev.onDeleteColumn !== next.onDeleteColumn) return false;
+  const prevDelete = prev.onDeleteStage ?? prev.onDeleteColumn;
+  const nextDelete = next.onDeleteStage ?? next.onDeleteColumn;
+  if (prevDelete !== nextDelete) return false;
   if (prev.doneParentIds !== next.doneParentIds) {
     if (!prev.doneParentIds || !next.doneParentIds) return false;
     if (prev.doneParentIds.size !== next.doneParentIds.size) return false;
@@ -259,8 +269,9 @@ function areColumnPropsEqual(prev: KanbanColumnProps, next: KanbanColumnProps): 
   }
 
   // Compare column definition properties
-  const cA = prev.column;
-  const cB = next.column;
+  const cA = prev.stage ?? prev.column;
+  const cB = next.stage ?? next.column;
+  if (!cA || !cB) return false;
   if (
     cA.id !== cB.id ||
     cA.title !== cB.title ||

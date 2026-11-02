@@ -200,20 +200,20 @@ pub fn propagate_parent_subtask_advance(
         let parent_board_id = tasks[parent_idx].board_id.clone();
         let parent_title = tasks[parent_idx].title.clone();
 
-        // Resolve columns for parent task's board
+        // Resolve stages for parent task's board
         let cols = {
             let from_boards = boards_cfg.and_then(|bc| {
                 if let Some(ref bid) = parent_board_id {
                     if let Some(b) = bc.boards.iter().find(|b| &b.id == bid) {
-                        return Some(b.columns.clone());
+                        return Some(b.stages.clone());
                     }
                 }
                 if let Some(b) = bc.boards.iter().find(|b| b.id == bc.active_board_id) {
-                    return Some(b.columns.clone());
+                    return Some(b.stages.clone());
                 }
-                bc.boards.first().map(|b| b.columns.clone())
+                bc.boards.first().map(|b| b.stages.clone())
             });
-            from_boards.or_else(|| pipeline.map(|p| p.columns.clone())).unwrap_or_default()
+            from_boards.or_else(|| pipeline.map(|p| p.stages.clone())).unwrap_or_default()
         };
 
         // Find the next stage for the parent task:
@@ -1139,7 +1139,7 @@ pub async fn internal_move_task_stage(
         });
 
         let board_has_target = |b: &crate::config::BoardDef| -> bool {
-            b.columns.iter().any(|c| c.id == target_stage_id || stage_id_matches(&c.id, target_stage_id))
+            b.stages.iter().any(|c| c.id == target_stage_id || stage_id_matches(&c.id, target_stage_id))
         };
 
         // 1. Explicit override board requested by caller (e.g. active board during user move)
@@ -1189,22 +1189,22 @@ pub async fn internal_move_task_stage(
 
     // --- on_finish / on_leave hooks of source column ---
     let source_stage_id = current_task.stage_id.clone();
-    let source_col: Option<crate::config::PipelineColumn> = {
+    let source_col: Option<crate::config::PipelineStage> = {
         let from_board = effective_board.as_ref().and_then(|b| {
-            b.columns.iter().find(|c| stage_id_matches(&c.id, &source_stage_id)).cloned()
+            b.stages.iter().find(|c| stage_id_matches(&c.id, &source_stage_id)).cloned()
         });
         match from_board {
             Some(c) => Some(c),
             None => load_pipeline_config(root)
                 .await
                 .ok()
-                .and_then(|p| p.columns.into_iter().find(|c| stage_id_matches(&c.id, &source_stage_id))),
+                .and_then(|p| p.stages.into_iter().find(|c| stage_id_matches(&c.id, &source_stage_id))),
         }
     };
 
     let target_col = {
         let col_from_board = effective_board.as_ref().and_then(|b| {
-            b.columns.iter().find(|c| stage_id_matches(&c.id, target_stage_id)).cloned()
+            b.stages.iter().find(|c| stage_id_matches(&c.id, target_stage_id)).cloned()
         });
         match col_from_board {
             Some(c) => c,
@@ -1213,7 +1213,7 @@ pub async fn internal_move_task_stage(
                     .await
                     .unwrap_or_else(|_| crate::config::default_pipeline_config());
                 let col_from_pipeline = pipeline
-                    .columns
+                    .stages
                     .iter()
                     .find(|c| stage_id_matches(&c.id, target_stage_id))
                     .cloned();
@@ -1228,13 +1228,14 @@ pub async fn internal_move_task_stage(
 
                         let terminal_opt = if is_explicit_terminal_request {
                             effective_board.as_ref().and_then(|b| {
-                                b.columns.iter().find(|c| c.terminal == Some(true) || stage_id_matches(&c.id, "ready") || stage_id_matches(&c.id, "done")).cloned()
-                                    .or_else(|| b.columns.last().cloned())
+                                b.stages.iter().find(|c| c.terminal == Some(true) || stage_id_matches(&c.id, "ready") || stage_id_matches(&c.id, "done")).cloned()
+                                    .or_else(|| b.stages.last().cloned())
                             }).or_else(|| {
-                                pipeline.columns.iter().find(|c| {
+                                pipeline.stages.iter().find(|c| {
                                     c.terminal == Some(true)
                                         || stage_id_matches(&c.id, "ready")
                                         || stage_id_matches(&c.id, "done")
+                                        || stage_id_matches(&c.id, "terminal")
                                 }).cloned()
                             })
                         } else {
@@ -1246,13 +1247,13 @@ pub async fn internal_move_task_stage(
                         } else {
                             let mut available_stages: Vec<String> = Vec::new();
                             if let Some(ref b) = effective_board {
-                                for c in &b.columns {
+                                for c in &b.stages {
                                     if !available_stages.contains(&c.id) {
                                         available_stages.push(c.id.clone());
                                     }
                                 }
                             }
-                            for c in &pipeline.columns {
+                            for c in &pipeline.stages {
                                 if !available_stages.contains(&c.id) {
                                     available_stages.push(c.id.clone());
                                 }
@@ -1291,11 +1292,11 @@ pub async fn internal_move_task_stage(
 
     let is_source_intake = {
         let cols = if let Some(b) = &effective_board {
-            b.columns.clone()
+            b.stages.clone()
         } else if let Some(bc) = &boards_cfg {
-            bc.boards.iter().find(|b| b.id == bc.active_board_id).map(|b| b.columns.clone()).unwrap_or_default()
+            bc.boards.iter().find(|b| b.id == bc.active_board_id).map(|b| b.stages.clone()).unwrap_or_default()
         } else if let Ok(pipe) = load_pipeline_config(root).await {
-            pipe.columns
+            pipe.stages
         } else {
             Vec::new()
         };
@@ -1561,7 +1562,7 @@ pub async fn move_task_stage(
         boards_cfg.as_ref().is_some_and(|cfg| {
             let active = cfg.boards.iter().find(|b| b.id == cfg.active_board_id);
             active.is_some_and(|b| {
-                b.columns.iter().find(|c| stage_id_matches(&c.id, &target_stage_id)).is_some_and(|c| c.is_intake == Some(true))
+                b.stages.iter().find(|c| stage_id_matches(&c.id, &target_stage_id)).is_some_and(|c| c.is_intake == Some(true))
             })
         })
     };
@@ -1777,29 +1778,29 @@ pub async fn internal_advance_task_to_stage(
             // 1. Try board referenced by current_task.board_id if it contains current stage
             if let Some(ref bid) = current_task.board_id {
                 if let Some(b) = bc.boards.iter().find(|b| &b.id == bid) {
-                    if b.columns.iter().any(|c| stage_id_matches(&c.id, &current_task.stage_id)) {
-                        return Some(b.columns.clone());
+                    if b.stages.iter().any(|c| stage_id_matches(&c.id, &current_task.stage_id)) {
+                        return Some(b.stages.clone());
                     }
                 }
             }
             // 2. Try active board if it contains current stage
             if let Some(b) = bc.boards.iter().find(|b| b.id == bc.active_board_id) {
-                if b.columns.iter().any(|c| stage_id_matches(&c.id, &current_task.stage_id)) {
-                    return Some(b.columns.clone());
+                if b.stages.iter().any(|c| stage_id_matches(&c.id, &current_task.stage_id)) {
+                    return Some(b.stages.clone());
                 }
             }
             // 3. Search any board in boards.json that contains current stage
             if let Some(b) = bc.boards.iter().find(|b| {
-                b.columns.iter().any(|c| stage_id_matches(&c.id, &current_task.stage_id))
+                b.stages.iter().any(|c| stage_id_matches(&c.id, &current_task.stage_id))
             }) {
-                return Some(b.columns.clone());
+                return Some(b.stages.clone());
             }
             // 4. Fallback to active board columns or first board
             bc.boards
                 .iter()
                 .find(|b| b.id == bc.active_board_id)
                 .or_else(|| bc.boards.first())
-                .map(|b| b.columns.clone())
+                .map(|b| b.stages.clone())
         });
         match from_board {
             Some(cols) => {
@@ -1809,14 +1810,14 @@ pub async fn internal_advance_task_to_stage(
                     let pipeline = load_pipeline_config(root)
                         .await
                         .map_err(|e| e.to_string())?;
-                    pipeline.columns
+                    pipeline.stages
                 }
             }
             None => {
                 let pipeline = load_pipeline_config(root)
                     .await
                     .map_err(|e| e.to_string())?;
-                pipeline.columns
+                pipeline.stages
             }
         }
     };

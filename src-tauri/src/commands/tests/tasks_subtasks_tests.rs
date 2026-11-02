@@ -110,7 +110,7 @@ use std::path::PathBuf;
             boards: vec![crate::config::BoardDef {
                 id: "5col-board".to_string(),
                 name: "5-Column Board".to_string(),
-                columns: cols,
+                stages: cols,
             }],
         };
         crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
@@ -286,7 +286,7 @@ use std::path::PathBuf;
             boards: vec![crate::config::BoardDef {
                 id: "nest-board".to_string(),
                 name: "Nest Board".to_string(),
-                columns: cols,
+                stages: cols,
             }],
         };
         crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
@@ -513,7 +513,7 @@ use std::path::PathBuf;
             boards: vec![crate::config::BoardDef {
                 id: "dev-board".to_string(),
                 name: "Development".to_string(),
-                columns: cols,
+                stages: cols,
             }],
         };
         crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
@@ -740,7 +740,7 @@ use std::path::PathBuf;
             boards: vec![crate::config::BoardDef {
                 id: "development".to_string(),
                 name: "Development".to_string(),
-                columns: vec![
+                stages: vec![
                     crate::config::PipelineColumn {
                         id: "backlog".to_string(),
                         title: "Backlog".to_string(),

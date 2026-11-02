@@ -70,10 +70,10 @@ pub async fn resolve_task_active_agent_model(
             } else {
                 bc.boards.iter().find(|b| b.id == bc.active_board_id)
             };
-            b.and_then(|b| b.columns.iter().find(|c| c.id == t.stage_id).cloned())
+            b.and_then(|b| b.stages.iter().find(|c| c.id == t.stage_id).cloned())
         });
         let col = col_from_board
-            .or_else(|| pipeline.columns.iter().find(|c| c.id == t.stage_id).cloned());
+            .or_else(|| pipeline.stages.iter().find(|c| c.id == t.stage_id).cloned());
         let col_override = col.as_ref().and_then(|c| non_empty_opt(&c.model_override));
         let persona_role = col
             .as_ref()
@@ -252,16 +252,16 @@ pub async fn run_agent(
             } else {
                 bc.boards.iter().find(|b| b.id == bc.active_board_id)
             };
-            b.and_then(|b| b.columns.iter().find(|c| c.id == task.stage_id).cloned())
+            b.and_then(|b| b.stages.iter().find(|c| c.id == task.stage_id).cloned())
         });
         col_from_board
-            .or_else(|| pipeline.columns.iter().find(|c| c.id == task.stage_id).cloned())
+            .or_else(|| pipeline.stages.iter().find(|c| c.id == task.stage_id).cloned())
             .unwrap_or_else(|| {
                 eprintln!(
-                    "CVH [run_agent]: Column '{}' not found in board or pipeline, falling back to default column",
+                    "CVH [run_agent]: Stage '{}' not found in board or pipeline, falling back to default stage",
                     task.stage_id
                 );
-                pipeline.columns.first().cloned().unwrap_or_else(|| crate::config::PipelineColumn {
+                pipeline.stages.first().cloned().unwrap_or_else(|| crate::config::PipelineStage {
                     id: task.stage_id.clone(),
                     title: task.stage_id.clone(),
                     color: None,
@@ -1778,7 +1778,7 @@ pub async fn get_task_context_window(
                     } else {
                         bc.boards.iter().find(|b| b.id == bc.active_board_id).or_else(|| bc.boards.first())
                     };
-                    b.and_then(|board| board.columns.iter().find(|c| c.id == task.stage_id).cloned())
+                    b.and_then(|board| board.stages.iter().find(|c| c.id == task.stage_id).cloned())
                 });
 
                 let persona_role = col

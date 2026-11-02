@@ -6,12 +6,14 @@ import { BoardState } from './slices/types';
 
 // Ub-mode Re-exports for zero breaking changes across codebase
 export {
+  CANONICAL_BOARD_STAGES,
   CANONICAL_BOARD_COLUMNS,
   DEFAULT_BOARD,
 } from './board/boardConstants';
 
 export {
   sortTasksByPosition,
+  isDoneStageDef,
   isDoneColumnDef,
   getTaskCompletionTime,
   sortDoneTasksByCompletionDateDesc,

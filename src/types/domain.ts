@@ -195,7 +195,7 @@ export function isDoneState(state: TaskState): state is { status: 'done'; verdic
 }
 
 /**
- * Structural contract for stage-like objects (e.g. PipelineColumn).
+ * Structural contract for stage-like objects (e.g. PipelineStage, PipelineColumn).
  */
 export interface StageLike {
   id?: string;

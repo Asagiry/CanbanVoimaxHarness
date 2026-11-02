@@ -133,12 +133,12 @@ use std::path::PathBuf;
                 crate::config::BoardDef {
                     id: "dev-board".to_string(),
                     name: "Development".to_string(),
-                    columns: b1_cols,
+                    stages: b1_cols,
                 },
                 crate::config::BoardDef {
                     id: "kanban-board".to_string(),
                     name: "Kanban".to_string(),
-                    columns: b2_cols,
+                    stages: b2_cols,
                 },
             ],
         };
@@ -290,7 +290,7 @@ use std::path::PathBuf;
                 crate::config::BoardDef {
                     id: "default-board".to_string(),
                     name: "Default".to_string(),
-                    columns: cols,
+                    stages: cols,
                 },
             ],
         };
@@ -517,7 +517,7 @@ use std::path::PathBuf;
             boards: vec![crate::config::BoardDef {
                 id: "development".to_string(),
                 name: "Development".to_string(),
-                columns: vec![
+                stages: vec![
                     test_col("backlog"),
                     test_col("dev"),
                     test_col("ready"),
@@ -803,7 +803,7 @@ use std::path::PathBuf;
             boards: vec![crate::config::BoardDef {
                 id: "development".to_string(),
                 name: "Development".to_string(),
-                columns: vec![
+                stages: vec![
                     test_col("backlog"),
                     test_col("dev"),
                     test_col("ready"),

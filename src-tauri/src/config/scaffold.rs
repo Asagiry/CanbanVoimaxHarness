@@ -135,23 +135,23 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
         atomic_write_file(&config_path, &serde_json::to_string_pretty(&default_config)?).await?;
     }
 
-    // 2. pipeline.json if not present (minimal 3 columns: backlog -> dev -> ready).
+    // 2. pipeline.json if not present (minimal 3 stages: backlog -> dev -> ready).
     let pipeline_path = cvh_dir.join("pipeline.json");
-    let initial_columns = if !pipeline_path.exists() {
+    let initial_stages = if !pipeline_path.exists() {
         let minimal_pipeline = minimal_pipeline_config();
         atomic_write_file(&pipeline_path, &serde_json::to_string_pretty(&minimal_pipeline)?).await?;
-        minimal_pipeline.columns
+        minimal_pipeline.stages
     } else {
-        load_pipeline_config(repo_root).await.map(|p| p.columns).unwrap_or_else(|_| minimal_pipeline_config().columns)
+        load_pipeline_config(repo_root).await.map(|p| p.stages).unwrap_or_else(|_| minimal_pipeline_config().stages)
     };
 
-    // 2b. boards.json if not present: seed default 3-column board with persona: 'cvh-dev'
+    // 2b. boards.json if not present: seed default 3-stage board with persona: 'cvh-dev'
     let boards_path = cvh_dir.join("boards.json");
     if !boards_path.exists() {
         let default_board = BoardDef {
             id: "development".to_string(),
             name: "cvh-board".to_string(),
-            columns: initial_columns,
+            stages: initial_stages,
         };
         let boards_cfg = BoardsConfig {
             active_board_id: "development".to_string(),

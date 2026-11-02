@@ -9,15 +9,17 @@ export function sortTasksByPosition(a: KanbanTask, b: KanbanTask): number {
   return (a.createdAt || 0) - (b.createdAt || 0);
 }
 
-export function isDoneColumnDef(col?: { id: string; title?: string; terminal?: boolean } | null): boolean {
-  if (!col) return false;
+export function isDoneStageDef(stage?: { id: string; title?: string; terminal?: boolean } | null): boolean {
+  if (!stage) return false;
   return Boolean(
-    col.terminal ||
-    col.id === 'ready' ||
-    col.title?.toLowerCase().includes('готов') ||
-    col.title?.toLowerCase().includes('done')
+    stage.terminal ||
+    stage.id === 'ready' ||
+    stage.title?.toLowerCase().includes('готов') ||
+    stage.title?.toLowerCase().includes('done')
   );
 }
+
+export const isDoneColumnDef = isDoneStageDef;
 
 export function getTaskCompletionTime(task: KanbanTask): number {
   return task.completedAt || task.stageEnteredAt || task.updatedAt || task.createdAt || 0;

@@ -1,4 +1,5 @@
 import {
+  PipelineStage,
   PipelineColumn,
   KanbanTask,
   BoardDef,
@@ -19,7 +20,9 @@ export interface ActiveQuestionInfo {
 export interface BoardMetaSlice {
   boards: BoardDef[];
   activeBoardId: string;
-  columns: PipelineColumn[];
+  stages: PipelineStage[];
+  /** @deprecated Use stages instead */
+  readonly columns: PipelineColumn[];
   isLoadingBoards: boolean;
   isBoardsLoaded: boolean;
   isTauriConnected: boolean;
@@ -30,13 +33,25 @@ export interface BoardMetaSlice {
   createBoard: (name: string, template?: string) => Promise<BoardDef | null>;
   saveBoard: (board: BoardDef) => Promise<void>;
   deleteBoard: (boardId: string) => Promise<void>;
-  saveCurrentBoard: (columns: PipelineColumn[]) => Promise<void>;
+  saveCurrentBoard: (stages: PipelineStage[]) => Promise<void>;
+  setStages: (stages: PipelineStage[]) => void;
+  /** @deprecated Use setStages instead */
   setColumns: (columns: PipelineColumn[]) => void;
+  updateStage: (stageId: string, partial: Partial<PipelineStage>) => Promise<void>;
+  /** @deprecated Use updateStage instead */
   updateColumn: (columnId: string, partial: Partial<PipelineColumn>) => Promise<void>;
+  loadStages: () => Promise<void>;
+  /** @deprecated Use loadStages instead */
   loadColumns: () => Promise<void>;
-  addColumn?: (column: PipelineColumn) => Promise<void>;
-  deleteColumn?: (columnId: string) => Promise<void>;
-  reorderColumns?: (columns: PipelineColumn[]) => Promise<void>;
+  addStage: (stage: PipelineStage) => Promise<void>;
+  /** @deprecated Use addStage instead */
+  addColumn: (column: PipelineColumn) => Promise<void>;
+  deleteStage: (stageId: string) => Promise<void>;
+  /** @deprecated Use deleteStage instead */
+  deleteColumn: (columnId: string) => Promise<void>;
+  reorderStages: (stages: PipelineStage[]) => Promise<void>;
+  /** @deprecated Use reorderStages instead */
+  reorderColumns: (columns: PipelineColumn[]) => Promise<void>;
 }
 
 export interface TaskTimersSlice {
