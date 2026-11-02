@@ -1,0 +1,9 @@
+incremental = false
+eager_incremental = false
+build_script_execution = true
+cc = true
+
+[scheduler]
+enabled = true
+reserve_cpus = 2
+priority = "normal"
