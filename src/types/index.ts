@@ -247,7 +247,7 @@ export interface LiveStreamEntry {
   createdAt?: number;
 }
 
-export type ActivityType = 'thought' | 'output' | 'tool' | 'steer' | 'system' | 'error' | 'user' | 'prompt' | 'question' | 'compacted' | 'summary';
+export type ActivityType = 'thought' | 'output' | 'tool' | 'steer' | 'system' | 'error' | 'user' | 'prompt' | 'question' | 'compacted' | 'summary' | 'reject';
 
 export interface ActivityItem {
   id: string;

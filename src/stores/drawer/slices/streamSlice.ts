@@ -6,7 +6,6 @@ import {
   ActivityType,
 } from '../types';
 import { LiveStreamEntry } from '../../../types';
-import { scheduleDialogSave } from '../drawerHelpers';
 
 export const createStreamSlice: StateCreator<
   DrawerState,
@@ -139,7 +138,6 @@ export const createStreamSlice: StateCreator<
         },
       };
     });
-    scheduleDialogSave(taskId);
   },
 
   appendOutput: (taskId, content, type = 'output', images) => {
@@ -236,7 +234,6 @@ export const createStreamSlice: StateCreator<
         },
       };
     });
-    scheduleDialogSave(taskId);
   },
 
   updateTelemetry: (taskId, telemetry) => {

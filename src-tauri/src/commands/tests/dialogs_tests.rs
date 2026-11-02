@@ -89,6 +89,43 @@ use std::path::PathBuf;
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
 
+    #[tokio::test]
+    async fn test_task_dialog_deduplicates_output_items() {
+        let base = PathBuf::from("target").join(format!("cvh_dialog_dedup_test_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        // Backend runner writes finished output with uuid-1
+        let runner_output = vec![ActivityItem {
+            id: "resp-uuid-1".to_string(),
+            item_type: "output".to_string(),
+            timestamp: "10:00:05".to_string(),
+            content: Some("Final answer from LLM".to_string()),
+            tool: None,
+            duration_ms: None,
+            images: None,
+        }];
+        crate::db::append_dialog_items(&base, "CVH-DEDUP", &runner_output).expect("write runner output");
+
+        // Frontend saves feed with out-123 and identical content
+        let frontend_output = vec![ActivityItem {
+            id: "out-123".to_string(),
+            item_type: "output".to_string(),
+            timestamp: "10:00:05".to_string(),
+            content: Some("Final answer from LLM".to_string()),
+            tool: None,
+            duration_ms: None,
+            images: None,
+        }];
+        crate::db::append_dialog_items(&base, "CVH-DEDUP", &frontend_output).expect("save frontend output");
+
+        let loaded = crate::db::load_dialog_items(&base, "CVH-DEDUP").expect("load dialog");
+        assert_eq!(loaded.len(), 1, "Duplicate output item must be reconciled into a single item");
+        assert_eq!(loaded[0].id, "out-123");
+        assert_eq!(loaded[0].content.as_deref(), Some("Final answer from LLM"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
 
     #[tokio::test]
     async fn test_append_llm_debug_log() {
