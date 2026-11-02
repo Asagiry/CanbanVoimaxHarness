@@ -84,14 +84,22 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
   }
 }
 
-export async function triggerRunAgent(taskId: string, prompt?: string): Promise<void> {
-  // Ensure the task is guaranteed to be saved and known to the backend before running agent (§ Requirement 4)
-  const currentTasks = useBoardStore.getState().tasks;
-  const taskToRun = currentTasks.find(
-    (t) => t.id === taskId || t.id.trim().toLowerCase() === taskId.trim().toLowerCase()
-  );
-  if (taskToRun) {
-    await syncTasksBackend(currentTasks);
+export async function triggerRunAgent(
+  taskId: string,
+  prompt?: string,
+  options?: { skipSync?: boolean }
+): Promise<void> {
+  // Ensure the task is guaranteed to be saved and known to the backend before running agent (§ Requirement 4).
+  // When skipSync is true (e.g. after move_task_stage or autorun event), avoid syncTasksBackend
+  // to prevent race conditions and clobbering backend-assigned fields.
+  if (!options?.skipSync) {
+    const currentTasks = useBoardStore.getState().tasks;
+    const taskToRun = currentTasks.find(
+      (t) => t.id === taskId || t.id.trim().toLowerCase() === taskId.trim().toLowerCase()
+    );
+    if (taskToRun) {
+      await syncTasksBackend(currentTasks);
+    }
   }
 
   try {
@@ -116,7 +124,9 @@ export async function triggerRunAgent(taskId: string, prompt?: string): Promise<
     );
     useBoardStore.setState({ tasks: reverted });
     useDrawerStore.getState().setActiveAgentTask(taskId, false);
-    void syncTasksBackend(reverted);
+    if (!options?.skipSync) {
+      void syncTasksBackend(reverted);
+    }
 
     // Display user notification / alert so the user understands why the agent did not start
     alert(`Не удалось запустить агента для задачи "${taskId}":\n${errMsg}`);

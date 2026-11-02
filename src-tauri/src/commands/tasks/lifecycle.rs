@@ -20,7 +20,7 @@ use super::storage::{
     load_task_sequence, max_task_num_on_disk, resolve_or_allocate_task_id, save_tasks_to_disk,
     save_task_sequence,
 };
-use super::transitions::trigger_column_on_enter_script;
+use super::transitions::{ensure_task_worktree, trigger_column_on_enter_script};
 
 pub async fn list_tasks(state: State<'_, AppState>) -> Result<Vec<Task>, String> {
     let root = resolve_actual_repo_root(&state.get_root());
@@ -140,6 +140,9 @@ pub async fn internal_save_tasks(
             }
             if t.hook_states.is_none() && dt.hook_states.is_some() {
                 t.hook_states = dt.hook_states.clone();
+            }
+            if (t.todos.is_none() || t.todos.as_ref().map(|v| v.is_empty()).unwrap_or(false)) && dt.todos.is_some() {
+                t.todos = dt.todos.clone();
             }
             if t.worktree_path.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) && dt.worktree_path.is_some() {
                 t.worktree_path = dt.worktree_path.clone();
@@ -421,7 +424,58 @@ pub async fn internal_create_task(
         };
         if let Some(col) = col_opt {
             trigger_column_on_enter_script(&col, &new_task, &stage_id, None, root).await;
-            if let Some(hook_cfg) = col.hooks.get("on_enter").cloned() {
+            let is_builtin = col.hooks.get("on_enter").map(|cfg| {
+                let s = cfg.script();
+                s == "builtin:create_worktree" || s.starts_with("builtin:create_worktree")
+            }).unwrap_or(false);
+            let is_backlog_col = col.is_intake == Some(true) || stage_id_matches(&stage_id, "backlog");
+
+            if is_builtin || is_backlog_col {
+                let wt_empty = new_task.worktree_path.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true);
+                if wt_empty && !skip {
+                    if let Some(app) = app_handle {
+                        let _ = app.emit("hook:start", serde_json::json!({
+                            "taskId": task_id,
+                            "stageId": stage_id,
+                            "hookType": "on_enter",
+                            "hookName": "builtin:create_worktree",
+                            "description": "Allocate isolated git worktree",
+                        }));
+                    }
+                    let started_at = chrono::Utc::now().timestamp_millis();
+                    let wt_res = ensure_task_worktree(root, &mut new_task).await;
+                    let duration_ms = (chrono::Utc::now().timestamp_millis() - started_at).max(0) as u64;
+                    let success = wt_res.is_ok();
+                    let wt_stdout = new_task.worktree_path.clone().unwrap_or_default();
+                    let wt_stderr = if let Err(ref e) = wt_res { e.clone() } else { String::new() };
+                    record_task_hook_result(
+                        &mut new_task,
+                        &stage_id,
+                        "on_enter",
+                        "builtin:create_worktree",
+                        started_at,
+                        duration_ms,
+                        success,
+                        if success { Some(0) } else { Some(1) },
+                        &wt_stdout,
+                        &wt_stderr,
+                        if !wt_stderr.is_empty() { Some(&wt_stderr) } else { None },
+                    );
+                    if let Some(app) = app_handle {
+                        let _ = app.emit("hook:finish", serde_json::json!({
+                            "taskId": task_id,
+                            "stageId": stage_id,
+                            "hookType": "on_enter",
+                            "success": success,
+                            "exitCode": if success { Some(0) } else { Some(1) },
+                            "stdout": new_task.worktree_path.as_deref().unwrap_or(""),
+                            "stderr": if let Err(ref e) = wt_res { e.as_str() } else { "" },
+                        }));
+                    }
+                }
+            }
+            if !is_builtin {
+                if let Some(hook_cfg) = col.hooks.get("on_enter").cloned() {
                 let hook_rel = hook_cfg.script().to_string();
                 let hook_desc = hook_cfg.description().map(str::to_string);
                 let hook_path = crate::config::resolve_hook_path(
@@ -569,6 +623,7 @@ pub async fn internal_create_task(
                         }
                     }
                 }
+            }
             }
         }
     }

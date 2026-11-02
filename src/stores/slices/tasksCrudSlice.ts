@@ -354,7 +354,7 @@ export const createTasksCrudSlice: StateCreator<
 
         const colDef = targetColDef ?? columns.find((c) => c.id === merged.columnId);
         if (colDef?.autoRun === true || (colDef?.autoRun !== false && Boolean(colDef?.persona))) {
-          await triggerRunAgent(resolvedTaskId);
+          await triggerRunAgent(resolvedTaskId, undefined, { skipSync: true });
         }
         return;
       }
@@ -818,7 +818,7 @@ export const createTasksCrudSlice: StateCreator<
     });
   },
 
-  runTaskAgent: async (taskId, prompt) => {
+  runTaskAgent: async (taskId, prompt, options) => {
     const { tasks, boards, activeBoardId, columns: activeColumns, moveTask } = get();
     const task = tasks.find(
       (t) => t.id === taskId || t.id.trim().toLowerCase() === taskId.trim().toLowerCase()
@@ -836,7 +836,9 @@ export const createTasksCrudSlice: StateCreator<
       JSON.stringify({ columnId: task.columnId, boardId: task.boardId, status: task.status })
     );
 
-    await syncTasksBackend(get().tasks);
+    if (!options?.skipSync) {
+      await syncTasksBackend(get().tasks);
+    }
 
     const effectiveBoardId = task.boardId || activeBoardId;
     const taskBoard = boards.find((b) => b.id === effectiveBoardId);
@@ -858,8 +860,10 @@ export const createTasksCrudSlice: StateCreator<
           : t
       );
       set({ tasks: updatedTasks });
-      await syncTasksBackend(updatedTasks);
-      await triggerRunAgent(resolvedTaskId, prompt);
+      if (!options?.skipSync) {
+        await syncTasksBackend(updatedTasks);
+      }
+      await triggerRunAgent(resolvedTaskId, prompt, options);
     } else if (taskCol?.isIntake || taskCol?.id === 'backlog') {
       const firstAgentCol = targetColumns.find((c) => c.persona || c.autoRun);
       if (firstAgentCol) {
