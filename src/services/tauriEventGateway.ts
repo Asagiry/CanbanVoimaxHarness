@@ -205,6 +205,7 @@ export interface AgentEventMap {
   'task:created': TaskCreatedPayload;
   'task:moved': TaskMovedPayload;
   'task:advanced': TaskAdvancedPayload;
+  'task:dialog': { taskId?: string; item?: any };
   'task:updated': TaskUpdatedPayload;
   'tasks:updated': TasksUpdatedPayload;
   'hook:start': HookStartPayload;
@@ -653,9 +654,11 @@ export function setupTauriEventGateway(): () => void {
               // ignore
             }
             // Dedup final and mark final response
-            st.markFinalResponse(taskId, response);
+            if (response && response.trim().length > 0) {
+              st.markFinalResponse(taskId, response);
+            }
             // Immediately flush task activity feed to disk upon turn finish
-            st.flushSaveDialog(taskId);
+            void st.flushSaveDialog(taskId);
           } else {
             bufferManager.clearTask(taskId);
             useDrawerStore.getState().setActiveAgentTask(taskId, false);
@@ -694,25 +697,15 @@ export function setupTauriEventGateway(): () => void {
 
       // 10. agent:status
       await addListener('agent:status', (payload) => {
-        const { taskId, status, response } = payload || {};
+        const { taskId, status } = payload || {};
         if (taskId && (status === 'finished' || status === 'aborted' || status === 'error')) {
           useBoardStore.getState().clearActiveQuestion(taskId);
           if (isTaskActiveInDrawer(taskId)) {
             bufferManager.flushTask(taskId);
             useDrawerStore.getState().setActiveAgentTask(taskId, false);
-            if (status === 'finished' && response && typeof response === 'string' && response.trim().length > 0) {
-              const trimmedResp = response.trim();
-              const feed = useDrawerStore.getState().activityFeed[taskId] || [];
-              const alreadyHas = feed.some(
-                (item) =>
-                  (item.type === 'output' || (item.type as string) === 'summary') &&
-                  (item.content?.trim() === trimmedResp || item.content?.includes(trimmedResp))
-              );
-              if (!alreadyHas) {
-                useDrawerStore.getState().markFinalResponse(taskId, trimmedResp);
-              }
+            if (status === 'aborted' || status === 'error') {
+              useDrawerStore.getState().flushSaveDialog(taskId);
             }
-            useDrawerStore.getState().flushSaveDialog(taskId);
             useDrawerStore.getState().setThinkingStartTime(taskId, null);
           } else {
             bufferManager.clearTask(taskId);
@@ -769,6 +762,17 @@ export function setupTauriEventGateway(): () => void {
       await addListener('task:advanced', (payload) => {
         if (payload) {
           void showAdvanceTaskNotification(payload);
+        }
+      });
+
+      // 13b. task:dialog (real-time dialog activities emitted by backend transitions & tools)
+      await addListener('task:dialog', (payload) => {
+        const { taskId, item } = payload || {};
+        if (taskId && item) {
+          if (isTaskActiveInDrawer(taskId)) {
+            bufferManager.flushTask(taskId);
+            useDrawerStore.getState().appendActivityItem(taskId, item);
+          }
         }
       });
 

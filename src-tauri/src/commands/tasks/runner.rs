@@ -665,17 +665,19 @@ pub async fn run_agent(
                     );
                 }
                 AgentEvent::Finished { final_response } => {
+                    let resp_id = format!("resp-{}", uuid::Uuid::new_v4());
                     let _ = app_inner.emit(
                         "agent:finished",
                         serde_json::json!({
                             "taskId": tid_inner,
                             "status": "finished",
-                            "response": &final_response
+                            "response": &final_response,
+                            "id": &resp_id
                         }),
                     );
                     if !final_response.trim().is_empty() {
                         let resp_item = crate::db::ActivityItem {
-                            id: uuid::Uuid::new_v4().to_string(),
+                            id: resp_id,
                             item_type: "output".to_string(),
                             timestamp: chrono::Utc::now().to_rfc3339(),
                             content: Some(final_response.clone()),

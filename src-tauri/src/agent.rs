@@ -3540,23 +3540,11 @@ Messages count: {}
                 // Synchronize messages to in-memory context state before exiting
                 sync_context_state(&config.app_handle, &config.task_id, turn, &messages);
 
-                let display_summary = serde_json::from_str::<serde_json::Value>(&tc.function.arguments)
-                    .ok()
-                    .and_then(|val| {
-                        val.get("summary")
-                            .or_else(|| val.get("reason"))
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.trim().to_string())
-                    })
-                    .filter(|s| !s.is_empty());
-
-                let final_resp = display_summary.unwrap_or_else(|| result_str.clone());
-
-                if !final_resp.trim().is_empty() {
-                    event_sink(AgentEvent::Output(final_resp.clone()));
-                }
+                // Advance_task and stage transitions already append dedicated "summary" or "reject"
+                // dialog activity cards via append_task_dialog_activity. Suppress intermediate stream
+                // output and empty the final_response to eliminate duplicate output cards (§ CVH-051).
                 event_sink(AgentEvent::Finished {
-                    final_response: final_resp,
+                    final_response: String::new(),
                 });
                 return Ok(result_str);
             }

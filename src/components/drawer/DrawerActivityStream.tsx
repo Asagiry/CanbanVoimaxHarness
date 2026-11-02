@@ -8,7 +8,7 @@ import ImageLightboxModal from './ImageLightboxModal';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useTranslation } from '../../stores/languageStore';
-import { ArrowDown, AlertTriangle, Info } from 'lucide-react';
+import { ArrowDown, AlertTriangle, Info, CheckCircle2, RotateCcw } from 'lucide-react';
 import {
   ThoughtStreamCard,
   SteerDirectiveCard,
@@ -23,6 +23,7 @@ import {
   shouldSuppressExplanation,
   filterDisplayActivities,
   computeActivityDurations,
+  MarkdownContent,
 } from './stream';
 import { tryExtractTodos } from '../../lib/markdown';
 
@@ -311,6 +312,49 @@ export default function DrawerActivityStream({
                     <AlertTriangle className="h-4 w-4 text-[#dc2626] dark:text-[#ff7b72] shrink-0 mt-0.5" />
                     <div className="flex-1 whitespace-pre-wrap select-text">
                       {activity?.content ?? ''}
+                    </div>
+                  </div>
+                );
+              }
+
+              // Dedicated Stage Summary Card (advance_task handover)
+              if ((activity?.type as string) === 'summary') {
+                return (
+                  <div key={key} className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-emerald-500/30 dark:border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20 shadow-xs overflow-hidden my-2.5">
+                    <div className="flex items-center justify-between px-3.5 py-2.5 bg-emerald-100/60 dark:bg-emerald-900/30 border-b border-emerald-200/60 dark:border-emerald-800/40 select-none">
+                      <div className="flex items-center space-x-2 text-emerald-900 dark:text-emerald-200">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span className="text-xs font-semibold font-sans">
+                          Саммари этапа / Handover Summary
+                        </span>
+                      </div>
+                      {activityDurations[idx] ? (
+                        <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-300">
+                          {Math.round(activityDurations[idx]! / 1000)}s
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="p-3.5 text-sm leading-relaxed text-[#27272a] dark:text-[#d4d4d8] select-text">
+                      <MarkdownContent content={activity?.content || ''} onImageClick={handleOpenLightbox} />
+                    </div>
+                  </div>
+                );
+              }
+
+              // Dedicated Reviewer Verdict Card (reject_task / changes requested)
+              if ((activity?.type as string) === 'reject') {
+                return (
+                  <div key={key} className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-amber-500/30 dark:border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20 shadow-xs overflow-hidden my-2.5">
+                    <div className="flex items-center justify-between px-3.5 py-2.5 bg-amber-100/60 dark:bg-amber-900/30 border-b border-amber-200/60 dark:border-amber-800/40 select-none">
+                      <div className="flex items-center space-x-2 text-amber-900 dark:text-amber-200">
+                        <RotateCcw className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                        <span className="text-xs font-semibold font-sans">
+                          Вердикт ревьюера: Требуются правки (CHANGES_REQUESTED)
+                        </span>
+                      </div>
+                    </div>
+                    <div className="p-3.5 text-sm leading-relaxed text-[#27272a] dark:text-[#d4d4d8] select-text">
+                      <MarkdownContent content={activity?.content || ''} onImageClick={handleOpenLightbox} />
                     </div>
                   </div>
                 );

@@ -50,6 +50,19 @@ pub fn append_dialog_items(root: &Path, task_id: &str, items: &[ActivityItem]) -
             .map_err(|e| format!("Failed to prepare insert statement: {}", e))?;
 
         for (idx, item) in items.iter().enumerate() {
+            // Deduplicate matching output items to eliminate duplicate final response cards
+            if item.item_type == "output" {
+                if let Some(ref text) = item.content {
+                    let trimmed = text.trim();
+                    if !trimmed.is_empty() {
+                        let _ = tx.execute(
+                            "DELETE FROM dialog_items WHERE task_id = ?1 AND type = 'output' AND TRIM(content) = ?2 AND id != ?3",
+                            params![task_id, trimmed, item.id],
+                        );
+                    }
+                }
+            }
+
             let images_json = match &item.images {
                 Some(imgs) if !imgs.is_empty() => {
                     Some(serde_json::to_string(imgs).map_err(|e| e.to_string())?)

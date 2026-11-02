@@ -55,13 +55,15 @@ export const createActivitySlice: StateCreator<
           .slice(lastOutputIdx + 1)
           .some((it) => it.type === 'tool' || Boolean((it as any).tool));
 
+      const resp = (response || '').trim();
+
       if (lastOutputIdx !== -1 && !hasInterveningTools) {
         const lastOutput = updatedFeed[lastOutputIdx];
-        const content = lastOutput.content || '';
-        if (response && response.length > 0 && !content.endsWith(response)) {
+        const content = (lastOutput.content || '').trim();
+        if (resp && !content) {
           updatedFeed[lastOutputIdx] = {
             ...lastOutput,
-            content: content ? `${content}\n\n${response}` : response,
+            content: response!,
             isFinal: true,
           };
         } else {
@@ -70,14 +72,21 @@ export const createActivitySlice: StateCreator<
             isFinal: true,
           };
         }
-      } else if (response && response.length > 0) {
-        updatedFeed.push({
-          id: `out-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-          type: 'output',
-          timestamp: timeStr,
-          content: response,
-          isFinal: true,
-        });
+      } else if (resp.length > 0) {
+        const alreadyExists = updatedFeed.some(
+          (it) =>
+            (it.type === 'output' || (it.type as string) === 'summary') &&
+            (it.content || '').trim() === resp
+        );
+        if (!alreadyExists) {
+          updatedFeed.push({
+            id: `out-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            type: 'output',
+            timestamp: timeStr,
+            content: response!,
+            isFinal: true,
+          });
+        }
       }
 
       return {
@@ -87,7 +96,6 @@ export const createActivitySlice: StateCreator<
         },
       };
     });
-    scheduleDialogSave(taskId);
   },
 
   addToolExecution: (taskId, tool) => {
@@ -604,6 +612,42 @@ export const createActivitySlice: StateCreator<
                   }
                   continue;
                 }
+
+                // Deduplicate adjacent identical output / summary items
+                if (
+                  prev &&
+                  (item.type === 'output' || (item.type as string) === 'summary') &&
+                  (prev.type === 'output' || (prev.type as string) === 'summary') &&
+                  item.content?.trim() &&
+                  prev.content?.trim() &&
+                  item.content.trim() === prev.content.trim()
+                ) {
+                  if ((item.type as string) === 'summary') {
+                    prev.type = 'summary';
+                  }
+                  if (item.isFinal) {
+                    prev.isFinal = true;
+                  }
+                  continue;
+                }
+
+                // Suppress output item if it duplicates a recent stage summary
+                if (item.type === 'output' && item.content?.trim()) {
+                  const itemContent = item.content.trim();
+                  const isDuplicateSummary = dedupedItems
+                    .slice(-3)
+                    .some(
+                      (d) =>
+                        (d.type as string) === 'summary' &&
+                        d.content?.trim() &&
+                        (d.content.trim() === itemContent ||
+                          d.content.includes(itemContent) ||
+                          itemContent.includes(d.content.trim()))
+                    );
+                  if (isDuplicateSummary) {
+                    continue;
+                  }
+                }
                 dedupedItems.push(item);
               }
 
@@ -886,5 +930,38 @@ export const createActivitySlice: StateCreator<
       };
     });
     scheduleDialogSave(taskId);
+  },
+
+  appendActivityItem: (taskId, item) => {
+    if (!taskId || !item) return;
+    set((state) => {
+      const feed = state.activityFeed[taskId] || [];
+      const idx = feed.findIndex((f) => f.id === item.id);
+      let updatedFeed: DrawerActivityItem[];
+      if (idx !== -1) {
+        updatedFeed = [...feed];
+        updatedFeed[idx] = { ...feed[idx], ...item };
+      } else {
+        const duplicateIdx = feed.findIndex(
+          (f) =>
+            f.type === item.type &&
+            f.content &&
+            item.content &&
+            f.content.trim() === item.content.trim()
+        );
+        if (duplicateIdx !== -1) {
+          updatedFeed = [...feed];
+          updatedFeed[duplicateIdx] = { ...feed[duplicateIdx], ...item };
+        } else {
+          updatedFeed = [...feed, item];
+        }
+      }
+      return {
+        activityFeed: {
+          ...state.activityFeed,
+          [taskId]: updatedFeed,
+        },
+      };
+    });
   },
 });

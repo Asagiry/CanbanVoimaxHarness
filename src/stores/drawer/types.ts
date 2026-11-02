@@ -95,6 +95,7 @@ export interface ActivityActions {
   evaporateClientToolLogs: (taskId: string) => { evaporatedCount: number; savedTokens: number };
   loadTaskDialog: (taskId: string) => Promise<void>;
   flushSaveDialog: (taskId: string) => Promise<void>;
+  appendActivityItem: (taskId: string, item: DrawerActivityItem) => void;
   addQuestion: (
     taskId: string,
     question: {
