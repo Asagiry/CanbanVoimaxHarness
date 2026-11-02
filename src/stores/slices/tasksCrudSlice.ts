@@ -232,20 +232,20 @@ export const createTasksCrudSlice: StateCreator<
     }
     const resolvedTaskId = task.id;
     if (!targetStageId) {
-      console.warn(`[moveTask] Invalid empty targetColumnId for task "${resolvedTaskId}"`);
+      console.warn(`[moveTask] Invalid empty targetStageId for task "${resolvedTaskId}"`);
       return;
     }
 
-    if (!options?.force && task.columnId === targetStageId) {
+    if (!options?.force && task.stageId === targetStageId) {
       return;
     }
 
     const targetColDef = columns.find((c) => c.id === targetStageId);
-    console.info(`[moveTask] Moving task "${resolvedTaskId}" from "${task.columnId}" to "${targetStageId}" (board: ${activeBoardId})`);
+    console.info(`[moveTask] Moving task "${resolvedTaskId}" from "${task.stageId}" to "${targetStageId}" (board: ${activeBoardId})`);
     logEvent(
       'INFO',
       'BOARD_STORE',
-      `moveTask: starting move for "${resolvedTaskId}" from "${task.columnId}" to "${targetStageId}"`,
+      `moveTask: starting move for "${resolvedTaskId}" from "${task.stageId}" to "${targetStageId}"`,
       JSON.stringify({ activeBoardId, originalStatus: task.status, force: options?.force })
     );
 
@@ -260,7 +260,7 @@ export const createTasksCrudSlice: StateCreator<
         const mapped = mapBackendTaskToKanban(backendTask);
         if (!mapped) return;
         const prev = get().tasks.find((t) => t.id === resolvedTaskId || t.id.trim().toLowerCase() === resolvedTaskId.trim().toLowerCase()) ?? task;
-        const sourceColId = options?.sourceColumnId ?? prev.columnId;
+        const sourceColId = (options as any)?.sourceStageId ?? options?.sourceColumnId ?? prev.stageId;
         const sourceCol = columns.find((c) => c.id === sourceColId);
         const sourceHasLeaveHook = Boolean(
           getHookScript(sourceCol?.hooks?.['on_leave']) ||
@@ -299,6 +299,7 @@ export const createTasksCrudSlice: StateCreator<
             : {};
         const merged: KanbanTask = {
           ...mapped,
+          stageId: targetStageId,
           columnId: targetStageId,
           previousStageId: sourceColId,
           hookStates: nextTaskHookStates,
@@ -315,7 +316,7 @@ export const createTasksCrudSlice: StateCreator<
           activeStageDuration: 0,
           stageDurations: {
             ...prevStageDurations,
-            [prev.columnId]: (prevStageDurations[prev.columnId] || 0) + currentDuration,
+            [prev.stageId]: (prevStageDurations[prev.stageId] || 0) + currentDuration,
           },
           totalElapsed: prev.totalElapsed,
           isTimerRunning: mapped.status === 'running',
@@ -342,7 +343,7 @@ export const createTasksCrudSlice: StateCreator<
           'INFO',
           'BOARD_STORE',
           `moveTask: backend move_task_stage succeeded for "${resolvedTaskId}"`,
-          JSON.stringify({ newStage: merged.columnId, newStatus: merged.status, boardId: merged.boardId })
+          JSON.stringify({ newStage: merged.stageId, newStatus: merged.status, boardId: merged.boardId })
         );
 
         if (merged.boardId && merged.boardId !== get().activeBoardId) {
@@ -352,7 +353,7 @@ export const createTasksCrudSlice: StateCreator<
           }
         }
 
-        const colDef = targetColDef ?? columns.find((c) => c.id === merged.columnId);
+        const colDef = targetColDef ?? columns.find((c) => c.id === merged.stageId);
         if (colDef?.autoRun === true || (colDef?.autoRun !== false && Boolean(colDef?.persona))) {
           await triggerRunAgent(resolvedTaskId, undefined, { skipSync: true });
         }
@@ -410,7 +411,7 @@ export const createTasksCrudSlice: StateCreator<
 
         if (targetColDef?.autoRun === true || (targetColDef?.autoRun !== false && Boolean(targetColDef?.persona))) {
           const prevTask = tasks.find((t) => t.id === taskId);
-          if (prevTask && prevTask.columnId !== targetStageId) {
+          if (prevTask && prevTask.stageId !== targetStageId) {
             await triggerRunAgent(taskId);
           }
         }
@@ -464,8 +465,8 @@ export const createTasksCrudSlice: StateCreator<
     if (!rawTask || typeof rawTask !== 'object') return;
     const rawDto = rawTask as BackendTaskDTO;
     const prev = get().tasks.find((p) => p.id === rawDto.id);
-    const rawCol = rawDto.stageId || rawDto.stage_id || rawDto.columnId;
-    if (prev && (!rawCol || prev.columnId === rawCol)) {
+    const rawStage = rawDto.stageId || rawDto.stage_id || rawDto.columnId;
+    if (prev && (!rawStage || prev.stageId === rawStage)) {
       if (prev.stageEnteredAt && !rawDto.stageEnteredAt && !rawDto.stage_entered_at) {
         rawDto.stageEnteredAt = prev.stageEnteredAt;
       }
@@ -516,8 +517,8 @@ export const createTasksCrudSlice: StateCreator<
       const finalTasks = mapped.parentId
         ? updatedTasks.map((t) => {
             if (t.id === mapped.parentId) {
-              const mappedCol = columns.find((c) => c.id === mapped.columnId);
-              const isSubDone = mapped.status === 'done' || mapped.columnId === 'ready' || mappedCol?.terminal === true;
+              const mappedCol = columns.find((c) => c.id === mapped.stageId);
+              const isSubDone = mapped.status === 'done' || mapped.stageId === 'ready' || mappedCol?.terminal === true;
               return {
                 ...t,
                 waitingForSubtaskId: isSubDone ? undefined : mapped.id,
@@ -529,8 +530,8 @@ export const createTasksCrudSlice: StateCreator<
             return t;
           })
         : updatedTasks.map((t) => {
-            const tCol = columns.find((c) => c.id === t.columnId);
-            if (t.id === mapped.id && (t.columnId === 'ready' || t.status === 'done' || tCol?.terminal === true)) {
+            const tCol = columns.find((c) => c.id === t.stageId);
+            if (t.id === mapped.id && (t.stageId === 'ready' || t.status === 'done' || tCol?.terminal === true)) {
               return {
                 ...t,
                 waitingForSubtaskId: undefined,
@@ -552,8 +553,8 @@ export const createTasksCrudSlice: StateCreator<
     for (const raw of rawTasks) {
       if (!isBackendTaskDTO(raw)) continue;
       const prev = prevTasks.find((p) => p.id === raw.id);
-      const rawCol = raw.stageId || raw.stage_id || raw.columnId;
-      if (prev && (!rawCol || prev.columnId === rawCol)) {
+      const rawStage = raw.stageId || raw.stage_id || raw.columnId;
+      if (prev && (!rawStage || prev.stageId === rawStage)) {
         if (prev.stageEnteredAt && !raw.stageEnteredAt && !raw.stage_entered_at) {
           raw.stageEnteredAt = prev.stageEnteredAt;
         }
@@ -571,8 +572,8 @@ export const createTasksCrudSlice: StateCreator<
     }
 
     const cleanedTasks = mapped.map((t) => {
-      const colDef = columns.find((c) => c.id === t.columnId);
-      const isTerminal = t.columnId === 'ready' || t.status === 'done' || colDef?.terminal === true;
+      const colDef = columns.find((c) => c.id === t.stageId);
+      const isTerminal = t.stageId === 'ready' || t.status === 'done' || colDef?.terminal === true;
       if (isTerminal) {
         if (t.waitingForSubtaskId || t.status === 'waiting_subtask') {
           return { ...t, waitingForSubtaskId: undefined, status: 'done' as TaskStatus };
@@ -581,8 +582,8 @@ export const createTasksCrudSlice: StateCreator<
       }
       if (t.waitingForSubtaskId) {
         const sub = mapped.find((s) => s.id === t.waitingForSubtaskId);
-        const subColDef = sub ? columns.find((c) => c.id === sub.columnId) : undefined;
-        if (!sub || sub.status === 'done' || sub.columnId === 'ready' || subColDef?.terminal === true) {
+        const subColDef = sub ? columns.find((c) => c.id === sub.stageId) : undefined;
+        if (!sub || sub.status === 'done' || sub.stageId === 'ready' || subColDef?.terminal === true) {
           return {
             ...t,
             waitingForSubtaskId: undefined,
@@ -611,8 +612,9 @@ export const createTasksCrudSlice: StateCreator<
   addTask: async (input) => {
     const state = get();
     const intakeCol = state.columns.find((c) => c.isIntake);
-    const targetColumnId =
+    const targetStageId =
       input.stageId ||
+      input.columnId ||
       intakeCol?.id ||
       (state.columns.some((c) => c.id === 'backlog') ? 'backlog' : (state.columns[0]?.id ?? 'backlog'));
     const boardId = input.boardId || state.activeBoardId || 'development';
@@ -624,7 +626,7 @@ export const createTasksCrudSlice: StateCreator<
       'INFO',
       'BOARD_STORE',
       `addTask: initiated for title="${title}"`,
-      JSON.stringify({ targetColumnId, boardId, model: input.model })
+      JSON.stringify({ targetStageId, boardId, model: input.model })
     );
 
     try {
@@ -632,7 +634,7 @@ export const createTasksCrudSlice: StateCreator<
       const backendTask = await invoke<BackendTaskDTO>('create_task', {
         title,
         description,
-        stageId: targetColumnId,
+        stageId: targetStageId,
         boardId,
         model: input.model || undefined,
         attachments: input.attachments && input.attachments.length > 0 ? input.attachments : undefined,
@@ -653,10 +655,10 @@ export const createTasksCrudSlice: StateCreator<
           'INFO',
           'BOARD_STORE',
           `addTask: backend create_task confirmed for "${confirmed.id}"`,
-          JSON.stringify({ columnId: confirmed.columnId, boardId: confirmed.boardId, worktree: confirmed.worktreePath })
+          JSON.stringify({ stageId: confirmed.stageId, boardId: confirmed.boardId, worktree: confirmed.worktreePath })
         );
 
-        const colDef = get().columns.find((c) => c.id === confirmed.columnId);
+        const colDef = get().columns.find((c) => c.id === confirmed.stageId);
         if (colDef?.autoRun ?? !!colDef?.persona) {
           await triggerRunAgent(confirmed.id);
         }
@@ -672,14 +674,14 @@ export const createTasksCrudSlice: StateCreator<
     }
   },
 
-  createSubtask: async (parentId: string, targetColumnId?: string) => {
+  createSubtask: async (parentId: string, targetStageId?: string) => {
     const { tasks, columns } = get();
     const parent = tasks.find((t) => t.id === parentId);
     if (!parent) return null;
 
-    const parentColIndex = columns.findIndex((c) => c.id === parent.columnId);
-    const targetCol = targetColumnId
-      ? columns.find((c) => c.id === targetColumnId)
+    const parentColIndex = columns.findIndex((c) => c.id === parent.stageId);
+    const targetCol = targetStageId
+      ? columns.find((c) => c.id === targetStageId)
       : parentColIndex >= 0 && parentColIndex + 1 < columns.length
       ? columns[parentColIndex + 1]
       : null;
@@ -725,7 +727,7 @@ export const createTasksCrudSlice: StateCreator<
           'INFO',
           'BOARD_STORE',
           `createSubtask: backend create_subtask confirmed for "${mapped.id}" (parent: "${parentId}")`,
-          JSON.stringify({ columnId: mapped.columnId, status: mapped.status })
+          JSON.stringify({ stageId: mapped.stageId, status: mapped.status })
         );
 
         if (targetCol.autoRun ?? !!targetCol.persona) {
@@ -833,7 +835,7 @@ export const createTasksCrudSlice: StateCreator<
       'INFO',
       'BOARD_STORE',
       `runTaskAgent: requested for "${resolvedTaskId}"`,
-      JSON.stringify({ columnId: task.columnId, boardId: task.boardId, status: task.status })
+      JSON.stringify({ stageId: task.stageId, boardId: task.boardId, status: task.status })
     );
 
     if (!options?.skipSync) {
@@ -846,14 +848,14 @@ export const createTasksCrudSlice: StateCreator<
       ? taskBoard.columns
       : (activeColumns && activeColumns.length > 0 ? activeColumns : CANONICAL_BOARD_COLUMNS);
     const taskCol = targetColumns.find(
-      (c) => c.id === task.columnId || (task.columnId && c.id.toLowerCase() === task.columnId.toLowerCase())
+      (c) => c.id === task.stageId || (task.stageId && c.id.toLowerCase() === task.stageId.toLowerCase())
     );
 
     if (taskCol?.terminal || taskCol?.id === 'ready' || taskCol?.id === 'done') {
-      logEvent('INFO', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" is in terminal column "${task.columnId}", skipping`);
+      logEvent('INFO', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" is in terminal stage "${task.stageId}", skipping`);
       return;
     } else if (taskCol?.persona || taskCol?.autoRun) {
-      logEvent('INFO', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" is in agent column "${taskCol.id}", starting agent`);
+      logEvent('INFO', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" is in agent stage "${taskCol.id}", starting agent`);
       const updatedTasks = get().tasks.map((t) =>
         t.id === resolvedTaskId || t.id.trim().toLowerCase() === resolvedTaskId.trim().toLowerCase()
           ? { ...t, status: 'running' as TaskStatus, isTimerRunning: true, updatedAt: Date.now() }
@@ -867,13 +869,13 @@ export const createTasksCrudSlice: StateCreator<
     } else if (taskCol?.isIntake || taskCol?.id === 'backlog') {
       const firstAgentCol = targetColumns.find((c) => c.persona || c.autoRun);
       if (firstAgentCol) {
-        logEvent('INFO', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" in intake column "${task.columnId}", moving to "${firstAgentCol.id}"`);
+        logEvent('INFO', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" in intake stage "${task.stageId}", moving to "${firstAgentCol.id}"`);
         await moveTask(resolvedTaskId, firstAgentCol.id);
       } else {
-        logEvent('WARN', 'BOARD_STORE', `runTaskAgent: no agent column found for task "${resolvedTaskId}"`);
+        logEvent('WARN', 'BOARD_STORE', `runTaskAgent: no agent stage found for task "${resolvedTaskId}"`);
       }
     } else {
-      logEvent('WARN', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" sits in column "${task.columnId}" without autoRun/persona. No move performed.`);
+      logEvent('WARN', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" sits in stage "${task.stageId}" without autoRun/persona. No move performed.`);
     }
   },
 
@@ -893,7 +895,7 @@ export const createTasksCrudSlice: StateCreator<
     if (!task) return;
 
     if (task.customFlow && task.customFlow.length > 0) {
-      const currentIndexInFlow = task.customFlow.indexOf(task.columnId);
+      const currentIndexInFlow = task.customFlow.indexOf(task.stageId);
       if (currentIndexInFlow >= 0 && currentIndexInFlow < task.customFlow.length - 1) {
         const nextStage = task.customFlow[currentIndexInFlow + 1];
         if (columns.some((c) => c.id === nextStage)) {
@@ -905,7 +907,7 @@ export const createTasksCrudSlice: StateCreator<
       }
     }
 
-    const currentIndex = columns.findIndex((c) => c.id === task.columnId);
+    const currentIndex = columns.findIndex((c) => c.id === task.stageId);
     if (currentIndex >= 0 && currentIndex < columns.length - 1) {
       const nextCol = columns[currentIndex + 1];
       moveTask(taskId, nextCol.id);

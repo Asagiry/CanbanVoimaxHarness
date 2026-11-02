@@ -39,7 +39,7 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
     title: 'Implement unit tests',
     description: 'Unit testing tasks slice',
     priority: 'medium',
-    columnId: 'backlog',
+    stageId: 'backlog',
     boardId: 'development',
     persona: 'cvh-dev',
     status: 'idle',
@@ -100,7 +100,7 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
       const currentTasks = useBoardStore.getState().tasks;
       expect(currentTasks).toHaveLength(2);
       expect(currentTasks[0].title).toBe('Fresh Project B Task');
-      expect(currentTasks[0].columnId).toBe('dev');
+      expect(currentTasks[0].stageId).toBe('dev');
       expect(currentTasks[1].title).toBe('Another Project B Task');
     });
 
@@ -121,7 +121,7 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
       expect(tasks).toHaveLength(1);
       expect(tasks[0].id).toBe('CVH-005');
       expect(tasks[0].title).toBe('New backend task');
-      expect(tasks[0].columnId).toBe('dev');
+      expect(tasks[0].stageId).toBe('dev');
       expect(tasks[0].status).toBe('running');
       expect(tasks[0].priority).toBe('high');
     });
@@ -191,7 +191,7 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
     it('setBackendTasks hydrates tasks and cleans up orphaned subtask wait states', () => {
       const parentTask = createSampleTask({
         id: 'CVH-010',
-        columnId: 'dev',
+        stageId: 'dev',
         status: 'waiting_subtask',
         waitingForSubtaskId: 'CVH-010.1',
       });
@@ -277,7 +277,7 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
       const task = createSampleTask({
         id: 'CVH-001',
         status: 'done',
-        columnId: 'ready',
+        stageId: 'ready',
       });
       useBoardStore.getState().setTasks([task]);
 
@@ -303,7 +303,7 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
     it('moveTask successfully updates stage, records stage duration, and triggers agent for active stages', async () => {
       const task = createSampleTask({
         id: 'CVH-001',
-        columnId: 'backlog',
+        stageId: 'backlog',
         activeStageDuration: 45,
         stageDurations: {},
       });
@@ -326,7 +326,7 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
       await useBoardStore.getState().moveTask('CVH-001', 'dev');
 
       const current = useBoardStore.getState().tasks.find((t) => t.id === 'CVH-001');
-      expect(current?.columnId).toBe('dev');
+      expect(current?.stageId).toBe('dev');
       expect(current?.previousStageId).toBe('backlog');
       expect(current?.stageDurations.backlog).toBe(45);
       expect(mockInvoke).toHaveBeenCalledWith(
@@ -339,7 +339,7 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
       const createdAt = Date.now() - 60000;
       const task = createSampleTask({
         id: 'CVH-001',
-        columnId: 'dev',
+        stageId: 'dev',
         status: 'running',
         createdAt,
         waitingForSubtaskId: 'CVH-001.1',
@@ -363,7 +363,7 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
       await useBoardStore.getState().moveTask('CVH-001', 'ready');
 
       const current = useBoardStore.getState().tasks.find((t) => t.id === 'CVH-001');
-      expect(current?.columnId).toBe('ready');
+      expect(current?.stageId).toBe('ready');
       expect(current?.status).toBe('done');
       expect(current?.waitingForSubtaskId).toBeUndefined();
       expect(current?.completedAt).toBeDefined();
@@ -385,7 +385,7 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
 
       const task = createSampleTask({
         id: 'CVH-040',
-        columnId: 'plan',
+        stageId: 'plan',
         boardId: 'pipeline',
         persona: 'planner',
       });
@@ -408,14 +408,14 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
       await useBoardStore.getState().moveTask('CVH-040', 'ready');
 
       const current = useBoardStore.getState().tasks.find((t) => t.id === 'CVH-040');
-      expect(current?.columnId).toBe('ready');
+      expect(current?.stageId).toBe('ready');
       expect(current?.persona).toBe('planner');
     });
 
     it('moveTask backward increments returnsCount (Rework Tracking)', async () => {
       const task = createSampleTask({
         id: 'CVH-001',
-        columnId: 'dev',
+        stageId: 'dev',
         returnsCount: 0,
       });
       useBoardStore.getState().setTasks([task]);
@@ -440,7 +440,7 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
     });
 
     it('promoteTaskToNextStage advances to next sequential column', () => {
-      const task = createSampleTask({ id: 'CVH-001', columnId: 'backlog' });
+      const task = createSampleTask({ id: 'CVH-001', stageId: 'backlog' });
       useBoardStore.getState().setTasks([task]);
 
       const moveTaskSpy = vi.spyOn(useBoardStore.getState(), 'moveTask').mockResolvedValue();
@@ -453,7 +453,7 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
     it('promoteTaskToNextStage adheres to customFlow when present', () => {
       const task = createSampleTask({
         id: 'CVH-001',
-        columnId: 'backlog',
+        stageId: 'backlog',
         customFlow: ['backlog', 'ready'],
       });
       useBoardStore.getState().setTasks([task]);
@@ -468,7 +468,7 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
 
   describe('Symmetrical Parent-Subtask Lifecycle (§ 2.22)', () => {
     it('upserting a subtask locks parent task into waiting_subtask with waitingForSubtaskId', () => {
-      const parent = createSampleTask({ id: 'CVH-010', columnId: 'dev', status: 'idle' });
+      const parent = createSampleTask({ id: 'CVH-010', stageId: 'dev', status: 'idle' });
       useBoardStore.getState().setTasks([parent]);
 
       const subtaskDto: BackendTaskDTO = {
@@ -493,14 +493,14 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
     it('completing subtask unlocks parent back to idle and clears waitingForSubtaskId', () => {
       const parent = createSampleTask({
         id: 'CVH-010',
-        columnId: 'dev',
+        stageId: 'dev',
         status: 'waiting_subtask',
         waitingForSubtaskId: 'CVH-010.1',
       });
       const subtask = createSampleTask({
         id: 'CVH-010.1',
         parentId: 'CVH-010',
-        columnId: 'dev',
+        stageId: 'dev',
         status: 'running',
       });
       useBoardStore.getState().setTasks([parent, subtask]);
@@ -523,7 +523,7 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
     });
 
     it('createSubtask calls backend IPC and updates local store relations', async () => {
-      const parent = createSampleTask({ id: 'CVH-020', columnId: 'backlog', status: 'idle' });
+      const parent = createSampleTask({ id: 'CVH-020', stageId: 'backlog', status: 'idle' });
       useBoardStore.getState().setTasks([parent]);
 
       mockInvoke.mockImplementation(async (cmd, args) => {

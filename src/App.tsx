@@ -75,7 +75,7 @@ export default function App() {
     const init = async () => {
       try {
         await loadProjects();
-        // Boards and columns first: task mapping (columnId fallback, persona, status) resolves via columns
+        // Boards and columns first: task mapping (stageId fallback, persona, status) resolves via columns
         await loadBoards();
         await loadTasks();
         await useAgentSessionStore.getState().syncActiveSessions();

@@ -35,7 +35,7 @@ export function areCardPropsEqual(prev: KanbanCardProps, next: KanbanCardProps):
     a.id === b.id &&
     a.title === b.title &&
     a.description === b.description &&
-    a.columnId === b.columnId &&
+    a.stageId === b.stageId &&
     a.boardId === b.boardId &&
     a.status === b.status &&
     a.priority === b.priority &&

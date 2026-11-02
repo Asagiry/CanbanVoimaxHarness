@@ -45,13 +45,13 @@ function KanbanCard({ task, index }: KanbanCardProps) {
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
-  const taskColumn = columns.find((c) => c.id === task.columnId);
+  const taskColumn = columns.find((c) => c.id === task.stageId);
   const assignedPersonaColor = useCortexStore((s) =>
     taskColumn?.persona ? s.agentPersonas.find((p) => p.role === taskColumn.persona)?.color : undefined
   );
   const assignedAgentColor = taskColumn?.persona
     ? (assignedPersonaColor || getDeterministicAgentColor(taskColumn.persona))
-    : (taskColumn?.color || getDeterministicAgentColor(task.columnId));
+    : (taskColumn?.color || getDeterministicAgentColor(task.stageId));
   const ringGlowColor = assignedAgentColor.startsWith('#') && assignedAgentColor.length === 7
     ? `${assignedAgentColor}50`
     : assignedAgentColor;
@@ -170,7 +170,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
               {/* Todo checklist progress strip */}
               <CardTodoProgress
                 todos={task.todos}
-                stageTitle={taskColumn?.title || task.columnId}
+                stageTitle={taskColumn?.title || task.stageId}
                 stageColor={assignedAgentColor}
                 isDragging={snapshot.isDragging}
                 taskId={task.id}
@@ -215,7 +215,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                       : hookData.enterHookDescription
                   }
                   state={hookData.effectiveLeftState}
-                  stageTitle={taskColumn?.title || task.columnId}
+                  stageTitle={taskColumn?.title || task.stageId}
                   sourceStageTitle={hookData.sourceStageTitle}
                   isTransition={hookData.isTransitionHookFromResult}
                   taskId={task.id}
@@ -231,7 +231,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                   hookName={hookData.effectiveRightHookName}
                   description={hookData.leaveHookDescription}
                   state={hookData.effectiveRightState}
-                  stageTitle={taskColumn?.title || task.columnId}
+                  stageTitle={taskColumn?.title || task.stageId}
                   taskId={task.id}
                   isDragging={snapshot.isDragging}
                 />

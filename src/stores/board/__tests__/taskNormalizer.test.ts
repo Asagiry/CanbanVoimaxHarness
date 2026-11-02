@@ -113,7 +113,7 @@ describe('taskNormalizer dynamic persona resolution', () => {
     });
 
     expect(task).not.toBeNull();
-    expect(task?.columnId).toBe('ready');
+    expect(task?.stageId).toBe('ready');
     expect(task?.status).toBe('done');
     // Root task executed stage 0 (plan), persona must be planner NOT developer!
     expect(task?.persona).toBe('planner');
@@ -135,7 +135,7 @@ describe('taskNormalizer dynamic persona resolution', () => {
     });
 
     expect(task).not.toBeNull();
-    expect(task?.columnId).toBe('ready');
+    expect(task?.stageId).toBe('ready');
     expect(task?.persona).toBe('cvh-dev');
   });
 

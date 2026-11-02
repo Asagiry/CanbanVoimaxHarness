@@ -56,10 +56,10 @@ export const createBoardMetaSlice: StateCreator<
             const hasBoard = rawBoards.some((b) => b.id === t.boardId);
             const effectiveBoardId = hasBoard ? t.boardId : activeId;
             const targetBoard = rawBoards.find((b) => b.id === effectiveBoardId) ?? currentBoard;
-            const colExists = targetBoard.columns.some((c) => c.id === t.columnId);
-            const effectiveColId = colExists ? t.columnId : (targetBoard.columns.find((c) => c.isIntake)?.id ?? targetBoard.columns[0]?.id ?? 'backlog');
-            if (effectiveBoardId !== t.boardId || effectiveColId !== t.columnId) {
-              return { ...t, boardId: effectiveBoardId, columnId: effectiveColId };
+            const colExists = targetBoard.columns.some((c) => c.id === t.stageId);
+            const effectiveColId = colExists ? t.stageId : (targetBoard.columns.find((c) => c.isIntake)?.id ?? targetBoard.columns[0]?.id ?? 'backlog');
+            if (effectiveBoardId !== t.boardId || effectiveColId !== t.stageId) {
+              return { ...t, boardId: effectiveBoardId, stageId: effectiveColId, columnId: effectiveColId };
             }
             return t;
           });
@@ -142,9 +142,10 @@ export const createBoardMetaSlice: StateCreator<
       // Heal tasks on this board whose columns may have been removed
       const nextTasks = state.tasks.map((t) => {
         if (t.boardId === board.id) {
-          const colExists = board.columns.some((c) => c.id === t.columnId);
+          const colExists = board.columns.some((c) => c.id === t.stageId);
           if (!colExists) {
-            return { ...t, columnId: board.columns.find((c) => c.isIntake)?.id ?? board.columns[0]?.id ?? 'backlog' };
+            const fallbackCol = board.columns.find((c) => c.isIntake)?.id ?? board.columns[0]?.id ?? 'backlog';
+            return { ...t, stageId: fallbackCol, columnId: fallbackCol };
           }
         }
         return t;
@@ -176,9 +177,9 @@ export const createBoardMetaSlice: StateCreator<
       const isTarget = (t.boardId || 'development') === boardId;
       if (!isTarget) return t;
       const targetCols = nextBoard.columns;
-      const colExists = targetCols.some((c) => c.id === t.columnId);
-      const healedCol = colExists ? t.columnId : (targetCols.find((c) => c.isIntake)?.id ?? targetCols[0]?.id ?? 'backlog');
-      return { ...t, boardId: nextActiveId, columnId: healedCol };
+      const colExists = targetCols.some((c) => c.id === t.stageId);
+      const healedCol = colExists ? t.stageId : (targetCols.find((c) => c.isIntake)?.id ?? targetCols[0]?.id ?? 'backlog');
+      return { ...t, boardId: nextActiveId, stageId: healedCol, columnId: healedCol };
     });
 
     set({

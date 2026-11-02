@@ -24,7 +24,7 @@ export interface DrawerSteerBarProps {
   turns: number;
   onSendPrompt: (promptText: string, attachedImages: Array<{ id: string; name: string; dataUrl: string }>) => Promise<void> | void;
   onAbortAgent: () => Promise<void> | void;
-  isToolAllowed: (toolName: string, columnId?: string) => boolean;
+  isToolAllowed: (toolName: string, stageId?: string) => boolean;
   effectiveModel: string;
   selectableModels: string[];
   onSelectModel: (model: string) => void;
@@ -71,7 +71,7 @@ export default function DrawerSteerBar({
   const columns = useBoardStore((s) => s.columns);
   const taskBoard = boards.find((b) => b.id === task.boardId);
   const boardCols = taskBoard?.columns && taskBoard.columns.length > 0 ? taskBoard.columns : columns;
-  const taskColumn = boardCols.find((c) => c.id === task.columnId) || columns.find((c) => c.id === task.columnId);
+  const taskColumn = boardCols.find((c) => c.id === task.stageId) || columns.find((c) => c.id === task.stageId);
 
   const workingCols = boardCols.filter(
     (c) => !c.isIntake && c.id !== 'backlog' && !c.terminal && c.id !== 'ready' && c.id !== 'done'
@@ -79,7 +79,7 @@ export default function DrawerSteerBar({
   const firstStagePersona = workingCols[0]?.persona;
   const defaultWorkingPersona = firstStagePersona || 'general';
 
-  const isTerminalTask = Boolean(taskColumn?.terminal || task.columnId === 'ready' || task.columnId === 'done');
+  const isTerminalTask = Boolean(taskColumn?.terminal || task.stageId === 'ready' || task.stageId === 'done');
   const effectivePersonaCandidate = (!task.parentId && (isTerminalTask || !taskColumn?.persona))
     ? (firstStagePersona || task.persona)
     : (task.persona || taskColumn?.persona);
@@ -310,7 +310,7 @@ export default function DrawerSteerBar({
               />
 
               {/* Compact TaskTodoWidget pill & overlay popover */}
-              {(Boolean(activeSubagentId) || isToolAllowed('todo_write', task.columnId) || (task.todos && task.todos.length > 0)) && (
+              {(Boolean(activeSubagentId) || isToolAllowed('todo_write', task.stageId) || (task.todos && task.todos.length > 0)) && (
                 <TaskTodoWidget task={task} align="left" />
               )}
 

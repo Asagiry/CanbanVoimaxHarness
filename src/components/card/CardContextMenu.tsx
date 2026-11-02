@@ -106,11 +106,11 @@ export const CardContextMenu = memo(function CardContextMenu({
     await useBoardStore.getState().createSubtask(task.id);
   };
 
-  const handleMove = async (targetColumnId: string) => {
+  const handleMove = async (targetStageId: string) => {
     onClose();
-    if (targetColumnId === task.columnId) return;
+    if (targetStageId === task.stageId) return;
     try {
-      await useBoardStore.getState().moveTask(task.id, targetColumnId);
+      await useBoardStore.getState().moveTask(task.id, targetStageId);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       alert(`Не удалось переместить задачу:\n${msg}`);
@@ -214,7 +214,7 @@ export const CardContextMenu = memo(function CardContextMenu({
 
       <div className="px-3 py-1 text-[#8f8f8f] dark:text-[#8b949e] select-none">{t('taskMenu.moveTo')}</div>
       {columns.map((col) => {
-        const isCurrent = col.id === task.columnId;
+        const isCurrent = col.id === task.stageId;
         return (
           <button
             key={col.id}

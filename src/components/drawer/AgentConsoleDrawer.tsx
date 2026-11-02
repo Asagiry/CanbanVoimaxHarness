@@ -57,6 +57,7 @@ export default function AgentConsoleDrawer() {
   const baseTask: KanbanTask = rawTask ?? {
     id: activeTaskId || 'task',
     title: activeTaskId || 'Task',
+    stageId: fallbackColId,
     columnId: fallbackColId,
     boardId: fallbackBoardId,
     persona: fallbackPersona,

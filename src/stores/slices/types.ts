@@ -6,6 +6,7 @@ import {
   TaskStatus,
   TaskVerdict,
   BackendTaskDTO,
+  TaskInput,
 } from '../../types';
 
 export interface ActiveQuestionInfo {
@@ -83,23 +84,16 @@ export interface TasksCrudSlice {
   loadTasks: () => Promise<void>;
   moveTask: (
     taskId: string,
-    targetColumnId: string,
-    options?: { force?: boolean; sourceColumnId?: string }
+    targetStageId: string,
+    options?: { force?: boolean; sourceStageId?: string; sourceColumnId?: string }
   ) => Promise<void>;
   reorderTask: (taskId: string, targetStageId: string, newIndex: number) => Promise<void>;
   updateTask: (taskId: string, partial: Partial<KanbanTask>) => void;
   updateTaskStatus: (taskId: string, status: TaskStatus) => void;
   upsertBackendTask: (rawTask: BackendTaskDTO | unknown) => void;
   setBackendTasks: (rawTasks: (BackendTaskDTO | unknown)[]) => void;
-  addTask: (input: {
-    title: string;
-    description?: string;
-    stageId?: string;
-    boardId?: string;
-    model?: string;
-    attachments?: string[];
-  }) => Promise<KanbanTask | null>;
-  createSubtask: (parentId: string, targetColumnId?: string) => Promise<KanbanTask | null>;
+  addTask: (input: TaskInput) => Promise<KanbanTask | null>;
+  createSubtask: (parentId: string, targetStageId?: string) => Promise<KanbanTask | null>;
   deleteTask: (taskId: string) => Promise<void>;
   setTaskVerdict: (taskId: string, verdict: TaskVerdict, note?: string) => void;
   promoteTaskToNextStage: (taskId: string) => void;

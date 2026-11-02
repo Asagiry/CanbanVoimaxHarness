@@ -166,7 +166,7 @@ describe('AgentConsoleDrawer React Rules of Hooks Verification', () => {
         {
           id: 'CVH-001',
           title: 'Implement Task Feature',
-          columnId: 'dev',
+          stageId: 'dev',
           boardId: 'development',
           persona: 'cvh-dev',
           status: 'idle',

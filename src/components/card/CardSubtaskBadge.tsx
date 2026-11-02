@@ -123,8 +123,8 @@ export const CardSubtaskBadge = memo(function CardSubtaskBadge({
                 : subId.split('.').pop()
                 ? `.${subId.split('.').pop()}`
                 : '';
-            const subCol = columns.find((c) => c.id === sub?.columnId);
-            const stageTitle = subCol?.title || sub?.columnId || '';
+            const subCol = columns.find((c) => c.id === sub?.stageId);
+            const stageTitle = subCol?.title || sub?.stageId || '';
 
             const subFinish = sub.completedAt || (sub.status === 'done' ? sub.updatedAt : undefined);
             const subDuration =

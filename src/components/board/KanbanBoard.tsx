@@ -155,9 +155,9 @@ export default function KanbanBoard() {
       const isFirst = targetColId === firstColId;
       const baseTasks = searchQuery ? filteredTasks : currentBoardTasks;
       const colTasks = baseTasks.filter((t) => {
-        if (t.columnId === targetColId) return true;
+        if (t.stageId === targetColId) return true;
         if (isFirst) {
-          const colExists = columns.some((c) => c.id === t.columnId);
+          const colExists = columns.some((c) => c.id === t.stageId);
           return !colExists;
         }
         return false;
@@ -251,6 +251,7 @@ export default function KanbanBoard() {
 
     const updatedMovedTask: KanbanTask = {
       ...movedTask,
+      stageId: destColId,
       columnId: destColId,
       boardId: effectiveBoardId,
       persona: destColDef?.persona || movedTask.persona,
@@ -308,7 +309,7 @@ export default function KanbanBoard() {
     const neighbor = curCols[idx - 1] ?? curCols[idx + 1] ?? null;
     if (!neighbor) return;
 
-    const doomedTasks = curTasks.filter((t) => t.columnId === columnId);
+    const doomedTasks = curTasks.filter((t) => t.stageId === columnId);
     const confirmed = window.confirm(
       doomedTasks.length === 0
         ? t('board.confirmDeleteColumnEmpty', { title: col.title })
@@ -351,10 +352,10 @@ export default function KanbanBoard() {
     // 3. Self-heal: If declared board does NOT have task's column, but active board DOES,
     // show on active board (prevents vanishing tasks when moved across boards or boardId drifted).
     const boardHasCol = matchingBoard.columns.some(
-      (c) => c.id === task.columnId || c.id.toLowerCase() === task.columnId?.toLowerCase()
+      (c) => c.id === task.stageId || c.id.toLowerCase() === task.stageId?.toLowerCase()
     );
     const activeHasCol = columns.some(
-      (c) => c.id === task.columnId || c.id.toLowerCase() === task.columnId?.toLowerCase()
+      (c) => c.id === task.stageId || c.id.toLowerCase() === task.stageId?.toLowerCase()
     );
     if (!boardHasCol && activeHasCol) {
       return true;
@@ -376,7 +377,7 @@ export default function KanbanBoard() {
   const doneParentIds = useMemo(() => {
     const set = new Set<string>();
     for (const t of tasks) {
-      if (t.status === 'done' || t.columnId === 'ready') {
+      if (t.status === 'done' || t.stageId === 'ready') {
         set.add(t.id);
       }
     }
@@ -452,9 +453,9 @@ export default function KanbanBoard() {
                   const firstColId = columns.find((c) => c.isIntake)?.id ?? columns[0]?.id ?? 'backlog';
                   const isFirstColumn = column.id === firstColId;
                   const columnTasks = filteredTasks.filter((t) => {
-                    if (t.columnId === column.id) return true;
+                    if (t.stageId === column.id) return true;
                     if (isFirstColumn) {
-                      const colExists = columns.some((c) => c.id === t.columnId);
+                      const colExists = columns.some((c) => c.id === t.stageId);
                       return !colExists;
                     }
                     return false;

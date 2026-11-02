@@ -96,11 +96,11 @@ export const CardTimerBadge = memo(function CardTimerBadge({
 
   const waitingSubCol = useMemo(() => {
     if (!waitingSub) return null;
-    return columns.find((c) => c.id === waitingSub.columnId) || null;
+    return columns.find((c) => c.id === waitingSub.stageId) || null;
   }, [waitingSub, columns]);
 
   const isSubActive = waitingSub
-    ? waitingSub.status !== 'done' && waitingSub.columnId !== 'ready' && !waitingSubCol?.terminal
+    ? waitingSub.status !== 'done' && waitingSub.stageId !== 'ready' && !waitingSubCol?.terminal
     : true;
 
   if (!isDone && status !== 'done' && isSubActive && (task.waitingForSubtaskId || status === 'waiting_subtask')) {

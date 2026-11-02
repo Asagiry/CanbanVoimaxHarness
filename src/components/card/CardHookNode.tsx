@@ -38,7 +38,7 @@ export function useCardHooks(
   const enterHookDescription = getHookDescription(enterHookDef);
   const rawEnterHookState = taskHooks?.on_enter;
   const enterHookState =
-    rawEnterHookState && (!rawEnterHookState.stageId || rawEnterHookState.stageId === task.columnId)
+    rawEnterHookState && (!rawEnterHookState.stageId || rawEnterHookState.stageId === task.stageId)
       ? rawEnterHookState
       : undefined;
 
@@ -51,7 +51,7 @@ export function useCardHooks(
   const leaveHookState = taskHooks?.on_leave;
 
   // Check predecessor column in board order
-  const currentColIndex = columns.findIndex((c) => c.id === task.columnId);
+  const currentColIndex = columns.findIndex((c) => c.id === task.stageId);
   const prevCol = currentColIndex > 0 ? columns[currentColIndex - 1] : null;
 
   const stageEntryTime = task.stageEnteredAt || task.createdAt || 0;
@@ -69,7 +69,7 @@ export function useCardHooks(
   const isTransitionHookFromResult = Boolean(
     !enterHookState &&
     leaveHookState &&
-    leaveHookState.stageId !== task.columnId &&
+    leaveHookState.stageId !== task.stageId &&
     matchesPreviousStage &&
     (isRecentHook || !stageEntryTime)
   );
@@ -93,10 +93,10 @@ export function useCardHooks(
 
   // Right node: exit hook from this column
   const hasRightHook = Boolean(
-    leaveHookName || (leaveHookState && leaveHookState.stageId === task.columnId)
+    leaveHookName || (leaveHookState && leaveHookState.stageId === task.stageId)
   );
   const effectiveRightState =
-    leaveHookState && leaveHookState.stageId === task.columnId ? leaveHookState : undefined;
+    leaveHookState && leaveHookState.stageId === task.stageId ? leaveHookState : undefined;
   const effectiveRightHookName = leaveHookName || effectiveRightState?.hookName;
 
   return {

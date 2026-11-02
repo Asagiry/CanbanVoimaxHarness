@@ -63,7 +63,7 @@ export function normalizeKanbanTask(
     ? rawBoardId
     : (activeBoardId || boards[0]?.id || 'development');
 
-  // Determine target board's columns to validate columnId
+  // Determine target board's columns to validate stageId
   const targetBoard = boards.find((b) => b.id === boardId);
   const targetColumns = targetBoard?.columns && targetBoard.columns.length > 0
     ? targetBoard.columns
@@ -71,7 +71,7 @@ export function normalizeKanbanTask(
 
   const rawId: string | undefined = raw.stageId || raw.stage_id || raw.columnId;
 
-  // ZERO INVISIBLE TASKS (§ 2.18): Ensure columnId and boardId are mutually consistent.
+  // ZERO INVISIBLE TASKS (§ 2.18): Ensure stageId and boardId are mutually consistent.
   // If rawId does not exist in targetBoard, but exists in active board columns, heal boardId to activeBoardId.
   let effectiveBoardId = boardId;
   let effectiveColumns = targetColumns;
@@ -99,8 +99,8 @@ export function normalizeKanbanTask(
     return false;
   });
 
-  const columnId = matchedCol?.id ?? (rawId && effectiveColumns.some((c) => c.id === rawId) ? rawId : (effectiveColumns[0]?.id ?? 'backlog'));
-  const col = effectiveColumns.find((c) => c.id === columnId);
+  const stageId = matchedCol?.id ?? (rawId && effectiveColumns.some((c) => c.id === rawId) ? rawId : (effectiveColumns[0]?.id ?? 'backlog'));
+  const col = effectiveColumns.find((c) => c.id === stageId);
   const rawStatus = (raw.status as TaskStatus) || undefined;
   const status: TaskStatus = rawStatus ?? (col?.terminal
     ? 'done'
@@ -186,7 +186,7 @@ export function normalizeKanbanTask(
         : (typeof raw.from_stage === 'string' && raw.from_stage.trim() !== '' ? raw.from_stage.trim() : undefined)));
   const prevCol = prevStageId ? effectiveColumns.find((c) => c.id === prevStageId) : undefined;
 
-  const isTerminalCol = Boolean(col?.terminal || columnId === 'ready' || columnId === 'done');
+  const isTerminalCol = Boolean(col?.terminal || stageId === 'ready' || stageId === 'done');
 
   let effectivePersona: string;
   if (col?.persona) {
@@ -202,7 +202,7 @@ export function normalizeKanbanTask(
     effectivePersona = rawPersona ?? workingCols[0]?.persona ?? 'general';
   }
 
-  const isTerminalTask = columnId === 'ready' || status === 'done';
+  const isTerminalTask = stageId === 'ready' || status === 'done';
   const effectiveWaitingForSubtaskId = isTerminalTask
     ? undefined
     : (raw.waitingForSubtaskId ?? raw.waiting_for_subtask_id ?? undefined);
@@ -217,7 +217,8 @@ export function normalizeKanbanTask(
     completedAt,
     stageEnteredAt,
     priority: (raw.priority as TaskPriority) || 'high',
-    columnId,
+    stageId,
+    columnId: stageId,
     boardId: effectiveBoardId,
     persona: effectivePersona,
     branch,

@@ -1,3 +1,4 @@
+import { StageId } from './domain';
 export * from './domain';
 
 export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
@@ -18,6 +19,21 @@ export interface BoardDef {
   columns: PipelineColumn[];
 }
 
+export interface TaskInput {
+  title: string;
+  description?: string;
+  stageId?: StageId | string;
+  /** @deprecated Use stageId instead */
+  columnId?: string;
+  boardId?: string;
+  model?: string;
+  attachments?: string[];
+  priority?: TaskPriority;
+  tags?: string[];
+  isSubtask?: boolean;
+  parentId?: string;
+}
+
 export interface KanbanTask {
   id: string;
   title: string;
@@ -28,7 +44,9 @@ export interface KanbanTask {
   completedAt?: number;
   stageEnteredAt?: number;
   priority: TaskPriority;
-  columnId: string;
+  stageId: StageId | string;
+  /** @deprecated Use stageId instead */
+  columnId?: string;
   boardId?: string;
   persona: string;
   branch?: string;

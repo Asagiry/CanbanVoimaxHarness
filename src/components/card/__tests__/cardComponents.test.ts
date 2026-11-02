@@ -8,7 +8,7 @@ const createSampleTask = (overrides?: Partial<KanbanTask>): KanbanTask => ({
   title: 'Task A',
   description: 'Sample description',
   priority: 'medium',
-  columnId: 'dev',
+  stageId: 'dev',
   boardId: 'development',
   persona: 'cvh-dev',
   status: 'idle',
