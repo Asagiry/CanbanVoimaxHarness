@@ -494,10 +494,12 @@ export default function ContextGauge({
 
   // Listen to Tauri IPC event
   useEffect(() => {
+    let isDisposed = false;
     let unlisten: (() => void) | undefined;
     const setupListener = async () => {
       try {
         const { listen } = await import('@tauri-apps/api/event');
+        if (isDisposed) return;
         type CompactedEventPayload = {
           tokens_after?: number;
           tokensAfter?: number;
@@ -505,7 +507,7 @@ export default function ContextGauge({
           estimatedSavedTokens?: number;
           savedTokens?: number;
         };
-        unlisten = await listen<CompactedEventPayload>('agent:compacted', (event) => {
+        const u = await listen<CompactedEventPayload>('agent:compacted', (event) => {
           if (event.payload) {
             const p = event.payload;
             const after = p.tokens_after ?? p.tokensAfter;
@@ -518,6 +520,11 @@ export default function ContextGauge({
             }
           }
         });
+        if (isDisposed) {
+          u();
+        } else {
+          unlisten = u;
+        }
       } catch {
         // Fallback in web mode
       }
@@ -525,6 +532,7 @@ export default function ContextGauge({
     setupListener();
 
     return () => {
+      isDisposed = true;
       if (unlisten) unlisten();
       if (savingsTimerRef.current) {
         clearTimeout(savingsTimerRef.current);

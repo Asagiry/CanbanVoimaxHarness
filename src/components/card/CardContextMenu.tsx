@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import type { KanbanTask } from '../../types';
 import { useBoardStore } from '../../stores/boardStore';
 import { useDrawerStore } from '../../stores/drawerStore';
-import { useCortexStore } from '../../stores/cortexStore';
 import { useTranslation } from '../../stores/languageStore';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -25,12 +24,10 @@ export const CardContextMenu = memo(function CardContextMenu({
 }: CardContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
-  const [showRoleSelector, setShowRoleSelector] = useState(false);
 
   const columns = useBoardStore(useShallow((s) => s.columns));
-  const agentPersonas = useCortexStore(useShallow((s) => s.agentPersonas));
   const openDrawer = useDrawerStore((s) => s.openDrawer);
-  const { t, language } = useTranslation();
+  const { t } = useTranslation();
 
   // Clamp coordinates within viewport
   useLayoutEffect(() => {
@@ -54,7 +51,7 @@ export const CardContextMenu = memo(function CardContextMenu({
     if (left !== x || top !== y) {
       setPos({ left, top });
     }
-  }, [x, y, showRoleSelector]);
+  }, [x, y]);
 
   // Close handlers: outside click, Escape, scroll, resize
   useEffect(() => {
@@ -117,20 +114,12 @@ export const CardContextMenu = memo(function CardContextMenu({
     }
   };
 
-  const handleSelectPersona = (role: string) => {
-    onClose();
-    if (task.persona === role) return;
-    useBoardStore.getState().updateTask(task.id, { persona: role });
-  };
-
   const handleDelete = async () => {
     const confirmed = window.confirm(t('taskMenu.confirmDelete', { title: task.title }));
     onClose();
     if (!confirmed) return;
     await useBoardStore.getState().deleteTask(task.id);
   };
-
-  const isRu = language === 'ru';
 
   const menu = (
     <div
@@ -167,48 +156,6 @@ export const CardContextMenu = memo(function CardContextMenu({
       >
         {t('taskMenu.createSubtask')}
       </button>
-
-      {/* Role / Persona selector */}
-      {agentPersonas.length > 0 && (
-        <>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => setShowRoleSelector(!showRoleSelector)}
-            className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer flex items-center justify-between"
-          >
-            <span>{isRu ? 'Сменить роль' : 'Change Role'}</span>
-            <span className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e]">
-              {task.persona || 'auto'}
-            </span>
-          </button>
-
-          {showRoleSelector && (
-            <div className="pl-3 pr-1 py-1 max-h-36 overflow-y-auto space-y-0.5 border-l-2 border-purple-500/30 ml-3 my-0.5">
-              {agentPersonas.map((p) => {
-                const isCurrentRole = task.persona === p.role;
-                return (
-                  <button
-                    key={p.role}
-                    type="button"
-                    role="menuitem"
-                    disabled={isCurrentRole}
-                    onClick={() => handleSelectPersona(p.role)}
-                    className={`w-full px-2 py-1 text-left rounded text-[11px] truncate flex items-center justify-between ${
-                      isCurrentRole
-                        ? 'text-[#8f8f8f] dark:text-[#8b949e] font-semibold cursor-default bg-[#f4f4f5]/50 dark:bg-[#21262d]/50'
-                        : 'hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer'
-                    }`}
-                  >
-                    <span className="truncate">{p.role}</span>
-                    {isCurrentRole && <span className="text-[9px] text-purple-400">✓</span>}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </>
-      )}
 
       <div className="my-1 border-t border-[#ebebeb] dark:border-[#21262d]" />
 
