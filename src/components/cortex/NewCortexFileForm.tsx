@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useCortexStore, cortexAgentDir, previewCortexFileName } from '../../../stores/cortexStore';
-import type { CortexHookExt, CortexHookMoment } from '../../../stores/cortexStore';
-import type { CortexAgentStage } from '../../../types';
-import { useTranslation } from '../../../stores/languageStore';
+import { useCortexStore, cortexAgentDir, previewCortexFileName } from '../../stores/cortexStore';
+import type { CortexHookExt, CortexHookMoment } from '../../stores/cortexStore';
+import type { CortexAgentStage } from '../../types';
+import { useTranslation } from '../../stores/languageStore';
 
 export interface NewCortexFileFormProps {
   stage: CortexAgentStage;

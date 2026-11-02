@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Bot, X, Folder, FileText, RotateCw, Plus } from 'lucide-react';
-import { useTranslation } from '../../../stores/languageStore';
-import { useCortexStore } from '../../../stores/cortexStore';
+import { useTranslation } from '../../stores/languageStore';
+import { useCortexStore } from '../../stores/cortexStore';
 
 export interface CreateAgentModalProps {
   isOpen: boolean;
@@ -147,7 +147,6 @@ export function CreateAgentModal({
             </p>
           </div>
 
-          {/* Превью файловой структуры */}
           <div className="rounded-lg border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22] p-2.5 text-[11px] font-mono text-[#52525b] dark:text-[#8b949e] space-y-1">
             <div className="text-[10px] uppercase font-sans font-semibold text-[#a1a1aa] dark:text-[#8b949e] tracking-wider mb-1">
               {t('cortex.willBeCreated')}

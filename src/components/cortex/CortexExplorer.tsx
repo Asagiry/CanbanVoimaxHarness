@@ -2,12 +2,7 @@ import { useState, useId, useEffect, useRef } from 'react';
 import { useCortexStore } from '../../stores/cortexStore';
 import type { AgentPersonaInfo } from '../../stores/cortexStore';
 import { useBoardStore } from '../../stores/boardStore';
-import { getDefaultColumnIcon } from '../../lib/columnIcons';
 import { useTranslation } from '../../stores/languageStore';
-import {
-  getDeterministicAgentColor,
-  isAllowedAgentColor,
-} from '../../lib/agentPalette';
 import {
   Search,
   Plus,
@@ -15,18 +10,16 @@ import {
   Trash2,
   RotateCw,
   Palette,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import type { CortexAgentFile, CortexAgentStage } from '../../types';
-import {
-  isBacklogSystemStage,
-  savePipelineConfig,
-} from './types';
-import SectionHeader from './tree/SectionHeader';
-import ColumnStageCard from './cards/ColumnStageCard';
-import AgentStageCard from './cards/AgentStageCard';
-import GlobalRulesSection from './cards/GlobalRulesSection';
-import EditAgentPersonaModal from './modals/EditAgentPersonaModal';
-import CreateAgentModal from './modals/CreateAgentModal';
+import { isBacklogSystemStage } from './types';
+import ColumnStageCard from './ColumnStageCard';
+import AgentMindInspector from './AgentMindInspector';
+import GlobalRulesSection from './GlobalRulesSection';
+import EditAgentPersonaModal from './EditAgentPersonaModal';
+import CreateAgentModal from './CreateAgentModal';
 
 export default function CortexExplorer() {
   const {
@@ -34,36 +27,24 @@ export default function CortexExplorer() {
     agentStages,
     agentPersonas,
     globalRules,
-    activeFile,
     focusedStageId,
-    toggleStageExpand,
     expandStage,
     focusStage,
     openFile,
-    fileMissing,
-    createPersonaTemplate,
-    createSettingTemplate,
     loadAgentPersonas,
     loadGlobalRules,
-    createGlobalRule,
-    deleteGlobalRule,
     renameAgentPersona,
     deleteAgentPersona,
     setAgentPersonaColor,
     setAgentPersonaIcon,
   } = useCortexStore();
+
   const syncStagesFromColumns = useCortexStore((s) => s.syncStagesFromColumns);
   const { columns, boards } = useBoardStore();
-  const setColumns = useBoardStore((s) => s.setColumns);
   const { t } = useTranslation();
+
   const [filterQuery, setFilterQuery] = useState('');
   const [openSections, setOpenSections] = useState({ columns: true, agents: true, globalRules: true });
-  const [openRulesFolders, setOpenRulesFolders] = useState<Record<string, boolean>>({});
-  const [openHooksFolders, setOpenHooksFolders] = useState<Record<string, boolean>>({});
-  const [creatingStageId, setCreatingStageId] = useState<string | null>(null);
-  const [creatingKind, setCreatingKind] = useState<'rule' | 'hook'>('rule');
-  const [agentSaving, setAgentSaving] = useState<Record<string, boolean>>({});
-  const [agentError, setAgentError] = useState<Record<string, string | null>>({});
   const [isRefreshingPersonas, setIsRefreshingPersonas] = useState(false);
   const [isCreateAgentOpen, setIsCreateAgentOpen] = useState(false);
 
@@ -171,26 +152,19 @@ export default function CortexExplorer() {
     }
   };
 
-  const openCreateForm = (stageId: string, kind: 'rule' | 'hook', isExpanded: boolean, expand: () => void) => {
-    if (!isExpanded) expand();
-    setCreatingKind(kind);
-    setCreatingStageId(stageId);
-  };
   const searchInputId = useId();
 
-  // Источник стадий — колонки доски (колонка с persona = агент).
-  // Мок-стадии из стора остаются только как fallback, когда columns пуст.
-  // Свежий проект (только backlog+ready без persona) даёт stages = [] — пустое состояние ниже.
+  // Reactive stage synchronization from board columns
   useEffect(() => {
     syncStagesFromColumns(columns);
   }, [columns, syncStagesFromColumns]);
 
-  // Источник секции агентов — invoke('list_agent_personas'); ошибка → пусто.
+  // Reactive agent persona list loading
   useEffect(() => {
     void loadAgentPersonas();
   }, [loadAgentPersonas]);
 
-  // Источник глобальных правил — invoke('list_global_rules')
+  // Reactive global rules loading
   useEffect(() => {
     void loadGlobalRules();
   }, [loadGlobalRules]);
@@ -199,80 +173,12 @@ export default function CortexExplorer() {
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const toggleRulesFolder = (stageId: string) => {
-    setOpenRulesFolders((prev) => ({
-      ...prev,
-      [stageId]: !(prev[stageId] ?? true),
-    }));
-  };
-
-  const toggleHooksFolder = (stageId: string) => {
-    setOpenHooksFolders((prev) => ({
-      ...prev,
-      [stageId]: !(prev[stageId] ?? true),
-    }));
-  };
-
-  const handleOpenFile = (fileId: string) => {
-    void openFile(fileId);
-  };
-
-  const handleCreatePersona = (fileId: string) => {
-    void createPersonaTemplate(fileId);
-  };
-
-  const handleCreateSetting = (fileId: string) => {
-    void createSettingTemplate(fileId);
-  };
-
-  // Смена персоны колонки — флоу ColumnContextMenu: оптимистичный setColumns,
-  // save_pipeline, при неудаче откат. Без создания новых персон (только выбор).
-  const handleAgentChange = async (columnId: string, rawValue: string) => {
-    const nextPersona = rawValue.trim() || null;
-    const col = columns.find((c) => c.id === columnId);
-    if (!col) return;
-    if ((col.persona ?? null) === nextPersona) return;
-    setAgentError((prev) => ({ ...prev, [columnId]: null }));
-    setAgentSaving((prev) => ({ ...prev, [columnId]: true }));
-    const matchedPersona = agentPersonas.find((p) => p.role === nextPersona);
-    let nextIcon = col.icon;
-    if (nextPersona && matchedPersona?.icon) {
-      nextIcon = matchedPersona.icon;
-    } else if (!nextPersona) {
-      nextIcon = getDefaultColumnIcon(col.id, col.icon);
-    }
-    // Автоматическое наследование цвета агента колонкой (если не backlog и не ready)
-    let nextColor = col.color;
-    if (col.id !== 'backlog' && col.id !== 'ready') {
-      if (nextPersona) {
-        const personaColor = matchedPersona?.color || getDeterministicAgentColor(nextPersona);
-        if (personaColor && isAllowedAgentColor(personaColor)) {
-          nextColor = personaColor;
-        }
-      }
-    }
-    const prev = columns;
-    const next = prev.map((c) =>
-      c.id === columnId ? { ...c, persona: nextPersona, icon: nextIcon, color: nextColor } : c,
-    );
-    setColumns(next);
-    syncStagesFromColumns(next);
-    const saved = await savePipelineConfig(next);
-    setAgentSaving((prevMap) => ({ ...prevMap, [columnId]: false }));
-    if (!saved) {
-      setColumns(prev);
-      syncStagesFromColumns(prev);
-      setAgentError((prevMap) => ({ ...prevMap, [columnId]: t('columnMenu.saveErrorRollback') }));
-    }
-  };
-
   const q = filterQuery.trim().toLowerCase();
   const isSearching = q.length > 0;
   const matchFile = (f: CortexAgentFile) =>
     f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q);
 
-  // Секция 1: поиск по названию стадии, персоне и хукам
-  // (setting — только для системного backlog-узла).
+  // Filter column stages by name, persona, or files
   const filteredColumnStages = stages.map((stage) => {
     if (!isSearching) return stage;
     const matchesStage =
@@ -291,7 +197,7 @@ export default function CortexExplorer() {
     return { ...stage, isExpanded: true, files: stage.files.filter((f) => keepIds.has(f.id)) };
   }).filter(Boolean) as CortexAgentStage[];
 
-  // Секция 2: поиск по роли и всем файлам агента.
+  // Filter agent stages by role and files
   const filteredAgentStages = agentStages.map((stage) => {
     if (!isSearching) return stage;
     const matchesAgent =
@@ -302,27 +208,8 @@ export default function CortexExplorer() {
     return { ...stage, isExpanded: true, files: matchingFiles };
   }).filter(Boolean) as CortexAgentStage[];
 
-  // Секция 3: глобальные правила проекта (.cvh/rules/)
+  // Filter global rules
   const filteredGlobalRules = globalRules.filter((f) => !isSearching || matchFile(f));
-
-  const handleDeleteGlobalRule = async (fileName: string) => {
-    if (!window.confirm(t('cortex.deleteGlobalRuleConfirm', { name: fileName }))) {
-      return;
-    }
-    try {
-      await deleteGlobalRule(fileName);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      alert(t('cortex.deleteGlobalRuleError', { msg }));
-    }
-  };
-
-  const sharedFolders = {
-    openRulesFolders,
-    openHooksFolders,
-    creatingStageId,
-    creatingKind,
-  };
 
   return (
     <aside className="w-64 shrink-0 h-full flex flex-col bg-[#f9f9f9] dark:bg-[#0d1117] border-r border-[#ebebeb] dark:border-[#21262d] select-none text-[#171717] dark:text-[#f0f6fc]">
@@ -361,12 +248,25 @@ export default function CortexExplorer() {
       <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1 font-mono text-xs">
         {/* СЕКЦИЯ 1: Колонки */}
         <section aria-label={t('cortex.columnsSection')}>
-          <SectionHeader
-            title={t('cortex.columnsSection')}
-            count={stages.length}
-            open={openSections.columns}
-            onToggle={() => toggleSection('columns')}
-          />
+          <div className="w-full flex items-center justify-between px-1.5 py-1 rounded-md text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition group">
+            <button
+              type="button"
+              onClick={() => toggleSection('columns')}
+              aria-expanded={openSections.columns}
+              className="flex-1 flex items-center gap-1.5 py-1 text-left cursor-pointer"
+            >
+              {openSections.columns ? (
+                <ChevronDown className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
+              )}
+              <span className="font-sans text-xs font-semibold">{t('cortex.columnsSection')}</span>
+              <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] tabular-nums">
+                ({stages.length})
+              </span>
+            </button>
+          </div>
+
           {openSections.columns && (
             <div className="space-y-1">
               {stages.length === 0 && (
@@ -398,25 +298,10 @@ export default function CortexExplorer() {
                   <ColumnStageCard
                     key={stage.stageId}
                     stage={stage}
-                    isBacklogSystem={backlog}
                     column={column}
-                    personas={agentPersonas}
-                    agentSaving={!!agentSaving[stage.stageId]}
-                    agentSaveError={agentError[stage.stageId] ?? null}
-                    onAgentChange={handleAgentChange}
-                    shared={sharedFolders}
-                    activeFileId={activeFile?.id ?? null}
-                    fileMissing={fileMissing}
+                    isBacklogSystem={backlog}
                     isFocused={focusedStageId === stage.stageId}
                     isSearching={isSearching}
-                    onToggleStage={() => toggleStageExpand(stage.stageId)}
-                    onToggleHooks={() => toggleHooksFolder(stage.stageId)}
-                    onOpenFile={handleOpenFile}
-                    onCreateSetting={handleCreateSetting}
-                    onOpenCreateForm={(kind) =>
-                      openCreateForm(stage.stageId, kind, stage.isExpanded, () => toggleStageExpand(stage.stageId))
-                    }
-                    onCloseCreate={() => setCreatingStageId(null)}
                   />
                 );
               })}
@@ -426,25 +311,36 @@ export default function CortexExplorer() {
 
         {/* СЕКЦИЯ 2: Агенты */}
         <section aria-label={t('cortex.agentsSection')}>
-          <SectionHeader
-            title={t('cortex.agentsSection')}
-            count={agentStages.length}
-            open={openSections.agents}
-            onToggle={() => toggleSection('agents')}
-            action={
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsCreateAgentOpen(true);
-                }}
-                aria-label={t('cortex.createAgent')}
-                className="p-1 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d] transition cursor-pointer"
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </button>
-            }
-          />
+          <div className="w-full flex items-center justify-between px-1.5 py-1 rounded-md text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition group">
+            <button
+              type="button"
+              onClick={() => toggleSection('agents')}
+              aria-expanded={openSections.agents}
+              className="flex-1 flex items-center gap-1.5 py-1 text-left cursor-pointer"
+            >
+              {openSections.agents ? (
+                <ChevronDown className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
+              )}
+              <span className="font-sans text-xs font-semibold">{t('cortex.agentsSection')}</span>
+              <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] tabular-nums">
+                ({agentStages.length})
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsCreateAgentOpen(true);
+              }}
+              aria-label={t('cortex.createAgent')}
+              className="p-1 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d] transition cursor-pointer shrink-0"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
           {openSections.agents && (
             <div className="space-y-1">
               {agentStages.length === 0 && (
@@ -467,28 +363,11 @@ export default function CortexExplorer() {
               )}
 
               {filteredAgentStages.map((stage) => (
-                <AgentStageCard
+                <AgentMindInspector
                   key={stage.stageId}
                   stage={stage}
-                  shared={sharedFolders}
-                  activeFileId={activeFile?.id ?? null}
-                  fileMissing={fileMissing}
                   isFocused={focusedStageId === stage.stageId}
                   isSearching={isSearching}
-                  onToggleStage={() => toggleStageExpand(stage.stageId)}
-                  onToggleRules={() => toggleRulesFolder(stage.stageId)}
-                  onOpenFile={handleOpenFile}
-                  onCreatePersona={handleCreatePersona}
-                  onCreateSetting={handleCreateSetting}
-                  onOpenCreateForm={(kind) =>
-                    openCreateForm(stage.stageId, kind, stage.isExpanded, () => toggleStageExpand(stage.stageId))
-                  }
-                  onPlusHeader={() => {
-                    if (!stage.isExpanded) toggleStageExpand(stage.stageId);
-                    setCreatingKind('rule');
-                    setCreatingStageId((prev) => (prev === stage.stageId ? null : stage.stageId));
-                  }}
-                  onCloseCreate={() => setCreatingStageId(null)}
                   onContextMenu={(e) => handleAgentContextMenu(e, stage)}
                 />
               ))}
@@ -502,10 +381,6 @@ export default function CortexExplorer() {
           totalCount={globalRules.length}
           isOpen={openSections.globalRules}
           onToggle={() => toggleSection('globalRules')}
-          activeFileId={activeFile?.id ?? null}
-          onOpenFile={handleOpenFile}
-          onCreateRule={createGlobalRule}
-          onDeleteRule={handleDeleteGlobalRule}
           isSearching={isSearching}
         />
       </div>
@@ -599,7 +474,7 @@ export default function CortexExplorer() {
           setOpenSections((prev) => ({ ...prev, agents: true }));
           expandStage(`agent:${role}`);
           focusStage(`agent:${role}`);
-          handleOpenFile(`agent:${role}-persona`);
+          await openFile(`agent:${role}-persona`);
         }}
       />
     </aside>
