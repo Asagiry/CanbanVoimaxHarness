@@ -391,7 +391,7 @@ export default function AgentConsoleDrawer() {
     (activeSubagentId && activeAgentTaskIds?.[activeSubagentId])
   );
 
-  const isRunning = isAuthoritativeSessionRunning || task.status === 'running' || hasRunningTool || isAgentActive;
+  const isRunning = isAuthoritativeSessionRunning || isAgentActive || hasRunningTool;
 
   const handleRunAgent = async () => {
     setRunError(null);

@@ -827,13 +827,19 @@ export const createTasksCrudSlice: StateCreator<
 
   runTaskAgent: async (taskId, prompt, options) => {
     const { tasks, boards, activeBoardId, columns: activeColumns, moveTask } = get();
-    const task = tasks.find(
+    let task = tasks.find(
       (t) => t.id === taskId || t.id.trim().toLowerCase() === taskId.trim().toLowerCase()
     );
     if (!task) {
-      console.warn(`[runTaskAgent] Task "${taskId}" not found in local store`);
-      logEvent('WARN', 'BOARD_STORE', `runTaskAgent: Task "${taskId}" not found in local store`);
-      return;
+      await get().loadTasks();
+      task = get().tasks.find(
+        (t) => t.id === taskId || t.id.trim().toLowerCase() === taskId.trim().toLowerCase()
+      );
+      if (!task) {
+        console.warn(`[runTaskAgent] Task "${taskId}" not found in local store`);
+        logEvent('WARN', 'BOARD_STORE', `runTaskAgent: Task "${taskId}" not found in local store`);
+        return;
+      }
     }
     const resolvedTaskId = task.id;
     logEvent(
@@ -862,10 +868,6 @@ export const createTasksCrudSlice: StateCreator<
       logEvent('INFO', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" is in terminal stage "${task.stageId}", skipping`);
       return;
     } else if (taskCol?.persona || taskCol?.autoRun) {
-      if (task.status === 'running' && !prompt) {
-        logEvent('WARN', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" is already running, skipping duplicate run`);
-        return;
-      }
       logEvent('INFO', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" is in agent stage "${taskCol.id}", starting agent`);
       const updatedTasks = get().tasks.map((t) =>
         t.id === resolvedTaskId || t.id.trim().toLowerCase() === resolvedTaskId.trim().toLowerCase()
