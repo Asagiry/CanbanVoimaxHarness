@@ -8,7 +8,7 @@ import ImageLightboxModal from './ImageLightboxModal';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useTranslation } from '../../stores/languageStore';
-import { ArrowDown, AlertTriangle, Info, CheckCircle2, RotateCcw } from 'lucide-react';
+import { ArrowDown, AlertTriangle, Info, RotateCcw } from 'lucide-react';
 import {
   ThoughtStreamCard,
   SteerDirectiveCard,
@@ -18,6 +18,7 @@ import {
   TerminalResponseCard,
   TaskObjectiveCard,
   ExecutionErrorBanner,
+  StageSummaryCard,
   isFinalResponseItem,
   hasNearbyTodoWrite,
   shouldSuppressExplanation,
@@ -56,6 +57,7 @@ export default function DrawerActivityStream({
     activeSubagentPrompt,
   } = useDrawerStore();
   const { t } = useTranslation();
+  const columns = useBoardStore((s) => s.columns);
 
   const effectiveAttachments =
     task.attachments && task.attachments.length > 0
@@ -320,24 +322,15 @@ export default function DrawerActivityStream({
               // Dedicated Stage Summary Card (advance_task handover)
               if ((activity?.type as string) === 'summary') {
                 return (
-                  <div key={key} className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-emerald-500/30 dark:border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20 shadow-xs overflow-hidden my-2.5">
-                    <div className="flex items-center justify-between px-3.5 py-2.5 bg-emerald-100/60 dark:bg-emerald-900/30 border-b border-emerald-200/60 dark:border-emerald-800/40 select-none">
-                      <div className="flex items-center space-x-2 text-emerald-900 dark:text-emerald-200">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                        <span className="text-xs font-semibold font-sans">
-                          Саммари этапа / Handover Summary
-                        </span>
-                      </div>
-                      {activityDurations[idx] ? (
-                        <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-300">
-                          {Math.round(activityDurations[idx]! / 1000)}s
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="p-3.5 text-sm leading-relaxed text-[#27272a] dark:text-[#d4d4d8] select-text">
-                      <MarkdownContent content={activity?.content || ''} onImageClick={handleOpenLightbox} />
-                    </div>
-                  </div>
+                  <StageSummaryCard
+                    key={key}
+                    activity={activity}
+                    durationMs={activityDurations[idx]}
+                    task={task}
+                    subtasks={subtasks}
+                    columns={columns}
+                    onImageClick={handleOpenLightbox}
+                  />
                 );
               }
 
@@ -349,7 +342,7 @@ export default function DrawerActivityStream({
                       <div className="flex items-center space-x-2 text-amber-900 dark:text-amber-200">
                         <RotateCcw className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
                         <span className="text-xs font-semibold font-sans">
-                          Вердикт ревьюера: Требуются правки (CHANGES_REQUESTED)
+                          {t('drawer.reviewerVerdictChangesRequested')}
                         </span>
                       </div>
                     </div>

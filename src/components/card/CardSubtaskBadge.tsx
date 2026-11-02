@@ -6,6 +6,7 @@ import { useBoardStore } from '../../stores/boardStore';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useShallow } from 'zustand/react/shallow';
 import { formatStageDuration } from './CardTimerBadge';
+import { stripDuplicateStageInTitle } from '../drawer/stream';
 
 export interface CardWaitingSubtaskBadgeProps {
   taskId: string;
@@ -149,7 +150,10 @@ export const CardSubtaskBadge = memo(function CardSubtaskBadge({
                     {subSuffix} {stageTitle}
                   </span>
                   <span className="text-[#666666] dark:text-[#8b949e] truncate">
-                    {(sub?.title ?? '').replace(/^\[.*?\]\s*/, '')}
+                    {stripDuplicateStageInTitle(
+                      (sub?.title ?? '').replace(/^\[.*?\]\s*/, ''),
+                      stageTitle
+                    )}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0 ml-2">

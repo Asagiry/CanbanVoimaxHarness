@@ -1,4 +1,6 @@
 import type { DrawerActivityItem } from '../../../stores/drawerStore';
+import type { KanbanTask } from '../../../types';
+import type { Language } from '../../../i18n/types';
 
 /**
  * Clean prompt helper: strips legacy appended [USER STEER] or [USER]: blocks for pure prompt display
@@ -230,4 +232,182 @@ export function computeActivityDurations(
     }
   }
   return res;
+}
+
+export interface ColumnSummaryInfo {
+  id: string;
+  title: string;
+  persona?: string | null;
+}
+
+const SUMMARY_LABELS: Record<
+  Language,
+  {
+    planner: string;
+    developer: string;
+    reviewer: string;
+    retro: string;
+    final: string;
+    stage: (stage: string) => string;
+    default: string;
+  }
+> = {
+  ru: {
+    planner: 'Саммари планера',
+    developer: 'Саммари девелопера',
+    reviewer: 'Саммари ревьюера',
+    retro: 'Саммари ретро',
+    final: 'Финальное саммари',
+    stage: (s) => `Саммари этапа: ${s}`,
+    default: 'Саммари этапа',
+  },
+  en: {
+    planner: 'Planner Summary',
+    developer: 'Developer Summary',
+    reviewer: 'Reviewer Summary',
+    retro: 'Retro Summary',
+    final: 'Final Summary',
+    stage: (s) => `Stage Summary: ${s}`,
+    default: 'Stage Summary',
+  },
+};
+
+export function classifyStageRole(raw?: string): 'planner' | 'developer' | 'reviewer' | 'retro' | 'final' | null {
+  if (!raw) return null;
+  const s = raw.toLowerCase().trim();
+  if (s === 'plan' || s === 'planner' || s === 'planning' || s.includes('план') || s.includes('planner') || s.includes('planning')) {
+    return 'planner';
+  }
+  if (s === 'dev' || s === 'developer' || s === 'cvh-dev' || s === 'development' || s.includes('девелоп') || s.includes('разработ') || s.includes('develop')) {
+    return 'developer';
+  }
+  if (s === 'review' || s === 'reviewer' || s.includes('ревью') || s.includes('review')) {
+    return 'reviewer';
+  }
+  if (s === 'retro' || s === 'retrospective' || s.includes('ретро') || s.includes('retro')) {
+    return 'retro';
+  }
+  if (s === 'ready' || s === 'done' || s.includes('готов') || s.includes('финализац') || s.includes('final')) {
+    return 'final';
+  }
+  return null;
+}
+
+/**
+ * Strips trailing parenthesized stage name from task or subtask title
+ * (e.g. "Task (Planning)" with stage "Planning" -> "Task")
+ */
+export function stripDuplicateStageInTitle(title: string | undefined, stageTitle?: string): string {
+  if (!title) return '';
+  if (!stageTitle || !stageTitle.trim()) return title.trim();
+  const escaped = stageTitle.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`\\s*\\(${escaped}\\)\\s*$`, 'i');
+  return title.replace(re, '').trim();
+}
+
+/**
+ * Strips leading redundant markdown headings from summary content such as
+ * "### Саммари этапа..." or "### Саммари финализации..."
+ */
+export function getCleanSummaryContent(content?: string): string {
+  if (!content) return '';
+  const headerRegex = /^\s*#{1,6}\s*(?:\[?(?:Саммари\s+(?:этапа|финализации)|Stage\s+Summary|Handover\s+Summary)[^\]\n\r]*\]?:?[^\n\r]*)(?:\r?\n)+/i;
+  return content.replace(headerRegex, '').replace(/^\s*(?:\r?\n)+/, '');
+}
+
+/**
+ * Resolves deslopped dynamic stage summary label (e.g. "Саммари планера", "Developer Summary")
+ */
+export function getStageSummaryLabel(
+  activity: DrawerActivityItem,
+  task: KanbanTask,
+  subtasks?: KanbanTask[],
+  columns?: ColumnSummaryInfo[],
+  lang: Language = 'ru'
+): string {
+  const labels = SUMMARY_LABELS[lang] || SUMMARY_LABELS.ru;
+  const content = activity?.content || '';
+
+  if (/###\s*Саммари\s+финализации/i.test(content)) return labels.final;
+
+  const stdMatch = content.match(/###\s*Саммари\s+этапа:\s*([^\n\r]+)/i);
+  if (stdMatch?.[1]) {
+    const rawStage = stdMatch[1].trim();
+    const role = classifyStageRole(rawStage);
+    if (role) return labels[role];
+    if (rawStage) return labels.stage(rawStage);
+  }
+
+  const legacyMatch = content.match(/###\s*Саммари\s+этапа\s+([a-zA-Z0-9_-]+):/i);
+  if (legacyMatch?.[1]) {
+    const stageId = legacyMatch[1].trim();
+    const role = classifyStageRole(stageId);
+    if (role) return labels[role];
+    const col = columns?.find((c) => c.id.toLowerCase() === stageId.toLowerCase());
+    if (col) {
+      const colRole = classifyStageRole(col.title) || classifyStageRole(col.persona || '');
+      if (colRole) return labels[colRole];
+      return labels.stage(col.title);
+    }
+  }
+
+  const handoverMatch = content.match(/передано на\s+([A-Za-z0-9_.-]+)\s+([^)]*)/i);
+  if (handoverMatch) {
+    const targetSubId = handoverMatch[1].trim();
+    const targetTitle = handoverMatch[2].trim();
+    if (subtasks && subtasks.length > 0) {
+      const sorted = [...subtasks].sort((a, b) => (a.subtaskIndex ?? 0) - (b.subtaskIndex ?? 0));
+      const idx = sorted.findIndex((s) => s.id === targetSubId);
+      if (idx > 0) {
+        const prevSub = sorted[idx - 1];
+        const prevRole = classifyStageRole(prevSub.stageId as string) || classifyStageRole(prevSub.persona);
+        if (prevRole) return labels[prevRole];
+        const col = columns?.find((c) => c.id === prevSub.stageId);
+        if (col) return labels.stage(col.title);
+      }
+    }
+    const targetRole = classifyStageRole(targetTitle);
+    if (targetRole === 'developer') return labels.planner;
+    if (targetRole === 'reviewer') return labels.developer;
+    if (targetRole === 'retro') return labels.reviewer;
+    if (targetRole === 'final') return labels.reviewer;
+  }
+
+  if (activity?.tool) {
+    const params = (activity.tool.params as Record<string, unknown>) || {};
+    const sourceParam = (params.source_stage || params.from_stage || '') as string;
+    const role = classifyStageRole(sourceParam);
+    if (role) return labels[role];
+  }
+
+  if (task.parentId || (task.id && task.id.includes('.'))) {
+    const role = classifyStageRole(task.stageId as string) || classifyStageRole(task.persona);
+    if (role) return labels[role];
+    const col = columns?.find((c) => c.id === task.stageId);
+    if (col) {
+      const colRole = classifyStageRole(col.title) || classifyStageRole(col.persona || '');
+      if (colRole) return labels[colRole];
+      return labels.stage(col.title);
+    }
+  }
+
+  if (subtasks && subtasks.length > 0) {
+    for (const sub of subtasks) {
+      if (sub.handoverSummary && content && (content.includes(sub.handoverSummary) || sub.handoverSummary.includes(content.trim()))) {
+        const role = classifyStageRole(sub.stageId as string) || classifyStageRole(sub.persona);
+        if (role) return labels[role];
+        const col = columns?.find((c) => c.id === sub.stageId);
+        if (col) return labels.stage(col.title);
+      }
+    }
+  }
+
+  if (task.stageId) {
+    const role = classifyStageRole(task.stageId as string) || classifyStageRole(task.persona);
+    if (role) return labels[role];
+    const col = columns?.find((c) => c.id === task.stageId);
+    if (col) return labels.stage(col.title);
+  }
+
+  return labels.default;
 }
