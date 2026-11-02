@@ -833,7 +833,7 @@ export function setupTauriEventGateway(): () => void {
         const tid = payload?.taskId;
         const prompt = payload?.prompt;
         if (tid) {
-          void useBoardStore.getState().runTaskAgent(tid, prompt);
+          void useBoardStore.getState().runTaskAgent(tid, prompt, { skipSync: true });
         }
       });
 

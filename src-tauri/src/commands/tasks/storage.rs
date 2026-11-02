@@ -157,8 +157,6 @@ pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
                     }
                 }
             }
-            // Safely remove legacy file so it no longer clutters disk
-            let _ = tokio::fs::remove_file(&local_tasks_file).await;
         }
 
         if tasks.is_empty() {
@@ -182,9 +180,6 @@ pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
                 }
             }
         }
-    } else if local_tasks_file.exists() {
-        // Safe cleanup if SQLite already has tasks but stale tasks.json still lingers
-        let _ = tokio::fs::remove_file(&local_tasks_file).await;
     }
 
     // 3. Purge foreign tasks that were contaminated into this SQLite database
@@ -281,6 +276,10 @@ pub async fn save_tasks_to_disk(repo_root: &Path, tasks: &[Task]) -> Result<(), 
 
     let backup_file = get_project_tasks_backup_file(&actual_root);
     let backup_res = atomic_write_file(&backup_file, &serialized).await;
+
+    // 3. Atomically persist tasks.json inside repo root .cvh as single atomic authority
+    let local_tasks_file = actual_root.join(".cvh").join("tasks.json");
+    let _ = atomic_write_file(&local_tasks_file, &serialized).await;
 
     let ids: Vec<&str> = tasks.iter().map(|t| t.id.as_str()).collect();
     match (db_res, backup_res) {

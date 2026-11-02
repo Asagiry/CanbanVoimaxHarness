@@ -1025,3 +1025,96 @@ use std::path::PathBuf;
         let _ = tokio::fs::remove_dir_all(&base1).await;
         let _ = tokio::fs::remove_dir_all(&base2).await;
     }
+
+    #[tokio::test]
+    async fn test_transition_engine_validates_stage_and_allocates_worktree() {
+        let base = std::env::temp_dir().join(format!("cvh_test_trans_{}", uuid::Uuid::new_v4()));
+        let _ = tokio::fs::create_dir_all(&base).await;
+        let _ = tokio::fs::create_dir_all(base.join(".cvh")).await;
+
+        let task = Task {
+            id: "CVH-500".to_string(),
+            title: "Transition Engine Task".to_string(),
+            description: "Testing single atomic authority".to_string(),
+            stage_id: "backlog".to_string(),
+            board_id: Some("development".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("idle".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            todos: Some(vec![crate::agent::TodoItem {
+                id: "1".to_string(),
+                content: "Authoritative Todo".to_string(),
+                status: "in_progress".to_string(),
+            }]),
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: Some(true),
+            created_at: 1000,
+            updated_at: 1000,
+            stage_entered_at: Some(1000),
+            completed_at: None,
+            handover_summary: None,
+            attachments: None,
+            cover_image: None,
+            position: Some(0.0),
+            hook_states: None,
+        };
+
+        crate::db::db_upsert_all_tasks(&base, &[task.clone()]).expect("db upsert");
+        save_tasks_to_disk(&base, &[task]).await.expect("save tasks");
+
+        // 1. Moving to non-existent stage must be rejected with informative error
+        let invalid_err = internal_move_task_stage(
+            &base,
+            "CVH-500",
+            "non_existent_stage_xyz",
+            None,
+            None,
+            None,
+            None,
+            false,
+            None,
+        )
+        .await
+        .expect_err("moving to invalid stage must fail");
+
+        assert!(
+            invalid_err.contains("Target stage 'non_existent_stage_xyz' not found"),
+            "Error must be informative: {}",
+            invalid_err
+        );
+
+        // 2. Moving to valid stage 'dev' succeeds and returns authoritative Task
+        let moved = internal_move_task_stage(
+            &base,
+            "CVH-500",
+            "dev",
+            None,
+            None,
+            None,
+            None,
+            false,
+            None,
+        )
+        .await
+        .expect("move to dev must succeed");
+
+        assert_eq!(moved.stage_id, "dev");
+        assert_eq!(moved.todos.as_ref().map(|t| t.len()), Some(1));
+        assert_eq!(moved.todos.as_ref().unwrap()[0].content, "Authoritative Todo");
+
+        // 3. Verify .cvh/tasks.json was atomically written and updated
+        let tasks_json_path = base.join(".cvh").join("tasks.json");
+        assert!(tasks_json_path.exists(), ".cvh/tasks.json must be written atomically");
+        let content = tokio::fs::read_to_string(&tasks_json_path).await.expect("read tasks.json");
+        assert!(content.contains("\"stageId\": \"dev\""));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
