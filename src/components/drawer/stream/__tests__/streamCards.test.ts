@@ -200,6 +200,38 @@ describe('streamHelpers', () => {
       expect(result).toHaveLength(1);
       expect(result[0].type).toBe('question');
     });
+
+    it('deduplicates consecutive and near-duplicate tool calls with identical toolName and params', () => {
+      const tool1 = {
+        id: 'call_1',
+        type: 'tool',
+        tool: { id: 'call_1', toolName: 'load_rule', params: { rule: 'frontend_map' } },
+      } as any;
+      const thought1 = {
+        id: 'th_1',
+        type: 'thought',
+        content: 'Analyzing requirements...',
+      } as any;
+      const tool2Duplicate = {
+        id: 'call_2',
+        type: 'tool',
+        tool: { id: 'call_2', toolName: 'load_rule', params: { rule: 'frontend_map' } },
+      } as any;
+      const todo1 = {
+        id: 'call_3',
+        type: 'tool',
+        tool: { id: 'call_3', toolName: 'todo_write', params: { todos: [{ content: 'Step 1', status: 'pending' }] } },
+      } as any;
+      const todo2Duplicate = {
+        id: 'call_4',
+        type: 'tool',
+        tool: { id: 'call_4', toolName: 'todo_write', params: { todos: [{ content: 'Step 1', status: 'pending' }] } },
+      } as any;
+
+      const result = filterDisplayActivities([tool1, thought1, tool2Duplicate, todo1, todo2Duplicate]);
+      expect(result).toHaveLength(3);
+      expect(result.map((r) => r.id)).toEqual(['call_1', 'th_1', 'call_3']);
+    });
   });
 
   describe('computeActivityDurations', () => {

@@ -141,7 +141,7 @@ export default function CommandToolCard({ tool }: ToolCardProps) {
           {tool.stderr && (
             <div>
               <span className="text-[10px] text-[#b91c1c] dark:text-[#ff7b72] block mb-1">
-                Ошибки / STDERR
+                STDERR
               </span>
               <pre className="p-2.5 rounded-md bg-[#fef2f2] dark:bg-[#3b1219] border border-[#fecaca] dark:border-[#da3633] text-[11px] text-[#991b1b] dark:text-[#ff7b72] overflow-x-auto leading-relaxed max-h-48 whitespace-pre-wrap select-text font-mono">
                 {tool.stderr}

@@ -127,28 +127,30 @@ export function shouldSuppressExplanation(
  */
 export function filterDisplayActivities(unifiedActivities: DrawerActivityItem[]): DrawerActivityItem[] {
   const list = unifiedActivities || [];
-  const questionItems = list.filter((a) => a?.type === 'question');
-  if (questionItems.length === 0) return list;
+  if (list.length === 0) return list;
 
+  const questionItems = list.filter((a) => a?.type === 'question');
   const questionSignatures = new Set<string>();
-  for (const q of questionItems) {
-    if (q.id) questionSignatures.add(q.id);
-    if (q.id?.startsWith('q-')) questionSignatures.add(q.id.replace(/^q-/, ''));
-    const qParams = q.tool?.params as Record<string, unknown> | undefined;
-    const qId = qParams?.questionId as string | undefined;
-    if (qId) questionSignatures.add(qId);
-    const callId = qParams?.callId as string | undefined;
-    if (callId) questionSignatures.add(callId);
-    if (q.tool?.id) questionSignatures.add(q.tool.id);
-    if (q.content?.trim()) questionSignatures.add(`txt:${q.content.trim()}`);
-    if (typeof qParams?.text === 'string' && qParams.text.trim()) {
-      questionSignatures.add(`txt:${qParams.text.trim()}`);
+  if (questionItems.length > 0) {
+    for (const q of questionItems) {
+      if (q.id) questionSignatures.add(q.id);
+      if (q.id?.startsWith('q-')) questionSignatures.add(q.id.replace(/^q-/, ''));
+      const qParams = q.tool?.params as Record<string, unknown> | undefined;
+      const qId = qParams?.questionId as string | undefined;
+      if (qId) questionSignatures.add(qId);
+      const callId = qParams?.callId as string | undefined;
+      if (callId) questionSignatures.add(callId);
+      if (q.tool?.id) questionSignatures.add(q.tool.id);
+      if (q.content?.trim()) questionSignatures.add(`txt:${q.content.trim()}`);
+      if (typeof qParams?.text === 'string' && qParams.text.trim()) {
+        questionSignatures.add(`txt:${qParams.text.trim()}`);
+      }
     }
   }
 
   const seenQuestionIds = new Set<string>();
 
-  return list.filter((activity) => {
+  const filteredQuestions = list.filter((activity) => {
     if (activity?.type === 'question') {
       const qParams = activity.tool?.params as Record<string, unknown> | undefined;
       const qId =
@@ -187,6 +189,70 @@ export function filterDisplayActivities(unifiedActivities: DrawerActivityItem[])
     }
     return true;
   });
+
+  // Second pass: deduplicate identical adjacent / near-identical tool calls
+  const result: DrawerActivityItem[] = [];
+  for (let i = 0; i < filteredQuestions.length; i++) {
+    const act = filteredQuestions[i];
+    if (act?.type === 'tool' && act.tool) {
+      const tName = act.tool.toolName || (act.tool as any)?.name;
+
+      // Smart Todo deduplication: if multiple todo_write snapshots share the same completed count
+      // (e.g. duplicate startup runs or zero-progress updates), keep only the latest checklist snapshot
+      if (tName === 'todo_write' || tName === 'write_todos') {
+        const actParams = (act.tool?.params as Record<string, unknown> | undefined)?.todos;
+        let actTodos: unknown[] = [];
+        if (Array.isArray(actParams)) {
+          actTodos = actParams;
+        } else if (typeof actParams === 'string') {
+          try {
+            const p = JSON.parse(actParams);
+            if (Array.isArray(p)) actTodos = p;
+          } catch {
+            // ignore
+          }
+        }
+        const actCompleted = actTodos.filter((t: any) => t?.status === 'completed').length;
+
+        const existingTodoIdx = result.findIndex((prev) => {
+          if (prev?.type !== 'tool' || !prev.tool) return false;
+          const pName = prev.tool.toolName || (prev.tool as any)?.name;
+          if (pName !== 'todo_write' && pName !== 'write_todos') return false;
+          const prevParams = (prev.tool?.params as Record<string, unknown> | undefined)?.todos;
+          let prevTodos: unknown[] = [];
+          if (Array.isArray(prevParams)) {
+            prevTodos = prevParams;
+          } else if (typeof prevParams === 'string') {
+            try {
+              const p = JSON.parse(prevParams);
+              if (Array.isArray(p)) prevTodos = p;
+            } catch {
+              // ignore
+            }
+          }
+          const prevCompleted = prevTodos.filter((t: any) => t?.status === 'completed').length;
+          return prevCompleted === actCompleted;
+        });
+
+        if (existingTodoIdx !== -1) {
+          continue;
+        }
+      }
+
+      const isDuplicate = result.slice(-3).some((prev) => {
+        if (prev?.type !== 'tool' || !prev.tool) return false;
+        const prevName = prev.tool.toolName || (prev.tool as any)?.name;
+        if (!prevName || prevName !== tName) return false;
+        return JSON.stringify(prev.tool.params) === JSON.stringify(act.tool?.params);
+      });
+      if (isDuplicate) {
+        continue;
+      }
+    }
+    result.push(act);
+  }
+
+  return result;
 }
 
 /**

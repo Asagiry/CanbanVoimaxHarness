@@ -145,6 +145,33 @@
   animation: silk-entrance 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* Checkmark Pop / Snap for Completed Tasks & Todos */
+@keyframes checkmark-pop {
+  0% {
+    transform: scale(0.65);
+    opacity: 0.3;
+  }
+  60% {
+    transform: scale(1.18);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-checkmark-pop {
+  animation: checkmark-pop 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+/* Tactile button interaction: snappy micro-press and recovery */
+.btn-tactile {
+  transition: transform 0.08s ease-out, background-color 0.15s ease-out, border-color 0.15s ease-out, box-shadow 0.15s ease-out;
+}
+.btn-tactile:active {
+  transform: scale(0.97);
+}
+
 @keyframes enter {
   from {
     opacity: var(--tw-enter-opacity, 1);

@@ -353,9 +353,14 @@ export const createTasksCrudSlice: StateCreator<
           }
         }
 
-        const colDef = targetColDef ?? columns.find((c) => c.id === merged.stageId);
-        if (colDef?.autoRun === true || (colDef?.autoRun !== false && Boolean(colDef?.persona))) {
-          await triggerRunAgent(resolvedTaskId, undefined, { skipSync: true });
+        // In desktop mode, backend move_task_stage emits "agent:autorun" as single authority.
+        // In browser mock mode without Tauri IPC, trigger agent execution directly.
+        const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+        if (!isTauri) {
+          const colDef = targetColDef ?? columns.find((c) => c.id === merged.stageId);
+          if (colDef?.autoRun === true || (colDef?.autoRun !== false && Boolean(colDef?.persona))) {
+            await triggerRunAgent(resolvedTaskId, undefined, { skipSync: true });
+          }
         }
         return;
       }
@@ -857,6 +862,10 @@ export const createTasksCrudSlice: StateCreator<
       logEvent('INFO', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" is in terminal stage "${task.stageId}", skipping`);
       return;
     } else if (taskCol?.persona || taskCol?.autoRun) {
+      if (task.status === 'running' && !prompt) {
+        logEvent('WARN', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" is already running, skipping duplicate run`);
+        return;
+      }
       logEvent('INFO', 'BOARD_STORE', `runTaskAgent: task "${resolvedTaskId}" is in agent stage "${taskCol.id}", starting agent`);
       const updatedTasks = get().tasks.map((t) =>
         t.id === resolvedTaskId || t.id.trim().toLowerCase() === resolvedTaskId.trim().toLowerCase()

@@ -22,6 +22,9 @@ export type { TaskObjectiveCardProps } from './TaskObjectiveCard';
 export { ExecutionErrorBanner } from './ExecutionErrorBanner';
 export type { ExecutionErrorBannerProps } from './ExecutionErrorBanner';
 
+export { default as StageSummaryCard } from './StageSummaryCard';
+export type { StageSummaryCardProps } from './StageSummaryCard';
+
 export {
   getCleanPrompt,
   isFinalResponseItem,

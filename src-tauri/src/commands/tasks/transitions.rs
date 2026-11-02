@@ -2215,6 +2215,12 @@ pub async fn internal_advance_task_to_stage(
                             task_id, existing_sub_id, existing_sub.status
                         ),
                     );
+                    let parent_summary_content = format!(
+                        "### Саммари этапа (передано на {} {}):\n\n{}",
+                        existing_sub_id, target_col.title, summary
+                    );
+                    let _ = append_task_dialog_activity(root, task_id, "summary", &parent_summary_content, app_handle).await;
+
                     return Ok(format!(
                         "Подзадача {} уже активна для задачи {}",
                         existing_sub_id, task_id

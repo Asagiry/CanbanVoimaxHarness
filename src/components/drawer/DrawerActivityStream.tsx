@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import type { KanbanTask } from '../../types';
 import type { DrawerActivityItem } from '../../stores/drawerStore';
 import ToolExecutionCard from './ToolExecutionCard';
@@ -8,7 +8,8 @@ import ImageLightboxModal from './ImageLightboxModal';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useTranslation } from '../../stores/languageStore';
-import { ArrowDown, AlertTriangle, Info, CheckCircle2, RotateCcw } from 'lucide-react';
+import { ArrowDown, AlertTriangle, Info } from 'lucide-react';
+import { useActivityScroll } from './useActivityScroll';
 import {
   ThoughtStreamCard,
   SteerDirectiveCard,
@@ -18,12 +19,12 @@ import {
   TerminalResponseCard,
   TaskObjectiveCard,
   ExecutionErrorBanner,
+  StageSummaryCard,
   isFinalResponseItem,
   hasNearbyTodoWrite,
   shouldSuppressExplanation,
   filterDisplayActivities,
   computeActivityDurations,
-  MarkdownContent,
 } from './stream';
 import { tryExtractTodos } from '../../lib/markdown';
 
@@ -65,12 +66,6 @@ export default function DrawerActivityStream({
           useBoardStore.getState().tasks.find((t) => t.id === task.parentId)?.attachments
         : undefined;
 
-  const [collapsedOutputs, setCollapsedOutputs] = useState<Set<string>>(() => new Set());
-  const [showNewButton, setShowNewButton] = useState(false);
-  const isFirstBatchRef = useRef(true);
-  const nearBottomRef = useRef(true);
-  const scrollRef = useRef<HTMLDivElement>(null);
-
   // Image Lightbox state & handlers (§ 2.13 Viewport Overlay & Image Lightbox Invariant)
   const [lightboxImage, setLightboxImage] = useState<{ src: string; alt?: string } | null>(null);
 
@@ -102,78 +97,14 @@ export default function DrawerActivityStream({
     [displayActivities, isRunning]
   );
 
-  const toggleOutput = (id: string) => {
-    setCollapsedOutputs((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
-  const scrollToBottom = () => {
-    const el = scrollRef.current;
-    if (el) {
-      el.scrollTop = el.scrollHeight;
-    }
-    nearBottomRef.current = true;
-    setShowNewButton(false);
-  };
-
-  const handleFeedScroll = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
-    nearBottomRef.current = nearBottom;
-    if (nearBottom) {
-      setShowNewButton(false);
-    }
-  };
-
-  // Reset scroll and collapsed state on task switch
-  useEffect(() => {
-    setCollapsedOutputs(new Set());
-    setShowNewButton(false);
-    isFirstBatchRef.current = true;
-    nearBottomRef.current = true;
-  }, [task?.id]);
-
-  // Smart auto-scroll: down only if user is already near bottom or initial batch
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    if (isFirstBatchRef.current) {
-      isFirstBatchRef.current = false;
-      el.scrollTop = el.scrollHeight;
-      nearBottomRef.current = true;
-      setShowNewButton(false);
-      return;
-    }
-    if (nearBottomRef.current) {
-      el.scrollTop = el.scrollHeight;
-      setShowNewButton(false);
-    } else {
-      setShowNewButton(true);
-    }
-  }, [displayActivities]);
-
-  // Auto-scroll down during thinking/token streaming (with user scroll-up protection)
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const contentEl = el.firstElementChild as HTMLElement;
-    if (!contentEl) return;
-    const ro = new ResizeObserver(() => {
-      if (nearBottomRef.current) {
-        el.scrollTop = el.scrollHeight;
-      }
-    });
-    ro.observe(contentEl);
-    return () => ro.disconnect();
-  }, []);
+  const {
+    scrollRef,
+    collapsedOutputs,
+    showNewButton,
+    toggleOutput,
+    scrollToBottom,
+    handleFeedScroll,
+  } = useActivityScroll(displayActivities, task?.id);
 
   return (
     <LightboxContext.Provider value={handleOpenLightbox}>
@@ -317,49 +248,17 @@ export default function DrawerActivityStream({
                 );
               }
 
-              // Dedicated Stage Summary Card (advance_task handover)
-              if ((activity?.type as string) === 'summary') {
+              // Dedicated Stage Summary Card (advance_task handover) or Reviewer Verdict Card
+              if ((activity?.type as string) === 'summary' || (activity?.type as string) === 'reject') {
                 return (
-                  <div key={key} className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-emerald-500/30 dark:border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20 shadow-xs overflow-hidden my-2.5">
-                    <div className="flex items-center justify-between px-3.5 py-2.5 bg-emerald-100/60 dark:bg-emerald-900/30 border-b border-emerald-200/60 dark:border-emerald-800/40 select-none">
-                      <div className="flex items-center space-x-2 text-emerald-900 dark:text-emerald-200">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                        <span className="text-xs font-semibold font-sans">
-                          Саммари этапа / Handover Summary
-                        </span>
-                      </div>
-                      {activityDurations[idx] ? (
-                        <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-300">
-                          {Math.round(activityDurations[idx]! / 1000)}s
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="p-3.5 text-sm leading-relaxed text-[#27272a] dark:text-[#d4d4d8] select-text">
-                      <MarkdownContent content={activity?.content || ''} onImageClick={handleOpenLightbox} />
-                    </div>
-                  </div>
+                  <StageSummaryCard
+                    key={key}
+                    activity={activity}
+                    durationMs={activityDurations[idx] || activity.durationMs}
+                    onImageClick={handleOpenLightbox}
+                  />
                 );
               }
-
-              // Dedicated Reviewer Verdict Card (reject_task / changes requested)
-              if ((activity?.type as string) === 'reject') {
-                return (
-                  <div key={key} className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-amber-500/30 dark:border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20 shadow-xs overflow-hidden my-2.5">
-                    <div className="flex items-center justify-between px-3.5 py-2.5 bg-amber-100/60 dark:bg-amber-900/30 border-b border-amber-200/60 dark:border-amber-800/40 select-none">
-                      <div className="flex items-center space-x-2 text-amber-900 dark:text-amber-200">
-                        <RotateCcw className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                        <span className="text-xs font-semibold font-sans">
-                          Вердикт ревьюера: Требуются правки (CHANGES_REQUESTED)
-                        </span>
-                      </div>
-                    </div>
-                    <div className="p-3.5 text-sm leading-relaxed text-[#27272a] dark:text-[#d4d4d8] select-text">
-                      <MarkdownContent content={activity?.content || ''} onImageClick={handleOpenLightbox} />
-                    </div>
-                  </div>
-                );
-              }
-
               // c) Assistant Response: True Final Response vs Intermediate Step Commentary
               const isFinal = isFinalResponseItem(activity, idx, displayActivities ?? [], isRunning);
 

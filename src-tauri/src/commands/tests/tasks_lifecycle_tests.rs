@@ -1036,7 +1036,7 @@ use std::path::PathBuf;
 
     #[tokio::test]
     async fn test_transition_engine_validates_stage_and_allocates_worktree() {
-        let base = std::env::temp_dir().join(format!("cvh_test_trans_{}", uuid::Uuid::new_v4()));
+        let base = PathBuf::from("target").join(format!("cvh_test_trans_{}", uuid::Uuid::new_v4()));
         let _ = tokio::fs::create_dir_all(&base).await;
         let _ = tokio::fs::create_dir_all(base.join(".cvh")).await;
 

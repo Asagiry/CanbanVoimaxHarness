@@ -597,6 +597,22 @@ export const createActivitySlice: StateCreator<
                 }
 
                 const prev = dedupedItems[dedupedItems.length - 1];
+
+                // Deduplicate identical tool calls within recent items (e.g. from concurrent runners or duplicate emissions)
+                if (
+                  item.type === 'tool' &&
+                  item.tool &&
+                  dedupedItems.slice(-3).some((d) => {
+                    if (d.type !== 'tool' || !d.tool) return false;
+                    const dName = d.tool.toolName || (d.tool as any).name;
+                    const iName = item.tool?.toolName || (item.tool as any)?.name;
+                    if (!dName || dName !== iName) return false;
+                    return JSON.stringify(d.tool.params) === JSON.stringify(item.tool?.params);
+                  })
+                ) {
+                  continue; // Suppress duplicate tool call
+                }
+
                 if (
                   prev &&
                   (item.type === 'steer' || item.type === 'user') &&

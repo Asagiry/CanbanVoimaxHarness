@@ -22,9 +22,17 @@ export default function GenericToolCard({ tool }: ToolCardProps) {
   const isRunning = tool.status === 'running';
   const durationText = formatDurationCompact(tool.durationMs);
 
-  const firstStr = Object.values(params).find(
-    (v) => typeof v === 'string' && (v as string).trim().length > 0
-  ) as string | undefined;
+  let firstStr = (params.stage_id || params.target_stage || params.stage || params.rule || params.query || params.path || params.name) as string | undefined;
+  if (!firstStr) {
+    firstStr = Object.entries(params).find(
+      ([k, v]) => k !== 'summary' && k !== 'handover_summary' && typeof v === 'string' && (v as string).trim().length > 0
+    )?.[1] as string | undefined;
+  }
+  if (!firstStr) {
+    firstStr = Object.values(params).find(
+      (v) => typeof v === 'string' && (v as string).trim().length > 0
+    ) as string | undefined;
+  }
 
   const raw = firstStr || '';
   const target = raw.length > 55 ? `${raw.slice(0, 52)}…` : raw;

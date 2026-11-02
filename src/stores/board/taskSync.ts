@@ -84,25 +84,38 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
   }
 }
 
+const inFlightAgentRuns = new Set<string>();
+
 export async function triggerRunAgent(
   taskId: string,
   prompt?: string,
   options?: { skipSync?: boolean }
 ): Promise<void> {
-  // Ensure the task is guaranteed to be saved and known to the backend before running agent (§ Requirement 4).
-  // When skipSync is true (e.g. after move_task_stage or autorun event), avoid syncTasksBackend
-  // to prevent race conditions and clobbering backend-assigned fields.
-  if (!options?.skipSync) {
-    const currentTasks = useBoardStore.getState().tasks;
-    const taskToRun = currentTasks.find(
-      (t) => t.id === taskId || t.id.trim().toLowerCase() === taskId.trim().toLowerCase()
+  const normalizedId = taskId.trim().toLowerCase();
+  if (inFlightAgentRuns.has(normalizedId)) {
+    logEvent(
+      'WARN',
+      'BOARD_STORE',
+      `triggerRunAgent: run_agent already in-flight for "${taskId}", skipping duplicate call`
     );
-    if (taskToRun) {
-      await syncTasksBackend(currentTasks);
-    }
+    return;
   }
+  inFlightAgentRuns.add(normalizedId);
 
   try {
+    // Ensure the task is guaranteed to be saved and known to the backend before running agent (§ Requirement 4).
+    // When skipSync is true (e.g. after move_task_stage or autorun event), avoid syncTasksBackend
+    // to prevent race conditions and clobbering backend-assigned fields.
+    if (!options?.skipSync) {
+      const currentTasks = useBoardStore.getState().tasks;
+      const taskToRun = currentTasks.find(
+        (t) => t.id === taskId || t.id.trim().toLowerCase() === taskId.trim().toLowerCase()
+      );
+      if (taskToRun) {
+        await syncTasksBackend(currentTasks);
+      }
+    }
+
     const { invoke } = await import('@tauri-apps/api/core');
     await invoke('run_agent', { taskId, prompt: prompt || null });
   } catch (err) {
@@ -130,5 +143,7 @@ export async function triggerRunAgent(
 
     // Display user notification / alert so the user understands why the agent did not start
     alert(`Не удалось запустить агента для задачи "${taskId}":\n${errMsg}`);
+  } finally {
+    inFlightAgentRuns.delete(normalizedId);
   }
 }

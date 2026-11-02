@@ -95,6 +95,14 @@ pub async fn resolve_task_active_agent_model(
         .unwrap_or_else(|| "gemini-3.8-flash-high".to_string())
 }
 
+pub fn cleanup_active_agent_reservation(app_handle: &AppHandle, task_id: &str) {
+    if let Some(state) = app_handle.try_state::<AppState>() {
+        if let Ok(mut map) = state.active_agents.lock() {
+            map.remove(task_id);
+        }
+    }
+}
+
 pub async fn run_agent(
     task_id: String,
     prompt: Option<String>,
@@ -109,33 +117,33 @@ pub async fn run_agent(
         &format!("run_agent IPC called for task_id='{}', prompt_len={}", task_id, prompt.as_ref().map(|p| p.len()).unwrap_or(0)),
         Some(&format!("root='{}'", root.display())),
     );
-    {
-        let is_running = {
-            let state = app_handle.state::<AppState>();
-            let mut is_active = false;
-            if let Ok(mut map) = state.active_agents.lock() {
-                // Sweep completed or aborted handles first
-                let mut stale_keys = Vec::new();
-                for (k, entry) in map.iter() {
-                    let aborted = entry.abort_flag.load(Ordering::SeqCst);
-                    let finished = if let Ok(guard) = entry.join_handle.try_lock() {
-                        guard.as_ref().map(|h| h.is_finished()).unwrap_or(true)
-                    } else {
-                        false
-                    };
-                    if aborted || finished {
-                        stale_keys.push(k.clone());
-                    }
-                }
-                for k in stale_keys {
-                    map.remove(&k);
-                }
 
-                is_active = map.keys().any(|k| task_id_matches(k, &task_id));
+    // Atomically check and reserve the active agent slot BEFORE any async operations (TOCTOU guard)
+    let (abort_flag, join_slot) = {
+        let state = app_handle.state::<AppState>();
+        let mut map = state
+            .active_agents
+            .lock()
+            .map_err(|_| "Failed to lock active agents".to_string())?;
+
+        // Sweep completed or aborted handles first
+        let mut stale_keys = Vec::new();
+        for (k, entry) in map.iter() {
+            let aborted = entry.abort_flag.load(Ordering::SeqCst);
+            let finished = if let Ok(guard) = entry.join_handle.try_lock() {
+                guard.as_ref().map(|h| h.is_finished()).unwrap_or(true)
+            } else {
+                false
+            };
+            if aborted || finished {
+                stale_keys.push(k.clone());
             }
-            is_active
-        };
-        if is_running {
+        }
+        for k in stale_keys {
+            map.remove(&k);
+        }
+
+        if map.keys().any(|k| task_id_matches(k, &task_id)) {
             crate::logger::cvh_log(
                 Some(&root),
                 "WARN",
@@ -144,7 +152,18 @@ pub async fn run_agent(
             );
             return Ok(format!("Agent already running for task {}", task_id));
         }
-    }
+
+        let abort_flag = Arc::new(AtomicBool::new(false));
+        let join_slot = Arc::new(tokio::sync::Mutex::new(None));
+        map.insert(
+            task_id.clone(),
+            ActiveAgentHandle {
+                abort_flag: Arc::clone(&abort_flag),
+                join_handle: Arc::clone(&join_slot),
+            },
+        );
+        (abort_flag, join_slot)
+    };
 
     // Check disk and in-memory state: merge them so in-memory tasks are never lost (§ 2.22).
     let mut tasks_to_use = load_tasks_from_disk(&root).await;
@@ -180,6 +199,7 @@ pub async fn run_agent(
                 &format!("run_agent REJECTED: Task '{}' not found (in-memory: {}, disk: {})", task_id, mem_count, tasks_to_use.len()),
                 Some(&format!("Available tasks in SQLite: [{}]", available_ids.join(", "))),
             );
+            cleanup_active_agent_reservation(&app_handle, &task_id);
             return Err(err_msg);
         }
     };
@@ -237,6 +257,7 @@ pub async fn run_agent(
                 task_id, task.waiting_for_subtask_id
             ),
         );
+        cleanup_active_agent_reservation(&app_handle, &task_id);
         return Ok(format!("Task {} is waiting for subtask to finish", task_id));
     }
 
@@ -371,8 +392,11 @@ pub async fn run_agent(
         }
     };
 
-    let abort_flag = Arc::new(AtomicBool::new(false));
-    let join_slot = Arc::new(tokio::sync::Mutex::new(None));
+    if abort_flag.load(Ordering::SeqCst) {
+        cleanup_active_agent_reservation(&app_handle, &task_id);
+        return Ok(format!("Agent execution cancelled before start for task {}", task_id));
+    }
+
     let session_id = format!("sess-{}-{}", task_id, Utc::now().timestamp_millis());
     let session_started_at = Utc::now().timestamp_millis() as u64;
     let session_summary = crate::agent::session_registry::AgentSessionSummary {
@@ -383,24 +407,13 @@ pub async fn run_agent(
         status: crate::agent::session_registry::SessionStatus::Running,
     };
 
-    // Store in active agents registry & authoritative session registry
+    // Register in authoritative session registry & initialize agent context (active_agents already reserved)
     {
         let state = app_handle.state::<AppState>();
         state.session_registry.register(
             session_summary.clone(),
             Arc::clone(&abort_flag),
             Arc::clone(&join_slot),
-        );
-        let mut map = state
-            .active_agents
-            .lock()
-            .map_err(|_| "Failed to lock active agents".to_string())?;
-        map.insert(
-            task_id.clone(),
-            ActiveAgentHandle {
-                abort_flag: Arc::clone(&abort_flag),
-                join_handle: Arc::clone(&join_slot),
-            },
         );
         if let Ok(mut ctx_map) = state.agent_contexts.lock() {
             ctx_map.entry(task_id.clone()).or_insert_with(|| {

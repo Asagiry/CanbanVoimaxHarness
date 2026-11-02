@@ -5,6 +5,7 @@ import FileOpsToolCard from './tools/FileOpsToolCard';
 import SearchToolCard from './tools/SearchToolCard';
 import CommandToolCard from './tools/CommandToolCard';
 import WebToolCard from './tools/WebToolCard';
+import TodoToolCard from './tools/TodoToolCard';
 import GenericToolCard from './tools/GenericToolCard';
 
 export interface ToolExecutionCardProps {
@@ -19,6 +20,10 @@ export default function ToolExecutionCard({ tool, onRerun, isLatest }: ToolExecu
   const toolName = tool.toolName ?? 'tool';
 
   switch (toolName) {
+    case 'todo_write':
+    case 'write_todos':
+      return <TodoToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+
     case 'compact_context':
       return <CompactContextToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
 

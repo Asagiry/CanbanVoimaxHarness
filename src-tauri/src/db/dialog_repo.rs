@@ -44,6 +44,7 @@ pub fn append_dialog_items(root: &Path, task_id: &str, items: &[ActivityItem]) -
                     content = excluded.content,
                     images_json = excluded.images_json,
                     timestamp = excluded.timestamp,
+                    created_at = excluded.created_at,
                     tool_json = excluded.tool_json,
                     duration_ms = excluded.duration_ms",
             )

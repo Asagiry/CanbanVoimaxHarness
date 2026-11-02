@@ -43,7 +43,10 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Terminal Response Card** | `src/components/drawer/stream/TerminalResponseCard.tsx` | Prominent final response card with copy and duration. |
 | **Task Objective Card** | `src/components/drawer/stream/TaskObjectiveCard.tsx` | Task goal, clean prompt, and attachment gallery. |
 | **Execution Error Banner** | `src/components/drawer/stream/ExecutionErrorBanner.tsx` | In-stream error banner with retry and dismiss controls. |
+| **Stage Summary Card** | `src/components/drawer/stream/StageSummaryCard.tsx` | Dedicated stage handover summary card and reviewer verdict card. |
+| **Activity Stream Scroll Hook** | `src/components/drawer/useActivityScroll.ts` | Activity feed scroll management, auto-scroll, and resize observer. |
 | **Stream Filtering Helpers** | `src/components/drawer/stream/streamHelpers.ts` | Stream activity dedup, prompt cleanup, duration helpers. |
+| **Todo Tool Card** | `src/components/drawer/tools/TodoToolCard.tsx` | `todo_write` checklist progress bar, status icons, and task rendering. |
 | **File Operations Tool Card** | `src/components/drawer/tools/FileOpsToolCard.tsx` | `read_file`, `write_file`, `edit_file` diff display. |
 | **Shell Command Tool Card** | `src/components/drawer/tools/CommandToolCard.tsx` | Command invocation, exit code, spilled logs link. |
 | **Subagent Tool Card** | `src/components/drawer/tools/SubagentToolCard.tsx` | Child agent execution card with progress spinner. |
