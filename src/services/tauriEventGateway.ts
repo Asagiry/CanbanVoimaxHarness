@@ -1,6 +1,6 @@
-import { useBoardStore, initBoardEventListeners } from '../stores/boardStore';
+import { useBoardStore } from '../stores/boardStore';
 import { useDrawerStore } from '../stores/drawerStore';
-import { useCortexStore, initCortexEventListeners } from '../stores/cortexStore';
+import { useCortexStore } from '../stores/cortexStore';
 import { useAgentSessionStore, type AgentSessionSummary } from '../stores/agentSessionStore';
 import {
   showAdvanceTaskNotification,
@@ -871,34 +871,34 @@ export function setupTauriEventGateway(): () => void {
         useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
       });
 
-      // 21. boards:updated
-      await addListener('boards:updated', async () => {
-        await useBoardStore.getState().loadBoards();
-        await useBoardStore.getState().loadTasks();
-        useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
+      // 21. boards:updated & pipeline:updated (consolidated and deduplicated)
+      let isSyncingBoards = false;
+      let hasPendingBoardsSync = false;
+      const handleBoardsOrPipelineUpdated = async () => {
+        if (isSyncingBoards) {
+          hasPendingBoardsSync = true;
+          return;
+        }
+        isSyncingBoards = true;
+        try {
+          do {
+            hasPendingBoardsSync = false;
+            await useBoardStore.getState().loadBoards();
+            await useBoardStore.getState().loadTasks();
+            useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
+          } while (hasPendingBoardsSync && !isDisposed);
+        } finally {
+          isSyncingBoards = false;
+        }
+      };
+
+      await addListener('boards:updated', handleBoardsOrPipelineUpdated);
+      await addListener('pipeline:updated', handleBoardsOrPipelineUpdated);
+
+      // 22. cortex:rules_updated
+      await addListener('cortex:rules_updated', async () => {
+        await useCortexStore.getState().loadGlobalRules();
       });
-
-      // 22. pipeline:updated
-      await addListener('pipeline:updated', async () => {
-        await useBoardStore.getState().loadBoards();
-        await useBoardStore.getState().loadTasks();
-        useCortexStore.getState().syncStagesFromColumns(useBoardStore.getState().columns);
-      });
-
-      // Store-level listeners
-      const unlistenBoardStore = await initBoardEventListeners();
-      if (isDisposed) {
-        unlistenBoardStore();
-      } else {
-        unlisteners.push(unlistenBoardStore);
-      }
-
-      const unlistenCortexStore = await initCortexEventListeners();
-      if (isDisposed) {
-        unlistenCortexStore();
-      } else {
-        unlisteners.push(unlistenCortexStore);
-      }
     } catch (e) {
       console.info('Tauri event listeners not active in web mode:', e);
     }

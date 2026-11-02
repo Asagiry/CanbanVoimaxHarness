@@ -99,142 +99,113 @@ export default function AgentConsoleDrawer() {
   // Listen to agent error & status events from Tauri backend
   useEffect(() => {
     if (!task?.id) return;
-    let unlistenStatus: (() => void) | undefined;
-    let unlistenFinished: (() => void) | undefined;
-    let unlistenError: (() => void) | undefined;
-    let unlistenSubagentStatus: (() => void) | undefined;
-    let unlistenSubagentAborted: (() => void) | undefined;
-    let unlistenSubagentFinished: (() => void) | undefined;
-    let unlistenSubagentError: (() => void) | undefined;
+    let isDisposed = false;
+    const unlisteners: (() => void)[] = [];
 
     const setupErrorListeners = async () => {
       try {
         const { listen } = await import('@tauri-apps/api/event');
+        if (isDisposed) return;
 
-        // Listen for agent:status terminal states
-        unlistenStatus = await listen<{ taskId?: string; status?: string }>('agent:status', (event) => {
-          if (event.payload?.taskId === task.id) {
-            const st = event.payload.status;
-            // Immediate reset of running status on terminal states
-            if (st === 'finished' || st === 'aborted' || st === 'error') {
+        const bind = async <T,>(event: string, handler: (e: { payload: T }) => void) => {
+          if (isDisposed) return;
+          const u = await listen<T>(event, handler);
+          if (isDisposed) {
+            u();
+          } else {
+            unlisteners.push(u);
+          }
+        };
+
+        await Promise.all([
+          // Listen for agent:status terminal states
+          bind<{ taskId?: string; status?: string }>('agent:status', (event) => {
+            if (event.payload?.taskId === task.id) {
+              const st = event.payload.status;
+              // Immediate reset of running status on terminal states
+              if (st === 'finished' || st === 'aborted' || st === 'error') {
+                useBoardStore.getState().updateTaskStatus(task.id, 'idle');
+                useDrawerStore.getState().setActiveAgentTask(task.id, false);
+                try {
+                  const ds = useDrawerStore.getState();
+                  ds.setGenerationEndTime(task.id, Date.now());
+                  ds.setTaskEndTime(task.id, Date.now());
+                  if (ds.finalTps[task.id] == null) {
+                    const tele = ds.taskTelemetry[task.id];
+                    const outTokens = tele?.outputTokens || ds.streamedTurnTokens[task.id] || 0;
+                    const start = ds.generationStartTime[task.id] ?? ds.thinkingStartTime[task.id];
+                    const end = ds.generationEndTime[task.id] ?? Date.now();
+                    if (start != null && outTokens > 0) {
+                      const elapsedSec = (end - start) / 1000;
+                      if (elapsedSec > 0.05) {
+                        ds.recordTurnMetrics(task.id, outTokens, elapsedSec);
+                      }
+                    }
+                  }
+                } catch {
+                  // ignore
+                }
+              }
+              if (st === 'error') {
+                setRunError((prev) => prev || 'Агент сообщил об ошибке выполнения');
+              } else if (st === 'running') {
+                setRunError(null);
+              }
+            }
+          }),
+
+          // Listen for agent:finished
+          bind<{ taskId?: string; response?: string }>('agent:finished', (event) => {
+            if (event.payload?.taskId === task.id) {
               useBoardStore.getState().updateTaskStatus(task.id, 'idle');
               useDrawerStore.getState().setActiveAgentTask(task.id, false);
               try {
                 const ds = useDrawerStore.getState();
-                ds.setGenerationEndTime(task.id, Date.now());
-                ds.setTaskEndTime(task.id, Date.now());
-                if (ds.finalTps[task.id] == null) {
-                  const tele = ds.taskTelemetry[task.id];
-                  const outTokens = tele?.outputTokens || ds.streamedTurnTokens[task.id] || 0;
-                  const start = ds.generationStartTime[task.id] ?? ds.thinkingStartTime[task.id];
-                  const end = ds.generationEndTime[task.id] ?? Date.now();
-                  if (start != null && outTokens > 0) {
-                    const elapsedSec = (end - start) / 1000;
-                    if (elapsedSec > 0.05) {
-                      ds.recordTurnMetrics(task.id, outTokens, elapsedSec);
-                    }
-                  }
-                }
+                ds.setThinkingStartTime(task.id, null);
               } catch {
                 // ignore
               }
             }
-            if (st === 'error') {
-              setRunError((prev) => prev || 'Агент сообщил об ошибке выполнения');
-            } else if (st === 'running') {
-              setRunError(null);
-            }
-          }
-        });
+          }),
 
-        // Listen for agent:finished
-        unlistenFinished = await listen<{ taskId?: string; response?: string }>('agent:finished', (event) => {
-          if (event.payload?.taskId === task.id) {
-            useBoardStore.getState().updateTaskStatus(task.id, 'idle');
-            useDrawerStore.getState().setActiveAgentTask(task.id, false);
-            try {
-              const ds = useDrawerStore.getState();
-              ds.setThinkingStartTime(task.id, null);
-            } catch {
-              // ignore
-            }
-          }
-        });
-
-        // Listen for agent:error
-        unlistenError = await listen<{ taskId?: string; error?: string }>('agent:error', (event) => {
-          if (event.payload && (!event.payload.taskId || event.payload.taskId === task.id)) {
-            setRunError(event.payload.error || 'Произошла непредвиденная ошибка агента');
-            useBoardStore.getState().updateTaskStatus(task.id, 'idle');
-            if (event.payload.taskId) {
-              useDrawerStore.getState().setActiveAgentTask(event.payload.taskId, false);
-            } else if (task?.id) {
-              useDrawerStore.getState().setActiveAgentTask(task.id, false);
-            }
-            try {
-              const ds = useDrawerStore.getState();
-              ds.setThinkingStartTime(task.id, null);
-            } catch {
-              // ignore
-            }
-          }
-        });
-
-        // Listen for subagent:status
-        unlistenSubagentStatus = await listen<{ subagentId?: string; status?: string; parentTaskId?: string }>(
-          'subagent:status',
-          (event) => {
-            const sid = event.payload?.subagentId;
-            const st = event.payload?.status;
-            if (sid) {
-              if (st === 'running') {
-                useDrawerStore.getState().updateSubagentStatus(sid, 'running');
-                useDrawerStore.getState().setActiveAgentTask(sid, true);
-                return;
+          // Listen for agent:error
+          bind<{ taskId?: string; error?: string }>('agent:error', (event) => {
+            if (event.payload && (!event.payload.taskId || event.payload.taskId === task.id)) {
+              setRunError(event.payload.error || 'Произошла непредвиденная ошибка агента');
+              useBoardStore.getState().updateTaskStatus(task.id, 'idle');
+              if (event.payload.taskId) {
+                useDrawerStore.getState().setActiveAgentTask(event.payload.taskId, false);
+              } else if (task?.id) {
+                useDrawerStore.getState().setActiveAgentTask(task.id, false);
               }
-              const nextStatus = st === 'finished' ? 'finished' : (st === 'aborted' || st === 'stopped') ? 'stopped' : 'error';
-              useDrawerStore.getState().updateSubagentStatus(sid, nextStatus as any);
-              useDrawerStore.getState().setActiveAgentTask(sid, false);
-              const tools = useDrawerStore.getState().toolExecutions[sid] || [];
-              for (const t of tools) {
-                if (t.status === 'running') {
-                  useDrawerStore.getState().updateToolExecution(sid, t.id, {
-                    status: 'failed',
-                    stderr: 'Прервано пользователем',
-                  });
+              try {
+                const ds = useDrawerStore.getState();
+                ds.setThinkingStartTime(task.id, null);
+              } catch {
+                // ignore
+              }
+            }
+          }),
+
+          // Listen for subagent:status
+          bind<{ subagentId?: string; status?: string; parentTaskId?: string }>(
+            'subagent:status',
+            (event) => {
+              const sid = event.payload?.subagentId;
+              const st = event.payload?.status;
+              if (sid) {
+                if (st === 'running') {
+                  useDrawerStore.getState().updateSubagentStatus(sid, 'running');
+                  useDrawerStore.getState().setActiveAgentTask(sid, true);
+                  return;
                 }
-              }
-            }
-          }
-        );
-
-        // Listen for subagent:aborted
-        unlistenSubagentAborted = await listen<{ subagentId?: string; parentTaskId?: string }>(
-          'subagent:aborted',
-          (event) => {
-            const sid = event.payload?.subagentId;
-            const pid = event.payload?.parentTaskId;
-            if (sid) {
-              useDrawerStore.getState().updateSubagentStatus(sid, 'stopped', 'Прервано пользователем');
-              useDrawerStore.getState().setActiveAgentTask(sid, false);
-              const tools = useDrawerStore.getState().toolExecutions[sid] || [];
-              for (const t of tools) {
-                if (t.status === 'running') {
-                  useDrawerStore.getState().updateToolExecution(sid, t.id, {
-                    status: 'failed',
-                    stderr: 'Прервано пользователем',
-                  });
-                }
-              }
-            } else if (pid && pid === task?.id) {
-              const list = useDrawerStore.getState().subagents[pid] || [];
-              for (const sub of list) {
-                useDrawerStore.getState().updateSubagentStatus(sub.id, 'stopped', 'Прервано пользователем');
-                useDrawerStore.getState().setActiveAgentTask(sub.id, false);
-                const tools = useDrawerStore.getState().toolExecutions[sub.id] || [];
+                const nextStatus = st === 'finished' ? 'finished' : (st === 'aborted' || st === 'stopped') ? 'stopped' : 'error';
+                useDrawerStore.getState().updateSubagentStatus(sid, nextStatus as any);
+                useDrawerStore.getState().setActiveAgentTask(sid, false);
+                const tools = useDrawerStore.getState().toolExecutions[sid] || [];
                 for (const t of tools) {
                   if (t.status === 'running') {
-                    useDrawerStore.getState().updateToolExecution(sub.id, t.id, {
+                    useDrawerStore.getState().updateToolExecution(sid, t.id, {
                       status: 'failed',
                       stderr: 'Прервано пользователем',
                     });
@@ -242,33 +213,70 @@ export default function AgentConsoleDrawer() {
                 }
               }
             }
-          }
-        );
+          ),
 
-        // Listen for subagent:finished
-        unlistenSubagentFinished = await listen<{ subagentId?: string; parentTaskId?: string; response?: string }>(
-          'subagent:finished',
-          (event) => {
-            const sid = event.payload?.subagentId;
-            if (sid) {
-              useDrawerStore.getState().updateSubagentStatus(sid, 'finished');
-              useDrawerStore.getState().setActiveAgentTask(sid, false);
+          // Listen for subagent:aborted
+          bind<{ subagentId?: string; parentTaskId?: string }>(
+            'subagent:aborted',
+            (event) => {
+              const sid = event.payload?.subagentId;
+              const pid = event.payload?.parentTaskId;
+              if (sid) {
+                useDrawerStore.getState().updateSubagentStatus(sid, 'stopped', 'Прервано пользователем');
+                useDrawerStore.getState().setActiveAgentTask(sid, false);
+                const tools = useDrawerStore.getState().toolExecutions[sid] || [];
+                for (const t of tools) {
+                  if (t.status === 'running') {
+                    useDrawerStore.getState().updateToolExecution(sid, t.id, {
+                      status: 'failed',
+                      stderr: 'Прервано пользователем',
+                    });
+                  }
+                }
+              } else if (pid && pid === task?.id) {
+                const list = useDrawerStore.getState().subagents[pid] || [];
+                for (const sub of list) {
+                  useDrawerStore.getState().updateSubagentStatus(sub.id, 'stopped', 'Прервано пользователем');
+                  useDrawerStore.getState().setActiveAgentTask(sub.id, false);
+                  const tools = useDrawerStore.getState().toolExecutions[sub.id] || [];
+                  for (const t of tools) {
+                    if (t.status === 'running') {
+                      useDrawerStore.getState().updateToolExecution(sub.id, t.id, {
+                        status: 'failed',
+                        stderr: 'Прервано пользователем',
+                      });
+                    }
+                  }
+                }
+              }
             }
-          }
-        );
+          ),
 
-        // Listen for subagent:error
-        unlistenSubagentError = await listen<{ subagentId?: string; parentTaskId?: string; error?: string }>(
-          'subagent:error',
-          (event) => {
-            const sid = event.payload?.subagentId;
-            const err = event.payload?.error;
-            if (sid) {
-              useDrawerStore.getState().updateSubagentStatus(sid, 'error', err);
-              useDrawerStore.getState().setActiveAgentTask(sid, false);
+          // Listen for subagent:finished
+          bind<{ subagentId?: string; parentTaskId?: string; response?: string }>(
+            'subagent:finished',
+            (event) => {
+              const sid = event.payload?.subagentId;
+              if (sid) {
+                useDrawerStore.getState().updateSubagentStatus(sid, 'finished');
+                useDrawerStore.getState().setActiveAgentTask(sid, false);
+              }
             }
-          }
-        );
+          ),
+
+          // Listen for subagent:error
+          bind<{ subagentId?: string; parentTaskId?: string; error?: string }>(
+            'subagent:error',
+            (event) => {
+              const sid = event.payload?.subagentId;
+              const err = event.payload?.error;
+              if (sid) {
+                useDrawerStore.getState().updateSubagentStatus(sid, 'error', err);
+                useDrawerStore.getState().setActiveAgentTask(sid, false);
+              }
+            }
+          ),
+        ]);
       } catch {
         // web mode fallback
       }
@@ -276,13 +284,10 @@ export default function AgentConsoleDrawer() {
 
     setupErrorListeners();
     return () => {
-      if (unlistenStatus) unlistenStatus();
-      if (unlistenFinished) unlistenFinished();
-      if (unlistenError) unlistenError();
-      if (unlistenSubagentStatus) unlistenSubagentStatus();
-      if (unlistenSubagentAborted) unlistenSubagentAborted();
-      if (unlistenSubagentFinished) unlistenSubagentFinished();
-      if (unlistenSubagentError) unlistenSubagentError();
+      isDisposed = true;
+      for (const u of unlisteners) {
+        u();
+      }
     };
   }, [task?.id, updateTask]);
 
