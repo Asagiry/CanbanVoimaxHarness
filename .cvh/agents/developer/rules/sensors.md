@@ -43,21 +43,30 @@ pnpm exec oxlint --deny-warnings
   - `pnpm exec oxlint --deny-warnings`: Exit code `0` with zero warnings or errors.
 
 ### 2.2 Backend Sensors (Run if `src-tauri/` or `.rs` files were modified)
+For accelerated verification in CanbanVoimaxHarness, use `mbx` (configured via `.mbx.toml` with cache in `.toolchain/mbx-cache`):
 ```bash
-# 1. Compiler check:
+# 1. Accelerated compiler check (preferred):
+mbx check --manifest-path src-tauri/Cargo.toml
+# Fallback if mbx is absent:
 cargo check --manifest-path src-tauri/Cargo.toml
 
-# 2. Strict linter & clippy:
+# 2. Accelerated test suite (optional/for domain/db refactors):
+mbx test --manifest-path src-tauri/Cargo.toml
+# Fallback if mbx is absent:
+cargo test --manifest-path src-tauri/Cargo.toml
+
+# 3. Strict linter & clippy:
 cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 ```
 - **Acceptance Criteria**: Exit code `0` with zero compilation errors and zero compiler warnings.
-- Optional when domain/db modules are refactored: `cargo test --manifest-path src-tauri/Cargo.toml`.
+- `mbx check` and `mbx test` use `.toolchain/mbx-cache` and `.mbx.toml`. If `mbx` is absent, fall back to `cargo check` and `cargo test`.
 
 ### 2.3 Full-Stack Turbo Sensors (<15s)
 When both frontend and backend are touched, or for full-stack pre-handover validation:
 ```bash
-pnpm test && pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings && cargo check --manifest-path src-tauri/Cargo.toml
+pnpm test && pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings && mbx check --manifest-path src-tauri/Cargo.toml
 ```
+*(Fallback: replace `mbx check` with `cargo check` if mbx is absent)*
 - **Acceptance Criteria**: All 4 sensors exit `0` sequentially.
 
 ### 2.4 Non-Code / Prompt / Rule Modifications
@@ -88,7 +97,7 @@ When invoking `advance_task(summary)`, the Developer MUST include explicit senso
   1. pnpm test: EXIT 0 (139/139 tests passed)
   2. pnpm exec tsc --noEmit: EXIT 0 (0 type errors)
   3. pnpm exec oxlint --deny-warnings: EXIT 0 (0 warnings)
-  4. cargo check --manifest-path src-tauri/Cargo.toml: EXIT 0 (0 errors)
+  4. mbx check --manifest-path src-tauri/Cargo.toml (or cargo check): EXIT 0 (0 errors)
   5. git merge-tree --write-tree main HEAD: EXIT 0 (0 merge conflicts)
 ```
 Failure to include concrete sensor results will cause the Reviewer to reject the task under Gate 2.

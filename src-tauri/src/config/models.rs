@@ -164,6 +164,8 @@ pub struct PipelineStage {
     pub icon: Option<String>,
     #[serde(default, alias = "role")]
     pub persona: Option<String>,
+    #[serde(rename = "wipLimit", alias = "wip_limit", default)]
+    pub wip_limit: Option<u32>,
     #[serde(rename = "onEnterScript", default)]
     pub on_enter_script: Option<String>,
     #[serde(rename = "contextWindow", default, skip_serializing_if = "Option::is_none")]
@@ -331,6 +333,7 @@ pub fn get_canonical_board_stages() -> Vec<PipelineStage> {
             color: Some("#64748b".to_string()),
             icon: Some("Inbox".to_string()),
             persona: None,
+            wip_limit: None,
             on_enter_script: None,
             context_window: None,
             model_override: None,
@@ -356,6 +359,7 @@ pub fn get_canonical_board_stages() -> Vec<PipelineStage> {
             color: Some("#6366f1".to_string()),
             icon: Some("Bot".to_string()),
             persona: Some("cvh-dev".to_string()),
+            wip_limit: None,
             on_enter_script: None,
             context_window: None,
             model_override: None,
@@ -383,6 +387,7 @@ pub fn get_canonical_board_stages() -> Vec<PipelineStage> {
             color: Some("#10b981".to_string()),
             icon: Some("CheckCircle2".to_string()),
             persona: None,
+            wip_limit: None,
             on_enter_script: None,
             context_window: None,
             model_override: None,
@@ -416,6 +421,7 @@ pub fn get_board_template_stages(template: &str) -> Vec<PipelineStage> {
                 color: Some("#a855f7".to_string()),
                 icon: Some("Lightbulb".to_string()),
                 persona: Some("concept-artist".to_string()),
+                wip_limit: None,
                 on_enter_script: None,
                 context_window: None,
                 model_override: None,
@@ -439,6 +445,7 @@ pub fn get_board_template_stages(template: &str) -> Vec<PipelineStage> {
                 color: Some("#3b82f6".to_string()),
                 icon: Some("Box".to_string()),
                 persona: Some("modeler".to_string()),
+                wip_limit: None,
                 on_enter_script: None,
                 context_window: None,
                 model_override: None,
@@ -465,6 +472,7 @@ pub fn get_board_template_stages(template: &str) -> Vec<PipelineStage> {
                 color: Some("#f59e0b".to_string()),
                 icon: Some("Palette".to_string()),
                 persona: Some("texture-artist".to_string()),
+                wip_limit: None,
                 on_enter_script: None,
                 context_window: None,
                 model_override: None,
@@ -491,6 +499,7 @@ pub fn get_board_template_stages(template: &str) -> Vec<PipelineStage> {
                 color: Some("#10b981".to_string()),
                 icon: Some("CheckCircle2".to_string()),
                 persona: None,
+                wip_limit: None,
                 on_enter_script: None,
                 context_window: None,
                 model_override: None,
@@ -900,7 +909,7 @@ Boards are configured in `.cvh/boards.json` and mirrored in `.cvh/pipeline.json`
 When creating or restructuring pipelines, refer to `load_rule("pipeline-setup")`.
 `cvh-dev` must interactively ask the user via `question` to select among standard topologies:
 1. **Standard Peer Review**: `backlog` ➔ `dev` (Developer) ➔ `review` (Reviewer) ➔ `ready`.
-2. **Full Cognitive Triad (CarSmash Model)**: `backlog` ➔ `plan` (Planner) ➔ `dev` (Developer) ➔ `review` (Reviewer) ➔ `retro` (Retro) ➔ `ready`.
+2. **Full Cognitive Triad (Autonomous Pipeline)**: `backlog` ➔ `plan` (Planner) ➔ `dev` (Developer) ➔ `review` (Reviewer) ➔ `retro` (Retro) ➔ `ready`.
 3. **Lean Solo**: `backlog` ➔ `dev` (Developer) ➔ `ready`.
 4. **Custom**: Defined interactively with the user.
 "##;
@@ -1072,7 +1081,7 @@ Authoritative, industrial-grade engineering manual for `cvh-dev` when configurin
 
 ## 1. The Interactive Setup Protocol (Zero-Assumption Architecture)
 
-When an operator instructs `cvh-dev` to configure or optimize a repository (e.g. *"настрой cvh"*, *"настрой пайплайн"*, *"сделай как в CarSmash"*):
+When an operator instructs `cvh-dev` to configure or optimize a repository (e.g. *"настрой cvh"*, *"настрой пайплайн"*, *"настрой CanbanVoimaxHarness"*):
 1. **Never Unilaterally Impose Fixed Topologies**: Do NOT assume a project wants a 4-role pipeline or a mandatory `planner`. Every codebase has unique velocity and governance needs.
 2. **Execute Interactive Discovery via `question`**:
    Invoke the `question` tool to present clear options to the operator:
@@ -1081,7 +1090,7 @@ When an operator instructs `cvh-dev` to configure or optimize a repository (e.g.
      "text": "Какую топологию пайплайна и уровень контроля вы хотите развернуть для этого проекта?",
      "options": [
        "Standard Peer Review (dev ➔ review ➔ ready) [Рекомендуется для большинства проектов]",
-       "Full Cognitive Triad (plan ➔ dev ➔ review ➔ retro ➔ ready) [Модель CarSmash: максимальная автономность и самообучение]",
+       "Full Cognitive Triad (plan ➔ dev ➔ review ➔ retro ➔ ready) [Autonomous Pipeline: максимальная автономность и самообучение]",
        "Lean Solo Dev (dev ➔ ready) [Для быстрых прототипов, скриптов и соло-разработки]",
        "Custom (Задать собственные роли и этапы)"
      ]
@@ -1392,4 +1401,27 @@ pub const CANONICAL_TOOLS: &[&str] = &[
     "get_task_history",
     "load_rule",
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pipeline_stage_wip_limit_serde() {
+        let json_camel = r#"{"id":"dev","title":"Development","wipLimit":4}"#;
+        let stage: PipelineStage = serde_json::from_str(json_camel).expect("deserialize camelCase wipLimit");
+        assert_eq!(stage.wip_limit, Some(4));
+
+        let json_snake = r#"{"id":"dev","title":"Development","wip_limit":7}"#;
+        let stage_snake: PipelineStage = serde_json::from_str(json_snake).expect("deserialize snake_case wip_limit");
+        assert_eq!(stage_snake.wip_limit, Some(7));
+
+        let serialized = serde_json::to_string(&stage).expect("serialize");
+        assert!(serialized.contains("\"wipLimit\":4"));
+
+        let stage_none: PipelineStage = serde_json::from_str(r#"{"id":"dev","title":"Development"}"#).expect("deserialize none");
+        assert_eq!(stage_none.wip_limit, None);
+    }
+}
+
 

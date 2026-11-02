@@ -343,29 +343,20 @@ export const createActivitySlice: StateCreator<
 
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      try {
-        const res = await invoke<CompactionReport>(
-          'compact_context',
-          { taskId, toolId }
-        );
-        if (res?.saved_tokens) savedTokens = res.saved_tokens;
-        if (res?.evaporated_count) evaporatedCount = Math.max(evaporatedCount, res.evaporated_count);
-        if (res?.tokens_after) {
-          get().setTaskTokens(taskId, res.tokens_after);
-          get().updateTelemetry(taskId, {
-            inputTokens: res.tokens_after,
-            outputTokens: 0,
-            cacheReadTokens: 0,
-            cacheCreationTokens: 0,
-          });
-        }
-      } catch {
-        const res = await invoke<{ estimated_saved_tokens?: number; evaporated_tools_count?: number }>(
-          'compact_task_context',
-          { taskId }
-        );
-        if (res?.estimated_saved_tokens) savedTokens = res.estimated_saved_tokens;
-        if (res?.evaporated_tools_count) evaporatedCount = Math.max(evaporatedCount, res.evaporated_tools_count);
+      const res = await invoke<CompactionReport>(
+        'compact_context',
+        { taskId, toolId }
+      );
+      if (res?.saved_tokens) savedTokens = res.saved_tokens;
+      if (res?.evaporated_count) evaporatedCount = Math.max(evaporatedCount, res.evaporated_count);
+      if (res?.tokens_after) {
+        get().setTaskTokens(taskId, res.tokens_after);
+        get().updateTelemetry(taskId, {
+          inputTokens: res.tokens_after,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheCreationTokens: 0,
+        });
       }
     } catch {
       // Keep local values

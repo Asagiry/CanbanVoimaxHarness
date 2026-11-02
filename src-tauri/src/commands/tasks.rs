@@ -193,14 +193,6 @@ pub async fn get_active_sessions(
 }
 
 #[tauri::command]
-pub async fn compact_task_context(
-    task_id: String,
-    state: State<'_, AppState>,
-) -> Result<crate::agent::compactor::CompactionResult, String> {
-    runner::compact_task_context(task_id, state).await
-}
-
-#[tauri::command]
 pub async fn compact_context(
     task_id: String,
     tool_id: Option<String>,

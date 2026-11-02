@@ -4,7 +4,7 @@ pub use crate::config::ensure_project_gitignore;
 use crate::config::{
     init_project_harness as cfg_init_project_harness, load_project_config, load_project_registry,
     persist_active_project, register_or_update_project, scaffold_cvh_project, ProjectConfig,
-    ProjectEntry, ProjectRegistry,
+    ProjectEntry,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -60,14 +60,6 @@ pub async fn get_active_project(state: State<'_, AppState>) -> Result<ProjectEnt
         ),
     );
     Ok(entry)
-}
-
-#[tauri::command]
-pub async fn get_registry(registry_path: Option<String>) -> Result<ProjectRegistry, String> {
-    let p = registry_path.map(PathBuf::from);
-    load_project_registry(p)
-        .await
-        .map_err(|e| format!("Failed to load project registry: {}", e))
 }
 
 #[tauri::command]

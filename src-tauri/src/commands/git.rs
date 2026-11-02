@@ -1,7 +1,6 @@
 use crate::agent::Task;
 use crate::commands::state::AppState;
 use crate::commands::tasks::load_tasks_from_disk;
-use crate::git::{delete_branch, remove_worktree};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -41,23 +40,6 @@ pub fn apply_worktree_from_hook_stdout(task: &mut Task, stdout: &str) {
             }
         }
     }
-}
-
-#[tauri::command]
-pub async fn cleanup_task_worktree(
-    task_id: String,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
-    let root = state.get_root();
-    let task_slug = task_id.to_lowercase();
-    remove_worktree(&root, &task_slug)
-        .await
-        .map_err(|e| format!("Failed to remove worktree for {}: {}", task_id, e))?;
-    // Also drop the feature branch created for the task (best-effort: it may
-    // already be merged/deleted or never have existed — never fail cleanup).
-    let branch = format!("feat/{}", task_slug);
-    let _ = delete_branch(&root, &branch, true).await;
-    Ok(())
 }
 
 // ============================================================================
