@@ -148,6 +148,7 @@ pub struct SubagentSummary {
     pub parent_task_id: String,
     pub tool_call_id: Option<String>,
     pub title: String,
+    #[serde(alias = "persona")]
     pub role: String,
     pub prompt: String,
     pub status: String,
@@ -229,7 +230,7 @@ pub async fn list_subagents(
                         if t_name == "subagent" || t_name == "subagent_bg" {
                             let params = t.get("params");
                             let title = params.and_then(|p| p.get("title")).and_then(|v| v.as_str()).unwrap_or("").to_string();
-                            let role = params.and_then(|p| p.get("role")).and_then(|v| v.as_str()).unwrap_or("general").to_string();
+                            let role = params.and_then(|p| p.get("persona").or_else(|| p.get("role"))).and_then(|v| v.as_str()).unwrap_or("general").to_string();
                             let prompt = params.and_then(|p| p.get("prompt")).and_then(|v| v.as_str()).unwrap_or("").to_string();
                             let call_id = t.get("id").and_then(|v| v.as_str()).map(|s| s.to_string());
                             let duration = t.get("durationMs").and_then(|v| v.as_f64());

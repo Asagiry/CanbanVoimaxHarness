@@ -879,4 +879,84 @@ use std::sync::Arc;
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
 
+    #[test]
+    fn test_subagent_tool_schema_persona_and_role() {
+        use crate::agent::get_standard_tools;
+
+        let tools = get_standard_tools();
+        let subagent_tool = tools.iter().find(|t| t.function.name == "subagent").expect("subagent tool");
+        let subagent_bg_tool = tools.iter().find(|t| t.function.name == "subagent_bg").expect("subagent_bg tool");
+
+        for tool in [subagent_tool, subagent_bg_tool] {
+            let props = tool.function.parameters.get("properties").expect("properties");
+
+            // persona field
+            let persona = props.get("persona").expect("persona parameter");
+            assert_eq!(persona.get("type").and_then(|v| v.as_str()), Some("string"));
+            assert_eq!(
+                persona.get("description").and_then(|v| v.as_str()),
+                Some("Target persona/role for subagent")
+            );
+
+            // role field (backward-compatible alias)
+            let role = props.get("role").expect("role parameter");
+            assert_eq!(role.get("type").and_then(|v| v.as_str()), Some("string"));
+        }
+    }
+
+    #[test]
+    fn test_persona_and_role_deserialization_aliases() {
+        use crate::commands::boards::AgentPersonaInfo;
+        use crate::config::PipelineColumn;
+
+        // AgentPersonaInfo accepts "persona" alias
+        let json_with_persona = serde_json::json!({
+            "persona": "tester",
+            "hasPrompt": true,
+            "isBuiltin": false,
+            "personaFile": "persona.md",
+            "rules": [],
+            "hooks": []
+        });
+        let info: AgentPersonaInfo = serde_json::from_value(json_with_persona).expect("deserialize persona");
+        assert_eq!(info.role, "tester");
+
+        // PipelineColumn accepts "role" alias for "persona"
+        let col_json = serde_json::json!({
+            "id": "c1",
+            "title": "Col",
+            "role": "reviewer"
+        });
+        let col: PipelineColumn = serde_json::from_value(col_json).expect("deserialize col");
+        assert_eq!(col.persona.as_deref(), Some("reviewer"));
+    }
+
+    #[test]
+    fn test_subagent_args_persona_precedence_over_role() {
+        let args_both = serde_json::json!({
+            "title": "Task",
+            "prompt": "Work",
+            "persona": "explorer",
+            "role": "general"
+        });
+        let extracted_role = args_both
+            .get("persona")
+            .or_else(|| args_both.get("role"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("general");
+        assert_eq!(extracted_role, "explorer");
+
+        let args_only_role = serde_json::json!({
+            "title": "Task",
+            "prompt": "Work",
+            "role": "developer"
+        });
+        let extracted_fallback = args_only_role
+            .get("persona")
+            .or_else(|| args_only_role.get("role"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("general");
+        assert_eq!(extracted_fallback, "developer");
+    }
+
 

@@ -374,6 +374,7 @@ pub fn deterministic_icon_for_role(role: &str, used_icons: &HashSet<String>) -> 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentPersonaInfo {
+    #[serde(alias = "persona")]
     pub role: String,
     pub has_prompt: bool,
     #[serde(default)]

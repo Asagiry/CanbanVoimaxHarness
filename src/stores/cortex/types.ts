@@ -5,6 +5,7 @@ export type CortexHookExt = 'bat' | 'ps1' | 'py' | 'sh';
 
 export interface AgentPersonaInfo {
   role: string;
+  persona?: string;
   hasPrompt: boolean;
   isBuiltin?: boolean;
   personaFile?: string;
@@ -16,7 +17,8 @@ export interface AgentPersonaInfo {
 }
 
 export interface RawAgentPersona {
-  role: string;
+  role?: string;
+  persona?: string;
   hasPrompt?: boolean;
   has_prompt?: boolean;
   isBuiltin?: boolean;

@@ -160,7 +160,7 @@ pub struct PipelineColumn {
     pub color: Option<String>,
     #[serde(default)]
     pub icon: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "role")]
     pub persona: Option<String>,
     #[serde(rename = "onEnterScript", default)]
     pub on_enter_script: Option<String>,

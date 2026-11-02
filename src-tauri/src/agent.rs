@@ -1399,6 +1399,7 @@ pub fn run_inprocess_subagent(
                 "subagentId": &subagent_id,
                 "toolCallId": &tool_call_id,
                 "title": &title,
+                "persona": &role,
                 "role": &role,
                 "prompt": &prompt,
                 "tools": &effective_sub_tools,
@@ -1414,6 +1415,7 @@ pub fn run_inprocess_subagent(
         content: Some(prompt.to_string()),
         tool: Some(serde_json::json!({
             "title": &title,
+            "persona": &role,
             "role": &role,
             "is_bg": is_bg_subagent
         })),
@@ -3394,7 +3396,8 @@ Messages count: {}
             // prompt and role, return the result of the already started/completed agent instead of spawning duplicate work.
             if is_sub {
                 let role = parsed_args
-                    .get("role")
+                    .get("persona")
+                    .or_else(|| parsed_args.get("role"))
                     .and_then(|v| v.as_str())
                     .unwrap_or("general")
                     .trim();
@@ -3491,7 +3494,8 @@ Messages count: {}
 
             if is_sub && success {
                 let role = parsed_args
-                    .get("role")
+                    .get("persona")
+                    .or_else(|| parsed_args.get("role"))
                     .and_then(|v| v.as_str())
                     .unwrap_or("general")
                     .trim()
