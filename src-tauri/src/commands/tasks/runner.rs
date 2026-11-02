@@ -1680,10 +1680,12 @@ pub async fn steer_agent(
             images: images.clone(),
         };
         let _ = crate::db::append_dialog_items(&root, &task_id, std::slice::from_ref(&new_item));
-        let _ = app_handle.emit("task:dialog", serde_json::json!({
+        let payload = serde_json::json!({
             "taskId": task_id,
             "item": new_item,
-        }));
+        });
+        let _ = app_handle.emit("task:activity", &payload);
+        let _ = app_handle.emit("task:dialog", &payload);
     }
 
     let steer_payload = serde_json::json!({

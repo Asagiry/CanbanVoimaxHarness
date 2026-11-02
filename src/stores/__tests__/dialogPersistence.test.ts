@@ -113,5 +113,38 @@ describe('Dialog Persistence & Stream Unification (CVH-051)', () => {
     expect(feed[0].content).toBe('Task output result');
     expect(feed[1].type).toBe('summary');
     expect(feed[1].content).toBe('Handover complete');
+    expect(mockInvoke).toHaveBeenCalledWith('load_task_activity', { taskId });
+  });
+
+  it('loadTaskActivity, saveTaskActivity, and clearTaskActivity invoke canonical IPC commands (CVH-054)', async () => {
+    const store = useDrawerStore.getState();
+    const taskId = 'CVH-054-TEST';
+
+    mockInvoke.mockResolvedValueOnce([]);
+    await store.loadTaskActivity(taskId);
+    expect(mockInvoke).toHaveBeenCalledWith('load_task_activity', { taskId });
+
+    useDrawerStore.setState({
+      activityFeed: {
+        [taskId]: [
+          {
+            id: 'act-1',
+            type: 'output',
+            timestamp: '12:00:00',
+            content: 'Canonical activity save',
+          },
+        ],
+      },
+    });
+
+    await store.saveTaskActivity(taskId);
+    expect(mockInvoke).toHaveBeenCalledWith('save_task_activity', expect.objectContaining({
+      taskId,
+      items: expect.arrayContaining([expect.objectContaining({ id: 'act-1' })]),
+    }));
+
+    await store.clearTaskActivity(taskId);
+    expect(mockInvoke).toHaveBeenCalledWith('clear_task_activity', { taskId });
+    expect(useDrawerStore.getState().activityFeed[taskId]).toEqual([]);
   });
 });

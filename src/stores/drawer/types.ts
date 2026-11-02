@@ -92,8 +92,13 @@ export interface ActivityActions {
   injectOptimisticCompactTool: (taskId: string, customId?: string) => string;
   compactTaskContext: (taskId: string) => Promise<{ savedTokens: number; evaporatedCount: number }>;
   clearTaskLogs: (taskId: string) => Promise<void> | void;
+  clearTaskActivity: (taskId: string) => Promise<void> | void;
+  clearTaskDialog?: (taskId: string) => Promise<void> | void;
   evaporateClientToolLogs: (taskId: string) => { evaporatedCount: number; savedTokens: number };
+  loadTaskActivity: (taskId: string) => Promise<void>;
   loadTaskDialog: (taskId: string) => Promise<void>;
+  saveTaskActivity: (taskId: string) => Promise<void>;
+  saveTaskDialog?: (taskId: string) => Promise<void>;
   flushSaveDialog: (taskId: string) => Promise<void>;
   appendActivityItem: (taskId: string, item: DrawerActivityItem) => void;
   addQuestion: (

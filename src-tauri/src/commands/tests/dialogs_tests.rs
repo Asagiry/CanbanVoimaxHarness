@@ -146,4 +146,39 @@ use std::path::PathBuf;
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
 
+    #[tokio::test]
+    async fn test_task_activity_sqlite_roundtrip_and_clear() {
+        let base = PathBuf::from("target").join(format!("cvh_act_test_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        let items = vec![
+            ActivityItem {
+                id: "act-1".to_string(),
+                item_type: "thought".to_string(),
+                timestamp: "10:00:00".to_string(),
+                content: Some("Activity unified test".to_string()),
+                tool: None,
+                duration_ms: Some(100.0),
+                images: None,
+            },
+        ];
+
+        crate::db::append_activity_items(&base, "CVH-ACT", &items).expect("write activity");
+        let loaded = crate::db::load_activity_items(&base, "CVH-ACT").expect("load activity");
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].id, "act-1");
+
+        // Test append_task_activity
+        append_task_activity(&base, "CVH-ACT", "output", "Finished activity test", None).await.expect("append_task_activity");
+        let loaded_after = crate::db::load_activity_items(&base, "CVH-ACT").expect("load after append");
+        assert_eq!(loaded_after.len(), 2);
+
+        // Test clear_activity_items
+        crate::db::clear_activity_items(&base, "CVH-ACT").expect("clear activity");
+        let empty = crate::db::load_activity_items(&base, "CVH-ACT").expect("load after clear");
+        assert!(empty.is_empty());
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
 

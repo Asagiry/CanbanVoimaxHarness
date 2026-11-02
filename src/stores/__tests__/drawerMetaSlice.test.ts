@@ -55,7 +55,7 @@ describe('drawerMetaSlice (Task History & Back Navigation)', () => {
 
   it('3. goBackDrawer() pops CVH-010 and reloads dialog', () => {
     const store = useDrawerStore.getState();
-    const loadTaskDialogSpy = vi.spyOn(store, 'loadTaskDialog');
+    const loadTaskActivitySpy = vi.spyOn(store, 'loadTaskActivity');
     const loadSubagentsSpy = vi.spyOn(store, 'loadSubagents');
 
     store.openDrawer('CVH-010');
@@ -64,7 +64,7 @@ describe('drawerMetaSlice (Task History & Back Navigation)', () => {
     expect(useDrawerStore.getState().activeTaskId).toBe('CVH-010.1');
     expect(useDrawerStore.getState().taskHistory).toEqual(['CVH-010']);
 
-    loadTaskDialogSpy.mockClear();
+    loadTaskActivitySpy.mockClear();
     loadSubagentsSpy.mockClear();
 
     store.goBackDrawer();
@@ -73,7 +73,7 @@ describe('drawerMetaSlice (Task History & Back Navigation)', () => {
     expect(state.activeTaskId).toBe('CVH-010');
     expect(state.taskHistory).toEqual([]);
     expect(state.isOpen).toBe(true);
-    expect(loadTaskDialogSpy).toHaveBeenCalledWith('CVH-010');
+    expect(loadTaskActivitySpy).toHaveBeenCalledWith('CVH-010');
     expect(loadSubagentsSpy).toHaveBeenCalledWith('CVH-010');
   });
 
@@ -94,7 +94,7 @@ describe('drawerMetaSlice (Task History & Back Navigation)', () => {
 
   it('5. Fallback when subtask is opened directly without history: goBackDrawer() navigates to CVH-010', () => {
     const store = useDrawerStore.getState();
-    const loadTaskDialogSpy = vi.spyOn(store, 'loadTaskDialog');
+    const loadTaskActivitySpy = vi.spyOn(store, 'loadTaskActivity');
     const loadSubagentsSpy = vi.spyOn(store, 'loadSubagents');
 
     // Simulate direct opening of subtask when drawer was closed (history empty)
@@ -103,7 +103,7 @@ describe('drawerMetaSlice (Task History & Back Navigation)', () => {
     expect(useDrawerStore.getState().activeTaskId).toBe('CVH-010.1');
     expect(useDrawerStore.getState().taskHistory).toEqual([]);
 
-    loadTaskDialogSpy.mockClear();
+    loadTaskActivitySpy.mockClear();
     loadSubagentsSpy.mockClear();
 
     store.goBackDrawer();
@@ -112,7 +112,7 @@ describe('drawerMetaSlice (Task History & Back Navigation)', () => {
     expect(state.activeTaskId).toBe('CVH-010');
     expect(state.taskHistory).toEqual([]);
     expect(state.isOpen).toBe(true);
-    expect(loadTaskDialogSpy).toHaveBeenCalledWith('CVH-010');
+    expect(loadTaskActivitySpy).toHaveBeenCalledWith('CVH-010');
     expect(loadSubagentsSpy).toHaveBeenCalledWith('CVH-010');
 
     // Navigating back once more from the root task closes the drawer

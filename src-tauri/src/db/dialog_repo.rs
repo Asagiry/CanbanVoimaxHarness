@@ -537,3 +537,8 @@ pub fn db_get_dialog_tool_json(root: &Path, task_id: &str, tool_id: &str) -> Opt
 // Aliases for convenience
 pub use append_dialog_items as db_append_dialog_item;
 pub use load_dialog_items as db_load_dialog_items;
+pub use append_dialog_items as append_activity_items;
+pub use load_dialog_items as load_activity_items;
+pub use clear_dialog_items as clear_activity_items;
+pub use append_dialog_items as db_append_activity_items;
+pub use load_dialog_items as db_load_activity_items;

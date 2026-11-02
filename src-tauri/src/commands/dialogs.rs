@@ -20,7 +20,7 @@ pub fn sanitize_task_id(task_id: &str) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn save_task_dialog(
+pub async fn save_task_activity(
     task_id: String,
     items: Vec<ActivityItem>,
     state: State<'_, AppState>,
@@ -28,11 +28,20 @@ pub async fn save_task_dialog(
     let safe_id = sanitize_task_id(&task_id)?;
     let root = state.get_root();
     crate::db::append_dialog_items(&root, &safe_id, &items)?;
-    eprintln!("CVH [save_task_dialog]: saved {} items to SQLite for task {}", items.len(), safe_id);
+    eprintln!("CVH [save_task_activity]: saved {} items to SQLite for task {}", items.len(), safe_id);
     Ok(())
 }
 
-pub async fn append_task_dialog_activity(
+#[tauri::command]
+pub async fn save_task_dialog(
+    task_id: String,
+    items: Vec<ActivityItem>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    save_task_activity(task_id, items, state).await
+}
+
+pub async fn append_task_activity(
     root: &Path,
     task_id: &str,
     item_type: &str,
@@ -53,13 +62,35 @@ pub async fn append_task_dialog_activity(
     crate::db::append_dialog_items(root, &safe_id, std::slice::from_ref(&new_item))?;
 
     if let Some(app) = app_handle {
-        let _ = app.emit("task:dialog", serde_json::json!({
+        let payload = serde_json::json!({
             "taskId": task_id,
             "item": new_item,
-        }));
+        });
+        let _ = app.emit("task:activity", &payload);
+        let _ = app.emit("task:dialog", &payload);
     }
 
     Ok(())
+}
+
+pub async fn append_task_dialog_activity(
+    root: &Path,
+    task_id: &str,
+    item_type: &str,
+    content: &str,
+    app_handle: Option<&AppHandle>,
+) -> Result<(), String> {
+    append_task_activity(root, task_id, item_type, content, app_handle).await
+}
+
+#[tauri::command]
+pub async fn load_task_activity(
+    task_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<ActivityItem>, String> {
+    let safe_id = sanitize_task_id(&task_id)?;
+    let root = state.get_root();
+    crate::db::load_dialog_items(&root, &safe_id)
 }
 
 #[tauri::command]
@@ -67,9 +98,7 @@ pub async fn load_task_dialog(
     task_id: String,
     state: State<'_, AppState>,
 ) -> Result<Vec<ActivityItem>, String> {
-    let safe_id = sanitize_task_id(&task_id)?;
-    let root = state.get_root();
-    crate::db::load_dialog_items(&root, &safe_id)
+    load_task_activity(task_id, state).await
 }
 
 #[tauri::command]
@@ -424,13 +453,21 @@ pub async fn log_ui_error(message: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn clear_task_dialog(
+pub async fn clear_task_activity(
     task_id: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let safe_id = sanitize_task_id(&task_id)?;
     let root = state.get_root();
     crate::db::clear_dialog_items(&root, &safe_id)
+}
+
+#[tauri::command]
+pub async fn clear_task_dialog(
+    task_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    clear_task_activity(task_id, state).await
 }
 
 #[tauri::command]

@@ -34,7 +34,7 @@ export const createDrawerMetaSlice: StateCreator<
       activeSubagentRole: null,
       activeSubagentPrompt: null,
     });
-    get().loadTaskDialog(taskId);
+    (get().loadTaskActivity || get().loadTaskDialog)(taskId);
     get().loadSubagents(taskId);
   },
 
@@ -56,7 +56,7 @@ export const createDrawerMetaSlice: StateCreator<
         activeSubagentRole: null,
         activeSubagentPrompt: null,
       });
-      get().loadTaskDialog(prevTaskId);
+      (get().loadTaskActivity || get().loadTaskDialog)(prevTaskId);
       get().loadSubagents(prevTaskId);
       return;
     }
@@ -72,7 +72,7 @@ export const createDrawerMetaSlice: StateCreator<
           activeSubagentRole: null,
           activeSubagentPrompt: null,
         });
-        get().loadTaskDialog(parentId);
+        (get().loadTaskActivity || get().loadTaskDialog)(parentId);
         get().loadSubagents(parentId);
         return;
       }

@@ -226,8 +226,8 @@ ID монотонные `max+1`, **никогда не переиспользу�
 
 ### 2.9 `harness.db` (SQLite), `spill/`, `worktrees/` — **работает**
 
-- Диалоги задач — SQLite база данных `.cvh/harness.db` с WAL-журналированием (таблица `dialog_items` с композитным индексом по `task_id, created_at`).
-  Операции `save_task_dialog` / `load_task_dialog` / `clear_task_dialog` выполняются атомарно в транзакциях (`src-tauri/src/db.rs`); легаси-файлы `.cvh/dialogs/` и `.cvh/tasks/<taskId>/dialog.json` ликвидированы — **работает**.
+- Диалоги и активность задач — SQLite база данных `.cvh/harness.db` с WAL-журналированием (таблица `dialog_items` с композитным индексом по `task_id, created_at`).
+  Операции `save_task_activity` / `load_task_activity` / `clear_task_activity` (с обратно совместимыми алиасами `save_task_dialog` / `load_task_dialog` / `clear_task_dialog`) выполняются атомарно в транзакциях (`src-tauri/src/db.rs`); легаси-файлы `.cvh/dialogs/` и `.cvh/tasks/<taskId>/dialog.json` ликвидированы — **работает**.
 - `spill/` — см. §5 (порог 100 строк / 8 КБ, `HEAD 20 + TAIL 20`) — **работает**.
 - `worktrees/` — git worktrees задач; в `.gitignore` (скаффолд дописывает `.cvh/llm.json`, `llm.json`, `.cvh/worktrees/`) — **работает**.
   Удаление — `cleanup_task_worktree` (worktree + ветка `feat/<slug>`, best-effort) — **работает**;
