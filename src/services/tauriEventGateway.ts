@@ -767,9 +767,18 @@ export function setupTauriEventGateway(): () => void {
       });
 
       // 13b. task:activity / task:dialog (real-time task activities emitted by backend transitions & tools)
+      const seenItemIds = new Set<string>();
       const handleTaskActivity = (payload: { taskId?: string; item?: any }) => {
         const { taskId, item } = payload || {};
         if (taskId && item) {
+          if (item.id && seenItemIds.has(item.id)) return;
+          if (item.id) {
+            seenItemIds.add(item.id);
+            if (seenItemIds.size > 200) {
+              const first = seenItemIds.values().next().value;
+              if (first) seenItemIds.delete(first);
+            }
+          }
           if (isTaskActiveInDrawer(taskId)) {
             bufferManager.flushTask(taskId);
             useDrawerStore.getState().appendActivityItem(taskId, item);
