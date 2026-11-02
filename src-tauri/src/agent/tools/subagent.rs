@@ -27,7 +27,8 @@ pub async fn execute_subagent(
         .and_then(|v| v.as_str())
         .context("Missing required parameter 'prompt'")?;
     let role = args
-        .get("role")
+        .get("persona")
+        .or_else(|| args.get("role"))
         .and_then(|v| v.as_str())
         .unwrap_or("general");
     let requested_tools: Option<Vec<String>> = args.get("tools").and_then(|v| v.as_array()).map(|arr| {
@@ -198,7 +199,8 @@ pub async fn execute_subagent_bg(
         .and_then(|v| v.as_str())
         .context("Missing required parameter 'prompt'")?;
     let role = args
-        .get("role")
+        .get("persona")
+        .or_else(|| args.get("role"))
         .and_then(|v| v.as_str())
         .unwrap_or("general");
     let requested_tools: Option<Vec<String>> = args.get("tools").and_then(|v| v.as_array()).map(|arr| {
@@ -526,6 +528,7 @@ pub async fn execute_subagent_list(
                 let mut item = serde_json::json!({
                     "subagent_id": &info.subagent_id,
                     "title": &info.title,
+                    "persona": &info.role,
                     "role": &info.role,
                     "status": norm_status,
                     "steps": info.steps,
@@ -592,7 +595,7 @@ pub async fn execute_subagent_list(
                                 if let Some(t) = tool_meta.get("title").and_then(|v| v.as_str()) {
                                     title = t.to_string();
                                 }
-                                if let Some(r) = tool_meta.get("role").and_then(|v| v.as_str()) {
+                                if let Some(r) = tool_meta.get("persona").or_else(|| tool_meta.get("role")).and_then(|v| v.as_str()) {
                                     role = r.to_string();
                                 }
                             }
@@ -626,6 +629,7 @@ pub async fn execute_subagent_list(
                         let mut item = serde_json::json!({
                             "subagent_id": &sub_id,
                             "title": &title,
+                            "persona": &role,
                             "role": &role,
                             "status": norm_status,
                             "steps": steps,

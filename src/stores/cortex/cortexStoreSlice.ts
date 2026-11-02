@@ -324,8 +324,9 @@ export const createCortexSlice: StateCreator<
     const seen = new Set<string>();
     const personas: AgentPersonaInfo[] = [];
     for (const item of raw) {
-      if (!item || typeof item.role !== 'string') continue;
-      const role = item.role.trim();
+      const candidate = item?.persona ?? item?.role;
+      if (typeof candidate !== 'string') continue;
+      const role = candidate.trim();
       if (!role || seen.has(role)) continue;
       seen.add(role);
       const roleColor = isAllowedAgentColor(item.color)
@@ -333,6 +334,7 @@ export const createCortexSlice: StateCreator<
         : getDeterministicAgentColor(role);
       personas.push({
         role,
+        persona: role,
         hasPrompt: item.hasPrompt ?? item.has_prompt ?? true,
         isBuiltin: item.isBuiltin ?? item.is_builtin ?? (role === 'cvh-dev'),
         personaFile: item.personaFile ?? item.persona_file ?? 'persona.md',

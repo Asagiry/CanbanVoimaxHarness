@@ -108,7 +108,8 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
                 "type": "object",
                 "properties": {
                     "title": { "type": "string", "description": "Short task description (e.g. 'Analyze project architecture', 'Find memory leak')." },
-                    "role": { "type": "string", "description": "Subagent role persona (e.g. 'general', 'developer', 'reviewer', 'explorer'). Default: 'general'." },
+                    "persona": { "type": "string", "description": "Target persona/role for subagent" },
+                    "role": { "type": "string", "description": "Target persona/role for subagent (backward-compatible alias for 'persona'). Default: 'general'." },
                     "prompt": { "type": "string", "description": "Detailed task instructions." },
                     "tools": {
                         "type": "array",
@@ -126,7 +127,8 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
                 "type": "object",
                 "properties": {
                     "title": { "type": "string", "description": "Short task description (e.g. 'Run long benchmark', 'Deep search repo')." },
-                    "role": { "type": "string", "description": "Subagent role persona (e.g. 'general', 'developer', 'reviewer', 'explorer'). Default: 'general'." },
+                    "persona": { "type": "string", "description": "Target persona/role for subagent" },
+                    "role": { "type": "string", "description": "Target persona/role for subagent (backward-compatible alias for 'persona'). Default: 'general'." },
                     "prompt": { "type": "string", "description": "Detailed task instructions." },
                     "tools": {
                         "type": "array",

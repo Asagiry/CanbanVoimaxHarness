@@ -333,6 +333,7 @@ export interface SubagentInfo {
   toolCallId?: string;
   title: string;
   role: SubagentRole;
+  persona?: SubagentRole;
   prompt: string;
   status: SubagentStatus;
   createdAt?: number;
