@@ -202,14 +202,6 @@ export const en = {
   'drawer.compactedCount': 'Compacted {count} {pluralMsg}',
   'drawer.freedTokens': 'Freed -{tokens} tokens',
   'drawer.optimizationTitle': 'Context Optimization',
-  'drawer.summaryPlanner': 'Planner Summary',
-  'drawer.summaryDeveloper': 'Developer Summary',
-  'drawer.summaryReviewer': 'Reviewer Summary',
-  'drawer.summaryRetro': 'Retro Summary',
-  'drawer.summaryFinal': 'Final Summary',
-  'drawer.summaryStage': 'Stage Summary: {stage}',
-  'drawer.summaryDefault': 'Stage Summary',
-  'drawer.reviewerVerdictChangesRequested': 'Reviewer Verdict: Changes Requested',
 
   // Git Diff Sidebar
   'gitDiff.title': 'Git Diff',
@@ -421,7 +413,6 @@ export const en = {
   'tools.subagent_list.found': 'Found: {count}',
   'tools.subagent_list.received': 'List received',
   'tools.subagent_list.notFound': 'No subagents found',
-  'tools.stderr': 'STDERR',
 
   // Tool Parameters
   'toolParam.max_lines.label': 'Read line limit per call',

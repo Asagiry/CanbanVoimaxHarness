@@ -204,14 +204,6 @@ export const ru = {
   'drawer.compactedCount': 'Сжато {count} {pluralMsg}',
   'drawer.freedTokens': 'Освобождено -{tokens} токенов',
   'drawer.optimizationTitle': 'Оптимизация контекста',
-  'drawer.summaryPlanner': 'Саммари планера',
-  'drawer.summaryDeveloper': 'Саммари девелопера',
-  'drawer.summaryReviewer': 'Саммари ревьюера',
-  'drawer.summaryRetro': 'Саммари ретро',
-  'drawer.summaryFinal': 'Финальное саммари',
-  'drawer.summaryStage': 'Саммари этапа: {stage}',
-  'drawer.summaryDefault': 'Саммари этапа',
-  'drawer.reviewerVerdictChangesRequested': 'Вердикт ревьюера: Требуются правки',
 
   // Git Diff Sidebar
   'gitDiff.title': 'Git Diff',
@@ -423,7 +415,6 @@ export const ru = {
   'tools.subagent_list.found': 'Найдено: {count}',
   'tools.subagent_list.received': 'Список получен',
   'tools.subagent_list.notFound': 'Субагенты не обнаружены',
-  'tools.stderr': 'STDERR',
 
   // Tool Parameters
   'toolParam.max_lines.label': 'Лимит чтения строк за раз',

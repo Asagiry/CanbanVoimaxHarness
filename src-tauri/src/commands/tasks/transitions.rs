@@ -15,7 +15,7 @@ use crate::git::create_worktree;
 use crate::hooks::{execute_hook, execute_sensor_command, HookContext};
 use super::healing::{stage_id_matches, task_id_matches};
 use super::lifecycle::{
-    clean_task_parent_title, internal_create_subtask, record_task_hook_result,
+    internal_create_subtask, record_task_hook_result,
 };
 use super::runner::internal_abort_agent;
 use super::storage::{
@@ -1866,11 +1866,6 @@ pub async fn internal_advance_task_to_stage(
         .find(|c| stage_id_matches(&c.id, &current_task.stage_id))
         .cloned();
 
-    let source_title = source_col
-        .as_ref()
-        .map(|c| c.title.clone())
-        .unwrap_or_else(|| current_task.stage_id.clone());
-
     let is_source_intake = {
         let source_idx = columns
             .iter()
@@ -1939,8 +1934,8 @@ pub async fn internal_advance_task_to_stage(
             }
 
             let sub_summary_content = format!(
-                "### Саммари этапа: {}\n\n{}",
-                source_title, summary
+                "### Саммари этапа {}: {}\n\n{}",
+                current_task.stage_id, current_task.title, summary
             );
             let _ = append_task_dialog_activity(root, &subtask_id, "summary", &sub_summary_content, app_handle).await;
 
@@ -2008,8 +2003,8 @@ pub async fn internal_advance_task_to_stage(
             }
 
             let parent_summary_content = format!(
-                "### Саммари этапа: {}\n\n{}",
-                source_title, summary
+                "### Саммари финализации задачи {}: {}\n\n{}",
+                parent_id, target_col.title, summary
             );
             let _ = append_task_dialog_activity(root, &parent_id, "summary", &parent_summary_content, app_handle).await;
 
@@ -2075,19 +2070,19 @@ pub async fn internal_advance_task_to_stage(
                 }
 
                 let sub_summary_content = format!(
-                    "### Саммари этапа: {}\n\n{}",
-                    source_title, summary
+                    "### Саммари этапа {}: {}\n\n{}",
+                    current_task.stage_id, current_task.title, summary
                 );
                 let _ = append_task_dialog_activity(root, &subtask_id, "summary", &sub_summary_content, app_handle).await;
 
                 let parent_summary_content = format!(
-                    "### Саммари этапа: {}\n\n{}",
-                    source_title, summary
+                    "### Саммари этапа (передано на {} {}):\n\n{}",
+                    existing_sub.id, target_col.title, summary
                 );
                 let _ = append_task_dialog_activity(root, &parent_id, "summary", &parent_summary_content, app_handle).await;
 
                 let handover_prompt = format!(
-                    "### Отчет об исправлениях\n\nЗамечания исправлены. Отчет исполнителя:\n{}",
+                    "### [ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]\n\nЗамечания исправлены. Отчет исполнителя:\n{}",
                     summary
                 );
                 let _ = append_task_dialog_activity(root, &existing_sub.id, "steer", &handover_prompt, app_handle).await;
@@ -2159,17 +2154,16 @@ pub async fn internal_advance_task_to_stage(
                 }
 
                 let sub_summary_content = format!(
-                    "### Саммари этапа: {}\n\n{}",
-                    source_title, summary
+                    "### Саммари этапа {}: {}\n\n{}",
+                    current_task.stage_id, current_task.title, summary
                 );
                 let _ = append_task_dialog_activity(root, &subtask_id, "summary", &sub_summary_content, app_handle).await;
 
-                let clean_title = clean_task_parent_title(&parent_task.title);
                 let next_subtask = internal_create_subtask(
                     root,
                     &parent_id,
                     Some(&target_col.id),
-                    Some(&format!("{} ({})", clean_title, target_col.title)),
+                    Some(&format!("{} ({})", parent_task.title, target_col.title)),
                     Some(summary),
                     app_handle,
                 )
@@ -2177,8 +2171,8 @@ pub async fn internal_advance_task_to_stage(
 
                 let next_subtask_id = next_subtask.id.clone();
                 let parent_summary_content = format!(
-                    "### Саммари этапа: {}\n\n{}",
-                    source_title, summary
+                    "### Саммари этапа (передано на {} {}):\n\n{}",
+                    next_subtask_id, target_col.title, summary
                 );
                 let _ = append_task_dialog_activity(root, &parent_id, "summary", &parent_summary_content, app_handle).await;
 
@@ -2289,13 +2283,13 @@ pub async fn internal_advance_task_to_stage(
             }
 
             let parent_summary_content = format!(
-                "### Саммари этапа: {}\n\n{}",
-                source_title, summary
+                "### Саммари этапа (передано на {} {}):\n\n{}",
+                existing_sub.id, target_col.title, summary
             );
             let _ = append_task_dialog_activity(root, task_id, "summary", &parent_summary_content, app_handle).await;
 
             let handover_prompt = format!(
-                "### Отчет об исправлениях\n\nЗамечания исправлены. Отчет исполнителя:\n{}",
+                "### [ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]\n\nЗамечания исправлены. Отчет исполнителя:\n{}",
                 summary
             );
             let _ = append_task_dialog_activity(root, &existing_sub.id, "steer", &handover_prompt, app_handle).await;
@@ -2334,12 +2328,11 @@ pub async fn internal_advance_task_to_stage(
             ));
         }
 
-        let clean_title = clean_task_parent_title(&current_task.title);
         let subtask = internal_create_subtask(
             root,
             task_id,
             Some(&target_col.id),
-            Some(&format!("{} ({})", clean_title, target_col.title)),
+            Some(&format!("{} ({})", current_task.title, target_col.title)),
             Some(summary),
             app_handle,
         )
@@ -2348,8 +2341,8 @@ pub async fn internal_advance_task_to_stage(
         let subtask_id = subtask.id.clone();
 
         let parent_summary_content = format!(
-            "### Саммари этапа: {}\n\n{}",
-            source_title, summary
+            "### Саммари этапа (передано на {} {}):\n\n{}",
+            subtask_id, target_col.title, summary
         );
         let _ = append_task_dialog_activity(
             root,
