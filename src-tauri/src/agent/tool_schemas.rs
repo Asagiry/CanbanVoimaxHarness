@@ -244,7 +244,8 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
                 "properties": {
                     "title": { "type": "string", "description": "Concise imperative task title." },
                     "description": { "type": "string", "description": "Detailed technical requirements, acceptance criteria, and file targets." },
-                    "column_id": { "type": "string", "description": "Target column ID (defaults to 'backlog')." },
+                    "stage_id": { "type": "string", "description": "Target stage/column ID (e.g. 'backlog', 'plan', 'dev'). Defaults to 'backlog'." },
+                    "column_id": { "type": "string", "description": "Legacy alias for stage_id." },
                     "board_id": { "type": "string", "description": "Target board ID (defaults to current task's board)." },
                     "tags": {
                         "type": "array",
@@ -282,7 +283,8 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
                             "properties": {
                                 "title": { "type": "string", "description": "Concise imperative task title." },
                                 "description": { "type": "string", "description": "Detailed technical requirements, acceptance criteria, and file targets." },
-                                "column_id": { "type": "string", "description": "Target column ID (defaults to 'backlog')." },
+                                "stage_id": { "type": "string", "description": "Target stage/column ID (e.g. 'backlog', 'plan', 'dev'). Defaults to 'backlog'." },
+                                "column_id": { "type": "string", "description": "Legacy alias for stage_id." },
                                 "board_id": { "type": "string", "description": "Target board ID (defaults to current task's board)." },
                                 "tags": {
                                     "type": "array",

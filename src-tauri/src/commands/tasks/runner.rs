@@ -267,6 +267,7 @@ pub async fn run_agent(
                     color: None,
                     icon: None,
                     persona: Some("developer".to_string()),
+                    wip_limit: None,
                     on_enter_script: None,
                     context_window: None,
                     model_override: None,
@@ -1296,33 +1297,6 @@ pub async fn get_active_sessions(
     state: State<'_, AppState>,
 ) -> Result<Vec<crate::agent::session_registry::AgentSessionSummary>, String> {
     Ok(state.session_registry.get_active_sessions())
-}
-
-pub async fn compact_task_context(
-    task_id: String,
-    state: State<'_, AppState>,
-) -> Result<crate::agent::compactor::CompactionResult, String> {
-    let root = state.get_root();
-    let tasks = load_tasks_from_disk(&root).await;
-    let task = tasks.iter().find(|t| t.id == task_id);
-
-    let snapshot = crate::agent::compactor::ExecutionStateSnapshot {
-        modified_files: vec!["src/agent.rs".to_string(), "src/commands.rs".to_string()],
-        sensor_status: "PASSED (Sensors verified)".to_string(),
-        next_step: format!("Continuing autonomous execution for {}", task_id),
-        verdict: task.and_then(|t| t.verdict.clone()).unwrap_or_else(|| "IN_PROGRESS".to_string()),
-    };
-
-    let mut sample_messages = vec![
-        crate::llm::ChatMessage::system("Base system prompt instructions"),
-        crate::llm::ChatMessage::user(format!("Task execution prompt for {}", task_id)),
-        crate::llm::ChatMessage::assistant(Some("Investigating files".to_string()), None),
-        crate::llm::ChatMessage::tool_response("call_01", "A".repeat(800)),
-        crate::llm::ChatMessage::assistant(Some("Applied modifications".to_string()), None),
-    ];
-
-    let result = crate::agent::compactor::compact_conversation(&mut sample_messages, Some(snapshot));
-    Ok(result)
 }
 
 pub async fn compact_context(

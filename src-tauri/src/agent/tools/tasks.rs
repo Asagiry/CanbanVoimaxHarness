@@ -52,7 +52,9 @@ pub async fn execute_create_task(
                 .unwrap_or_default()
                 .to_string();
             let column_id = item
-                .get("column_id")
+                .get("stage_id")
+                .or_else(|| item.get("stageId"))
+                .or_else(|| item.get("column_id"))
                 .or_else(|| item.get("columnId"))
                 .and_then(|v| v.as_str())
                 .map(str::trim)
@@ -120,7 +122,9 @@ pub async fn execute_create_task(
             .unwrap_or_default()
             .to_string();
         let column_id = args
-            .get("column_id")
+            .get("stage_id")
+            .or_else(|| args.get("stageId"))
+            .or_else(|| args.get("column_id"))
             .or_else(|| args.get("columnId"))
             .and_then(|v| v.as_str())
             .map(str::trim)

@@ -366,4 +366,52 @@ use std::sync::Arc;
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
 
+    #[tokio::test]
+    async fn test_create_task_stage_id_priority() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_stage_prio_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+
+        let t1 = make_test_task("CVH-001", "backlog", "development");
+        crate::commands::tasks::save_tasks_to_disk(&base, &[t1]).await.expect("save initial task");
+
+        let flag = Arc::new(AtomicBool::new(false));
+        let policy = ToolPolicyConfig::default();
+        let tool_ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("dev"),
+            role: Some("orchestrator"),
+            abort_handle: flag,
+            tool_policy: &policy,
+            task_id: Some("CVH-001"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        // When both stage_id and column_id are supplied, stage_id MUST take precedence
+        let res = execute_tool(&tool_ctx, "create_task", &serde_json::json!({
+            "title": "Stage Priority Task",
+            "stage_id": "dev",
+            "column_id": "backlog"
+        }))
+        .await
+        .expect("create_task execution");
+
+        let parsed: serde_json::Value = serde_json::from_str(&res).expect("parse json");
+        assert_eq!(parsed["status"], "created");
+        assert_eq!(parsed["column_id"], "dev");
+
+        let tasks = crate::commands::tasks::load_tasks_from_disk(&base).await;
+        let t2 = tasks.iter().find(|t| t.id == "CVH-002").expect("CVH-002 on disk");
+        assert_eq!(t2.stage_id, "dev");
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
 

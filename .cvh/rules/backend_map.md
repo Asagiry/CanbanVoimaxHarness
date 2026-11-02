@@ -27,7 +27,7 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 | **Agent Runner Trigger & Steer** | `src-tauri/src/commands/tasks/runner.rs` | `run_agent`, `steer_agent`, active task registry. |
 | **Task Serialization & Storage** | `src-tauri/src/commands/tasks/storage.rs` | `load_tasks`, `sync_tasks_to_disk`. |
 | **Board & Column Self-Healing** | `src-tauri/src/commands/tasks/healing.rs` | Orphan board/column resolution on load. |
-| **Cortex File Tree & Rules/Personas IPC** | `src-tauri/src/commands/cortex.rs` | Persona/rules file operations, YAML frontmatter. |
+| **Cortex Rules & Personas File IPC** | `src-tauri/src/commands/cortex.rs` | Persona/rules file operations, YAML frontmatter. |
 | **Boards & Pipeline IPC** | `src-tauri/src/commands/boards.rs` | Multi-board CRUD, column settings, pipeline sync. |
 | **Dialogs History & Stream IPC** | `src-tauri/src/commands/dialogs.rs` | Dialogue history retrieval, steer persistence. |
 | **Git Worktree & Branch IPC** | `src-tauri/src/commands/git.rs` | Worktree lifecycle, branch diffs, commit queries. |
@@ -78,7 +78,7 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 - **`tasks/runner.rs`**: Agent execution initiation (`run_agent`, `run_agent_loop`). Resolves active model hierarchy, prepares primed system messages, and tracks active agent runs.
 - **`tasks/storage.rs`**: Task serialization and synchronization with disk ledgers and frontend subscribers via `tasks:updated`.
 - **`tasks/healing.rs`**: Autonomous self-healing (`heal_task_board_and_column`, `heal_tasks`). Rescues orphan tasks assigned to non-existent boards or columns without failing.
-- **`cortex.rs`**: Cortex tree hierarchy and file CRUD for personas, modular rules, and hooks.
+- **`cortex.rs`**: File CRUD for personas, modular rules, and hooks.
 - **`boards.rs`**: Multi-board CRUD (`.cvh/boards.json`), active board switching, and pipeline column management.
 - **`dialogs.rs`**: Dialogue item retrieval, paginated history loading, and steer event storage.
 - **`git.rs`**: Git worktree manager, branch listings, unified diff calculations, and working tree checks.
@@ -108,3 +108,16 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 5. **Windows Process Hygiene**: Shell commands and hook scripts must execute with process tree isolation and explicit timeouts; on Windows, use `taskkill /F /T /PID` on teardown.
 6. **Architectural Map Synchronization Mandate**: Whenever adding, removing, renaming, or relocating files in `src-tauri/src/` or `src/`, this navigation map MUST be updated in the exact same commit. The Level 2 Reviewer rejects diffs with `CHANGES_REQUESTED` if files were altered without map synchronization.
 7. **Direct Coordinate Navigation**: Jump directly to mapped files with `read_file` when coordinates or paths are known. Targeted `grep` for specific symbols (function names, types, commands) remains a natural, valid tool.
+
+---
+
+## 4. Accelerated Sensor Commands (`mbx`)
+
+For rapid Rust compile checks and test execution in CanbanVoimaxHarness, use the accelerated build tool `mbx`:
+- **Accelerated Check**: `mbx check --manifest-path src-tauri/Cargo.toml`
+- **Accelerated Test**: `mbx test --manifest-path src-tauri/Cargo.toml`
+
+### Invariants:
+- Configured via `.mbx.toml` in repository root and uses `.toolchain/mbx-cache`.
+- **Fallback Guarantee**: If `mbx` is absent or not installed in PATH, fall back seamlessly to standard `cargo check --manifest-path src-tauri/Cargo.toml` and `cargo test --manifest-path src-tauri/Cargo.toml`.
+

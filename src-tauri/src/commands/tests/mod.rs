@@ -10,6 +10,7 @@ pub(crate) fn test_col(id: &str) -> PipelineColumn {
         color: None,
         icon: None,
         persona: None,
+        wip_limit: None,
         on_enter_script: None,
         context_window: None,
         model_override: None,
