@@ -1,9 +1,13 @@
 /**
  * Core Domain Layer Value Objects, Branded Types, and Type Factories.
- * Implements Uncle Bob's Clean Architecture & DDD principles:
+ *
+ * Implements Eric Evans' Domain-Driven Design (DDD) & Matt Pocock's domain modeling principles:
+ * - Authoritative domain terms & ubiquitous language defined in: /GLOSSARY.md
  * - Make illegal states unrepresentable
  * - Validate once at boundary, trust inside
  * - Zero runtime overhead for nominal branded types
+ *
+ * @see {@link ../../GLOSSARY.md} for the canonical Ubiquitous Language dictionary.
  */
 
 /**

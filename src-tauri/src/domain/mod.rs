@@ -1,7 +1,10 @@
 //! Domain Module (§ Phase 3.1 DDD Foundation)
 //!
 //! Provides core Domain Value Objects for tasks, pipeline stages, and boards.
-//! Designed under Uncle Bob's Clean Architecture & ub-mode principles:
+//! Authoritative domain terms and ubiquitous language are codified in `GLOSSARY.md` (repository root).
+//!
+//! Designed under Eric Evans' Domain-Driven Design (DDD) & Uncle Bob's Clean Architecture:
+//! - Canonical domain definitions: see `GLOSSARY.md`
 //! - Strongly typed Domain Value Objects (TaskId, StageId, BoardId)
 //! - Parse-don't-validate boundary discipline
 //! - Non-breaking additive foundation
