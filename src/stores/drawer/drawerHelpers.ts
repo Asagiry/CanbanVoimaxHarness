@@ -1,27 +1,31 @@
 // In-flight debounced save timers per task
-export const dialogSaveTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+export const activitySaveTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+export const dialogSaveTimers = activitySaveTimers; // backward-compatible alias
 
 let flushCallback: ((taskId: string) => void) | null = null;
 
-export function registerDialogFlushCallback(cb: (taskId: string) => void) {
+export function registerActivityFlushCallback(cb: (taskId: string) => void) {
   flushCallback = cb;
 }
+export const registerDialogFlushCallback = registerActivityFlushCallback; // backward-compatible alias
 
-export function cancelDialogSave(taskId: string) {
-  if (dialogSaveTimers[taskId]) {
-    clearTimeout(dialogSaveTimers[taskId]);
-    delete dialogSaveTimers[taskId];
+export function cancelActivitySave(taskId: string) {
+  if (activitySaveTimers[taskId]) {
+    clearTimeout(activitySaveTimers[taskId]);
+    delete activitySaveTimers[taskId];
   }
 }
+export const cancelDialogSave = cancelActivitySave; // backward-compatible alias
 
-export function scheduleDialogSave(taskId: string, delayMs = 1000) {
-  if (dialogSaveTimers[taskId]) {
-    clearTimeout(dialogSaveTimers[taskId]);
+export function scheduleActivitySave(taskId: string, delayMs = 1000) {
+  if (activitySaveTimers[taskId]) {
+    clearTimeout(activitySaveTimers[taskId]);
   }
-  dialogSaveTimers[taskId] = setTimeout(() => {
-    delete dialogSaveTimers[taskId];
+  activitySaveTimers[taskId] = setTimeout(() => {
+    delete activitySaveTimers[taskId];
     if (flushCallback) {
       flushCallback(taskId);
     }
   }, delayMs);
 }
+export const scheduleDialogSave = scheduleActivitySave; // backward-compatible alias

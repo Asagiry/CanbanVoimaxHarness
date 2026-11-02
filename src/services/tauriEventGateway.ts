@@ -205,6 +205,7 @@ export interface AgentEventMap {
   'task:created': TaskCreatedPayload;
   'task:moved': TaskMovedPayload;
   'task:advanced': TaskAdvancedPayload;
+  'task:activity': { taskId?: string; item?: any };
   'task:dialog': { taskId?: string; item?: any };
   'task:updated': TaskUpdatedPayload;
   'tasks:updated': TasksUpdatedPayload;
@@ -658,7 +659,7 @@ export function setupTauriEventGateway(): () => void {
               st.markFinalResponse(taskId, response);
             }
             // Immediately flush task activity feed to disk upon turn finish
-            void st.flushSaveDialog(taskId);
+            void st.saveTaskActivity(taskId);
           } else {
             bufferManager.clearTask(taskId);
             useDrawerStore.getState().setActiveAgentTask(taskId, false);
@@ -679,7 +680,7 @@ export function setupTauriEventGateway(): () => void {
           if (isTaskActiveInDrawer(taskId)) {
             bufferManager.flushTask(taskId);
             useDrawerStore.getState().setActiveAgentTask(taskId, false);
-            useDrawerStore.getState().flushSaveDialog(taskId);
+            useDrawerStore.getState().saveTaskActivity(taskId);
             useDrawerStore.getState().setThinkingStartTime(taskId, null);
           } else {
             bufferManager.clearTask(taskId);
@@ -704,7 +705,7 @@ export function setupTauriEventGateway(): () => void {
             bufferManager.flushTask(taskId);
             useDrawerStore.getState().setActiveAgentTask(taskId, false);
             if (status === 'aborted' || status === 'error') {
-              useDrawerStore.getState().flushSaveDialog(taskId);
+              useDrawerStore.getState().saveTaskActivity(taskId);
             }
             useDrawerStore.getState().setThinkingStartTime(taskId, null);
           } else {
@@ -765,8 +766,8 @@ export function setupTauriEventGateway(): () => void {
         }
       });
 
-      // 13b. task:dialog (real-time dialog activities emitted by backend transitions & tools)
-      await addListener('task:dialog', (payload) => {
+      // 13b. task:activity / task:dialog (real-time task activities emitted by backend transitions & tools)
+      const handleTaskActivity = (payload: { taskId?: string; item?: any }) => {
         const { taskId, item } = payload || {};
         if (taskId && item) {
           if (isTaskActiveInDrawer(taskId)) {
@@ -774,7 +775,9 @@ export function setupTauriEventGateway(): () => void {
             useDrawerStore.getState().appendActivityItem(taskId, item);
           }
         }
-      });
+      };
+      await addListener('task:activity', handleTaskActivity);
+      await addListener('task:dialog', handleTaskActivity);
 
       // 14. hook:start
       await addListener('hook:start', (payload) => {

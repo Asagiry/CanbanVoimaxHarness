@@ -9,7 +9,7 @@ import {
   createStreamSlice,
   createActivitySlice,
   createSubagentsSlice,
-  registerDialogFlushCallback,
+  registerActivityFlushCallback,
   initSubagentListeners,
 } from './drawer';
 
@@ -18,8 +18,8 @@ export type { DrawerActivityItem, DrawerTab, TaskTelemetry, DrawerState };
 
 export const useDrawerStore = create<DrawerState>()((...a) => {
   const [, get] = a;
-  registerDialogFlushCallback((taskId) => {
-    void get().flushSaveDialog(taskId);
+  registerActivityFlushCallback((taskId) => {
+    void get().saveTaskActivity(taskId);
   });
 
   return {

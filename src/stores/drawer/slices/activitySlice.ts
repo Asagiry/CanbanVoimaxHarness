@@ -5,7 +5,7 @@ import {
   DrawerActivityItem,
 } from '../types';
 import { ToolExecution, CompactionReport, LiveStreamEntry } from '../../../types';
-import { scheduleDialogSave, cancelDialogSave } from '../drawerHelpers';
+import { scheduleActivitySave, cancelActivitySave } from '../drawerHelpers';
 import { useBoardStore } from '../../boardStore';
 
 export const createActivitySlice: StateCreator<
@@ -210,7 +210,7 @@ export const createActivitySlice: StateCreator<
         },
       };
     });
-    scheduleDialogSave(taskId);
+    scheduleActivitySave(taskId);
   },
 
   updateToolExecution: (taskId, toolId, partial) => {
@@ -261,7 +261,7 @@ export const createActivitySlice: StateCreator<
         },
       };
     });
-    scheduleDialogSave(taskId);
+    scheduleActivitySave(taskId);
   },
 
   injectOptimisticCompactTool: (taskId, customId) => {
@@ -386,18 +386,18 @@ export const createActivitySlice: StateCreator<
       },
     });
 
-    // 3. Refresh dialog feed from SQLite to load the persisted 'compacted' accordion card
+    // 3. Refresh activity feed from SQLite to load the persisted 'compacted' accordion card
     try {
-      await get().loadTaskDialog(taskId);
+      await get().loadTaskActivity(taskId);
     } catch (e) {
-      console.warn('Failed to reload dialog after compaction:', e);
+      console.warn('Failed to reload activity after compaction:', e);
     }
 
     return { savedTokens, evaporatedCount };
   },
 
-  clearTaskLogs: async (taskId) => {
-    cancelDialogSave(taskId);
+  clearTaskActivity: async (taskId) => {
+    cancelActivitySave(taskId);
     set((state) => ({
       activityFeed: {
         ...state.activityFeed,
@@ -454,10 +454,18 @@ export const createActivitySlice: StateCreator<
     }));
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('clear_task_dialog', { taskId });
+      await invoke('clear_task_activity', { taskId });
     } catch (e) {
-      console.info('clear_task_dialog invoke error or web mode:', e);
+      console.info('clear_task_activity invoke error or web mode:', e);
     }
+  },
+
+  clearTaskLogs: async (taskId) => {
+    return get().clearTaskActivity(taskId);
+  },
+
+  clearTaskDialog: async (taskId) => {
+    return get().clearTaskActivity(taskId);
   },
 
   evaporateClientToolLogs: (taskId) => {
@@ -514,11 +522,11 @@ export const createActivitySlice: StateCreator<
     return { evaporatedCount, savedTokens };
   },
 
-  loadTaskDialog: async (taskId) => {
+  loadTaskActivity: async (taskId) => {
     if (!taskId) return;
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const items = await invoke<DrawerActivityItem[]>('load_task_dialog', { taskId });
+      const items = await invoke<DrawerActivityItem[]>('load_task_activity', { taskId });
       if (items && Array.isArray(items)) {
         let compactedTokens: number | undefined;
         for (let i = items.length - 1; i >= 0; i--) {
@@ -712,12 +720,16 @@ export const createActivitySlice: StateCreator<
         }
       }
     } catch (e) {
-      console.info('load_task_dialog invoke error or web mode:', e);
+      console.info('load_task_activity invoke error or web mode:', e);
     }
   },
 
-  flushSaveDialog: async (taskId) => {
-    cancelDialogSave(taskId);
+  loadTaskDialog: async (taskId) => {
+    return get().loadTaskActivity(taskId);
+  },
+
+  saveTaskActivity: async (taskId) => {
+    cancelActivitySave(taskId);
     const state = get();
     const feed = state.activityFeed[taskId];
     if (!feed || feed.length === 0) return;
@@ -743,13 +755,21 @@ export const createActivitySlice: StateCreator<
 
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('save_task_dialog', { taskId: targetDbTaskId, items: feed });
+      await invoke('save_task_activity', { taskId: targetDbTaskId, items: feed });
       if (targetDbTaskId !== taskId) {
-        await invoke('save_task_dialog', { taskId, items: feed }).catch(() => {});
+        await invoke('save_task_activity', { taskId, items: feed }).catch(() => {});
       }
     } catch (err) {
-      console.info('save_task_dialog invoke error or web mode:', err);
+      console.info('save_task_activity invoke error or web mode:', err);
     }
+  },
+
+  saveTaskDialog: async (taskId) => {
+    return get().saveTaskActivity(taskId);
+  },
+
+  flushSaveDialog: async (taskId) => {
+    return get().saveTaskActivity(taskId);
   },
 
   addQuestion: (taskId, question) => {
@@ -929,7 +949,7 @@ export const createActivitySlice: StateCreator<
         },
       };
     });
-    scheduleDialogSave(taskId);
+    scheduleActivitySave(taskId);
   },
 
   appendActivityItem: (taskId, item) => {

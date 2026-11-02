@@ -2937,10 +2937,12 @@ where
                 };
                 let _ = crate::db::append_dialog_items(&config.repo_root, &config.task_id, std::slice::from_ref(&new_item));
                 if let Some(app) = config.app_handle.as_ref() {
-                    let _ = app.emit("task:dialog", serde_json::json!({
+                    let payload = serde_json::json!({
                         "taskId": config.task_id,
                         "item": new_item,
-                    }));
+                    });
+                    let _ = app.emit("task:activity", &payload);
+                    let _ = app.emit("task:dialog", &payload);
                 }
             }
         }

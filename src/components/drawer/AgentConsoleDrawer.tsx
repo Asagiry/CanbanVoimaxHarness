@@ -87,11 +87,11 @@ export default function AgentConsoleDrawer() {
 
   const subtasks = tasks.filter((t) => t.parentId === rootTask.id);
 
-  // Reset error when switching tasks & load dialog history from disk
+  // Reset error when switching tasks & load activity history from disk
   useEffect(() => {
     setRunError(null);
     if (activeTaskId) {
-      useDrawerStore.getState().loadTaskDialog(activeTaskId);
+      useDrawerStore.getState().loadTaskActivity(activeTaskId);
     }
   }, [activeTaskId]);
 
@@ -527,7 +527,7 @@ export default function AgentConsoleDrawer() {
       }
 
       // Persist to SQLite immediately under canonical key {parent_id}:sub:{subagent_id}
-      void useDrawerStore.getState().flushSaveDialog(activeSubagentId);
+      void useDrawerStore.getState().saveTaskActivity(activeSubagentId);
 
       try {
         const { invoke } = await import('@tauri-apps/api/core');
@@ -545,7 +545,7 @@ export default function AgentConsoleDrawer() {
     // Append user steer message into feed immediately with attached images
     const isSteer = isRunning;
     appendOutput(task.id, mainText, isSteer ? 'steer' : 'user', imageUrls.length > 0 ? imageUrls : undefined);
-    useDrawerStore.getState().flushSaveDialog(task.id);
+    useDrawerStore.getState().saveTaskActivity(task.id);
 
     // Do NOT pollute task description with user steer messages.
     // If task has no description yet, set initial prompt. Otherwise, keep original description untouched.
