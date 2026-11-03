@@ -96,6 +96,16 @@ The Retro agent operates as an **LLM-Wiki Administrator**:
 - Cue: When creating or refactoring React components or Rust backend modules.
 - Lesson: Enforce React components <= 350 lines, Rust files <= 500 lines; decompose into submodules on breach.
 - Evidence: CVH-UB04 - Decomposing monolithic db.rs, config.rs, and KanbanCard.
+
+### [CLE: Windows Desktop Toast Notification Delivery]
+- Cue: When implementing native desktop notifications or spawning toast processes on Windows.
+- Lesson: Register AUMID in HKCU\Software\Classes\AppUserModelId\<id>, implement multi-AUMID cascade with NotifyIcon fallback, enforce Start-Sleep -Milliseconds 1500 before process exit to protect Action Center RPC, and use CREATE_NO_WINDOW = 0x08000000.
+- Evidence: CVH-017 (commit 76597d7) - Windows desktop notifications failing silently due to missing registry AUMID and premature PowerShell process termination.
+
+### [CLE: i18n Key Parity Merge Conflict Resolution]
+- Cue: When integrating upstream main into a branch adding translation keys and encountering conflict in src/i18n/__tests__/i18n.test.ts:31-32.
+- Lesson: Calculate (keys in main) + (branch keys added), update both enKeys and ruKeys length assertions, and verify with pnpm test and git merge-tree --write-tree main HEAD.
+- Evidence: CVH-017 (commit a9286e1) and CVH-019 (commit 76597d7) - Gate 6 rejection from unmerged concurrent i18n additions.
 ```
 
 ---

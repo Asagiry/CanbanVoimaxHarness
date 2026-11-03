@@ -99,6 +99,12 @@ Implements DDD principles and Uncle Bob's Clean Architecture:
 - **Attachment Persistence**: Task image attachments are persisted in task definitions and inherited by child subtasks.
 - **Vision Model Context**: When attachments are present, the agent runtime packages image payloads into the initial user prompt using multimodal vision message constructs, preserving image references across both in-memory contexts and SQLite dialogue history.
 
+### 3.7 Windows Desktop Notifications & Toast RPC Lifetime (AUMID Invariant)
+- **AppUserModelID (AUMID) Registration**: WinRT Toast notifications require an AUMID registered in Windows Registry (`HKCU\Software\Classes\AppUserModelId\<id>`) with `DisplayName`, `IconUri`, and `ShowInSettings = 1`. Without this entry, WinRT `ToastNotificationManager::create_toast_notifier_with_id` returns `0x80070490 ERROR_NOT_FOUND`.
+- **Multi-Tier Cascade & NotifyIcon Fallback**: Toast dispatch must cascade across verified AUMIDs (`<primary_aumid>`, `Windows.SystemToast.BackgroundAccess`, `Microsoft.Windows.Explorer`, PowerShell exe path) and fall back to Tier 3 `System.Windows.Forms.NotifyIcon` BalloonTip if WinRT fails.
+- **Process Lifetime Delay (RPC Protection)**: Headless toast helper processes (such as PowerShell) MUST execute a delay (`Start-Sleep -Milliseconds 1500`) after calling `.Show($toast)`. Instant process termination drops the RPC channel with Windows Action Center before the notification can be rendered or queued.
+- **Headless Execution**: All external process invocations (`reg.exe`, `powershell.exe`) must specify `CREATE_NO_WINDOW = 0x08000000` to eliminate console window flicker.
+
 ---
 
 ## 4. Rust Systems Coding Standards

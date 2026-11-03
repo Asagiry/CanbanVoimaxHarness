@@ -2002,12 +2002,6 @@ pub async fn internal_advance_task_to_stage(
                 }));
             }
 
-            let parent_summary_content = format!(
-                "### Саммари финализации задачи {}: {}\n\n{}",
-                parent_id, target_col.title, summary
-            );
-            let _ = append_task_dialog_activity(root, &parent_id, "summary", &parent_summary_content, app_handle).await;
-
             return Ok(format!(
                 "УСПЕШНО: Задача {} завершена в терминальной колонке '{}' ({}), статус: {}",
                 parent_id,
@@ -2074,12 +2068,6 @@ pub async fn internal_advance_task_to_stage(
                     current_task.stage_id, current_task.title, summary
                 );
                 let _ = append_task_dialog_activity(root, &subtask_id, "summary", &sub_summary_content, app_handle).await;
-
-                let parent_summary_content = format!(
-                    "### Саммари этапа (передано на {} {}):\n\n{}",
-                    existing_sub.id, target_col.title, summary
-                );
-                let _ = append_task_dialog_activity(root, &parent_id, "summary", &parent_summary_content, app_handle).await;
 
                 let handover_prompt = format!(
                     "### [ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]\n\nЗамечания исправлены. Отчет исполнителя:\n{}",
@@ -2170,11 +2158,6 @@ pub async fn internal_advance_task_to_stage(
                 .await?;
 
                 let next_subtask_id = next_subtask.id.clone();
-                let parent_summary_content = format!(
-                    "### Саммари этапа (передано на {} {}):\n\n{}",
-                    next_subtask_id, target_col.title, summary
-                );
-                let _ = append_task_dialog_activity(root, &parent_id, "summary", &parent_summary_content, app_handle).await;
 
                 if let Some(app) = app_handle {
                     let _ = app.emit("task:advanced", serde_json::json!({
@@ -2216,8 +2199,8 @@ pub async fn internal_advance_task_to_stage(
                         ),
                     );
                     let parent_summary_content = format!(
-                        "### Саммари этапа (передано на {} {}):\n\n{}",
-                        existing_sub_id, target_col.title, summary
+                        "### Саммари этапа {}: {}\n\n{}",
+                        current_task.stage_id, current_task.title, summary
                     );
                     let _ = append_task_dialog_activity(root, task_id, "summary", &parent_summary_content, app_handle).await;
 
@@ -2289,8 +2272,8 @@ pub async fn internal_advance_task_to_stage(
             }
 
             let parent_summary_content = format!(
-                "### Саммари этапа (передано на {} {}):\n\n{}",
-                existing_sub.id, target_col.title, summary
+                "### Саммари этапа {}: {}\n\n{}",
+                current_task.stage_id, current_task.title, summary
             );
             let _ = append_task_dialog_activity(root, task_id, "summary", &parent_summary_content, app_handle).await;
 
@@ -2347,8 +2330,8 @@ pub async fn internal_advance_task_to_stage(
         let subtask_id = subtask.id.clone();
 
         let parent_summary_content = format!(
-            "### Саммари этапа (передано на {} {}):\n\n{}",
-            subtask_id, target_col.title, summary
+            "### Саммари этапа {}: {}\n\n{}",
+            current_task.stage_id, current_task.title, summary
         );
         let _ = append_task_dialog_activity(
             root,

@@ -64,10 +64,10 @@ cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 ### 2.3 Full-Stack Turbo Sensors (<15s)
 When both frontend and backend are touched, or for full-stack pre-handover validation:
 ```bash
-pnpm test && pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings && mbx check --manifest-path src-tauri/Cargo.toml
+git add -A && git commit -m "feat(<task-id>): <summary>" && git merge-tree --write-tree main HEAD && pnpm test && pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings && mbx check --manifest-path src-tauri/Cargo.toml
 ```
 *(Fallback: replace `mbx check` with `cargo check` if mbx is absent)*
-- **Acceptance Criteria**: All 4 sensors exit `0` sequentially.
+- **Acceptance Criteria**: All sensors exit `0` sequentially with zero merge conflicts.
 
 ### 2.4 Non-Code / Prompt / Rule Modifications
 - If only documentation, rule markdown files, or configuration files were changed without code edits, no heavy compilation commands are required. Verify file formatting and valid syntax.
@@ -86,6 +86,10 @@ git merge-tree --write-tree main HEAD
 - **Committed HEAD Pre-Flight Invariant (CLE)**:
   - **Cue**: When preparing to invoke `advance_task` or running mergeability pre-flight checks.
   - **Lesson**: Commit all modified files to the feature branch before handover; running `git merge-tree --write-tree main HEAD` on a dirty working tree tests stale base commits and triggers automatic gatekeeper rejection (`git status --porcelain` check). Never hand off uncommitted changes, as teardown hooks (`on_review_finish.bat`) will discard them upon merge.
+- **i18n Parity Assertion Merge Invariant (CLE)**:
+  - **Cue**: When integrating upstream `main` into a branch that adds new translation keys in `src/i18n/{en,ru}.ts` and encountering a conflict in `src/i18n/__tests__/i18n.test.ts:31-32`.
+  - **Lesson**: Never guess or leave stale branch key counts; calculate `(keys in main) + (keys introduced by feature branch)`. Update both `enKeys.length` and `ruKeys.length` assertions to the sum, verify via `pnpm test`, and confirm clean merge with `git merge-tree --write-tree main HEAD`.
+  - **Evidence**: CVH-017 (commit `a9286e1`) & CVH-019 (commit `76597d7`) - Gate 6 rejection due to unmerged upstream i18n key count additions.
 
 ---
 

@@ -26,36 +26,80 @@ pub fn encode_powershell_script(script: &str) -> String {
     base64::engine::general_purpose::STANDARD.encode(&utf16_bytes)
 }
 
-/// Builds PowerShell WinRT Toast script with dual AUMID strategy:
-/// primary: `com.voimax.cvh`, fallback: built-in PowerShell AUMID.
+/// Builds PowerShell WinRT Toast script with cascade AUMID strategy and NotifyIcon Tier 3 fallback:
+/// Tier 2.1: `com.voimax.cvh` (primary AUMID)
+/// Tier 2.2: `Windows.SystemToast.BackgroundAccess` (system background toast AUMID)
+/// Tier 2.3: `Microsoft.Windows.Explorer` (explorer toast AUMID)
+/// Tier 2.4: Built-in PowerShell AUMID
+/// Tier 3: System.Windows.Forms.NotifyIcon BalloonTip fallback
 pub fn build_windows_toast_script(title: &str, body: Option<&str>) -> String {
-    let escaped_title = escape_xml(title).replace("'@", "' @");
-    let escaped_body = escape_xml(body.unwrap_or_default()).replace("'@", "' @");
+    let xml_title = escape_xml(title).replace("'@", "' @");
+    let xml_body = escape_xml(body.unwrap_or_default()).replace("'@", "' @");
+    let raw_title = title.replace("'@", "' @");
+    let unescaped_body = body.unwrap_or_default().replace("'@", "' @");
+    let balloon_body = if unescaped_body.trim().is_empty() {
+        " "
+    } else {
+        &unescaped_body
+    };
 
     format!(
-r#"[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
-[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
+r#"$delivered = $false
+try {{
+    [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+    [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
 
-$xml = New-Object Windows.Data.Xml.Dom.XmlDocument
-$template = @'
+    $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
+    $template = @'
 <toast>
   <visual>
     <binding template="ToastGeneric">
-      <text>{}</text>
-      <text>{}</text>
+      <text>{0}</text>
+      <text>{1}</text>
     </binding>
   </visual>
 </toast>
 '@
-$xml.LoadXml($template)
-$toast = New-Object Windows.UI.Notifications.ToastNotification $xml
+    $xml.LoadXml($template)
+    $toast = New-Object Windows.UI.Notifications.ToastNotification $xml
 
-try {{
-    [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("com.voimax.cvh").Show($toast)
-}} catch {{
-    [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("{{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}}\WindowsPowerShell\v1.0\powershell.exe").Show($toast)
+    $aumids = @(
+        "com.voimax.cvh",
+        "Windows.SystemToast.BackgroundAccess",
+        "Microsoft.Windows.Explorer",
+        "{{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}}\WindowsPowerShell\v1.0\powershell.exe"
+    )
+
+    foreach ($appId in $aumids) {{
+        try {{
+            [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($appId).Show($toast)
+            $delivered = $true
+            break
+        }} catch {{}}
+    }}
+}} catch {{}}
+
+if ($delivered) {{
+    Start-Sleep -Milliseconds 1500
+}} else {{
+    try {{
+        Add-Type -AssemblyName System.Windows.Forms
+        Add-Type -AssemblyName System.Drawing
+        $balloon = New-Object System.Windows.Forms.NotifyIcon
+        $balloon.Icon = [System.Drawing.SystemIcons]::Information
+        $balloon.BalloonTipTitle = @'
+{2}
+'@
+        $balloon.BalloonTipText = @'
+{3}
+'@
+        $balloon.Visible = $true
+        $balloon.ShowBalloonTip(3000)
+        Start-Sleep -Seconds 2
+        $balloon.Dispose()
+    }} catch {{}}
 }}"#,
-        escaped_title, escaped_body
+        xml_title, xml_body, raw_title, balloon_body
     )
 }
 
@@ -95,10 +139,76 @@ pub fn show_windows_toast_fallback(_title: &str, _body: Option<&str>) -> Result<
     Ok(())
 }
 
+/// Registers AppUserModelID (`com.voimax.cvh`) in the Windows Current User Registry
+/// so that WinRT ToastNotificationManager can locate and authorize desktop toast notifications.
+#[cfg(target_os = "windows")]
+pub fn register_windows_aumid() {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+    let exe_path = match std::env::current_exe() {
+        Ok(p) => p.to_string_lossy().to_string(),
+        Err(_) => return,
+    };
+
+    let key = r"HKCU\Software\Classes\AppUserModelId\com.voimax.cvh";
+
+    let _ = std::process::Command::new("reg")
+        .args([
+            "add",
+            key,
+            "/v",
+            "DisplayName",
+            "/t",
+            "REG_SZ",
+            "/d",
+            "CanbanVoimaxHarness",
+            "/f",
+        ])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    let _ = std::process::Command::new("reg")
+        .args([
+            "add",
+            key,
+            "/v",
+            "IconUri",
+            "/t",
+            "REG_SZ",
+            "/d",
+            &exe_path,
+            "/f",
+        ])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    let _ = std::process::Command::new("reg")
+        .args([
+            "add",
+            key,
+            "/v",
+            "ShowInSettings",
+            "/t",
+            "REG_DWORD",
+            "/d",
+            "1",
+            "/f",
+        ])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn register_windows_aumid() {
+    // No-op on non-Windows platforms
+}
+
 /// Ensures a Start Menu shortcut exists for the application on Windows,
 /// allowing WinRT ToastNotificationManager to resolve the AppUserModelId (`com.voimax.cvh`).
 #[cfg(target_os = "windows")]
 pub fn ensure_windows_start_menu_shortcut() {
+    register_windows_aumid();
     let _ = std::thread::spawn(|| {
         let app_data = match std::env::var("APPDATA") {
             Ok(v) => v,
@@ -165,6 +275,9 @@ pub fn send_system_notification_internal(
     body: Option<&str>,
     task_id: Option<&str>,
 ) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    register_windows_aumid();
+
     let mut builder = app.notification().builder().title(title);
     if let Some(b) = body {
         builder = builder.body(b);
@@ -243,8 +356,19 @@ mod tests {
     fn test_build_windows_toast_script_contains_aumid() {
         let script = build_windows_toast_script("Task CVH-042", Some("Review & test"));
         assert!(script.contains("com.voimax.cvh"));
+        assert!(script.contains("Windows.SystemToast.BackgroundAccess"));
+        assert!(script.contains("Microsoft.Windows.Explorer"));
         assert!(script.contains("{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}"));
         assert!(script.contains("&amp;"));
         assert!(script.contains("<text>Task CVH-042</text>"));
+        assert!(script.contains("Start-Sleep -Milliseconds 1500"));
+        assert!(script.contains("System.Windows.Forms.NotifyIcon"));
+    }
+
+    #[test]
+    fn test_build_windows_toast_script_empty_body() {
+        let script = build_windows_toast_script("Alert Title", None);
+        assert!(script.contains("<text>Alert Title</text>"));
+        assert!(script.contains("System.Windows.Forms.NotifyIcon"));
     }
 }

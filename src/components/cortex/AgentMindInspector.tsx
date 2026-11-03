@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { CortexAgentFile, CortexAgentStage } from '../../types';
 import AgentIcon from '../common/AgentIcon';
+import { RuntimeRuleIcon, isRuntimeRule } from '../common/RuntimeRuleIcon';
 import { useTranslation } from '../../stores/languageStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import { getDeterministicAgentColor } from '../../lib/agentPalette';
@@ -206,15 +207,35 @@ export function AgentMindInspector({
 
               {isRulesOpen && ruleFiles.length > 0 && (
                 <div className="pl-4 space-y-0.5 border-l border-[#ebebeb] dark:border-[#21262d] ml-2">
-                  {ruleFiles.map((ruleFile) => (
-                    <TreeFileRow
-                      key={ruleFile.id}
-                      file={ruleFile}
-                      isActive={activeFile?.id === ruleFile.id}
-                      icon={<FileText className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />}
-                      onSelect={() => void openFile(ruleFile.id)}
-                    />
-                  ))}
+                  {ruleFiles.map((ruleFile) => {
+                    const isRuntime = isRuntimeRule(ruleFile.name);
+                    return (
+                      <TreeFileRow
+                        key={ruleFile.id}
+                        file={ruleFile}
+                        isActive={activeFile?.id === ruleFile.id}
+                        icon={
+                          isRuntime ? (
+                            <RuntimeRuleIcon className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400 shrink-0" />
+                          ) : (
+                            <FileText className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
+                          )
+                        }
+                        badge={
+                          isRuntime ? (
+                            <span
+                              title={t('cortex.runtimeRuleTooltip')}
+                              className="px-1 py-px rounded border border-indigo-200 dark:border-indigo-800/80 bg-indigo-50 dark:bg-indigo-950/50 text-[9px] font-mono font-medium text-indigo-600 dark:text-indigo-400 shrink-0 leading-tight"
+                            >
+                              {t('cortex.runtimeRuleBadge')}
+                            </span>
+                          ) : undefined
+                        }
+                        title={isRuntime ? t('cortex.runtimeRuleTooltip') : ruleFile.path}
+                        onSelect={() => void openFile(ruleFile.id)}
+                      />
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -247,11 +268,12 @@ interface TreeFileRowProps {
   file: CortexAgentFile;
   isActive: boolean;
   icon: React.ReactNode;
-  badge?: string | null;
+  badge?: React.ReactNode;
+  title?: string;
   onSelect: () => void;
 }
 
-function TreeFileRow({ file, isActive, icon, badge, onSelect }: TreeFileRowProps) {
+function TreeFileRow({ file, isActive, icon, badge, title, onSelect }: TreeFileRowProps) {
   const { t } = useTranslation();
   return (
     <button
@@ -262,15 +284,17 @@ function TreeFileRow({ file, isActive, icon, badge, onSelect }: TreeFileRowProps
           ? 'bg-white dark:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] font-semibold shadow-xs'
           : 'text-[#4d4d4d] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d]'
       }`}
-      title={file.path}
+      title={title ?? file.path}
     >
       <div className="flex items-center space-x-1.5 min-w-0">
         {icon}
         <span className="text-xs font-mono truncate">{file.name}</span>
-        {badge && (
+        {typeof badge === 'string' ? (
           <span className="px-1 py-px rounded border border-[#ebebeb] dark:border-[#30363d] bg-[#f4f4f5] dark:bg-[#161b22] text-[10px] font-mono text-[#666666] dark:text-[#8b949e] shrink-0">
             {badge}
           </span>
+        ) : (
+          badge
         )}
       </div>
 
