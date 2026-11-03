@@ -595,4 +595,23 @@ export const en = {
   'imageLightbox.wheelHint': 'Wheel: zoom +/-',
   'imageLightbox.dragActive': 'Drag active',
   'imageLightbox.closeHint': 'to close',
+
+  // Telemetry popovers & bottom bar
+  'telemetry.sessionStatistics': 'Session statistics',
+  'telemetry.llmTime': 'LLM time',
+  'telemetry.toolTime': 'Tool time',
+  'telemetry.avgTtft': 'Avg time to first token (TTFT)',
+  'telemetry.tps': 'Tokens per second (TPS)',
+  'telemetry.tokenUsage': 'Token usage',
+  'telemetry.cacheHit': 'Cache hit',
+  'telemetry.uncachedInput': 'Uncached input',
+  'telemetry.cachedInput': 'Cached input',
+  'telemetry.output': 'Output',
+  'telemetry.cacheLabel': 'Cache hit',
+  'telemetry.turnOne': 'turn',
+  'telemetry.turnFew': 'turns',
+  'telemetry.turnMany': 'turns',
+  'telemetry.stepOne': 'step',
+  'telemetry.stepFew': 'steps',
+  'telemetry.stepMany': 'steps',
 } as const;

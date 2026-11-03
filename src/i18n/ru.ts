@@ -597,4 +597,23 @@ export const ru = {
   'imageLightbox.wheelHint': 'Колесико: зум +/-',
   'imageLightbox.dragActive': 'Перетаскивание активно',
   'imageLightbox.closeHint': 'чтобы закрыть',
+
+  // Telemetry popovers & bottom bar
+  'telemetry.sessionStatistics': 'Статистика сессии',
+  'telemetry.llmTime': 'Время LLM',
+  'telemetry.toolTime': 'Время инструментов',
+  'telemetry.avgTtft': 'Ср. время первого токена (TTFT)',
+  'telemetry.tps': 'Токенов в секунду (TPS)',
+  'telemetry.tokenUsage': 'Расход токенов',
+  'telemetry.cacheHit': 'Попадание в кэш',
+  'telemetry.uncachedInput': 'Входные без кэша',
+  'telemetry.cachedInput': 'Входные из кэша',
+  'telemetry.output': 'Генерация',
+  'telemetry.cacheLabel': 'Кэш',
+  'telemetry.turnOne': 'ход',
+  'telemetry.turnFew': 'хода',
+  'telemetry.turnMany': 'ходов',
+  'telemetry.stepOne': 'шаг',
+  'telemetry.stepFew': 'шага',
+  'telemetry.stepMany': 'шагов',
 } as const satisfies TranslationDict;
