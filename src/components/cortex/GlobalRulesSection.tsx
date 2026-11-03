@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, Globe, Plus, Trash2 } from 'lucide-react';
 import type { CortexAgentFile } from '../../types';
 import { useTranslation } from '../../stores/languageStore';
 import { useCortexStore } from '../../stores/cortexStore';
+import { RuntimeRuleIcon, isRuntimeRule } from '../common/RuntimeRuleIcon';
 
 export interface GlobalRulesSectionProps {
   rules: CortexAgentFile[];
@@ -167,6 +168,7 @@ export function GlobalRulesSection({
 
           {rules.map((rule) => {
             const isActive = activeFile?.id === rule.id;
+            const isRuntime = isRuntimeRule(rule.name);
             return (
               <div
                 key={rule.id}
@@ -180,10 +182,22 @@ export function GlobalRulesSection({
                       ? 'text-[#171717] dark:text-[#f0f6fc] font-semibold'
                       : 'text-[#4d4d4d] dark:text-[#8b949e]'
                   }`}
-                  title={rule.path}
+                  title={isRuntime ? t('cortex.runtimeRuleTooltip') : rule.path}
                 >
-                  <Globe className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
+                  {isRuntime ? (
+                    <RuntimeRuleIcon className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400 shrink-0" />
+                  ) : (
+                    <Globe className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
+                  )}
                   <span className="text-xs font-mono truncate">{rule.name}</span>
+                  {isRuntime && (
+                    <span
+                      title={t('cortex.runtimeRuleTooltip')}
+                      className="px-1 py-px rounded border border-indigo-200 dark:border-indigo-800/80 bg-indigo-50 dark:bg-indigo-950/50 text-[9px] font-mono font-medium text-indigo-600 dark:text-indigo-400 shrink-0 leading-tight"
+                    >
+                      {t('cortex.runtimeRuleBadge')}
+                    </span>
+                  )}
                   {rule.isDirty && (
                     <span
                       className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0"

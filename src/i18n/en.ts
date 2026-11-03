@@ -468,6 +468,8 @@ export const en = {
   'cortex.columnsSection': 'Columns',
   'cortex.agentsSection': 'Agents',
   'cortex.globalRulesSection': 'Global Rules',
+  'cortex.runtimeRuleBadge': 'built-in',
+  'cortex.runtimeRuleTooltip': 'Primed in system prompt on Turn 1 — permanently embedded, does not require load_rule',
   'cortex.noGlobalRules': 'No global rules',
   'cortex.createFirstGlobalRule': 'Create your first shared project rule in .cvh/rules/',
   'cortex.globalRulesNothingFound': 'Nothing found in global rules',
