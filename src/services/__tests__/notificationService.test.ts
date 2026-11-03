@@ -13,6 +13,8 @@ import {
 
 const mockInvoke = vi.fn();
 const mockOnAction = vi.fn();
+const mockIsPermissionGranted = vi.fn();
+const mockRequestPermission = vi.fn();
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...args: unknown[]) => mockInvoke(...args),
@@ -20,12 +22,16 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 vi.mock('@tauri-apps/plugin-notification', () => ({
   onAction: (...args: unknown[]) => mockOnAction(...args),
+  isPermissionGranted: (...args: unknown[]) => mockIsPermissionGranted(...args),
+  requestPermission: (...args: unknown[]) => mockRequestPermission(...args),
 }));
 
 describe('notificationService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockInvoke.mockResolvedValue(undefined);
+    mockIsPermissionGranted.mockResolvedValue(true);
+    mockRequestPermission.mockResolvedValue('granted');
     useSettingsStore.setState({
       notificationSettings: {
         enabled: true,
@@ -37,8 +43,9 @@ describe('notificationService', () => {
   });
 
   describe('initNotifications & handleNotificationClick', () => {
-    it('initializes notification plugin action listener', async () => {
+    it('initializes notification plugin action listener and checks permission', async () => {
       await initNotifications();
+      expect(mockIsPermissionGranted).toHaveBeenCalled();
       expect(mockOnAction).toHaveBeenCalledTimes(1);
 
       // Calling again should be idempotent
@@ -260,14 +267,23 @@ describe('notificationService', () => {
   });
 
   describe('showTestNotification', () => {
-    it('sends test notification via IPC', async () => {
-      await showTestNotification();
+    it('sends test notification via IPC and returns true on success', async () => {
+      const result = await showTestNotification();
 
+      expect(result).toBe(true);
       expect(mockInvoke).toHaveBeenCalledWith('show_system_notification', {
         title: 'CanbanVoimaxHarness',
         body: 'Тестовое системное уведомление доставлено успешно.',
         taskId: null,
       });
+    });
+
+    it('returns false when IPC fails', async () => {
+      mockInvoke.mockRejectedValueOnce(new Error('IPC Error'));
+
+      const result = await showTestNotification();
+
+      expect(result).toBe(false);
     });
   });
 });

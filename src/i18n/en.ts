@@ -291,6 +291,7 @@ export const en = {
   'settings.notifyOnAdvanceTask': 'Stage transition (advance_task)',
   'settings.notifyOnTaskCompleted': 'Task completed',
   'settings.sendTestNotification': 'Send test notification',
+  'settings.testNotificationSent': 'Notification sent!',
   'notification.advanceTaskTitle': 'Task {taskId} moved to {stageTitle}',
   'notification.taskCompletedTitle': 'Task {taskId} completed',
   'notification.questionTitle': 'Question in task {taskId}',

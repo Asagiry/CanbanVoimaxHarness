@@ -293,6 +293,7 @@ export const ru = {
   'settings.notifyOnAdvanceTask': 'Переход этапа (advance_task)',
   'settings.notifyOnTaskCompleted': 'Завершение задачи',
   'settings.sendTestNotification': 'Отправить тестовое уведомление',
+  'settings.testNotificationSent': 'Уведомление отправлено!',
   'notification.advanceTaskTitle': 'Задача {taskId} перешла в колонку {stageTitle}',
   'notification.taskCompletedTitle': 'Задача {taskId} завершена',
   'notification.questionTitle': 'В задаче {taskId} вопрос от агента',

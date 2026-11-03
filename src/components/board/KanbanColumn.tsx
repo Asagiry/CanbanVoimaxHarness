@@ -214,7 +214,7 @@ function KanbanColumn({
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className={`flex-1 min-h-0 p-2 overflow-y-auto overscroll-y-contain transition-colors ${
+            className={`flex-1 min-h-0 p-2 overflow-y-auto overscroll-y-contain transition-colors kanban-column-scroll ${
               snapshot.isDraggingOver
                 ? 'bg-[#f4f4f5] dark:bg-[#161b22]/50 border border-dashed border-[#171717]/30 dark:border-[#30363d] rounded-b-lg'
                 : 'bg-transparent'
