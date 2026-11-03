@@ -9,7 +9,7 @@ export interface TodoItem {
   status: 'pending' | 'in_progress' | 'completed';
 }
 
-export type TaskStatus = 'idle' | 'running' | 'paused' | 'waiting_review' | 'waiting_subtask' | 'blocked' | 'done';
+export type TaskStatus = 'idle' | 'running' | 'paused' | 'waiting_review' | 'waiting_subtask' | 'waiting_subagent' | 'blocked' | 'done';
 
 export type TaskVerdict = 'NONE' | 'APPROVED' | 'APPROVED_WITH_CAVEATS' | 'CHANGES_REQUESTED';
 

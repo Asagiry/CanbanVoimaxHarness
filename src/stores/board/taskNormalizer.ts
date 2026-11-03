@@ -106,11 +106,14 @@ export function normalizeKanbanTask(
   const stageId = matchedCol?.id ?? (rawId && effectiveColumns.some((c) => c.id === rawId) ? rawId : (effectiveColumns[0]?.id ?? 'backlog'));
   const col = effectiveColumns.find((c) => c.id === stageId);
   const rawStatus = (raw.status as TaskStatus) || undefined;
-  const status: TaskStatus = rawStatus ?? (col?.terminal
+  let status: TaskStatus = rawStatus ?? (col?.terminal
     ? 'done'
     : col?.persona
     ? 'running'
     : 'idle');
+  if (status === 'waiting_subtask') {
+    status = (col?.terminal || stageId === 'ready' || stageId === 'done') ? 'done' : 'idle';
+  }
   const stageDurations: Record<string, number> =
     raw.stageDurations && typeof raw.stageDurations === 'object' && !Array.isArray(raw.stageDurations)
       ? raw.stageDurations
@@ -227,7 +230,7 @@ export function normalizeKanbanTask(
     persona: effectivePersona,
     branch,
     worktreePath,
-    status: isTerminalTask && status === 'waiting_subtask' ? ('done' as TaskStatus) : status,
+    status,
     activeStageDuration,
     stageDurations,
     totalElapsed,

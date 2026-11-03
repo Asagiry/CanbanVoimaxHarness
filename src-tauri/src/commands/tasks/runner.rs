@@ -246,19 +246,25 @@ pub async fn run_agent(
         None
     };
 
-    // Strict guard against duplicate runs while waiting for subtask (§ 1):
-    if task.status.as_deref() == Some("waiting_subtask") && steer_prompt.is_none() {
+    // Strict guard against duplicate runs while waiting for subtask or subagent:
+    let is_waiting_for_subtask = task
+        .waiting_for_subtask_id
+        .as_deref()
+        .map(|id| !id.trim().is_empty())
+        .unwrap_or(false)
+        || task.status.as_deref() == Some("waiting_subtask");
+    if (is_waiting_for_subtask || task.status.as_deref() == Some("waiting_subagent")) && steer_prompt.is_none() {
         crate::logger::cvh_log(
             Some(&root),
             "WARN",
             "RUN_AGENT",
             &format!(
-                "run_agent: Task '{}' is waiting for subtask to finish (waiting_for_subtask_id={:?}), rejecting autorun",
-                task_id, task.waiting_for_subtask_id
+                "run_agent: Task '{}' has active subtask or subagent (waiting_for_subtask_id={:?}, status={:?}), rejecting autorun",
+                task_id, task.waiting_for_subtask_id, task.status
             ),
         );
         cleanup_active_agent_reservation(&app_handle, &task_id);
-        return Ok(format!("Task {} is waiting for subtask to finish", task_id));
+        return Ok(format!("Task {} is waiting for subtask/subagent to finish", task_id));
     }
 
     let pipeline = load_pipeline_config(&root)
@@ -799,20 +805,26 @@ pub async fn run_agent(
                 if let Some(task_idx) = tasks.iter().position(|t| t.id == tid) {
                     let mut task_changed = false;
 
-                    if tasks[task_idx].status.as_deref() == Some("running") {
+                    if tasks[task_idx].status.as_deref() != Some("done") {
                         tasks[task_idx].status = Some("idle".to_string());
                         tasks[task_idx].updated_at = Utc::now().timestamp_millis();
                         task_changed = true;
                     }
 
                     if task_changed {
+                        let _ = crate::db::db_upsert_task(&root_task, &tasks[task_idx]);
                         let _ = save_tasks_to_disk(&root_task, &tasks).await;
                         if let Some(state_ref) = app.try_state::<AppState>() {
                             if let Ok(mut guard) = state_ref.tasks.lock() {
                                 *guard = tasks.clone();
                             }
                         }
+                        let _ = app.emit("task:updated", serde_json::json!({ "task": &tasks[task_idx] }));
                         let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+                        let _ = app.emit(
+                            "agent:status",
+                            serde_json::json!({ "taskId": tid, "status": "idle" }),
+                        );
                     }
                 }
             }
@@ -833,15 +845,17 @@ pub async fn run_agent(
                     );
                     let mut tasks = load_tasks_from_disk(&root_task).await;
                     if let Some(task_idx) = tasks.iter().position(|t| t.id == tid) {
-                        if tasks[task_idx].status.as_deref() == Some("running") {
+                        if tasks[task_idx].status.as_deref() != Some("done") {
                             tasks[task_idx].status = Some("idle".to_string());
                             tasks[task_idx].updated_at = Utc::now().timestamp_millis();
+                            let _ = crate::db::db_upsert_task(&root_task, &tasks[task_idx]);
                             let _ = save_tasks_to_disk(&root_task, &tasks).await;
                             if let Some(state_ref) = app.try_state::<AppState>() {
                                 if let Ok(mut guard) = state_ref.tasks.lock() {
                                     *guard = tasks.clone();
                                 }
                             }
+                            let _ = app.emit("task:updated", serde_json::json!({ "task": &tasks[task_idx] }));
                             let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
                         }
                     }

@@ -45,6 +45,7 @@ export const en = {
   'status.blocked': 'Blocked',
   'status.waitingReview': 'Review',
   'status.waitingSubtask': 'Waiting for subtask',
+  'status.waitingSubagent': 'Waiting subagent',
   'status.error': 'Error',
 
   // Priorities

@@ -123,6 +123,7 @@ export type TaskState =
   | { status: 'idle' }
   | { status: 'running'; model?: string }
   | { status: 'waiting_subtask'; waitingForSubtaskId: string }
+  | { status: 'waiting_subagent'; subagentId?: string }
   | { status: 'done'; verdict?: string };
 
 export type TaskStateStatus = TaskState['status'];
@@ -139,6 +140,8 @@ export const TaskStates = {
     }
     return { status: 'waiting_subtask', waitingForSubtaskId: waitingForSubtaskId.trim() };
   },
+  waitingSubagent: (subagentId?: string): TaskState =>
+    subagentId && subagentId.trim() ? { status: 'waiting_subagent', subagentId: subagentId.trim() } : { status: 'waiting_subagent' },
   done: (verdict?: string): TaskState => (verdict && verdict.trim() ? { status: 'done', verdict: verdict.trim() } : { status: 'done' }),
 } as const;
 
@@ -155,6 +158,8 @@ export function isTaskState(candidate: unknown): candidate is TaskState {
       return state.model === undefined || (typeof state.model === 'string' && state.model.trim().length > 0);
     case 'waiting_subtask':
       return typeof state.waitingForSubtaskId === 'string' && state.waitingForSubtaskId.trim().length > 0;
+    case 'waiting_subagent':
+      return state.subagentId === undefined || typeof state.subagentId === 'string';
     case 'done':
       return state.verdict === undefined || typeof state.verdict === 'string';
     default:
@@ -188,6 +193,12 @@ export function isWaitingSubtaskState(
   state: TaskState
 ): state is { status: 'waiting_subtask'; waitingForSubtaskId: string } {
   return state.status === 'waiting_subtask';
+}
+
+export function isWaitingSubagentState(
+  state: TaskState
+): state is { status: 'waiting_subagent'; subagentId?: string } {
+  return state.status === 'waiting_subagent';
 }
 
 export function isDoneState(state: TaskState): state is { status: 'done'; verdict?: string } {

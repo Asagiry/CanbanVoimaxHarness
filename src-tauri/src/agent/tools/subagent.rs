@@ -14,6 +14,77 @@ use crate::agent::{
     SubagentRetryInfo, SubagentSession, ToolContext, SUBAGENT_RECEIVERS, SUBAGENT_SESSIONS,
 };
 
+pub fn update_task_execution_status(
+    app: Option<&tauri::AppHandle>,
+    root: &std::path::Path,
+    task_id: &str,
+    new_status: &str,
+) {
+    if let Some(app) = app {
+        let mut updated_task = None;
+        if let Some(state) = app.try_state::<crate::commands::AppState>() {
+            if let Ok(mut tasks) = state.tasks.lock() {
+                if let Some(task) = tasks.iter_mut().find(|t| t.id == task_id) {
+                    task.status = Some(new_status.to_string());
+                    task.updated_at = chrono::Utc::now().timestamp_millis();
+                    updated_task = Some(task.clone());
+                }
+            }
+        }
+        if let Some(task) = updated_task {
+            let _ = crate::db::db_upsert_task(root, &task);
+            let root_buf = root.to_path_buf();
+            let app_clone = app.clone();
+            tokio::spawn(async move {
+                if let Some(state) = app_clone.try_state::<crate::commands::AppState>() {
+                    let tasks = if let Ok(guard) = state.tasks.lock() {
+                        guard.clone()
+                    } else {
+                        vec![]
+                    };
+                    if !tasks.is_empty() {
+                        let _ = crate::commands::save_tasks_to_disk(&root_buf, &tasks).await;
+                    }
+                }
+            });
+            let _ = app.emit("task:updated", serde_json::json!({ "task": &task }));
+            let _ = app.emit("agent:status", serde_json::json!({
+                "taskId": task_id,
+                "status": new_status,
+            }));
+        }
+    }
+}
+
+pub struct TaskStatusGuard<'a> {
+    app: Option<&'a tauri::AppHandle>,
+    root: &'a std::path::Path,
+    task_id: &'a str,
+    active: bool,
+}
+
+impl<'a> TaskStatusGuard<'a> {
+    pub fn new(app: Option<&'a tauri::AppHandle>, root: &'a std::path::Path, task_id: &'a str) -> Self {
+        update_task_execution_status(app, root, task_id, "waiting_subagent");
+        Self { app, root, task_id, active: true }
+    }
+
+    pub fn disarm_to_running(&mut self) {
+        if self.active {
+            update_task_execution_status(self.app, self.root, self.task_id, "running");
+            self.active = false;
+        }
+    }
+}
+
+impl<'a> Drop for TaskStatusGuard<'a> {
+    fn drop(&mut self) {
+        if self.active {
+            update_task_execution_status(self.app, self.root, self.task_id, "running");
+        }
+    }
+}
+
 pub async fn execute_subagent(
     ctx: &ToolContext<'_>,
     args: &serde_json::Value,
@@ -150,6 +221,7 @@ pub async fn execute_subagent(
     }
 
     // Parent agent blocks synchronously awaiting clean report from channel (Zero-Pollution Invariant!)
+    let mut status_guard = TaskStatusGuard::new(ctx.app_handle.as_ref(), ctx.repo_root, parent_id);
     let mut rx = rx;
     let clean_report = loop {
         tokio::select! {
@@ -175,6 +247,7 @@ pub async fn execute_subagent(
             }
         }
     };
+    status_guard.disarm_to_running();
     if let Some(ref app) = ctx.app_handle {
         if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
             state_ref.session_registry.update_status(&subagent_id, crate::agent::session_registry::SessionStatus::Finished);
@@ -369,14 +442,21 @@ pub async fn execute_collect_subagent(
         };
 
         if let Some((resolved_id, rx)) = rx_opt {
+            let mut status_guard = task_id.map(|tid| TaskStatusGuard::new(ctx.app_handle.as_ref(), repo_root, tid));
             match rx.await {
                 Ok(report) => {
+                    if let Some(ref mut g) = status_guard {
+                        g.disarm_to_running();
+                    }
                     let mut sessions = SUBAGENT_SESSIONS.lock().await;
                     sessions.remove(&resolved_id);
                     collected_reports.push((resolved_id, report));
                     continue;
                 }
                 Err(_) => {
+                    if let Some(ref mut g) = status_guard {
+                        g.disarm_to_running();
+                    }
                     // 1. Check SUBAGENT_SESSIONS for completed report or aborted status
                     if let Some((_, session)) = find_subagent_session(task_id, &resolved_id).await {
                         let info = session.retry_info.lock().await;
