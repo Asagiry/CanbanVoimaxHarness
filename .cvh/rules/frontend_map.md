@@ -47,6 +47,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Activity Stream Scroll Hook** | `src/components/drawer/useActivityScroll.ts` | Activity feed scroll management, auto-scroll, and resize observer. |
 | **Stream Filtering Helpers** | `src/components/drawer/stream/streamHelpers.ts` | Stream activity dedup, prompt cleanup, duration helpers. |
 | **Todo Tool Card** | `src/components/drawer/tools/TodoToolCard.tsx` | `todo_write` checklist progress bar, status icons, and task rendering. |
+| **Todo Shared Checklist** | `src/components/drawer/tools/TodoChecklist.tsx` | Reusable dual-color progress bar and task item checklist. |
 | **File Operations Tool Card** | `src/components/drawer/tools/FileOpsToolCard.tsx` | `read_file`, `write_file`, `edit_file` diff display. |
 | **Shell Command Tool Card** | `src/components/drawer/tools/CommandToolCard.tsx` | Command invocation, exit code, spilled logs link. |
 | **Subagent Tool Card** | `src/components/drawer/tools/SubagentToolCard.tsx` | Child agent execution card with progress spinner. |
@@ -54,6 +55,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Cortex Explorer Tree** | `src/components/cortex/CortexExplorer.tsx` | File navigation tree for personas, rules, and hooks. |
 | **Agent Persona Visual Editor** | `src/components/cortex/AgentSettingVisualEditor.tsx` | Persona prompt editor, settings, icon/color selectors. |
 | **Modular Rule Editor Modal** | `src/components/cortex/RuleEditorModal.tsx` | Markdown editor for `.cvh/rules/*.md` and role rules. |
+| **Baked-in Runtime Rule Icon** | `src/components/common/RuntimeRuleIcon.tsx` | Dedicated SVG prompt-chip icon and `isRuntimeRule` helper for `runtime.md`. |
 | **Two-Level Tool Policy Modal** | `src/components/settings/ToolPolicyModal.tsx` | Interactive policy matrix: global switches & overrides. |
 | **Global Settings Modal** | `src/components/settings/SettingsModal.tsx` | LLM endpoints, active model, and app settings. |
 | **Window Titlebar & Controls** | `src/components/layout/WindowControls.tsx` | Tauri window controls (minimize, maximize, close). |
