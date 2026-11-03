@@ -215,8 +215,8 @@ export default function DrawerActivityStream({
                 );
               }
 
-              // User steer message or Gatekeeper Sensor rejection
-              if (activity?.type === 'user' || activity?.type === 'steer') {
+              // User steer message, agent message, or Gatekeeper Sensor rejection
+              if (activity?.type === 'user' || activity?.type === 'steer' || (activity?.type as string) === 'agent') {
                 return (
                   <SteerDirectiveCard
                     key={key}

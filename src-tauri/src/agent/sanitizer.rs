@@ -69,11 +69,13 @@ pub fn reconstruct_messages_from_dialog(
                     }
                 }
             }
-            "steer" => {
+            "steer" | "agent" => {
                 if let Some(ref c) = item.content {
                     let trimmed = c.trim();
                     if !trimmed.is_empty() {
-                        let formatted = if trimmed.starts_with("### [УКАЗАНИЕ ПОЛЬЗОВАТЕЛЯ") {
+                        let formatted = if item.item_type == "agent" && !trimmed.starts_with("### [") && !trimmed.starts_with("### ") {
+                            format!("### [СООБЩЕНИЕ АГЕНТА / AGENT MESSAGE]\n{}", trimmed)
+                        } else if trimmed.starts_with("### [") || trimmed.starts_with("### Задача возвращена") {
                             trimmed.to_string()
                         } else {
                             format!(
