@@ -117,6 +117,8 @@ pub struct Task {
     pub position: Option<f64>,
     #[serde(rename = "hookStates", alias = "hook_states", default)]
     pub hook_states: Option<serde_json::Value>,
+    #[serde(rename = "projectPath", alias = "project_path", default)]
+    pub project_path: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

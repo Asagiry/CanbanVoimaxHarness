@@ -14,6 +14,7 @@ import { loadCachedHookStates, saveCachedHookStates } from '../board/hookStorage
 import { mapBackendTaskToKanban, isTaskForeign } from '../board/taskNormalizer';
 import { syncTasksBackend, triggerRunAgent } from '../board/taskSync';
 import { useDrawerStore } from '../drawerStore';
+import { useProjectStore } from '../projectStore';
 import { logEvent } from '../../lib/logger';
 
 export const createTasksCrudSlice: StateCreator<
@@ -469,6 +470,15 @@ export const createTasksCrudSlice: StateCreator<
   upsertBackendTask: (rawTask: BackendTaskDTO | unknown) => {
     if (!rawTask || typeof rawTask !== 'object') return;
     const rawDto = rawTask as BackendTaskDTO;
+    let activeRoot: string | undefined;
+    try {
+      activeRoot = useProjectStore.getState().activeProject?.rootPath;
+    } catch {
+      // ignore
+    }
+    if (activeRoot && isTaskForeign(rawDto, activeRoot)) {
+      return;
+    }
     const prev = get().tasks.find((p) => p.id === rawDto.id);
     const rawStage = rawDto.stageId || rawDto.stage_id || rawDto.columnId;
     if (prev && (!rawStage || prev.stageId === rawStage)) {
@@ -552,11 +562,18 @@ export const createTasksCrudSlice: StateCreator<
 
   setBackendTasks: (rawTasks: (BackendTaskDTO | unknown)[]) => {
     if (!Array.isArray(rawTasks)) return;
+    let activeRoot: string | undefined;
+    try {
+      activeRoot = useProjectStore.getState().activeProject?.rootPath;
+    } catch {
+      // ignore
+    }
     const prevTasks = get().tasks;
     const { columns } = get();
     const mapped: KanbanTask[] = [];
     for (const raw of rawTasks) {
       if (!isBackendTaskDTO(raw)) continue;
+      if (activeRoot && isTaskForeign(raw, activeRoot)) continue;
       const prev = prevTasks.find((p) => p.id === raw.id);
       const rawStage = raw.stageId || raw.stage_id || raw.columnId;
       if (prev && (!rawStage || prev.stageId === rawStage)) {

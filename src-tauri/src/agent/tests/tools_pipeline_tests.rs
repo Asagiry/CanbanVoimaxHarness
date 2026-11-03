@@ -132,6 +132,7 @@ use std::sync::Arc;
             cover_image: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
         crate::commands::tasks::save_tasks_to_disk(&base, &[task]).await.expect("save task");
 

@@ -77,6 +77,7 @@ export interface KanbanTask {
   previousStageId?: string;
   coverImage?: string;
   hookStates?: TaskHookStates;
+  projectPath?: string;
 }
 
 /**
@@ -94,6 +95,8 @@ export interface BackendTaskDTO {
   board_id?: string;
   worktreePath?: string;
   worktree_path?: string;
+  projectPath?: string;
+  project_path?: string;
   branch?: string;
   verdict?: string;
   customFlow?: string[];

@@ -18,10 +18,28 @@ import { useBoardStore } from '../boardStore';
  * Tasks with absolute worktree paths that do not start with projectRoot are flagged as foreign.
  */
 export function isTaskForeign(
-  task: { worktreePath?: string; worktree_path?: string },
+  task: {
+    worktreePath?: string;
+    worktree_path?: string;
+    projectPath?: string;
+    project_path?: string;
+  },
   projectRoot?: string
 ): boolean {
   if (!projectRoot || typeof projectRoot !== 'string') return false;
+
+  const normRoot = projectRoot.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '');
+
+  // 1. Direct check: projectPath
+  const pPath = (task.projectPath || task.project_path || '').trim();
+  if (pPath) {
+    const normPPath = pPath.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '');
+    if (normPPath !== normRoot) {
+      return true;
+    }
+  }
+
+  // 2. Fallback check: absolute worktreePath
   const wt = (task.worktreePath || task.worktree_path || '').trim();
   if (!wt) return false;
   // Absolute path check (Windows drive letter C:\ or UNC \\ or Unix /)
@@ -29,7 +47,6 @@ export function isTaskForeign(
   if (!isAbs) return false;
 
   const normWt = wt.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '');
-  const normRoot = projectRoot.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '');
 
   return !normWt.startsWith(normRoot + '/') && normWt !== normRoot;
 }
@@ -265,6 +282,7 @@ export function normalizeKanbanTask(
     hookStates: (raw.hookStates || raw.hook_states) && typeof (raw.hookStates || raw.hook_states) === 'object'
       ? (raw.hookStates || raw.hook_states)
       : undefined,
+    projectPath: raw.projectPath || raw.project_path || context?.activeProjectRoot,
   };
 }
 

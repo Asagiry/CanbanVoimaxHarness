@@ -128,6 +128,7 @@ fn test_tasks_crud_and_todos() {
                 "error": null
             }
         })),
+        project_path: None,
     };
 
     db_upsert_task(root, &task1).expect("upsert task1");
@@ -199,6 +200,7 @@ fn test_tasks_crud_and_todos() {
         completed_at: None,
         position: Some(1.0),
         hook_states: None,
+        project_path: None,
     };
     db_upsert_task(root, &subtask).expect("upsert subtask");
 
@@ -257,6 +259,7 @@ fn test_sequence_allocation() {
         completed_at: None,
         position: None,
         hook_states: None,
+        project_path: None,
     };
     db_upsert_task(root, &high_task).expect("upsert high task");
 

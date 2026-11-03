@@ -77,6 +77,7 @@ use std::sync::Arc;
             completed_at: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
         crate::commands::tasks::save_tasks_to_disk(&base, &[parent_task]).await.expect("save parent");
 
@@ -242,6 +243,7 @@ use std::sync::Arc;
             completed_at: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
         crate::commands::tasks::save_tasks_to_disk(&base, &[regular_task]).await.expect("save regular task");
 

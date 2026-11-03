@@ -124,6 +124,7 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
             completed_at,
             position,
             hook_states,
+            project_path: Some(root.to_string_lossy().to_string()),
         });
     }
 
@@ -234,6 +235,7 @@ pub fn db_get_task(root: &Path, task_id: &str) -> Result<Option<Task>, String> {
         completed_at,
         position,
         hook_states,
+        project_path: Some(root.to_string_lossy().to_string()),
     }))
 }
 
