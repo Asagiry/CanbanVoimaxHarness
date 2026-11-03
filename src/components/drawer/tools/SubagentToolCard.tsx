@@ -25,7 +25,7 @@ import {
   Users,
   FolderDown,
 } from 'lucide-react';
-import { ToolCardProps } from './shared';
+import { ToolCardProps, BatchBadge } from './shared';
 
 export function CollectSubagentExecutionCard({ tool }: { tool: ToolExecution }) {
   const [isExpanded, setIsExpanded] = useState(true);
@@ -236,6 +236,7 @@ export function CollectSubagentExecutionCard({ tool }: { tool: ToolExecution }) 
 
         {/* Right side status and Chevron toggle */}
         <div className="flex items-center space-x-2 shrink-0">
+          <BatchBadge tool={tool} />
           {isRunning ? (
             <div className="flex items-center space-x-1.5">
               <span className="relative flex h-2 w-2 shrink-0">
@@ -507,6 +508,7 @@ export default function SubagentToolCard({ tool }: ToolCardProps) {
           </div>
 
           <div className="flex items-center space-x-2 shrink-0">
+            <BatchBadge tool={tool} />
             {isRunning ? (
               <div className="flex items-center space-x-1.5">
                 <span className="relative flex h-2 w-2 shrink-0">

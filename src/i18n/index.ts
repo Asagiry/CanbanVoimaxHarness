@@ -94,7 +94,8 @@ export function setLanguage(lang: Language): void {
  * React Hook for component localization with instantaneous reactivity
  */
 export function useTranslation() {
-  const language = useLanguageStore((s) => s.language);
+  const storeLanguage = useLanguageStore((s) => s.language);
+  const language = typeof window === 'undefined' ? useLanguageStore.getState().language : storeLanguage;
   const setLang = useLanguageStore((s) => s.setLanguage);
   const toggleLanguage = useLanguageStore((s) => s.toggleLanguage);
 

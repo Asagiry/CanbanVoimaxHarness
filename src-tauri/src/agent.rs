@@ -220,12 +220,16 @@ pub enum AgentEvent {
         id: String,
         name: String,
         arguments: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        batch: Option<serde_json::Value>,
     },
     ToolResult {
         id: String,
         name: String,
         result: String,
         success: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        batch: Option<serde_json::Value>,
     },
     TurnStart {
         turn: usize,
@@ -1766,7 +1770,17 @@ Messages count: {}
 
         // Execute subagent tool calls
         let mut batch_aborted_by_error: Option<String> = None;
-        for tc in turn_tool_calls {
+        let total_in_batch = turn_tool_calls.len();
+        for (batch_idx, tc) in turn_tool_calls.iter().enumerate() {
+            let batch_info = if total_in_batch > 1 {
+                Some(serde_json::json!({
+                    "index": batch_idx + 1,
+                    "total": total_in_batch
+                }))
+            } else {
+                None
+            };
+
             if ctx.abort_handle.load(Ordering::SeqCst) {
                 break;
             }
@@ -1782,6 +1796,7 @@ Messages count: {}
                     "status": "failed",
                     "params": serde_json::from_str(&tc.function.arguments).unwrap_or_else(|_| serde_json::json!({})),
                     "stdout": &skip_msg,
+                    "batch": &batch_info,
                 });
                 let tool_act_skipped = ActivityItem {
                     id: tool_item_id,
@@ -1800,7 +1815,7 @@ Messages count: {}
                         "activity": &tool_act_skipped,
                     }));
                 }
-                sub_messages.push(ChatMessage::tool_response(tc.id, skip_msg));
+                sub_messages.push(ChatMessage::tool_response(tc.id.clone(), skip_msg));
                 continue;
             }
 
@@ -1816,6 +1831,7 @@ Messages count: {}
                 "durationMs": 0,
                 "status": "running",
                 "params": &parsed_args,
+                "batch": &batch_info,
             });
             let tool_act_running = ActivityItem {
                 id: tool_item_id.clone(),
@@ -1865,6 +1881,7 @@ Messages count: {}
                     "params": &parsed_args,
                     "stderr": "Прервано пользователем",
                     "stdout": "[Прервано пользователем / Aborted by user]",
+                    "batch": &batch_info,
                 });
                 let tool_act_aborted = ActivityItem {
                     id: tool_item_id,
@@ -1900,6 +1917,7 @@ Messages count: {}
                 "status": if is_success { "success" } else { "failed" },
                 "params": &parsed_args,
                 "stdout": &res_str,
+                "batch": &batch_info,
             });
             let tool_act_done = ActivityItem {
                 id: tool_item_id,
@@ -1923,7 +1941,7 @@ Messages count: {}
                 batch_aborted_by_error = Some(tc.function.name.clone());
             }
 
-            sub_messages.push(ChatMessage::tool_response(tc.id, res_str));
+            sub_messages.push(ChatMessage::tool_response(tc.id.clone(), res_str));
         }
     }
 
@@ -3473,9 +3491,19 @@ Messages count: {}
 
         let mut executed_subagents_in_turn: Vec<ExecutedSubagentCall> = Vec::new();
         let mut batch_aborted_by_error: Option<String> = None;
+        let total_in_batch = turn_tool_calls.len();
 
         // Execute each tool call and record response
-        for tc in turn_tool_calls {
+        for (batch_idx, tc) in turn_tool_calls.iter().enumerate() {
+            let batch_info = if total_in_batch > 1 {
+                Some(serde_json::json!({
+                    "index": batch_idx + 1,
+                    "total": total_in_batch
+                }))
+            } else {
+                None
+            };
+
             if abort_flag.load(Ordering::SeqCst) {
                 sanitize_unclosed_tool_calls(&mut messages);
                 sync_context_state(&config.app_handle, &config.task_id, turn, &messages);
@@ -3485,15 +3513,29 @@ Messages count: {}
 
             if let Some(ref failed_tool) = batch_aborted_by_error {
                 let skip_msg = format!("Skipped: previous tool '{}' in this batch failed", failed_tool);
+                event_sink(AgentEvent::ToolCall {
+                    id: tc.id.clone(),
+                    name: tc.function.name.clone(),
+                    arguments: tc.function.arguments.clone(),
+                    batch: batch_info.clone(),
+                });
                 event_sink(AgentEvent::ToolResult {
                     id: tc.id.clone(),
                     name: tc.function.name.clone(),
                     result: skip_msg.clone(),
                     success: false,
+                    batch: batch_info.clone(),
                 });
-                messages.push(ChatMessage::tool_response(tc.id, skip_msg));
+                messages.push(ChatMessage::tool_response(tc.id.clone(), skip_msg));
                 continue;
             }
+
+            event_sink(AgentEvent::ToolCall {
+                id: tc.id.clone(),
+                name: tc.function.name.clone(),
+                arguments: tc.function.arguments.clone(),
+                batch: batch_info.clone(),
+            });
 
             let parsed_args: serde_json::Value =
                 serde_json::from_str(&tc.function.arguments).unwrap_or_else(|_| serde_json::json!({}));
@@ -3529,8 +3571,9 @@ Messages count: {}
                         name: tc.function.name.clone(),
                         result: prev.result.clone(),
                         success: true,
+                        batch: batch_info.clone(),
                     });
-                    messages.push(ChatMessage::tool_response(tc.id, prev.result.clone()));
+                    messages.push(ChatMessage::tool_response(tc.id.clone(), prev.result.clone()));
                     continue;
                 }
             }
@@ -3551,6 +3594,7 @@ Messages count: {}
                     name: tc.function.name.clone(),
                     result: "Прервано пользователем".to_string(),
                     success: false,
+                    batch: batch_info.clone(),
                 });
                 sanitize_unclosed_tool_calls(&mut messages);
                 sync_context_state(&config.app_handle, &config.task_id, turn, &messages);
@@ -3630,9 +3674,10 @@ Messages count: {}
                 name: tc.function.name.clone(),
                 result: result_str.clone(),
                 success,
+                batch: batch_info.clone(),
             });
 
-            messages.push(ChatMessage::tool_response(tc.id, result_str.clone()));
+            messages.push(ChatMessage::tool_response(tc.id.clone(), result_str.clone()));
 
             if should_abort_tool_batch(&tc.function.name, success, &result_str) {
                 batch_aborted_by_error = Some(tc.function.name.clone());

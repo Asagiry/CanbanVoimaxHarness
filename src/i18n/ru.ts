@@ -204,6 +204,8 @@ export const ru = {
   'drawer.compactedCount': 'Сжато {count} {pluralMsg}',
   'drawer.freedTokens': 'Освобождено -{tokens} токенов',
   'drawer.optimizationTitle': 'Оптимизация контекста',
+  'drawer.batchStep': 'Пакет {index}/{total}',
+  'drawer.batchSkipped': 'Пропущено из-за сбоя в пакете',
 
   // Git Diff Sidebar
   'gitDiff.title': 'Git Diff',

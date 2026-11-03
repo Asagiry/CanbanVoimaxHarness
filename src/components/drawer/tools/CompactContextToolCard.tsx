@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from '../../../stores/languageStore';
 import { formatDurationCompact } from '../ThinkingCard';
 import { ChevronRight, Copy, Check, X, Minimize2 } from 'lucide-react';
-import { ToolCardProps, isToolFailed } from './shared';
+import { ToolCardProps, isToolFailed, isToolSkipped, BatchBadge } from './shared';
 
 export default function CompactContextToolCard({ tool }: ToolCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -15,6 +15,7 @@ export default function CompactContextToolCard({ tool }: ToolCardProps) {
   const isRunning = tool.status === 'running';
   const isSuccess = tool.status === 'success';
   const isFailed = isToolFailed(tool);
+  const isSkipped = isToolSkipped(tool);
 
   const params = (tool.params && typeof tool.params === 'object' ? tool.params : {}) as Record<string, unknown>;
   const savedTokens = typeof params.savedTokens === 'number'
@@ -95,7 +96,7 @@ export default function CompactContextToolCard({ tool }: ToolCardProps) {
         isRunning
           ? 'border-amber-500/40 dark:border-amber-500/30 bg-amber-500/[0.02]'
           : 'border-[#ebebeb] dark:border-[#21262d]'
-      }`}
+      } ${isSkipped ? 'opacity-70 dark:opacity-65' : ''}`}
     >
       {/* Header Strip */}
       <div
@@ -154,6 +155,7 @@ export default function CompactContextToolCard({ tool }: ToolCardProps) {
 
         {/* Right side status indicator & copy */}
         <div className="flex items-center space-x-2 shrink-0">
+          <BatchBadge tool={tool} />
           <button
             type="button"
             onClick={handleCopy}

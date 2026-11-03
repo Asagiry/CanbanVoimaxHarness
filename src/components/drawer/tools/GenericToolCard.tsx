@@ -3,8 +3,10 @@ import { ChevronRight, Wrench } from 'lucide-react';
 import {
   ToolCardProps,
   isToolFailed,
+  isToolSkipped,
   StatusIndicator,
   CopyLogsButton,
+  BatchBadge,
   ToolParamsView,
   formatDurationCompact,
 } from './shared';
@@ -19,6 +21,7 @@ export default function GenericToolCard({ tool }: ToolCardProps) {
       : {};
 
   const isFailed = isToolFailed(tool);
+  const isSkipped = isToolSkipped(tool);
   const isRunning = tool.status === 'running';
   const durationText = formatDurationCompact(tool.durationMs);
 
@@ -49,7 +52,7 @@ export default function GenericToolCard({ tool }: ToolCardProps) {
         isRunning
           ? 'border-amber-500/40 dark:border-amber-500/30 bg-amber-500/[0.02]'
           : 'border-[#ebebeb] dark:border-[#21262d]'
-      }`}
+      } ${isSkipped ? 'opacity-70 dark:opacity-65' : ''}`}
     >
       {/* Header Strip */}
       <div
@@ -109,6 +112,7 @@ export default function GenericToolCard({ tool }: ToolCardProps) {
         </div>
 
         <div className="flex items-center space-x-2 shrink-0">
+          <BatchBadge tool={tool} />
           <CopyLogsButton tool={tool} isExpanded={isExpanded} />
           <StatusIndicator tool={tool} isFailed={isFailed} />
         </div>

@@ -526,15 +526,21 @@ pub async fn run_agent(
                         serde_json::json!({ "taskId": tid_inner, "thought": &thought, "delta": &thought }),
                     );
                 }
-                AgentEvent::ToolCall { id, name, arguments } => {
+                AgentEvent::ToolCall { id, name, arguments, batch } => {
                     let _ = app_inner.emit(
                         "agent:tool_call",
-                        serde_json::json!({ "taskId": tid_inner, "id": id, "name": name, "arguments": arguments }),
+                        serde_json::json!({
+                            "taskId": tid_inner,
+                            "id": id,
+                            "name": name,
+                            "arguments": arguments,
+                            "batch": batch,
+                        }),
                     );
 
                     let parsed_args = serde_json::from_str::<serde_json::Value>(&arguments)
                         .unwrap_or_else(|_| serde_json::json!({ "raw": &arguments }));
-                    let tool_obj = serde_json::json!({
+                    let mut tool_obj = serde_json::json!({
                         "id": &id,
                         "toolName": &name,
                         "name": &name,
@@ -544,6 +550,9 @@ pub async fn run_agent(
                         "timestamp": chrono::Utc::now().to_rfc3339(),
                         "durationMs": 0,
                     });
+                    if let Some(ref b) = batch {
+                        tool_obj["batch"] = b.clone();
+                    }
                     let tool_item = crate::db::ActivityItem {
                         id: id.clone(),
                         item_type: "tool".to_string(),
@@ -555,7 +564,7 @@ pub async fn run_agent(
                     };
                     let _ = crate::db::append_dialog_items(&root_inner, &tid_inner, std::slice::from_ref(&tool_item));
                 }
-                AgentEvent::ToolResult { id, name, result, success } => {
+                AgentEvent::ToolResult { id, name, result, success, batch } => {
                     let sanitized_result = if result.len() > 65536 {
                         let half = 32768;
                         let head_end = result
@@ -581,7 +590,14 @@ pub async fn run_agent(
                     };
                     let _ = app_inner.emit(
                         "agent:tool_result",
-                        serde_json::json!({ "taskId": tid_inner, "id": id, "name": name, "result": &sanitized_result, "success": success }),
+                        serde_json::json!({
+                            "taskId": tid_inner,
+                            "id": id,
+                            "name": name,
+                            "result": &sanitized_result,
+                            "success": success,
+                            "batch": batch,
+                        }),
                     );
 
                     let status_str = if success { "success" } else { "failed" };
@@ -600,6 +616,9 @@ pub async fn run_agent(
                         obj.insert("result".to_string(), serde_json::json!(&result));
                         if !success {
                             obj.insert("stderr".to_string(), serde_json::json!(&result));
+                        }
+                        if let Some(ref b) = batch {
+                            obj.insert("batch".to_string(), b.clone());
                         }
                     }
 

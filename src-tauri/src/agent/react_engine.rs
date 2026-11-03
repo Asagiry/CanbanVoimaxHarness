@@ -448,11 +448,6 @@ impl StreamChunkConsumer {
                     }
                     last_token_instant = Some(std::time::Instant::now());
                     turn_streamed_chars += name.len() + arguments.len();
-                    driver.emit_event(AgentEvent::ToolCall {
-                        id: id.clone(),
-                        name: name.clone(),
-                        arguments: arguments.clone(),
-                    });
                     turn_tool_calls.push(ToolCall {
                         id,
                         call_type: "function".to_string(),

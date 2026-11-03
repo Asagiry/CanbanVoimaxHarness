@@ -8,6 +8,8 @@ import WebToolCard from './tools/WebToolCard';
 import TodoToolCard from './tools/TodoToolCard';
 import GenericToolCard from './tools/GenericToolCard';
 
+export { BatchBadge, isToolSkipped, StatusIndicator } from './tools/shared';
+
 export interface ToolExecutionCardProps {
   tool: ToolExecution;
   onRerun?: (tool: ToolExecution) => void;

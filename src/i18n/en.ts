@@ -202,6 +202,8 @@ export const en = {
   'drawer.compactedCount': 'Compacted {count} {pluralMsg}',
   'drawer.freedTokens': 'Freed -{tokens} tokens',
   'drawer.optimizationTitle': 'Context Optimization',
+  'drawer.batchStep': 'Batch {index}/{total}',
+  'drawer.batchSkipped': 'Skipped due to batch failure',
 
   // Git Diff Sidebar
   'gitDiff.title': 'Git Diff',

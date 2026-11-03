@@ -3,8 +3,10 @@ import { ChevronRight, ListTodo, CheckCircle2, Loader2, Circle } from 'lucide-re
 import {
   ToolCardProps,
   isToolFailed,
+  isToolSkipped,
   StatusIndicator,
   CopyLogsButton,
+  BatchBadge,
   formatDurationCompact,
 } from './shared';
 
@@ -34,6 +36,7 @@ export default function TodoToolCard({ tool }: ToolCardProps) {
   }
 
   const isFailed = isToolFailed(tool);
+  const isSkipped = isToolSkipped(tool);
   const isRunning = tool.status === 'running';
   const durationText = formatDurationCompact(tool.durationMs);
 
@@ -49,7 +52,7 @@ export default function TodoToolCard({ tool }: ToolCardProps) {
         isRunning
           ? 'border-indigo-500/40 dark:border-indigo-500/30 bg-indigo-500/[0.02]'
           : 'border-[#ebebeb] dark:border-[#21262d]'
-      }`}
+      } ${isSkipped ? 'opacity-70 dark:opacity-65' : ''}`}
     >
       {/* Header Strip */}
       <div
@@ -107,6 +110,7 @@ export default function TodoToolCard({ tool }: ToolCardProps) {
         </div>
 
         <div className="flex items-center space-x-1.5 shrink-0">
+          <BatchBadge tool={tool} />
           <CopyLogsButton tool={tool} isExpanded={isExpanded} />
           <StatusIndicator tool={tool} isFailed={isFailed} />
         </div>

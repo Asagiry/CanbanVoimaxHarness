@@ -190,9 +190,27 @@ export default function DrawerActivityStream({
                   ...activity.tool,
                   durationMs: activity.tool.durationMs || activityDurations[idx] || 0,
                 };
+                const currentBatch = activity.tool.batch;
+                const nextActivity = displayActivities[idx + 1];
+                const hasNextInBatch = Boolean(
+                  currentBatch &&
+                  currentBatch.total > 1 &&
+                  currentBatch.index < currentBatch.total &&
+                  nextActivity?.type === 'tool' &&
+                  nextActivity.tool?.batch &&
+                  nextActivity.tool.batch.total === currentBatch.total &&
+                  nextActivity.tool.batch.index === currentBatch.index + 1
+                );
+
                 return (
-                  <div key={key} className="animate-silk-entrance motion-reduce:animate-none">
+                  <div key={key} className="relative animate-silk-entrance motion-reduce:animate-none">
                     <ToolExecutionCard tool={toolWithDuration} />
+                    {hasNextInBatch && (
+                      <div
+                        data-testid="batch-chain-connector"
+                        className="absolute left-4 -bottom-3.5 h-3.5 border-l-2 border-dashed border-blue-500/40 dark:border-blue-400/30 z-10 pointer-events-none"
+                      />
+                    )}
                   </div>
                 );
               }

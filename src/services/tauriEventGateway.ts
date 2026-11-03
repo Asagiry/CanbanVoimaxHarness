@@ -34,6 +34,7 @@ export interface AgentToolCallPayload {
   id?: string;
   name?: string;
   arguments?: string | Record<string, unknown>;
+  batch?: { index: number; total: number };
 }
 
 export interface AgentToolResultPayload {
@@ -41,6 +42,7 @@ export interface AgentToolResultPayload {
   id?: string;
   result?: unknown;
   success?: boolean;
+  batch?: { index: number; total: number };
 }
 
 export interface QuestionOptionItem {
@@ -464,7 +466,7 @@ export function setupTauriEventGateway(): () => void {
 
       // 3. agent:tool_call
       await addListener('agent:tool_call', (payload) => {
-        const { taskId, id, name, arguments: args } = payload || {};
+        const { taskId, id, name, arguments: args, batch } = payload || {};
         if (!taskId) return;
         ensureTaskRunningOnBoard(taskId);
         if (!isTaskActiveInDrawer(taskId)) {
@@ -503,13 +505,14 @@ export function setupTauriEventGateway(): () => void {
             durationMs: 0,
             status: 'running',
             params: parsedParams,
+            batch: batch ?? undefined,
           });
         }
       });
 
       // 4. agent:tool_result
       await addListener('agent:tool_result', (payload) => {
-        const { taskId, id, result, success } = payload || {};
+        const { taskId, id, result, success, batch } = payload || {};
         if (!taskId) return;
         if (!isTaskActiveInDrawer(taskId)) {
           return;
@@ -521,6 +524,7 @@ export function setupTauriEventGateway(): () => void {
             status: success ? 'success' : 'failed',
             stdout: success ? outStr : undefined,
             stderr: !success ? outStr : undefined,
+            ...(batch ? { batch } : {}),
           });
         }
       });

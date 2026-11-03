@@ -914,7 +914,7 @@ data: [DONE]
         let tool_results: Vec<(String, String, bool)> = captured_events
             .iter()
             .filter_map(|e| {
-                if let AgentEvent::ToolResult { id, name, result: _, success } = e {
+                if let AgentEvent::ToolResult { id, name, result: _, success, .. } = e {
                     Some((id.clone(), name.clone(), *success))
                 } else {
                     None
@@ -927,21 +927,33 @@ data: [DONE]
         // Tool 0 failed execution
         assert_eq!(tool_results[0].0, "call_edit_fail");
         assert!(!tool_results[0].2, "First edit must have failed");
+        let event_0 = captured_events.iter().find(|e| matches!(e, AgentEvent::ToolResult { id, .. } if id == "call_edit_fail")).unwrap();
+        if let AgentEvent::ToolResult { batch, .. } = event_0 {
+            let b = batch.as_ref().expect("Batch metadata on first tool");
+            assert_eq!(b["index"], 1);
+            assert_eq!(b["total"], 3);
+        }
 
         // Tool 1 was skipped due to fail-fast
         assert_eq!(tool_results[1].0, "call_edit_skip");
         assert!(!tool_results[1].2, "Second edit must be marked failure/skipped");
         let event_1 = captured_events.iter().find(|e| matches!(e, AgentEvent::ToolResult { id, .. } if id == "call_edit_skip")).unwrap();
-        if let AgentEvent::ToolResult { result, .. } = event_1 {
+        if let AgentEvent::ToolResult { result, batch, .. } = event_1 {
             assert!(result.contains("Skipped: previous tool 'edit_file' in this batch failed"), "got: {}", result);
+            let b = batch.as_ref().expect("Batch metadata on second tool");
+            assert_eq!(b["index"], 2);
+            assert_eq!(b["total"], 3);
         }
 
         // Tool 2 was skipped due to fail-fast
         assert_eq!(tool_results[2].0, "call_cmd_skip");
         assert!(!tool_results[2].2, "Third command must be marked failure/skipped");
         let event_2 = captured_events.iter().find(|e| matches!(e, AgentEvent::ToolResult { id, .. } if id == "call_cmd_skip")).unwrap();
-        if let AgentEvent::ToolResult { result, .. } = event_2 {
+        if let AgentEvent::ToolResult { result, batch, .. } = event_2 {
             assert!(result.contains("Skipped: previous tool 'edit_file' in this batch failed"), "got: {}", result);
+            let b = batch.as_ref().expect("Batch metadata on third tool");
+            assert_eq!(b["index"], 3);
+            assert_eq!(b["total"], 3);
         }
 
         let _ = tokio::fs::remove_dir_all(&base).await;

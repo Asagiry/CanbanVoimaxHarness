@@ -2,11 +2,19 @@ import { useState, useRef, useEffect } from 'react';
 import { ToolExecution } from '../../../types';
 import { Check, Copy, X } from 'lucide-react';
 import { formatDurationCompact } from '../ThinkingCard';
+import { useTranslation } from '../../../stores/languageStore';
 
 export interface ToolCardProps {
   tool: ToolExecution;
   onRerun?: (tool: ToolExecution) => void;
   isLatest?: boolean;
+}
+
+export function isToolSkipped(tool: ToolExecution): boolean {
+  return Boolean(
+    tool?.stdout?.includes('Skipped: previous tool') ||
+    tool?.stderr?.includes('Skipped: previous tool')
+  );
 }
 
 export function isToolFailed(tool: ToolExecution): boolean {
@@ -18,7 +26,33 @@ export function isToolFailed(tool: ToolExecution): boolean {
   );
 }
 
+export function BatchBadge({ tool }: { tool: ToolExecution }) {
+  const { t } = useTranslation();
+  if (!tool?.batch || tool.batch.total <= 1) return null;
+  return (
+    <span
+      data-testid="batch-step-badge"
+      className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 flex items-center space-x-1 shrink-0 select-none"
+    >
+      <span>🔗</span>
+      <span>{t('drawer.batchStep', { index: tool.batch.index, total: tool.batch.total })}</span>
+    </span>
+  );
+}
+
 export function StatusIndicator({ tool, isFailed }: { tool: ToolExecution; isFailed?: boolean }) {
+  const { t } = useTranslation();
+  if (isToolSkipped(tool)) {
+    return (
+      <span
+        data-testid="batch-skipped-badge"
+        className="px-1.5 py-0.5 rounded text-[10px] text-amber-600 dark:text-amber-400 font-mono flex items-center space-x-1 shrink-0 select-none bg-amber-500/10 border border-amber-500/20"
+      >
+        <span>🚫</span>
+        <span>{t('drawer.batchSkipped')}</span>
+      </span>
+    );
+  }
   const failed = isFailed ?? isToolFailed(tool);
   if (tool.status === 'running') {
     return (
