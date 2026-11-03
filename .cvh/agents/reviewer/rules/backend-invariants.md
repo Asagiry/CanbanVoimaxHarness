@@ -86,3 +86,14 @@ Authoritative backend audit checklist for the **Reviewer** persona in CanbanVoim
   - Reject `let _ = ...` on fallible operations that can fail without warning.
   - Reject `.ok()` or `unwrap_or_default()` on core business logic or storage queries where an error signifies an actionable failure.
   - Mandate proper error propagation with context via `?` and `.with_context(...)`.
+
+---
+
+## 11. Windows Desktop Notifications & Toast RPC Lifetime (AUMID Invariant)
+- **Rule**: Desktop notification implementations on Windows must guarantee reliable delivery across all Windows 10/11 environments:
+  1. AppUserModelID registered in `HKCU\Software\Classes\AppUserModelId\<id>`.
+  2. Multi-tier AUMID fallback cascade and Tier 3 `NotifyIcon` BalloonTip fallback.
+  3. Process lifetime protection: headless toast processes (e.g. PowerShell) must include a delay (`Start-Sleep -Milliseconds 1500`) to keep the RPC channel open until Action Center renders the toast.
+  4. Process creation flags must include `CREATE_NO_WINDOW = 0x08000000`.
+- **Audit**: Inspect any notification command or script generation in `src-tauri/src/commands/notifications.rs` or subprocess handlers.
+- **REJECTION TRIGGER**: Naked toast invocations without registry AUMID registration, missing fallback cascade, or instant subprocess exit causing dropped toasts.
