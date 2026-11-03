@@ -287,7 +287,7 @@ pub fn propagate_parent_subtask_advance(
             let now = Utc::now().timestamp_millis();
 
             tasks[parent_idx].waiting_for_subtask_id = Some(new_subtask_id.clone());
-            tasks[parent_idx].status = Some("waiting_subtask".to_string());
+            tasks[parent_idx].status = Some("idle".to_string());
             tasks[parent_idx].updated_at = now;
 
             let has_autorun = next_col.persona.is_some() || next_col.auto_run == Some(true);
@@ -353,7 +353,7 @@ pub fn propagate_parent_subtask_advance(
                 "fromStage": &old_parent_stage,
                 "toStage": &old_parent_stage,
                 "stageId": &old_parent_stage,
-                "status": "waiting_subtask",
+                "status": "idle",
                 "waitingForSubtaskId": &new_subtask_id,
                 "verdict": parent_clone.verdict,
                 "task": &parent_clone
@@ -2033,12 +2033,6 @@ pub async fn internal_advance_task_to_stage(
                 }));
             }
 
-            let parent_summary_content = format!(
-                "### Саммари финализации задачи {}: {}\n\n{}",
-                parent_id, target_col.title, summary
-            );
-            let _ = append_task_dialog_activity(root, &parent_id, "summary", &parent_summary_content, app_handle).await;
-
             return Ok(format!(
                 "УСПЕШНО: Задача {} завершена в терминальной колонке '{}' ({}), статус: {}",
                 parent_id,
@@ -2076,7 +2070,7 @@ pub async fn internal_advance_task_to_stage(
                 // 2. Update parent task waiting_for_subtask_id
                 if let Some(parent) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &parent_id)) {
                     parent.waiting_for_subtask_id = Some(existing_sub.id.clone());
-                    parent.status = Some("waiting_subtask".to_string());
+                    parent.status = Some("idle".to_string());
                     parent.updated_at = Utc::now().timestamp_millis();
                     let _ = crate::db::db_upsert_task(root, parent);
                 }
@@ -2107,12 +2101,6 @@ pub async fn internal_advance_task_to_stage(
                     current_task.stage_id, current_task.title, summary
                 );
                 let _ = append_task_dialog_activity(root, &subtask_id, "summary", &sub_summary_content, app_handle).await;
-
-                let parent_summary_content = format!(
-                    "### Саммари этапа (передано на {} {}):\n\n{}",
-                    existing_sub.id, target_col.title, summary
-                );
-                let _ = append_task_dialog_activity(root, &parent_id, "summary", &parent_summary_content, app_handle).await;
 
                 let handover_prompt = format!(
                     "### [ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]\n\nЗамечания исправлены. Отчет исполнителя:\n{}",
@@ -2209,11 +2197,6 @@ pub async fn internal_advance_task_to_stage(
                 .await?;
 
                 let next_subtask_id = next_subtask.id.clone();
-                let parent_summary_content = format!(
-                    "### Саммари этапа (передано на {} {}):\n\n{}",
-                    next_subtask_id, target_col.title, summary
-                );
-                let _ = append_task_dialog_activity(root, &parent_id, "summary", &parent_summary_content, app_handle).await;
 
                 if let Some(app) = app_handle {
                     let _ = app.emit("task:advanced", serde_json::json!({
@@ -2255,8 +2238,8 @@ pub async fn internal_advance_task_to_stage(
                         ),
                     );
                     let parent_summary_content = format!(
-                        "### Саммари этапа (передано на {} {}):\n\n{}",
-                        existing_sub_id, target_col.title, summary
+                        "### Саммари этапа {}: {}\n\n{}",
+                        current_task.stage_id, current_task.title, summary
                     );
                     let _ = append_task_dialog_activity(root, task_id, "summary", &parent_summary_content, app_handle).await;
 
@@ -2305,7 +2288,7 @@ pub async fn internal_advance_task_to_stage(
             let mut tasks = load_tasks_from_disk(root).await;
             if let Some(parent) = tasks.iter_mut().find(|t| task_id_matches(&t.id, task_id)) {
                 parent.waiting_for_subtask_id = Some(existing_sub.id.clone());
-                parent.status = Some("waiting_subtask".to_string());
+                parent.status = Some("idle".to_string());
                 parent.updated_at = Utc::now().timestamp_millis();
                 let _ = crate::db::db_upsert_task(root, parent);
             }
@@ -2330,8 +2313,8 @@ pub async fn internal_advance_task_to_stage(
             }
 
             let parent_summary_content = format!(
-                "### Саммари этапа (передано на {} {}):\n\n{}",
-                existing_sub.id, target_col.title, summary
+                "### Саммари этапа {}: {}\n\n{}",
+                current_task.stage_id, current_task.title, summary
             );
             let _ = append_task_dialog_activity(root, task_id, "summary", &parent_summary_content, app_handle).await;
 
@@ -2390,8 +2373,8 @@ pub async fn internal_advance_task_to_stage(
         let subtask_id = subtask.id.clone();
 
         let parent_summary_content = format!(
-            "### Саммари этапа (передано на {} {}):\n\n{}",
-            subtask_id, target_col.title, summary
+            "### Саммари этапа {}: {}\n\n{}",
+            current_task.stage_id, current_task.title, summary
         );
         let _ = append_task_dialog_activity(
             root,

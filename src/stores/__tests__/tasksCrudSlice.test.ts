@@ -260,10 +260,10 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
       expect(current?.isTimerRunning).toBe(false);
     });
 
-    it('updateTaskStatus preserves waiting_subtask status when idle is attempted (Guard Invariant)', () => {
+    it('updateTaskStatus transitions task to idle', () => {
       const task = createSampleTask({
         id: 'CVH-001',
-        status: 'waiting_subtask',
+        status: 'running',
         waitingForSubtaskId: 'CVH-001.1',
       });
       useBoardStore.getState().setTasks([task]);
@@ -271,7 +271,7 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
       useBoardStore.getState().updateTaskStatus('CVH-001', 'idle');
 
       const current = useBoardStore.getState().tasks.find((t) => t.id === 'CVH-001');
-      expect(current?.status).toBe('waiting_subtask');
+      expect(current?.status).toBe('idle');
     });
 
     it('updateTaskStatus preserves done status when idle is attempted (Guard Invariant)', () => {
@@ -469,7 +469,7 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
   });
 
   describe('Symmetrical Parent-Subtask Lifecycle (§ 2.22)', () => {
-    it('upserting a subtask locks parent task into waiting_subtask with waitingForSubtaskId', () => {
+    it('upserting a subtask links parent task with waitingForSubtaskId while keeping status idle', () => {
       const parent = createSampleTask({ id: 'CVH-010', stageId: 'dev', status: 'idle' });
       useBoardStore.getState().setTasks([parent]);
 
@@ -488,7 +488,7 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
       const childTask = state.tasks.find((t) => t.id === 'CVH-010.1');
 
       expect(childTask).toBeDefined();
-      expect(parentTask?.status).toBe('waiting_subtask');
+      expect(parentTask?.status).toBe('idle');
       expect(parentTask?.waitingForSubtaskId).toBe('CVH-010.1');
     });
 
@@ -548,7 +548,7 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
       expect(created?.id).toBe('CVH-020.1');
       const state = useBoardStore.getState();
       const parentTask = state.tasks.find((t) => t.id === 'CVH-020');
-      expect(parentTask?.status).toBe('waiting_subtask');
+      expect(parentTask?.status).toBe('idle');
       expect(parentTask?.waitingForSubtaskId).toBe('CVH-020.1');
     });
   });

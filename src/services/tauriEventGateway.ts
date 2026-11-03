@@ -417,7 +417,7 @@ export function ensureTaskRunningOnBoard(taskId: string): void {
     currentTask &&
     currentTask.status !== 'running' &&
     currentTask.status !== 'done' &&
-    currentTask.status !== 'waiting_subtask'
+    currentTask.status !== 'waiting_subagent'
   ) {
     boardState.updateTaskStatus(currentTask.id, 'running');
   }
@@ -720,7 +720,7 @@ export function setupTauriEventGateway(): () => void {
       // 10. agent:status
       await addListener('agent:status', (payload) => {
         const { taskId, status } = payload || {};
-        if (taskId && (status === 'finished' || status === 'aborted' || status === 'error')) {
+        if (taskId && (status === 'finished' || status === 'aborted' || status === 'error' || status === 'idle')) {
           useBoardStore.getState().clearActiveQuestion(taskId);
           if (isTaskActiveInDrawer(taskId)) {
             bufferManager.flushTask(taskId);
@@ -734,9 +734,13 @@ export function setupTauriEventGateway(): () => void {
             useDrawerStore.getState().setActiveAgentTask(taskId, false);
           }
           const currentTask = useBoardStore.getState().tasks.find((t) => t.id === taskId);
-          if (currentTask && currentTask.status === 'running') {
+          if (currentTask && currentTask.status !== 'done') {
             useBoardStore.getState().updateTaskStatus(taskId, 'idle');
           }
+        } else if (taskId && status === 'waiting_subagent') {
+          useBoardStore.getState().updateTaskStatus(taskId, 'waiting_subagent');
+        } else if (taskId && status === 'running') {
+          ensureTaskRunningOnBoard(taskId);
         }
         void useBoardStore.getState().loadTasks();
       });

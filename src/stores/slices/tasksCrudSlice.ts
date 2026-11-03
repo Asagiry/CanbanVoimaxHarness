@@ -457,7 +457,7 @@ export const createTasksCrudSlice: StateCreator<
     set((state) => {
       const updatedTasks = state.tasks.map((t) => {
         if (t.id !== taskId) return t;
-        if (status === 'idle' && (t.status === 'waiting_subtask' || t.status === 'done')) {
+        if (status === 'idle' && t.status === 'done') {
           return t;
         }
         const isTimerRunning = status === 'running' ? t.isTimerRunning : false;
@@ -537,9 +537,7 @@ export const createTasksCrudSlice: StateCreator<
               return {
                 ...t,
                 waitingForSubtaskId: isSubDone ? undefined : mapped.id,
-                status: isSubDone
-                  ? (t.status === 'waiting_subtask' ? ('idle' as TaskStatus) : t.status)
-                  : ('waiting_subtask' as TaskStatus),
+                status: t.status === 'waiting_subtask' ? ('idle' as TaskStatus) : t.status,
               };
             }
             return t;
@@ -602,6 +600,10 @@ export const createTasksCrudSlice: StateCreator<
         }
         return t;
       }
+      let status = t.status;
+      if (status === 'waiting_subtask') {
+        status = 'idle';
+      }
       if (t.waitingForSubtaskId) {
         const sub = mapped.find((s) => s.id === t.waitingForSubtaskId);
         const subColDef = sub ? columns.find((c) => c.id === sub.stageId) : undefined;
@@ -609,11 +611,11 @@ export const createTasksCrudSlice: StateCreator<
           return {
             ...t,
             waitingForSubtaskId: undefined,
-            status: t.status === 'waiting_subtask' ? ('idle' as TaskStatus) : t.status,
+            status,
           };
         }
       }
-      return t;
+      return status !== t.status ? { ...t, status } : t;
     });
 
     const prevHookStates = get().hookStates;
@@ -735,7 +737,7 @@ export const createTasksCrudSlice: StateCreator<
           if (t.id === parentId) {
             return {
               ...t,
-              status: 'waiting_subtask' as TaskStatus,
+              status: 'idle' as TaskStatus,
               waitingForSubtaskId: mapped.id,
               updatedAt: Date.now(),
             };

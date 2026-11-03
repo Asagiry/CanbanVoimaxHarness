@@ -55,7 +55,13 @@ export async function initNotifications(): Promise<void> {
   isInitialized = true;
 
   try {
-    const { onAction } = await import('@tauri-apps/plugin-notification');
+    const { onAction, isPermissionGranted, requestPermission } = await import('@tauri-apps/plugin-notification');
+    let granted = await isPermissionGranted();
+    if (!granted) {
+      const res = await requestPermission();
+      granted = res === 'granted';
+    }
+
     await onAction((action) => {
       const notifId = action.notification?.id;
       const extraData = action.notification?.extra as NotificationData | undefined;
@@ -67,7 +73,7 @@ export async function initNotifications(): Promise<void> {
   }
 }
 
-async function sendSystemNotification(title: string, body?: string, taskId?: string): Promise<void> {
+async function sendSystemNotification(title: string, body?: string, taskId?: string): Promise<boolean> {
   try {
     const { invoke } = await import('@tauri-apps/api/core');
     await invoke('show_system_notification', {
@@ -75,8 +81,10 @@ async function sendSystemNotification(title: string, body?: string, taskId?: str
       body: body || null,
       taskId: taskId || null,
     });
+    return true;
   } catch (err) {
     console.warn('[NotificationService] Failed to show system notification via IPC:', err);
+    return false;
   }
 }
 
@@ -164,7 +172,7 @@ export async function showRejectTaskNotification(payload: TaskRejectedPayload): 
   await sendSystemNotification(title, body || undefined, payload.taskId);
 }
 
-export async function showTestNotification(): Promise<void> {
+export async function showTestNotification(): Promise<boolean> {
   const title = 'CanbanVoimaxHarness';
   const body = 'Тестовое системное уведомление доставлено успешно.';
 
@@ -179,5 +187,5 @@ export async function showTestNotification(): Promise<void> {
     if (oldestKey !== undefined) notificationDataMap.delete(oldestKey);
   }
 
-  await sendSystemNotification(title, body);
+  return await sendSystemNotification(title, body);
 }

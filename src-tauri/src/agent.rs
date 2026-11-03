@@ -129,6 +129,7 @@ pub enum TaskStatus {
     Paused,
     WaitingReview,
     WaitingSubtask,
+    WaitingSubagent,
     Blocked,
     Done,
     #[serde(untagged)]
@@ -143,6 +144,7 @@ impl TaskStatus {
             TaskStatus::Paused => "paused",
             TaskStatus::WaitingReview => "waiting_review",
             TaskStatus::WaitingSubtask => "waiting_subtask",
+            TaskStatus::WaitingSubagent => "waiting_subagent",
             TaskStatus::Blocked => "blocked",
             TaskStatus::Done => "done",
             TaskStatus::Custom(s) => s.as_str(),
@@ -164,6 +166,7 @@ impl From<&str> for TaskStatus {
             "paused" => TaskStatus::Paused,
             "waiting_review" => TaskStatus::WaitingReview,
             "waiting_subtask" => TaskStatus::WaitingSubtask,
+            "waiting_subagent" => TaskStatus::WaitingSubagent,
             "blocked" => TaskStatus::Blocked,
             "done" => TaskStatus::Done,
             other => TaskStatus::Custom(other.to_string()),
@@ -196,6 +199,10 @@ impl Task {
 
     pub fn is_waiting_subtask(&self) -> bool {
         self.get_status() == TaskStatus::WaitingSubtask
+    }
+
+    pub fn is_waiting_subagent(&self) -> bool {
+        self.get_status() == TaskStatus::WaitingSubagent
     }
 
     /// Returns the strongly-typed domain `TaskState` representation of this task.

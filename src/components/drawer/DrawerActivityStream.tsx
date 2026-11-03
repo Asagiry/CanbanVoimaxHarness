@@ -87,8 +87,8 @@ export default function DrawerActivityStream({
 
   // Obeying § 2.20 & Question Tool Dedup:
   const displayActivities = useMemo(
-    () => filterDisplayActivities(unifiedActivities),
-    [unifiedActivities]
+    () => filterDisplayActivities(unifiedActivities, task?.id),
+    [unifiedActivities, task?.id]
   );
 
   // Pre-compute elapsed duration for each activity item
@@ -215,8 +215,8 @@ export default function DrawerActivityStream({
                 );
               }
 
-              // User steer message or Gatekeeper Sensor rejection
-              if (activity?.type === 'user' || activity?.type === 'steer') {
+              // User steer message, agent message, or Gatekeeper Sensor rejection
+              if (activity?.type === 'user' || activity?.type === 'steer' || (activity?.type as string) === 'agent') {
                 return (
                   <SteerDirectiveCard
                     key={key}

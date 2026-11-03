@@ -1,4 +1,7 @@
+import React from 'react';
 import { describe, it, expect } from 'vitest';
+import { renderToString } from 'react-dom/server';
+import { setLanguage } from '../../../../stores/languageStore';
 import {
   formatDurationCompact,
   ThoughtStreamCard,
@@ -18,6 +21,9 @@ import {
   shouldSuppressExplanation,
   filterDisplayActivities,
   computeActivityDurations,
+  isSensorRejectionActivity,
+  isHookRejectionActivity,
+  isAgentMessageActivity,
 } from '../index';
 import type { DrawerActivityItem } from '../../../../stores/drawerStore';
 
@@ -232,6 +238,66 @@ describe('streamHelpers', () => {
       expect(result).toHaveLength(3);
       expect(result.map((r) => r.id)).toEqual(['call_1', 'th_1', 'call_3']);
     });
+
+    it('filters out foreign subtask summaries and finalization summaries for root tasks', () => {
+      const ownCanonical = {
+        id: 's1',
+        type: 'summary',
+        content: '### Саммари этапа plan: Планирование\n\nPlan details',
+      } as any;
+      const ownLegacy = {
+        id: 's2',
+        type: 'summary',
+        content: '### Саммари этапа (передано на CVH-022.1 Разработка):\n\nHandover to dev',
+      } as any;
+      const foreignSub2 = {
+        id: 's3',
+        type: 'summary',
+        content: '### Саммари этапа (передано на CVH-022.2 Ревью):\n\nDev complete',
+      } as any;
+      const foreignFinal = {
+        id: 's4',
+        type: 'summary',
+        content: '### Саммари финализации задачи CVH-022: Готово\n\nReview approved and ready',
+      } as any;
+
+      const result = filterDisplayActivities(
+        [ownCanonical, ownLegacy, foreignSub2, foreignFinal],
+        'CVH-022'
+      );
+      expect(result).toHaveLength(2);
+      expect(result.map((r) => r.id)).toEqual(['s1', 's2']);
+    });
+
+    it('keeps subtask stage summaries when viewing a child subtask', () => {
+      const subtaskSummary = {
+        id: 'sub-summary',
+        type: 'summary',
+        content: '### Саммари этапа dev: Разработка\n\nImplementation completed',
+      } as any;
+      const subtaskHandover = {
+        id: 'sub-handover',
+        type: 'summary',
+        content: '### Саммари этапа (передано на CVH-022.2 Ревью):\n\nPassed to review',
+      } as any;
+
+      const result = filterDisplayActivities(
+        [subtaskSummary, subtaskHandover],
+        'CVH-022.1'
+      );
+      expect(result).toHaveLength(2);
+      expect(result.map((r) => r.id)).toEqual(['sub-summary', 'sub-handover']);
+    });
+
+    it('preserves all summaries when currentTaskId is undefined', () => {
+      const summary1 = {
+        id: 'sum-1',
+        type: 'summary',
+        content: '### Саммари финализации задачи CVH-022: Готово',
+      } as any;
+      const result = filterDisplayActivities([summary1]);
+      expect(result).toHaveLength(1);
+    });
   });
 
   describe('computeActivityDurations', () => {
@@ -253,5 +319,145 @@ describe('streamHelpers', () => {
       expect(durations[0]).toBe(250);
       expect(durations[1]).toBe(2000);
     });
+  });
+});
+
+describe('SteerDirectiveCard activity categorization & rendering', () => {
+  it('correctly categorizes sensor rejections', () => {
+    const actSensor1: DrawerActivityItem = {
+      id: '1',
+      type: 'steer',
+      timestamp: '12:00:00',
+      content: '### [ОТКЛОНЕНО СЕНСОРОМ / SENSOR REJECTED: clippy]\nclippy failed',
+    };
+    const actSensor2: DrawerActivityItem = {
+      id: '2',
+      type: 'steer',
+      timestamp: '12:00:00',
+      content: 'Gatekeeper SENSOR REJECTED: tests failed',
+    };
+    expect(isSensorRejectionActivity(actSensor1)).toBe(true);
+    expect(isSensorRejectionActivity(actSensor2)).toBe(true);
+    expect(isHookRejectionActivity(actSensor1)).toBe(false);
+    expect(isAgentMessageActivity(actSensor1)).toBe(false);
+  });
+
+  it('correctly categorizes hook rejections', () => {
+    const actHook1: DrawerActivityItem = {
+      id: '1',
+      type: 'steer',
+      timestamp: '12:00:00',
+      content: '### [ОТКЛОНЕНО ХУКОМ / HOOK REJECTED: verify_branch]\nExit 1',
+    };
+    const actHook2: DrawerActivityItem = {
+      id: '2',
+      type: 'steer',
+      timestamp: '12:00:00',
+      content: 'HOOK REJECTED: cannot transition stage',
+    };
+    expect(isHookRejectionActivity(actHook1)).toBe(true);
+    expect(isHookRejectionActivity(actHook2)).toBe(true);
+    expect(isSensorRejectionActivity(actHook1)).toBe(false);
+    expect(isAgentMessageActivity(actHook1)).toBe(false);
+  });
+
+  it('correctly categorizes agent handover summaries and reviewer returns as agent messages', () => {
+    const actHandover: DrawerActivityItem = {
+      id: '1',
+      type: 'steer',
+      timestamp: '12:00:00',
+      content: '### [ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]\n\nЗамечания исправлены. Отчет исполнителя:\nFixed Gate 6 merge conflict.',
+    };
+    const actReviewerReturn: DrawerActivityItem = {
+      id: '2',
+      type: 'steer',
+      timestamp: '12:00:00',
+      content: '### Задача возвращена на этап: Developer\n\n**Причина отклонения:**\nMerge conflict with main',
+    };
+    const actStageSummary: DrawerActivityItem = {
+      id: '3',
+      type: 'steer',
+      timestamp: '12:00:00',
+      content: '### Саммари этапа (передано на stage_2): All tasks done',
+    };
+    const actExplicitAgent: DrawerActivityItem = {
+      id: '4',
+      type: 'agent',
+      timestamp: '12:00:00',
+      content: 'Internal message from subagent',
+    };
+
+    expect(isAgentMessageActivity(actHandover)).toBe(true);
+    expect(isAgentMessageActivity(actReviewerReturn)).toBe(true);
+    expect(isAgentMessageActivity(actStageSummary)).toBe(true);
+    expect(isAgentMessageActivity(actExplicitAgent)).toBe(true);
+    expect(isSensorRejectionActivity(actHandover)).toBe(false);
+    expect(isHookRejectionActivity(actHandover)).toBe(false);
+  });
+
+  it('does not classify true user directives as agent messages or rejections', () => {
+    const actUserSteer: DrawerActivityItem = {
+      id: '1',
+      type: 'steer',
+      timestamp: '12:00:00',
+      content: 'Please make the navbar dark and add a search bar',
+    };
+    expect(isSensorRejectionActivity(actUserSteer)).toBe(false);
+    expect(isHookRejectionActivity(actUserSteer)).toBe(false);
+    expect(isAgentMessageActivity(actUserSteer)).toBe(false);
+  });
+
+  it('renders SteerDirectiveCard with Agent message banner for handover report instead of User Steer', () => {
+    setLanguage('en');
+    const actHandover: DrawerActivityItem = {
+      id: '1',
+      type: 'steer',
+      timestamp: '12:00:00',
+      content: '### [ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]\n\nResolved Gate 6 merge conflict',
+    };
+    const html = renderToString(React.createElement(SteerDirectiveCard, { activity: actHandover }));
+    expect(html).toContain('Agent message');
+    expect(html).not.toContain('User Steer');
+  });
+
+  it('renders SteerDirectiveCard with User Steer banner for genuine user instructions', () => {
+    setLanguage('en');
+    const actUserSteer: DrawerActivityItem = {
+      id: '1',
+      type: 'steer',
+      timestamp: '12:00:00',
+      content: 'Focus only on fixing the frontend layout',
+    };
+    const html = renderToString(React.createElement(SteerDirectiveCard, { activity: actUserSteer }));
+    expect(html).toContain('User Steer');
+    expect(html).not.toContain('Agent message');
+  });
+
+  it('renders SteerDirectiveCard with Gatekeeper Sensor Rejected banner for sensor failures', () => {
+    setLanguage('en');
+    const actSensor: DrawerActivityItem = {
+      id: '1',
+      type: 'steer',
+      timestamp: '12:00:00',
+      content: '### [ОТКЛОНЕНО СЕНСОРОМ / SENSOR REJECTED: clippy]\nErrors found',
+    };
+    const html = renderToString(React.createElement(SteerDirectiveCard, { activity: actSensor }));
+    expect(html).toContain('Gatekeeper Sensor Rejected');
+    expect(html).not.toContain('User Steer');
+    expect(html).not.toContain('Agent message');
+  });
+
+  it('renders SteerDirectiveCard with Hook Execution Rejected banner for hook failures', () => {
+    setLanguage('en');
+    const actHook: DrawerActivityItem = {
+      id: '1',
+      type: 'steer',
+      timestamp: '12:00:00',
+      content: '### [ОТКЛОНЕНО ХУКОМ / HOOK REJECTED: pre-commit]\nHook failed',
+    };
+    const html = renderToString(React.createElement(SteerDirectiveCard, { activity: actHook }));
+    expect(html).toContain('Hook Execution Rejected');
+    expect(html).not.toContain('User Steer');
+    expect(html).not.toContain('Agent message');
   });
 });

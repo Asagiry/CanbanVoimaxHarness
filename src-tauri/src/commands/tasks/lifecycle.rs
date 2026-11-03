@@ -113,19 +113,15 @@ pub async fn internal_save_tasks(
                 if t.status.as_deref() == Some("waiting_subtask") {
                     t.status = Some("done".to_string());
                 }
-            } else if dt.status.as_deref() == Some("waiting_subtask") && t.status.as_deref() != Some("waiting_subtask") {
-                if let Some(ref sub_id) = dt.waiting_for_subtask_id {
-                    if active_sub_ids.contains(sub_id) {
-                        t.status = Some("waiting_subtask".to_string());
-                        t.waiting_for_subtask_id = Some(sub_id.clone());
-                    } else {
-                        t.waiting_for_subtask_id = None;
-                    }
+            } else {
+                if t.status.as_deref() == Some("waiting_subtask") {
+                    t.status = Some("idle".to_string());
                 }
-            } else if dt.waiting_for_subtask_id.is_some() && t.waiting_for_subtask_id.is_none() {
-                if let Some(ref sub_id) = dt.waiting_for_subtask_id {
-                    if active_sub_ids.contains(sub_id) {
-                        t.waiting_for_subtask_id = Some(sub_id.clone());
+                if dt.waiting_for_subtask_id.is_some() && t.waiting_for_subtask_id.is_none() {
+                    if let Some(ref sub_id) = dt.waiting_for_subtask_id {
+                        if active_sub_ids.contains(sub_id) {
+                            t.waiting_for_subtask_id = Some(sub_id.clone());
+                        }
                     }
                 }
             }
@@ -832,7 +828,7 @@ pub async fn internal_create_subtask(
 
     // Update parent task: mark waiting for subtask, keep parent pinned in current stage (§ 2.2)
     tasks[parent_idx].waiting_for_subtask_id = Some(subtask_id.clone());
-    tasks[parent_idx].status = Some("waiting_subtask".to_string());
+    tasks[parent_idx].status = Some("idle".to_string());
     tasks[parent_idx].updated_at = now;
 
     let subtask_title = title
@@ -917,7 +913,7 @@ pub async fn internal_create_subtask(
             "task:moved",
             serde_json::json!({
                 "taskId": parent_id,
-                "status": "waiting_subtask",
+                "status": "idle",
                 "waitingForSubtaskId": &subtask_id,
                 "task": &parent_task_clone,
                 "projectPath": &project_path_str,
