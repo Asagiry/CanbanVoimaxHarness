@@ -280,7 +280,7 @@ When NOT: not a coder for feature logic; not a reviewer (separate clean context)
 Paths (repo-root relative, single source of truth):
 - `.cvh/boards.json {activeBoardId, boards[{id,name,columns}]}` defines `development` + `kanban` boards; `activeBoardId` selects one.
 - `.cvh/pipeline.json {id,title,columns[{id,title,persona,gatekeeperSensor,allowedTools,terminal}]}` mirrors active board columns.
-- `.cvh/settings/tool-policy.json {globalEnabled, stageOverrides}` is the only policy file; `.cvh/agents/<role>/persona.md` (legacy `.cvh/agents/<role>.md` replaced) + `<role>/setting {contextWindow,model,temperature}` + `<role>/rules/*.md` hold personas; `.cvh/rules/` holds project-wide architectural invariants and navigation maps; `.cvh/tools/<tool>.json` custom tools; `.cvh/hooks/` transition scripts; task work only in `worktrees/<slug>`.
+- `.cvh/settings/tool-policy.json {globalEnabled, stageOverrides}` is the only policy file; `.cvh/agents/<role>/persona.md` (legacy `.cvh/agents/<role>.md` replaced) + `<role>/setting {contextWindow,model,temperature}` + `<role>/rules/*.md` hold personas; `.cvh/rules/` holds project-wide architectural invariants, Cortex-editable Global Rules, and Turn 1 primed runtime contract (`.cvh/rules/runtime.md`); `.cvh/tools/<tool>.json` custom tools; `.cvh/hooks/` transition scripts; task work only in `worktrees/<slug>`.
 
 Architectural Map Discovery Mandate:
 - When initializing or configuring any repository, `cvh-dev` MUST NOT copy CanbanVoimaxHarness internal paths into target projects.
@@ -302,6 +302,7 @@ Load: rules/<topic>.md (progressive disclosure, each rule file ≤8KB).
 - If asked to configure boards: read rules/boards.md (.cvh/agents/cvh-dev/rules/boards.md).
 - If asked to configure agents/personas: read rules/agents.md (.cvh/agents/cvh-dev/rules/agents.md).
 - If asked to configure hooks: read rules/hooks.md (.cvh/agents/cvh-dev/rules/hooks.md).
+- If asked about runtime contract, batch execution, Global Rules vs Role Rules, Cortex Explorer, or CVH UI/UX: load_rule("runtime-rules") (.cvh/agents/cvh-dev/rules/runtime-rules.md).
 
 Boards skeleton (2 boards, minimal):
 ```json
@@ -371,6 +372,23 @@ Workflow (Explore -> Plan -> Code -> Verify -> Commit -> Handover):
 Rationalization vs Reality:
 - State only what runtime sensors prove. If a sensor fails, report the exact error and fix root causes immediately.
 "#;
+
+pub const DEFAULT_RUNTIME_MANDATE: &str = r#"# Runtime Environment: CanbanVoimaxHarness
+You are executing inside the CanbanVoimaxHarness autonomous multi-agent control plane.
+- Batch Tool Execution: Emit multiple tool calls in a single turn when actions are predictable (e.g. multi-file edits, or edits followed by build/lint/test verification). The harness executes them sequentially in order.
+- Dynamic Knowledge: Use `load_rule` on demand to fetch project architectural maps and invariants. Never guess."#;
+
+/// Strips leading YAML frontmatter block (`---\n...\n---`) from markdown content.
+pub fn strip_yaml_frontmatter(content: &str) -> &str {
+    let trimmed = content.trim_start();
+    if let Some(rest) = trimmed.strip_prefix("---") {
+        if let Some(end_idx) = rest.find("\n---") {
+            let after_marker = &rest[end_idx + 4..];
+            return after_marker.trim_start_matches(['\r', '\n']);
+        }
+    }
+    content
+}
 
 /// Zero-Turn Memory Priming: compiles strictly static SystemMessage from the
 /// role Persona (directory `.cvh/agents/<role>/persona.md` → built-in fallback), per-role
@@ -515,6 +533,18 @@ pub async fn compile_primed_system_prompt_with_tools(
         sections.push(format!("# Role Persona: {}\nYou are an expert AI agent in {}.", role, role));
     }
 
+    // 1a. Runtime Environment Contract (Turn 1 primed from .cvh/rules/runtime.md)
+    let runtime_path = repo_root.join(".cvh").join("rules").join("runtime.md");
+    let runtime_content = if runtime_path.is_file() {
+        tokio::fs::read_to_string(&runtime_path)
+            .await
+            .map(|s| strip_yaml_frontmatter(&crate::config::strip_frontmatter_tools(&s)).to_string())
+            .unwrap_or_else(|_| DEFAULT_RUNTIME_MANDATE.to_string())
+    } else {
+        DEFAULT_RUNTIME_MANDATE.to_string()
+    };
+    sections.push(runtime_content.trim().to_string());
+
     // 1b. Per-agent rules: `.cvh/agents/<role>/rules/*.md` and global `.cvh/rules/*.md`, alphabetical.
     // Modular Rules (JIT On-Demand): If `load_rule` is active, decouple rule bodies from prompt to optimize tokens.
     let has_load_rule = resolved_tools.iter().any(|t| t == "load_rule");
@@ -555,6 +585,9 @@ pub async fn compile_primed_system_prompt_with_tools(
                             continue;
                         }
                         let fname = entry.file_name().to_string_lossy().to_string();
+                        if fname == "runtime.md" {
+                            continue;
+                        }
                         if let Ok(content) = tokio::fs::read_to_string(&path).await {
                             rules.push((fname, content));
                         }
@@ -1149,6 +1182,29 @@ pub fn canonical_tool_name(tool_name: &str) -> &str {
     crate::config::normalize_tool_name(tool_name)
 }
 
+/// Determines if a failed tool execution triggers fail-fast batch abort (§ Directive C).
+/// Mutation tools (edit_file, write_file, task mutations) failing with Err / !success,
+/// or execute_command failing (Err, or output with non-zero exit code) abort subsequent tools in the batch.
+pub fn should_abort_tool_batch(tool_name: &str, success: bool, result_output: &str) -> bool {
+    let norm = canonical_tool_name(tool_name);
+    let is_mutation = matches!(
+        norm,
+        "edit_file"
+            | "write_file"
+            | "create_task"
+            | "create_tasks"
+            | "complete_task"
+            | "advance_task"
+            | "move_task"
+            | "reject_task"
+    );
+    let is_failing_cmd = norm == "execute_command"
+        && (!success
+            || (result_output.contains("[Exit Code: ") && !result_output.contains("[Exit Code: 0]")));
+
+    (!success && is_mutation) || is_failing_cmd
+}
+
 pub async fn get_stage_personas(repo_root: &Path) -> HashMap<String, String> {
     let mut map = HashMap::new();
     if let Ok(boards_cfg) = crate::config::load_boards_config(repo_root).await {
@@ -1709,10 +1765,45 @@ Messages count: {}
         }
 
         // Execute subagent tool calls
+        let mut batch_aborted_by_error: Option<String> = None;
         for tc in turn_tool_calls {
             if ctx.abort_handle.load(Ordering::SeqCst) {
                 break;
             }
+
+            if let Some(ref failed_tool) = batch_aborted_by_error {
+                let skip_msg = format!("Skipped: previous tool '{}' in this batch failed", failed_tool);
+                let tool_item_id = format!("sub-tool-{}", tc.id);
+                let tool_exec_skipped = serde_json::json!({
+                    "id": &tc.id,
+                    "toolName": &tc.function.name,
+                    "timestamp": chrono::Utc::now().to_rfc3339(),
+                    "durationMs": 0,
+                    "status": "failed",
+                    "params": serde_json::from_str(&tc.function.arguments).unwrap_or_else(|_| serde_json::json!({})),
+                    "stdout": &skip_msg,
+                });
+                let tool_act_skipped = ActivityItem {
+                    id: tool_item_id,
+                    item_type: "tool".to_string(),
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    content: None,
+                    tool: Some(tool_exec_skipped),
+                    duration_ms: Some(0.0),
+                    images: None,
+                };
+                let _ = crate::db::append_dialog_items(&ctx.repo_root, &subagent_dialog_id, std::slice::from_ref(&tool_act_skipped));
+                if let Some(ref app) = ctx.app_handle {
+                    let _ = app.emit("subagent:activity", serde_json::json!({
+                        "parentTaskId": &parent_id,
+                        "subagentId": &subagent_id,
+                        "activity": &tool_act_skipped,
+                    }));
+                }
+                sub_messages.push(ChatMessage::tool_response(tc.id, skip_msg));
+                continue;
+            }
+
             let parsed_args: serde_json::Value =
                 serde_json::from_str(&tc.function.arguments).unwrap_or_else(|_| serde_json::json!({}));
 
@@ -1826,6 +1917,10 @@ Messages count: {}
                     "subagentId": &subagent_id,
                     "activity": &tool_act_done,
                 }));
+            }
+
+            if should_abort_tool_batch(&tc.function.name, is_success, &res_str) {
+                batch_aborted_by_error = Some(tc.function.name.clone());
             }
 
             sub_messages.push(ChatMessage::tool_response(tc.id, res_str));
@@ -3377,6 +3472,7 @@ Messages count: {}
         };
 
         let mut executed_subagents_in_turn: Vec<ExecutedSubagentCall> = Vec::new();
+        let mut batch_aborted_by_error: Option<String> = None;
 
         // Execute each tool call and record response
         for tc in turn_tool_calls {
@@ -3385,6 +3481,18 @@ Messages count: {}
                 sync_context_state(&config.app_handle, &config.task_id, turn, &messages);
                 event_sink(AgentEvent::Aborted);
                 bail!("Agent execution aborted by user");
+            }
+
+            if let Some(ref failed_tool) = batch_aborted_by_error {
+                let skip_msg = format!("Skipped: previous tool '{}' in this batch failed", failed_tool);
+                event_sink(AgentEvent::ToolResult {
+                    id: tc.id.clone(),
+                    name: tc.function.name.clone(),
+                    result: skip_msg.clone(),
+                    success: false,
+                });
+                messages.push(ChatMessage::tool_response(tc.id, skip_msg));
+                continue;
             }
 
             let parsed_args: serde_json::Value =
@@ -3525,6 +3633,10 @@ Messages count: {}
             });
 
             messages.push(ChatMessage::tool_response(tc.id, result_str.clone()));
+
+            if should_abort_tool_batch(&tc.function.name, success, &result_str) {
+                batch_aborted_by_error = Some(tc.function.name.clone());
+            }
 
             // Stage transition termination (§ 2.27 & § 1):
             // When any executed tool call is "advance_task", "move_task", or "reject_task" (or aliases):

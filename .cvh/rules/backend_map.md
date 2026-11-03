@@ -91,7 +91,8 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 - **`ids.rs`**: Strongly typed nominal branded types: `TaskId`, `StageId`, `BoardId`. Prevents primitive obsession and accidental string interchange.
 - **`state.rs`**: `TaskState` state machine (`Backlog`, `InProgress`, `Review`, `Done`). Rejects illegal state jumps at compile and runtime.
 
-### 2.5 Agent Execution Engine (`src-tauri/src/agent/`)
+### 2.5 Agent Execution Engine (`src-tauri/src/agent/` & `agent.rs`)
+- **`agent.rs`**: Core agent ReAct loop (`run_agent_loop`), in-process subagents (`execute_subagent`), Turn 1 runtime contract priming (`.cvh/rules/runtime.md`), batch tool execution fail-fast logic (`should_abort_tool_batch`), and system prompt assembly (`compile_primed_system_prompt_with_tools`).
 - **`react_engine.rs`**: Generic `ReActEngine<Driver>` implementing multi-turn reasoning loops, event streaming (`AgentEvent`), and tool invocation dispatch.
 - **`compactor.rs`**: `ToolCallSummaryExtractor` (CC=1) extracting head/tail summaries of large tool outputs without nested branching. Enforces 100% context capacity threshold.
 - **`sanitizer.rs`**: Cleans malformed LLM responses, stripping unclosed thinking tags and repairing incomplete tool invocation markers.

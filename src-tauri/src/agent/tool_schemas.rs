@@ -443,6 +443,8 @@ pub fn get_available_rules_with_descriptions(
         }
     }
 
+    // Exclude 'runtime' because runtime.md is automatically primed into Turn 1 for all agents
+    rules.retain(|(stem, _)| stem != "runtime");
     rules.sort_by(|a, b| a.0.cmp(&b.0));
     rules.dedup_by(|a, b| a.0 == b.0);
     rules

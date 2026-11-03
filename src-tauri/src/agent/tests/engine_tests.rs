@@ -341,6 +341,7 @@ use std::sync::Arc;
                 "role-planner",
                 "role-retro",
                 "role-reviewer",
+                "runtime-rules",
                 "tools",
             ]
         );
@@ -769,6 +770,181 @@ data: [DONE]
         let regular_text = regular.join("");
         assert!(regular_text.contains("`<think>`"));
         assert!(regular_text.contains("Done!"));
+    }
+
+    #[tokio::test]
+    async fn test_system_prompt_primed_runtime_mandate_and_exclusion() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_runtime_test_{}", uuid::Uuid::new_v4()));
+        let rules_dir = base.join(".cvh").join("rules");
+        tokio::fs::create_dir_all(&rules_dir).await.expect("rules dir");
+
+        // 1. Write runtime.md with frontmatter and a custom rule architecture.md
+        let custom_runtime = r#"---
+description: Custom runtime description
+---
+# Runtime Environment: CanbanVoimaxHarness
+Custom runtime rule content for test."#;
+        tokio::fs::write(rules_dir.join("runtime.md"), custom_runtime).await.expect("write runtime.md");
+
+        let arch_rule = r#"---
+description: System architecture overview
+---
+# System Architecture"#;
+        tokio::fs::write(rules_dir.join("architecture.md"), arch_rule).await.expect("write arch.md");
+
+        // 2. Primed system prompt must contain stripped runtime.md content
+        let prompt = compile_primed_system_prompt(&base, "developer").await.expect("compile prompt");
+        assert!(prompt.contains("# Runtime Environment: CanbanVoimaxHarness"));
+        assert!(prompt.contains("Custom runtime rule content for test."));
+        assert!(!prompt.contains("description: Custom runtime description"), "YAML frontmatter must be stripped");
+
+        // 3. get_available_rules_with_descriptions must exclude 'runtime'
+        let available_with_desc = crate::agent::tool_schemas::get_available_rules_with_descriptions(&base, Some("developer"));
+        assert!(available_with_desc.iter().any(|(stem, _)| stem == "architecture"));
+        assert!(!available_with_desc.iter().any(|(stem, _)| stem == "runtime"), "runtime.md must be excluded from dynamic rules");
+
+        let available_stems = crate::agent::tool_schemas::get_available_rules(&base, Some("developer"));
+        assert!(available_stems.contains(&"architecture".to_string()));
+        assert!(!available_stems.contains(&"runtime".to_string()));
+
+        // 4. When runtime.md does NOT exist on disk, fall back to DEFAULT_RUNTIME_MANDATE
+        let _ = tokio::fs::remove_file(rules_dir.join("runtime.md")).await;
+        let fallback_prompt = compile_primed_system_prompt(&base, "developer").await.expect("compile prompt fallback");
+        assert!(fallback_prompt.contains(DEFAULT_RUNTIME_MANDATE));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[test]
+    fn test_should_abort_tool_batch_logic() {
+        // Mutation tools fail-fast on failure
+        assert!(should_abort_tool_batch("edit_file", false, "file error"));
+        assert!(should_abort_tool_batch("write_file", false, "permission error"));
+        assert!(should_abort_tool_batch("advance_task", false, "stage error"));
+        assert!(!should_abort_tool_batch("edit_file", true, "ok"));
+        assert!(!should_abort_tool_batch("write_file", true, "ok"));
+
+        // Commands fail-fast on error or non-zero exit code
+        assert!(should_abort_tool_batch("execute_command", false, "timeout"));
+        assert!(should_abort_tool_batch("execute_command", true, "[Exit Code: 1]
+--- STDOUT ---
+error
+--- STDERR ---"));
+        assert!(should_abort_tool_batch("execute_command", true, "[Exit Code: 101]
+--- STDOUT ---
+panic
+--- STDERR ---"));
+        assert!(!should_abort_tool_batch("execute_command", true, "[Exit Code: 0]
+--- STDOUT ---
+success
+--- STDERR ---"));
+
+        // Read-only tools do NOT abort batch
+        assert!(!should_abort_tool_batch("read_file", false, "file not found"));
+        assert!(!should_abort_tool_batch("glob", false, "no files"));
+        assert!(!should_abort_tool_batch("grep", false, "no matches"));
+        assert!(!should_abort_tool_batch("load_rule", false, "unknown rule"));
+    }
+
+    #[tokio::test]
+    async fn test_batch_tool_execution_fail_fast_in_run_agent_loop() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_batch_test_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+
+        let (boards_cfg, _) = make_test_board(&base);
+        crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
+
+        let task = make_test_task("CVH-090", "dev", "test-board");
+        crate::commands::tasks::save_tasks_to_disk(&base, &[task]).await.expect("save task");
+
+        // Batch tool calls:
+        // Tool 0: edit_file on non-existent file -> fails
+        // Tool 1: edit_file on second file -> should be skipped
+        // Tool 2: execute_command -> should be skipped
+        let sse_stream = r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_edit_fail","function":{"name":"edit_file","arguments":"{\"path\":\"missing_file.rs\",\"old_str\":\"a\",\"new_str\":\"b\"}"}},{"index":1,"id":"call_edit_skip","function":{"name":"edit_file","arguments":"{\"path\":\"file2.rs\",\"old_str\":\"c\",\"new_str\":\"d\"}"}},{"index":2,"id":"call_cmd_skip","function":{"name":"execute_command","arguments":"{\"command\":\"cargo check\"}"}}]}}]}
+
+data: [DONE]
+
+data: {"choices":[{"delta":{"content":"Batch recovery completed."}}]}
+
+data: [DONE]
+
+"#;
+        let request_counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let (base_url, server_handle) = start_mock_sse_server(sse_stream, Arc::clone(&request_counter)).await;
+
+        let config = AgentSessionConfig {
+            repo_root: base.clone(),
+            worktree_path: base.clone(),
+            role: "developer".to_string(),
+            stage_id: "dev".to_string(),
+            task_id: "CVH-090".to_string(),
+            task_title: "Test batch task".to_string(),
+            task_description: "Batch fail-fast test".to_string(),
+            handover_summary: None,
+            task_attachments: None,
+            steer_prompt: None,
+            steer_images: None,
+            base_url,
+            api_key: None,
+            model: "test-model".to_string(),
+            temperature: None,
+            reasoning_effort: None,
+            max_turns: 10,
+            app_handle: None,
+            context_window: None,
+        };
+
+        let loop_abort_flag = Arc::new(AtomicBool::new(false));
+        let events = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let events_clone = Arc::clone(&events);
+
+        let result = run_agent_loop(config, loop_abort_flag, move |ev| {
+            events_clone.lock().unwrap().push(ev);
+        })
+        .await
+        .expect("run_agent_loop must succeed on recovery");
+
+        server_handle.abort();
+
+        assert_eq!(request_counter.load(Ordering::SeqCst), 2, "Expected 2 requests to LLM");
+        assert!(result.contains("Batch recovery completed."));
+
+        let captured_events = events.lock().unwrap().clone();
+        let tool_results: Vec<(String, String, bool)> = captured_events
+            .iter()
+            .filter_map(|e| {
+                if let AgentEvent::ToolResult { id, name, result: _, success } = e {
+                    Some((id.clone(), name.clone(), *success))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        assert_eq!(tool_results.len(), 3, "Expected 3 tool results in batch");
+
+        // Tool 0 failed execution
+        assert_eq!(tool_results[0].0, "call_edit_fail");
+        assert!(!tool_results[0].2, "First edit must have failed");
+
+        // Tool 1 was skipped due to fail-fast
+        assert_eq!(tool_results[1].0, "call_edit_skip");
+        assert!(!tool_results[1].2, "Second edit must be marked failure/skipped");
+        let event_1 = captured_events.iter().find(|e| matches!(e, AgentEvent::ToolResult { id, .. } if id == "call_edit_skip")).unwrap();
+        if let AgentEvent::ToolResult { result, .. } = event_1 {
+            assert!(result.contains("Skipped: previous tool 'edit_file' in this batch failed"), "got: {}", result);
+        }
+
+        // Tool 2 was skipped due to fail-fast
+        assert_eq!(tool_results[2].0, "call_cmd_skip");
+        assert!(!tool_results[2].2, "Third command must be marked failure/skipped");
+        let event_2 = captured_events.iter().find(|e| matches!(e, AgentEvent::ToolResult { id, .. } if id == "call_cmd_skip")).unwrap();
+        if let AgentEvent::ToolResult { result, .. } = event_2 {
+            assert!(result.contains("Skipped: previous tool 'edit_file' in this batch failed"), "got: {}", result);
+        }
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
     }
 
 
