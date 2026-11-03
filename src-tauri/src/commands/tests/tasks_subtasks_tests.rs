@@ -1032,3 +1032,128 @@ use std::path::PathBuf;
 
         let _ = tokio::fs::remove_dir_all(&tmp).await;
     }
+
+    #[tokio::test]
+    async fn test_subtask_advance_does_not_forward_summary_to_parent_dialog() {
+        let tmp = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("tmp")
+            .join(format!("cvh_test_subtask_no_dialog_leak_{}", uuid::Uuid::new_v4()));
+        let _ = tokio::fs::create_dir_all(&tmp).await;
+        let _ = tokio::fs::create_dir_all(tmp.join(".cvh")).await;
+
+        let boards_cfg = serde_json::json!({
+            "active_board_id": "development",
+            "boards": [
+                {
+                    "id": "development",
+                    "name": "Разработка",
+                    "columns": [
+                        { "id": "plan", "title": "Планирование", "auto_run": false },
+                        { "id": "dev", "title": "Разработка", "auto_run": false },
+                        { "id": "review", "title": "Ревью", "auto_run": false },
+                        { "id": "ready", "title": "Готово", "terminal": true }
+                    ]
+                }
+            ]
+        });
+        tokio::fs::write(
+            tmp.join(".cvh").join("boards.json"),
+            serde_json::to_string_pretty(&boards_cfg).unwrap(),
+        )
+        .await
+        .expect("write boards.json");
+
+        // 1. Create root parent task CVH-888
+        let _parent = internal_create_task(
+            &tmp,
+            "Root Task".to_string(),
+            "Parent Description".to_string(),
+            "plan".to_string(),
+            Some("development".to_string()),
+            Some(true),
+            None,
+            Some("CVH-888".to_string()),
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("create parent task");
+
+        // 2. Advance parent to 'dev', which creates child subtask CVH-888.1
+        let adv_parent = internal_advance_task_to_stage(
+            &tmp,
+            "CVH-888",
+            Some("dev"),
+            "Planner summary for root",
+            None,
+        )
+        .await
+        .expect("advance parent to dev");
+        assert!(adv_parent.contains("УСПЕШНО"));
+
+        // Verify parent dialog has its own canonical summary
+        let parent_dialog_after_plan = crate::db::load_dialog_items(&tmp, "CVH-888").expect("load parent dialog");
+        assert!(parent_dialog_after_plan.iter().any(|d| {
+            let c = d.content.as_deref().unwrap_or("");
+            c.contains("Planner summary for root") && c.contains("### Саммари этапа plan: Root Task")
+        }));
+
+        // 3. Child subtask CVH-888.1 advances to 'review', creating CVH-888.2
+        let adv_sub1 = internal_advance_task_to_stage(
+            &tmp,
+            "CVH-888.1",
+            Some("review"),
+            "Developer summary from sub1",
+            None,
+        )
+        .await
+        .expect("advance sub1 to review");
+        assert!(adv_sub1.contains("УСПЕШНО"));
+
+        // Verify subtask CVH-888.1 dialog has its own summary
+        let sub1_dialog = crate::db::load_dialog_items(&tmp, "CVH-888.1").expect("load sub1 dialog");
+        assert!(sub1_dialog.iter().any(|d| {
+            d.content.as_deref().unwrap_or("").contains("Developer summary from sub1")
+        }));
+
+        // CRITICAL INVARIANT: Parent CVH-888 dialog must NOT receive CVH-888.1 summary
+        let parent_dialog_after_sub1 = crate::db::load_dialog_items(&tmp, "CVH-888").expect("load parent dialog");
+        assert!(
+            !parent_dialog_after_sub1.iter().any(|d| {
+                d.content.as_deref().unwrap_or("").contains("Developer summary from sub1")
+            }),
+            "Parent dialog must NOT contain subtask 1's summary!"
+        );
+
+        // 4. Subtask CVH-888.2 advances to terminal 'ready'
+        let adv_sub2 = internal_advance_task_to_stage(
+            &tmp,
+            "CVH-888.2",
+            Some("ready"),
+            "Reviewer approved summary from sub2",
+            None,
+        )
+        .await
+        .expect("advance sub2 to ready");
+        assert!(adv_sub2.contains("УСПЕШНО"));
+
+        // Subtask CVH-888.2 dialog has its own summary
+        let sub2_dialog = crate::db::load_dialog_items(&tmp, "CVH-888.2").expect("load sub2 dialog");
+        assert!(sub2_dialog.iter().any(|d| {
+            d.content.as_deref().unwrap_or("").contains("Reviewer approved summary from sub2")
+        }));
+
+        // CRITICAL INVARIANT: Parent CVH-888 dialog must NOT receive sub2 terminal summary or finalization summary
+        let parent_dialog_final = crate::db::load_dialog_items(&tmp, "CVH-888").expect("load parent dialog");
+        assert!(
+            !parent_dialog_final.iter().any(|d| {
+                let c = d.content.as_deref().unwrap_or("");
+                c.contains("Reviewer approved summary from sub2") || c.contains("Саммари финализации задачи")
+            }),
+            "Parent dialog must NOT contain subtask 2's summary or finalization summary!"
+        );
+
+        let _ = tokio::fs::remove_dir_all(&tmp).await;
+    }

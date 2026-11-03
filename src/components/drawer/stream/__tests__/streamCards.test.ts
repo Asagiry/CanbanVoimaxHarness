@@ -238,6 +238,66 @@ describe('streamHelpers', () => {
       expect(result).toHaveLength(3);
       expect(result.map((r) => r.id)).toEqual(['call_1', 'th_1', 'call_3']);
     });
+
+    it('filters out foreign subtask summaries and finalization summaries for root tasks', () => {
+      const ownCanonical = {
+        id: 's1',
+        type: 'summary',
+        content: '### Саммари этапа plan: Планирование\n\nPlan details',
+      } as any;
+      const ownLegacy = {
+        id: 's2',
+        type: 'summary',
+        content: '### Саммари этапа (передано на CVH-022.1 Разработка):\n\nHandover to dev',
+      } as any;
+      const foreignSub2 = {
+        id: 's3',
+        type: 'summary',
+        content: '### Саммари этапа (передано на CVH-022.2 Ревью):\n\nDev complete',
+      } as any;
+      const foreignFinal = {
+        id: 's4',
+        type: 'summary',
+        content: '### Саммари финализации задачи CVH-022: Готово\n\nReview approved and ready',
+      } as any;
+
+      const result = filterDisplayActivities(
+        [ownCanonical, ownLegacy, foreignSub2, foreignFinal],
+        'CVH-022'
+      );
+      expect(result).toHaveLength(2);
+      expect(result.map((r) => r.id)).toEqual(['s1', 's2']);
+    });
+
+    it('keeps subtask stage summaries when viewing a child subtask', () => {
+      const subtaskSummary = {
+        id: 'sub-summary',
+        type: 'summary',
+        content: '### Саммари этапа dev: Разработка\n\nImplementation completed',
+      } as any;
+      const subtaskHandover = {
+        id: 'sub-handover',
+        type: 'summary',
+        content: '### Саммари этапа (передано на CVH-022.2 Ревью):\n\nPassed to review',
+      } as any;
+
+      const result = filterDisplayActivities(
+        [subtaskSummary, subtaskHandover],
+        'CVH-022.1'
+      );
+      expect(result).toHaveLength(2);
+      expect(result.map((r) => r.id)).toEqual(['sub-summary', 'sub-handover']);
+    });
+
+    it('preserves all summaries when currentTaskId is undefined', () => {
+      const summary1 = {
+        id: 'sum-1',
+        type: 'summary',
+        content: '### Саммари финализации задачи CVH-022: Готово',
+      } as any;
+      const result = filterDisplayActivities([summary1]);
+      expect(result).toHaveLength(1);
+    });
   });
 
   describe('computeActivityDurations', () => {
