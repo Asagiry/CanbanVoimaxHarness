@@ -113,6 +113,71 @@ use crate::llm::ToolCall;
         assert!(!steer_content.contains("Примите это указание во внимание"));
     }
 
+    #[test]
+    fn test_reconstruct_messages_from_dialog_preserves_handover_and_rejections() {
+        let items = vec![
+            ActivityItem {
+                id: "act-handover".to_string(),
+                item_type: "steer".to_string(),
+                timestamp: "12:00:10".to_string(),
+                content: Some("### [ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]\n\nЗамечания исправлены. Отчет исполнителя:\nFixed bug in tasks.rs".to_string()),
+                tool: None,
+                duration_ms: None,
+                images: None,
+            },
+            ActivityItem {
+                id: "act-sensor-reject".to_string(),
+                item_type: "steer".to_string(),
+                timestamp: "12:00:15".to_string(),
+                content: Some("### [ОТКЛОНЕНО СЕНСОРОМ / SENSOR REJECTED: Gatekeeper]\n\nClippy failed".to_string()),
+                tool: None,
+                duration_ms: None,
+                images: None,
+            },
+            ActivityItem {
+                id: "act-reviewer-reject".to_string(),
+                item_type: "steer".to_string(),
+                timestamp: "12:00:20".to_string(),
+                content: Some("### Задача возвращена на этап: Developer\n\n**Причина отклонения:**\nMerge conflict".to_string()),
+                tool: None,
+                duration_ms: None,
+                images: None,
+            },
+            ActivityItem {
+                id: "act-true-user-steer".to_string(),
+                item_type: "steer".to_string(),
+                timestamp: "12:00:25".to_string(),
+                content: Some("Please write more tests".to_string()),
+                tool: None,
+                duration_ms: None,
+                images: None,
+            },
+        ];
+
+        let reconstructed = reconstruct_messages_from_dialog(
+            "SYSTEM PROMPT",
+            "INITIAL OBJECTIVE",
+            &items,
+        );
+
+        assert_eq!(reconstructed.len(), 6);
+        let handover_msg = reconstructed[2].content.as_deref().unwrap();
+        assert!(handover_msg.starts_with("### [ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]"));
+        assert!(!handover_msg.contains("[УКАЗАНИЕ ПОЛЬЗОВАТЕЛЯ"));
+
+        let sensor_msg = reconstructed[3].content.as_deref().unwrap();
+        assert!(sensor_msg.starts_with("### [ОТКЛОНЕНО СЕНСОРОМ"));
+        assert!(!sensor_msg.contains("[УКАЗАНИЕ ПОЛЬЗОВАТЕЛЯ"));
+
+        let reviewer_msg = reconstructed[4].content.as_deref().unwrap();
+        assert!(reviewer_msg.starts_with("### Задача возвращена на этап: Developer"));
+        assert!(!reviewer_msg.contains("[УКАЗАНИЕ ПОЛЬЗОВАТЕЛЯ"));
+
+        let user_steer_msg = reconstructed[5].content.as_deref().unwrap();
+        assert!(user_steer_msg.contains("### [УКАЗАНИЕ ПОЛЬЗОВАТЕЛЯ / USER STEER]"));
+        assert!(user_steer_msg.contains("Please write more tests"));
+    }
+
 
     #[test]
     fn test_reconstruct_messages_from_frontend_dialog_items() {
