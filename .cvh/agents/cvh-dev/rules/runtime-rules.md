@@ -6,6 +6,7 @@ description: Turn 1 runtime contract, batch tool execution & fail-fast mechanics
 ## 1. Runtime Environment Contract (`.cvh/rules/runtime.md`)
 - **Turn 1 Priming**: The harness reads `.cvh/rules/runtime.md` from the project repository root and automatically inlines it (with YAML frontmatter stripped) as Section 1a into the Turn 1 System Prompt of all agents across all columns/roles. If absent or unreadable, the backend falls back to `DEFAULT_RUNTIME_MANDATE`.
 - **Exclusion from `load_rule` Suggestions**: Because `runtime.md` is already unconditionally primed into Turn 1, `get_available_rules_with_descriptions` explicitly filters out `runtime`. Agents do not need to call `load_rule("runtime")`.
+- **Core Invariants Governed**: Batch Tool Execution, Zero-Slop Code (no unprompted code comments), Concise Delivery (no post-edit fluff recitation), and JIT Dynamic Knowledge (`load_rule`).
 - **Cortex Visibility**: Because it is stored in `.cvh/rules/`, it is fully visible and editable in the Cortex Explorer tab under "Общие правила" (Global Rules), enabling operators to tune batch mandates and global instructions on the fly.
 
 ## 2. Batch Tool Execution & Fail-Fast Semantics
