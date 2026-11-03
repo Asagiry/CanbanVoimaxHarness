@@ -35,6 +35,7 @@ export interface AgentToolCallPayload {
   name?: string;
   arguments?: string | Record<string, unknown>;
   batch?: { index: number; total: number };
+  status?: string;
 }
 
 export interface AgentToolResultPayload {
@@ -466,7 +467,7 @@ export function setupTauriEventGateway(): () => void {
 
       // 3. agent:tool_call
       await addListener('agent:tool_call', (payload) => {
-        const { taskId, id, name, arguments: args, batch } = payload || {};
+        const { taskId, id, name, arguments: args, batch, status = 'running' } = payload || {};
         if (!taskId) return;
         ensureTaskRunningOnBoard(taskId);
         if (!isTaskActiveInDrawer(taskId)) {
@@ -503,7 +504,7 @@ export function setupTauriEventGateway(): () => void {
             toolName: name,
             timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
             durationMs: 0,
-            status: 'running',
+            status: status === 'queued' ? 'queued' : 'running',
             params: parsedParams,
             batch: batch ?? undefined,
           });

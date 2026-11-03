@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { ToolExecution } from '../../../types';
-import { Check, Copy, X } from 'lucide-react';
+import { Check, Copy, X, Clock } from 'lucide-react';
 import { formatDurationCompact } from '../ThinkingCard';
 import { useTranslation } from '../../../stores/languageStore';
 
@@ -11,10 +11,11 @@ export interface ToolCardProps {
 }
 
 export function isToolSkipped(tool: ToolExecution): boolean {
-  return Boolean(
-    tool?.stdout?.includes('Skipped: previous tool') ||
-    tool?.stderr?.includes('Skipped: previous tool')
-  );
+  if (tool.status !== 'failed' && (tool.status as string) !== 'error') {
+    return false;
+  }
+  const text = (tool.stderr || tool.stdout || '').trim();
+  return text.startsWith('Skipped: previous tool');
 }
 
 export function isToolFailed(tool: ToolExecution): boolean {
@@ -42,6 +43,17 @@ export function BatchBadge({ tool }: { tool: ToolExecution }) {
 
 export function StatusIndicator({ tool, isFailed }: { tool: ToolExecution; isFailed?: boolean }) {
   const { t } = useTranslation();
+  if (tool.status === 'queued') {
+    return (
+      <span
+        data-testid="batch-queued-badge"
+        className="px-1.5 py-0.5 rounded text-[10px] font-mono text-[#8b949e] dark:text-[#6e7681] bg-[#f4f4f5]/60 dark:bg-[#161b22]/60 border border-[#e4e4e7] dark:border-[#30363d] flex items-center space-x-1 shrink-0 select-none"
+      >
+        <Clock className="h-2.5 w-2.5" />
+        <span>{t('drawer.batchQueued')}</span>
+      </span>
+    );
+  }
   if (isToolSkipped(tool)) {
     return (
       <span

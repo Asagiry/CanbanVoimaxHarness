@@ -197,9 +197,11 @@ export function filterDisplayActivities(unifiedActivities: DrawerActivityItem[])
     if (act?.type === 'tool' && act.tool) {
       const tName = act.tool.toolName || (act.tool as any)?.name;
 
+      const isBatchStep = Boolean(act.tool?.batch && (act.tool.batch.total ?? 0) > 1);
+
       // Smart Todo deduplication: if multiple todo_write snapshots share the same completed count
       // (e.g. duplicate startup runs or zero-progress updates), keep only the latest checklist snapshot
-      if (tName === 'todo_write' || tName === 'write_todos') {
+      if ((tName === 'todo_write' || tName === 'write_todos') && !isBatchStep) {
         const actParams = (act.tool?.params as Record<string, unknown> | undefined)?.todos;
         let actTodos: unknown[] = [];
         if (Array.isArray(actParams)) {
@@ -216,6 +218,7 @@ export function filterDisplayActivities(unifiedActivities: DrawerActivityItem[])
 
         const existingTodoIdx = result.findIndex((prev) => {
           if (prev?.type !== 'tool' || !prev.tool) return false;
+          if (prev.tool.batch && (prev.tool.batch.total ?? 0) > 1) return false;
           const pName = prev.tool.toolName || (prev.tool as any)?.name;
           if (pName !== 'todo_write' && pName !== 'write_todos') return false;
           const prevParams = (prev.tool?.params as Record<string, unknown> | undefined)?.todos;
@@ -239,14 +242,16 @@ export function filterDisplayActivities(unifiedActivities: DrawerActivityItem[])
         }
       }
 
-      const isDuplicate = result.slice(-3).some((prev) => {
-        if (prev?.type !== 'tool' || !prev.tool) return false;
-        const prevName = prev.tool.toolName || (prev.tool as any)?.name;
-        if (!prevName || prevName !== tName) return false;
-        return JSON.stringify(prev.tool.params) === JSON.stringify(act.tool?.params);
-      });
-      if (isDuplicate) {
-        continue;
+      if (!isBatchStep) {
+        const isDuplicate = result.slice(-3).some((prev) => {
+          if (prev?.type !== 'tool' || !prev.tool) return false;
+          const prevName = prev.tool.toolName || (prev.tool as any)?.name;
+          if (!prevName || prevName !== tName) return false;
+          return JSON.stringify(prev.tool.params) === JSON.stringify(act.tool?.params);
+        });
+        if (isDuplicate) {
+          continue;
+        }
       }
     }
     result.push(act);

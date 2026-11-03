@@ -526,6 +526,19 @@ pub async fn run_agent(
                         serde_json::json!({ "taskId": tid_inner, "thought": &thought, "delta": &thought }),
                     );
                 }
+                AgentEvent::ToolQueued { id, name, arguments, batch } => {
+                    let _ = app_inner.emit(
+                        "agent:tool_call",
+                        serde_json::json!({
+                            "taskId": tid_inner,
+                            "id": id,
+                            "name": name,
+                            "arguments": arguments,
+                            "batch": batch,
+                            "status": "queued",
+                        }),
+                    );
+                }
                 AgentEvent::ToolCall { id, name, arguments, batch } => {
                     let _ = app_inner.emit(
                         "agent:tool_call",
@@ -535,6 +548,7 @@ pub async fn run_agent(
                             "name": name,
                             "arguments": arguments,
                             "batch": batch,
+                            "status": "running",
                         }),
                     );
 

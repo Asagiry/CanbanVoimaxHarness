@@ -256,7 +256,7 @@ export interface ToolExecution {
   toolName: string;
   timestamp: string;
   durationMs: number;
-  status: 'running' | 'success' | 'failed';
+  status: 'queued' | 'running' | 'success' | 'failed';
   exitCode?: number;
   params: Record<string, unknown>;
   stdout?: string;

@@ -204,6 +204,7 @@ export const en = {
   'drawer.optimizationTitle': 'Context Optimization',
   'drawer.batchStep': 'Batch {index}/{total}',
   'drawer.batchSkipped': 'Skipped due to batch failure',
+  'drawer.batchQueued': 'Queued',
 
   // Git Diff Sidebar
   'gitDiff.title': 'Git Diff',

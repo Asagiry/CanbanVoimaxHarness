@@ -206,6 +206,7 @@ export const ru = {
   'drawer.optimizationTitle': 'Оптимизация контекста',
   'drawer.batchStep': 'Пакет {index}/{total}',
   'drawer.batchSkipped': 'Пропущено из-за сбоя в пакете',
+  'drawer.batchQueued': 'В очереди',
 
   // Git Diff Sidebar
   'gitDiff.title': 'Git Diff',

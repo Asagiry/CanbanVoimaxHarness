@@ -9,6 +9,7 @@ import ToolExecutionCard from '../ToolExecutionCard';
 import DrawerActivityStream from '../DrawerActivityStream';
 import { ToolExecution, KanbanTask } from '../../../types';
 import type { DrawerActivityItem } from '../../../stores/drawerStore';
+import { filterDisplayActivities } from '../stream/streamHelpers';
 import { useLanguageStore } from '../../../stores/languageStore';
 
 // Mock Tauri invoke and store APIs
@@ -77,6 +78,34 @@ describe('Visual Batch Tool Execution: isToolSkipped', () => {
       stderr: 'File not found on disk',
     };
     expect(isToolSkipped(regularFailedTool)).toBe(false);
+  });
+
+  it('does NOT mark tool as skipped when stdout has 300 lines containing skip text but status is success', () => {
+    const lines = Array.from({ length: 300 }, (_, i) => `Log line ${i + 1}`);
+    lines[150] = "Skipped: previous tool 'edit_file' in this batch failed";
+    const inspectionTool: ToolExecution = {
+      id: 'call_inspect',
+      toolName: 'read_file',
+      timestamp: '12:00:00',
+      durationMs: 45,
+      status: 'success',
+      params: { path: 'history.txt' },
+      stdout: lines.join('\n'),
+    };
+    expect(isToolSkipped(inspectionTool)).toBe(false);
+  });
+
+  it('does NOT mark tool as skipped when failed but skip phrase is in the middle of output', () => {
+    const failedInspection: ToolExecution = {
+      id: 'call_inspect_fail',
+      toolName: 'get_task_history',
+      timestamp: '12:00:00',
+      durationMs: 20,
+      status: 'failed',
+      params: {},
+      stdout: "Error header\nSkipped: previous tool 'x' in this batch failed\nmore logs",
+    };
+    expect(isToolSkipped(failedInspection)).toBe(false);
   });
 });
 
@@ -195,6 +224,28 @@ describe('Visual Batch Tool Execution: StatusIndicator', () => {
     expect(html).toContain('text-rose-600');
     expect(html).not.toContain('🚫');
   });
+
+  it('renders queued status badge when tool.status is queued', () => {
+    useLanguageStore.setState({ language: 'en' });
+    const queuedTool: ToolExecution = {
+      id: 'call_queued',
+      toolName: 'write_file',
+      timestamp: '12:00:00',
+      durationMs: 0,
+      status: 'queued',
+      params: { path: 'test.txt' },
+      batch: { index: 2, total: 5 },
+    };
+
+    const html = renderToString(<StatusIndicator tool={queuedTool} />);
+    expect(html).toContain('data-testid="batch-queued-badge"');
+    expect(html).toContain('Queued');
+
+    useLanguageStore.setState({ language: 'ru' });
+    const htmlRu = renderToString(<StatusIndicator tool={queuedTool} />);
+    expect(htmlRu).toContain('data-testid="batch-queued-badge"');
+    expect(htmlRu).toContain('В очереди');
+  });
 });
 
 describe('Visual Batch Tool Execution: ToolExecutionCard Integration', () => {
@@ -231,6 +282,122 @@ describe('Visual Batch Tool Execution: ToolExecutionCard Integration', () => {
     expect(cmdHtml).toContain('Batch 2/3');
     expect(cmdHtml).toContain('data-testid="batch-skipped-badge"');
     expect(cmdHtml).toContain('🚫');
+  });
+
+  it('renders queued tool with subtle opacity', () => {
+    const queuedTool: ToolExecution = {
+      id: 'call_q',
+      toolName: 'execute_command',
+      timestamp: '12:00:00',
+      durationMs: 0,
+      status: 'queued',
+      params: { command: 'cargo test' },
+      batch: { index: 3, total: 5 },
+    };
+
+    const html = renderToString(<ToolExecutionCard tool={queuedTool} />);
+    expect(html).toContain('opacity-75');
+    expect(html).toContain('data-testid="batch-queued-badge"');
+  });
+});
+
+describe('Visual Batch Tool Execution: filterDisplayActivities deduplication', () => {
+  it('does NOT filter out or deduplicate todo_write when it is part of a batch', () => {
+    const todos = [
+      { id: '1', content: 'Step 1', status: 'completed' },
+      { id: '2', content: 'Step 2', status: 'pending' },
+    ];
+
+    const activities: DrawerActivityItem[] = [
+      {
+        id: 'act-1',
+        type: 'tool',
+        timestamp: '12:00:00',
+        tool: {
+          id: 'call_1',
+          toolName: 'todo_write',
+          timestamp: '12:00:00',
+          durationMs: 10,
+          status: 'success',
+          params: { todos },
+          batch: { index: 1, total: 10 },
+        },
+      },
+      {
+        id: 'act-2',
+        type: 'tool',
+        timestamp: '12:00:01',
+        tool: {
+          id: 'call_2',
+          toolName: 'edit_file',
+          timestamp: '12:00:01',
+          durationMs: 20,
+          status: 'success',
+          params: { path: 'a.rs' },
+          batch: { index: 2, total: 10 },
+        },
+      },
+      {
+        id: 'act-10',
+        type: 'tool',
+        timestamp: '12:00:09',
+        tool: {
+          id: 'call_10',
+          toolName: 'todo_write',
+          timestamp: '12:00:09',
+          durationMs: 10,
+          status: 'success',
+          params: { todos },
+          batch: { index: 10, total: 10 },
+        },
+      },
+    ];
+
+    const filtered = filterDisplayActivities(activities);
+    expect(filtered).toHaveLength(3);
+    const step10 = filtered.find((a) => a.tool?.id === 'call_10');
+    expect(step10).toBeDefined();
+    expect(step10?.tool?.batch?.index).toBe(10);
+    expect(step10?.tool?.batch?.total).toBe(10);
+  });
+
+  it('deduplicates standalone todo_write with identical completed counts when not in batch', () => {
+    const todos = [
+      { id: '1', content: 'Step 1', status: 'completed' },
+      { id: '2', content: 'Step 2', status: 'pending' },
+    ];
+
+    const activities: DrawerActivityItem[] = [
+      {
+        id: 'act-1',
+        type: 'tool',
+        timestamp: '12:00:00',
+        tool: {
+          id: 'call_1',
+          toolName: 'todo_write',
+          timestamp: '12:00:00',
+          durationMs: 10,
+          status: 'success',
+          params: { todos },
+        },
+      },
+      {
+        id: 'act-2',
+        type: 'tool',
+        timestamp: '12:00:01',
+        tool: {
+          id: 'call_2',
+          toolName: 'todo_write',
+          timestamp: '12:00:01',
+          durationMs: 10,
+          status: 'success',
+          params: { todos },
+        },
+      },
+    ];
+
+    const filtered = filterDisplayActivities(activities);
+    expect(filtered).toHaveLength(1);
   });
 });
 

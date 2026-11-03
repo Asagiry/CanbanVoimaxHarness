@@ -21,20 +21,24 @@ export default function ToolExecutionCard({ tool, onRerun, isLatest }: ToolExecu
 
   const toolName = tool.toolName ?? 'tool';
 
+  let card: React.ReactNode;
   switch (toolName) {
     case 'todo_write':
     case 'write_todos':
-      return <TodoToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      card = <TodoToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      break;
 
     case 'compact_context':
-      return <CompactContextToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      card = <CompactContextToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      break;
 
     case 'subagent':
     case 'subagent_bg':
     case 'collect_subagent':
     case 'subagent_list':
     case 'list_subagents':
-      return <SubagentToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      card = <SubagentToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      break;
 
     case 'read':
     case 'read_file':
@@ -44,22 +48,33 @@ export default function ToolExecutionCard({ tool, onRerun, isLatest }: ToolExecu
     case 'edit':
     case 'edit_file':
     case 'str_replace':
-      return <FileOpsToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      card = <FileOpsToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      break;
 
     case 'glob':
     case 'grep':
-      return <SearchToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      card = <SearchToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      break;
 
     case 'execute_command':
     case 'bash':
     case 'pwsh':
-      return <CommandToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      card = <CommandToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      break;
 
     case 'web_search':
     case 'web_fetch':
-      return <WebToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      card = <WebToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      break;
 
     default:
-      return <GenericToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      card = <GenericToolCard tool={tool} onRerun={onRerun} isLatest={isLatest} />;
+      break;
   }
+
+  if (tool.status === 'queued') {
+    return <div className="opacity-75 dark:opacity-70 transition-opacity">{card}</div>;
+  }
+
+  return card;
 }

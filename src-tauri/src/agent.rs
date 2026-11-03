@@ -216,6 +216,13 @@ pub enum AgentEvent {
     Token(String),
     Output(String),
     Thought(String),
+    ToolQueued {
+        id: String,
+        name: String,
+        arguments: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        batch: Option<serde_json::Value>,
+    },
     ToolCall {
         id: String,
         name: String,
@@ -1773,6 +1780,40 @@ Messages count: {}
         // Execute subagent tool calls
         let mut batch_aborted_by_error: Option<String> = None;
         let total_in_batch = turn_tool_calls.len();
+        if total_in_batch > 1 {
+            for (batch_idx, tc) in turn_tool_calls.iter().enumerate() {
+                let batch_info = Some(serde_json::json!({
+                    "index": batch_idx + 1,
+                    "total": total_in_batch
+                }));
+                let tool_item_id = format!("sub-tool-{}", tc.id);
+                let tool_exec_queued = serde_json::json!({
+                    "id": &tc.id,
+                    "toolName": &tc.function.name,
+                    "timestamp": chrono::Utc::now().to_rfc3339(),
+                    "durationMs": 0,
+                    "status": "queued",
+                    "params": serde_json::from_str(&tc.function.arguments).unwrap_or_else(|_| serde_json::json!({})),
+                    "batch": &batch_info,
+                });
+                let tool_act_queued = ActivityItem {
+                    id: tool_item_id,
+                    item_type: "tool".to_string(),
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    content: None,
+                    tool: Some(tool_exec_queued),
+                    duration_ms: None,
+                    images: None,
+                };
+                if let Some(ref app) = ctx.app_handle {
+                    let _ = app.emit("subagent:activity", serde_json::json!({
+                        "parentTaskId": &parent_id,
+                        "subagentId": &subagent_id,
+                        "activity": &tool_act_queued,
+                    }));
+                }
+            }
+        }
         for (batch_idx, tc) in turn_tool_calls.iter().enumerate() {
             let batch_info = if total_in_batch > 1 {
                 Some(serde_json::json!({
@@ -3494,6 +3535,20 @@ Messages count: {}
         let mut executed_subagents_in_turn: Vec<ExecutedSubagentCall> = Vec::new();
         let mut batch_aborted_by_error: Option<String> = None;
         let total_in_batch = turn_tool_calls.len();
+        if total_in_batch > 1 {
+            for (idx, tc) in turn_tool_calls.iter().enumerate() {
+                let batch_info = Some(serde_json::json!({
+                    "index": idx + 1,
+                    "total": total_in_batch
+                }));
+                event_sink(AgentEvent::ToolQueued {
+                    id: tc.id.clone(),
+                    name: tc.function.name.clone(),
+                    arguments: tc.function.arguments.clone(),
+                    batch: batch_info,
+                });
+            }
+        }
 
         // Execute each tool call and record response
         for (batch_idx, tc) in turn_tool_calls.iter().enumerate() {

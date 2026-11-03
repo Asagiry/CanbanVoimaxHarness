@@ -911,6 +911,33 @@ data: [DONE]
         assert!(result.contains("Batch recovery completed."));
 
         let captured_events = events.lock().unwrap().clone();
+        let tool_queued: Vec<(String, String, Option<serde_json::Value>)> = captured_events
+            .iter()
+            .filter_map(|e| {
+                if let AgentEvent::ToolQueued { id, name, batch, .. } = e {
+                    Some((id.clone(), name.clone(), batch.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        assert_eq!(tool_queued.len(), 3, "Expected 3 ToolQueued events emitted for the batch");
+        assert_eq!(tool_queued[0].0, "call_edit_fail");
+        assert_eq!(tool_queued[0].1, "edit_file");
+        assert_eq!(tool_queued[0].2.as_ref().unwrap()["index"], 1);
+        assert_eq!(tool_queued[0].2.as_ref().unwrap()["total"], 3);
+
+        assert_eq!(tool_queued[1].0, "call_edit_skip");
+        assert_eq!(tool_queued[1].1, "edit_file");
+        assert_eq!(tool_queued[1].2.as_ref().unwrap()["index"], 2);
+        assert_eq!(tool_queued[1].2.as_ref().unwrap()["total"], 3);
+
+        assert_eq!(tool_queued[2].0, "call_cmd_skip");
+        assert_eq!(tool_queued[2].1, "execute_command");
+        assert_eq!(tool_queued[2].2.as_ref().unwrap()["index"], 3);
+        assert_eq!(tool_queued[2].2.as_ref().unwrap()["total"], 3);
+
         let tool_results: Vec<(String, String, bool)> = captured_events
             .iter()
             .filter_map(|e| {
