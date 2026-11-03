@@ -227,7 +227,7 @@ pub async fn list_subagents(
                     role: info.role.clone(),
                     prompt: info.prompt.clone(),
                     status: info.status.clone(),
-                    created_at: chrono::Utc::now().timestamp_millis(),
+                    created_at: if info.created_at > 0 { info.created_at } else { chrono::Utc::now().timestamp_millis() },
                     duration_ms: info.duration_ms,
                     steps_count: 0,
                     last_error: info.last_error.clone(),
@@ -247,6 +247,7 @@ pub async fn list_subagents(
         duration: Option<f64>,
         status: String,
         is_bg: bool,
+        created_at: Option<i64>,
     }
 
     let mut parent_subagent_tools: Vec<ParentSubagentTool> = Vec::new();
@@ -265,6 +266,22 @@ pub async fn list_subagents(
                             let duration = t.get("durationMs").and_then(|v| v.as_f64());
                             let status = t.get("status").and_then(|v| v.as_str()).unwrap_or("running").to_string();
                             let is_bg = t_name == "subagent_bg";
+                            let created_at = t
+                                .get("timestamp")
+                                .and_then(|v| {
+                                    v.as_i64()
+                                        .or_else(|| v.as_f64().map(|f| f as i64))
+                                        .or_else(|| {
+                                            v.as_str()
+                                                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                                                .map(|dt| dt.timestamp_millis())
+                                        })
+                                })
+                                .or_else(|| {
+                                    chrono::DateTime::parse_from_rfc3339(&it.timestamp)
+                                        .ok()
+                                        .map(|dt| dt.timestamp_millis())
+                                });
                             parent_subagent_tools.push(ParentSubagentTool {
                                 call_id,
                                 title,
@@ -273,6 +290,7 @@ pub async fn list_subagents(
                                 duration,
                                 status,
                                 is_bg,
+                                created_at,
                             });
                         }
                     }
@@ -297,8 +315,14 @@ pub async fn list_subagents(
             let mut status = "finished".to_string();
             let mut duration_ms = 0.0f64;
             let mut last_error: Option<String> = None;
+            let mut sub_created_at: Option<i64> = None;
 
             for it in &items {
+                if sub_created_at.is_none() {
+                    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&it.timestamp) {
+                        sub_created_at = Some(dt.timestamp_millis());
+                    }
+                }
                 if it.item_type == "prompt" {
                     if let Some(ref c) = it.content {
                         prompt = c.clone();
@@ -316,12 +340,14 @@ pub async fn list_subagents(
             let tool_call_id = raw_sub_id.rfind(".sub-").map(|pos| raw_sub_id[(pos + 5)..].to_string());
 
             let mut is_bg = false;
+            let mut matched_tool_created_at: Option<i64> = None;
             // Correlate with parent_subagent_tools if possible
             if let Some(pt) = parent_subagent_tools.iter().find(|p| {
                 (p.call_id.is_some() && tool_call_id.is_some() && p.call_id == tool_call_id)
                     || (!prompt.is_empty() && p.prompt == prompt)
             }) {
                 is_bg = pt.is_bg;
+                matched_tool_created_at = pt.created_at;
                 if !pt.title.is_empty() {
                     title = pt.title.clone();
                 }
@@ -349,10 +375,17 @@ pub async fn list_subagents(
                     if sid == &raw_sub_id || sid.ends_with(&raw_sub_id) {
                         let info = s.retry_info.lock().await;
                         is_bg = info.is_bg;
+                        if info.created_at > 0 {
+                            matched_tool_created_at = Some(info.created_at);
+                        }
                         break;
                     }
                 }
             }
+
+            let final_created_at = matched_tool_created_at
+                .or(sub_created_at)
+                .unwrap_or_else(|| chrono::Utc::now().timestamp_millis());
 
             if title.is_empty() && !prompt.is_empty() {
                 let first_line = prompt.lines().next().unwrap_or("").trim();
@@ -376,6 +409,9 @@ pub async fn list_subagents(
                 if is_bg {
                     existing.is_bg = true;
                 }
+                if final_created_at > 0 && (existing.created_at == 0 || final_created_at < existing.created_at) {
+                    existing.created_at = final_created_at;
+                }
             } else {
                 let summary = SubagentSummary {
                     id: raw_sub_id.clone(),
@@ -385,7 +421,7 @@ pub async fn list_subagents(
                     role,
                     prompt,
                     status,
-                    created_at: chrono::Utc::now().timestamp_millis(),
+                    created_at: final_created_at,
                     duration_ms: if duration_ms > 0.0 { Some(duration_ms) } else { None },
                     steps_count,
                     last_error,

@@ -107,7 +107,10 @@ export function CollectSubagentExecutionCard({ tool }: { tool: ToolExecution }) 
         return (
           t.id === id ||
           p.subagent_id === id ||
-          toolIdToSubagentId[t.id] === id
+          toolIdToSubagentId[t.id] === id ||
+          id.endsWith(t.id) ||
+          (id.includes('.sub-') && id.split('.sub-')[1] === t.id) ||
+          (Boolean(t.stdout) && t.stdout!.includes(id))
         );
       });
 
@@ -143,17 +146,37 @@ export function CollectSubagentExecutionCard({ tool }: { tool: ToolExecution }) 
         status = spawnTool.status === 'running' ? 'running' : spawnTool.status === 'success' ? 'finished' : 'running';
       }
 
-      // Duration & Start Time
-      const durationMs = storeSub?.durationMs ?? spawnTool?.durationMs;
-      let startTime: number | undefined = storeSub?.createdAt;
-      if (!startTime && spawnTool?.timestamp) {
-        const parsed = Date.parse(spawnTool.timestamp);
-        if (!isNaN(parsed)) startTime = parsed;
-      }
-
-      // Steps count
+      // Steps count & feed
       const feed = (activityFeed[resolvedId] || activityFeed[id] || (storeSub?.toolCallId ? activityFeed[storeSub.toolCallId] : [])) || [];
       const stepsCount = Math.max(storeSub?.stepsCount || 0, feed.length);
+
+      // Start Time resolution: choose earliest valid timestamp between storeSub?.createdAt and spawnTool?.timestamp. Fall back to feed[0]?.timestamp.
+      const candidateTimes: number[] = [];
+      if (storeSub?.createdAt && storeSub.createdAt > 0) {
+        candidateTimes.push(storeSub.createdAt);
+      }
+      if (spawnTool?.timestamp) {
+        const parsed = Date.parse(spawnTool.timestamp);
+        if (!isNaN(parsed) && parsed > 0) {
+          candidateTimes.push(parsed);
+        }
+      }
+      if (candidateTimes.length === 0 && feed[0]?.timestamp) {
+        const feedParsed = Date.parse(feed[0].timestamp);
+        if (!isNaN(feedParsed) && feedParsed > 0) {
+          candidateTimes.push(feedParsed);
+        }
+      }
+      const startTime: number | undefined = candidateTimes.length > 0 ? Math.min(...candidateTimes) : undefined;
+
+      // Duration resolution
+      let durationMs = storeSub?.durationMs;
+      if (!durationMs && storeSub?.finishedAt && startTime) {
+        durationMs = Math.max(0, storeSub.finishedAt - startTime);
+      }
+      if (!durationMs && spawnTool && spawnTool.toolName !== 'subagent_bg') {
+        durationMs = spawnTool.durationMs;
+      }
 
       const isBg = Boolean(storeSub?.isBg || (spawnTool && spawnTool.toolName === 'subagent_bg'));
       const isBoardSubtask = Boolean(boardSub);
