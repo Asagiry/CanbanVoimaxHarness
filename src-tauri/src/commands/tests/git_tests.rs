@@ -155,6 +155,7 @@ use std::path::PathBuf;
             cover_image: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
         save_tasks_to_disk(&base, &[task]).await.expect("save task");
 
@@ -225,6 +226,7 @@ use std::path::PathBuf;
             completed_at: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
 
         // 3. Child subtask CVH-999.1 has NO worktree_path and NO branch
@@ -257,6 +259,7 @@ use std::path::PathBuf;
             completed_at: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
 
         save_tasks_to_disk(&tmp, &[parent, child]).await.expect("save tasks to disk");
@@ -325,6 +328,7 @@ use std::path::PathBuf;
             completed_at: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
         let child = Task {
             id: "CVH-888.1".to_string(),
@@ -355,6 +359,7 @@ use std::path::PathBuf;
             completed_at: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
 
         save_tasks_to_disk(&tmp, &[parent, child]).await.expect("save tasks");
@@ -416,6 +421,7 @@ use std::path::PathBuf;
             completed_at: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
         save_tasks_to_disk(&tmp, &[task]).await.expect("initial save");
 
@@ -451,6 +457,7 @@ use std::path::PathBuf;
             completed_at: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
 
         internal_save_tasks(&tmp, vec![client_task], Some(&state.tasks)).await.expect("internal_save_tasks");

@@ -112,7 +112,7 @@ export interface TasksCrudSlice {
   deleteTask: (taskId: string) => Promise<void>;
   setTaskVerdict: (taskId: string, verdict: TaskVerdict, note?: string) => void;
   promoteTaskToNextStage: (taskId: string) => void;
-  runTaskAgent: (taskId: string, prompt?: string, options?: { skipSync?: boolean }) => Promise<void>;
+  runTaskAgent: (taskId: string, prompt?: string, options?: { skipSync?: boolean; projectPath?: string }) => Promise<void>;
 }
 
 export type BoardState = BoardMetaSlice & TaskTimersSlice & TasksCrudSlice;

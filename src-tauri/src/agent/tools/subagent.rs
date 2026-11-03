@@ -195,12 +195,14 @@ pub async fn execute_subagent(
     // Register into state.active_agents and session_registry
     if let Some(ref app) = ctx.app_handle {
         if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+            let root_str = ctx.repo_root.to_string_lossy().to_string();
             let sub_summary = crate::agent::session_registry::AgentSessionSummary {
                 session_id: subagent_id.clone(),
                 task_id: subagent_id.clone(),
                 stage_id: None,
                 started_at: chrono::Utc::now().timestamp_millis() as u64,
                 status: crate::agent::session_registry::SessionStatus::Running,
+                project_path: Some(root_str),
             };
             state_ref.session_registry.register(
                 sub_summary.clone(),
@@ -208,6 +210,14 @@ pub async fn execute_subagent(
                 Arc::clone(&sub_join_slot),
             );
             let _ = app.emit("agent:session_status", &sub_summary);
+            state_ref.register_active_agent(
+                ctx.repo_root,
+                &subagent_id,
+                crate::commands::ActiveAgentHandle {
+                    abort_flag: Arc::clone(&sub_abort_handle),
+                    join_handle: Arc::clone(&sub_join_slot),
+                },
+            );
             if let Ok(mut map) = state_ref.active_agents.lock() {
                 map.insert(
                     subagent_id.clone(),
@@ -373,12 +383,14 @@ pub async fn execute_subagent_bg(
     // Register into state.active_agents and session_registry
     if let Some(ref app) = ctx.app_handle {
         if let Some(state_ref) = app.try_state::<crate::commands::AppState>() {
+            let root_str = ctx.repo_root.to_string_lossy().to_string();
             let sub_summary = crate::agent::session_registry::AgentSessionSummary {
                 session_id: subagent_id.clone(),
                 task_id: subagent_id.clone(),
                 stage_id: None,
                 started_at: chrono::Utc::now().timestamp_millis() as u64,
                 status: crate::agent::session_registry::SessionStatus::Running,
+                project_path: Some(root_str),
             };
             state_ref.session_registry.register(
                 sub_summary.clone(),
@@ -386,6 +398,14 @@ pub async fn execute_subagent_bg(
                 Arc::clone(&sub_join_slot),
             );
             let _ = app.emit("agent:session_status", &sub_summary);
+            state_ref.register_active_agent(
+                ctx.repo_root,
+                &subagent_id,
+                crate::commands::ActiveAgentHandle {
+                    abort_flag: Arc::clone(&sub_abort_handle),
+                    join_handle: Arc::clone(&sub_join_slot),
+                },
+            );
             if let Ok(mut map) = state_ref.active_agents.lock() {
                 map.insert(
                     subagent_id.clone(),

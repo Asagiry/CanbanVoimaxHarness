@@ -95,11 +95,9 @@ pub async fn resolve_task_active_agent_model(
         .unwrap_or_else(|| "gemini-3.8-flash-high".to_string())
 }
 
-pub fn cleanup_active_agent_reservation(app_handle: &AppHandle, task_id: &str) {
+pub fn cleanup_active_agent_reservation(app_handle: &AppHandle, root: &std::path::Path, task_id: &str) {
     if let Some(state) = app_handle.try_state::<AppState>() {
-        if let Ok(mut map) = state.active_agents.lock() {
-            map.remove(task_id);
-        }
+        state.remove_active_agent(root, task_id);
     }
 }
 
@@ -107,9 +105,12 @@ pub async fn run_agent(
     task_id: String,
     prompt: Option<String>,
     images: Option<Vec<String>>,
+    project_path: Option<String>,
     app_handle: AppHandle,
 ) -> Result<String, String> {
-    let root = app_handle.state::<AppState>().get_root();
+    let root = project_path
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| app_handle.state::<AppState>().get_root());
     crate::logger::cvh_log_with_details(
         Some(&root),
         "INFO",
@@ -143,20 +144,21 @@ pub async fn run_agent(
             map.remove(&k);
         }
 
-        if map.keys().any(|k| task_id_matches(k, &task_id)) {
+        if state.is_agent_active(&root, &task_id) {
             crate::logger::cvh_log(
                 Some(&root),
                 "WARN",
                 "RUN_AGENT",
-                &format!("run_agent: Task '{}' already has an active agent loop, rejecting duplicate run", task_id),
+                &format!("run_agent: Task '{}' already has an active agent loop in root '{:?}', rejecting duplicate run", task_id, root),
             );
             return Ok(format!("Agent already running for task {}", task_id));
         }
 
+        let agent_k = AppState::agent_key(&root, &task_id);
         let abort_flag = Arc::new(AtomicBool::new(false));
         let join_slot = Arc::new(tokio::sync::Mutex::new(None));
         map.insert(
-            task_id.clone(),
+            agent_k,
             ActiveAgentHandle {
                 abort_flag: Arc::clone(&abort_flag),
                 join_handle: Arc::clone(&join_slot),
@@ -168,10 +170,13 @@ pub async fn run_agent(
     // Check disk and in-memory state: merge them so in-memory tasks are never lost (§ 2.22).
     let mut tasks_to_use = load_tasks_from_disk(&root).await;
     let initial_disk_count = tasks_to_use.len();
-    if let Ok(guard) = app_handle.state::<AppState>().tasks.lock() {
-        for mem_task in guard.iter() {
-            if !tasks_to_use.iter().any(|t| task_id_matches(&t.id, &mem_task.id)) {
-                tasks_to_use.push(mem_task.clone());
+    let is_current_project = app_handle.state::<AppState>().get_root() == root;
+    if is_current_project {
+        if let Ok(guard) = app_handle.state::<AppState>().tasks.lock() {
+            for mem_task in guard.iter() {
+                if !tasks_to_use.iter().any(|t| task_id_matches(&t.id, &mem_task.id)) {
+                    tasks_to_use.push(mem_task.clone());
+                }
             }
         }
     }
@@ -180,8 +185,10 @@ pub async fn run_agent(
 
     let mut task = match task_opt {
         Some(t) => {
-            if let Ok(mut guard) = app_handle.state::<AppState>().tasks.lock() {
-                *guard = tasks_to_use.clone();
+            if is_current_project {
+                if let Ok(mut guard) = app_handle.state::<AppState>().tasks.lock() {
+                    *guard = tasks_to_use.clone();
+                }
             }
             if tasks_to_use.len() > initial_disk_count {
                 let _ = save_tasks_to_disk(&root, &tasks_to_use).await;
@@ -189,7 +196,11 @@ pub async fn run_agent(
             t
         }
         None => {
-            let mem_count = app_handle.state::<AppState>().tasks.lock().map(|g| g.len()).unwrap_or(0);
+            let mem_count = if is_current_project {
+                app_handle.state::<AppState>().tasks.lock().map(|g| g.len()).unwrap_or(0)
+            } else {
+                0
+            };
             let available_ids: Vec<String> = tasks_to_use.iter().map(|t| t.id.clone()).collect();
             let err_msg = format!("Task {} not found", task_id);
             crate::logger::cvh_log_with_details(
@@ -199,7 +210,7 @@ pub async fn run_agent(
                 &format!("run_agent REJECTED: Task '{}' not found (in-memory: {}, disk: {})", task_id, mem_count, tasks_to_use.len()),
                 Some(&format!("Available tasks in SQLite: [{}]", available_ids.join(", "))),
             );
-            cleanup_active_agent_reservation(&app_handle, &task_id);
+            cleanup_active_agent_reservation(&app_handle, &root, &task_id);
             return Err(err_msg);
         }
     };
@@ -263,7 +274,7 @@ pub async fn run_agent(
                 task_id, task.waiting_for_subtask_id, task.status
             ),
         );
-        cleanup_active_agent_reservation(&app_handle, &task_id);
+        cleanup_active_agent_reservation(&app_handle, &root, &task_id);
         return Ok(format!("Task {} is waiting for subtask/subagent to finish", task_id));
     }
 
@@ -399,7 +410,7 @@ pub async fn run_agent(
     };
 
     if abort_flag.load(Ordering::SeqCst) {
-        cleanup_active_agent_reservation(&app_handle, &task_id);
+        cleanup_active_agent_reservation(&app_handle, &root, &task_id);
         return Ok(format!("Agent execution cancelled before start for task {}", task_id));
     }
 
@@ -411,6 +422,7 @@ pub async fn run_agent(
         stage_id: Some(task.stage_id.clone()),
         started_at: session_started_at,
         status: crate::agent::session_registry::SessionStatus::Running,
+        project_path: Some(root.to_string_lossy().to_string()),
     };
 
     // Register in authoritative session registry & initialize agent context (active_agents already reserved)
@@ -421,11 +433,7 @@ pub async fn run_agent(
             Arc::clone(&abort_flag),
             Arc::clone(&join_slot),
         );
-        if let Ok(mut ctx_map) = state.agent_contexts.lock() {
-            ctx_map.entry(task_id.clone()).or_insert_with(|| {
-                std::sync::Arc::new(std::sync::Mutex::new(crate::agent::compactor::AgentContextState::default()))
-            });
-        };
+        let _ = state.get_or_create_agent_context(&root, &task_id);
     }
 
     // Persist status "running" to database and update state.tasks
@@ -436,8 +444,10 @@ pub async fn run_agent(
             t.updated_at = Utc::now().timestamp_millis();
             let _ = save_tasks_to_disk(&root, &all_tasks).await;
         }
-        if let Ok(mut guard) = app_handle.state::<AppState>().tasks.lock() {
-            *guard = all_tasks;
+        if app_handle.state::<AppState>().get_root() == root {
+            if let Ok(mut guard) = app_handle.state::<AppState>().tasks.lock() {
+                *guard = all_tasks;
+            }
         }
     }
 
@@ -453,9 +463,10 @@ pub async fn run_agent(
     );
 
     // Emit live status: running
+    let project_path_str = root.to_string_lossy().to_string();
     let _ = app_handle.emit(
         "agent:status",
-        serde_json::json!({ "taskId": task.id, "status": "running" }),
+        serde_json::json!({ "taskId": task.id, "status": "running", "projectPath": &project_path_str }),
     );
     let _ = app_handle.emit("agent:session_status", &session_summary);
 
@@ -786,6 +797,7 @@ pub async fn run_agent(
         };
 
         let result = run_agent_loop(agent_cfg, abort_flag, event_sink).await;
+        let project_path_str = root_task.to_string_lossy().to_string();
 
         match &result {
             Ok(final_response) => {
@@ -798,7 +810,7 @@ pub async fn run_agent(
                 );
                 let _ = app.emit(
                     "agent:status",
-                    serde_json::json!({ "taskId": tid, "status": "finished" }),
+                    serde_json::json!({ "taskId": tid, "status": "finished", "projectPath": &project_path_str }),
                 );
 
                 let mut tasks = load_tasks_from_disk(&root_task).await;
@@ -815,15 +827,17 @@ pub async fn run_agent(
                         let _ = crate::db::db_upsert_task(&root_task, &tasks[task_idx]);
                         let _ = save_tasks_to_disk(&root_task, &tasks).await;
                         if let Some(state_ref) = app.try_state::<AppState>() {
-                            if let Ok(mut guard) = state_ref.tasks.lock() {
-                                *guard = tasks.clone();
+                            if state_ref.get_root() == root_task {
+                                if let Ok(mut guard) = state_ref.tasks.lock() {
+                                    *guard = tasks.clone();
+                                }
                             }
                         }
-                        let _ = app.emit("task:updated", serde_json::json!({ "task": &tasks[task_idx] }));
-                        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+                        let _ = app.emit("task:updated", serde_json::json!({ "task": &tasks[task_idx], "projectPath": &project_path_str }));
+                        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
                         let _ = app.emit(
                             "agent:status",
-                            serde_json::json!({ "taskId": tid, "status": "idle" }),
+                            serde_json::json!({ "taskId": tid, "status": "idle", "projectPath": &project_path_str }),
                         );
                     }
                 }
@@ -841,7 +855,7 @@ pub async fn run_agent(
                     eprintln!("CVH [run_agent]: Agent execution aborted by user for task {}", tid);
                     let _ = app.emit(
                         "agent:status",
-                        serde_json::json!({ "taskId": tid, "status": "idle" }),
+                        serde_json::json!({ "taskId": tid, "status": "idle", "projectPath": &project_path_str }),
                     );
                     let mut tasks = load_tasks_from_disk(&root_task).await;
                     if let Some(task_idx) = tasks.iter().position(|t| t.id == tid) {
@@ -851,23 +865,25 @@ pub async fn run_agent(
                             let _ = crate::db::db_upsert_task(&root_task, &tasks[task_idx]);
                             let _ = save_tasks_to_disk(&root_task, &tasks).await;
                             if let Some(state_ref) = app.try_state::<AppState>() {
-                                if let Ok(mut guard) = state_ref.tasks.lock() {
-                                    *guard = tasks.clone();
+                                if state_ref.get_root() == root_task {
+                                    if let Ok(mut guard) = state_ref.tasks.lock() {
+                                        *guard = tasks.clone();
+                                    }
                                 }
                             }
-                            let _ = app.emit("task:updated", serde_json::json!({ "task": &tasks[task_idx] }));
-                            let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+                            let _ = app.emit("task:updated", serde_json::json!({ "task": &tasks[task_idx], "projectPath": &project_path_str }));
+                            let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
                         }
                     }
                 } else {
                     eprintln!("CVH [run_agent]: Agent execution failed for task {}: {}", tid, err_str);
                     let _ = app.emit(
                         "agent:status",
-                        serde_json::json!({ "taskId": tid, "status": "error", "error": &err_str }),
+                        serde_json::json!({ "taskId": tid, "status": "error", "error": &err_str, "projectPath": &project_path_str }),
                     );
                     let _ = app.emit(
                         "agent:error",
-                        serde_json::json!({ "taskId": tid, "error": &err_str }),
+                        serde_json::json!({ "taskId": tid, "error": &err_str, "projectPath": &project_path_str }),
                     );
                     let _ = app.emit(
                         "agent:output",
@@ -883,10 +899,13 @@ pub async fn run_agent(
                         tasks[task_idx].updated_at = Utc::now().timestamp_millis();
                         let _ = save_tasks_to_disk(&root_task, &tasks).await;
                         if let Some(state_ref) = app.try_state::<AppState>() {
-                            if let Ok(mut guard) = state_ref.tasks.lock() {
-                                *guard = tasks.clone();
+                            if state_ref.get_root() == root_task {
+                                if let Ok(mut guard) = state_ref.tasks.lock() {
+                                    *guard = tasks.clone();
+                                }
                             }
                         }
+                        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
                     }
                 }
             }
@@ -901,19 +920,13 @@ pub async fn run_agent(
             if let Some(summary) = state_ref.session_registry.get_session(&session_id_task) {
                 let _ = app.emit("agent:session_status", &summary);
             }
-            if let Ok(mut map) = state_ref.active_agents.lock() {
-                if let Some(entry) = map.get(&tid) {
-                    if Arc::ptr_eq(&entry.abort_flag, &abort_flag_task) {
-                        map.remove(&tid);
-                        crate::logger::cvh_log(
-                            Some(&root_task),
-                            "INFO",
-                            "RUN_AGENT",
-                            &format!("run_agent: active agent handle removed for task '{}'", tid),
-                        );
-                    }
-                }
-            }
+            state_ref.remove_active_agent_if_same(&root_task, &tid, &abort_flag_task);
+            crate::logger::cvh_log(
+                Some(&root_task),
+                "INFO",
+                "RUN_AGENT",
+                &format!("run_agent: active agent handle removed for task '{}'", tid),
+            );
         }
     });
 
@@ -927,7 +940,8 @@ pub async fn run_agent(
 
 /// Suffix/prefix matching helper for subagent keys across registries and dialog identifiers.
 pub fn is_matching_subagent_key(key: &str, target_sub_id: &str) -> bool {
-    let k_clean = key.trim();
+    let k_stripped = key.split_once("::").map(|(_, tid)| tid).unwrap_or(key);
+    let k_clean = k_stripped.trim();
     let t_clean = target_sub_id.trim();
     if k_clean == t_clean {
         return true;
@@ -1156,7 +1170,8 @@ pub async fn internal_abort_agent(
         let mut keys_to_remove = Vec::new();
 
         for k in map.keys() {
-            let k_trim = k.trim();
+            let k_stripped = k.split_once("::").map(|(_, tid)| tid).unwrap_or(k);
+            let k_trim = k_stripped.trim();
             if task_id_matches(k_trim, p_trim)
                 || k_trim.to_ascii_lowercase().starts_with(&format!("{}.", p_trim.to_ascii_lowercase()))
                 || k_trim.to_ascii_lowercase().starts_with(&format!("{}:sub:", p_trim.to_ascii_lowercase()))
@@ -1765,14 +1780,16 @@ pub async fn steer_agent(
             t.updated_at = Utc::now().timestamp_millis();
             let _ = save_tasks_to_disk(&root, &current_tasks).await;
         }
-        if let Ok(mut guard) = state.tasks.lock() {
-            if let Some(t) = guard.iter_mut().find(|t| t.id == task_id) {
-                t.updated_at = Utc::now().timestamp_millis();
+        if state.get_root() == root {
+            if let Ok(mut guard) = state.tasks.lock() {
+                if let Some(t) = guard.iter_mut().find(|t| t.id == task_id) {
+                    t.updated_at = Utc::now().timestamp_millis();
+                }
             }
         }
     }
 
-    run_agent(task_id, Some(message), images, app_handle).await
+    run_agent(task_id, Some(message), images, Some(root.to_string_lossy().to_string()), app_handle).await
 }
 
 /// Resolves the context window strictly for a task or agent persona role.

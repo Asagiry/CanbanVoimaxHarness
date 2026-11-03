@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { useProjectStore, isInvalidProjectPath } from '../../stores/projectStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useToolPolicyStore } from '../../stores/toolPolicyStore';
+import { useAgentSessionStore } from '../../stores/agentSessionStore';
 import Logo from '../common/Logo';
 import WindowControls, { toggleMaximizeWindow } from './WindowControls';
 import {
@@ -28,6 +29,7 @@ export default function Topbar() {
   const { openModal: openToolPolicyModal } = useToolPolicyStore();
   const { theme, toggleThemeWithAnimation } = useThemeStore();
   const { language, toggleLanguage, t } = useTranslation();
+  const sessions = useAgentSessionStore((s) => s.sessions);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   // Filter and deduplicate valid project tabs
@@ -140,6 +142,15 @@ export default function Topbar() {
               const folderName =
                 (project.rootPath || '').split(/[\\/]/).filter(Boolean).pop() || project.name;
 
+              const runningSessionsCount = Object.values(sessions).filter((s) => {
+                if (s.status !== 'running') return false;
+                if (!s.projectPath || !project.rootPath) return false;
+                const normSession = s.projectPath.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '');
+                const normProj = project.rootPath.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '');
+                return normSession === normProj;
+              }).length;
+              const isAgentRunningInProject = runningSessionsCount > 0;
+
               return (
                 <div
                   key={project.id || project.rootPath}
@@ -156,6 +167,22 @@ export default function Topbar() {
                       : 'border-transparent text-[#666666] dark:text-[#8b949e] hover:bg-[#f9f9f9] dark:hover:bg-[#161b22] hover:border-[#ebebeb] dark:hover:border-[#21262d] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
                   }`}
                 >
+                  {isAgentRunningInProject && (
+                    <span
+                      className="flex items-center space-x-1 shrink-0"
+                      title={`${runningSessionsCount} active agent(s)`}
+                    >
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                      </span>
+                      {runningSessionsCount > 1 && (
+                        <span className="font-mono text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                          {runningSessionsCount}
+                        </span>
+                      )}
+                    </span>
+                  )}
                   <span className="max-w-[130px] truncate font-sans text-xs">
                     {folderName}
                   </span>

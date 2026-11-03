@@ -231,10 +231,18 @@ describe('taskNormalizer dynamic persona resolution', () => {
     const relativeTask = {
       worktreePath: 'worktrees/CVH-046',
     };
+    const foreignProjectTask = {
+      projectPath: 'C:/Users/Voimax/Projects/CarSmash',
+    };
+    const localProjectTask = {
+      projectPath: 'C:/Users/Voimax/Projects/CanbanVoimaxHarness',
+    };
 
     expect(isTaskForeign(foreignTask, activeRoot)).toBe(true);
     expect(isTaskForeign(localTask, activeRoot)).toBe(false);
     expect(isTaskForeign(relativeTask, activeRoot)).toBe(false);
+    expect(isTaskForeign(foreignProjectTask, activeRoot)).toBe(true);
+    expect(isTaskForeign(localProjectTask, activeRoot)).toBe(false);
   });
 
   it('filters out foreign tasks during normalizeKanbanTask when activeProjectRoot is provided', () => {

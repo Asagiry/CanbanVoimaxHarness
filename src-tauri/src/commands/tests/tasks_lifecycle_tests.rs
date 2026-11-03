@@ -180,6 +180,7 @@ use std::path::PathBuf;
             cover_image: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
         save_tasks_to_disk(&base, &[task1]).await.expect("save task1");
 
@@ -222,6 +223,7 @@ use std::path::PathBuf;
             cover_image: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
         save_tasks_to_disk(&base, &[t1.clone(), task2]).await.expect("save task2");
 
@@ -334,6 +336,7 @@ use std::path::PathBuf;
             cover_image: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
         save_tasks_to_disk(&base, &[task]).await.expect("save task");
 
@@ -563,6 +566,7 @@ use std::path::PathBuf;
             completed_at: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
         save_tasks_to_disk(&tmp, &[task]).await.expect("save task");
 
@@ -863,6 +867,7 @@ use std::path::PathBuf;
             completed_at: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
 
         save_tasks_to_disk(&base, &[task]).await.expect("save task");
@@ -949,6 +954,7 @@ use std::path::PathBuf;
             cover_image: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
 
         let foreign_parent = Task {
@@ -980,6 +986,7 @@ use std::path::PathBuf;
             cover_image: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
 
         let foreign_child = Task {
@@ -1011,6 +1018,7 @@ use std::path::PathBuf;
             cover_image: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
 
         // Directly insert foreign tasks into Proj1's SQLite to simulate contamination
@@ -1073,6 +1081,7 @@ use std::path::PathBuf;
             cover_image: None,
             position: Some(0.0),
             hook_states: None,
+            project_path: None,
         };
 
         crate::db::db_upsert_all_tasks(&base, &[task.clone()]).expect("db upsert");

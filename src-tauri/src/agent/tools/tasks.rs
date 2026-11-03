@@ -277,6 +277,7 @@ pub async fn execute_create_task(
             completed_at: None,
             position: None,
             hook_states: None,
+            project_path: Some(ctx.repo_root.to_string_lossy().to_string()),
         };
 
         tasks.push(new_task);

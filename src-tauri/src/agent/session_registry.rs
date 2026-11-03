@@ -23,6 +23,8 @@ pub struct AgentSessionSummary {
     pub stage_id: Option<String>,
     pub started_at: u64,
     pub status: SessionStatus,
+    #[serde(default)]
+    pub project_path: Option<String>,
 }
 
 pub struct AgentSessionEntry {
@@ -177,6 +179,7 @@ mod tests {
             stage_id: Some("dev".to_string()),
             started_at: 1000,
             status: SessionStatus::Running,
+            project_path: None,
         };
 
         registry.register(summary, Arc::clone(&abort_flag), join_slot);
@@ -207,6 +210,7 @@ mod tests {
             stage_id: Some("dev".to_string()),
             started_at: 2000,
             status: SessionStatus::Running,
+            project_path: None,
         };
 
         registry.register(summary, Arc::clone(&abort_flag), join_slot);
@@ -248,6 +252,7 @@ mod tests {
                 stage_id: Some("dev".to_string()),
                 started_at: 3000,
                 status: SessionStatus::Running,
+                project_path: None,
             },
             Arc::clone(&abort_flag_parent),
             Arc::new(tokio::sync::Mutex::new(Some(join_parent))),
@@ -260,6 +265,7 @@ mod tests {
                 stage_id: Some("dev".to_string()),
                 started_at: 3050,
                 status: SessionStatus::Running,
+                project_path: None,
             },
             Arc::clone(&abort_flag_sub),
             Arc::new(tokio::sync::Mutex::new(Some(join_sub))),
@@ -289,6 +295,7 @@ mod tests {
                 stage_id: Some("review".to_string()),
                 started_at: 4000,
                 status: SessionStatus::Running,
+                project_path: None,
             },
             Arc::clone(&abort_flag),
             join_slot,
@@ -319,6 +326,7 @@ mod tests {
                         stage_id: Some("dev".to_string()),
                         started_at: 1000 + i,
                         status: SessionStatus::Running,
+                        project_path: None,
                     },
                     flag,
                     slot,

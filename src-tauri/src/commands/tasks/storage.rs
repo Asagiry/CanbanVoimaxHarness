@@ -44,15 +44,24 @@ fn normalize_path_for_comparison(p: &Path) -> String {
 }
 
 /// Identifies all task IDs in a slice that belong to a foreign workspace root,
-/// including worktree paths outside the project root and cascading child/parent relationships.
+/// including mismatched project_path, worktree paths outside the project root, and cascading child/parent relationships.
 pub fn find_foreign_task_ids(tasks: &[Task], repo_root: &Path) -> HashSet<String> {
     let mut foreign_ids = HashSet::new();
     if repo_root.as_os_str().is_empty() {
         return foreign_ids;
     }
 
-    // 1. Direct check: worktree_path is outside repo_root
+    let norm_repo_root = normalize_path_for_comparison(repo_root);
+
+    // 1. Direct check: project_path and worktree_path
     for t in tasks {
+        if let Some(ref p_path) = t.project_path {
+            let norm_p = normalize_path_for_comparison(Path::new(p_path));
+            if !norm_p.is_empty() && !norm_repo_root.is_empty() && norm_p != norm_repo_root {
+                foreign_ids.insert(t.id.clone());
+                continue;
+            }
+        }
         if let Some(ref wt_str) = t.worktree_path {
             let trimmed = wt_str.trim();
             if !trimmed.is_empty() {
@@ -92,10 +101,7 @@ pub fn find_foreign_task_ids(tasks: &[Task], repo_root: &Path) -> HashSet<String
                     continue;
                 }
             }
-            let has_foreign_child = tasks.iter().any(|child| {
-                child.parent_id.as_deref() == Some(&t.id) && foreign_ids.contains(&child.id)
-            });
-            if has_foreign_child {
+            if tasks.iter().any(|c| c.parent_id.as_deref() == Some(&t.id) && foreign_ids.contains(&c.id)) {
                 foreign_ids.insert(t.id.clone());
                 changed = true;
             }
@@ -202,6 +208,10 @@ pub async fn load_tasks_from_disk(repo_root: &Path) -> Vec<Task> {
         tasks.retain(|t| !foreign_ids.contains(&t.id));
     }
 
+    for t in tasks.iter_mut() {
+        t.project_path = Some(actual_root.to_string_lossy().to_string());
+    }
+
     let modified = heal_tasks(&mut tasks, &boards_cfg);
     if modified {
         crate::logger::cvh_log(
@@ -241,7 +251,7 @@ pub async fn save_tasks_to_disk(repo_root: &Path, tasks: &[Task]) -> Result<(), 
     }
 
     let foreign_ids = find_foreign_task_ids(tasks, &actual_root);
-    let filtered_tasks: Vec<Task> = if !foreign_ids.is_empty() {
+    let mut filtered_tasks: Vec<Task> = if !foreign_ids.is_empty() {
         crate::logger::cvh_log(
             Some(&actual_root),
             "WARN",
@@ -257,6 +267,11 @@ pub async fn save_tasks_to_disk(repo_root: &Path, tasks: &[Task]) -> Result<(), 
     } else {
         tasks.to_vec()
     };
+    for t in filtered_tasks.iter_mut() {
+        if t.project_path.is_none() {
+            t.project_path = Some(actual_root.to_string_lossy().to_string());
+        }
+    }
     let tasks = &filtered_tasks;
 
     // 1. 100% Single Source of Truth: High-speed SQLite database (.cvh/harness.db)
@@ -282,48 +297,19 @@ pub async fn save_tasks_to_disk(repo_root: &Path, tasks: &[Task]) -> Result<(), 
     let _ = atomic_write_file(&local_tasks_file, &serialized).await;
 
     let ids: Vec<&str> = tasks.iter().map(|t| t.id.as_str()).collect();
-    match (db_res, backup_res) {
-        (Ok(_), Ok(_)) => {
-            crate::logger::cvh_log_with_details(
-                Some(&actual_root),
-                "INFO",
-                "SAVE_TASKS",
-                &format!("save_tasks_to_disk: successfully saved {} tasks to SQLite & disaster backup", tasks.len()),
-                Some(&format!("Saved IDs: [{}]", ids.join(", "))),
-            );
-            Ok(())
-        }
-        (Ok(_), Err(e)) => {
-            crate::logger::cvh_log_with_details(
-                Some(&actual_root),
-                "WARN",
-                "SAVE_TASKS",
-                &format!("save_tasks_to_disk: saved {} tasks to SQLite, but disaster backup failed: {}", tasks.len(), e),
-                Some(&format!("Saved IDs: [{}]", ids.join(", "))),
-            );
-            Ok(())
-        }
-        (Err(e), Ok(_)) => {
-            crate::logger::cvh_log_with_details(
-                Some(&actual_root),
-                "WARN",
-                "SAVE_TASKS",
-                &format!("save_tasks_to_disk: SQLite error: {}, but persisted to disaster backup {:?}", e, backup_file),
-                Some(&format!("Saved IDs: [{}]", ids.join(", "))),
-            );
-            Ok(())
-        }
-        (Err(e1), Err(e2)) => {
-            let err_msg = format!("Failed to save tasks to both SQLite ({}) and backup ({})", e1, e2);
-            crate::logger::cvh_log(
-                Some(&actual_root),
-                "ERROR",
-                "SAVE_TASKS",
-                &err_msg,
-            );
-            Err(err_msg)
-        }
+    if db_res.is_err() && backup_res.is_err() {
+        let err_msg = "Failed to save tasks to both SQLite and backup".to_string();
+        crate::logger::cvh_log(Some(&actual_root), "ERROR", "SAVE_TASKS", &err_msg);
+        return Err(err_msg);
     }
+    crate::logger::cvh_log_with_details(
+        Some(&actual_root),
+        "INFO",
+        "SAVE_TASKS",
+        &format!("save_tasks_to_disk: saved {} tasks (db_ok: {}, backup_ok: {})", tasks.len(), db_res.is_ok(), backup_res.is_ok()),
+        Some(&format!("Saved IDs: [{}]", ids.join(", "))),
+    );
+    Ok(())
 }
 
 pub async fn load_task_sequence(repo_root: &Path) -> u32 {

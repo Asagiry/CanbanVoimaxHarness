@@ -8,6 +8,7 @@ export interface AgentSessionSummary {
   stageId?: string;
   startedAt: number;
   status: SessionStatus;
+  projectPath?: string;
 }
 
 export function isMatchingSessionTaskId(sessionTaskId: string, queryTaskId: string): boolean {
