@@ -1,10 +1,7 @@
-import { memo, useMemo, useCallback } from 'react';
+import { memo } from 'react';
 import { Paperclip } from 'lucide-react';
 import { KanbanTask, TaskStatus } from '../../types';
 import { useTranslation, Language } from '../../stores/languageStore';
-import { useBoardStore } from '../../stores/boardStore';
-import { useDrawerStore } from '../../stores/drawerStore';
-import { useShallow } from 'zustand/react/shallow';
 
 export function formatCardDate(ts?: number): string {
   if (!ts || !Number.isFinite(ts)) return '';
@@ -76,49 +73,13 @@ export interface CardTimerBadgeProps {
 
 export const CardTimerBadge = memo(function CardTimerBadge({
   task,
-  isDone = false,
+  isDone: _isDone = false,
 }: CardTimerBadgeProps) {
   const { t } = useTranslation();
-  const openDrawer = useDrawerStore((s) => s.openDrawer);
-  const columns = useBoardStore(useShallow((s) => s.columns));
 
   const status: TaskStatus = task.status;
   const isRunning = status === 'running';
   const currentStageDuration = calculateStageDuration(task, isRunning);
-
-  // Check waiting subtask state reactively (Invariant § 2.22 & Defect 12)
-  const waitingSub = useBoardStore(
-    useCallback(
-      (s) => (task.waitingForSubtaskId ? s.tasks.find((t) => t.id === task.waitingForSubtaskId) : undefined),
-      [task.waitingForSubtaskId]
-    )
-  );
-
-  const waitingSubCol = useMemo(() => {
-    if (!waitingSub) return null;
-    return columns.find((c) => c.id === waitingSub.stageId) || null;
-  }, [waitingSub, columns]);
-
-  const isSubActive = waitingSub
-    ? waitingSub.status !== 'done' && waitingSub.stageId !== 'ready' && !waitingSubCol?.terminal
-    : true;
-
-  if (!isDone && status !== 'done' && isSubActive && (task.waitingForSubtaskId || status === 'waiting_subtask')) {
-    return (
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          if (task.waitingForSubtaskId) openDrawer(task.waitingForSubtaskId);
-        }}
-        className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#d97706] dark:text-[#f59e0b] bg-[#fefce8] dark:bg-[#161b22] border border-[#fef08a] dark:border-[#30363d] hover:border-[#f59e0b] transition cursor-pointer"
-        aria-label={task.waitingForSubtaskId ? `${t('status.waitingSubtask')}: ${task.waitingForSubtaskId}` : undefined}
-      >
-        <span className="h-1.5 w-1.5 rounded-full bg-[#f59e0b]" />
-        <span>{t('status.waitingSubtask')}</span>
-      </button>
-    );
-  }
 
   switch (status) {
     case 'running':
@@ -126,6 +87,13 @@ export const CardTimerBadge = memo(function CardTimerBadge({
         <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#161b22] border border-[#bbf7d0] dark:border-[#30363d]">
           <span className="h-1.5 w-1.5 rounded-full bg-[#15803d] dark:bg-[#4ade80]" />
           <span>{t('status.running')} {formatTimerMMSS(currentStageDuration)}</span>
+        </span>
+      );
+    case 'waiting_subagent':
+      return (
+        <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#d97706] dark:text-[#f59e0b] bg-[#fefce8] dark:bg-[#161b22] border border-[#fef08a] dark:border-[#30363d]">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#f59e0b] animate-pulse" />
+          <span>{t('status.waitingSubagent')}</span>
         </span>
       );
     case 'paused':

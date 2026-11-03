@@ -47,6 +47,7 @@ export const ru = {
   'status.blocked': 'Блок',
   'status.waitingReview': 'Ревью',
   'status.waitingSubtask': 'Ждем подзадачу',
+  'status.waitingSubagent': 'Ждем субагента',
   'status.error': 'Ошибка',
 
   // Priorities

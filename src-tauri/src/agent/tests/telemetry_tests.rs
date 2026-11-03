@@ -28,6 +28,11 @@ use std::sync::Arc;
         assert_eq!(task.get_status(), TaskStatus::WaitingSubtask);
         assert!(task.is_waiting_subtask());
 
+        // Set status WaitingSubagent
+        task.set_status(TaskStatus::WaitingSubagent);
+        assert_eq!(task.get_status(), TaskStatus::WaitingSubagent);
+        assert!(task.is_waiting_subagent());
+
         // Set status Done
         task.set_status(TaskStatus::Done);
         assert_eq!(task.get_status(), TaskStatus::Done);

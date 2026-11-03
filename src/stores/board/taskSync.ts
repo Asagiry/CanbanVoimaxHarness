@@ -49,7 +49,7 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
         branch: t.branch,
         verdict: t.verdict === 'NONE' ? null : t.verdict,
         customFlow: t.customFlow,
-        status: isTerminalTask && t.status === 'waiting_subtask' ? 'done' : t.status,
+        status: t.status === 'waiting_subtask' ? (isTerminalTask ? 'done' : 'idle') : t.status,
         model: t.model,
         parentId: t.parentId ?? null,
         subtaskIndex: t.subtaskIndex ?? null,

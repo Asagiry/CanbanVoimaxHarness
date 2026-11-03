@@ -424,7 +424,7 @@ data: [DONE]
         let tasks = crate::commands::tasks::load_tasks_from_disk(&base).await;
         let t = tasks.iter().find(|t| t.id == "CVH-081").expect("task found");
         assert_eq!(t.stage_id, "dev");
-        assert_eq!(t.status.as_deref(), Some("waiting_subtask"));
+        assert_eq!(t.status.as_deref(), Some("idle"));
         assert_eq!(t.waiting_for_subtask_id.as_deref(), Some("CVH-081.1"));
 
         let sub = tasks.iter().find(|t| t.id == "CVH-081.1").expect("subtask found");

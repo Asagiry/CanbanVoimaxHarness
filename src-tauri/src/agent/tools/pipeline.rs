@@ -168,7 +168,7 @@ pub async fn execute_reject_task(
             // 3. Update parent task waiting_for_subtask_id
             if let Some(p) = mut_tasks.iter_mut().find(|t| crate::commands::task_id_matches(&t.id, pid)) {
                 p.waiting_for_subtask_id = Some(prev_sub.id.clone());
-                p.status = Some("waiting_subtask".to_string());
+                p.status = Some("idle".to_string());
                 p.updated_at = chrono::Utc::now().timestamp_millis();
                 let _ = crate::db::db_upsert_task(repo_root, p);
             }
