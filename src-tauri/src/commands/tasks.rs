@@ -171,9 +171,10 @@ pub async fn run_agent(
     task_id: String,
     prompt: Option<String>,
     images: Option<Vec<String>>,
+    project_path: Option<String>,
     app_handle: AppHandle,
 ) -> Result<String, String> {
-    runner::run_agent(task_id, prompt, images, app_handle).await
+    runner::run_agent(task_id, prompt, images, project_path, app_handle).await
 }
 
 #[tauri::command]

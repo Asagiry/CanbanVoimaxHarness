@@ -150,6 +150,7 @@ use std::path::PathBuf;
             cover_image: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
         save_tasks_to_disk(&base, &[parent]).await.expect("save parent");
 
@@ -161,7 +162,7 @@ use std::path::PathBuf;
 
         let loaded = load_tasks_from_disk(&base).await;
         let p1 = loaded.iter().find(|t| t.id == "CVH-200").unwrap();
-        assert_eq!(p1.status.as_deref(), Some("waiting_subtask"));
+        assert_eq!(p1.status.as_deref(), Some("idle"));
         assert_eq!(p1.waiting_for_subtask_id.as_deref(), Some("CVH-200.1"));
 
         // 2. Advance subtask CVH-200.1 to ready (terminal column):
@@ -186,7 +187,7 @@ use std::path::PathBuf;
         let loaded2 = load_tasks_from_disk(&base).await;
         let p2 = loaded2.iter().find(|t| t.id == "CVH-200").unwrap();
         assert_eq!(p2.stage_id, "dev", "Parent stays pinned in dev stage");
-        assert_eq!(p2.status.as_deref(), Some("waiting_subtask"), "Parent status is waiting_subtask");
+        assert_eq!(p2.status.as_deref(), Some("idle"), "Parent status is idle");
         assert_eq!(p2.waiting_for_subtask_id.as_deref(), Some("CVH-200.2"), "Parent waits for CVH-200.2 in retro");
 
         let s2 = loaded2.iter().find(|t| t.id == "CVH-200.2").unwrap();
@@ -310,7 +311,7 @@ use std::path::PathBuf;
             branch: None,
             verdict: None,
             custom_flow: None,
-            status: Some("waiting_subtask".to_string()),
+            status: Some("idle".to_string()),
             model: None,
             parent_id: None,
             subtask_index: None,
@@ -329,6 +330,7 @@ use std::path::PathBuf;
             cover_image: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
 
         // Parent CVH-300.1 waiting on Child CVH-300.1.1
@@ -342,7 +344,7 @@ use std::path::PathBuf;
             branch: None,
             verdict: None,
             custom_flow: None,
-            status: Some("waiting_subtask".to_string()),
+            status: Some("idle".to_string()),
             model: None,
             parent_id: Some("CVH-300".to_string()),
             subtask_index: Some(1),
@@ -361,6 +363,7 @@ use std::path::PathBuf;
             cover_image: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
 
         // Child CVH-300.1.1 running in dev
@@ -393,6 +396,7 @@ use std::path::PathBuf;
             cover_image: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
 
         save_tasks_to_disk(&base, &[gp, parent, child]).await.expect("save tasks");
@@ -560,6 +564,7 @@ use std::path::PathBuf;
             cover_image: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
         save_tasks_to_disk(&base, &[parent_task]).await.expect("save parent task");
 
@@ -581,7 +586,7 @@ use std::path::PathBuf;
 
         let parent = loaded.iter().find(|t| t.id == "CVH-100").unwrap();
         assert_eq!(parent.stage_id, "dev", "Parent must remain pinned in 'dev' stage (§ 2.2)");
-        assert_eq!(parent.status.as_deref(), Some("waiting_subtask"), "Parent status must be 'waiting_subtask'");
+        assert_eq!(parent.status.as_deref(), Some("idle"), "Parent status must be 'idle'");
         assert_eq!(parent.waiting_for_subtask_id.as_deref(), Some("CVH-100.1"), "Parent must be waiting for CVH-100.1");
 
         let subtask = loaded.iter().find(|t| t.id == "CVH-100.1").unwrap();
@@ -847,6 +852,7 @@ use std::path::PathBuf;
             completed_at: None,
                 position: None,
                 hook_states: None,
+            project_path: None,
             },
             Task {
                 id: "CVH-500.1".to_string(),
@@ -877,6 +883,7 @@ use std::path::PathBuf;
             completed_at: None,
                 position: None,
                 hook_states: None,
+            project_path: None,
             },
             Task {
                 id: "CVH-501".to_string(),
@@ -907,6 +914,7 @@ use std::path::PathBuf;
             completed_at: None,
                 position: None,
                 hook_states: None,
+            project_path: None,
             },
             Task {
                 id: "CVH-501.1".to_string(),
@@ -937,6 +945,7 @@ use std::path::PathBuf;
             completed_at: None,
                 position: None,
                 hook_states: None,
+            project_path: None,
             },
         ];
 
@@ -962,7 +971,7 @@ use std::path::PathBuf;
             branch: None,
             verdict: None,
             custom_flow: None,
-            status: Some("waiting_subtask".to_string()),
+            status: Some("idle".to_string()),
             model: None,
             parent_id: None,
             subtask_index: None,
@@ -981,6 +990,7 @@ use std::path::PathBuf;
             completed_at: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
         let child_active = Task {
             id: "CVH-600.1".to_string(),
@@ -1011,6 +1021,7 @@ use std::path::PathBuf;
             completed_at: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
         save_tasks_to_disk(&tmp, &[parent_active, child_active]).await.expect("save active tasks");
 

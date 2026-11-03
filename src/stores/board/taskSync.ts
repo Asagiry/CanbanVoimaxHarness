@@ -49,7 +49,7 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
         branch: t.branch,
         verdict: t.verdict === 'NONE' ? null : t.verdict,
         customFlow: t.customFlow,
-        status: isTerminalTask && t.status === 'waiting_subtask' ? 'done' : t.status,
+        status: t.status === 'waiting_subtask' ? (isTerminalTask ? 'done' : 'idle') : t.status,
         model: t.model,
         parentId: t.parentId ?? null,
         subtaskIndex: t.subtaskIndex ?? null,
@@ -75,6 +75,7 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
         completedAt: t.completedAt ?? null,
         skipWorktree: t.skipWorktree ?? false,
         hookStates: t.hookStates ?? null,
+        projectPath: t.projectPath || activeRoot || null,
       };
     });
     await invoke('save_tasks', { tasks: backendPayload });
@@ -89,7 +90,7 @@ const inFlightAgentRuns = new Set<string>();
 export async function triggerRunAgent(
   taskId: string,
   prompt?: string,
-  options?: { skipSync?: boolean }
+  options?: { skipSync?: boolean; projectPath?: string }
 ): Promise<void> {
   const normalizedId = taskId.trim().toLowerCase();
   if (inFlightAgentRuns.has(normalizedId)) {
@@ -117,7 +118,10 @@ export async function triggerRunAgent(
     }
 
     const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('run_agent', { taskId, prompt: prompt || null });
+    const { useProjectStore } = await import('../projectStore');
+    const activeRoot = useProjectStore.getState().activeProject?.rootPath;
+    const projectPath = options?.projectPath || activeRoot || null;
+    await invoke('run_agent', { taskId, prompt: prompt || null, projectPath });
   } catch (err) {
     const errMsg = String(err);
     logEvent('ERROR', 'BOARD_STORE', `triggerRunAgent: run_agent failed for task "${taskId}"`, errMsg);

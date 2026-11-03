@@ -1,7 +1,7 @@
 import { memo, useContext, useMemo } from 'react';
 import type { DrawerActivityItem } from '../../../stores/drawerStore';
 import { useTranslation } from '../../../stores/languageStore';
-import { ShieldAlert, User, ZoomIn, Clock } from 'lucide-react';
+import { ShieldAlert, User, ZoomIn, Clock, Bot } from 'lucide-react';
 import { MarkdownContent, LightboxContext } from './MarkdownContent';
 
 export interface SteerDirectiveCardProps {
@@ -9,9 +9,44 @@ export interface SteerDirectiveCardProps {
   onImageClick?: (src: string, alt?: string) => void;
 }
 
+export function isSensorRejectionActivity(activity?: DrawerActivityItem): boolean {
+  return Boolean(
+    activity?.content?.includes('[ОТКЛОНЕНО СЕНСОРОМ') ||
+    activity?.content?.includes('[SENSOR REJECTED') ||
+    activity?.content?.includes('SENSOR REJECTED:')
+  );
+}
+
+export function isHookRejectionActivity(activity?: DrawerActivityItem): boolean {
+  return Boolean(
+    activity?.content?.includes('[ОТКЛОНЕНО ХУКОМ') ||
+    activity?.content?.includes('[HOOK REJECTED') ||
+    activity?.content?.includes('HOOK REJECTED:')
+  );
+}
+
+export function isAgentMessageActivity(activity?: DrawerActivityItem): boolean {
+  if (isSensorRejectionActivity(activity) || isHookRejectionActivity(activity)) {
+    return false;
+  }
+  return Boolean(
+    activity?.type === 'agent' ||
+    (activity as { source?: string } | undefined)?.source === 'agent' ||
+    activity?.content?.includes('[ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ') ||
+    activity?.content?.includes('HANDOVER SUMMARY') ||
+    activity?.content?.includes('Замечания исправлены. Отчет исполнителя:') ||
+    activity?.content?.includes('### Саммари этапа') ||
+    activity?.content?.includes('Задача возвращена на этап:') ||
+    activity?.content?.includes('Вердикт ревьюера:') ||
+    activity?.content?.includes('ОТКЛОНЕНО:') ||
+    activity?.content?.includes('ОТКЛОНЕНО РЕВЬЮ')
+  );
+}
+
 /**
- * SteerDirectiveCard - Displays user steering instructions and gatekeeper sensor rejections
- * with timestamps, status badges, image attachments, and markdown rendering.
+ * SteerDirectiveCard - Displays user steering instructions, agent handover/rejection messages,
+ * and gatekeeper sensor / transition hook rejections with timestamps, status badges,
+ * image attachments, and markdown rendering.
  */
 export const SteerDirectiveCard = memo(function SteerDirectiveCard({
   activity,
@@ -22,11 +57,9 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
   const handleImageClick = onImageClick || contextLightbox || undefined;
 
   const images = Array.isArray(activity?.images) ? activity.images : [];
-  const isSensorRejection = Boolean(
-    activity?.content?.includes('[ОТКЛОНЕНО СЕНСОРОМ') ||
-    activity?.content?.includes('[SENSOR REJECTED') ||
-    activity?.content?.includes('SENSOR REJECTED:')
-  );
+  const isSensorRejection = isSensorRejectionActivity(activity);
+  const isHookRejection = isHookRejectionActivity(activity);
+  const isAgentMessage = isAgentMessageActivity(activity);
 
   const formattedTime = useMemo(() => {
     if (activity.timestamp) {
@@ -47,13 +80,14 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
     return null;
   }, [activity.timestamp, activity.createdAt]);
 
-  if (isSensorRejection) {
+  if (isSensorRejection || isHookRejection) {
+    const titleKey = isSensorRejection ? 'drawer.sensorRejection' : 'drawer.hookRejection';
     return (
       <div className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-amber-500/20 bg-amber-500/10 p-3.5 shadow-xs">
         <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-amber-500/20 text-[10px] font-mono">
           <div className="flex items-center space-x-1.5 text-amber-500 dark:text-amber-400 font-medium">
             <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
-            <span>{t('drawer.sensorRejection')}</span>
+            <span>{t(titleKey)}</span>
           </div>
           {formattedTime && (
             <span className="flex items-center space-x-1 text-amber-600 dark:text-amber-400 tabular-nums">
@@ -95,8 +129,17 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
     <div className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#0d1117] p-3.5 shadow-xs">
       <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-[#ebebeb] dark:border-[#21262d] text-[10px] font-mono text-[#666666] dark:text-[#8b949e]">
         <div className="flex items-center space-x-1.5 text-[#171717] dark:text-[#f0f6fc] font-medium">
-          <User className="h-3 w-3" />
-          <span>{t('drawer.userSteer')}</span>
+          {isAgentMessage ? (
+            <>
+              <Bot className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400 shrink-0" />
+              <span>{t('drawer.agentMessage')}</span>
+            </>
+          ) : (
+            <>
+              <User className="h-3 w-3" />
+              <span>{t('drawer.userSteer')}</span>
+            </>
+          )}
         </div>
         {formattedTime && (
           <span className="flex items-center space-x-1 text-[#71717a] dark:text-[#8b949e] tabular-nums">

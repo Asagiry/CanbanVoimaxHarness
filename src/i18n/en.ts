@@ -45,6 +45,7 @@ export const en = {
   'status.blocked': 'Blocked',
   'status.waitingReview': 'Review',
   'status.waitingSubtask': 'Waiting for subtask',
+  'status.waitingSubagent': 'Waiting subagent',
   'status.error': 'Error',
 
   // Priorities
@@ -179,6 +180,8 @@ export const en = {
   'drawer.agentExplanation': 'Agent Explanation',
   'drawer.userSteer': 'User Steer',
   'drawer.sensorRejection': 'Gatekeeper Sensor Rejected',
+  'drawer.agentMessage': 'Agent message',
+  'drawer.hookRejection': 'Hook Execution Rejected',
   'drawer.generatingResponse': 'Generating response...',
   'drawer.formingStep': 'Forming step...',
   'drawer.scrollToNew': 'Scroll to new',

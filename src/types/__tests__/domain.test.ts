@@ -14,6 +14,7 @@ import {
   isIdleState,
   isRunningState,
   isWaitingSubtaskState,
+  isWaitingSubagentState,
   isDoneState,
   isTerminalStage,
   isIntakeStage,
@@ -237,6 +238,19 @@ describe('Domain Value Objects & Types', () => {
 
       expect(() => TaskStates.waitingSubtask('')).toThrow(DomainValidationError);
       expect(() => TaskStates.waitingSubtask('   ')).toThrow(DomainValidationError);
+    });
+
+    it('validates waiting_subagent state with and without subagentId', () => {
+      const stateNoId: TaskState = { status: 'waiting_subagent' };
+      const stateWithId: TaskState = { status: 'waiting_subagent', subagentId: 'sub-123' };
+
+      expect(isTaskState(stateNoId)).toBe(true);
+      expect(isTaskState(stateWithId)).toBe(true);
+      expect(isWaitingSubagentState(stateNoId)).toBe(true);
+      expect(isWaitingSubagentState(stateWithId)).toBe(true);
+
+      expect(TaskStates.waitingSubagent()).toEqual({ status: 'waiting_subagent' });
+      expect(TaskStates.waitingSubagent(' sub-456 ')).toEqual({ status: 'waiting_subagent', subagentId: 'sub-456' });
     });
 
     it('validates done state with and without verdict', () => {

@@ -2,6 +2,7 @@ import { useBoardStore } from '../stores/boardStore';
 import { useDrawerStore } from '../stores/drawerStore';
 import { useCortexStore } from '../stores/cortexStore';
 import { useAgentSessionStore, type AgentSessionSummary } from '../stores/agentSessionStore';
+import { useProjectStore } from '../stores/projectStore';
 import {
   showAdvanceTaskNotification,
   showQuestionNotification,
@@ -9,6 +10,15 @@ import {
   type TaskAdvancedPayload,
 } from './notificationService';
 import type { BackendTaskDTO, TodoItem } from '../types';
+
+export function isEventForCurrentProject(eventProjectPath?: string): boolean {
+  if (!eventProjectPath || typeof eventProjectPath !== 'string') return true;
+  const activeRoot = useProjectStore.getState().activeProject?.rootPath;
+  if (!activeRoot) return true;
+  const normEvent = eventProjectPath.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '');
+  const normActive = activeRoot.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '');
+  return normEvent === normActive;
+}
 
 /**
  * Micro-batching window for streaming SSE tokens.
@@ -92,11 +102,13 @@ export interface AgentStatusPayload {
   status?: string;
   response?: string;
   error?: string;
+  projectPath?: string;
 }
 
 export interface AgentAutoRunPayload {
   taskId?: string;
   prompt?: string;
+  projectPath?: string;
 }
 
 export interface AgentCompactedPayload {
@@ -112,6 +124,7 @@ export interface AgentCompactedPayload {
 
 export interface TaskCreatedPayload {
   task?: BackendTaskDTO;
+  projectPath?: string;
 }
 
 export interface TaskMovedPayload {
@@ -124,6 +137,7 @@ export interface TaskMovedPayload {
   reason?: string;
   verdict?: string;
   status?: string;
+  projectPath?: string;
 }
 
 export interface HookStartPayload {
@@ -149,10 +163,12 @@ export interface TaskUpdatedPayload {
   taskId?: string;
   todos?: TodoItem[];
   task?: BackendTaskDTO;
+  projectPath?: string;
 }
 
 export interface TasksUpdatedPayload {
   tasks?: BackendTaskDTO[];
+  projectPath?: string;
 }
 
 export interface SubagentSpawnedPayload {
@@ -402,7 +418,7 @@ export function ensureTaskRunningOnBoard(taskId: string): void {
     currentTask &&
     currentTask.status !== 'running' &&
     currentTask.status !== 'done' &&
-    currentTask.status !== 'waiting_subtask'
+    currentTask.status !== 'waiting_subagent'
   ) {
     boardState.updateTaskStatus(currentTask.id, 'running');
   }
@@ -705,7 +721,7 @@ export function setupTauriEventGateway(): () => void {
       // 10. agent:status
       await addListener('agent:status', (payload) => {
         const { taskId, status } = payload || {};
-        if (taskId && (status === 'finished' || status === 'aborted' || status === 'error')) {
+        if (taskId && (status === 'finished' || status === 'aborted' || status === 'error' || status === 'idle')) {
           useBoardStore.getState().clearActiveQuestion(taskId);
           if (isTaskActiveInDrawer(taskId)) {
             bufferManager.flushTask(taskId);
@@ -719,9 +735,13 @@ export function setupTauriEventGateway(): () => void {
             useDrawerStore.getState().setActiveAgentTask(taskId, false);
           }
           const currentTask = useBoardStore.getState().tasks.find((t) => t.id === taskId);
-          if (currentTask && currentTask.status === 'running') {
+          if (currentTask && currentTask.status !== 'done') {
             useBoardStore.getState().updateTaskStatus(taskId, 'idle');
           }
+        } else if (taskId && status === 'waiting_subagent') {
+          useBoardStore.getState().updateTaskStatus(taskId, 'waiting_subagent');
+        } else if (taskId && status === 'running') {
+          ensureTaskRunningOnBoard(taskId);
         }
         void useBoardStore.getState().loadTasks();
       });
@@ -737,6 +757,8 @@ export function setupTauriEventGateway(): () => void {
 
       // 11. task:created
       await addListener('task:created', (payload) => {
+        const eventRoot = payload?.projectPath || payload?.task?.projectPath || (payload?.task as any)?.project_path;
+        if (!isEventForCurrentProject(eventRoot)) return;
         if (payload?.task) {
           useBoardStore.getState().upsertBackendTask(payload.task);
         }
@@ -745,6 +767,8 @@ export function setupTauriEventGateway(): () => void {
 
       // 12. task:moved
       await addListener('task:moved', (payload) => {
+        const eventRoot = payload?.projectPath || payload?.task?.projectPath || (payload?.task as any)?.project_path;
+        if (!isEventForCurrentProject(eventRoot)) return;
         if (payload?.task) {
           const rawTask = payload.task;
           if (payload.fromStage && typeof rawTask === 'object') {
@@ -821,6 +845,8 @@ export function setupTauriEventGateway(): () => void {
 
       // 16. task:updated
       await addListener('task:updated', (payload) => {
+        const eventRoot = payload?.projectPath || payload?.task?.projectPath || (payload?.task as any)?.project_path;
+        if (!isEventForCurrentProject(eventRoot)) return;
         const { taskId, todos, task } = payload || {};
         if (taskId) {
           bufferManager.flushTask(taskId);
@@ -838,6 +864,7 @@ export function setupTauriEventGateway(): () => void {
 
       // 17. tasks:updated
       await addListener('tasks:updated', (payload) => {
+        if (!isEventForCurrentProject(payload?.projectPath)) return;
         bufferManager.flushAll();
         if (Array.isArray(payload?.tasks)) {
           useBoardStore.getState().setBackendTasks(payload.tasks);
@@ -850,8 +877,9 @@ export function setupTauriEventGateway(): () => void {
       await addListener('agent:autorun', (payload) => {
         const tid = payload?.taskId;
         const prompt = payload?.prompt;
+        const projectPath = payload?.projectPath;
         if (tid) {
-          void useBoardStore.getState().runTaskAgent(tid, prompt, { skipSync: true });
+          void useBoardStore.getState().runTaskAgent(tid, prompt, { skipSync: true, projectPath });
         }
       });
 

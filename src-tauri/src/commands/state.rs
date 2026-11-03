@@ -113,6 +113,151 @@ impl AppState {
         }
         crate::db::get_db_conn(&self.get_root())
     }
+
+    pub fn normalize_root_key(root: &std::path::Path) -> String {
+        let s = root.to_string_lossy().replace('\\', "/");
+        let s = s.trim();
+        let s = s.strip_prefix("//?/").unwrap_or(s);
+        let s = s.strip_prefix("\\\\?\\").unwrap_or(s);
+        let s = s.trim_end_matches('/');
+        #[cfg(windows)]
+        {
+            s.to_lowercase()
+        }
+        #[cfg(not(windows))]
+        {
+            s.to_string()
+        }
+    }
+
+    pub fn agent_key(root: &std::path::Path, task_id: &str) -> String {
+        format!("{}::{}", Self::normalize_root_key(root), task_id.trim().to_lowercase())
+    }
+
+    pub fn register_active_agent(&self, root: &std::path::Path, task_id: &str, handle: ActiveAgentHandle) {
+        let key = Self::agent_key(root, task_id);
+        if let Ok(mut map) = self.active_agents.lock() {
+            map.insert(key, handle);
+        }
+    }
+
+    pub fn remove_active_agent(&self, root: &std::path::Path, task_id: &str) -> Option<ActiveAgentHandle> {
+        let key = Self::agent_key(root, task_id);
+        if let Ok(mut map) = self.active_agents.lock() {
+            if let Some(h) = map.remove(&key) {
+                return Some(h);
+            }
+            map.remove(task_id.trim())
+        } else {
+            None
+        }
+    }
+
+    pub fn remove_active_agent_if_same(
+        &self,
+        root: &std::path::Path,
+        task_id: &str,
+        expected_abort_flag: &Arc<AtomicBool>,
+    ) -> bool {
+        let key = Self::agent_key(root, task_id);
+        if let Ok(mut map) = self.active_agents.lock() {
+            if let Some(entry) = map.get(&key) {
+                if Arc::ptr_eq(&entry.abort_flag, expected_abort_flag) {
+                    map.remove(&key);
+                    return true;
+                }
+            } else if let Some(entry) = map.get(task_id.trim()) {
+                if Arc::ptr_eq(&entry.abort_flag, expected_abort_flag) {
+                    map.remove(task_id.trim());
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    pub fn get_active_agent(&self, root: &std::path::Path, task_id: &str) -> Option<ActiveAgentHandle> {
+        let key = Self::agent_key(root, task_id);
+        if let Ok(map) = self.active_agents.lock() {
+            if let Some(h) = map.get(&key) {
+                return Some(h.clone());
+            }
+            map.get(task_id.trim()).cloned()
+        } else {
+            None
+        }
+    }
+
+    pub fn is_agent_active(&self, root: &std::path::Path, task_id: &str) -> bool {
+        let key = Self::agent_key(root, task_id);
+        let tid_lower = task_id.trim().to_lowercase();
+        let norm_root = Self::normalize_root_key(root);
+
+        if let Ok(map) = self.active_agents.lock() {
+            map.iter().any(|(k, entry)| {
+                let aborted = entry.abort_flag.load(std::sync::atomic::Ordering::SeqCst);
+                let finished = if let Ok(guard) = entry.join_handle.try_lock() {
+                    guard.as_ref().map(|h| h.is_finished()).unwrap_or(false)
+                } else {
+                    false
+                };
+                if aborted || finished {
+                    return false;
+                }
+
+                if k == &key {
+                    return true;
+                }
+                if let Some((k_root, k_tid)) = k.split_once("::") {
+                    if k_root == norm_root
+                        && (k_tid == tid_lower
+                            || k_tid.starts_with(&format!("{}.", tid_lower))
+                            || k_tid.starts_with(&format!("{}:sub:", tid_lower))
+                            || k_tid.starts_with(&format!("{}.sub-", tid_lower)))
+                    {
+                        return true;
+                    }
+                } else if k.eq_ignore_ascii_case(task_id.trim()) {
+                    return true;
+                }
+                false
+            })
+        } else {
+            false
+        }
+    }
+
+    pub fn get_or_create_agent_context(
+        &self,
+        root: &std::path::Path,
+        task_id: &str,
+    ) -> Arc<Mutex<crate::agent::compactor::AgentContextState>> {
+        let key = Self::agent_key(root, task_id);
+        let mut map = self.agent_contexts.lock().unwrap_or_else(|p| p.into_inner());
+        map.entry(key)
+            .or_insert_with(|| Arc::new(Mutex::new(crate::agent::compactor::AgentContextState::default())))
+            .clone()
+    }
+
+    pub fn get_agent_context(
+        &self,
+        root: &std::path::Path,
+        task_id: &str,
+    ) -> Option<Arc<Mutex<crate::agent::compactor::AgentContextState>>> {
+        let key = Self::agent_key(root, task_id);
+        let map = self.agent_contexts.lock().ok()?;
+        map.get(&key).cloned().or_else(|| map.get(task_id.trim()).cloned())
+    }
+
+    pub fn remove_agent_context(
+        &self,
+        root: &std::path::Path,
+        task_id: &str,
+    ) -> Option<Arc<Mutex<crate::agent::compactor::AgentContextState>>> {
+        let key = Self::agent_key(root, task_id);
+        let mut map = self.agent_contexts.lock().ok()?;
+        map.remove(&key).or_else(|| map.remove(task_id.trim()))
+    }
 }
 
 #[cfg(test)]
@@ -193,5 +338,38 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&temp_dir1);
         let _ = std::fs::remove_dir_all(&temp_dir2);
+    }
+
+    #[test]
+    fn test_app_state_agent_isolation_between_projects() {
+        let root_a = PathBuf::from("target").join("proj_a");
+        let root_b = PathBuf::from("target").join("proj_b");
+
+        let state = AppState::new(root_a.clone());
+
+        let flag_a = Arc::new(AtomicBool::new(false));
+        let slot_a = Arc::new(tokio::sync::Mutex::new(None));
+        state.register_active_agent(&root_a, "CVH-001", ActiveAgentHandle {
+            abort_flag: Arc::clone(&flag_a),
+            join_handle: slot_a,
+        });
+
+        // CVH-001 is active in root_a
+        assert!(state.is_agent_active(&root_a, "CVH-001"));
+        // But NOT active in root_b even with same task ID
+        assert!(!state.is_agent_active(&root_b, "CVH-001"));
+
+        // Contexts are also isolated
+        let ctx_a = state.get_or_create_agent_context(&root_a, "CVH-001");
+        {
+            let mut g = ctx_a.lock().unwrap();
+            g.current_turn = 5;
+        }
+
+        let ctx_b = state.get_or_create_agent_context(&root_b, "CVH-001");
+        {
+            let g = ctx_b.lock().unwrap();
+            assert_eq!(g.current_turn, 0); // Clean context in proj_b!
+        }
     }
 }

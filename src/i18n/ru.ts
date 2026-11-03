@@ -47,6 +47,7 @@ export const ru = {
   'status.blocked': 'Блок',
   'status.waitingReview': 'Ревью',
   'status.waitingSubtask': 'Ждем подзадачу',
+  'status.waitingSubagent': 'Ждем субагента',
   'status.error': 'Ошибка',
 
   // Priorities
@@ -181,6 +182,8 @@ export const ru = {
   'drawer.agentExplanation': 'Пояснение агента',
   'drawer.userSteer': 'Корректировка пользователя',
   'drawer.sensorRejection': 'Отклонено сенсором гейткипера',
+  'drawer.agentMessage': 'Сообщение агента',
+  'drawer.hookRejection': 'Отклонено хуком перехода',
   'drawer.generatingResponse': 'Генерация ответа...',
   'drawer.formingStep': 'Формирование шага...',
   'drawer.scrollToNew': 'К новому',

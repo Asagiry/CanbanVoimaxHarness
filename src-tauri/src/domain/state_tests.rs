@@ -56,11 +56,20 @@ fn test_state_variants_and_predicates() {
     assert!(!waiting.is_idle());
     assert!(!waiting.is_running());
     assert!(waiting.is_waiting_subtask());
+    assert!(!waiting.is_waiting_subagent());
     assert!(!waiting.is_done());
     assert_eq!(waiting.as_str(), "waiting_subtask");
     assert_eq!(waiting.model(), None);
     assert_eq!(waiting.subtask_id(), Some("CVH-042.1"));
     assert_eq!(waiting.verdict(), None);
+
+    let waiting_agent = TaskState::WaitingSubagent;
+    assert!(!waiting_agent.is_idle());
+    assert!(!waiting_agent.is_running());
+    assert!(!waiting_agent.is_waiting_subtask());
+    assert!(waiting_agent.is_waiting_subagent());
+    assert!(!waiting_agent.is_done());
+    assert_eq!(waiting_agent.as_str(), "waiting_subagent");
 
     let done = TaskState::Done {
         verdict: Some("APPROVED".to_string()),
@@ -68,6 +77,7 @@ fn test_state_variants_and_predicates() {
     assert!(!done.is_idle());
     assert!(!done.is_running());
     assert!(!done.is_waiting_subtask());
+    assert!(!done.is_waiting_subagent());
     assert!(done.is_done());
     assert_eq!(done.as_str(), "done");
     assert_eq!(done.model(), None);

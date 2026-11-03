@@ -14,6 +14,7 @@ import { loadCachedHookStates, saveCachedHookStates } from '../board/hookStorage
 import { mapBackendTaskToKanban, isTaskForeign } from '../board/taskNormalizer';
 import { syncTasksBackend, triggerRunAgent } from '../board/taskSync';
 import { useDrawerStore } from '../drawerStore';
+import { useProjectStore } from '../projectStore';
 import { logEvent } from '../../lib/logger';
 
 export const createTasksCrudSlice: StateCreator<
@@ -456,7 +457,7 @@ export const createTasksCrudSlice: StateCreator<
     set((state) => {
       const updatedTasks = state.tasks.map((t) => {
         if (t.id !== taskId) return t;
-        if (status === 'idle' && (t.status === 'waiting_subtask' || t.status === 'done')) {
+        if (status === 'idle' && t.status === 'done') {
           return t;
         }
         const isTimerRunning = status === 'running' ? t.isTimerRunning : false;
@@ -469,6 +470,15 @@ export const createTasksCrudSlice: StateCreator<
   upsertBackendTask: (rawTask: BackendTaskDTO | unknown) => {
     if (!rawTask || typeof rawTask !== 'object') return;
     const rawDto = rawTask as BackendTaskDTO;
+    let activeRoot: string | undefined;
+    try {
+      activeRoot = useProjectStore.getState().activeProject?.rootPath;
+    } catch {
+      // ignore
+    }
+    if (activeRoot && isTaskForeign(rawDto, activeRoot)) {
+      return;
+    }
     const prev = get().tasks.find((p) => p.id === rawDto.id);
     const rawStage = rawDto.stageId || rawDto.stage_id || rawDto.columnId;
     if (prev && (!rawStage || prev.stageId === rawStage)) {
@@ -527,9 +537,7 @@ export const createTasksCrudSlice: StateCreator<
               return {
                 ...t,
                 waitingForSubtaskId: isSubDone ? undefined : mapped.id,
-                status: isSubDone
-                  ? (t.status === 'waiting_subtask' ? ('idle' as TaskStatus) : t.status)
-                  : ('waiting_subtask' as TaskStatus),
+                status: t.status === 'waiting_subtask' ? ('idle' as TaskStatus) : t.status,
               };
             }
             return t;
@@ -552,11 +560,18 @@ export const createTasksCrudSlice: StateCreator<
 
   setBackendTasks: (rawTasks: (BackendTaskDTO | unknown)[]) => {
     if (!Array.isArray(rawTasks)) return;
+    let activeRoot: string | undefined;
+    try {
+      activeRoot = useProjectStore.getState().activeProject?.rootPath;
+    } catch {
+      // ignore
+    }
     const prevTasks = get().tasks;
     const { columns } = get();
     const mapped: KanbanTask[] = [];
     for (const raw of rawTasks) {
       if (!isBackendTaskDTO(raw)) continue;
+      if (activeRoot && isTaskForeign(raw, activeRoot)) continue;
       const prev = prevTasks.find((p) => p.id === raw.id);
       const rawStage = raw.stageId || raw.stage_id || raw.columnId;
       if (prev && (!rawStage || prev.stageId === rawStage)) {
@@ -585,6 +600,10 @@ export const createTasksCrudSlice: StateCreator<
         }
         return t;
       }
+      let status = t.status;
+      if (status === 'waiting_subtask') {
+        status = 'idle';
+      }
       if (t.waitingForSubtaskId) {
         const sub = mapped.find((s) => s.id === t.waitingForSubtaskId);
         const subColDef = sub ? columns.find((c) => c.id === sub.stageId) : undefined;
@@ -592,11 +611,11 @@ export const createTasksCrudSlice: StateCreator<
           return {
             ...t,
             waitingForSubtaskId: undefined,
-            status: t.status === 'waiting_subtask' ? ('idle' as TaskStatus) : t.status,
+            status,
           };
         }
       }
-      return t;
+      return status !== t.status ? { ...t, status } : t;
     });
 
     const prevHookStates = get().hookStates;
@@ -718,7 +737,7 @@ export const createTasksCrudSlice: StateCreator<
           if (t.id === parentId) {
             return {
               ...t,
-              status: 'waiting_subtask' as TaskStatus,
+              status: 'idle' as TaskStatus,
               waitingForSubtaskId: mapped.id,
               updatedAt: Date.now(),
             };
