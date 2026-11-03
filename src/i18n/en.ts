@@ -621,4 +621,23 @@ export const en = {
   'tools.todo_write.expand': 'Expand tasks',
   'tools.todo_write.completed': '{completed}/{total} completed ({percent}%)',
   'tools.todo_write.inProgress': '{count} in progress',
+
+  // Telemetry popovers & bottom bar
+  'telemetry.sessionStatistics': 'Session statistics',
+  'telemetry.llmTime': 'LLM time',
+  'telemetry.toolTime': 'Tool time',
+  'telemetry.avgTtft': 'Avg time to first token (TTFT)',
+  'telemetry.tps': 'Tokens per second (TPS)',
+  'telemetry.tokenUsage': 'Token usage',
+  'telemetry.cacheHit': 'Cache hit',
+  'telemetry.uncachedInput': 'Uncached input',
+  'telemetry.cachedInput': 'Cached input',
+  'telemetry.output': 'Output',
+  'telemetry.cacheLabel': 'Cache hit',
+  'telemetry.turnOne': 'turn',
+  'telemetry.turnFew': 'turns',
+  'telemetry.turnMany': 'turns',
+  'telemetry.stepOne': 'step',
+  'telemetry.stepFew': 'steps',
+  'telemetry.stepMany': 'steps',
 } as const;
