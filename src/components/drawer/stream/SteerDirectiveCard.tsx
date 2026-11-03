@@ -97,9 +97,6 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
         <div className="flex items-center space-x-1.5 text-[#171717] dark:text-[#f0f6fc] font-medium">
           <User className="h-3 w-3" />
           <span>{t('drawer.userSteer')}</span>
-          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono uppercase bg-[#ebebeb] dark:bg-[#21262d] text-[#666666] dark:text-[#8b949e]">
-            STEER
-          </span>
         </div>
         {formattedTime && (
           <span className="flex items-center space-x-1 text-[#71717a] dark:text-[#8b949e] tabular-nums">
