@@ -469,6 +469,8 @@ export const ru = {
   'cortex.columnsSection': 'Колонки',
   'cortex.agentsSection': 'Агенты',
   'cortex.globalRulesSection': 'Глобальные правила',
+  'cortex.runtimeRuleBadge': 'встроено',
+  'cortex.runtimeRuleTooltip': 'Встроено в системный промт (Turn 1 Primed) — активно всегда, не требует load_rule',
   'cortex.noGlobalRules': 'Нет глобальных правил',
   'cortex.createFirstGlobalRule': 'Создайте первое общее правило проекта в .cvh/rules/',
   'cortex.globalRulesNothingFound': 'В глобальных правилах ничего не найдено',
