@@ -673,6 +673,19 @@ export const createActivitySlice: StateCreator<
               for (const item of dedupedItems) {
                 if (item.type === 'tool' && item.tool) {
                   tools.unshift(item.tool);
+                  if (item.tool.toolName === 'subagent' || item.tool.toolName === 'subagent_bg') {
+                    const pSubId = (item.tool.params as Record<string, unknown> | undefined)?.subagent_id;
+                    if (typeof pSubId === 'string' && pSubId) {
+                      get().registerSubagentMapping(item.tool.id, pSubId);
+                    } else if (item.tool.stdout) {
+                      try {
+                        const parsed = JSON.parse(item.tool.stdout);
+                        if (parsed.subagent_id) get().registerSubagentMapping(item.tool.id, parsed.subagent_id);
+                      } catch {}
+                      const match = item.tool.stdout.match(/\[Subagent ID:\s*([^\s\]]+)\]/);
+                      if (match && match[1]) get().registerSubagentMapping(item.tool.id, match[1]);
+                    }
+                  }
                 } else if (item.type === 'thought') {
                   thoughts.push({
                     id: item.id,

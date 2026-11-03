@@ -139,6 +139,11 @@ export const createSubagentsSlice: StateCreator<
               const current = mergedMap.get(ex.id)!;
               mergedMap.set(ex.id, {
                 ...current,
+                createdAt:
+                  ex.createdAt && current.createdAt
+                    ? Math.min(ex.createdAt, current.createdAt)
+                    : (ex.createdAt || current.createdAt),
+                finishedAt: ex.finishedAt ?? current.finishedAt,
                 status: ex.status === 'running' ? 'running' : current.status,
                 stepsCount: Math.max(current.stepsCount, ex.stepsCount),
                 durationMs: ex.durationMs ?? current.durationMs,
@@ -165,6 +170,7 @@ export const createSubagentsSlice: StateCreator<
           const params = (t.params as any) || {};
           const subId = params.subagent_id || state.toolIdToSubagentId[t.id] || t.id;
           const feed = state.activityFeed[subId] || [];
+          const createdTime = t.timestamp ? Date.parse(t.timestamp) : undefined;
           derived.push({
             id: subId,
             parentTaskId,
@@ -173,6 +179,7 @@ export const createSubagentsSlice: StateCreator<
             role: params.role || 'general',
             prompt: params.prompt || '',
             status: t.status === 'running' ? 'running' : t.status === 'failed' ? 'error' : 'finished',
+            createdAt: createdTime && !Number.isNaN(createdTime) ? createdTime : undefined,
             durationMs: t.durationMs,
             stepsCount: feed.length,
           });

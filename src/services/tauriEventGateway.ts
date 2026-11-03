@@ -178,6 +178,7 @@ export interface SubagentSpawnedPayload {
   role?: string;
   prompt?: string;
   tools?: string[];
+  createdAt?: number;
 }
 
 export interface SubagentFinishedPayload {

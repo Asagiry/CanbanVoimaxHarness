@@ -9,10 +9,10 @@ export async function initSubagentListeners(store: typeof useDrawerStore) {
   try {
     const { listen } = await import('@tauri-apps/api/event');
 
-    await listen<{ parentTaskId?: string; subagentId?: string; title?: string; role?: string; prompt?: string; tools?: string[] }>(
+    await listen<{ parentTaskId?: string; subagentId?: string; title?: string; role?: string; prompt?: string; tools?: string[]; createdAt?: number }>(
       'subagent:spawned',
       (event) => {
-        const { parentTaskId, subagentId, prompt, title } = event.payload || {};
+        const { parentTaskId, subagentId, prompt, title, createdAt } = event.payload || {};
         if (!subagentId) return;
         const state = store.getState();
 
@@ -62,7 +62,7 @@ export async function initSubagentListeners(store: typeof useDrawerStore) {
             role: role || 'general',
             prompt: prompt || '',
             status: 'running',
-            createdAt: Date.now(),
+            createdAt: createdAt || Date.now(),
             stepsCount: 1,
           });
         }
