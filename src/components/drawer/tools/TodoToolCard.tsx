@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ChevronRight, ListTodo, CheckCircle2, Loader2, Circle } from 'lucide-react';
+import { ChevronRight, ListTodo } from 'lucide-react';
+import { useTranslation } from '../../../stores/languageStore';
 import {
   ToolCardProps,
   isToolFailed,
@@ -9,13 +10,10 @@ import {
   BatchBadge,
   formatDurationCompact,
 } from './shared';
-
-interface TodoItem {
-  content: string;
-  status: 'pending' | 'in_progress' | 'completed';
-}
+import TodoChecklist, { TodoChecklistItem } from './TodoChecklist';
 
 export default function TodoToolCard({ tool }: ToolCardProps) {
+  const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
 
   const toolName = tool.toolName ?? 'todo_write';
@@ -23,9 +21,9 @@ export default function TodoToolCard({ tool }: ToolCardProps) {
     ? (tool.params as Record<string, unknown>)
     : {}) as { todos?: unknown };
 
-  let rawTodos: TodoItem[] = [];
+  let rawTodos: TodoChecklistItem[] = [];
   if (Array.isArray(params.todos)) {
-    rawTodos = params.todos as TodoItem[];
+    rawTodos = params.todos as TodoChecklistItem[];
   } else if (typeof params.todos === 'string') {
     try {
       const parsed = JSON.parse(params.todos);
@@ -69,7 +67,7 @@ export default function TodoToolCard({ tool }: ToolCardProps) {
               e.stopPropagation();
               setIsExpanded(!isExpanded);
             }}
-            aria-label={isExpanded ? 'Свернуть задачи' : 'Развернуть задачи'}
+            aria-label={isExpanded ? t('tools.todo_write.collapse') : t('tools.todo_write.expand')}
           >
             <ChevronRight
               className={`h-3 w-3 transition-transform duration-150 ${
@@ -87,14 +85,14 @@ export default function TodoToolCard({ tool }: ToolCardProps) {
           </span>
 
           <span className="font-mono text-[#52525b] dark:text-[#8b949e] shrink-0 tabular-nums">
-            {completed}/{total} выполнено ({percent}%)
+            {t('tools.todo_write.completed', { completed, total, percent })}
           </span>
 
           {inProgress > 0 && (
             <>
               <span className="text-[#a1a1aa] dark:text-[#6e7681] select-none text-[10px]">•</span>
               <span className="font-mono text-amber-600 dark:text-amber-400 shrink-0 tabular-nums text-[11px]">
-                {inProgress} в работе
+                {t('tools.todo_write.inProgress', { count: inProgress })}
               </span>
             </>
           )}
@@ -119,61 +117,7 @@ export default function TodoToolCard({ tool }: ToolCardProps) {
       {/* Expanded Checklist Body */}
       {isExpanded && (
         <div className="p-3 bg-white dark:bg-[#0d1117] space-y-2.5">
-          {/* Progress track */}
-          {total > 0 && (
-            <div className="w-full bg-[#e4e4e7] dark:bg-[#21262d] h-1.5 rounded-full overflow-hidden flex">
-              <div
-                className="bg-emerald-500 h-full transition-all duration-300"
-                style={{ width: `${(completed / total) * 100}%` }}
-              />
-              <div
-                className="bg-amber-500 h-full transition-all duration-300"
-                style={{ width: `${(inProgress / total) * 100}%` }}
-              />
-            </div>
-          )}
-
-          {/* List items */}
-          <div className="space-y-1.5 pt-0.5">
-            {rawTodos.map((todo, idx) => {
-              const isDone = todo.status === 'completed';
-              const isWorking = todo.status === 'in_progress';
-
-              return (
-                <div
-                  key={idx}
-                  className={`flex items-start space-x-2 py-1 px-2 rounded-md transition-colors ${
-                    isWorking
-                      ? 'bg-amber-500/[0.08] dark:bg-amber-500/[0.12] border border-amber-500/20'
-                      : isDone
-                      ? 'bg-emerald-500/[0.04] dark:bg-emerald-500/[0.06]'
-                      : 'hover:bg-slate-50 dark:hover:bg-slate-900/40'
-                  }`}
-                >
-                  <span className="mt-0.5 shrink-0">
-                    {isDone ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 animate-checkmark-pop" />
-                    ) : isWorking ? (
-                      <Loader2 className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 animate-spin" />
-                    ) : (
-                      <Circle className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
-                    )}
-                  </span>
-                  <span
-                    className={`font-mono text-xs leading-relaxed select-text ${
-                      isDone
-                        ? 'line-through text-slate-400 dark:text-slate-500'
-                        : isWorking
-                        ? 'text-amber-900 dark:text-amber-200 font-medium'
-                        : 'text-slate-700 dark:text-slate-300'
-                    }`}
-                  >
-                    {todo.content}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+          <TodoChecklist todos={rawTodos} />
 
           {tool.stdout && (
             <div className="pt-1 border-t border-[#f4f4f5] dark:border-[#21262d] text-[11px] font-mono text-[#71717a] dark:text-[#8b949e]">

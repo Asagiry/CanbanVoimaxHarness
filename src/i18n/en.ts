@@ -595,4 +595,27 @@ export const en = {
   'imageLightbox.wheelHint': 'Wheel: zoom +/-',
   'imageLightbox.dragActive': 'Drag active',
   'imageLightbox.closeHint': 'to close',
+
+  // Drawer Steer Bar Todos Popover & Tool Card
+  'drawer.todos': 'Tasks',
+  'drawer.todosAriaTrigger': 'Agent task execution plan',
+  'drawer.todosAriaDialog': 'Agent task list',
+  'drawer.todosAriaClose': 'Close',
+  'drawer.todosExecutionPlan': 'Execution Plan',
+  'drawer.todosSubagentPlan': 'Subagent Plan',
+  'drawer.todosSubagentPlanWithTitle': 'Plan: {title}',
+  'drawer.todosDone': 'done',
+  'drawer.todosInProgress': 'in progress',
+  'drawer.todosQueued': 'queued',
+  'drawer.todosCompletedSummary': '{completed}/{total} completed ({percent}%)',
+  'drawer.todosInProgressSummary': '{count} in progress',
+  'drawer.todosEmptyPlan': 'Plan is currently empty. Steps will appear here when the agent calls the {tool} tool.',
+  'drawer.todosSubagentEmptyPlan': 'Subagent has not created a task plan yet. Steps will appear here when it calls the {tool} tool.',
+  'drawer.todosItemStatus': 'Status: {status}',
+
+  // Tools: todo_write specific keys
+  'tools.todo_write.collapse': 'Collapse tasks',
+  'tools.todo_write.expand': 'Expand tasks',
+  'tools.todo_write.completed': '{completed}/{total} completed ({percent}%)',
+  'tools.todo_write.inProgress': '{count} in progress',
 } as const;

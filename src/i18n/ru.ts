@@ -597,4 +597,27 @@ export const ru = {
   'imageLightbox.wheelHint': 'Колесико: зум +/-',
   'imageLightbox.dragActive': 'Перетаскивание активно',
   'imageLightbox.closeHint': 'чтобы закрыть',
+
+  // Drawer Steer Bar Todos Popover & Tool Card
+  'drawer.todos': 'Задачи',
+  'drawer.todosAriaTrigger': 'План выполнения задач агента',
+  'drawer.todosAriaDialog': 'Список задач агента',
+  'drawer.todosAriaClose': 'Закрыть',
+  'drawer.todosExecutionPlan': 'План выполнения',
+  'drawer.todosSubagentPlan': 'План субагента',
+  'drawer.todosSubagentPlanWithTitle': 'План: {title}',
+  'drawer.todosDone': 'готово',
+  'drawer.todosInProgress': 'в работе',
+  'drawer.todosQueued': 'в очереди',
+  'drawer.todosCompletedSummary': '{completed}/{total} выполнено ({percent}%)',
+  'drawer.todosInProgressSummary': '{count} в работе',
+  'drawer.todosEmptyPlan': 'План пока пуст. Шаги появятся здесь, когда агент вызовет инструмент {tool}.',
+  'drawer.todosSubagentEmptyPlan': 'Субагент пока не составил свой план задач. Шаги появятся здесь, когда он вызовет инструмент {tool}.',
+  'drawer.todosItemStatus': 'Статус: {status}',
+
+  // Tools: todo_write specific keys
+  'tools.todo_write.collapse': 'Свернуть задачи',
+  'tools.todo_write.expand': 'Развернуть задачи',
+  'tools.todo_write.completed': '{completed}/{total} выполнено ({percent}%)',
+  'tools.todo_write.inProgress': '{count} в работе',
 } as const satisfies TranslationDict;
