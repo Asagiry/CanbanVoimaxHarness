@@ -87,8 +87,8 @@ export default function DrawerActivityStream({
 
   // Obeying § 2.20 & Question Tool Dedup:
   const displayActivities = useMemo(
-    () => filterDisplayActivities(unifiedActivities),
-    [unifiedActivities]
+    () => filterDisplayActivities(unifiedActivities, task?.id),
+    [unifiedActivities, task?.id]
   );
 
   // Pre-compute elapsed duration for each activity item
