@@ -248,6 +248,18 @@ if errorlevel 1 (
   )
 )
 
+rem Auto-detect mbx compiler cache and Cargo shim
+if exist "%LOCALAPPDATA%\mbx\bin\cargo.exe" (
+  set "PATH=%LOCALAPPDATA%\mbx\bin;%PATH%"
+  echo   notice: added mbx compiler cache shim (%LOCALAPPDATA%\mbx\bin) to PATH
+) else if exist "%USERPROFILE%\AppData\Local\mbx\bin\cargo.exe" (
+  set "PATH=%USERPROFILE%\AppData\Local\mbx\bin;%PATH%"
+  echo   notice: added mbx compiler cache shim (%USERPROFILE%\AppData\Local\mbx\bin) to PATH
+) else if exist "C:\Users\Voimax\AppData\Local\mbx\bin\cargo.exe" (
+  set "PATH=C:\Users\Voimax\AppData\Local\mbx\bin;%PATH%"
+  echo   notice: added mbx compiler cache shim to PATH
+)
+
 rem Auto-detect node
 where node >nul 2>nul
 if errorlevel 1 (
@@ -309,6 +321,10 @@ if errorlevel 1 (
   goto error_exit
 )
 echo   ok: cargo, node, pnpm found.
+where mbx >nul 2>nul
+if not errorlevel 1 (
+  echo   ok: mbx compiler cache active.
+)
 
 rem Target and bundle defaults
 if "%TARGET%"=="" (
@@ -380,29 +396,32 @@ if not exist "src-tauri" (
   goto error_exit
 )
 pushd "src-tauri"
+set "CARGO_CMD=cargo"
+where mbx >nul 2>nul
+if not errorlevel 1 set "CARGO_CMD=mbx"
 if not "%TARGET%"=="" (
-  cargo check --target %TARGET%
+  !CARGO_CMD! check --target %TARGET%
   if errorlevel 1 (
-    echo ERROR: cargo check --target %TARGET% failed. 1>&2
+    echo ERROR: !CARGO_CMD! check --target %TARGET% failed. 1>&2
     popd
     goto error_exit
   )
-  cargo clippy --target %TARGET% -- -D warnings
+  !CARGO_CMD! clippy --target %TARGET% -- -D warnings
   if errorlevel 1 (
-    echo ERROR: cargo clippy --target %TARGET% -- -D warnings failed. 1>&2
+    echo ERROR: !CARGO_CMD! clippy --target %TARGET% -- -D warnings failed. 1>&2
     popd
     goto error_exit
   )
 ) else (
-  cargo check
+  !CARGO_CMD! check
   if errorlevel 1 (
-    echo ERROR: cargo check failed. 1>&2
+    echo ERROR: !CARGO_CMD! check failed. 1>&2
     popd
     goto error_exit
   )
-  cargo clippy -- -D warnings
+  !CARGO_CMD! clippy -- -D warnings
   if errorlevel 1 (
-    echo ERROR: cargo clippy -- -D warnings failed. 1>&2
+    echo ERROR: !CARGO_CMD! clippy -- -D warnings failed. 1>&2
     popd
     goto error_exit
   )
