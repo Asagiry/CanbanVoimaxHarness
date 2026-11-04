@@ -643,4 +643,8 @@ export const en = {
   'telemetry.stepOne': 'step',
   'telemetry.stepFew': 'steps',
   'telemetry.stepMany': 'steps',
+
+  // Stage Summary Card
+  'stageSummary.rejectTitle': 'Task returned for rework',
+  'stageSummary.summaryTitle': 'Stage Summary',
 } as const;

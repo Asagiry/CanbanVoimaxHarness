@@ -6,6 +6,7 @@ import {
   formatDurationCompact,
   ThoughtStreamCard,
   SteerDirectiveCard,
+  StageSummaryCard,
   SubagentActivityCard,
   MarkdownContent,
   LightboxContext,
@@ -459,5 +460,41 @@ describe('SteerDirectiveCard activity categorization & rendering', () => {
     expect(html).toContain('Hook Execution Rejected');
     expect(html).not.toContain('User Steer');
     expect(html).not.toContain('Agent message');
+  });
+});
+
+describe('StageSummaryCard localized rendering', () => {
+  it('renders generic rework title for reject activity in Russian and English', () => {
+    const actReject: DrawerActivityItem = {
+      id: 'rej-1',
+      type: 'reject',
+      timestamp: '12:00:00',
+      content: 'Needs clippy fix',
+    };
+    setLanguage('ru');
+    const htmlRu = renderToString(React.createElement(StageSummaryCard, { activity: actReject }));
+    expect(htmlRu).toContain('Задача возвращена на доработку');
+    expect(htmlRu).not.toContain('Вердикт ревьюера');
+
+    setLanguage('en');
+    const htmlEn = renderToString(React.createElement(StageSummaryCard, { activity: actReject }));
+    expect(htmlEn).toContain('Task returned for rework');
+    expect(htmlEn).not.toContain('Reviewer');
+  });
+
+  it('renders summary title for summary activity in Russian and English', () => {
+    const actSummary: DrawerActivityItem = {
+      id: 'sum-1',
+      type: 'summary',
+      timestamp: '12:00:00',
+      content: 'Implementation complete',
+    };
+    setLanguage('ru');
+    const htmlRu = renderToString(React.createElement(StageSummaryCard, { activity: actSummary }));
+    expect(htmlRu).toContain('Саммари этапа');
+
+    setLanguage('en');
+    const htmlEn = renderToString(React.createElement(StageSummaryCard, { activity: actSummary }));
+    expect(htmlEn).toContain('Stage Summary');
   });
 });

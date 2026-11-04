@@ -67,8 +67,8 @@ export function ColumnStageCard({
   const settingsFile = stage.files.find((f) => f.type === 'settings');
   const settingsIsMissing = settingsFile ? Boolean(fileMissing[settingsFile.id]) : false;
 
-  const isBacklog = stage.stageId === 'backlog';
-  const isReady = stage.stageId === 'ready';
+  const isBacklog = Boolean(column?.isIntake || stage.stageId === 'backlog');
+  const isReady = Boolean(column?.terminal || stage.stageId === 'ready');
   const assignedPersona = column?.persona
     ? agentPersonas.find((p) => p.role === column.persona)
     : undefined;

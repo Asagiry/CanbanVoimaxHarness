@@ -716,17 +716,6 @@ pub async fn internal_create_task(
     Ok(new_task)
 }
 
-pub fn is_review_stage(stage: &crate::config::PipelineStage) -> bool {
-    stage.persona.as_deref() == Some("reviewer")
-        || stage_id_matches(&stage.id, "review")
-        || stage.id.to_lowercase().contains("review")
-        || stage.id.to_lowercase().contains("ревью")
-}
-
-pub fn is_review_column(col: &crate::config::PipelineStage) -> bool {
-    is_review_stage(col)
-}
-
 #[allow(clippy::too_many_arguments)]
 pub async fn internal_create_subtask(
     root: &Path,

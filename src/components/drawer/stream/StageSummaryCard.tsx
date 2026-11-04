@@ -1,5 +1,6 @@
 import { CheckCircle2, RotateCcw } from 'lucide-react';
 import type { DrawerActivityItem } from '../../../stores/drawerStore';
+import { useTranslation } from '../../../stores/languageStore';
 import { MarkdownContent } from './MarkdownContent';
 
 export interface StageSummaryCardProps {
@@ -13,6 +14,7 @@ export default function StageSummaryCard({
   durationMs,
   onImageClick,
 }: StageSummaryCardProps) {
+  const { t } = useTranslation();
   const isReject = (activity?.type as string) === 'reject';
 
   if (isReject) {
@@ -22,7 +24,7 @@ export default function StageSummaryCard({
           <div className="flex items-center space-x-2 text-[#171717] dark:text-[#f0f6fc]">
             <RotateCcw className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
             <span className="text-xs font-semibold font-sans">
-              Вердикт ревьюера: Требуются правки
+              {t('stageSummary.rejectTitle')}
             </span>
           </div>
           {durationMs ? (
@@ -44,7 +46,7 @@ export default function StageSummaryCard({
         <div className="flex items-center space-x-2 text-[#171717] dark:text-[#f0f6fc]">
           <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
           <span className="text-xs font-semibold font-sans">
-            Саммари этапа
+            {t('stageSummary.summaryTitle')}
           </span>
         </div>
         {durationMs ? (

@@ -215,7 +215,7 @@ pub async fn execute_create_task(
         let effective_column_id = if let Some(ref cid) = input.column_id {
             cid.clone()
         } else if let Some(ref cols) = target_board_cols {
-            if let Some(backlog_col) = cols.iter().find(|c| crate::commands::tasks::stage_id_matches(&c.id, "backlog")) {
+            if let Some(backlog_col) = cols.iter().find(|c| c.is_intake == Some(true) || crate::commands::tasks::stage_id_matches(&c.id, "backlog")) {
                 backlog_col.id.clone()
             } else if let Some(first) = cols.first() {
                 first.id.clone()
@@ -239,7 +239,7 @@ pub async fn execute_create_task(
             pipe_cols.as_ref().and_then(|cols| cols.iter().find(|c| c.id == effective_column_id))
         });
 
-        let is_backlog = crate::commands::tasks::stage_id_matches(&effective_column_id, "backlog");
+        let is_backlog = target_col.map(|c| c.is_intake == Some(true)).unwrap_or(false) || crate::commands::tasks::stage_id_matches(&effective_column_id, "backlog");
         let should_autorun = !is_backlog && target_col.map(|c| {
             c.auto_run == Some(true) || c.persona.is_some()
         }).unwrap_or(false);
@@ -601,7 +601,7 @@ pub async fn execute_get_task_history(
                     } else if content.contains("HOOK REJECTED") || content.contains("ОТКЛОНЕНО ХУКОМ") {
                         "Hook Rejection"
                     } else if content.contains("Задача возвращена на этап") {
-                        "Reviewer Rejection"
+                        "Rejection"
                     } else if it.item_type == "agent" {
                         "Agent Message"
                     } else {

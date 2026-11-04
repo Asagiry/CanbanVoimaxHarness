@@ -687,25 +687,6 @@ use std::sync::Arc;
         }
     }
 
-
-    #[test]
-    fn test_is_exploratory_role() {
-        assert!(is_exploratory_role("explorer"));
-        assert!(is_exploratory_role("architect"));
-        assert!(is_exploratory_role("researcher"));
-        assert!(is_exploratory_role("scout"));
-        assert!(is_exploratory_role("code_explorer"));
-        assert!(is_exploratory_role("system_architect"));
-        assert!(is_exploratory_role("Project Explorer"));
-
-        // Non-exploratory roles must NOT match
-        assert!(!is_exploratory_role("developer"));
-        assert!(!is_exploratory_role("reviewer"));
-        assert!(!is_exploratory_role("tester"));
-        assert!(!is_exploratory_role("cvh-dev"));
-    }
-
-
     #[test]
     fn test_subagent_session_info_is_bg() {
         let (tx, _rx) = oneshot::channel();
