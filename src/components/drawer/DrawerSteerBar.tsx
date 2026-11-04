@@ -50,6 +50,9 @@ export default function DrawerSteerBar({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const activeSubagentId = useDrawerStore((s) => s.activeSubagentId);
+  const draftKey = activeSubagentId
+    ? (activeSubagentId.includes(':sub:') ? activeSubagentId : `${task?.id}:sub:${activeSubagentId}`)
+    : task?.id;
   const activeSubagentRole = useDrawerStore((s) => s.activeSubagentRole);
   const storeSubagents = useDrawerStore((s) => s.subagents);
   const toolExecutions = useDrawerStore((s) => s.toolExecutions);
@@ -99,14 +102,19 @@ export default function DrawerSteerBar({
   const parentLimit = parentMatchedPersona?.contextWindow || (taskPersona.toLowerCase() === 'cvh-dev' ? 200000 : 128000);
   const effectiveLimit = matchedPersona?.contextWindow || parentLimit;
 
-  // Reset input and attachments on task switch
+  // Restore draft when switching tasks or subagents
   useEffect(() => {
-    setInteractiveInput('');
-    setAttachedImages([]);
+    if (!draftKey) return;
+    const draft = useDrawerStore.getState().getTaskDraft(draftKey);
+    setInteractiveInput(draft?.text || '');
+    setAttachedImages(draft?.images || []);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
+      requestAnimationFrame(() => {
+        if (textareaRef.current) adjustTextareaHeight(textareaRef.current);
+      });
     }
-  }, [task?.id]);
+  }, [draftKey]);
 
   const adjustTextareaHeight = (el: HTMLTextAreaElement) => {
     el.style.height = 'auto';
@@ -115,8 +123,29 @@ export default function DrawerSteerBar({
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInteractiveInput(e.target.value);
+    const newVal = e.target.value;
+    setInteractiveInput(newVal);
     adjustTextareaHeight(e.target);
+    if (draftKey) {
+      useDrawerStore.getState().setTaskDraft(draftKey, {
+        text: newVal,
+        images: attachedImages,
+      });
+    }
+  };
+
+  const handleRemoveImage = (imageId: string) => {
+    setAttachedImages((prev) => {
+      const next = prev.filter((i) => i.id !== imageId);
+      if (draftKey) {
+        const currentText = textareaRef.current ? textareaRef.current.value : interactiveInput;
+        useDrawerStore.getState().setTaskDraft(draftKey, {
+          text: currentText,
+          images: next,
+        });
+      }
+      return next;
+    });
   };
 
   const handleAddChatImages = async (files: FileList | File[]) => {
@@ -144,7 +173,17 @@ export default function DrawerSteerBar({
 
       const successful = results.filter((item): item is { id: string; name: string; dataUrl: string } => item !== null);
       if (successful.length > 0) {
-        setAttachedImages((prev) => [...prev, ...successful]);
+        setAttachedImages((prev) => {
+          const next = [...prev, ...successful];
+          if (draftKey) {
+            const currentText = textareaRef.current ? textareaRef.current.value : interactiveInput;
+            useDrawerStore.getState().setTaskDraft(draftKey, {
+              text: currentText,
+              images: next,
+            });
+          }
+          return next;
+        });
       }
     } catch (err) {
       console.error('[DrawerSteerBar] Error handling images:', err);
@@ -215,6 +254,10 @@ export default function DrawerSteerBar({
     const currentImages = [...attachedImages];
     const textToSend = interactiveInput;
 
+    if (draftKey) {
+      useDrawerStore.getState().clearTaskDraft(draftKey);
+    }
+
     setInteractiveInput('');
     setAttachedImages([]);
     if (textareaRef.current) {
@@ -255,7 +298,7 @@ export default function DrawerSteerBar({
                   />
                   <button
                     type="button"
-                    onClick={() => setAttachedImages((prev) => prev.filter((i) => i.id !== img.id))}
+                    onClick={() => handleRemoveImage(img.id)}
                     className="absolute top-1 right-1 w-4 h-4 rounded-full bg-white/90 dark:bg-[#161b22]/90 hover:bg-white dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] border border-[#ebebeb] dark:border-[#30363d] flex items-center justify-center text-xs leading-none transition cursor-pointer"
                     aria-label={t('drawer.removeImage')}
                   >

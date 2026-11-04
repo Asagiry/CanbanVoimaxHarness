@@ -9,6 +9,7 @@ import {
   createStreamSlice,
   createActivitySlice,
   createSubagentsSlice,
+  createDraftsSlice,
   registerActivityFlushCallback,
   initSubagentListeners,
 } from './drawer';
@@ -27,6 +28,7 @@ export const useDrawerStore = create<DrawerState>()((...a) => {
     ...createStreamSlice(...a),
     ...createActivitySlice(...a),
     ...createSubagentsSlice(...a),
+    ...createDraftsSlice(...a),
   };
 });
 

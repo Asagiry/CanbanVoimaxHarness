@@ -137,10 +137,28 @@ export interface SubagentsActions {
 
 export type SubagentsSlice = SubagentsState & SubagentsActions;
 
+export interface TaskDraft {
+  text: string;
+  images: Array<{ id: string; name: string; dataUrl: string }>;
+}
+
+export interface DraftsState {
+  taskDrafts: Record<string, TaskDraft>;
+}
+
+export interface DraftsActions {
+  setTaskDraft: (draftKey: string, draft: TaskDraft) => void;
+  clearTaskDraft: (draftKey: string) => void;
+  getTaskDraft: (draftKey: string) => TaskDraft | undefined;
+}
+
+export type DraftsSlice = DraftsState & DraftsActions;
+
 export type DrawerState = DrawerMetaSlice &
   StreamSlice &
   ActivitySlice &
-  SubagentsSlice;
+  SubagentsSlice &
+  DraftsSlice;
 
 export type DrawerSliceSet = (
   partial:

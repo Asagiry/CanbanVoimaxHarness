@@ -4,4 +4,5 @@ export * from './slices/drawerMetaSlice';
 export * from './slices/streamSlice';
 export * from './slices/activitySlice';
 export * from './slices/subagentsSlice';
+export * from './slices/draftsSlice';
 export * from './subagentListeners';

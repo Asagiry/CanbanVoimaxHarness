@@ -802,6 +802,11 @@ export const createTasksCrudSlice: StateCreator<
       } catch (logErr) {
         console.warn('Failed to clear task logs for deleted task:', id, logErr);
       }
+      try {
+        useDrawerStore.getState().clearTaskDraft(id);
+      } catch (draftErr) {
+        console.warn('Failed to clear task draft for deleted task:', id, draftErr);
+      }
     }
 
     logEvent('INFO', 'BOARD_STORE', `deleteTask: requesting backend delete for "${resolvedId}"`, JSON.stringify(ids));
