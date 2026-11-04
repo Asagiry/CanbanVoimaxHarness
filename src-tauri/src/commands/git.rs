@@ -102,6 +102,66 @@ pub fn get_image_mime_type(path: &str) -> &'static str {
     }
 }
 
+/// Returns true if a path refers to a user-facing CVH configuration or rule file
+/// (e.g. `.cvh/rules/**`, `.cvh/agents/**`, `.cvh/settings/**`, `.cvh/tools/**`,
+/// `.cvh/hooks/**`, `.cvh/boards.json`, `.cvh/pipeline.json`).
+/// Runtime artifacts (db, logs, spills, worktrees, dialogs, secrets) return false.
+pub fn is_cvh_config_path(path: &str) -> bool {
+    let raw = path.replace('\\', "/");
+    let norm = raw.trim();
+    if norm.is_empty() {
+        return false;
+    }
+    let norm = norm.strip_prefix("./").unwrap_or(norm).trim_start_matches('/');
+
+    if norm.contains("harness.db")
+        || norm.starts_with("worktrees/")
+        || norm.contains("/worktrees/")
+        || norm.ends_with("llm.json")
+        || norm.contains("/llm.json")
+        || norm.starts_with(".cvh/spill/")
+        || norm.contains("/.cvh/spill/")
+        || norm.starts_with("spill/")
+        || norm.contains("/spill/")
+        || norm.starts_with(".cvh/logs/")
+        || norm.contains("/.cvh/logs/")
+        || norm.starts_with("logs/")
+        || norm.contains("/logs/")
+        || norm.ends_with(".log")
+        || norm.starts_with(".cvh/dialogs/")
+        || norm.contains("/.cvh/dialogs/")
+        || norm.contains("/dialogs/")
+        || norm.ends_with("tasks.json")
+        || norm.contains("/tasks.json")
+        || norm.starts_with(".cvh/tasks/")
+        || norm.contains("/.cvh/tasks/")
+        || norm.contains("/tasks/")
+        || norm.ends_with(".secret")
+        || norm.contains(".secret/")
+        || norm.contains("/.secret")
+        || norm.ends_with(".key")
+        || norm.contains(".key/")
+        || norm.contains("/.key")
+    {
+        return false;
+    }
+
+    norm.starts_with(".cvh/rules/")
+        || norm.contains("/.cvh/rules/")
+        || norm.starts_with(".cvh/agents/")
+        || norm.contains("/.cvh/agents/")
+        || norm.starts_with(".cvh/settings/")
+        || norm.contains("/.cvh/settings/")
+        || norm.starts_with(".cvh/tools/")
+        || norm.contains("/.cvh/tools/")
+        || norm.starts_with(".cvh/hooks/")
+        || norm.contains("/.cvh/hooks/")
+        || norm == ".cvh/boards.json"
+        || norm.ends_with("/.cvh/boards.json")
+        || norm == ".cvh/pipeline.json"
+        || norm.ends_with("/.cvh/pipeline.json")
+}
+
 /// Returns true if the file path is an internal CVH runtime, database, secret,
 /// or worktree artifact that must be hidden from Git diffs.
 /// Configuration files under `.cvh/` (rules, agents, settings, tools, hooks,
@@ -154,22 +214,7 @@ pub fn is_cvh_path(path: &str) -> bool {
     // 3. Explicitly allowed CVH configuration files & directories:
     //    .cvh/rules/, .cvh/agents/, .cvh/settings/, .cvh/tools/, .cvh/hooks/,
     //    .cvh/boards.json, .cvh/pipeline.json
-    let is_cvh_config = norm.starts_with(".cvh/rules/")
-        || norm.contains("/.cvh/rules/")
-        || norm.starts_with(".cvh/agents/")
-        || norm.contains("/.cvh/agents/")
-        || norm.starts_with(".cvh/settings/")
-        || norm.contains("/.cvh/settings/")
-        || norm.starts_with(".cvh/tools/")
-        || norm.contains("/.cvh/tools/")
-        || norm.starts_with(".cvh/hooks/")
-        || norm.contains("/.cvh/hooks/")
-        || norm == ".cvh/boards.json"
-        || norm.ends_with("/.cvh/boards.json")
-        || norm == ".cvh/pipeline.json"
-        || norm.ends_with("/.cvh/pipeline.json");
-
-    if is_cvh_config {
+    if is_cvh_config_path(norm) {
         return false;
     }
 

@@ -144,7 +144,7 @@ pub async fn run_agent(
             map.remove(&k);
         }
 
-        if state.is_agent_active(&root, &task_id) {
+        if AppState::is_agent_active_in_map(&map, &root, &task_id) {
             crate::logger::cvh_log(
                 Some(&root),
                 "WARN",
@@ -314,7 +314,6 @@ pub async fn run_agent(
                     gatekeeper_sensor: None,
                     allowed_tools: None,
                     hooks: HashMap::new(),
-                    routes: None,
                     auto_run: None,
                     terminal: None,
                     is_intake: None,
@@ -1746,13 +1745,7 @@ pub async fn steer_agent(
     let _ = app_handle.emit("agent:steer", steer_payload);
 
     {
-        let prev_entry = {
-            let mut map = state
-                .active_agents
-                .lock()
-                .map_err(|_| "Failed to lock active agents".to_string())?;
-            map.remove(&task_id)
-        };
+        let prev_entry = state.remove_active_agent(&root, &task_id);
 
         if let Some(agent_entry) = prev_entry {
             agent_entry.abort_flag.store(true, Ordering::SeqCst);

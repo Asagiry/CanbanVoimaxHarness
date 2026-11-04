@@ -51,8 +51,8 @@ use std::sync::Arc;
             "skills section must be gone"
         );
         assert!(
-            prompt.contains("Scoped Tool Execution Mandate"),
-            "tool instructions must be kept"
+            prompt.contains("Runtime Environment"),
+            "runtime contract must be kept"
         );
 
         let _ = tokio::fs::remove_dir_all(&base).await;
@@ -97,7 +97,7 @@ use std::sync::Arc;
         let pos_a = prompt.find("RULE_A_MARKER").expect("rule a pos");
         let pos_b = prompt.find("RULE_B_MARKER").expect("rule b pos");
         assert!(pos_a < pos_b, "rules must be alphabetical: a_first before b_second");
-        assert!(prompt.contains("Scoped Tool Execution Mandate"));
+        assert!(prompt.contains("Runtime Environment"));
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
@@ -221,7 +221,6 @@ use std::sync::Arc;
             "name: <role>",
             "description: Use PROACTIVELY when",
             "model: inherit",
-            "tools:",
             "scope:",
             "activation:",
             ".cvh/boards.json {activeBoardId",
@@ -271,11 +270,10 @@ use std::sync::Arc;
             .await
             .expect("compile prompt");
 
-        assert!(prompt.contains("tools: [advance_task]"), "frontmatter must contain only allowed tools");
+        assert!(!prompt.contains("tools: [read_file"), "frontmatter tools must be stripped");
         assert!(!prompt.contains("read_file"), "disabled read_file must NOT leak in prompt");
         assert!(!prompt.contains("write_file"), "disabled write_file must NOT leak in prompt");
-        assert!(!prompt.contains("Scoped Tool Execution Mandate"), "mandate for fs tools must NOT appear");
-        assert!(!prompt.contains("Subagent Delegation Mandate"), "mandate for subagent must NOT appear");
+        assert!(!prompt.contains("Authorized Tools"), "backend-authoritative tools block must NOT appear in prompt");
 
         // Case 2: Only read_file and advance_task
         let tools_fs = vec!["read_file".to_string(), "advance_task".to_string()];
@@ -283,9 +281,7 @@ use std::sync::Arc;
             .await
             .expect("compile prompt");
 
-        assert!(prompt_fs.contains("tools: [read_file, advance_task]"));
-        assert!(prompt_fs.contains("Scoped Tool Execution Mandate"));
-        assert!(!prompt_fs.contains("Subagent Delegation Mandate"));
+        assert!(prompt_fs.contains("Runtime Environment"));
         assert!(!prompt_fs.contains("`write_file`"));
 
         let _ = tokio::fs::remove_dir_all(&base).await;
@@ -303,19 +299,53 @@ use std::sync::Arc;
         println!("planner_rules: {:?}", planner_rules);
         assert_eq!(
             planner_rules,
-            vec!["anti-sycophancy", "architecture", "backend_map", "be-ambitious", "decomposition", "frontend_map", "scope-hygiene"]
+            vec![
+                "anti-sycophancy",
+                "antislop",
+                "architecture",
+                "backend_map",
+                "be-ambitious",
+                "decomposition",
+                "frontend_map",
+                "ponytail",
+                "review-checklist",
+                "rules-sync",
+                "scope-hygiene",
+            ]
         );
 
         let dev_rules = get_available_rules(repo_root, Some("developer"));
         assert_eq!(
             dev_rules,
-            vec!["anti-sycophancy", "backend", "backend_map", "frontend", "frontend_map", "ponytail", "rules-sync", "sensors"]
+            vec![
+                "anti-sycophancy",
+                "antislop",
+                "backend",
+                "backend_map",
+                "frontend",
+                "frontend_map",
+                "ponytail",
+                "review-checklist",
+                "rules-sync",
+                "sensors",
+            ]
         );
 
         let reviewer_rules = get_available_rules(repo_root, Some("reviewer"));
         assert_eq!(
             reviewer_rules,
-            vec!["anti-sycophancy", "backend-invariants", "backend_map", "frontend-invariants", "frontend_map", "review-checklist", "verdict-routing"]
+            vec![
+                "anti-sycophancy",
+                "antislop",
+                "backend-invariants",
+                "backend_map",
+                "frontend-invariants",
+                "frontend_map",
+                "ponytail",
+                "review-checklist",
+                "rules-sync",
+                "verdict-routing",
+            ]
         );
         assert!(!reviewer_rules.contains(&"boards".to_string()), "Reviewer must NOT have boards rule");
         assert!(!reviewer_rules.contains(&"retro".to_string()), "Reviewer must NOT have retro rule");
@@ -323,7 +353,17 @@ use std::sync::Arc;
         let retro_rules = get_available_rules(repo_root, Some("retro"));
         assert_eq!(
             retro_rules,
-            vec!["anti-sycophancy", "backend_map", "frontend_map", "reflection-methodology", "rule-evolution"]
+            vec![
+                "anti-sycophancy",
+                "antislop",
+                "backend_map",
+                "frontend_map",
+                "ponytail",
+                "reflection-methodology",
+                "review-checklist",
+                "rule-evolution",
+                "rules-sync",
+            ]
         );
 
         let cvh_dev_rules = get_available_rules(repo_root, Some("cvh-dev"));
@@ -332,15 +372,19 @@ use std::sync::Arc;
             vec![
                 "agents",
                 "anti-sycophancy",
+                "antislop",
                 "backend_map",
                 "boards",
                 "frontend_map",
                 "hooks",
                 "pipeline-setup",
+                "ponytail",
+                "review-checklist",
                 "role-developer",
                 "role-planner",
                 "role-retro",
                 "role-reviewer",
+                "rules-sync",
                 "runtime-rules",
                 "tools",
             ]

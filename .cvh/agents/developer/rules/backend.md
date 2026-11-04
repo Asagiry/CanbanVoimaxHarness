@@ -14,7 +14,7 @@ Authoritative backend engineering standards and architectural invariants of **Ca
 - **Embedded Database (`rusqlite = "0.32"`, bundled)**: High-concurrency ACID transactions operating strictly under WAL mode (`.cvh/harness.db`).
 - **Async Runtime (`tokio = "1"`, full)**: Asynchronous ReAct agent loops, background subagents, child process management, and non-blocking IPC.
 - **HTTP & SSE Streaming (`reqwest = "0.12"`, `eventsource-stream = "0.2"`)**: LLM communication supporting OpenAI-compatible and Gemini endpoints with real-time token/thought streaming.
-- **Error Handling**: Strongly typed domain errors (`thiserror = "1.0"`) and application context propagation (`anyhow = "1.0"`).
+- **Error Handling**: Strongly typed domain errors (`thiserror = "2"`) and application context propagation (`anyhow = "1.0"`).
 
 ---
 
@@ -41,7 +41,7 @@ The legacy monolithic `config.rs` is partitioned into modular submodules:
 ### 2.3 Domain Model & Value Objects (`src-tauri/src/domain/`)
 Implements DDD principles and Uncle Bob's Clean Architecture:
 - `domain::ids`: Immutable nominal Value Objects (`TaskId`, `StageId`, `BoardId`) with compile-time branding, strict regex enforcement (`^[A-Z0-9-_.:]+$`), case normalization, and deref coercion.
-- `domain::state`: Algebraic Data Type `TaskState` (`Idle`, `Running { model }`, `WaitingSubtask { waiting_for_subtask_id }`, `Done { verdict }`), making illegal lifecycle states mathematically unrepresentable at compile time.
+- `domain::state`: Algebraic Data Type `TaskState` (`Idle`, `Running { model }`, `WaitingSubtask { subtask_id }`, `WaitingSubagent`, `Done { verdict }`), making illegal lifecycle states mathematically unrepresentable at compile time.
 
 ### 2.4 Agent Runtime & ReAct Engine (`src-tauri/src/agent/`)
 - `agent::react_engine`: `ReActEngine<Driver>` generic execution engine eliminating duplication between root agent loops and in-process subagents. Provides unified SSE streaming chunk consumption, telemetry calculation (TTFT, TPS, Cache Hit Rate), abort checking, and SQLite persistence.

@@ -64,7 +64,7 @@ echo [CVH Merge Hook] SUCCESS: Cleanly merged into main and pushed to origin/mai
 REM Worktree Teardown Protocol (§ 2.23)
 set "TARGET_WT=%CVH_WORKTREE_PATH%"
 if "%TARGET_WT%"=="" if not "%CVH_TASK_ID%"=="" (
-    if exist "worktrees%CVH_TASK_ID%" set "TARGET_WT=worktrees%CVH_TASK_ID%"
+    if exist "worktrees\%CVH_TASK_ID%" set "TARGET_WT=worktrees\%CVH_TASK_ID%"
 )
 
 if not "%TARGET_WT%"=="" if exist "%TARGET_WT%" (

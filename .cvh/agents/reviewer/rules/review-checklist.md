@@ -52,8 +52,8 @@ The Reviewer MUST execute and verify all Ground Truth Sensors via `execute_comma
 1. **Frontend Unit Tests (Vitest)**: `pnpm test` (Vitest v5.0.5: 100% pass across all test suites).
 2. **TypeScript Compiler Sensor**: `pnpm exec tsc --noEmit` (exit code 0, 0 type errors).
 3. **Frontend Linter Sensor**: `pnpm exec oxlint --deny-warnings` (exit code 0, 0 linter warnings).
-4. **Backend Unit Tests (Cargo Test)**: `cargo test --manifest-path src-tauri/Cargo.toml` (100% pass across core test suites).
-5. **Backend Compiler & Clippy Sensor**: `cargo check --manifest-path src-tauri/Cargo.toml` and `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` (exit code 0, 0 errors, 0 warnings).
+4. **Backend Unit Tests (mbx / cargo)**: `mbx test --manifest-path src-tauri/Cargo.toml` (100% pass across core test suites; fallback to `cargo test` if mbx absent).
+5. **Backend Compiler & Clippy Sensor**: `mbx check --manifest-path src-tauri/Cargo.toml` and `mbx clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` (exit code 0, 0 errors, 0 warnings; fallback to `cargo` if mbx absent).
 - The Reviewer does not accept claims of success without live sensor verification logs.
 
 ### Gate 3: Backend Architectural Invariants & Uncle Bob Clean Architecture
@@ -87,10 +87,9 @@ The Reviewer MUST execute and verify all Ground Truth Sensors via `execute_comma
 
 ### Gate 6: Clean Merge, Origin Integration & Stage Routing Protocol
 - **Branch Diff Inspection Mandate**: The Reviewer MUST inspect the branch diff using `git diff main...HEAD` (or `git log -p main..HEAD`). A bare `git diff` only inspects uncommitted working tree changes, which produces a deceptive empty diff when developer changes are committed.
-- **Main Integration & Conflict Check**: Run `git merge main` to integrate latest upstream changes into the feature branch and verify zero merge conflicts before concluding the audit.
 - **Clean Mergeability Check**: Verify clean mergeability against `main` (`git merge-tree --write-tree main HEAD` exits 0). Reject immediately with `CHANGES_REQUESTED` if merge conflicts exist.
 - **Pre-Handover Clean Working Tree Check**: The feature branch MUST contain all task commits and the working tree must be completely clean (`git status --porcelain` is empty).
-- **Merge & Origin Integration**: Merge approved feature branch into `main`, push to remote `origin` (`git push origin main`), and execute routing verdict (see `verdict-routing.md`).
+- **Merge & Origin Integration**: The actual merge into `main` and push to remote `origin` is executed automatically by the transition hook (`.cvh/hooks/on_review_finish.bat`) upon advancing the task. The Reviewer executes stage routing via `advance_task(stage_id="ready" | "retro")` (see `verdict-routing.md`).
 
 ---
 

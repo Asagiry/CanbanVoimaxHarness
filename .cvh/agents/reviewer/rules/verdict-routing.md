@@ -29,17 +29,16 @@ If ANY of the 6 Gates fails or invariant is violated:
 ## 3. Approval & Stage Routing Protocol
 
 When all 6 Gates pass completely:
-1. Merge the task feature branch into `main` and push to remote `origin`:
+1. Verify clean mergeability against `main`:
    ```bash
-   git checkout main
-   git merge --no-ff feat/<task-slug> -m "feat(<task_id>): <task_title> [approved by reviewer]"
-   git push origin main
+   git merge-tree --write-tree main HEAD
    ```
+   (Exit code 0 confirms conflict-free mergeability). The actual fast-forward/non-ff merge into `main` and push to remote `origin` is executed automatically by the transition hook (`.cvh/hooks/on_review_finish.bat`) upon advancing the task. The Reviewer MUST NOT execute manual `git checkout main` or `git merge` commands inside secondary worktrees.
 2. Inspect task history via `get_task_history(task_id)`:
    - **Case A: Approved Immediately (First Attempt)**:
      - The task had ZERO prior rejections (`CHANGES_REQUESTED`).
      - Route card directly to `ready`:
-       `advance_task(stage_id="ready", summary="Task approved on first attempt: all 6 gates passed, clean merge to main.")`
+       `advance_task(stage_id="ready", summary="Task approved on first attempt: all 6 gates passed, clean mergeability verified.")`
    - **Case B: Approved After Revisions**:
      - The task previously received `CHANGES_REQUESTED` and required developer fixes.
      - Route card to `retro` for post-mortem rule evolution:

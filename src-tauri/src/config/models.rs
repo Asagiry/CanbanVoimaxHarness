@@ -182,8 +182,6 @@ pub struct PipelineStage {
     pub allowed_tools: Option<Vec<String>>,
     #[serde(default)]
     pub hooks: HashMap<String, HookConfig>,
-    #[serde(default)]
-    pub routes: Option<HashMap<String, String>>,
     #[serde(rename = "autoRun", default)]
     pub auto_run: Option<bool>,
     #[serde(default)]
@@ -348,7 +346,6 @@ pub fn get_canonical_board_stages() -> Vec<PipelineStage> {
                 "web_fetch".to_string(),
             ]),
             hooks: HashMap::new(),
-            routes: None,
             auto_run: None,
             terminal: None,
             is_intake: Some(true),
@@ -376,7 +373,6 @@ pub fn get_canonical_board_stages() -> Vec<PipelineStage> {
                 "web_search".to_string(),
             ]),
             hooks: HashMap::new(),
-            routes: None,
             auto_run: None,
             terminal: None,
             is_intake: None,
@@ -400,7 +396,6 @@ pub fn get_canonical_board_stages() -> Vec<PipelineStage> {
                 "grep".to_string(),
             ]),
             hooks: HashMap::new(),
-            routes: None,
             auto_run: None,
             terminal: Some(true),
             is_intake: None,
@@ -434,8 +429,7 @@ pub fn get_board_template_stages(template: &str) -> Vec<PipelineStage> {
                     "read_file".to_string(),
                 ]),
                 hooks: HashMap::new(),
-                routes: None,
-                auto_run: None,
+                    auto_run: None,
                 terminal: None,
                 is_intake: Some(true),
             },
@@ -461,8 +455,7 @@ pub fn get_board_template_stages(template: &str) -> Vec<PipelineStage> {
                     "grep".to_string(),
                 ]),
                 hooks: HashMap::new(),
-                routes: None,
-                auto_run: None,
+                    auto_run: None,
                 terminal: None,
                 is_intake: None,
             },
@@ -488,8 +481,7 @@ pub fn get_board_template_stages(template: &str) -> Vec<PipelineStage> {
                     "grep".to_string(),
                 ]),
                 hooks: HashMap::new(),
-                routes: None,
-                auto_run: None,
+                    auto_run: None,
                 terminal: None,
                 is_intake: None,
             },
@@ -512,8 +504,7 @@ pub fn get_board_template_stages(template: &str) -> Vec<PipelineStage> {
                     "grep".to_string(),
                 ]),
                 hooks: HashMap::new(),
-                routes: None,
-                auto_run: None,
+                    auto_run: None,
                 terminal: Some(true),
                 is_intake: None,
             },
@@ -877,7 +868,7 @@ The Kanban board is a dynamic control plane adaptable to arbitrary project workf
 The ONLY structural invariants across all boards:
 1. **Intake Anchor**: First column (index 0, e.g. `backlog`), `persona: null`, `terminal: null`. Tasks wait here until selected for work.
 2. **Delivery Anchor**: Final column (e.g. `ready`), `persona: null`, `terminal: true`. Tasks entering this column are finalized deliverables.
-3. **Intermediate Execution Stages**: Completely arbitrary and defined by project requirements (any personas, models, tools, gatekeeper sensors, and routing hooks such as `routes.on_approved` / `routes.on_changes_requested`).
+3. **Intermediate Execution Stages**: Completely arbitrary and defined by project requirements (any personas, models, tools, gatekeeper sensors, and lifecycle hooks).
 
 Boards are configured in `.cvh/boards.json` and mirrored in `.cvh/pipeline.json`.
 

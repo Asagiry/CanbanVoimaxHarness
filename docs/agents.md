@@ -26,8 +26,8 @@
    - **Relay Handoff Memory Priming**: При переходе карточки между этапами через `advance_task(summary)` или `reject_task(reason)`, итоговое саммари этапа автоматически встраивается в вершину промпта нового агента баннером:
      ```markdown
      ### [ЭСТАФЕТА ПАЙПЛАЙНА / RELAY HANDOFF]
-     Передано из этапа: <предыдущий_этап>
-     Саммари: <текст передачи>
+     Предыдущий этап пайплайна передал следующее саммари:
+     <текст_передачи>
      ```
      Это полностью исключает деградацию контекста и потерю инженерных находок предыдущих стадий.
 3. **Изолированные Git Worktrees (`worktrees/<task-slug>`)**:
@@ -118,7 +118,7 @@ Your mission is to implement robust features across the Rust/Tauri v2 desktop ba
 
 ## 3. Политика инструментов: Tool Policy Matrix
 
-Безопасность и контроль доступа к системным вызовам обеспечиваются двухслойной матрицей с **логикой AND**.
+Безопасность и контроль доступа к системным вызовам обеспечиваются двухслойной матрицей с архитектурой **Single Authoritative Layer**.
 
 ### 3.1 Единый источник правды: `.cvh/settings/tool-policy.json`
 ```json
@@ -132,7 +132,8 @@ Your mission is to implement robust features across the Rust/Tauri v2 desktop ba
     "grep": true,
     "web_search": true,
     "web_fetch": true,
-    "subagent": true
+    "subagent": true,
+    "todo_write": true
   },
   "stageOverrides": {
     "dev": {
@@ -142,9 +143,10 @@ Your mission is to implement robust features across the Rust/Tauri v2 desktop ba
       "write_file": true,
       "glob": true,
       "grep": true,
-      "web_search": false,
+      "web_search": true,
       "web_fetch": true,
-      "subagent": true
+      "subagent": true,
+      "todo_write": true
     },
     "review": {
       "execute_command": true,
@@ -155,7 +157,8 @@ Your mission is to implement robust features across the Rust/Tauri v2 desktop ba
       "grep": true,
       "web_search": true,
       "web_fetch": true,
-      "subagent": true
+      "subagent": true,
+      "todo_write": true
     },
     "retro": {
       "execute_command": true,
@@ -166,19 +169,21 @@ Your mission is to implement robust features across the Rust/Tauri v2 desktop ba
       "grep": true,
       "web_search": false,
       "web_fetch": false,
-      "subagent": false
+      "subagent": false,
+      "todo_write": true
     }
   }
 }
 ```
 
-### 3.2 Принцип работы логики AND
+### 3.2 Принцип работы Single Authoritative Layer
 Решение о доступности инструмента принимается функцией `is_tool_allowed`:
 ```rust
-effective = global_enabled[tool] && stage_overrides[stage][tool]
+effective = stage_overrides[stage][tool] ?? global_enabled[tool] ?? true
 ```
-- Если инструмент выключен в `globalEnabled`, **ни одна колонка не сможет включить его обратно**.
-- Если записи для стадии нет, по умолчанию берется значение глобального переключателя.
+- Если для этапа явно задан оверрайд (`true` или `false`), это решение является окончательным (Single Authoritative Layer).
+- Если запись для стадии отсутствует, значение наследуется из `global_enabled`.
+- Для семейства субагентов мастер-переключатель `subagent` на стадии управляет доступностью всего семейства.
 - Алиасы автоматически нормализуются: `bash` → `execute_command`, `str_replace` → `edit_file`.
 
 ### 3.3 Zero-Trust Schema Exclusion (Защита от галлюцинаций)
@@ -217,46 +222,49 @@ effective = global_enabled[tool] && stage_overrides[stage][tool]
 ### 4.2 Шаблонизация и исполнение
 - Подстрока `{{args}}` заменяется сериализованным JSON аргументов или распакованными флагами.
 - Команда выполняется внутри директории активного ворктри с таймаутом и контролем дочерних процессов.
-- Если вывод команды превышает 100 строк или 8 КБ, срабатывает **Output Spilling**:
+- Если вывод команды превышает 500 строк или 64 КБ (и >2000 строк / 128 КБ для `read_file`), срабатывает **Output Spilling**:
   - Полный лог пишется в `.cvh/spill/<timestamp>-<tool>.log`.
   - В контекст возвращаются первые 20 строк (HEAD), последние 20 строк (TAIL) и путь к файлу.
 
 ---
 
-## 5. Пошаговая инструкция: перенос скиллов и ролей из других проектов (например, carSmash)
+## 5. Пошаговая инструкция: перенос ролей и правил из других проектов
 
 Если у вас есть наработки из другого проекта (роли, скиллы, архитектурные промпты), следуйте этому алгоритму для их интеграции в CVH.
 
 ### Шаг 1. Анализ ролей и обязанностей
-Определите, какие роли выполняли задачи в исходном проекте. Например, в carSmash:
-- `VehiclePhysicsEngineer` (настройка физики колес и столкновений).
-- `VoxelAssetArtist` (генерация и оптимизация воксельных сеток).
-- `GameplayAuditor` (ревью баланса и стабильности FPS).
+Определите, какие роли выполняли задачи в исходном проекте. Например:
+- `physics-engineer` (настройка физики колес и столкновений).
+- `voxel-artist` (генерация и оптимизация воксельных сеток).
+- `gameplay-auditor` (ревью баланса и стабильности FPS).
 
-### Шаг 2. Создание файлов персон в `.cvh/agents/`
-Создайте markdown-файлы для каждой роли:
+### Шаг 2. Создание структуры персон в `.cvh/agents/<role>/`
+Создайте директорию с файлом `persona.md`, `setting` и `rules/` для каждой роли:
 ```text
 .cvh/agents/
-├── physics-engineer.md
-├── voxel-artist.md
-└── gameplay-auditor.md
+├── physics-engineer/
+│   ├── persona.md
+│   ├── setting
+│   └── rules/
+├── voxel-artist/
+│   ├── persona.md
+│   ├── setting
+│   └── rules/
+└── gameplay-auditor/
+    ├── persona.md
+    ├── setting
+    └── rules/
 ```
-В каждом файле зафиксируйте:
-- Имя персоны и миссию.
-- Инварианты предметной области (например: «Никогда не использовать сжатие с потерями для воксельных палитр»).
+В `persona.md` зафиксируйте:
+- Frontmatter с иконкой и описанием (`icon: Wrench`, `color: #0284c7`).
+- Миссию роли и предметные обязанности.
 - Ожидаемый формат вердикта (для аудиторов: `APPROVED`, `CHANGES_REQUESTED`).
 
-### Шаг 3. Перенос скиллов в `.agents/skills/`
-Скиллы проекта оформляются в виде модулей с файлом `SKILL.md`:
-```text
-.agents/skills/
-├── voxel-art/
-│   └── SKILL.md
-└── vehicle-physics/
-    └── SKILL.md
-```
-В начале файла укажите YAML-шапку:
-```markdown
+### Шаг 3. Организация правил и базы знаний
+В CVH внешние каталоги `.agents/skills/` и `AGENTS.md` **не внедряются в системный промпт автоматически** (тест `test_system_prompt_is_lean_cvh_only` защищает компактность контекста):
+- Перенесите обязательные архитектурные инварианты роли в `.cvh/agents/<role>/rules/*.md` (компилируются в системный промпт по алфавиту).
+- Общие для проекта стандарты вынесите в `.cvh/rules/*.md` — агенты смогут подгружать их по требованию с помощью инструмента `load_rule("<rule>")`.
+- Каталог `.agents/skills/` используется как внешнее справочное хранилище или документация.
 ---
 name: vehicle-physics
 description: Экспертиза физики подвески, сил трения и деформации кузова.

@@ -106,6 +106,25 @@ use std::path::PathBuf;
         // 3. Now in map -> is_running is true, reject duplicate run
         let is_running_after = active_map.lock().map(|map| map.contains_key(&task_id)).unwrap_or(false);
         assert!(is_running_after);
+
+        // 4. Verify is_agent_active_in_map directly without re-locking active_agents Mutex
+        let root = PathBuf::from(r"C:\fake_root");
+        let guard = active_map.lock().unwrap();
+        // Plain task id matching
+        assert!(crate::commands::AppState::is_agent_active_in_map(&guard, &root, &task_id));
+        // Subtask or root-prefixed matching
+        let agent_key = crate::commands::AppState::agent_key(&root, "CVH-099");
+        drop(guard);
+        active_map.lock().unwrap().insert(
+            agent_key,
+            crate::commands::ActiveAgentHandle {
+                abort_flag: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                join_handle: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
+            },
+        );
+        let guard2 = active_map.lock().unwrap();
+        assert!(crate::commands::AppState::is_agent_active_in_map(&guard2, &root, "CVH-099"));
+        assert!(!crate::commands::AppState::is_agent_active_in_map(&guard2, &root, "CVH-NONEXISTENT"));
     }
 
     #[tokio::test]

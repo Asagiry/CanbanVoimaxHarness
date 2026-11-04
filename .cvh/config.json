@@ -1,5 +1,4 @@
 {
-  "activePipeline": "default-engineering",
   "apiBaseUrl": "http://127.0.0.1:8045/v1",
   "defaultModel": "gemini-3.8-flash-high",
   "description": "CanbanVoimaxHarness Workspace for CanbanVoimaxHarness",

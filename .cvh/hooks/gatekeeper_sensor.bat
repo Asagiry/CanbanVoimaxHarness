@@ -1,6 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
-set "PATH=%USERPROFILE%\.cargo\bin;C:\Users\Voimax\.cargo\bin;%PATH%"
+set "PATH=%USERPROFILE%\.cargo\bin;%PATH%"
 
 REM Ensure shared Cargo build cache across all worktrees to prevent cold compilations
 if "%CARGO_TARGET_DIR%"=="" set "CARGO_TARGET_DIR=%~dp0..\..\src-tauri\target"
@@ -76,7 +76,7 @@ if "!RUN_FRONTEND!"=="0" (
 ) else (
     echo [CVH Sensor] Running TypeScript frontend typecheck...
     if exist "package.json" (
-        call npx tsc --noEmit
+        call pnpm exec tsc --noEmit
         if errorlevel 1 (
             echo [CVH Sensor] ERROR: Frontend TypeScript check failed! >&2
             exit /b 1

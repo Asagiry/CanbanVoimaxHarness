@@ -188,40 +188,48 @@ impl AppState {
         }
     }
 
-    pub fn is_agent_active(&self, root: &std::path::Path, task_id: &str) -> bool {
+    pub fn is_agent_active_in_map(
+        map: &HashMap<String, ActiveAgentHandle>,
+        root: &std::path::Path,
+        task_id: &str,
+    ) -> bool {
         let key = Self::agent_key(root, task_id);
         let tid_lower = task_id.trim().to_lowercase();
         let norm_root = Self::normalize_root_key(root);
 
-        if let Ok(map) = self.active_agents.lock() {
-            map.iter().any(|(k, entry)| {
-                let aborted = entry.abort_flag.load(std::sync::atomic::Ordering::SeqCst);
-                let finished = if let Ok(guard) = entry.join_handle.try_lock() {
-                    guard.as_ref().map(|h| h.is_finished()).unwrap_or(false)
-                } else {
-                    false
-                };
-                if aborted || finished {
-                    return false;
-                }
-
-                if k == &key {
-                    return true;
-                }
-                if let Some((k_root, k_tid)) = k.split_once("::") {
-                    if k_root == norm_root
-                        && (k_tid == tid_lower
-                            || k_tid.starts_with(&format!("{}.", tid_lower))
-                            || k_tid.starts_with(&format!("{}:sub:", tid_lower))
-                            || k_tid.starts_with(&format!("{}.sub-", tid_lower)))
-                    {
-                        return true;
-                    }
-                } else if k.eq_ignore_ascii_case(task_id.trim()) {
-                    return true;
-                }
+        map.iter().any(|(k, entry)| {
+            let aborted = entry.abort_flag.load(std::sync::atomic::Ordering::SeqCst);
+            let finished = if let Ok(guard) = entry.join_handle.try_lock() {
+                guard.as_ref().map(|h| h.is_finished()).unwrap_or(false)
+            } else {
                 false
-            })
+            };
+            if aborted || finished {
+                return false;
+            }
+
+            if k == &key {
+                return true;
+            }
+            if let Some((k_root, k_tid)) = k.split_once("::") {
+                if k_root == norm_root
+                    && (k_tid == tid_lower
+                        || k_tid.starts_with(&format!("{}.", tid_lower))
+                        || k_tid.starts_with(&format!("{}:sub:", tid_lower))
+                        || k_tid.starts_with(&format!("{}.sub-", tid_lower)))
+                {
+                    return true;
+                }
+            } else if k.eq_ignore_ascii_case(task_id.trim()) {
+                return true;
+            }
+            false
+        })
+    }
+
+    pub fn is_agent_active(&self, root: &std::path::Path, task_id: &str) -> bool {
+        if let Ok(map) = self.active_agents.lock() {
+            Self::is_agent_active_in_map(&map, root, task_id)
         } else {
             false
         }

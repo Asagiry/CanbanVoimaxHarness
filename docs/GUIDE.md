@@ -1,41 +1,36 @@
-# CanbanVoimaxHarness — полный гайд по харнессу и `.cvh` (docs/GUIDE.md)
-
-> Язык гайда — русский. Термины, имена файлов, ключи JSON, имена команд — английские, как в коде.
-> Правило этого гайда: каждый нетривиальный факт сверён с кодом. Рядом с пунктом стоит статус:
-> **работает** — подтверждено кодом; **частично** — работает не полностью / фронт и бэк расходятся / есть мёртвые поля;
-> **задумано** — описано в `docs/`/персонах, но в коде реализации нет.
-> Связанные доки не копипастятся — на них даются ссылки: `docs/agents.md`, `docs/board.md`, `docs/hooks.md`,
-> `README.md` (все этапы дорожной карты CVH-001—CVH-014 и архитектурные концепции Live Diff и Cortex Memory Ledger полностью реализованы в кодовой базе).
+�ии Live Diff и Cortex Memory Ledger полностью реализованы в кодовой базе).
 
 ---
 
 ## 0. Как сверялся гайд (что прочитано кодом, а не угадано)
 
-- `src-tauri/src/config.rs` — `scaffold_cvh_project`, `minimal_pipeline_config`, `default_pipeline_config`,
-  `get_canonical_board_columns`, `get_board_template_columns`, `ToolPermissions` + `ToolPolicyConfig` (AND-семантика),
+- `src-tauri/src/config/` (`models.rs`, `tool_policy.rs`, `discovery.rs`, `scaffold.rs`, `io.rs`) —
+  `scaffold_cvh_project`, `minimal_pipeline_config`, `default_pipeline_config`,
+  `get_canonical_board_columns`, `get_board_template_columns`, `ToolPolicyConfig` (Single Authoritative Layer),
   `AgentSetting`, `agent_persona_path` / `agent_rules_dir` / `agent_hooks_dir` / `agent_setting_path`,
   `resolve_hook_path`, `load_boards_config` / `save_boards_config`, `tool_policy_path`,
   `load_tool_policies` / `save_tool_policies`.
-- `src-tauri/src/commands.rs` — `create_task`, `move_task_stage`, `run_agent`, `create_subtask`,
-  `list_agent_personas_in` / `create_agent_persona_file`, `list_custom_tools_in` / `save_custom_tool_file` /
-  `delete_custom_tool_file`, `get_tool_policies` / `save_tool_policies`, `steer_agent`,
-  `compact_task_context` / `compact_context`, `get_task_git_diff`, `cleanup_task_worktree`,
-  `normalize_pipeline_columns`, `is_valid_persona_role`, `BUILTIN_CREATE_WORKTREE_MARKER`,
-  `should_builtin_on_enter` / `needs_builtin_worktree` / `ensure_builtin_worktree`,
-  `apply_worktree_from_hook_stdout`, `trigger_column_on_enter_script`, `get_cortex_tree` /
-  `read_cortex_file` / `save_cortex_file`.
-- `src-tauri/src/agent.rs` — `compile_primed_system_prompt`, `get_standard_tools`, `todo_write`
-  (внутри `execute_tool`), `load_custom_tools` / `get_all_tools`, `maybe_spill_output`, `execute_tool`
-  (zero-trust gate), `run_agent_loop` (фильтр тулов, компактор, телеметрия, сортировка тулов).
-- `src-tauri/src/agent/compactor.rs` — `estimate_tokens`, `evaporate_tool_logs`,
-  `compact_context_messages`, `compact_conversation`.
-- `src-tauri/src/hooks.rs` — `execute_hook` (env `CVH_*`, интерпретаторы, таймауты),
-  `execute_sensor_command`, `HookContext`.
+- `src-tauri/src/commands/` (`state.rs`, `tasks.rs`, `tasks/*`, `boards.rs`, `cortex.rs`, `dialogs.rs`, `git.rs`, `llm.rs`, `notifications.rs`, `projects.rs`, `tools.rs`) —
+  `create_task`, `update_task`, `move_task_stage`, `run_agent`, `steer_agent`, `answer_agent_question`, `create_subtask`,
+  `list_agent_personas_in` / `create_agent_persona` / `delete_agent_persona` / `rename_agent_persona`,
+  `list_custom_tools_in` / `save_custom_tool_file` / `delete_custom_tool_file`,
+  `get_tool_policies` / `save_tool_policies`, `compact_context`, `get_task_git_diff`, `get_task_image_diff`,
+  `load_subagent_dialog`, `list_subagents`, `get_cortex_tree` / `read_cortex_file` / `save_cortex_file`.
+- `src-tauri/src/db/` (`pool.rs`, `task_repo.rs`, `dialog_repo.rs`, `telemetry_repo.rs`) —
+  R2D2 SQLite connection pool, WAL mode, ACID dialog item transactions, telemetry aggregation.
+- `src-tauri/src/agent/` (`react_engine.rs`, `session_registry.rs`, `compactor.rs`, `sanitizer.rs`, `telemetry.rs`, `text_match.rs`, `tool_schemas.rs`, `tools/*`) —
+  `compile_primed_system_prompt_with_tools`, `get_standard_tools`, `ReActEngine<Driver>`,
+  `session_registry` (child subagent sessions & Tokio completion channels),
+  `maybe_spill_output` (500 строк / 64 КБ; 2000 строк / 128 КБ для `read_file`),
+  `execute_tool` (Single Authoritative Layer gate, custom CLI tools).
+- `src-tauri/src/hooks.rs`, `git.rs`, `udf.rs`, `logger.rs`, `error.rs` —
+  `execute_hook` (env `CVH_*`, интерпретаторы, таймауты, process tree kill на Windows),
+  `execute_sensor_command`, `HookContext`, git worktrees & diffs, SQLite UDFs.
 - `src-tauri/src/lib.rs` — полный список зарегистрированных Tauri-команд.
-- `src/stores/boardStore.ts`, `toolPolicyStore.ts`, `cortexStore.ts`, `mockData.ts` —
-  колонки=агенты, матрица, `backlog`/`ready` особые, дрейф фронта и бэка.
-- Живой `.cvh/` этого репозитория (`pipeline.json`, `boards.json`, `config.json`, `tasks.json`,
-  `settings/tool-policy.json`, `agents/*.md`, `dialogs/`, `spill/`, `tasks/`, `worktrees/`)
+- `src/stores/` (`boardStore.ts`, `drawerStore.ts`, `cortexStore.ts`, `settingsStore.ts`, `themeStore.ts`, `toolPolicyStore.ts`, `agentSessionStore.ts`, `slices/*`) —
+  реактивные сторы, координация колонок, Single Authoritative Layer в матрице тулов.
+- Живой `.cvh/` этого репозитория (`pipeline.json`, `boards.json`, `config.json`, `harness.db`,
+  `settings/tool-policy.json`, `agents/<role>/persona.md`, `rules/`, `spill/`, `worktrees/`)
   и `src/components/` (`board/`, `card/`, `drawer/`, `cortex/`, `settings/`, `layout/`).
 
 ---
@@ -45,7 +40,7 @@
 **CanbanVoimaxHarness (CVH)** — десктопный оркестратор ИИ-агентов (Rust + Tauri v2 + React 19).
 Фундаментальный инвариант: **колонки Kanban-доски — это агенты**. У колонки есть поле `persona: "<role>"`;
 перетаскивание карточки в такую колонку запускает `run_agent` с системным промптом из
-`.cvh/agents/<role>.md`. Подробнее философия расписана в `docs/board.md` и `.cvh/rules/` — здесь только механика.
+`.cvh/agents/<role>/persona.md`. Подробнее философия расписана в `docs/board.md` и `.cvh/rules/` — здесь только механика.
 
 **`.cvh/`** — вся конфигурация харнесса для одного проекта (лежит в корне репозитория проекта).
 Открытие папки проекта в CVH (`select_project_folder` / `set_active_project`) вызывает
@@ -84,9 +79,9 @@
 │       └── hooks/        # on_enter.* / on_finish.* — fallback для hooks колонок
 ├── settings/
 │   └── tool-policy.json   # ЕДИНСТВЕННЫЙ канонический файл матрицы тулов
-├── tools/                 # кастомные тулы: .cvh/tools/<name>.json (может отсутствовать)
-├── hooks/                 # общие скрипты переходов (может отсутствовать)
-├── spill/                # spill-логи больших выводов тулов (>100 строк / >8KB)
+├── tools/                 # кастомные тулы: .cvh/tools/<name>.json
+├── hooks/                 # общие скрипты переходов (.bat/.ps1/.sh)
+├── spill/                # spill-логи больших выводов тулов (>500 строк / >64KB; >2000 строк / >128KB для read_file)
 └── worktrees/            # git worktrees задач (в .gitignore)
 ```
 
@@ -94,12 +89,10 @@
 > (таблица `dialog_items` с индексами и WAL-журналированием). Легаси-файлы `.cvh/dialogs/`
 > и `.cvh/tasks/<id>/dialog.json` ликвидированы в пользу атомарных ACID-транзакций.
 
-> Внимание: в этом репозитории прямо сейчас **нет** `.cvh/hooks/` и `.cvh/tools/`
-> (проверено листингом диска), хотя `pipeline.json` ссылается на `.cvh/hooks/on_enter_dev.bat`.
-> Отсутствующий хук — не ошибка: бэкенд молча пропускает его (`if hook_path.exists()`).
-> Это же — типовая ошибка №1 из §8: «хук настроен, но файла нет — тишина в логах».
+> **Скрипты переходов**: общие хуки лежат в `.cvh/hooks/` (`gatekeeper_sensor.bat`, `on_review_finish.bat` и др.).
+> Если хук не настроен или файл отсутствует, бэкенд безопасно пропускает вызов (`if hook_path.exists()`).
 
-### 2.2 `pipeline.json` — колонки, hooks, routes, autoRun/terminal — **работает**
+### 2.2 `pipeline.json` — колонки, hooks, autoRun/terminal — **работает**
 
 Полная схема колонки (`PipelineColumn`, `config.rs`):
 
@@ -117,7 +110,6 @@
 | `gatekeeperSensor` | string? | команда-сенсор; **блокирует** вход при ненулевом exit code |
 | `allowedTools` | string[]? | декларативный список (см. статус ниже) |
 | `hooks` | `{ on_enter?, on_finish? }` | пути скриптов ИЛИ `"builtin:create_worktree"` |
-| `routes` | `{ on_approved?, on_approved_with_caveats?, on_changes_requested? }` | маршруты по вердиктам |
 | `autoRun` | bool? | автозапуск агента при входе; default = `persona != null` |
 | `terminal` | bool? | терминальная колонка: задача переходит в `done` |
 
@@ -135,7 +127,7 @@
 - `get_board_template_columns("modeler"|"3d"|"3d-modeler")` — 4 стадии
   `concept → modeling → texturing → ready`. Любой другой `template` → canonical.
 - Фронтенд-стор держит ещё два набора: `CANONICAL_BOARD_COLUMNS` (3 колонки с сенсорами/хуками)
-  и `INITIAL_COLUMNS` в `mockData.ts` (5 колонок с `routes` и `wipLimit`) — это fallback для web-режима,
+  и `INITIAL_COLUMNS` в `mockData.ts` (5 колонок с `wipLimit`) — это fallback для web-режима,
   бэкенд их не читает.
 
 > Расхождение с `docs/board.md` (§3.2): дока обещает шаблоны `development` (5 стадий),
@@ -181,29 +173,23 @@ ID монотонные `max+1`, **никогда не переиспользу�
 Формат — см. §4. Читают/пишут: агентный цикл (`load_tool_policies`), `get/save_tool_policies`,
 модалка матрицы, скаффолд (сидит `ToolPolicyConfig::default()`).
 
-### 2.7 `agents/<role>/` — персона, правила, хуки, setting — **работает** (с одной оговоркой фронта)
+### 2.7 `agents/<role>/` — персона, правила, хуки, setting — **работает**
 
-Единственный путь персоны, который читает бэкенд: **flat `.cvh/agents/<role>.md`**
-(`agent_persona_path`; тест `test_system_prompt_flat_persona_rules_alphabetical`).
-Рядом — per-role aux-каталог `.cvh/agents/<role>/` (сам по себе персоной не является):
-
-- `rules/*.md` — только `.md`, в системный промпт **по алфавиту имени файла** — **работает**.
-- `hooks/` — файлы `on_enter.*` / `on_finish.*`; используются как **fallback по basename**:
+Канонический модульный формат персоны, который читает бэкенд: **директория `.cvh/agents/<role>/`**:
+- **`persona.md`**: Системный промпт роли с YAML frontmatter (`icon`, `color`, `description`, `scope`).
+  Если `persona.md` отсутствует, проверяется fallback `agent.md`. Плоские файлы `.cvh/agents/<role>.md` полностью упразднены.
+- **`rules/*.md`**: Модульные правила роли, компилируемые в системный промпт **по алфавиту имени файла** — **работает**.
+- **`hooks/`**: Файлы `on_enter.*` / `on_finish.*`; используются как **fallback по basename**:
   `resolve_hook_path` берёт настроенный путь, а если файла нет — `.cvh/agents/<persona>/hooks/<basename>` — **работает**.
-- `setting` — JSON **без расширения**: `{ model?, temperature?, context_window?|contextWindow,
-  allowed_tools?|allowedTools }`. Отсутствует/пуст/бит → дефолт без ошибки (с варном в лог) — **работает**.
+- **`setting`**: JSON **без расширения**: `{ model?, temperature?, context_window?|contextWindow, allowed_tools?|allowedTools, icon?, color? }`.
+  Отсутствует/пуст/бит → дефолт без ошибки (с варном в лог) — **работает**.
 
-Создание: `create_agent_persona(role)` — **работает**: валидация `^[a-z0-9][a-z0-9-]*$`,
-пишет flat `<role>.md` с русским TODO-шаблоном, создаёт пустые `<role>/{rules,hooks}` и `setting` (`{}`),
-возвращает относительный путь. Листинг: `list_agent_personas` сканирует только flat `*.md`, сортировка по роли — **работает**.
-Удаления/переименования персоны командой нет — только вручную/через `save_cortex_file`.
-
-> **Частично (дрейф фронта)**: `cortexStore.ts` показывает персону как узел
-> `.cvh/agents/<role>/agent.md` (`path: ${dir}/agent.md`), а бэкенд этот путь **игнорирует**
-> (тест `test_system_prompt_flat_persona_and_builtin_fallback` прямо ассертит `DIRMARKER` отсутствие).
-> Правило до исправления: **персону редактируйте в flat `.cvh/agents/<role>.md`**, узел `agent.md`
-> в Проводнике разума — витрина, сохранение туда на промпт агента не повлияет.
-> Правила (`rules/`), хуки (`hooks/`) и `setting` в Проводнике — по корректным путям.
+Управление персонами через IPC-команды — **работает**:
+- `create_agent_persona(role)`: валидация `^[a-z0-9][a-z0-9-]*$`, скаффолдит `<role>/persona.md`, `<role>/rules/`, `<role>/hooks/` и `<role>/setting`.
+- `delete_agent_persona(role)`: удаляет директорию роли (защита системной роли `cvh-dev`).
+- `rename_agent_persona(old_role, new_role)`: атомарно переименовывает папку агента.
+- `set_agent_persona_color(role, color)` / `set_agent_persona_icon(role, icon)`: обновляет frontmatter и `setting`.
+- `list_agent_personas`: сканирует поддиректории `.cvh/agents/<role>/`, читает метаданные и возвращает список доступных персон.
 
 ### 2.8 `tools/*.json` — формат кастомного тула — **работает**
 
@@ -285,10 +271,9 @@ ID монотонные `max+1`, **никогда не переиспользу�
 - Финиш: парсинг вердикта **по вхождению верхнего регистра** в финальном ответе:
   `CHANGES_REQUESTED` / `APPROVED_WITH_CAVEATS` / `APPROVED`. Дальше — иерархия сабтасок:
   родитель остаётся на месте (`waiting_subtask`), в следующей колонке создаётся `CVH-012.N`
-  (наследует worktree/branch; `routes.on_approved` / `on_approved_with_caveats` / `on_changes_requested`
+  (наследует worktree/branch; вердикты APPROVED, APPROVED_WITH_CAVEATS, CHANGES_REQUESTED
   имеют приоритет над «следующей колонкой по порядку»); `CHANGES_REQUESTED` разблокирует родителя в `idle`;
   терминальная колонка (`terminal: true`) собирает всё в `done` и двигает родителя в неё.
-  Ключ `routes.on_finished` из моков фронтa бэкенд **не** обрабатывает — **частично** (только три ключа выше).
 
 ### 3.4 Промпт-маркер `[HOOK]` и stdout-протокол `CVH_WORKTREE`/`CVH_BRANCH` — **работает**
 
@@ -306,33 +291,29 @@ Env хуков (`execute_hook`, `hooks.rs`) — **работает**: `CVH_TASK_
 `.py` → `python`, `.sh` → `sh`, прочее — прямой запуск. Таймаут хуков 180с, сенсоров 300с, зависшие деревья убиваются
 (`taskkill /F /T` на Windows, `kill -9` иначе).
 
-> Расхождение с `docs/hooks.md`: таблица env не упоминает `CVH_BOARD_ID` (он есть в коде);
-> примеры хуков вручную создают worktree через `git worktree add`, но **не печатают** `CVH_WORKTREE=` —
-> без этой строки назначенный хуком worktree не подхватится задачей (останется builtin-дефолт).
-> Допишите `echo CVH_WORKTREE=...` / `echo CVH_BRANCH=...` в свои скрипты.
+> Всегда дописывайте `echo CVH_WORKTREE=...` / `echo CVH_BRANCH=...` в скрипты переходов, создающие ворктри, чтобы харнесс подхватил изолированную директорию.
+
+### 3.5 Каталог Tauri IPC-команд управления задачами и агентами — **работает**
+
+- **`update_task(task)`**: Обновление полей задачи (title, description, tags, model_override).
+- **`answer_agent_question(task_id, answer)`**: Ответ пользователя на интерактивный вопрос агента (`question` / `ask_user`), возобновляющий приостановленный цикл ReAct.
+- **`get_task_image_diff(task_id, relative_path)`**: Расчет визуального диффа графических ассетов (side-by-side, swipe-slider, blend).
+- **`load_subagent_dialog(task_id, subagent_id)`**: Загрузка изолированной истории диалога и мыслей дочернего субагента из SQLite.
+- **`list_subagents(task_id)`**: Возврат списка всех запущенных и завершенных субагентов для задачи.
+- **`delete_agent_persona(role)`**: Удаление папки персоны `.cvh/agents/<role>/` с защитой встроенного агента `cvh-dev`.
+- **`rename_agent_persona(old_role, new_role)`**: Атомарное переименование роли агента.
 
 ---
 
-## 4. Матрица тулов: global && stage, todo_write, кастомные
+## 4. Матрица тулов: Single Authoritative Layer, todo_write, кастомные
 
-### 4.1 AND-семантика — **работает**
+### 4.1 Single Authoritative Layer — **работает**
 
-`effective(tool, stage) = globalEnabled && stageOverride`, отсутствующие записи = `true`.
-Глобальный `false` **нельзя перебить** stage-`true` (регрессионный тест
-`test_tool_policy_and_semantics_global_stage`). Алиасы нормализуются до проверки:
-`bash → execute_command`, `str_replace → edit_file` (`normalize_tool_name`, тест
-`test_disabled_tool_blocked_for_stage_including_alias`). Та же AND-логика продублирована для
-legacy-модели `ToolPermissions { globalAllowedTools, stageAllowedTools }`.
-
-Дефолт `ToolPolicyConfig::default()` — **работает**: все 10 глобальных `true`
-(`execute_command`, `read_file`, `edit_file`, `write_file`, `glob`, `grep`,
-`web_search`, `web_fetch`, `subagent`, `todo_write`); оверрайды только `dev`
-(`web_search: false`) и `review` (`edit_file/write_file: false`).
-
-> Дрейф дефолтов — **частично**: `toolPolicyStore` (фронт) в `DEFAULT_OVERRIDES` добавляет третий оверрайд
-> `retro` (без записи, но с `write_file: true`), а живой `.cvh/settings/tool-policy.json` в репозитории
-> тоже содержит `retro`. Бэкенд-дефолт `retro` не знает — он появится только из файла.
-> А `docs/agents.md` (§3.1) показывает пример без `todo_write` вообще — пример устарел, в коде тул есть везде.
+`effective(tool, stage) = stage_override[stage][tool] ?? global_enabled[tool] ?? true`.
+- Если на этапе колонки явно задан оверрайд (`true` или `false`), это решение является **окончательным** (Single Authoritative Layer).
+- Если оверрайд для данного тула отсутствует, в силу вступает значение из `global_enabled`.
+- Для иерархии субагентов (`subagent`, `subagent_bg`, `collect_subagent`, `subagent_list`) действует мастер-свитч стадии `subagent`: если он `false`, всё семейство блокируется.
+- Алиасы SWE-bench нормализуются до проверки: `bash → execute_command`, `str_replace → edit_file` (`normalize_tool_name`).
 
 ### 4.2 Zero-trust gate — **работает**
 
@@ -343,32 +324,32 @@ legacy-модели `ToolPermissions { globalAllowedTools, stageAllowedTools }`.
 пустой набор → поле `tools` опускается (`None`, т.к. `"tools": []` режут некоторые прокси).
 Определения тулов сортируются по имени для prefix caching — **работает**.
 
-> **Частично (два контура)**: `config.rs::resolve_allowed_tools` реализует приоритет
-> `column.allowedTools` → `pipeline.toolPermissions` → `project.toolPermissions`, но `execute_tool`
-> и фильтр `run_agent_loop` его **не вызывают** — gate смотрит только матрицу `ToolPolicyConfig`
-> + `setting.allowed_tools`. Поле `column.allowedTools` сегодня декларативно (его видно в UI),
-> enforcement — только через матрицу. Проектируйте права через `tool-policy.json` + `setting`.
+### 4.3 Стандартные тулы 1-в-1 (agent.rs / tool_schemas.rs) — **работает**
 
-> **Частично (превью фронта)**: `toolPolicyStore.isToolAllowed` возвращает stage-значение если оно есть,
-> иначе глобальное — это **stage-wins**, а не AND. Модалка может показать «разрешён», что бэкенд запретит
-> (глобальный `false`). Доверяйте бэкенду; превью — ориентир.
-
-### 4.3 Стандартные тулы 1-в-1 (agent.rs `get_standard_tools`) — **работает**
-
-| Тул | Параметры | Заметки кода |
+| Тул | Параметры | Описание и заметки кода |
 |---|---|---|
-| `read_file` | `file_path` (`path` — алиас), `offset` (default 1), `limit` (default 2000) | UTF-8, номера строк; вне worktree — отказ |
-| `write_file` | `file_path`/`path`, `content` | атомарная запись |
-| `edit_file` (алиас `str_replace`) | `file_path`/`path`, `old_string` (`old_str`), `new_string` (`new_str`), `replace_all` (default false) | без `old_string` — умная ошибка с кандидатом; >1 совпадения без `replace_all` — отказ «ambiguous» |
-| `glob` | `pattern` (required), `path` (default `.`) | пропуск `.git`/`target`/`node_modules` |
-| `grep` | `pattern` (required), `path` (default `.`) | подстрока (не полноценный regex-движок!), кап 200 совпадений |
-| `execute_command` (алиас `bash`) | `command` (`cmd` — алиас), `timeout_seconds` (default 60) | `cmd.exe /C` (win) / `sh -c`, kill-tree по таймауту/аборту |
-| `web_search` | `query` (required), `limit` (default 5) | DuckDuckGo HTML + Instant Answer API |
-| `web_fetch` | `url` (required) | чистка в Markdown, вырезаются script/style/head/nav/footer/svg |
-| `subagent` | `role` (required), `prompt` (required) | **частично**: возвращает строку-заглушку `Subagent [<role>] dispatched…`, рекурсивного запуска нет |
-| `todo_write` | `todos: [{content, status}]` (required) | статусы `pending\|in_progress\|completed` (+алиасы `done→completed`, `running→in_progress`); пустые `content` скипаются; **пишет в `tasks.json`** + событие `TaskUpdated`; id авто `todo-N` |
+| `read_file` | `file_path` (`path`), `offset` (def 1), `limit` (def 2000) | UTF-8, номера строк; вне worktree — отказ. Порог спиллинга: 2000 строк / 128 КБ. |
+| `write_file` | `file_path` (`path`), `content` | Атомарная запись файла в изолированном worktree. |
+| `edit_file` (алиас `str_replace`) | `file_path` (`path`), `old_string` (`old_str`), `new_string` (`new_str`), `replace_all` (def false) | 5-уровневый fuzzy-матчинг с адаптацией CRLF/пробелов. |
+| `glob` | `pattern` (req), `path` (def `.`) | Поиск путей по шаблону; пропуск `.git`/`target`/`node_modules`. |
+| `grep` | `pattern` (req), `path` (def `.`) | Regex-поиск содержимого файлов с ограничением совпадений. |
+| `execute_command` (алиас `bash`) | `command` (`cmd`), `timeout_seconds` (def 60) | Запуск shell-команд. Порог спиллинга: 500 строк / 64 КБ. Убийство дерева процессов при таймауте. |
+| `web_search` | `query` (req), `limit` (def 5) | DuckDuckGo search интеграция без внешних API-ключей. |
+| `web_fetch` | `url` (req) | Чистка HTML в читаемый Markdown. |
+| `subagent` | `title` (req), `prompt` (req), `persona`/`role`, `tools` | **Синхронная делегация**: запускает дочерний ReAct-цикл и блокирует родителя до получения финального отчета. |
+| `subagent_bg` | `title` (req), `prompt` (req), `persona`/`role`, `tools` | **Асинхронная фоновая делегация**: возвращает `subagent_id` без блокировки родителя. |
+| `collect_subagent` | `subagent_id` или `subagent_ids` | **Сборщик отчетов субагентов**: 3-уровневое разрешение (Tokio broadcast, in-memory кэш, SQLite). |
+| `subagent_list` | `status_filter` (`all\|running\|completed\|aborted`) | Реестр активных и завершенных субагентов задачи. |
+| `load_rule` | `rule` (req) | JIT-загрузка модульных системных правил из `.cvh/rules/` и роли. |
+| `todo_write` | `todos: [{content, status}]` (req) | Тактический чеклист `pending\|in_progress\|completed`. Пишет в SQLite WAL + пушит события в UI. |
+| `question` (алиас `ask_user`) | `text` (req), `options`, `multiple` | Интерактивный Human-in-the-Loop запрос, приостанавливающий ReAct-цикл. |
+| `create_task` | `title` (req), `description`, `stage_id`, `board_id` | Создание единичной карточки в Kanban-пайплайне. |
+| `create_tasks` | `tasks: [{title, description, stage_id}]` | Пакетное создание карточек задач. |
+| `complete_task` | `task_id` (req), `summary` | Перевод задачи в терминальную стадию с записью результата. |
+| `list_tasks` | `limit`, `query`, `stage_id` | Компактная инспекция карточек задач Kanban-доски. |
+| `get_task_history` | `task_id` (req), `include_tool_outputs` | Хронология выполнения задачи со всеми вызовами инструментов и вердиктами. |
 
-Безопасность путей: `resolve_safe_path` — нормализация `..`, запрет выхода за worktree, запрет `C:`-абсолютов — **работает**.
+Безопасность путей: `resolve_safe_path` — нормализация `..`, запрет выхода за worktree, запрет абсолютных системных путей — **работает**.
 
 > Расхождение с `README.md` (§7): «`web_search` … with Google/Bing fallback» — **частично**: в коде только
 > два DuckDuckGo-источника, Google/Bing нет.
@@ -494,7 +475,7 @@ DnD карточек → `boardStore.moveTask` (§3.2). Карточка: мон
 
 Идея: вместо одного длинного пайплайна — несколько досок-витков под разные контуры работ.
 Задачи живут в своей доске (`board_id`), колонки доски = агенты контура со своими хуками/персонами.
-Механика витков — `boards.json` + `create_board(template)` + `routes` + сабтаски (§2.3, §3.3).
+Механика витков — `boards.json` + `create_board(template)` + сабтаски (§2.3, §3.3).
 Пример ниже — рабочий скелет (ключи и значения — из кода, §2.2/§4).
 
 ### 7.1 Доска фронта — `frontend` (свои хуки и агенты)
@@ -512,7 +493,6 @@ DnD карточек → `boardStore.moveTask` (§3.2). Карточка: мон
     { "id": "ux-review", "title": "UX-ревью", "persona": "ux-reviewer",
       "temperature": 0.1, "contextWindow": 128000,
       "hooks": { "on_enter": ".cvh/hooks/on_enter_ux.bat" },
-      "routes": { "on_approved": "ready", "on_changes_requested": "markup" },
       "autoRun": true },
     { "id": "ready", "title": "Готово", "persona": null, "terminal": true,
       "hooks": { "on_enter": ".cvh/hooks/on_finish_done.bat" },
@@ -530,7 +510,7 @@ DnD карточек → `boardStore.moveTask` (§3.2). Карточка: мон
 ### 7.2 Доска бэкенда — `backend`
 
 `backlog → dev (persona: backend-dev, sensor: cargo check) → review (persona: backend-reviewer,
-routes: on_approved→retro, on_changes_requested→dev) → retro (persona: retro) → ready (terminal)`.
+→ retro (persona: retro) → ready (terminal)`.
 `backend-reviewer` — readonly по матрице; `retro` — пишет леджер (см. оговорку ниже — **задумано**).
 
 ### 7.3 Доска девопса — `devops` (только developer, без ревью)
@@ -579,18 +559,15 @@ routes: on_approved→retro, on_changes_requested→dev) → retro (persona: ret
 1. Создай доски под свои контуры (§7) — `create_board` или правкой JSON.
 2. Соблюди инвариант: `backlog` первая, `ready` последняя, id уникальны (иначе ошибка сохранения).
 3. Расставь `persona` только там, где реально нужен агент; `terminal: true` — только финалу.
-4. `routes` — только ключи из §3.3; `on_finished` бэкенд не читает.
 5. `gatekeeperSensor` — команда, честно проверяющая стадию в worktree (`cargo check`, `npm run build`,
    `terraform validate`); помни про таймаут 300с.
 
-### Шаг 2. Персоны: `.cvh/agents/<role>.md` + `rules/` + `setting`
+### Шаг 2. Персоны: `.cvh/agents/<role>/persona.md` + `rules/` + `setting`
 
-1. `create_agent_persona(<role>)` (или ПКМ по колонке → новый агент; имя `^[a-z0-9][a-z0-9-]*$`).
-2. **Заполни flat `<role>.md`** — в этом репозитории `developer.md` прямо сейчас пуст (1 байт),
-   а плейсхолдер требует цель/стиль/запреты. Пустая персона = дженерик-системник.
-   (Узел `agent.md` в Проводнике — не тот файл, см. §2.7.)
+1. `create_agent_persona(<role>)` (создаёт директорию `.cvh/agents/<role>/` со скаффолдом `persona.md`, `setting`, `rules/`, `hooks/`).
+2. **Заполни `persona.md`** — системный промпт роли с YAML frontmatter (`icon`, `color`, `description`, `scope`).
 3. Разложи инварианты по `rules/*.md` (имена задают порядок — называй `00-*.md`, `10-*.md`…).
-4. Прижми права/настройки в `<role>/setting` (`allowed_tools`, `model`, `temperature`, `context_window`).
+4. Прижми права/настройки в `<role>/setting` (`allowed_tools`, `model`, `temperature`, `context_window`, `icon`, `color`).
    Проверь JSON валидность — битый файл молча = дефолт.
 
 ### Шаг 3. Хуки: `hooks` + `.cvh/hooks/` + per-agent fallback
@@ -603,10 +580,10 @@ routes: on_approved→retro, on_changes_requested→dev) → retro (persona: ret
 
 ### Шаг 4. Матрица: `settings/tool-policy.json`
 
-1. Глобально выключай только то, что запрещено всем контурам (назад stage-`true` не включит — AND).
+1. Single Authoritative Layer: явный stage override (`true` или `false`) имеет приоритет над глобальным дефолтом.
 2. Ревью/аудит: `edit_file: false, write_file: false` на стадии, не глобально.
 3. Кастомные тулы из `tools/` — те же тоглы (имена — `name` из JSON).
-4. Сверяйся с бэкендом, а не с превью модалки (§4.2): при расхождении прав бэкенд.
+4. Мастер-свитч `subagent` на стадии управляет доступностью всего семейства субагентов.
 
 ### Шаг 5. Кастомные тулы: `.cvh/tools/*.json`
 
@@ -618,7 +595,7 @@ routes: on_approved→retro, on_changes_requested→dev) → retro (persona: ret
 1. Создай задачу в `backlog` (чекбокс worktree: вкл = builtin по конвенции; выкл = только хуки).
 2. Перетащи в агентскую колонку → проверь: worktree создан, в ленте `[HOOK] worktree:`,
    телеметрия идёт, `ContextGauge` считает.
-3. Доведи до вердикта → проверь маршрут (`routes` или порядок), сабтаску `CVH-NNN.M`, финал в `ready/done`.
+3. Доведи до вердикта → проверь порядок стадий, сабтаску `CVH-NNN.M`, финал в `ready/done`.
 4. Удали тестовую задачу → worktree/ветка/диалоги чистятся.
 
 ### Шаг 7. Канонический контур CanbanVoimaxHarness: `developer -> review`
@@ -642,31 +619,43 @@ routes: on_approved→retro, on_changes_requested→dev) → retro (persona: ret
 |---|---|---|---|
 | 1 | Хук настроен, файла нет | молчаливый пропуск (`exists`-check), в логе только on_enter_script-варн | положи файл или убери ключ |
 | 2 | Хук создаёт worktree, но не печатает `CVH_WORKTREE=` | задача остаётся без worktree → агент работает **в корне репо** | допечатай протокол §3.4 |
-| 3 | Персона правится в `agents/<role>/agent.md` (узел Проводника) | на промпт не влияет (читается flat `<role>.md`) | правь flat-файл |
-| 4 | Пустая `developer.md` | слабый дженерик-системник | заполни цель/стиль/запреты |
-| 5 | `globalEnabled: false` + stage `true` | тул всё равно запрещён (AND) | включай глобально, режь по стадиям |
-| 6 | Надежда на `column.allowedTools` как enforcement | gate его не смотрит | права — в `tool-policy.json` + `setting` |
-| 7 | Превью модалки ≠ бэкенд | stage-wins vs AND | доверяй бэкенду/`PermissionDenied` в ленте |
-| 8 | Имя тула `my-tool` / `MyTool` | `save_custom_tool` отклонит (только `a-z0-9_`) | переименуй |
-| 9 | `{args}` одинарные в `command` | подстановки нет (код ищет `{{args}}`) | двойные скобки |
-| 10 | `routes.on_finished` | игнорируется | только 3 ключа §3.3 |
-| 11 | Правка `pipeline.json` при активных досках | перезапишется зеркалом активной доски | правь `boards.json`/доску в UI |
-| 12 | `wipLimit` как лимит | фронт-only поле, бэкенд не знает | контролируй руками |
-| 13 | Ожидание автозаписи `tasks-history.json`/knowledge-graph | код не пишет (задумано) | веди вручную/хуком |
-| 14 | `subagent` как делегирование | заглушка-строка, не запуск | не строй на нём контур |
-| 15 | Стадия без worktree у задачи | агент тихо работает в корне (WARN в лог) | проверяй worktree после создания |
+| 3 | Пустая `persona.md` | слабый дженерик-системник | заполни цель/стиль/запреты и frontmatter |
+| 4 | Надежда на `column.allowedTools` как enforcement | gate его не смотрит | права — в `tool-policy.json` + `setting` |
+| 5 | Имя тула `my-tool` / `MyTool` | `save_custom_tool` отклонит (только `a-z0-9_`) | переименуй |
+| 6 | `{args}` одинарные в `command` | подстановки нет (код ищет `{{args}}`) | двойные скобки |
+| 8 | Правка `pipeline.json` при активных досках | перезапишется зеркалом активной доски | правь `boards.json`/доску в UI |
+| 9 | `wipLimit` как лимит | фронт-only поле, бэкенд не знает | контролируй руками |
+| 10 | Ожидание автозаписи `tasks-history.json`/knowledge-graph | код не пишет (задумано) | веди вручную/хуком |
+| 11 | Стадия без worktree у задачи | агент тихо работает в корне (WARN в лог) | проверяй worktree после создания |
 
 ---
 
 ## Приложение А. Статусная сводка проверки
 
 **Покрыто (работает)** — скаффолд (состав, минимальные 2 колонки, пустые `agents/`, git-условный builtin-хук,
-`.gitignore`); все дефолты колонок (minimal/default/canonical/modeler); `ToolPolicyConfig` AND + алиасы;
-`create_task` (все параметры, board-aware поиск колонки, shell→stdout→builtin цепочка, `skip_worktree`);
+`.gitignore`); все дефолты колонок (minimal/default/canonical/modeler); `ToolPolicyConfig` Single Authoritative Layer + алиасы;
+`create_task`, `update_task`, `delete_task` (все параметры, board-aware поиск колонки, shell→stdout→builtin цепочка, `skip_worktree`);
 `move_task_stage` (on_finish best-effort → sensor блокирующий → on_enter блокирующий → builtin → onEnterScript);
 `run_agent` (steer, fallback persona `developer`, приоритеты модели/температуры/baseUrl, worktree-fallback в корень,
-`[HOOK]`-маркер, вердикты, сабтаски, routes, terminal); `list/create_agent_persona` (flat-путь, валидация, шаблон);
+`[HOOK]`-маркер, вердикты, сабтаски, terminal); `list/create/delete/rename_agent_persona` (канонический `.cvh/agents/<role>/persona.md`, валидация, шаблон);
+субагенты (`subagent` синхронный, `subagent_bg` фоновый, `collect_subagent` сборщик с 3-уровневым разрешением, `subagent_list`);
 custom tools CRUD + исполнение `{{args}}`; `execute_hook` env/интерпретаторы/таймауты; stdout-протокол;
+системник (персона + rules по алфавиту + runtime mandate, без внешних skills/монолитов — намеренно); полный стек инструментов
+с параметрами; `todo_write` (persist + событие); spill (>500 строк / >64KB; >2000 строк / >128KB для `read_file`);
+ACID-транзакции диалогов в SQLite WAL `harness.db`; `normalize_pipeline_columns`;
+boards CRUD + слаги + защита последней доски + реассайна задач; `boards.json` ↔ `pipeline.json` синк;
+Cortex tree/read/save; Git Diff и Image Diff; drawer/телеметрия/steer; оба ПКМ-меню (+защита `backlog`/`ready`);
+`ContextGauge`+телеметрия; `localStorage`-бэкап задач и монотонные ID.
+
+**Частично** — `column.allowedTools`/`resolve_allowed_tools` (декларативно, gate не смотрит);
+`compact_task_context` и `compact_context` для живых сессий; `max_turns` (мёртвое поле);
+шаблоны досок из `docs/board.md` (встроенный `modeler` на 4 стадии, остальные дают 3 стадии);
+формула системника из `docs/agents.md` (очищена от устаревших ссылок); Google/Bing fallback (только DDG);
+`fastTrack`, `wipLimit` (фронт-only).
+
+**Задумано** — автозапись `.agents/tasks-history.json` / `.agents/knowledge-graph.json` и патчинг правил в `.cvh/rules/`
+ретро-агентом (управляется агентом-верификатором).
+(Все основные вехи дорожной карты CVH-001—CVH-014 и архитектурные концепции Live Diff и SQLite WAL леджера памяти переведены в статус «работает»).
 системник (персона + rules по алфавиту + mandate, без внешних skills/монолитов — намеренно); 10 стандартных тулов
 с параметрами; `todo_write` (persist + событие); spill; 3-tier диалогов; `normalize_pipeline_columns`;
 boards CRUD + слаги + защита последней доски + реассайна задач; `boards.json` ↔ `pipeline.json` синк;
@@ -678,7 +667,7 @@ Cortex tree/read/save; Git Diff; drawer/телеметрия/steer; оба ПК�
 и `compact_context` для живых сессий (синтетика); `max_turns` (мёртвое поле); шаблоны досок из `docs/board.md`
 (`development`/`kanban`/`simple`/`empty` — кода нет, есть canonical+modeler+скаффолд);
 формула системника из `docs/agents.md` (очищена от устаревших ссылок); Google/Bing fallback (только DDG);
-`retro`-оверрайд (есть в сторе/файле, нет в бэкенд-дефолте); `routes.on_finished`, `fastTrack`, `wipLimit`
+`retro`-оверрайд (есть в сторе/файле, нет в бэкенд-дефолте); `fastTrack`, `wipLimit`
 (фронт-only); узел `agent.md` Проводника vs flat-персона; двухколоночный Live Diff (`GitDiffSidebar` — полностью интегрирован);
 пример `tool-policy.json` в `docs/agents.md` (без `todo_write`); env-таблица `docs/hooks.md` (без `CVH_BOARD_ID`,
 без `CVH_WORKTREE=` в примерах).

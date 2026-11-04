@@ -383,3 +383,159 @@ line 2 again"
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
+    #[tokio::test]
+    async fn test_worktree_fallback_to_repo_root_for_cvh_spill() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_spill_fallback_{}", uuid::Uuid::new_v4()));
+        let repo_root = base.join("repo");
+        let worktree_dir = base.join("worktrees").join("cvh-026");
+        tokio::fs::create_dir_all(&repo_root).await.expect("create repo_root");
+        tokio::fs::create_dir_all(&worktree_dir).await.expect("create worktree_dir");
+
+        let spill_dir = repo_root.join(".cvh").join("spill");
+        tokio::fs::create_dir_all(&spill_dir).await.expect("create spill_dir");
+        let log_file = spill_dir.join("20261104-124502.339-execute_command.log");
+        tokio::fs::write(&log_file, "line 1\nline 2\ndiff content\n").await.expect("write spill");
+
+        let flag = Arc::new(AtomicBool::new(false));
+        let policy = ToolPolicyConfig::default();
+        let tool_ctx = ToolContext {
+            repo_root: &repo_root,
+            worktree_dir: &worktree_dir,
+            stage_id: Some("review"),
+            role: Some("reviewer"),
+            abort_handle: flag,
+            tool_policy: &policy,
+            task_id: Some("CVH-026.2"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        // 1. read_file with .cvh/spill/... path when file exists in repo_root but NOT in worktree_dir
+        let res = execute_tool(&tool_ctx, "read_file", &serde_json::json!({
+            "file_path": ".cvh/spill/20261104-124502.339-execute_command.log"
+        }))
+        .await
+        .expect("read_file must fall back to repo_root for .cvh/ assets");
+
+        assert!(res.contains("diff content"), "got: {}", res);
+
+        // 2. Nonexistent file in both must fail
+        let non_existent = execute_tool(&tool_ctx, "read_file", &serde_json::json!({
+            "file_path": ".cvh/spill/nonexistent.log"
+        }))
+        .await
+        .expect_err("nonexistent file must fail");
+        assert!(non_existent.to_string().contains("File does not exist"));
+
+        // 3. Traversal attempt out of worktree/repo_root must still fail
+        let traversal = execute_tool(&tool_ctx, "read_file", &serde_json::json!({
+            "file_path": ".cvh/../../secret.txt"
+        }))
+        .await
+        .expect_err("traversal must fail");
+        assert!(traversal.to_string().contains("escape worktree") || traversal.to_string().contains("Path traversal denied"));
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
+    #[tokio::test]
+    async fn test_worktree_dual_writes_cvh_config_to_repo_root() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_dual_write_{}", uuid::Uuid::new_v4()));
+        let repo_root = base.join("repo");
+        let worktree_dir = base.join("worktrees").join("task-cvh-dual");
+        tokio::fs::create_dir_all(&repo_root).await.expect("create repo_root");
+        tokio::fs::create_dir_all(&worktree_dir).await.expect("create worktree_dir");
+
+        let flag = Arc::new(AtomicBool::new(false));
+        let policy = ToolPolicyConfig::default();
+        let tool_ctx = ToolContext {
+            repo_root: &repo_root,
+            worktree_dir: &worktree_dir,
+            stage_id: Some("dev"),
+            role: Some("developer"),
+            abort_handle: flag,
+            tool_policy: &policy,
+            task_id: Some("CVH-030"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        // 1. write_file with .cvh/rules/runtime.md must write to BOTH worktree and repo_root
+        let write_res = execute_tool(&tool_ctx, "write_file", &serde_json::json!({
+            "file_path": ".cvh/rules/runtime.md",
+            "content": "# Live Runtime Rules
+v1.0
+"
+        }))
+        .await
+        .expect("write_file runtime.md");
+        assert!(write_res.contains("Successfully wrote"));
+
+        let wt_runtime = tokio::fs::read_to_string(worktree_dir.join(".cvh").join("rules").join("runtime.md")).await.expect("read worktree runtime.md");
+        assert_eq!(wt_runtime, "# Live Runtime Rules
+v1.0
+");
+
+        let repo_runtime = tokio::fs::read_to_string(repo_root.join(".cvh").join("rules").join("runtime.md")).await.expect("read repo_root runtime.md");
+        assert_eq!(repo_runtime, "# Live Runtime Rules
+v1.0
+");
+
+        // 2. edit_file with .cvh/rules/runtime.md must also mirror to repo_root
+        let edit_res = execute_tool(&tool_ctx, "edit_file", &serde_json::json!({
+            "file_path": ".cvh/rules/runtime.md",
+            "old_string": "v1.0",
+            "new_string": "v2.0"
+        }))
+        .await
+        .expect("edit_file runtime.md");
+        assert!(edit_res.contains("Successfully updated"));
+
+        let wt_runtime_v2 = tokio::fs::read_to_string(worktree_dir.join(".cvh").join("rules").join("runtime.md")).await.unwrap();
+        assert_eq!(wt_runtime_v2, "# Live Runtime Rules
+v2.0
+");
+
+        let repo_runtime_v2 = tokio::fs::read_to_string(repo_root.join(".cvh").join("rules").join("runtime.md")).await.unwrap();
+        assert_eq!(repo_runtime_v2, "# Live Runtime Rules
+v2.0
+");
+
+        // 3. Regular source code must NOT be written to repo_root (stays isolated in worktree)
+        let _ = execute_tool(&tool_ctx, "write_file", &serde_json::json!({
+            "file_path": "src/main.rs",
+            "content": "fn main() {}
+"
+        }))
+        .await
+        .expect("write_file src/main.rs");
+
+        assert!(worktree_dir.join("src").join("main.rs").exists());
+        assert!(!repo_root.join("src").join("main.rs").exists(), "Source files must remain isolated in worktree");
+
+        // 4. Internal runtime files (like spill logs or tasks.json) must NOT be mirrored to repo_root
+        let _ = execute_tool(&tool_ctx, "write_file", &serde_json::json!({
+            "file_path": ".cvh/spill/test.log",
+            "content": "test log"
+        }))
+        .await
+        .expect("write_file spill log");
+
+        assert!(worktree_dir.join(".cvh").join("spill").join("test.log").exists());
+        assert!(!repo_root.join(".cvh").join("spill").join("test.log").exists(), "Spill logs written directly by agent must not dual write");
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+

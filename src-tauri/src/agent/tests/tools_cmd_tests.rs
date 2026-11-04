@@ -67,7 +67,7 @@ static QUESTION_TEST_MUTEX: std::sync::LazyLock<tokio::sync::Mutex<()>> = std::s
             large_output.push_str(&format!("This is log line {}\n", i));
         }
 
-        let spilled = maybe_spill_output(&base, "execute_command", large_output)
+        let spilled = maybe_spill_output(&base, None, "execute_command", large_output)
             .await
             .expect("spill output");
 
@@ -81,18 +81,18 @@ static QUESTION_TEST_MUTEX: std::sync::LazyLock<tokio::sync::Mutex<()>> = std::s
         for i in 1..=600 {
             subagent_rep.push_str(&format!("Subagent finding {}\n", i));
         }
-        let unspilled_sub = maybe_spill_output(&base, "subagent", subagent_rep.clone())
+        let unspilled_sub = maybe_spill_output(&base, None, "subagent", subagent_rep.clone())
             .await
             .expect("subagent unspilled");
         assert_eq!(unspilled_sub, subagent_rep, "subagent reports must NEVER be truncated");
 
-        let unspilled_collect = maybe_spill_output(&base, "collect_subagent", subagent_rep.clone())
+        let unspilled_collect = maybe_spill_output(&base, None, "collect_subagent", subagent_rep.clone())
             .await
             .expect("collect_subagent unspilled");
         assert_eq!(unspilled_collect, subagent_rep, "collect_subagent reports must NEVER be truncated");
 
         // Verify read_file: 600 lines does NOT spill (safe limit is 2000 lines)
-        let unspilled_read = maybe_spill_output(&base, "read_file", subagent_rep)
+        let unspilled_read = maybe_spill_output(&base, None, "read_file", subagent_rep)
             .await
             .expect("read_file unspilled at 600 lines");
         assert!(!unspilled_read.contains("[Output truncated"), "read_file must not spill under 2000 lines");
@@ -102,7 +102,7 @@ static QUESTION_TEST_MUTEX: std::sync::LazyLock<tokio::sync::Mutex<()>> = std::s
         for i in 1..=2100 {
             massive_file.push_str(&format!("File line {}\n", i));
         }
-        let spilled_read = maybe_spill_output(&base, "read_file", massive_file)
+        let spilled_read = maybe_spill_output(&base, None, "read_file", massive_file)
             .await
             .expect("read_file spilled at 2100 lines");
         assert!(spilled_read.contains("[Output truncated: 2100 lines"), "got: {}", spilled_read);

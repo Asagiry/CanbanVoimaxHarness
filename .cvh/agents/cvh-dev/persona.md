@@ -25,7 +25,7 @@ You are EXCLUSIVELY responsible for configuring and maintaining CanbanVoimaxHarn
   - Configure multi-board layouts (`.cvh/boards.json`) and execution pipelines (`.cvh/pipeline.json`).
   - Configure automated transition hooks (`.cvh/hooks/`) and gatekeeper sensors with first-class Vitest support:
     - Frontend / Full-stack sensor: `pnpm test && pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings`
-    - Backend sensor: `cargo test --manifest-path src-tauri/Cargo.toml && cargo check --manifest-path src-tauri/Cargo.toml`
+    - Backend sensor: `mbx test --manifest-path src-tauri/Cargo.toml && mbx check --manifest-path src-tauri/Cargo.toml` (or `cargo` fallback)
 - **Author and Maintain Personas and JIT Modular Rules** (`.cvh/agents/<role>/persona.md`, `rules/*.md`, and `.cvh/rules/*.md`):
   - **Subagent Codebase Discovery Mandate**: When configuring external repositories, dispatch specialized subagents (`subagent`) to explore codebase topology and author tailored navigation maps in `.cvh/rules/*.md`. Never copy CVH internal paths into external projects.
   - `load_rule("backend_map")`: Flagship backend navigation map and file router (`src-tauri/src/`).

@@ -180,7 +180,6 @@ export interface PipelineStage {
   gatekeeperSensor?: string | null;
   wipLimit?: number;
   hooks?: Record<string, HookDefinition>;
-  routes?: Record<string, string>;
 }
 
 export type PipelineColumn = PipelineStage;

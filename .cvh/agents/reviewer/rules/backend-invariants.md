@@ -36,6 +36,7 @@ Authoritative backend audit checklist for the **Reviewer** persona in CanbanVoim
   - `TaskState::Idle`
   - `TaskState::Running { model }`
   - `TaskState::WaitingSubtask { subtask_id }`
+  - `TaskState::WaitingSubagent`
   - `TaskState::Done { verdict }`
 - **REJECTION TRIGGER**: Adding combinations of boolean fields (e.g. `is_running: bool`, `waiting: bool`) where conflicting permutations (e.g. `Done` while simultaneously waiting for a subtask) can exist. Illegal states must be mathematically unrepresentable at compile time.
 

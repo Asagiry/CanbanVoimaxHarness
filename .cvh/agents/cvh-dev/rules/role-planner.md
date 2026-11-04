@@ -36,4 +36,4 @@ Turn tasks into deeper versions of themselves, not bigger ones:
 3. **Specific Methods & Tools**: Name concrete Rust types, React hooks, Tauri IPC signatures, compiler flags, and profilers.
 4. **External Ground Truth Verification**: Specific sensor commands that prove correctness without trusting the model:
    - Frontend & Pure Logic: `pnpm test` (Vitest), `pnpm exec tsc --noEmit`, `pnpm exec oxlint --deny-warnings`
-   - Backend: `cargo test --manifest-path src-tauri/Cargo.toml`, `cargo check --manifest-path src-tauri/Cargo.toml`
+   - Backend: `mbx test --manifest-path src-tauri/Cargo.toml`, `mbx check --manifest-path src-tauri/Cargo.toml` (or `cargo` fallback)

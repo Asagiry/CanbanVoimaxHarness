@@ -204,7 +204,7 @@ Authoritative code craftsmanship and simplicity standard.
 - Before calling `advance_task`, run `git diff` and audit every single changed line:
   - Eliminate stray `console.log`, debugging dumps, temporary files.
   - Eliminate accidental whitespace churn or unrelated formatting changes.
-- Ensure all live Ground Truth Sensors pass (`pnpm test`, `tsc`, `oxlint`, `cargo test`, `cargo check`).
+- Ensure all live Ground Truth Sensors pass (`pnpm test`, `tsc`, `oxlint`, `mbx test` (or `cargo test`), `mbx check` (or `cargo check`)).
 ```
 
 ### 5.2 Template: `.cvh/agents/reviewer/rules/review-checklist.md`
@@ -221,8 +221,8 @@ Every review MUST execute and verify all applicable sensors:
 1. `pnpm test` (Vitest unit tests pass 100%).
 2. `pnpm exec tsc --noEmit` (TypeScript type check passes with 0 errors).
 3. `pnpm exec oxlint --deny-warnings` (Oxlint linter passes with 0 warnings).
-4. `cargo test --manifest-path src-tauri/Cargo.toml` (Rust unit tests pass 100%).
-5. `cargo check --manifest-path src-tauri/Cargo.toml` (Rust compiler check passes with 0 errors).
+4. `mbx test --manifest-path src-tauri/Cargo.toml` (Rust unit tests pass 100%; fallback to `cargo test`).
+5. `mbx check --manifest-path src-tauri/Cargo.toml` (Rust compiler check passes with 0 errors; fallback to `cargo check`).
 
 ## 3. Invariant Verification
 - **Frontend Invariants**:

@@ -359,7 +359,7 @@ Initializer flow (empty project):
 Process (Explore->Plan->Code->Verify->Commit): Explore (glob/grep), Plan: ALWAYS call todo_write on Turn 1 or Turn 2 to publish your complete step-by-step execution plan (e.g. 1. Explore stack, 2. Design boards & pipeline, 3. Create personas, 4. Configure tool policies & hooks, 5. Verify). Mark each todo as completed as you finish it. Code (edit in worktree), Verify (gate sensors: `cargo check`, `cargo clippy -- -D warnings`, `tsc`, `vite build`), Commit (1 slice = 1 commit).
 - Ironclad Completion Rule: Before calling advance_task, you MUST mark all TODO items as completed via todo_write. After completing all planned items, you MUST cease tool calls and provide a terminal findings report, OR invoke advance_task(summary) to hand over to the next stage. NEVER re-publish completed items in todo_write or enter recursive planning loops!
 
-Verdicts (reviewer is separate clean context; personas never invoke personas): `APPROVED` = auto-advance via routes.on_approved; `APPROVED_WITH_CAVEATS` = advance + log notes; `CHANGES_REQUESTED` = unlock dev, return `file:line -> fix` checklist, re-run sensors.
+Verdicts (reviewer is separate clean context; personas never invoke personas): `APPROVED` = auto-advance to next stage / ready; `APPROVED_WITH_CAVEATS` = advance + log notes; `CHANGES_REQUESTED` = unlock dev, return `file:line -> fix` checklist, re-run sensors.
 Key patterns/recipes: scaffold-then-sense; sensor-first promotion (gatekeeperSensor must exit 0 or move rejected); spill large outputs (>100 lines/8KB) to `.cvh/spill/`, return head/tail 20.
 Pitfalls: monolith agent.md (>30 lines); copypaste instead of Load-link; writing outside worktree; re-enabling globally-disabled tool; stale board/pipeline drift.
 What to ask when blocked: stack + build cmd, target board template, allowed tools per stage, sensor to gate on.
@@ -396,9 +396,12 @@ Rationalization vs Reality:
 pub const DEFAULT_RUNTIME_MANDATE: &str = r#"# Runtime Environment: CanbanVoimaxHarness
 You are executing inside the CanbanVoimaxHarness autonomous multi-agent control plane.
 - Batch Tool Execution: Emit multiple tool calls in a single turn when actions are predictable (e.g. multi-file edits, or edits followed by build/lint/test verification). The harness executes them sequentially in order.
+- Mandatory Tactical TODO: You MUST initialize and maintain a concrete plan via `todo_write`. On Turn 1 (or immediately after inspecting task context), emit `todo_write` with granular steps (`pending` / `in_progress`). Update items to `completed` as work finishes. Never proceed to execution without a published todo list, and never complete a task with unaddressed todos.
 - Zero-Slop Code: Do NOT add comments to code unless explicitly requested by the user. Follow existing codebase conventions and styling.
 - Concise Delivery: Minimize conversational commentary. Avoid unnecessary preamble or postamble. After editing a file or running verification, proceed directly to the next action without reciting what you just changed.
-- Dynamic Knowledge: Use `load_rule` on demand to fetch project architectural maps and invariants. Never guess."#;
+- Dynamic Knowledge: Use `load_rule` on demand to fetch project architectural maps and invariants. Never guess.
+- Worktree Isolation: All file inspections, edits, and sensor commands operate strictly inside your isolated worktree directory (`CVH_WORKTREE_PATH`).
+- Execution Protocol & Final Answer Discipline: Do not write concluding summaries or farewell messages while tool calls are still in flight; emit the comprehensive final answer only when all tool executions are finished."#;
 
 /// Strips leading YAML frontmatter block (`---\n...\n---`) from markdown content.
 pub fn strip_yaml_frontmatter(content: &str) -> &str {
@@ -624,36 +627,9 @@ pub async fn compile_primed_system_prompt_with_tools(
         }
     }
 
-    // 2. Dynamic Tool Instructions & Execution Mandates ("отдельная склейка" backend-authoritative)
-    let mut tool_sections = Vec::new();
-    let tools_line = format!("tools: [{}]", resolved_tools.join(", "));
-    tool_sections.push(format!(
-        "# Authorized Tools (Backend-Authoritative)\n{}\nThese tools are authorized and dynamically assembled by the backend engine.",
-        tools_line
-    ));
-
-    let has_fs_tools = resolved_tools.iter().any(|t| {
-        matches!(t.as_str(), "read_file" | "write_file" | "edit_file" | "execute_command" | "glob" | "grep")
-    });
     let has_subagents = resolved_tools.iter().any(|t| {
         matches!(t.as_str(), "subagent" | "subagent_bg" | "collect_subagent")
     });
-
-    if has_fs_tools {
-        let active_fs_tools: Vec<&str> = ["read_file", "write_file", "edit_file", "glob", "grep", "execute_command"]
-            .into_iter()
-            .filter(|t| resolved_tools.iter().any(|at| at == *t))
-            .collect();
-        let active_fs_str = active_fs_tools.iter().map(|t| format!("`{}`", t)).collect::<Vec<_>>().join(", ");
-        let mut fs_mandate = format!(
-            "# Scoped Tool Execution Mandate\nYou have direct tool access scoped to your isolated worktree. Use {} to inspect, modify, and verify code.",
-            active_fs_str
-        );
-        if resolved_tools.iter().any(|t| t == "execute_command") {
-            fs_mandate.push_str("\nAlways use Ground Truth Sensors (e.g. `cargo check`, `npm run build`) via `execute_command` to verify changes.");
-        }
-        tool_sections.push(fs_mandate);
-    }
 
     if has_subagents {
         let mut sub_mandate = String::from("## Subagent Delegation Mandate\n");
@@ -664,20 +640,9 @@ pub async fn compile_primed_system_prompt_with_tools(
             sub_mandate.push_str("- If you use `subagent_bg` for background execution, you MUST call `collect_subagent` with the returned `subagent_id` to wait for and consume the subagent's report before taking subsequent actions or finishing the task. Never fire-and-forget background subagents without collecting them.\n");
         }
         if resolved_tools.iter().any(|t| t == "collect_subagent" || t == "subagent_bg") {
-            sub_mandate.push_str("- Single-Action Collection: When invoking 'collect_subagent', you MUST invoke it as the ONLY tool call in that turn. Do NOT batch file reads or other tools alongside collect_subagent; wait to consume and analyze the received reports before planning next steps.\n");
+            sub_mandate.push_str("- Single-Action Collection: When invoking 'collect_subagent', you MUST invoke it as the ONLY tool call in that turn. Do NOT batch other tools alongside collect_subagent; wait to consume and analyze the received reports before planning next steps.\n");
         }
-        tool_sections.push(sub_mandate.trim().to_string());
-    }
-
-    if !resolved_tools.is_empty() {
-        tool_sections.push(
-            "## Execution Protocol & Final Answer Discipline:\n- While you are still planning, researching, writing files, or executing tools, do NOT write a concluding summary or farewell message in your turn content. Keep turn content focused strictly on immediate intent or leave content empty when issuing tool calls.\n- ONLY output your comprehensive final answer when ALL tools have finished executing, all verifications have passed, and NO further tool calls are required."
-                .to_string(),
-        );
-    }
-
-    if !tool_sections.is_empty() {
-        sections.push(tool_sections.join("\n\n"));
+        sections.push(sub_mandate.trim().to_string());
     }
 
     Ok(sections.join("\n\n---\n\n"))
@@ -815,6 +780,7 @@ pub async fn prune_spill_dir(spill_dir: &Path) -> Result<()> {
 /// if they exceed that absolute ceiling to prevent context explosion.
 pub async fn maybe_spill_output(
     repo_root: &Path,
+    worktree_dir: Option<&Path>,
     tool_name: &str,
     output: String,
 ) -> Result<String> {
@@ -847,6 +813,17 @@ pub async fn maybe_spill_output(
 
         tokio::fs::write(&spill_file, &output).await?;
         let _ = prune_spill_dir(&spill_dir).await;
+
+        // Mirror to worktree if isolated execution (§ 2.8 worktree safety)
+        if let Some(wt) = worktree_dir {
+            if wt != repo_root {
+                let wt_spill = wt.join(".cvh").join("spill");
+                if tokio::fs::create_dir_all(&wt_spill).await.is_ok() {
+                    let _ = tokio::fs::write(wt_spill.join(&filename), &output).await;
+                    let _ = prune_spill_dir(&wt_spill).await;
+                }
+            }
+        }
 
         let all_lines: Vec<&str> = output.lines().collect();
         let head_count = if is_exempt { 50 } else { 20 };
@@ -1394,7 +1371,7 @@ pub async fn execute_tool(
         bail!("Operation aborted");
     }
 
-    maybe_spill_output(repo_root, normalized_tool_name, raw_result).await
+    maybe_spill_output(repo_root, Some(ctx.worktree_dir), normalized_tool_name, raw_result).await
 }
 
 /// In-Process Subagent Execution Engine (§ 3 Architectural Invariants)
@@ -1410,7 +1387,6 @@ pub fn run_inprocess_subagent(
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String>> + Send>> {
     Box::pin(async move {
     let start_instant = std::time::Instant::now();
-    let start_time_ms = chrono::Utc::now().timestamp_millis();
     let parent_id = ctx.task_id.as_deref().unwrap_or("unknown").to_string();
     let subagent_suffix = match ctx.call_id.as_deref() {
         Some(cid) if !cid.trim().is_empty() => cid.trim().to_string(),
@@ -1483,7 +1459,7 @@ pub fn run_inprocess_subagent(
                 "role": &role,
                 "prompt": &prompt,
                 "tools": &effective_sub_tools,
-                "createdAt": start_time_ms,
+                "createdAt": chrono::Utc::now().timestamp_millis(),
             }),
         );
     }
@@ -3007,6 +2983,17 @@ where
             "CVH [agent]: Adopting existing in-memory context ({} messages, turn {}) for task {}",
             msgs.len(), cur_turn, config.task_id
         );
+        // Refresh system message so active tools, personas, and rules are always 100% in sync
+        if !msgs.is_empty() && msgs[0].role == Role::System {
+            msgs[0] = ChatMessage::system(system_prompt.clone())
+                .with_cache_control(crate::llm::CacheControl::ephemeral());
+        } else {
+            msgs.insert(
+                0,
+                ChatMessage::system(system_prompt.clone())
+                    .with_cache_control(crate::llm::CacheControl::ephemeral()),
+            );
+        }
         if let Some(ref atts) = config.task_attachments {
             if !atts.is_empty() && msgs.len() >= 2 && msgs[1].role == Role::User && !msgs[1].has_images() {
                 let text = msgs[1].text_content().unwrap_or(&initial_user_prompt).to_string();
@@ -3020,6 +3007,17 @@ where
             "CVH [agent]: Adopting reconstructed SQLite dialogue context ({} messages) for task {}",
             msgs.len(), config.task_id
         );
+        // Refresh system message so active tools, personas, and rules are always 100% in sync
+        if !msgs.is_empty() && msgs[0].role == Role::System {
+            msgs[0] = ChatMessage::system(system_prompt.clone())
+                .with_cache_control(crate::llm::CacheControl::ephemeral());
+        } else {
+            msgs.insert(
+                0,
+                ChatMessage::system(system_prompt.clone())
+                    .with_cache_control(crate::llm::CacheControl::ephemeral()),
+            );
+        }
         if let Some(ref atts) = config.task_attachments {
             if !atts.is_empty() && msgs.len() >= 2 && msgs[1].role == Role::User && !msgs[1].has_images() {
                 let text = msgs[1].text_content().unwrap_or(&initial_user_prompt).to_string();

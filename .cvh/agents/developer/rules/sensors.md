@@ -56,6 +56,8 @@ mbx test --manifest-path src-tauri/Cargo.toml
 cargo test --manifest-path src-tauri/Cargo.toml
 
 # 3. Strict linter & clippy:
+mbx clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+# Fallback if mbx is absent:
 cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 ```
 - **Acceptance Criteria**: Exit code `0` with zero compilation errors and zero compiler warnings.

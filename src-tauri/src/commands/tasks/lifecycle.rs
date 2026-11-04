@@ -24,7 +24,28 @@ use super::transitions::{ensure_task_worktree, trigger_column_on_enter_script};
 
 pub async fn list_tasks(state: State<'_, AppState>) -> Result<Vec<Task>, String> {
     let root = resolve_actual_repo_root(&state.get_root());
-    let tasks = load_tasks_from_disk(&root).await;
+    let mut tasks = load_tasks_from_disk(&root).await;
+
+    // Self-healing orphan running tasks: if a task is marked "running" in SQLite
+    // but has no active Tokio execution in AppState (e.g. after desktop restart or crash),
+    // reconcile it safely to "idle".
+    let mut reconciled = false;
+    for t in tasks.iter_mut() {
+        if t.status.as_deref() == Some("running") && !state.is_agent_active(&root, &t.id) {
+            crate::logger::cvh_log(
+                Some(&root),
+                "INFO",
+                "LIST_TASKS",
+                &format!("Reconciling orphan running task '{}' to idle (no active Tokio agent found)", t.id),
+            );
+            t.status = Some("idle".to_string());
+            reconciled = true;
+        }
+    }
+    if reconciled {
+        let _ = save_tasks_to_disk(&root, &tasks).await;
+    }
+
     let ids: Vec<&str> = tasks.iter().map(|t| t.id.as_str()).collect();
     crate::logger::cvh_log_with_details(
         Some(&root),

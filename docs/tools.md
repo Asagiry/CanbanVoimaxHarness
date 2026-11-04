@@ -32,11 +32,14 @@
 | Инструмент | Параметры | Описание |
 | :--- | :--- | :--- |
 | `advance_task` / `move_task` | `summary?: string`, `stage_id?: string` | Переводит задачу на следующий этап пайплайна или указанный `stage_id`. ВАЖНО: все пункты TODO должны быть полностью завершены перед вызовом. Текст `summary` передается в эстафету Relay Handoff. При успехе завершает ReAct-цикл текущего агента. |
-| `reject_task` | `reason: string`, `target_stage?: string` | Возвращает задачу на доработку в предыдущий этап (например, из `review` в `dev`), разблокируя родительскую карточку. |
+| `reject_task` | `reason: string` | Возвращает задачу на доработку в предыдущий этап (например, из `review` в `dev`), разблокируя родительскую карточку. |
+| `create_task` | `title: string`, `description?: string`, `stage_id?: string`, `board_id?: string` | Создание новой карточки задачи на доске Kanban. |
+| `create_tasks` | `tasks: Array<{title: string, description?: string, stage_id?: string}>` | Пакетное создание нескольких задач на доске. |
+| `complete_task` | `task_id: string`, `summary?: string` | Завершение задачи и перевод ее в терминальную стадию done. |
 
 > 🚨 **Критический ролевой инвариант (§ 2.8, § 2.16)**:
-> Создание и удаление карточек задач (`create_task`, `create_tasks`, `complete_task`) строго зарезервированы за **Root Orchestrator (Level 0)** и человеком через интерфейс.
-> Субагентам разработки (`cvh-dev`, `developer`, `reviewer`) **СТРОГО ЗАПРЕЩЕНО** вызывать `create_task`, `create_tasks` или `complete_task`. Агенты работают только в пределах назначенных задач и продвигают их через `advance_task` или `reject_task`.
+> Создание и завершение карточек задач (`create_task`, `create_tasks`, `complete_task`) разрешены на этапах оркестрации (`backlog`, `plan`, `orchestrator`).
+> Агентам непосредственной разработки в ветках задач (`developer`, `reviewer`) запрещено создавать карточки верхнего уровня. Агенты продвигают свою задачу через `advance_task` или `reject_task`.
 
 ---
 
@@ -44,10 +47,10 @@
 
 | Инструмент | Параметры | Описание |
 | :--- | :--- | :--- |
-| `subagent` | `role: string`, `prompt: string` | **Синхронный ваншот**: порождает дочернего агента в изолированном Tokio-таске в процессе бэкенда, ожидает завершения и возвращает полный отчет. |
-| `subagent_bg` | `role: string`, `prompt: string` | **Асинхронный фон**: мгновенно запускает фонового субагента и возвращает `subagent_id`. |
-| `collect_subagent` | `subagent_ids: string[]`, `timeout_seconds?: number` | Ожидает завершения одного или нескольких фоновых субагентов по 3-уровневому каскаду (активные каналы, сессии памяти, SQLite). |
-| `subagent_list` | _нет_ | Возвращает реестр активных и завершенных субагентов текущей задачи. |
+| `subagent` | `title: string`, `prompt: string`, `persona?: string`, `role?: string`, `tools?: string[]` | **Синхронный ваншот**: порождает дочернего агента в изолированном Tokio-таске в процессе бэкенда, ожидает завершения и возвращает полный отчет. |
+| `subagent_bg` | `title: string`, `prompt: string`, `persona?: string`, `role?: string`, `tools?: string[]` | **Асинхронный фон**: мгновенно запускает фонового субагента и возвращает `subagent_id`. |
+| `collect_subagent` | `subagent_id?: string`, `subagent_ids?: string[]` | Ожидает завершения одного или нескольких фоновых субагентов по 3-уровневому каскаду (активные каналы, сессии памяти, SQLite). |
+| `subagent_list` | `status_filter?: "all" \| "running" \| "completed" \| "aborted"` | Возвращает компактный реестр активных и завершенных субагентов текущей задачи с фильтрацией по статусу. |
 
 - **Автономный синтез отчетов (§ 2.32)**: Если субагент завершил вызовы тулов без текстового ответа, движок автономно запускает финальный ход синтеза с `tools: None`, гарантируя содержательный отчет.
 - **Изолированный точечный аборт (§ 2.34, § 2.35)**: Остановка субагента оператором через UI или `abort_agent` уничтожает только поток конкретного субагента, не затрагивая родительский ReAct-цикл и соседей.
@@ -90,15 +93,15 @@
 | :--- | :--- | :--- |
 | `web_search` | `query: string`, `limit?: number` | Поиск в DuckDuckGo для извлечения актуальной документации и решений ошибок. |
 | `web_fetch` | `url: string` | Загрузка веб-страницы с преобразованием в чистый Markdown. |
-| `load_rule` | `rule_name: string` | Динамическая подгрузка модульных правил из `.cvh/agents/<role>/rules/` по принципу Progressive Disclosure. |
-| `list_tasks` | `board_id?: string` | Получение реестра задач и текущего состояния колонок доски. |
-| `get_task_history` | `task_id: string`, `limit?: number` | Извлечение истории диалога и шагов задачи из базы данных SQLite WAL. |
+| `load_rule` | `rule: string` | Динамическая подгрузка модульных правил из `.cvh/rules/` и локальных правил роли `.cvh/agents/<role>/rules/`. |
+| `list_tasks` | `limit?: number`, `query?: string`, `stage_id?: string` | Компактный реестр карточек задач Kanban-доски из SQLite с фильтрацией по этапу или поисковому запросу. |
+| `get_task_history` | `task_id: string`, `include_tool_outputs?: boolean` | Пошаговая хронология выполнения задачи со всеми вызовами инструментов, кодами возврата и вердиктами. |
 
 ---
 
 ## 3. Матрица политик: Tool Policy Matrix (§ 2.5)
 
-Контроль доступа к инструментам определяется файлом `.cvh/settings/tool-policy.json`:
+Контроль доступа к инструментам определяется файлом `.cvh/settings/tool-policy.json` по принципу **Single Authoritative Layer**:
 
 ```json
 {
@@ -126,9 +129,10 @@
 ```
 
 - **Формула вычисления прав**:
-  `effective(tool, stage) = globalEnabled[tool] && stageOverrides[stage][tool]`
-- Если инструмент отключен в `globalEnabled`, **ни один этап не может включить его локально**.
-- При сохранении политик через UI бэкенд синхронизирует разрешенные инструменты в YAML-шапку `.cvh/agents/<role>/persona.md` (`tools: [...]`).
+  `effective(tool, stage) = stageOverrides[stage][tool] ?? globalEnabled[tool] ?? true`
+- Явный оверрайд этапа (`true` или `false`) является окончательным и имеет приоритет над `globalEnabled`.
+- Если тул не указан в `stageOverrides`, используется значение по умолчанию из `globalEnabled`.
+- Для семейства субагентов мастер-переключатель `subagent` на этапе контролирует доступность `subagent`, `subagent_bg`, `collect_subagent`, `subagent_list`.
 
 ---
 

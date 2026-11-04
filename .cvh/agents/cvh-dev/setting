@@ -21,7 +21,6 @@
   ],
   "color": "#6366f1",
   "contextWindow": 256000,
-  "context_window": 200000,
   "icon": "Cpu",
   "maxTokens": 8192,
   "model": "gemini-3.8-flash-high",

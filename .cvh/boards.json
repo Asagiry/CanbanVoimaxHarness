@@ -4,13 +4,14 @@
     {
       "id": "development",
       "name": "CanbanVoimaxHarness",
-      "columns": [
+      "stages": [
         {
           "id": "backlog",
           "title": "Backlog",
           "color": "#64748b",
           "icon": "Inbox",
           "persona": null,
+          "wipLimit": null,
           "onEnterScript": null,
           "modelOverride": null,
           "reasoningEffort": null,
@@ -29,7 +30,6 @@
               "description": "Создает изолированный git worktree и feature-ветку feat/<task-id> для безопасной разработки задачи"
             }
           },
-          "routes": null,
           "autoRun": null,
           "terminal": null,
           "isIntake": true
@@ -40,6 +40,7 @@
           "color": "#3b82f6",
           "icon": "Compass",
           "persona": "planner",
+          "wipLimit": null,
           "onEnterScript": null,
           "modelOverride": "gemini-3.8-flash-high",
           "reasoningEffort": null,
@@ -59,7 +60,6 @@
             "question"
           ],
           "hooks": {},
-          "routes": null,
           "autoRun": true,
           "terminal": null,
           "isIntake": null
@@ -70,6 +70,7 @@
           "color": "#0284c7",
           "icon": "Wrench",
           "persona": "developer",
+          "wipLimit": null,
           "onEnterScript": null,
           "modelOverride": "gemini-3.8-flash-high",
           "reasoningEffort": null,
@@ -96,7 +97,6 @@
             "web_fetch"
           ],
           "hooks": {},
-          "routes": null,
           "autoRun": true,
           "terminal": null,
           "isIntake": null
@@ -107,6 +107,7 @@
           "color": "#f59e0b",
           "icon": "ShieldCheck",
           "persona": "reviewer",
+          "wipLimit": null,
           "onEnterScript": null,
           "modelOverride": "gemini-3.8-flash-high",
           "reasoningEffort": null,
@@ -133,11 +134,6 @@
               "description": "Сливает утвержденную feature-ветку в main, отправляет в origin/main и удаляет изолированный worktree"
             }
           },
-          "routes": {
-            "on_approved": "ready",
-            "on_changes_requested": "dev",
-            "on_approved_after_changes": "retro"
-          },
           "autoRun": true,
           "terminal": null,
           "isIntake": null
@@ -148,6 +144,7 @@
           "color": "#ec4899",
           "icon": "RotateCcw",
           "persona": "retro",
+          "wipLimit": null,
           "onEnterScript": null,
           "modelOverride": "gemini-3.8-flash-high",
           "reasoningEffort": null,
@@ -168,7 +165,6 @@
             "web_fetch"
           ],
           "hooks": {},
-          "routes": null,
           "autoRun": true,
           "terminal": null,
           "isIntake": null
@@ -179,6 +175,7 @@
           "color": "#10b981",
           "icon": "CheckCircle2",
           "persona": null,
+          "wipLimit": null,
           "onEnterScript": null,
           "modelOverride": null,
           "reasoningEffort": null,
@@ -189,13 +186,7 @@
             "glob",
             "grep"
           ],
-          "hooks": {
-            "on_enter": {
-              "script": ".cvh/hooks/on_enter_ready.bat",
-              "description": "Финальная проверка слияния ветки задачи в main, отправка в origin/main и удаление временного worktree"
-            }
-          },
-          "routes": null,
+          "hooks": {},
           "autoRun": null,
           "terminal": true,
           "isIntake": null
@@ -205,13 +196,14 @@
     {
       "id": "nastroyka",
       "name": "Setup",
-      "columns": [
+      "stages": [
         {
           "id": "backlog",
           "title": "Backlog",
           "color": "#64748b",
           "icon": "Inbox",
           "persona": null,
+          "wipLimit": null,
           "onEnterScript": null,
           "modelOverride": null,
           "reasoningEffort": null,
@@ -225,7 +217,6 @@
             "web_fetch"
           ],
           "hooks": {},
-          "routes": null,
           "autoRun": null,
           "terminal": null,
           "isIntake": true
@@ -236,6 +227,7 @@
           "color": "#6366f1",
           "icon": "Cpu",
           "persona": "cvh-dev",
+          "wipLimit": null,
           "onEnterScript": null,
           "modelOverride": null,
           "reasoningEffort": null,
@@ -251,7 +243,6 @@
             "web_search"
           ],
           "hooks": {},
-          "routes": null,
           "autoRun": null,
           "terminal": null,
           "isIntake": null
@@ -262,6 +253,7 @@
           "color": "#10b981",
           "icon": "CheckCircle2",
           "persona": null,
+          "wipLimit": null,
           "onEnterScript": null,
           "modelOverride": null,
           "reasoningEffort": null,
@@ -273,7 +265,6 @@
             "grep"
           ],
           "hooks": {},
-          "routes": null,
           "autoRun": null,
           "terminal": true,
           "isIntake": null

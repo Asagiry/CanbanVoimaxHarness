@@ -53,9 +53,9 @@ All standard tools are defined in Rust backend (`src-tauri/src/agent.rs` and `sr
   - **Vitest Unit Tests**: `pnpm test` (executes `vitest run` on frontend pure functions, domain types, and store slices).
   - **TypeScript Sensor**: `pnpm exec tsc --noEmit`
   - **Frontend Linter**: `pnpm exec oxlint --deny-warnings`
-  - **Rust Domain Tests**: `cargo test --manifest-path src-tauri/Cargo.toml` (executes domain and backend unit tests).
-  - **Rust Compiler Sensor**: `cargo check --manifest-path src-tauri/Cargo.toml`
-  - **Rust Clippy Sensor**: `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings`
+  - **Rust Domain Tests**: `mbx test --manifest-path src-tauri/Cargo.toml` (executes domain and backend unit tests; fallback to `cargo test`).
+  - **Rust Compiler Sensor**: `mbx check --manifest-path src-tauri/Cargo.toml` (fallback to `cargo check`).
+  - **Rust Clippy Sensor**: `mbx clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` (fallback to `cargo clippy`).
 
 ### 2.7 Modular Architectural Boundaries in Tool Usage
 - **Backend Subsystem Awareness**: Tool operations touching the backend must respect the modular domain boundaries:

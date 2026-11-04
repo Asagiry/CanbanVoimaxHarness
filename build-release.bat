@@ -251,10 +251,10 @@ if errorlevel 1 (
 rem Auto-detect mbx compiler cache and Cargo shim
 if exist "%LOCALAPPDATA%\mbx\bin\cargo.exe" (
   set "PATH=%LOCALAPPDATA%\mbx\bin;%PATH%"
-  echo   notice: added mbx compiler cache shim (%LOCALAPPDATA%\mbx\bin) to PATH
+  echo   notice: added mbx compiler cache shim to PATH: %LOCALAPPDATA%\mbx\bin
 ) else if exist "%USERPROFILE%\AppData\Local\mbx\bin\cargo.exe" (
   set "PATH=%USERPROFILE%\AppData\Local\mbx\bin;%PATH%"
-  echo   notice: added mbx compiler cache shim (%USERPROFILE%\AppData\Local\mbx\bin) to PATH
+  echo   notice: added mbx compiler cache shim to PATH: %USERPROFILE%\AppData\Local\mbx\bin
 ) else if exist "C:\Users\Voimax\AppData\Local\mbx\bin\cargo.exe" (
   set "PATH=C:\Users\Voimax\AppData\Local\mbx\bin;%PATH%"
   echo   notice: added mbx compiler cache shim to PATH
@@ -526,6 +526,11 @@ if "%APP_EXE%"=="" (
 )
 
 copy /Y "%APP_EXE%" "%BIN_DIR%\" >nul
+if errorlevel 1 (
+  if exist "%BIN_DIR%\canban-voimax-harness.exe.old" del /F /Q "%BIN_DIR%\canban-voimax-harness.exe.old" >nul 2>&1
+  move /Y "%BIN_DIR%\canban-voimax-harness.exe" "%BIN_DIR%\canban-voimax-harness.exe.old" >nul 2>&1
+  copy /Y "%APP_EXE%" "%BIN_DIR%\" >nul
+)
 if errorlevel 1 (
   echo ERROR: failed to copy %APP_EXE% to %BIN_DIR% 1>&2
   goto error_exit

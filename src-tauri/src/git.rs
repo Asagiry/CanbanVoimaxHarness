@@ -354,6 +354,23 @@ pub async fn sync_cvh_runtime_state(repo_root: &Path, worktree_abs: &Path) {
     // Whole-directory copies (minus secrets).
     copy_dir_recursive_filtered(&src_cvh.join("hooks"), &dst_cvh.join("hooks")).await;
     copy_dir_recursive_filtered(&src_cvh.join("skills"), &dst_cvh.join("skills")).await;
+    copy_dir_recursive_filtered(&src_cvh.join("rules"), &dst_cvh.join("rules")).await;
+
+    // Agent role directories (agents/<role>/rules/*.md, persona.md, setting, etc.)
+    if let Ok(mut entries) = tokio::fs::read_dir(&src_cvh.join("agents")).await {
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            if let Ok(ft) = entry.file_type().await {
+                if ft.is_dir() {
+                    let dir_name = entry.file_name();
+                    copy_dir_recursive_filtered(
+                        &entry.path(),
+                        &dst_cvh.join("agents").join(dir_name),
+                    )
+                    .await;
+                }
+            }
+        }
+    }
     // Deliberately NOT synced: worktrees/, dialogs/, tasks/<id>/, spill/,
     // llm.json and other secrets.
 }
@@ -520,6 +537,15 @@ mod tests {
             "#!/bin/sh\necho nested",
         );
         write_file(&src_cvh.join("skills").join("skill.md"), "# skill");
+        write_file(&src_cvh.join("rules").join("runtime.md"), "# runtime rule live");
+        write_file(
+            &src_cvh
+                .join("agents")
+                .join("developer")
+                .join("rules")
+                .join("guidelines.md"),
+            "# dev role guideline",
+        );
         // Excluded live data.
         write_file(&src_cvh.join("worktrees").join("old").join("f.txt"), "wt");
         write_file(&src_cvh.join("dialogs").join("d.json"), "{}");
@@ -572,6 +598,11 @@ mod tests {
             "#!/bin/sh\necho nested"
         );
         assert_eq!(read_str(&dst_cvh.join("skills").join("skill.md")), "# skill");
+        assert_eq!(read_str(&dst_cvh.join("rules").join("runtime.md")), "# runtime rule live");
+        assert_eq!(
+            read_str(&dst_cvh.join("agents").join("developer").join("rules").join("guidelines.md")),
+            "# dev role guideline"
+        );
 
         // Wrong extensions are not synced.
         assert!(!dst_cvh.join("agents").join("notes.txt").exists());

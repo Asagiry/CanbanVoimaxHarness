@@ -12,16 +12,18 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 | What you need to build / modify | Exact File Path | Key Invariants & Ceilings |
 | :--- | :--- | :--- |
 | **Domain Nominal Types & IDs** | `src-tauri/src/domain/ids.rs` | `TaskId`, `StageId`, `BoardId`. Zero raw strings. |
-| **Task State Machine & Transitions** | `src-tauri/src/domain/state.rs` | `TaskState` enum. Valid transitions only. |
+| **Task State Machine & Transitions** | `src-tauri/src/domain/state.rs` | `TaskState` ADT (`Idle`, `Running`, `WaitingSubtask`, `WaitingSubagent`, `Done`). |
 | **Database Pool & Migrations** | `src-tauri/src/db/pool.rs` | R2D2 pool, WAL mode, foreign keys, 5s timeout. |
 | **Task SQLite CRUD & Monotonic IDs** | `src-tauri/src/db/task_repo.rs` | Monotonic ID allocation, subtask cascade. |
 | **Dialogue Items & Streaming Chunks** | `src-tauri/src/db/dialog_repo.rs` | Atomic upsert, tool JSON persistence. |
 | **Token Usage & TPS Telemetry Repo** | `src-tauri/src/db/telemetry_repo.rs` | Aggregated tokens, non-decaying TPS metrics. |
 | **Pipeline & Board Data Models** | `src-tauri/src/config/models.rs` | `BoardDef`, `PipelineConfig`, embedded rules. |
-| **Two-Level Tool Policy Matrix** | `src-tauri/src/config/tool_policy.rs` | Strict AND-semantics: global && stage override. |
+| **Tool Policy Matrix & Authorization** | `src-tauri/src/config/tool_policy.rs` | Single Authoritative Layer: stage_overrides take precedence over global. |
 | **Workspace Root Discovery** | `src-tauri/src/config/discovery.rs` | Multi-tier root discovery, `%LOCALAPPDATA%`. |
 | **Scaffolding & Auto-Gitignore** | `src-tauri/src/config/scaffold.rs` | Automatic scaffold, auto-gitignore policies. |
 | **Atomic File I/O** | `src-tauri/src/config/io.rs` | `atomic_write_file`, JSON load/save. |
+| **Central Application State Container** | `src-tauri/src/commands/state.rs` | `AppState`, connection pool, workspace root, active session registry. |
+| **Task IPC Command Dispatcher** | `src-tauri/src/commands/tasks.rs` | IPC invoke gateway routing for tasks and agent lifecycle. |
 | **Task Stage Transition Pipeline** | `src-tauri/src/commands/tasks/transitions.rs` | `TaskTransitionPipeline`, hooks, gatekeeper sensors. |
 | **Task Lifecycle (Create, Delete, Subtask)**| `src-tauri/src/commands/tasks/lifecycle.rs` | Backend-authoritative card lifecycle, auto-unlock. |
 | **Agent Runner Trigger & Steer** | `src-tauri/src/commands/tasks/runner.rs` | `run_agent`, `steer_agent`, active task registry. |
@@ -33,8 +35,9 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 | **Git Worktree & Branch IPC** | `src-tauri/src/commands/git.rs` | Worktree lifecycle, branch diffs, commit queries. |
 | **LLM Settings & Test IPC** | `src-tauri/src/commands/llm.rs` | Endpoint config, model verification, test calls. |
 | **Project Workspace Switching IPC** | `src-tauri/src/commands/projects.rs` | Workspace root switching, recent projects list. |
-| **Tool Policy IPC** | `src-tauri/src/commands/tools.rs` | Tool policy inspection, two-level matrix updates. |
+| **Tool Policy IPC** | `src-tauri/src/commands/tools.rs` | Tool policy inspection, stage overrides & matrix updates. |
 | **Desktop Notifications & Windows Fallback** | `src-tauri/src/commands/notifications.rs` | Native WinRT toasts with PowerShell fallback, AUMID registration. |
+| **Subagent & Session Registry** | `src-tauri/src/agent/session_registry.rs` | Active & background subagents, completion channels, lifecycle. |
 | **Generic ReAct Engine Loop** | `src-tauri/src/agent/react_engine.rs` | `ReActEngine<Driver>`, unified streaming. |
 | **State-Preserving Context Compactor**| `src-tauri/src/agent/compactor.rs` | `ToolCallSummaryExtractor` (CC=1), 100% ceiling. |
 | **Unclosed Tool Call Sanitizer** | `src-tauri/src/agent/sanitizer.rs` | Tag stripping, unclosed JSON repairs. |
@@ -46,14 +49,18 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 | **Pipeline Navigation Tools** | `src-tauri/src/agent/tools/pipeline.rs` | `advance_task`, `reject_task`, relay handoff. |
 | **Planning & Checklist Tools** | `src-tauri/src/agent/tools/planning.rs` | `todo_write`, `question` (ask_user). |
 | **Modular Rule Loader Tool** | `src-tauri/src/agent/tools/rules.rs` | `load_rule` (JIT dynamic rule loader). |
-| **Subagent Hierarchy Tools** | `src-tauri/src/agent/tools/subagent.rs` | `subagent`, `subagent_bg`, `collect_subagent`. |
-| **Task Card Tools (Level 0 Only)** | `src-tauri/src/agent/tools/tasks.rs` | `create_task`, `create_tasks`, `complete_task`. |
+| **Subagent Hierarchy Tools** | `src-tauri/src/agent/tools/subagent.rs` | `subagent`, `subagent_bg`, `collect_subagent`, `subagent_list`. |
+| **Task Card & Query Tools** | `src-tauri/src/agent/tools/tasks.rs` | `create_task`, `create_tasks`, `complete_task`, `list_tasks`, `get_task_history`. |
 | **Web Research Tools** | `src-tauri/src/agent/tools/web.rs` | `web_search`, `web_fetch`. |
 | **Git Worktree Manager** | `src-tauri/src/git.rs` | Worktree isolation, prune, branch teardown. |
 | **Lifecycle Hooks Runner** | `src-tauri/src/hooks.rs` | Transition scripts, process tree kill on Windows. |
 | **Universal LLM Client & SSE Stream** | `src-tauri/src/llm/client.rs` | OpenAI / Gemini streaming, thought extraction. |
 | **LLM Configuration & Models** | `src-tauri/src/llm/models.rs` | Model overrides, endpoints, temperature. |
-| **Tauri IPC Command Registration** | `src-tauri/src/lib.rs` | Plugin builder, invoke handlers, AppState. |
+| **Custom SQLite UDFs** | `src-tauri/src/udf.rs` | Custom regex and search functions for SQLite connection. |
+| **Structured Logger** | `src-tauri/src/logger.rs` | Rotating file & terminal logging configuration. |
+| **Error Hierarchy & IPC Conversions** | `src-tauri/src/error.rs` | Domain errors and Tauri IPC error formatting. |
+| **Tauri Plugin & IPC Registration** | `src-tauri/src/lib.rs` | Tauri invoke handler wiring and application setup. |
+| **Desktop Executable Entrypoint** | `src-tauri/src/main.rs` | Windows subsystem bootstrap, panic hook, crash telemetry. |
 
 ---
 
@@ -67,15 +74,17 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 
 ### 2.2 Configuration & Scaffolding Subsystem (`src-tauri/src/config/`)
 - **`models.rs`**: Canonical data contracts (`BoardDef`, `BoardsConfig`, `PipelineConfig`, `ColumnDef`, `AgentSettings`). Defines system directory resolvers (`agent_rules_dir`, `global_rules_dir`, `tool_policy_path`).
-- **`tool_policy.rs`**: Two-level tool authorization engine. Enforces strict AND-semantics: `effective(tool, stage) = global_enabled[tool] && stage_override[stage][tool]`. Zero-trust stripping purges disabled tools from LLM schemas.
+- **`tool_policy.rs`**: Two-level tool authorization engine with Single Authoritative Layer: `stage_overrides` dictation takes precedence over `global_enabled` defaults (`effective(tool, stage) = stage_override[stage][tool] ?? global_enabled[tool] ?? true`). Zero-trust stripping purges disabled tools from LLM schemas.
 - **`discovery.rs`**: Four-tier workspace root discovery traversing ancestors, inspecting `.cvh` / `.git`, and persisting active projects to `%LOCALAPPDATA%/com.voimax.cvh/active_project.txt`.
 - **`scaffold.rs`**: Initial project initialization (`ensure_cvh_scaffold`, `ensure_cvh_dev_scaffold`). Enforces auto-gitignore entries (`.cvh/llm.json`, `.cvh/worktrees/`) and seeds initial 3-column boards.
 - **`io.rs`**: Atomic disk operations. `atomic_write_file` writes via transient temp files and renames to prevent partial corruption.
 
 ### 2.3 Task Pipeline & Command Subsystem (`src-tauri/src/commands/`)
-- **`tasks/transitions.rs`**: Modular `TaskTransitionPipeline`. Executes stage movement, triggers `on_leave` and `on_enter` scripts, runs `gatekeeperSensor` commands in isolated worktrees, and routes on verdicts (`routes.on_approved`, `routes.on_changes_requested`).
+- **`state.rs`**: Central application state container (`AppState`) managing database pool, workspace discovery root, and active session registries.
+- **`tasks.rs`**: Top-level IPC command gateway routing commands (`load_tasks`, `create_task`, `advance_task`, `reject_task`, etc.) to modular pipelines.
+- **`tasks/transitions.rs`**: Modular `TaskTransitionPipeline`. Executes stage movement, triggers `on_leave` and `on_enter` scripts, runs `gatekeeperSensor` commands in isolated worktrees, and transitions on verdicts (`APPROVED`, `APPROVED_WITH_CAVEATS`, `CHANGES_REQUESTED`).
 - **`tasks/lifecycle.rs`**: Task creation and destruction commands. Enforces monotonic task numbers, parent-subtask waiting locks, and symmetric worktree teardown.
-- **`tasks/runner.rs`**: Agent execution initiation (`run_agent`, `run_agent_loop`). Resolves active model hierarchy, prepares primed system messages, and tracks active agent runs.
+- **`tasks/runner.rs`**: Agent execution initiation (`run_agent`, `steer_agent`). Resolves active model hierarchy, prepares primed system messages, and tracks active agent runs.
 - **`tasks/storage.rs`**: Task serialization and synchronization with disk ledgers and frontend subscribers via `tasks:updated`.
 - **`tasks/healing.rs`**: Autonomous self-healing (`heal_task_board_and_column`, `heal_tasks`). Rescues orphan tasks assigned to non-existent boards or columns without failing.
 - **`cortex.rs`**: File CRUD for personas, modular rules, and hooks.
@@ -89,14 +98,33 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 
 ### 2.4 Domain Layer (`src-tauri/src/domain/`)
 - **`ids.rs`**: Strongly typed nominal branded types: `TaskId`, `StageId`, `BoardId`. Prevents primitive obsession and accidental string interchange.
-- **`state.rs`**: `TaskState` state machine (`Backlog`, `InProgress`, `Review`, `Done`). Rejects illegal state jumps at compile and runtime.
+- **`state.rs`**: `TaskState` algebraic data type (ADT) state machine (`Idle`, `Running`, `WaitingSubtask`, `WaitingSubagent`, `Done`). Rejects illegal state jumps at compile and runtime.
 
 ### 2.5 Agent Execution Engine (`src-tauri/src/agent/` & `agent.rs`)
 - **`agent.rs`**: Core agent ReAct loop (`run_agent_loop`), in-process subagents (`execute_subagent`), Turn 1 runtime contract priming (`.cvh/rules/runtime.md`), batch tool execution fail-fast logic (`should_abort_tool_batch`), and system prompt assembly (`compile_primed_system_prompt_with_tools`).
 - **`react_engine.rs`**: Generic `ReActEngine<Driver>` implementing multi-turn reasoning loops, event streaming (`AgentEvent`), and tool invocation dispatch.
+- **`session_registry.rs`**: Concurrency-safe registry of active and background child subagent sessions (`subagent_bg`), managing asynchronous channels and cancellation tokens.
 - **`compactor.rs`**: `ToolCallSummaryExtractor` (CC=1) extracting head/tail summaries of large tool outputs without nested branching. Enforces 100% context capacity threshold.
 - **`sanitizer.rs`**: Cleans malformed LLM responses, stripping unclosed thinking tags and repairing incomplete tool invocation markers.
-- **`tools/`**: Domain-partitioned tool executors conforming to command pattern: `file_ops`, `command`, `pipeline`, `planning`, `rules`, `subagent`, `tasks`, `web`.
+- **`telemetry.rs`**: Non-decaying TPS calculation, TTFT split, and generation token metrics.
+- **`text_match.rs`**: Resilient 5-tier fuzzy text matcher for robust search-and-replace tool operations.
+- **`tool_schemas.rs`**: Tool metadata, parameter schemas, and dynamic rule enumeration for LLM tool calling.
+- **`tools/`**: Domain-partitioned tool executors conforming to command pattern: `file_ops`, `command`, `pipeline`, `planning`, `rules`, `subagent` (`subagent`, `subagent_bg`, `collect_subagent`, `subagent_list`), `tasks` (`create_task`, `create_tasks`, `complete_task`, `list_tasks`, `get_task_history`), `web`.
+
+### 2.6 Entrypoint, UDF, Logging & Error Subsystem
+- **`main.rs`**: Application entrypoint initializing the Windows GUI subsystem, setting panic hooks, configuring crash telemetry, and launching the Tauri runtime.
+- **`lib.rs`**: Core library entrypoint registering Tauri plugins, state management, and wiring IPC handlers via `tauri::generate_handler!`.
+- **`udf.rs`**: Custom SQLite User-Defined Functions (e.g., regex matching and fuzzy text search) registered into SQLite connections upon pool initialization.
+- **`logger.rs`**: Desktop logging configuration using structured rotation into `.cvh/logs/` and stdout streaming with configurable log levels.
+- **`error.rs`**: Centralized domain error hierarchy (`CvhError`) mapping internal errors into serialized Tauri IPC error responses.
+
+### 2.7 Backend Test Shield (275 Automated Tests)
+Comprehensive test suites covering domain types, SQLite operations, config parsers, agent loops, and command dispatch:
+- `domain/tests.rs`, `domain/state_tests.rs` (nominal types, state machine transitions).
+- `db/tests.rs` (pool, task repository, dialog repository, telemetry aggregation).
+- `config/tests.rs` (models, discovery, auto-scaffold, tool policy matrix).
+- `agent/tests/*` (`compactor_tests.rs`, `engine_tests.rs`, `session_tests.rs`, `telemetry_tests.rs`, `tools_cmd_tests.rs`, `tools_fs_tests.rs`, `tools_pipeline_tests.rs`, `tools_policy_tests.rs`).
+- `commands/tests/*` (`boards_tests.rs`, `cortex_tests.rs`, `dialogs_tests.rs`, `git_tests.rs`, `tasks_id_tests.rs`, `tasks_lifecycle_tests.rs`, `tasks_runner_tests.rs`, `tasks_subtasks_tests.rs`).
 
 ---
 

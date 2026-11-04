@@ -67,6 +67,8 @@ pub async fn emit_file_change_events(ctx: &ToolContext<'_>, rel_path: &str) {
         } else if norm.contains(".cvh/agents") || norm.contains("/agents/") {
             let list = crate::commands::list_agent_personas_in(ctx.repo_root).await;
             let _ = app.emit("agent:personas_updated", &list);
+        } else if norm.contains(".cvh/rules") || norm.contains("/rules/") {
+            let _ = app.emit("cortex:rules_updated", serde_json::json!({ "path": norm }));
         }
     }
 }
@@ -241,7 +243,18 @@ pub async fn execute_read_file(ctx: &ToolContext<'_>, args: &serde_json::Value) 
         .and_then(|v| v.as_str())
         .context("Missing required parameter 'file_path'")?;
 
-    let target = resolve_safe_path(ctx.worktree_dir, rel_path)?;
+    let mut target = resolve_safe_path(ctx.worktree_dir, rel_path)?;
+    if !target.exists() && ctx.worktree_dir != ctx.repo_root {
+        // Fallback for shared .cvh/ assets (e.g. .cvh/spill/ logs or shared .cvh/ configs)
+        let norm = rel_path.trim_start_matches(['/', '\\']).replace('\\', "/");
+        if norm.starts_with(".cvh/") {
+            if let Ok(repo_target) = resolve_safe_path(ctx.repo_root, rel_path) {
+                if repo_target.exists() {
+                    target = repo_target;
+                }
+            }
+        }
+    }
     if !target.exists() {
         bail!("File does not exist: {:?}", rel_path);
     }
@@ -299,6 +312,11 @@ pub async fn execute_write_file(ctx: &ToolContext<'_>, args: &serde_json::Value)
 
     let target = resolve_safe_path(ctx.worktree_dir, rel_path)?;
     crate::config::atomic_write_file(&target, content).await?;
+    if ctx.worktree_dir != ctx.repo_root && crate::commands::git::is_cvh_config_path(rel_path) {
+        if let Ok(repo_target) = resolve_safe_path(ctx.repo_root, rel_path) {
+            let _ = crate::config::atomic_write_file(&repo_target, content).await;
+        }
+    }
     emit_file_change_events(ctx, rel_path).await;
     Ok(format!("Successfully wrote {} bytes to {:?}", content.len(), rel_path))
 }
@@ -338,6 +356,11 @@ pub async fn execute_edit_file(ctx: &ToolContext<'_>, args: &serde_json::Value) 
     };
 
     crate::config::atomic_write_file(&target, &updated).await?;
+    if ctx.worktree_dir != ctx.repo_root && crate::commands::git::is_cvh_config_path(rel_path) {
+        if let Ok(repo_target) = resolve_safe_path(ctx.repo_root, rel_path) {
+            let _ = crate::config::atomic_write_file(&repo_target, &updated).await;
+        }
+    }
     emit_file_change_events(ctx, rel_path).await;
     Ok(format!("Successfully updated {:?}", rel_path))
 }

@@ -55,6 +55,7 @@
 | `CVH_WORKTREE_PATH` | Абсолютный путь к рабочей директории ворктри | `C:\Repo\worktrees\CVH-042` |
 | `CVH_BRANCH` | Название целевой feature-ветки в Git | `feat/CVH-042` |
 | `CVH_STAGE_ID` | Идентификатор текущей целевой колонки | `dev`, `review`, `ready` |
+| `CVH_BOARD_ID` | Идентификатор активной Kanban-доски | `development`, `modeler` |
 | `CVH_VERDICT` | Вердикт аудита (если задача выходит из ревью) | `APPROVED`, `CHANGES_REQUESTED` |
 
 ---
@@ -85,6 +86,9 @@ if not exist "worktrees\%CVH_TASK_ID%" (
 
 if exist "worktrees\%CVH_TASK_ID%" (
     echo [CVH Hook] Worktree successfully verified at worktrees\%CVH_TASK_ID%
+    REM Протокол передачи ворктри в ядро харнесса (stdout):
+    echo CVH_WORKTREE=worktrees\%CVH_TASK_ID%
+    echo CVH_BRANCH=feat/%CVH_TASK_ID%
     exit /b 0
 ) else (
     echo [CVH Hook] ERROR: Failed to scaffold worktree for %CVH_TASK_ID% >&2
@@ -115,6 +119,9 @@ if (-not (Test-Path $wtPath)) {
 
 if (Test-Path $wtPath) {
     Write-Host "[CVH Hook] Worktree ready at $wtPath."
+    # Протокол передачи ворктри в ядро харнесса (stdout):
+    Write-Output "CVH_WORKTREE=$wtPath"
+    Write-Output "CVH_BRANCH=$branch"
     exit 0
 } else {
     Write-Error "[CVH Hook] Failed to create worktree at $wtPath!"

@@ -36,9 +36,9 @@ Adheres to Clean Architecture and Uncle Bob's Domain-Driven Design (DDD) princip
   - Boundary input MUST be validated and normalized via factories: `toTaskId(raw)`, `toStageId(raw)`, `toBoardId(raw)`.
   - Type guards `isTaskId(v)`, `isStageId(v)`, `isBoardId(v)` narrow untrusted data.
 - **State Machine ADT (`TaskState`)**:
-  - Discriminated union: `{ status: 'idle' } | { status: 'running'; model?: string } | { status: 'waiting_subtask'; waitingForSubtaskId: string } | { status: 'done'; verdict?: string }`.
+  - Discriminated union: `{ status: 'idle' } | { status: 'running'; model?: string } | { status: 'waiting_subtask'; waitingForSubtaskId: string } | { status: 'waiting_subagent'; subagentId?: string } | { status: 'done'; verdict?: string }`.
   - Makes illegal states unrepresentable (e.g. waiting for a subtask without a subtask ID).
-  - Use constructors `TaskStates.idle()`, `TaskStates.running(model)`, `TaskStates.waitingSubtask(id)`, `TaskStates.done(verdict)`.
+  - Use constructors `TaskStates.idle()`, `TaskStates.running(model)`, `TaskStates.waitingSubtask(id)`, `TaskStates.waitingSubagent(subagentId)`, `TaskStates.done(verdict)`.
 - **Stage Predicates**: Use canonical predicates `isTerminalStage(col)` and `isIntakeStage(col)` rather than hardcoding string checks.
 
 ---

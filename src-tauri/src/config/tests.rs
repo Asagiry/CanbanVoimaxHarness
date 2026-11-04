@@ -496,7 +496,6 @@ use std::path::{Path, PathBuf};
                     "gatekeeperSensor": null,
                     "allowedTools": null,
                     "hooks": {},
-                    "routes": null,
                     "autoRun": null,
                     "terminal": null
                 }

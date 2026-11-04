@@ -8,7 +8,7 @@
 [![Tauri v2](https://img.shields.io/badge/Tauri-v2.0-24C8DB?style=flat-square&logo=tauri&logoColor=white)](https://v2.tauri.app/)
 [![React 19](https://img.shields.io/badge/React-19.0-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
 [![Clean Architecture](https://img.shields.io/badge/Clean%20Architecture-9.7%2F10-blueviolet?style=flat-square)](#6-clean-architecture-9710--type-safe-domain-layer)
-[![NASA Test Shield](https://img.shields.io/badge/NASA%20Test%20Shield-383%20PASS%20(100%25)-brightgreen?style=flat-square)](#-nasa-ground-truth-verification-shield-383-automated-tests)
+[![NASA Test Shield](https://img.shields.io/badge/NASA%20Test%20Shield-572%20PASS%20(100%25)-brightgreen?style=flat-square)](#-nasa-ground-truth-verification-shield-572-automated-tests)
 [![SQLite WAL](https://img.shields.io/badge/SQLite-WAL%20Mode-003B57?style=flat-square&logo=sqlite&logoColor=white)](https://sqlite.org/)
 [![RAM Footprint](https://img.shields.io/badge/RAM_Footprint-~40MB-emerald?style=flat-square)](#-key-architectural-highlights)
 [![Zero-Amnesia Memory](https://img.shields.io/badge/Memory-Zero--Amnesia%20Relay-orange?style=flat-square)](#2-relay-handoff-memory-zero-amnesia-priming)
@@ -132,19 +132,19 @@ Engineered to strict Clean Architecture and Single-Responsibility principles (Un
 - **R2D2 SQLite WAL Connection Pooling**: Multi-threaded connection pooling with WAL mode and specialized repository pattern (`pool.rs`, `task_repo.rs`, `dialog_repo.rs`, `telemetry_repo.rs`), eliminating database lock contention.
 - **Decoupled ReActEngine<Driver>**: Generic agent execution engine (`react_engine.rs`) parameterized by `AgentSessionDriver`, sharing SSE streaming and telemetry logic between root tasks and child subagents with zero duplication.
 - **Type-Safe Tauri Event Gateway**: All IPC event communication routes through `tauriEventGateway.ts`, eliminating unverified `listen<any>` calls.
-- **Modular Frontend Slices**: Monolithic stores and components decomposed into single-responsibility slices (`stores/board/`, `stores/drawer/`, `stores/cortex/`, `KanbanCard.tsx` reduced to 239 lines).
+- **Modular Frontend Slices**: Monolithic stores and components decomposed into single-responsibility slices (`stores/board/`, `stores/drawer/`, `stores/cortex/`, `KanbanCard.tsx` reduced to ~256 lines).
 
 ---
 
 ## 🛡️ Zero-Waste Token Engineering & Security Matrix
 
 ### Two-Tier Zero-Trust Tool Policy Matrix
-Security is enforced with ironclad **AND-semantics**:
+Security is enforced with ironclad Single Authoritative Layer resolution:
 ```text
-effective(tool, stage) = global_enabled[tool] && stage_override[stage][tool]
+effective(tool, stage) = stage_override[stage][tool] ?? global_enabled[tool] ?? true
 ```
-- **Level A (Global Switches)**: Defined in `.cvh/settings/tool-policy.json`.
-- **Level B (Stage Overrides)**: Enforced per pipeline column (e.g. Code Review stage disables code-mutation tools).
+- **Level A (Global Switches)**: Defined in `.cvh/settings/tool-policy.json` as global defaults.
+- **Level B (Stage Overrides)**: Single Authoritative Layer per pipeline column (e.g. Code Review stage disables code-mutation tools; explicit stage configuration takes precedence).
 - **Direct JSON Schema Editor (`toolCustomSchemas`)**: The Global Registry in `.cvh/settings/tool-policy.json` supports direct customization of tool schemas (`toolCustomSchemas`). Architects and developers can tailor parameter descriptions, add domain-specific constraints, or specialize instructions without modifying core Rust engine code.
 - **English-Only Schemas & BPE Token Compression**: All tool names, descriptions, and parameter definitions sent to LLMs are authoritatively maintained in English. Byte-Pair Encoding (BPE) tokenizers (used across Claude, Gemini, DeepSeek, and OpenAI) process English tokens with **~70% denser compression** than Cyrillic UTF-8 multi-byte sequences, saving thousands of prompt tokens per step and driving prompt cache hit rates above 90%.
 - **Zero-Trust Request Schema Stripping**: Disabled tools are completely purged from the JSON tool schema sent to the LLM. This saves **~2,400+ prompt tokens per inference step** and completely eliminates tool hallucination vectors.
@@ -167,9 +167,13 @@ CVH equips agents with an industrial-grade tool suite compliant with SWE-bench s
 | **Subagent Hierarchy** | `subagent` | Synchronous in-process child delegation returning structured report. |
 | | `subagent_bg` | Asynchronous background delegation returning `subagent_id`. |
 | | `collect_subagent` | Reliable zero-polling collector with 3-tier report resolution (⚡ СИНХР / 🗂️ ФОН). |
+| | `subagent_list` | Compact listing of active and completed child subagents with status filters. |
 | **Knowledge & Dynamic Rules** | `load_rule` | JIT on-demand loading of modular architectural standards and guidelines by topic. |
 | **Task Registry & Chronology** | `list_tasks` | Compact registry inspection of Kanban board tasks filtered by stage or query from SQLite WAL. |
 | | `get_task_history` | Step-by-step task execution chronology (requirements, tool calls, exit codes, verdicts) for audits. |
+| | `create_task` | Create a single task card directly in the Kanban pipeline. |
+| | `create_tasks` | Batch create multiple task cards across pipeline stages. |
+| | `complete_task` | Move task to terminal done stage and record final outcome. |
 | **Human-in-the-Loop** | `question` / `ask_user` | Interactive query prompt with option choices, suspending execution. |
 | | `todo_write` | Live tactical checklist (`todos: [{content, status}]`). |
 | **Filesystem & Shell** | `read_file` | UTF-8 file inspection with line offsets and limits. |
@@ -216,7 +220,7 @@ pnpm tauri dev
 
 ### Option B: Pre-Compiled Desktop Installer
 Download the latest verified Windows release installer directly:
-- **[Download Latest Windows Installer (Release/Windows/installer)](Release/Windows/installer)**
+- **[Download Latest Windows Release](https://github.com/Asagiry/CanbanVoimaxHarness/releases)**
 - Instant launch, native OS integration, pre-bundled Rust core (~40MB RAM).
 
 ### Option C: Web Development Sandbox
@@ -228,20 +232,20 @@ pnpm run dev
 
 ---
 
-## 🛡️ NASA Ground Truth Verification Shield (383 Automated Tests, 100% PASS)
+## 🛡️ NASA Ground Truth Verification Shield (572 Automated Tests, 100% PASS)
 
-CanbanVoimaxHarness enforces zero-regression engineering through an unyielding 383-test automated verification shield:
+CanbanVoimaxHarness enforces zero-regression engineering through an unyielding 572-test automated verification shield:
 
-- **Frontend Test Shield (Vitest v5.0.5)**: **139 automated tests** across 8 test suites running in ~2.7s with 100% PASS (0 failures, 0 flaky):
-  - Branded nominal types & domain invariants (`src/types/domain.test.ts`)
-  - Board store reactive slices, transitions, and auto-unlock (`src/stores/board/boardStore.test.ts`)
-  - Drawer streaming slices, thought parsers, and telemetry aggregation (`src/stores/drawer/drawerStore.test.ts`)
-  - Cortex persona and rules management slices (`src/stores/cortex/cortexStore.test.ts`)
-  - Type-Safe Tauri Event Gateway payload verification (`src/services/tauriEventGateway.test.ts`)
-  - Markdown AST extraction, token counters, and code blocks (`src/lib/markdown/parser.test.ts`)
-  - KanbanCard memoization, comparators, and tactile badges (`src/components/card/KanbanCard.test.tsx`)
-  - Localization dictionary completeness and fallbacks (`src/i18n/i18n.test.ts`)
-- **Backend Test Shield (Cargo Test)**: **244 automated tests** across all subsystems running in ~4.8s with 100% PASS (0 failures, 0 flaky):
+- **Frontend Test Shield (Vitest v5.0.5)**: **297 automated tests** across 24 test suites running in ~6.0s with 100% PASS (0 failures, 0 flaky):
+  - Branded nominal types & domain invariants (`src/types/__tests__/domain.test.ts`)
+  - Board store slices, normalizers & drag-and-drop (`src/stores/__tests__/tasksCrudSlice.test.ts`, `src/stores/board/__tests__/taskNormalizer.test.ts`)
+  - Drawer streaming slices, thought parsers, and console drawer (`src/stores/__tests__/drawerMetaSlice.test.ts`, `src/components/drawer/__tests__/AgentConsoleDrawer.test.tsx`)
+  - Cortex persona and rules management slices (`src/stores/__tests__/cortexStore.test.ts`)
+  - Dialog persistence & streaming subagent synchronization (`src/stores/__tests__/dialogPersistence.test.ts`, `src/stores/__tests__/subagentsTimestamp.test.ts`)
+  - Markdown AST extraction, token counters, and code blocks (`src/lib/markdown/__tests__/parseMarkdownTokens.test.ts`)
+  - KanbanCard memoization, comparators, and tactile badges (`src/components/card/__tests__/cardComponents.test.ts`)
+  - Localization dictionary completeness and fallbacks (`src/i18n/__tests__/i18n.test.ts`)
+- **Backend Test Shield (Cargo Test)**: **275 automated tests** across all subsystems (150 sync + 125 async tokio) running in ~4.8s with 100% PASS (0 failures, 0 flaky):
   - Domain nominal branded IDs & state machine (`domain/ids.rs`, `domain/state.rs`)
   - R2D2 SQLite connection pooling, migrations, and repositories (`db/pool.rs`, `db/task_repo.rs`, `db/dialog_repo.rs`, `db/telemetry_repo.rs`)
   - Config discovery, models, tool policy, and auto-gitignore scaffold (`config/`)
@@ -252,9 +256,9 @@ CanbanVoimaxHarness enforces zero-regression engineering through an unyielding 3
   # Execute full parallel ground-truth sensors:
   pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings && cargo check
   
-  # Run complete 383-test shield:
-  pnpm test      # 139 Vitest tests (~2.7s)
-  cargo test     # 244 Rust core tests (~4.8s)
+  # Run complete 572-test shield:
+  pnpm test      # 297 Vitest tests across 24 suites (~6.0s)
+  cargo test     # 275 Rust core tests (~4.8s)
   ```
 
 ---
@@ -297,6 +301,9 @@ CanbanVoimaxHarness/
 │   ├── src/
 │   │   ├── main.rs            # Desktop entrypoint & crash handler
 │   │   ├── lib.rs             # Tauri plugin & IPC handler registration
+│   │   ├── error.rs           # Domain error hierarchy & Tauri IPC conversions
+│   │   ├── logger.rs          # Structured file and terminal logging
+│   │   ├── udf.rs             # Custom SQLite user-defined functions
 │   │   ├── domain/            # Nominal Branded Types & Core Business Invariants
 │   │   │   ├── ids.rs         # TaskId, StageId, BoardId branded types
 │   │   │   └── state.rs       # TaskState state-machine & valid transitions
@@ -316,6 +323,7 @@ CanbanVoimaxHarness/
 │   │   ├── agent.rs           # Agent lifecycle, priming & custom tool executor
 │   │   ├── agent/             # Modular Agent Execution Subsystems
 │   │   │   ├── react_engine.rs  # Generic ReActEngine<Driver> loop & stream consumer
+│   │   │   ├── session_registry.rs # Active and background subagent session registry
 │   │   │   ├── compactor.rs     # Typed ToolCallSummaryExtractor (CC=1)
 │   │   │   ├── sanitizer.rs     # Unclosed tool call sanitization
 │   │   │   ├── telemetry.rs     # Non-decaying TPS/RPM telemetry
@@ -323,13 +331,17 @@ CanbanVoimaxHarness/
 │   │   │   ├── tool_schemas.rs  # LLM tool definitions & JSON schemas
 │   │   │   └── tools/           # Modular tool execution implementations
 │   │   ├── commands/          # Tauri IPC Command Handlers
+│   │   │   ├── state.rs       # Central application state container (AppState)
 │   │   │   ├── tasks.rs       # Task command routing
 │   │   │   ├── tasks/         # Modular task pipelines (transitions, lifecycle, healing)
 │   │   │   ├── boards.rs      # Board management commands
 │   │   │   ├── dialogs.rs     # Dialogue history & streaming commands
 │   │   │   ├── cortex.rs      # Persona & rules editor commands
 │   │   │   ├── git.rs         # Worktree & diff commands
-│   │   │   └── llm.rs         # LLM configuration commands
+│   │   │   ├── llm.rs         # LLM configuration commands
+│   │   │   ├── notifications.rs # Native notification commands
+│   │   │   ├── projects.rs    # Workspace and project management commands
+│   │   │   └── tools.rs       # Tool policy & execution commands
 │   │   └── llm/               # Universal SSE streaming client & model registry
 │   ├── Cargo.toml             # Rust dependencies (Tauri v2, Tokio, Rusqlite, R2D2)
 │   └── tauri.conf.json        # Tauri v2 bundle and window configuration
@@ -337,14 +349,14 @@ CanbanVoimaxHarness/
 └── src/                       # React 19 Tactical Frontend (Modular Architecture)
     ├── components/
     │   ├── board/             # Kanban board, BoardTabsHeader & column interactions
-    │   ├── card/              # Modular KanbanCard (239 lines), badges & comparators
+    │   ├── card/              # Modular KanbanCard (~256 lines), badges & comparators
     │   ├── drawer/            # AgentConsoleDrawer, diff/ (ImageDiffViewer), stream/
     │   ├── cortex/            # Cortex Explorer, Persona & Rule visual editors
     │   └── settings/          # Pipeline, tool policy & LLM config modals
-    ├── stores/                # Zustand reactive stores decomposed into modular slices
+    ├── stores/                # Zustand reactive stores (boardStore, drawerStore, cortexStore, settingsStore, toolPolicyStore, slices/)
     │   ├── board/             # Board store slices, normalizers & helpers
     │   ├── drawer/            # Drawer store slices (stream, activity, subagents)
-    │   └── cortex/            # Cortex store slices (personas, rules, files)
+    │   └── cortex/            # Cortex store slices (cortexStoreSlice, helpers, listeners)
     ├── services/              # Pure decoupled services
     │   └── tauriEventGateway.ts # Strongly typed IPC event gateway (zero listen<any>)
     ├── types/

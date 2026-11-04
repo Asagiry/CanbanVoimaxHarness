@@ -20,7 +20,7 @@ The Kanban board is a dynamic control plane adaptable to arbitrary project workf
 The ONLY structural invariants across all boards:
 1. **Intake Anchor**: First column (index 0, e.g. `backlog`), `persona: null`, `terminal: null`. Tasks wait here until selected for work.
 2. **Delivery Anchor**: Final column (e.g. `ready`), `persona: null`, `terminal: true`. Tasks entering this column are finalized deliverables.
-3. **Intermediate Execution Stages**: Completely arbitrary and defined by project requirements (any personas, models, tools, gatekeeper sensors, and routing hooks such as `routes.on_approved` / `routes.on_changes_requested`).
+3. **Intermediate Execution Stages**: Completely arbitrary and defined by project requirements (any personas, models, tools, gatekeeper sensors, and lifecycle hooks).
 
 Boards are configured in `.cvh/boards.json` and mirrored in `.cvh/pipeline.json`.
 
