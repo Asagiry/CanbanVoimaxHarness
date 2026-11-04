@@ -84,8 +84,9 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
         if (selectedPersona) {
           const matched = personas.find((p) => p.role === selectedPersona);
           const curStages = created.stages ?? created.columns ?? [];
+          const targetCol = curStages.find((c) => !c.isIntake && !c.terminal && c.id !== 'backlog' && c.id !== 'ready') ?? curStages[1];
           const updatedColumns = curStages.map((c) =>
-            c.id === 'dev'
+            c.id === targetCol?.id
               ? { ...c, persona: selectedPersona, icon: matched?.icon || c.icon }
               : c,
           );

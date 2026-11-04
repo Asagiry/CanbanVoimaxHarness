@@ -39,17 +39,24 @@ export function formatSubagentDisplayTitle(title?: string | null, lang?: Languag
   return title;
 }
 
-function getSubagentRoleLabel(role: string, isRu: boolean): string {
-  const r = role.trim().toLowerCase();
-  if (r === 'architect') return isRu ? 'Архитектор' : 'Architect';
-  if (r === 'developer' || r === 'dev') return isRu ? 'Разработчик' : 'Developer';
-  if (r === 'reviewer' || r === 'review') return isRu ? 'Ревьюер' : 'Reviewer';
-  if (r === 'scout') return isRu ? 'Скаут' : 'Scout';
-  if (r === 'explorer') return isRu ? 'Исследователь' : 'Explorer';
-  if (r === 'subtask') return isRu ? 'Подзадача' : 'Subtask';
-  if (r === 'subagent' || r === 'general' || !r) return isRu ? 'Субагент' : 'Subagent';
-  if (r === 'cvh-dev') return 'CVH-DEV';
-  return role.trim().charAt(0).toUpperCase() + role.trim().slice(1);
+export function getSubagentRoleLabel(role: string, isRu: boolean): string {
+  const r = role.trim();
+  if (!r || r.toLowerCase() === 'general' || r.toLowerCase() === 'subagent') {
+    return isRu ? 'Субагент' : 'Subagent';
+  }
+  if (r.toLowerCase() === 'subtask') {
+    return isRu ? 'Подзадача' : 'Subtask';
+  }
+  if (r.toLowerCase() === 'cvh-dev') {
+    return 'CVH-DEV';
+  }
+  const matched = useCortexStore.getState().agentPersonas?.find(
+    (p) => p.role.toLowerCase() === r.toLowerCase()
+  );
+  if (matched?.persona?.trim()) {
+    return matched.persona.trim();
+  }
+  return r.charAt(0).toUpperCase() + r.slice(1);
 }
 
 export function formatSubagentRoleDisplay(
@@ -60,17 +67,14 @@ export function formatSubagentRoleDisplay(
 ): string {
   const isRu = lang === 'ru';
   if (isBoardSubtask) {
-    const r = (role || '').trim().toLowerCase();
-    if (role && r && r !== 'general') {
-      return getSubagentRoleLabel(role, isRu);
+    const r = (role || '').trim();
+    if (r && r.toLowerCase() !== 'general') {
+      return getSubagentRoleLabel(r, isRu);
     }
     return isRu ? 'Подзадача' : 'Subtask';
   }
 
-  const r = (role || '').trim().toLowerCase();
-  const hasRole = Boolean(role && r && r !== 'general');
-  const baseName = hasRole ? getSubagentRoleLabel(role!, isRu) : (isRu ? 'Субагент' : 'Subagent');
-
+  const baseName = isRu ? 'Субагент' : 'Subagent';
   if (subIndex != null) {
     return `${baseName} #${subIndex}`;
   }
@@ -107,7 +111,7 @@ function getSubagentsForTask(
   toolExecutions: Record<string, ToolExecution[]>,
   toolIdToSubagentId: Record<string, string>,
   boardTasks: KanbanTask[],
-  columns?: { id: string; persona?: string | null }[]
+  columns?: { id: string; persona?: string | null; title?: string }[]
 ): SubagentInfo[] {
   const cols = columns || useBoardStore.getState().columns || [];
   const map = new Map<string, SubagentInfo>();
@@ -182,10 +186,9 @@ function getSubagentsForTask(
   const childTasks = (boardTasks || []).filter((t) => t.parentId === taskId || (t.id.startsWith(taskId + '.') && !t.parentId));
   for (const child of childTasks) {
     const childCreated = (child as any).createdAt ? Number((child as any).createdAt) : undefined;
-    const isReviewSubtask = child.title.toLowerCase().includes('ревью') || child.title.toLowerCase().includes('review');
     const childStageId = child.stageId;
     const col = (cols || []).find((c) => c.id === childStageId);
-    const resolvedRole = child.persona || col?.persona || (isReviewSubtask ? 'reviewer' : 'general');
+    const resolvedRole = child.persona || col?.persona || col?.title || 'subtask';
     map.set(child.id, {
       id: child.id,
       parentTaskId: taskId,
@@ -277,7 +280,7 @@ export function getSubagentOrderMap(
   toolExecutions: Record<string, ToolExecution[]>,
   toolIdToSubagentId: Record<string, string>,
   boardTasks: KanbanTask[],
-  columns?: { id: string; persona?: string | null }[]
+  columns?: { id: string; persona?: string | null; title?: string }[]
 ): Map<string, number> {
   const map = new Map<string, number>();
   if (!taskId) return map;

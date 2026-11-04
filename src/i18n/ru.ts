@@ -645,4 +645,8 @@ export const ru = {
   'telemetry.stepOne': 'шаг',
   'telemetry.stepFew': 'шага',
   'telemetry.stepMany': 'шагов',
+
+  // Stage Summary Card
+  'stageSummary.rejectTitle': 'Задача возвращена на доработку',
+  'stageSummary.summaryTitle': 'Саммари этапа',
 } as const satisfies TranslationDict;

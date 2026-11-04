@@ -370,7 +370,7 @@ use std::sync::Arc;
         assert_eq!(t.stage_id, "dev", "Must move back to dev");
         assert_eq!(t.status.as_deref(), Some("idle"), "Status must be reset to idle");
         assert_eq!(t.verdict.as_deref(), Some("CHANGES_REQUESTED"), "Verdict must be CHANGES_REQUESTED");
-        assert_eq!(t.handover_summary.as_deref(), Some("ОТКЛОНЕНО РЕВЬЮ: Clippy sensor emitted 3 warnings"));
+        assert_eq!(t.handover_summary.as_deref(), Some("ОТКЛОНЕНО: Clippy sensor emitted 3 warnings"));
 
         // Verify reject with explicit task_id in args when tool_ctx.task_id is None
         let tool_ctx_no_id = ToolContext {

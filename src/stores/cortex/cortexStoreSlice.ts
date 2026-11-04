@@ -112,7 +112,7 @@ export const createCortexSlice: StateCreator<
       const persona = col.persona?.trim() ?? '';
       const isSystemNode =
         persona === '' &&
-        (col.id === 'backlog' || col.id === 'ready' || col.terminal === true);
+        (col.isIntake === true || col.terminal === true || col.id === 'backlog' || col.id === 'ready');
       const dir = cortexAgentDir(col.persona ?? '', col.id);
       if (isSystemNode) {
         // Хуки колонки (on_enter/on_leave) как узлы типа hook.
@@ -219,10 +219,10 @@ export const createCortexSlice: StateCreator<
       // Четкая стилизация Backlog (#64748b) и Ready (#10b981) + реактивная иконка и цвет персоны
       let stageColor = col.color;
       let stageIcon = col.icon;
-      if (col.id === 'backlog') {
+      if (col.isIntake || col.id === 'backlog') {
         stageColor = BACKLOG_COLOR;
         stageIcon = col.icon || getDefaultColumnIcon('backlog');
-      } else if (col.id === 'ready') {
+      } else if (col.terminal || col.id === 'ready') {
         stageColor = READY_COLOR;
         stageIcon = col.icon || getDefaultColumnIcon('ready');
       } else {

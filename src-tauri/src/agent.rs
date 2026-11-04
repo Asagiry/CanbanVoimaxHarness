@@ -1161,22 +1161,6 @@ pub fn are_subagent_prompts_duplicate(p1: &str, p2: &str) -> bool {
     false
 }
 
-/// Determines if a subagent role is an exploratory/architect/researcher persona
-/// subject to single-turn or in-flight deduplication.
-#[allow(dead_code)]
-pub fn is_exploratory_role(role: &str) -> bool {
-    let r = role.trim().to_lowercase();
-    r == "explorer"
-        || r == "architect"
-        || r == "researcher"
-        || r == "scout"
-        || r == "code_explorer"
-        || r == "system_architect"
-        || r.contains("explorer")
-        || r.contains("architect")
-        || r.contains("researcher")
-}
-
 /// Canonical tool name normalization for aliases and SWE-bench compatibility.
 pub fn canonical_tool_name(tool_name: &str) -> &str {
     crate::config::normalize_tool_name(tool_name)

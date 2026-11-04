@@ -117,9 +117,7 @@ pub async fn execute_reject_task(
     // "Запрещено возвращать задачу из первой рабочей стадии назад в бэклог. Задача должна быть доработана или закрыта."
     let is_prev_backlog = prev_col.is_intake == Some(true)
         || curr_idx == 1
-        || prev_col.id == "backlog"
-        || prev_col.title.to_lowercase().contains("backlog")
-        || prev_col.title.to_lowercase().contains("бэклог");
+        || crate::commands::stage_id_matches(&prev_col.id, "backlog");
 
     if is_prev_backlog {
         bail!("Запрещено возвращать задачу из первой рабочей стадии назад в бэклог. Задача должна быть доработана или закрыта.");
@@ -252,7 +250,7 @@ pub async fn execute_reject_task(
         Ok(res_str)
     } else {
         // Fallback for single tasks or subtasks without previous subtask
-        let rejection_summary = format!("ОТКЛОНЕНО РЕВЬЮ: {}", reason);
+        let rejection_summary = format!("ОТКЛОНЕНО: {}", reason);
         let updated_task = crate::commands::internal_move_task_stage(
             repo_root,
             task_id,

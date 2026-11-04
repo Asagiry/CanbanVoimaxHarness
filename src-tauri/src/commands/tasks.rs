@@ -18,7 +18,7 @@ pub mod transitions;
 
 pub use healing::*;
 pub use lifecycle::{
-    internal_create_subtask, internal_create_task, internal_save_tasks, is_review_column,
+    internal_create_subtask, internal_create_task, internal_save_tasks,
     record_task_hook_result,
 };
 pub use runner::{
