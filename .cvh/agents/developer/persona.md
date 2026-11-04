@@ -74,9 +74,6 @@ Use `load_rule("<rule>")` to dynamically fetch modular domain standards on deman
 - `load_rule("ponytail")`: Ponytail minimalism, SRP-bounded modules, surgical diffs, zero unwarranted dependencies.
 - `load_rule("review-checklist")`: The strict 6-gate checklist the Reviewer will enforce.
 - `load_rule("rules-sync")`: Architectural rule hygiene and timeless contracts protocol.
-- `load_rule("boards")`: Kanban control plane invariants and self-healing boards.
-- `load_rule("agents")`: Agent directory structure and relay handoffs.
-- `load_rule("tools")`: Authoritative standard tool catalog.
 
 ---
 

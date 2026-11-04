@@ -12,6 +12,7 @@ import DrawerSteerBar from './DrawerSteerBar';
 import GitDiffSidebar from './GitDiffSidebar';
 import SubagentsSidebar from './SubagentsSidebar';
 import { useUiZoom, getZoomOverlayStyle } from '../../hooks/useUiZoom';
+import { listenToEvent, type AgentEventMap } from '../../services/tauriEventGateway';
 
 export default function AgentConsoleDrawer() {
   const { zoom } = useUiZoom();
@@ -104,12 +105,16 @@ export default function AgentConsoleDrawer() {
 
     const setupErrorListeners = async () => {
       try {
-        const { listen } = await import('@tauri-apps/api/event');
         if (isDisposed) return;
 
-        const bind = async <T,>(event: string, handler: (e: { payload: T }) => void) => {
+        const bind = async <K extends keyof AgentEventMap>(
+          event: K,
+          handler: (payload: AgentEventMap[K]) => void
+        ) => {
           if (isDisposed) return;
-          const u = await listen<T>(event, handler);
+          const u = await listenToEvent(event, (payload) => {
+            if (!isDisposed) handler(payload);
+          });
           if (isDisposed) {
             u();
           } else {
@@ -119,9 +124,9 @@ export default function AgentConsoleDrawer() {
 
         await Promise.all([
           // Listen for agent:status terminal states
-          bind<{ taskId?: string; status?: string }>('agent:status', (event) => {
-            if (event.payload?.taskId === task.id) {
-              const st = event.payload.status;
+          bind('agent:status', (payload) => {
+            if (payload?.taskId === task.id) {
+              const st = payload.status;
               // Immediate reset of running status on terminal states
               if (st === 'finished' || st === 'aborted' || st === 'error') {
                 useBoardStore.getState().updateTaskStatus(task.id, 'idle');
@@ -155,8 +160,8 @@ export default function AgentConsoleDrawer() {
           }),
 
           // Listen for agent:finished
-          bind<{ taskId?: string; response?: string }>('agent:finished', (event) => {
-            if (event.payload?.taskId === task.id) {
+          bind('agent:finished', (payload) => {
+            if (payload?.taskId === task.id) {
               useBoardStore.getState().updateTaskStatus(task.id, 'idle');
               useDrawerStore.getState().setActiveAgentTask(task.id, false);
               try {
@@ -169,12 +174,12 @@ export default function AgentConsoleDrawer() {
           }),
 
           // Listen for agent:error
-          bind<{ taskId?: string; error?: string }>('agent:error', (event) => {
-            if (event.payload && (!event.payload.taskId || event.payload.taskId === task.id)) {
-              setRunError(event.payload.error || 'Произошла непредвиденная ошибка агента');
+          bind('agent:error', (payload) => {
+            if (payload && (!payload.taskId || payload.taskId === task.id)) {
+              setRunError(payload.error || 'Произошла непредвиденная ошибка агента');
               useBoardStore.getState().updateTaskStatus(task.id, 'idle');
-              if (event.payload.taskId) {
-                useDrawerStore.getState().setActiveAgentTask(event.payload.taskId, false);
+              if (payload.taskId) {
+                useDrawerStore.getState().setActiveAgentTask(payload.taskId, false);
               } else if (task?.id) {
                 useDrawerStore.getState().setActiveAgentTask(task.id, false);
               }
@@ -188,94 +193,82 @@ export default function AgentConsoleDrawer() {
           }),
 
           // Listen for subagent:status
-          bind<{ subagentId?: string; status?: string; parentTaskId?: string }>(
-            'subagent:status',
-            (event) => {
-              const sid = event.payload?.subagentId;
-              const st = event.payload?.status;
-              if (sid) {
-                if (st === 'running') {
-                  useDrawerStore.getState().updateSubagentStatus(sid, 'running');
-                  useDrawerStore.getState().setActiveAgentTask(sid, true);
-                  return;
-                }
-                const nextStatus = st === 'finished' ? 'finished' : (st === 'aborted' || st === 'stopped') ? 'stopped' : 'error';
-                useDrawerStore.getState().updateSubagentStatus(sid, nextStatus as any);
-                useDrawerStore.getState().setActiveAgentTask(sid, false);
-                const tools = useDrawerStore.getState().toolExecutions[sid] || [];
-                for (const t of tools) {
-                  if (t.status === 'running') {
-                    useDrawerStore.getState().updateToolExecution(sid, t.id, {
-                      status: 'failed',
-                      stderr: 'Прервано пользователем',
-                    });
-                  }
+          bind('subagent:status', (payload) => {
+            const sid = payload?.subagentId;
+            const st = payload?.status;
+            if (sid) {
+              if (st === 'running') {
+                useDrawerStore.getState().updateSubagentStatus(sid, 'running');
+                useDrawerStore.getState().setActiveAgentTask(sid, true);
+                return;
+              }
+              const nextStatus = st === 'finished' ? 'finished' : (st === 'aborted' || st === 'stopped') ? 'stopped' : 'error';
+              useDrawerStore.getState().updateSubagentStatus(sid, nextStatus as any);
+              useDrawerStore.getState().setActiveAgentTask(sid, false);
+              const tools = useDrawerStore.getState().toolExecutions[sid] || [];
+              for (const t of tools) {
+                if (t.status === 'running') {
+                  useDrawerStore.getState().updateToolExecution(sid, t.id, {
+                    status: 'failed',
+                    stderr: 'Прервано пользователем',
+                  });
                 }
               }
             }
-          ),
+          }),
 
           // Listen for subagent:aborted
-          bind<{ subagentId?: string; parentTaskId?: string }>(
-            'subagent:aborted',
-            (event) => {
-              const sid = event.payload?.subagentId;
-              const pid = event.payload?.parentTaskId;
-              if (sid) {
-                useDrawerStore.getState().updateSubagentStatus(sid, 'stopped', 'Прервано пользователем');
-                useDrawerStore.getState().setActiveAgentTask(sid, false);
-                const tools = useDrawerStore.getState().toolExecutions[sid] || [];
+          bind('subagent:aborted', (payload) => {
+            const sid = payload?.subagentId;
+            const pid = payload?.parentTaskId;
+            if (sid) {
+              useDrawerStore.getState().updateSubagentStatus(sid, 'stopped', 'Прервано пользователем');
+              useDrawerStore.getState().setActiveAgentTask(sid, false);
+              const tools = useDrawerStore.getState().toolExecutions[sid] || [];
+              for (const t of tools) {
+                if (t.status === 'running') {
+                  useDrawerStore.getState().updateToolExecution(sid, t.id, {
+                    status: 'failed',
+                    stderr: 'Прервано пользователем',
+                  });
+                }
+              }
+            } else if (pid && pid === task?.id) {
+              const list = useDrawerStore.getState().subagents[pid] || [];
+              for (const sub of list) {
+                useDrawerStore.getState().updateSubagentStatus(sub.id, 'stopped', 'Прервано пользователем');
+                useDrawerStore.getState().setActiveAgentTask(sub.id, false);
+                const tools = useDrawerStore.getState().toolExecutions[sub.id] || [];
                 for (const t of tools) {
                   if (t.status === 'running') {
-                    useDrawerStore.getState().updateToolExecution(sid, t.id, {
+                    useDrawerStore.getState().updateToolExecution(sub.id, t.id, {
                       status: 'failed',
                       stderr: 'Прервано пользователем',
                     });
                   }
                 }
-              } else if (pid && pid === task?.id) {
-                const list = useDrawerStore.getState().subagents[pid] || [];
-                for (const sub of list) {
-                  useDrawerStore.getState().updateSubagentStatus(sub.id, 'stopped', 'Прервано пользователем');
-                  useDrawerStore.getState().setActiveAgentTask(sub.id, false);
-                  const tools = useDrawerStore.getState().toolExecutions[sub.id] || [];
-                  for (const t of tools) {
-                    if (t.status === 'running') {
-                      useDrawerStore.getState().updateToolExecution(sub.id, t.id, {
-                        status: 'failed',
-                        stderr: 'Прервано пользователем',
-                      });
-                    }
-                  }
-                }
               }
             }
-          ),
+          }),
 
           // Listen for subagent:finished
-          bind<{ subagentId?: string; parentTaskId?: string; response?: string }>(
-            'subagent:finished',
-            (event) => {
-              const sid = event.payload?.subagentId;
-              if (sid) {
-                useDrawerStore.getState().updateSubagentStatus(sid, 'finished');
-                useDrawerStore.getState().setActiveAgentTask(sid, false);
-              }
+          bind('subagent:finished', (payload) => {
+            const sid = payload?.subagentId;
+            if (sid) {
+              useDrawerStore.getState().updateSubagentStatus(sid, 'finished');
+              useDrawerStore.getState().setActiveAgentTask(sid, false);
             }
-          ),
+          }),
 
           // Listen for subagent:error
-          bind<{ subagentId?: string; parentTaskId?: string; error?: string }>(
-            'subagent:error',
-            (event) => {
-              const sid = event.payload?.subagentId;
-              const err = event.payload?.error;
-              if (sid) {
-                useDrawerStore.getState().updateSubagentStatus(sid, 'error', err);
-                useDrawerStore.getState().setActiveAgentTask(sid, false);
-              }
+          bind('subagent:error', (payload) => {
+            const sid = payload?.subagentId;
+            const err = payload?.error;
+            if (sid) {
+              useDrawerStore.getState().updateSubagentStatus(sid, 'error', err);
+              useDrawerStore.getState().setActiveAgentTask(sid, false);
             }
-          ),
+          }),
         ]);
       } catch {
         // web mode fallback

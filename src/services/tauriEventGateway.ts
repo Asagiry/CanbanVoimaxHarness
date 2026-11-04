@@ -51,6 +51,7 @@ export interface AgentToolCallPayload {
 export interface AgentToolResultPayload {
   taskId?: string;
   id?: string;
+  name?: string;
   result?: unknown;
   success?: boolean;
   batch?: { index: number; total: number };
@@ -204,6 +205,12 @@ export interface SubagentAbortedPayload {
   parentTaskId?: string;
 }
 
+export interface SubagentActivityPayload {
+  parentTaskId?: string;
+  subagentId?: string;
+  activity?: any;
+}
+
 /**
  * Authoritative type map of all Tauri IPC events emitted by CanbanVoimaxHarness Rust backend.
  * Guarantees 100% type safety for listeners and eliminates any-typed event payloads.
@@ -238,6 +245,7 @@ export interface AgentEventMap {
   'pipeline:updated': unknown;
   'cortex:rules_updated': unknown;
   'subagent:spawned': SubagentSpawnedPayload;
+  'subagent:activity': SubagentActivityPayload;
   'subagent:finished': SubagentFinishedPayload;
   'subagent:error': SubagentErrorPayload;
   'subagent:status': SubagentStatusPayload;
@@ -946,3 +954,19 @@ export function setupTauriEventGateway(): () => void {
     unlisteners.forEach((u) => u());
   };
 }
+
+/**
+ * Authoritative typed event subscription helper via tauriEventGateway.
+ * Subscribes to backend Tauri IPC events using the nominal types defined in AgentEventMap.
+ * Guarantees zero raw `listen<any>` in UI components.
+ */
+export async function listenToEvent<K extends keyof AgentEventMap>(
+  event: K,
+  handler: (payload: AgentEventMap[K]) => void | Promise<void>
+): Promise<() => void> {
+  const { listen } = await import('@tauri-apps/api/event');
+  return listen<AgentEventMap[K]>(event, (e) => {
+    void handler(e.payload);
+  });
+}
+

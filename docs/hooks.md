@@ -60,16 +60,16 @@
 
 ---
 
-## 3. Готовый пример: Автоматическое создание ворктри (`on_enter_dev`)
+## 3. Готовый пример: Автоматическое создание ворктри (`create_worktree`)
 
-Этот скрипт автоматически создает изолированный `git worktree` и feature-ветку при перемещении карточки из бэклога в разработку (`dev`).
+Этот скрипт автоматически создает изолированный `git worktree` и feature-ветку при выходе карточки из бэклога в разработку (`dev`).
 
-### Вариант на Windows Batch (`.cvh/hooks/on_enter_dev.bat`):
+### Вариант на Windows Batch (`.cvh/hooks/create_worktree.bat`):
 ```bat
 @echo off
 REM ==============================================================================
-REM CanbanVoimaxHarness Hook: on_enter_dev.bat
-REM Создание изолированного ворктри при входе в стадию разработки
+REM CanbanVoimaxHarness Hook: create_worktree.bat
+REM Создание изолированного ворктри для безопасной разработки
 REM ==============================================================================
 
 echo [CVH Hook] Entering Development stage for %CVH_TASK_ID%: %CVH_TASK_TITLE%
@@ -96,57 +96,52 @@ if exist "worktrees\%CVH_TASK_ID%" (
 )
 ```
 
-### Вариант на PowerShell (`.cvh/hooks/on_enter_dev.ps1`):
-```powershell
-# ==============================================================================
-# CanbanVoimaxHarness Hook: on_enter_dev.ps1
-# ==============================================================================
-$taskId = $env:CVH_TASK_ID
-$title  = $env:CVH_TASK_TITLE
-$wtPath = "worktrees/$taskId"
-$branch = "feat/$taskId"
+### Вариант на Bash (`.cvh/hooks/create_worktree.sh`):
+```bash
+#!/usr/bin/env bash
+set -e
 
-Write-Host "[CVH Hook] Preparing isolated worktree for $taskId ($title)..."
+echo "[CVH Hook] Entering Development stage for $CVH_TASK_ID: $CVH_TASK_TITLE"
 
-if (-not (Test-Path $wtPath)) {
-    Write-Host "[CVH Hook] Creating git branch '$branch' and worktree at '$wtPath'..."
-    git worktree add -b $branch $wtPath main 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        # Повторная попытка для существующей ветки
-        git worktree add $wtPath $branch 2>&1 | Out-Null
-    }
-}
+if [ ! -d "worktrees/$CVH_TASK_ID" ]; then
+    echo "[CVH Hook] Scaffolding isolated git worktree: worktrees/$CVH_TASK_ID"
+    git worktree add -b "feat/$CVH_TASK_ID" "worktrees/$CVH_TASK_ID" main 2>/dev/null || \
+    git worktree add "worktrees/$CVH_TASK_ID" "feat/$CVH_TASK_ID" 2>/dev/null
+fi
 
-if (Test-Path $wtPath) {
-    Write-Host "[CVH Hook] Worktree ready at $wtPath."
-    # Протокол передачи ворктри в ядро харнесса (stdout):
-    Write-Output "CVH_WORKTREE=$wtPath"
-    Write-Output "CVH_BRANCH=$branch"
+if [ -d "worktrees/$CVH_TASK_ID" ]; then
+    echo "[CVH Hook] Worktree successfully verified at worktrees/$CVH_TASK_ID"
+    echo "CVH_WORKTREE=worktrees/$CVH_TASK_ID"
+    echo "CVH_BRANCH=feat/$CVH_TASK_ID"
     exit 0
-} else {
-    Write-Error "[CVH Hook] Failed to create worktree at $wtPath!"
+else
+    echo "[CVH Hook] ERROR: Failed to scaffold worktree for $CVH_TASK_ID" >&2
     exit 1
-}
+fi
 ```
 
 ---
 
-## 4. Готовый пример: Очистка ворктри при сдаче (`on_finish_done`)
+## 4. Готовый пример: Слияние и очистка при завершении ревью (`on_review_finish`)
 
-Когда задача получает вердикт `APPROVED` и переходит в колонку `ready` (Готово), хук автоматически закрывает ворктри и удаляет временную ветку.
+Когда задача получает вердикт `APPROVED` и переходит дальше, хук автоматически сливает ветку в `main`, пушит в удаленный репозиторий и удаляет временный ворктри.
 
-### Скрипт очистки (`.cvh/hooks/on_finish_done.bat`):
+### Скрипт слияния и очистки (`.cvh/hooks/on_review_finish.bat`):
 ```bat
 @echo off
 echo [CVH Hook] Finishing task %CVH_TASK_ID% with verdict: %CVH_VERDICT%
 
+REM Проверяем, существует ли ворктри
 if exist "worktrees\%CVH_TASK_ID%" (
-    echo [CVH Hook] Cleaning up temporary worktree: worktrees\%CVH_TASK_ID%
+    echo [CVH Hook] Merging feat/%CVH_TASK_ID% into main and pushing...
+    git checkout main
+    git merge "feat/%CVH_TASK_ID%" --no-edit
+    git push origin main
     git worktree remove "worktrees\%CVH_TASK_ID%" --force >nul 2>&1
-    git branch -D feat/%CVH_TASK_ID% >nul 2>&1
+    git branch -d "feat/%CVH_TASK_ID%" >nul 2>&1
 )
 
-echo [CVH Hook] Worktree cleaned. Task %CVH_TASK_ID% is ready.
+echo [CVH Hook] Worktree cleaned and merged. Task %CVH_TASK_ID% is complete.
 exit /b 0
 ```
 
@@ -158,18 +153,24 @@ exit /b 0
 
 ```json
 {
-  "id": "dev",
-  "title": "В разработке",
+  "id": "backlog",
+  "title": "Бэклог",
   "hooks": {
-    "on_enter": ".cvh/hooks/on_enter_dev.bat"
+    "on_leave": {
+      "script": ".cvh/hooks/create_worktree.bat",
+      "description": "Создает изолированный git worktree и feature-ветку feat/<task-id>"
+    }
   }
 },
 {
-  "id": "ready",
-  "title": "Готово",
-  "gatekeeperSensor": "cargo check",
+  "id": "review",
+  "title": "Ревью",
+  "gatekeeperSensor": "call .cvh\\hooks\\gatekeeper_sensor.bat",
   "hooks": {
-    "on_enter": ".cvh/hooks/on_finish_done.bat"
+    "on_leave": {
+      "script": ".cvh/hooks/on_review_finish.bat",
+      "description": "Сливает утвержденную ветку в main и удаляет ворктри"
+    }
   }
 }
 ```

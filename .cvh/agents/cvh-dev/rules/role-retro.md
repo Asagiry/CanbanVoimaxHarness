@@ -20,4 +20,4 @@ Authoritative behavioral specifications and architectural DNA for the Retro role
      - `Evidence`: Concrete task ID and defect trace.
 2. **Rule-Sprawl Filter (Mechanical Hardening Over Prose)**:
    - **Banned**: Writing generic prose rules or philosophical essays for one-off bugs.
-   - **Mandated**: Convert manual reviewer findings into automated mechanical sensor assertions in `.agents/scripts/audit/` or transition hooks (`.cvh/hooks/`). If an invariant cannot be checked mechanically, record at most 3-4 lines of CLE into an existing rule page. Never create new rule files for single-instance bugs.
+   - **Mandated**: Convert manual reviewer findings into automated mechanical sensor assertions in transition hooks (`.cvh/hooks/`). If an invariant cannot be checked mechanically, record at most 3-4 lines of CLE into an existing rule page. Never create new rule files for single-instance bugs.

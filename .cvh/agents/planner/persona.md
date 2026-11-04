@@ -56,8 +56,8 @@ Load modular guidelines dynamically using `load_rule("<rule>")`:
 - `load_rule("architecture")`: System topology, modular backend (`db/`, `config/`, `domain/`, `agent/`) and frontend (`card/`, `stream/`, `slices/`).
 - `load_rule("decomposition")`: Atomic task decomposition, anti-monolith invariants, and sensor specifications.
 - `load_rule("be-ambitious")`: Deeper, not bigger engineering depth & the 4 foundational questions.
-- `load_rule("backend")`: Rust 2021, Tauri v2, SQLite WAL, Tokio async runtime.
-- `load_rule("frontend")`: React 19, Tailwind v4, Zustand 5, `useShallow`, `tauriEventGateway`.
+- `load_rule("scope-hygiene")`: Scope control, strict boundaries, and non-expansion mandate.
+- `load_rule("anti-sycophancy")`: Zero subservience, direct pushback, and objective reality checks.
 - `load_rule("review-checklist")`: Red Team review criteria and Claude Code convergence protocol.
 - `load_rule("antislop")`: UI and prose anti-slop guidelines.
 - `load_rule("ponytail")`: Ponytail minimalism, minimal diffs, modular ceilings.

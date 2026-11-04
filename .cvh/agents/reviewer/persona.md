@@ -30,6 +30,7 @@ Load complete criteria dynamically using `load_rule("<rule>")`:
 - `load_rule("review-checklist")`: Complete 5-sensor Ground Truth checklist and 6 mandatory verification gates.
 - `load_rule("backend-invariants")`: Rust backend architecture, SRP modules (`db/`, `config/`, `agent/`, `domain/`), file limits (<=500 lines), `domain::ids`, `domain::state`, SQLite WAL, zero unwraps.
 - `load_rule("frontend-invariants")`: React 19 rules, `tauriEventGateway` mandate (ban on `listen<any>`), component limits (<=350 lines), Vitest unit test coverage (`pnpm test`), `useShallow`, flex bounds.
+- `load_rule("verdict-routing")`: Stage routing protocol, immediate approval to ready vs revised approval routing to retro.
 - `load_rule("antislop")`: UI and prose anti-slop guidelines.
 - `load_rule("ponytail")`: Ponytail minimalism, minimal surgical diffs, zero unwarranted dependencies.
 - `load_rule("rules-sync")`: Architectural rule hygiene and timeless contracts invariant.

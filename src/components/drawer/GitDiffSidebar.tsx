@@ -12,6 +12,7 @@ import {
 import { TaskGitDiff } from '../../types';
 import { useTranslation } from '../../stores/languageStore';
 import { DiffFileList, isCvhPath, formatFilesCount } from './diff';
+import { listenToEvent } from '../../services/tauriEventGateway';
 
 export { ImageDiffViewer, isImageFile } from './diff';
 
@@ -154,12 +155,10 @@ export default function GitDiffSidebar({
 
     const setupListeners = async () => {
       try {
-        const { listen } = await import('@tauri-apps/api/event');
         if (isDisposed) return;
 
         // ONLY trigger diff update on tool_result for filesystem-modifying tools
-        const uResult = await listen<{ taskId?: string; name?: string }>('agent:tool_result', (event) => {
-          const p = event.payload;
+        const uResult = await listenToEvent('agent:tool_result', (p) => {
           const eventTaskId = p?.taskId;
           const isMatchingTask =
             eventTaskId === taskId ||
@@ -178,8 +177,7 @@ export default function GitDiffSidebar({
         }
 
         // Trigger diff update on agent finished
-        const uFinish = await listen<{ taskId?: string }>('agent:finished', (event) => {
-          const p = event.payload;
+        const uFinish = await listenToEvent('agent:finished', (p) => {
           const eventTaskId = p?.taskId;
           const isMatchingTask =
             eventTaskId === taskId ||

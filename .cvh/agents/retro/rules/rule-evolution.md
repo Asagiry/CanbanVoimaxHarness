@@ -33,12 +33,12 @@ From the major architectural refactoring of CanbanVoimaxHarness, extract and enf
 
 ### 2.3 Automated Unit Testing Shield (Vitest & Cargo Test)
 - **Lesson**: Fast, reliable unit tests provide fearless refactoring velocity and act as an impenetrable regression shield.
-- **Practice**: Enforce 100% test pass rates across both frontend (Vitest: `pnpm test`, 139 tests across 8 suites) and backend (`cargo test`, 244 tests across domain, db, config, agent, commands). Total test shield: 383 automated tests.
+- **Practice**: Enforce 100% test pass rates across both frontend (Vitest: `pnpm test`, 297 tests across 24 suites) and backend (`cargo test`, 277 tests across domain, db, config, agent, commands). Total test shield: 574 automated tests.
 - **Anti-Mock Policy**: Tests must verify real transformations, parsers, and reducers. Never substitute live runtime sensor verification with synthetic mocks for external subprocesses or IPC.
 
 ### 2.4 Single Responsibility Principle (SRP) & Sizing Ceilings
 - **Lesson**: Massive monolithic files accumulate accidental coupling, invite git merge conflicts, and exceed model context windows.
-- **Practice**: Enforce strict file sizing ceilings: React components <= 350 lines (gold standard: `KanbanCard.tsx` at ~239 lines); Rust backend files <= 500 lines. Break modules cleanly across domain boundaries (`db/`, `config/`, `domain/`, `agent/`).
+- **Practice**: Enforce strict file sizing ceilings: React components <= 350 lines (gold standard: `KanbanCard.tsx` at ~256 lines); Rust backend files <= 500 lines. Break modules cleanly across domain boundaries (`db/`, `config/`, `domain/`, `agent/`).
 
 ### 2.5 Decoupled Event Gateways (No Direct `listen<any>`)
 - **Lesson**: Scattering raw IPC event listeners across UI components introduces memory leaks, unclosed listeners, and untyped payload bugs.
