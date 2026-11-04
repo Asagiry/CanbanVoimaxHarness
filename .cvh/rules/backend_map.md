@@ -158,5 +158,5 @@ For rapid Rust compile checks and test execution in CanbanVoimaxHarness, use the
 
 ### Invariants:
 - Configured via `.mbx.toml` in repository root and uses `.toolchain/mbx-cache`.
-- **Fallback Guarantee**: If `mbx` is absent or not installed in PATH, fall back seamlessly to standard `cargo check --manifest-path src-tauri/Cargo.toml` and `cargo test --manifest-path src-tauri/Cargo.toml`.
+- **MANDATORY**: Agents MUST use `mbx check` and `mbx test` instead of raw `cargo`. `mbx` leverages persistent compiler cache for sub-second verification (<0.6s). Raw `cargo` is prohibited unless `mbx` is not installed in PATH.
 

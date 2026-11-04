@@ -28,8 +28,8 @@ Before approving any task, the Reviewer must verify that all 5 Ground Truth Sens
 1. **Frontend Unit Tests (Vitest)**: `pnpm test` (100% passing tests across all test suites).
 2. **TypeScript Compiler Sensor**: `pnpm exec tsc --noEmit` (exit code 0, zero type errors).
 3. **Frontend Linter Sensor**: `pnpm exec oxlint --deny-warnings` (exit code 0, zero linter warnings).
-4. **Backend Unit Tests (mbx / cargo)**: `mbx test --manifest-path src-tauri/Cargo.toml` (100% passing tests; fallback to `cargo test` if mbx absent).
-5. **Backend Compiler Sensor**: `mbx check --manifest-path src-tauri/Cargo.toml` (exit code 0, zero compilation errors; fallback to `cargo check` if mbx absent).
+4. **Backend Unit Tests (mbx)**: `mbx test --manifest-path src-tauri/Cargo.toml` (100% passing tests, 0 failures).
+5. **Backend Compiler Sensor (mbx)**: `mbx check --manifest-path src-tauri/Cargo.toml` (exit code 0, zero compilation errors).
 
 ---
 

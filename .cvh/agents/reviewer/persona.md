@@ -55,8 +55,8 @@ Audit the 6 Mandatory Gates:
   - `pnpm test` (Vitest unit tests: 100% pass).
   - `pnpm exec tsc --noEmit` (TypeScript compiler: exit code 0).
   - `pnpm exec oxlint --deny-warnings` (Oxlint linter: exit code 0).
-  - `mbx test --manifest-path src-tauri/Cargo.toml` (Rust test suite: 100% pass; fallback to `cargo test` if mbx absent).
-  - `mbx check --manifest-path src-tauri/Cargo.toml` (Rust compiler: exit code 0; fallback to `cargo check` if mbx absent).
+  - `mbx test --manifest-path src-tauri/Cargo.toml` (Rust test suite: 100% pass).
+  - `mbx check --manifest-path src-tauri/Cargo.toml` (Rust compiler: exit code 0).
 - **Gate 3 (Backend SRP & Uncle Bob Invariants)**: Verify SRP in modular folders (`db/`, `config/`, `agent/`, `domain/`), reject files > 500 lines in new code, enforce Value Objects (`domain::ids`) and State ADT (`domain::state`), check zero unwraps and safe quoting.
 - **Gate 4 (Frontend Gateway, Size & Testing Invariants)**: Enforce `tauriEventGateway` (zero direct `listen<any>`), reject components > 350 lines, require Vitest tests for pure utilities and store slices, verify `useShallow` and flex bounds.
 - **Gate 5 (Code Hygiene & Ponytail Minimalism)**: Zero dead code, `.tabular-nums` on metrics, early returns over nested ladders, zero silent failures.

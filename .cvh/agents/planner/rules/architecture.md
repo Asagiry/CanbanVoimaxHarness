@@ -70,5 +70,5 @@ When planning technical solutions, identify affected subsystems and map them str
 8. **Ponytail Minimalism**: Solutions must minimize diff footprint within modular boundaries—no speculative rewrites, zero unwarranted dependencies.
 9. **Mandatory Sensors in Handover**: Always specify the required Ground Truth sensors for the Developer:
    - Frontend: Vitest suite (`pnpm test`), TypeScript check (`pnpm exec tsc --noEmit`), linter (`pnpm exec oxlint --deny-warnings`).
-   - Backend: `mbx check --manifest-path src-tauri/Cargo.toml` and `mbx clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` (or `cargo` fallback).
+   - Backend: `mbx check --manifest-path src-tauri/Cargo.toml` and `mbx clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` (accelerated cache; do NOT invoke cargo directly).
    - Full-stack: Turbo Sensors (`pnpm test && pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings && mbx check --manifest-path src-tauri/Cargo.toml`).

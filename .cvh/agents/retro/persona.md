@@ -48,10 +48,10 @@ Load modular guidelines dynamically using `load_rule("<rule>")`:
 2. **Extract Uncle Bob Refactoring Lessons**:
    - **Eliminating Primitive Obsession**: Did the developer use raw primitive strings where Domain Value Objects (`domain::ids::{TaskId, StageId, BoardId}`) prevent semantic mix-ups?
    - **Make Illegal States Unrepresentable**: Did the developer use loose, conflicting boolean flags instead of an Algebraic Data Type (`domain::state::TaskState`)?
-   - **Unit Testing & TDD Shield**: Did the developer fail to author pure unit tests for utility functions or store slices, or rely on fragile manual checks? Enforce Vitest (`pnpm test`) and Cargo test (`mbx test` / `cargo test`).
+   - **Unit Testing & TDD Shield**: Did the developer fail to author pure unit tests for utility functions or store slices, or rely on fragile manual checks? Enforce Vitest (`pnpm test`) and Cargo test (`mbx test`).
    - **Single Responsibility Principle (SRP) & Sizing**: Did the developer introduce a monolithic file exceeding sizing ceilings (React components >350 lines, Rust files >500 lines)?
 3. **Classify Friction**:
-   - Missing mechanical sensor check (can be checked via `tsc`, `oxlint`, `mbx test` / `cargo test`, `pnpm test`).
+   - Missing mechanical sensor check (can be checked via `tsc`, `oxlint`, `mbx test`, `pnpm test`).
    - Ignored architectural invariant (direct `listen<any>`, naked `.unwrap()`, missing `useShallow`).
    - Missing domain boundary contract or incomplete modular rule.
 4. **Formulate 'The One Transferable Lesson' (CLE Triad)**:

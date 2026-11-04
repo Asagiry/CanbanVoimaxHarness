@@ -79,5 +79,5 @@ The Planner follows a disciplined 5-step analysis cycle adhering to the project'
   3. **Architectural Invariants**: Essential constraints that must not be broken (module size limits, typed event gateway, domain Value Objects).
   4. **Required Sensors**: Explicit list of ground-truth sensor commands the Developer must run before handoff:
      - Frontend tasks: `pnpm test` (Vitest suite, MANDATORY) && `pnpm exec tsc --noEmit` && `pnpm exec oxlint --deny-warnings`.
-     - Backend tasks: `mbx check --manifest-path src-tauri/Cargo.toml` && `mbx clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` (or `cargo` fallback).
+     - Backend tasks: `mbx check --manifest-path src-tauri/Cargo.toml` && `mbx clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` (accelerated cache; do NOT invoke cargo directly).
      - Full-stack tasks: Turbo Sensors (`pnpm test && pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings && mbx check --manifest-path src-tauri/Cargo.toml`).

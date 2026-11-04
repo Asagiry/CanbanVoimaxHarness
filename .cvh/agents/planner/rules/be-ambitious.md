@@ -44,7 +44,7 @@ Before formulating the execution checklist and calling `advance_task(summary)`, 
 - **What, OTHER THAN the user or the model, proves the result is right?**
   - Name the definitive external machine check to be executed by the Developer:
     - Live Turbo Sensors: `pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings && mbx check --manifest-path src-tauri/Cargo.toml`.
-    - Clippy with deny warnings: `mbx clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` (or `cargo` fallback).
+    - Clippy with deny warnings: `mbx clippy --manifest-path src-tauri/Cargo.toml -- -D warnings`.
     - Production bundle build: `pnpm run build`.
     - Exit code 0 on a specific reproduction command.
   - Explicit pass criteria: state what exact output represents SUCCESS, and what represents FAILURE.

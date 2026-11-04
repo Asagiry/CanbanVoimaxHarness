@@ -55,7 +55,7 @@ You operate strictly within isolated git worktrees (`worktrees/<task-slug>`) on 
   - **NEVER run commands on startup**: Never run `cargo check`, `pnpm test`, `npm run build`, `pnpm exec tsc`, or test suites at the beginning of a task before making edits. Static code exploration is done with `read_file`, `glob`, `grep`.
   - **Targeted Verification Only**: Run compiler/linter/test sensors strictly during the post-edit verification phase (Step 6), and ONLY for the subsystems touched by your changes:
     - Frontend changes (`src/**`, `.tsx`, `.ts`, `.css`): run Vitest (`pnpm test`), TypeScript check (`pnpm exec tsc --noEmit`), and linter (`pnpm exec oxlint --deny-warnings`). `pnpm test` is strictly mandatory for any frontend modification.
-    - Backend-only changes (`src-tauri/**`, `.rs`): run ONLY backend sensors via accelerated `mbx` (compiler cache) or fallback to `cargo`: `mbx check --manifest-path src-tauri/Cargo.toml` and `mbx clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` (or `cargo check` / `cargo clippy` if mbx absent). Do NOT run frontend build or frontend tests.
+    - Backend-only changes (`src-tauri/**`, `.rs`): run ONLY backend sensors via accelerated `mbx` (compiler cache): `mbx check --manifest-path src-tauri/Cargo.toml` and `mbx clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` (cache hit <0.6s). Direct `cargo` invocation is prohibited unless `mbx` is absent from PATH. Do NOT run frontend build or frontend tests.
     - Full-stack changes (both frontend and backend touched): run Turbo Sensors (`pnpm test && pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings && mbx check --manifest-path src-tauri/Cargo.toml`).
     - Documentation, config, or prompt-only changes: do NOT run heavy compiler sensors unless contracts changed.
 - **Handover Requirement**: Never hand off work without running real sensors for the touched subsystems (must exit 0 with 0 errors). If a sensor fails, diagnose root causes and fix them before calling `advance_task`.
@@ -87,7 +87,7 @@ Use `load_rule("<rule>")` to dynamically fetch modular domain standards on deman
 5. **Rule Hygiene**: Update corresponding `.cvh/agents/*/rules/*.md` ONLY if universal system architecture or public contracts fundamentally changed. Keep rule files clean of changelog slop.
 6. **Sensor & Integration Verification**: Run ONLY the relevant sensors for modified subsystems:
    - Frontend: `pnpm test && pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings` (all exit 0).
-   - Backend: `mbx check --manifest-path src-tauri/Cargo.toml && mbx clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` (all exit 0; fallback to `cargo` if mbx absent).
+   - Backend: `mbx check --manifest-path src-tauri/Cargo.toml && mbx clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` (all exit 0).
    - Verify clean branch integration with `main` (`git merge-tree --write-tree main HEAD` exit 0). Ensure 0 regressions on shared components.
 7. **Handover**: Advance to `review` via `advance_task(summary)`. The summary MUST include:
    - Summary of modifications and modular layout adherence.

@@ -29,7 +29,7 @@ Authoritative behavioral specifications and architectural DNA for the Developer 
 - Before calling `advance_task`, run `git diff` and audit every single changed line:
   - Eliminate stray `console.log`, debugging dumps, temporary files.
   - Eliminate accidental whitespace churn or unrelated formatting changes.
-- Ensure all live Ground Truth Sensors pass (Turbo Sensors: `tsc`, `oxlint`, `mbx check` (or `cargo check`); Automated Test Shield: `pnpm test`, `mbx test` (or `cargo test`)).
+- Ensure all live Ground Truth Sensors pass (Turbo Sensors: `tsc`, `oxlint`, `mbx check`; Automated Test Shield: `pnpm test`, `mbx test`). Direct `cargo` is prohibited unless `mbx` is absent.
 - **Architectural Map Synchronization Mandate**: Whenever adding, removing, renaming, or relocating modules or files in `src-tauri/src/` or `src/`, you MUST update `.cvh/rules/backend_map.md` or `.cvh/rules/frontend_map.md` in the exact same diff/commit so navigation maps remain 100% faithful to the filesystem.
 - **Pre-Handover Commit Mandate**: Commit all modified files (`git commit`) before running pre-flight mergeability sensors and before calling `advance_task`. Never hand off an uncommitted working tree to review, as `HEAD` will not include your changes during merge conflict checks.
 - **Branch Integration & Zero-Regression Check**: Verify clean mergeability against `main` (`git merge-tree --write-tree main HEAD` exit 0). If `main` moved, merge `origin/main` and verify that concurrent changes in shared files (e.g. `KanbanCard.tsx`) are preserved. If resolving merge conflicts in `src/i18n/__tests__/i18n.test.ts:31-32`, calculate `(keys in main) + (branch keys added)` and update assertions accordingly.

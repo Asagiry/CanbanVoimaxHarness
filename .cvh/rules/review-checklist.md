@@ -49,11 +49,11 @@ In accordance with the Harness2.0 selection protocol, review candidate code arti
 
 ### Gate 2: The 5-Sensor Ground Truth Checklist
 The Reviewer MUST execute and verify all Ground Truth Sensors via `execute_command`:
-1. **Frontend Unit Tests (Vitest)**: `pnpm test` (100% pass across all 24 test suites, 297 tests).
+1. **Frontend Unit Tests (Vitest)**: `pnpm test` (100% pass across all test suites, 0 failures).
 2. **TypeScript Compiler Sensor**: `pnpm exec tsc --noEmit` (exit code 0, 0 type errors).
 3. **Frontend Linter Sensor**: `pnpm exec oxlint --deny-warnings` (exit code 0, 0 linter warnings).
-4. **Backend Unit Tests (mbx / cargo)**: `mbx test --manifest-path src-tauri/Cargo.toml` (100% pass across core test suites, 277 tests; fallback to `cargo test` if mbx absent).
-5. **Backend Compiler & Clippy Sensor**: `mbx check --manifest-path src-tauri/Cargo.toml` and `mbx clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` (exit code 0, 0 errors, 0 warnings; fallback to `cargo` if mbx absent).
+4. **Backend Unit Tests (mbx)**: `mbx test --manifest-path src-tauri/Cargo.toml` (100% pass across core test suites, 0 failures).
+5. **Backend Compiler & Clippy Sensor (mbx)**: `mbx check --manifest-path src-tauri/Cargo.toml` and `mbx clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` (exit code 0, 0 errors, 0 warnings).
 - **Windows Command Hygiene**: When executing sensor checks via `execute_command`, strictly avoid Unix shell pipelines (`| wc -l`, `| grep`, `| head`, `| tail`) on Windows `cmd.exe`.
 - The Reviewer does not accept claims of success without live sensor verification logs.
 

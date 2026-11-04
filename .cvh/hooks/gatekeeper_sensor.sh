@@ -50,13 +50,17 @@ if [ "$DIFF_AVAILABLE" -eq 1 ]; then
 fi
 
 if [ "$RUN_BACKEND" -eq 0 ]; then
-    echo "[CVH Sensor] Backend unchanged, skipping cargo check."
+    echo "[CVH Sensor] Backend unchanged, skipping backend check."
 elif [ -f "src-tauri/Cargo.toml" ]; then
-    echo "[CVH Sensor] Running Rust backend check..."
+    echo "[CVH Sensor] Running Rust backend check [mbx/cargo]..."
     if [ ! -d "dist" ]; then
         mkdir -p "dist"
     fi
-    cargo check --manifest-path "src-tauri/Cargo.toml"
+    if command -v mbx >/dev/null 2>&1; then
+        mbx check --manifest-path "src-tauri/Cargo.toml"
+    else
+        cargo check --manifest-path "src-tauri/Cargo.toml"
+    fi
 fi
 
 if [ "$RUN_FRONTEND" -eq 0 ]; then

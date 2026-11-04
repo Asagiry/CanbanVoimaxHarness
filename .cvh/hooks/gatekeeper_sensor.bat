@@ -58,14 +58,19 @@ if defined DIFF_AVAILABLE (
 )
 
 if "!RUN_BACKEND!"=="0" (
-    echo [CVH Sensor] Backend unchanged, skipping cargo check.
+    echo [CVH Sensor] Backend unchanged, skipping backend check.
 ) else (
-    echo [CVH Sensor] Running Rust backend check...
+    echo [CVH Sensor] Running Rust backend check [mbx/cargo]...
     if not exist "dist" mkdir "dist" >nul 2>&1
     if exist "src-tauri\Cargo.toml" (
-        cargo check --manifest-path "src-tauri\Cargo.toml"
+        where mbx >nul 2>&1
+        if not errorlevel 1 (
+            mbx check --manifest-path "src-tauri\Cargo.toml"
+        ) else (
+            cargo check --manifest-path "src-tauri\Cargo.toml"
+        )
         if errorlevel 1 (
-            echo [CVH Sensor] ERROR: Backend cargo check failed! >&2
+            echo [CVH Sensor] ERROR: Backend check failed! >&2
             exit /b 1
         )
     )

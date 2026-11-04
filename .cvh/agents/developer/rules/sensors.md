@@ -44,32 +44,26 @@ pnpm exec oxlint --deny-warnings
   - `pnpm exec oxlint --deny-warnings`: Exit code `0` with zero warnings or errors.
 
 ### 2.2 Backend Sensors (Run if `src-tauri/` or `.rs` files were modified)
-For accelerated verification in CanbanVoimaxHarness, use `mbx` (configured via `.mbx.toml` with cache in `.toolchain/mbx-cache`):
+For accelerated verification in CanbanVoimaxHarness, use `mbx` (configured via `.mbx.toml` with cache in `.toolchain/mbx-cache`).
+**MANDATORY**: Always use `mbx` for backend compilation and tests. Direct invocation of `cargo` is prohibited because `mbx` provides zero-latency compiler cache hits (<0.6s vs 15s cold). Use `cargo` only if `mbx` is physically not installed in PATH.
 ```bash
-# 1. Accelerated compiler check (preferred):
+# 1. Accelerated compiler check (MANDATORY):
 mbx check --manifest-path src-tauri/Cargo.toml
-# Fallback if mbx is absent:
-cargo check --manifest-path src-tauri/Cargo.toml
 
-# 2. Accelerated test suite (optional/for domain/db refactors):
+# 2. Accelerated test suite (for domain/db refactors & test updates):
 mbx test --manifest-path src-tauri/Cargo.toml
-# Fallback if mbx is absent:
-cargo test --manifest-path src-tauri/Cargo.toml
 
 # 3. Strict linter & clippy:
 mbx clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
-# Fallback if mbx is absent:
-cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 ```
 - **Acceptance Criteria**: Exit code `0` with zero compilation errors and zero compiler warnings.
-- `mbx check` and `mbx test` use `.toolchain/mbx-cache` and `.mbx.toml`. If `mbx` is absent, fall back to `cargo check` and `cargo test`.
+- `mbx check`, `mbx test`, and `mbx clippy` use `.toolchain/mbx-cache` and `.mbx.toml`.
 
-### 2.3 Full-Stack Turbo Sensors (<15s)
+### 2.3 Full-Stack Turbo Sensors (<10s)
 When both frontend and backend are touched, or for full-stack pre-handover validation:
 ```bash
 git add -A && git commit -m "feat(<task-id>): <summary>" && git merge-tree --write-tree main HEAD && pnpm test && pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings && mbx check --manifest-path src-tauri/Cargo.toml
 ```
-*(Fallback: replace `mbx check` with `cargo check` if mbx is absent)*
 - **Acceptance Criteria**: All sensors exit `0` sequentially with zero merge conflicts.
 
 ### 2.4 Non-Code / Prompt / Rule Modifications
@@ -101,10 +95,10 @@ git merge-tree --write-tree main HEAD
 When invoking `advance_task(summary)`, the Developer MUST include explicit sensor proof:
 ```text
 - Sensors Verified:
-  1. pnpm test: EXIT 0 (297/297 tests passed across 24 suites)
+  1. pnpm test: EXIT 0 (100% Vitest suites passing, 0 failures)
   2. pnpm exec tsc --noEmit: EXIT 0 (0 type errors)
   3. pnpm exec oxlint --deny-warnings: EXIT 0 (0 warnings)
-  4. mbx check / cargo test: EXIT 0 (277/277 backend tests passed, 0 compiler errors)
+  4. mbx check / mbx test: EXIT 0 (0 compiler errors, 100% tests passing)
   5. git merge-tree --write-tree main HEAD: EXIT 0 (0 merge conflicts)
 ```
 Failure to include concrete sensor results will cause the Reviewer to reject the task under Gate 2.
