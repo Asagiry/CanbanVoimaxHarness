@@ -389,6 +389,7 @@ export const createActivitySlice: StateCreator<
 
   clearTaskActivity: async (taskId) => {
     cancelActivitySave(taskId);
+    get().clearTaskDraft(taskId);
     set((state) => ({
       activityFeed: {
         ...state.activityFeed,

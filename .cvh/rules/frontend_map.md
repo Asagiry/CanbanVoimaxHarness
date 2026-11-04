@@ -67,6 +67,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Drawer Activity Store Slice** | `src/stores/drawer/slices/activitySlice.ts` | `activityFeed`, optimistic tool injection, deduplication. |
 | **Drawer Stream Store Slice** | `src/stores/drawer/slices/streamSlice.ts` | Live streaming chunks, thoughts, token telemetry. |
 | **Drawer Subagents Store Slice** | `src/stores/drawer/slices/subagentsSlice.ts` | Subagent lifecycle, active subtasks, subagent logs. |
+| **Drawer Drafts Store Slice** | `src/stores/drawer/slices/draftsSlice.ts` | Steer prompt & attachment draft persistence per task/subagent with localStorage quota fallback. |
 | **Cortex Files Store Slice** | `src/stores/cortex/slices/cortexFilesSlice.ts` | File tree hierarchy, disk file read/write. |
 | **Cortex Personas Store Slice** | `src/stores/cortex/slices/personasSlice.ts` | Persona CRUD, settings synchronization. |
 | **Cortex Rules Store Slice** | `src/stores/cortex/slices/rulesSlice.ts` | Rule creation, editing, and frontmatter management. |
@@ -102,6 +103,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 - **`tasksCrudSlice.ts`**: Pure CRUD operations. Auto-unlocks parent tasks when subtasks are deleted or completed.
 - **`activitySlice.ts`**: Maintains `activityFeed`. Implements in-place tool deduplication by deterministic `tool_id` to eliminate card flickering upon dialogue reloads.
 - **`streamSlice.ts`**: Accumulates streamed thoughts and assistant tokens. Freezes TPS immediately upon generation termination without metric decay.
+- **`draftsSlice.ts`**: Preserves unsent steer prompts and image attachments per task and subagent across drawer unmounts and task navigation, with localStorage fallback on quota exceed.
 
 ### 2.4 Typed IPC Event Gateway (`src/services/tauriEventGateway.ts`)
 - **Zero Raw `listen<any>`**: Direct invocations of Tauri `listen` in components or stores are strictly prohibited.
