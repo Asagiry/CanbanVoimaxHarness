@@ -131,7 +131,7 @@ describe('notificationService', () => {
       expect(mockInvoke).not.toHaveBeenCalledWith('show_system_notification', expect.anything());
     });
 
-    it('sends notification for non-terminal stage transition', async () => {
+    it('sends notification for non-terminal stage transition with normalized markdown and icon', async () => {
       await showAdvanceTaskNotification({
         taskId: 'CVH-001',
         sourceTaskId: 'CVH-001',
@@ -141,13 +141,14 @@ describe('notificationService', () => {
         targetStageId: 'review',
         targetStageTitle: 'Review',
         isTerminal: false,
-        summary: 'Feature implementation complete',
+        summary: '### Summary\nFeature **implementation** complete with `zero` errors.',
       });
 
       expect(mockInvoke).toHaveBeenCalledWith('show_system_notification', {
         title: 'Задача CVH-001 перешла в колонку Review',
-        body: 'Feature implementation complete',
+        body: "Summary\nFeature implementation complete with 'zero' errors.",
         taskId: 'CVH-001',
+        icon: 'review',
       });
     });
 
@@ -168,6 +169,7 @@ describe('notificationService', () => {
         title: 'Задача CVH-001 завершена.',
         body: 'All checks passed',
         taskId: 'CVH-001',
+        icon: 'ready',
       });
     });
 
@@ -198,17 +200,18 @@ describe('notificationService', () => {
   });
 
   describe('showQuestionNotification', () => {
-    it('sends question notification when enabled', async () => {
+    it('sends question notification with normalized markdown and question icon when enabled', async () => {
       await showQuestionNotification({
         taskId: 'CVH-042',
         questionId: 'q-1',
-        text: 'Should we proceed with SQLite WAL mode?',
+        text: 'Should we proceed with **SQLite WAL** mode? Check `db.rs`.',
       });
 
       expect(mockInvoke).toHaveBeenCalledWith('show_system_notification', {
         title: 'В задаче CVH-042 вопрос от агента.',
-        body: 'Should we proceed with SQLite WAL mode?',
+        body: "Should we proceed with SQLite WAL mode? Check 'db.rs'.",
         taskId: 'CVH-042',
+        icon: 'question',
       });
     });
 
@@ -233,10 +236,10 @@ describe('notificationService', () => {
   });
 
   describe('showRejectTaskNotification', () => {
-    it('sends reject task notification with reason', async () => {
+    it('sends reject task notification with reason and reject icon', async () => {
       await showRejectTaskNotification({
         taskId: 'CVH-042',
-        reason: 'Missing sensor validation and unit tests',
+        reason: 'Missing **sensor validation** and unit tests',
         toStage: 'dev',
       });
 
@@ -244,6 +247,7 @@ describe('notificationService', () => {
         title: 'Задача CVH-042 возвращена на доработку.',
         body: 'Missing sensor validation and unit tests',
         taskId: 'CVH-042',
+        icon: 'reject',
       });
     });
 
@@ -275,6 +279,7 @@ describe('notificationService', () => {
         title: 'CanbanVoimaxHarness',
         body: 'Тестовое системное уведомление доставлено успешно.',
         taskId: null,
+        icon: 'app',
       });
     });
 
