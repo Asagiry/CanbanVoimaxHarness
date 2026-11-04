@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import type { DrawerActivityItem } from '../../stores/drawerStore';
 import { useDrawerStore } from '../../stores/drawerStore';
 import { Check, CornerDownLeft, Lock } from 'lucide-react';
+import { MarkdownContent, formatInline } from './stream';
 
 interface QuestionOptionItem {
   label: string;
@@ -189,11 +190,9 @@ export default function QuestionPromptCard({ activity, taskId }: QuestionPromptC
         </div>
       </div>
 
-      {/* 2. Bold Clear Question Text */}
-      <div className="mb-3.5">
-        <h4 className="text-sm md:text-base font-semibold text-[#171717] dark:text-[#f0f6fc] leading-snug tracking-tight">
-          {questionText}
-        </h4>
+      {/* 2. Question Text with Markdown Support */}
+      <div className="mb-4 select-text leading-relaxed text-[#171717] dark:text-[#f0f6fc]">
+        <MarkdownContent content={questionText} />
       </div>
 
       {/* 3. Predefined Selectable Choice Cards */}
@@ -248,7 +247,7 @@ export default function QuestionPromptCard({ activity, taskId }: QuestionPromptC
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-medium text-[#171717] dark:text-[#f0f6fc]">
-                    {cleanLabel}
+                    {formatInline(cleanLabel, `opt-${idx}`)}
                   </span>
                   {isRecommended && (
                     <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] border border-[#bbf7d0] dark:border-[#238636]">
@@ -264,7 +263,7 @@ export default function QuestionPromptCard({ activity, taskId }: QuestionPromptC
                 </div>
                 {option.description && (
                   <p className="text-xs text-[#71717a] dark:text-[#8b949e] font-mono mt-1 leading-relaxed">
-                    {option.description}
+                    {formatInline(option.description, `desc-${idx}`)}
                   </p>
                 )}
               </div>
@@ -329,7 +328,7 @@ export default function QuestionPromptCard({ activity, taskId }: QuestionPromptC
               <div className="flex-1 min-w-0">
                 <span className="text-xs font-mono text-[#71717a] dark:text-[#8b949e]">Пользовательский ответ:</span>
                 <p className="text-sm font-medium text-[#171717] dark:text-[#f0f6fc] mt-0.5 break-words">
-                  {activeAnswer}
+                  {formatInline(activeAnswer, 'ans-custom')}
                 </p>
               </div>
               <span className="flex items-center space-x-1 text-xs text-[#15803d] dark:text-[#7ee787] font-mono">

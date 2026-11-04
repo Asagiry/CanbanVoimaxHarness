@@ -4,13 +4,14 @@
     {
       "id": "development",
       "name": "CanbanVoimaxHarness",
-      "columns": [
+      "stages": [
         {
           "id": "backlog",
           "title": "Backlog",
           "color": "#64748b",
           "icon": "Inbox",
           "persona": null,
+          "wipLimit": null,
           "onEnterScript": null,
           "modelOverride": null,
           "reasoningEffort": null,
@@ -40,6 +41,7 @@
           "color": "#3b82f6",
           "icon": "Compass",
           "persona": "planner",
+          "wipLimit": null,
           "onEnterScript": null,
           "modelOverride": "gemini-3.8-flash-high",
           "reasoningEffort": null,
@@ -70,6 +72,7 @@
           "color": "#0284c7",
           "icon": "Wrench",
           "persona": "developer",
+          "wipLimit": null,
           "onEnterScript": null,
           "modelOverride": "gemini-3.8-flash-high",
           "reasoningEffort": null,
@@ -107,6 +110,7 @@
           "color": "#f59e0b",
           "icon": "ShieldCheck",
           "persona": "reviewer",
+          "wipLimit": null,
           "onEnterScript": null,
           "modelOverride": "gemini-3.8-flash-high",
           "reasoningEffort": null,
@@ -134,9 +138,9 @@
             }
           },
           "routes": {
-            "on_approved": "ready",
+            "on_approved_after_changes": "retro",
             "on_changes_requested": "dev",
-            "on_approved_after_changes": "retro"
+            "on_approved": "ready"
           },
           "autoRun": true,
           "terminal": null,
@@ -148,6 +152,7 @@
           "color": "#ec4899",
           "icon": "RotateCcw",
           "persona": "retro",
+          "wipLimit": null,
           "onEnterScript": null,
           "modelOverride": "gemini-3.8-flash-high",
           "reasoningEffort": null,
@@ -179,6 +184,7 @@
           "color": "#10b981",
           "icon": "CheckCircle2",
           "persona": null,
+          "wipLimit": null,
           "onEnterScript": null,
           "modelOverride": null,
           "reasoningEffort": null,
@@ -205,13 +211,14 @@
     {
       "id": "nastroyka",
       "name": "Setup",
-      "columns": [
+      "stages": [
         {
           "id": "backlog",
           "title": "Backlog",
           "color": "#64748b",
           "icon": "Inbox",
           "persona": null,
+          "wipLimit": null,
           "onEnterScript": null,
           "modelOverride": null,
           "reasoningEffort": null,
@@ -236,6 +243,7 @@
           "color": "#6366f1",
           "icon": "Cpu",
           "persona": "cvh-dev",
+          "wipLimit": null,
           "onEnterScript": null,
           "modelOverride": null,
           "reasoningEffort": null,
@@ -262,6 +270,7 @@
           "color": "#10b981",
           "icon": "CheckCircle2",
           "persona": null,
+          "wipLimit": null,
           "onEnterScript": null,
           "modelOverride": null,
           "reasoningEffort": null,

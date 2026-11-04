@@ -29,6 +29,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Agent Console Drawer (Root Container)**| `src/components/drawer/AgentConsoleDrawer.tsx` | Hoisted fixed overlay, flex bounded (`min-h-0 min-w-0`). |
 | **Drawer Header & Action Stepper** | `src/components/drawer/DrawerHeader.tsx` | Task title, tactile stage stepper, abort/run controls. |
 | **Activity Stream & Comment Cards** | `src/components/drawer/DrawerActivityStream.tsx` | Step commentary vs prominent terminal response card. |
+| **Human-in-the-Loop Question Prompt Card** | `src/components/drawer/QuestionPromptCard.tsx` | Interactive clarifying question card, single/multiple choice, custom input, markdown rendering. |
 | **Steer Instruction Prompt Bar** | `src/components/drawer/DrawerSteerBar.tsx` | Interactive steer input bar, optimistic submission. |
 | **Context Gauge Status Ring** | `src/components/drawer/ContextGauge.tsx` | Real-time context token gauge, status bar & header ring. |
 | **Session Statistics Popover** | `src/components/drawer/SessionStatsPopover.tsx` | DSH-style speedometer popover (LLM time, tool time, TTFT, TPS). |
@@ -92,6 +93,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 ### 2.2 Console Drawer Subsystem (`src/components/drawer/`)
 - **`AgentConsoleDrawer.tsx`**: Slide-out execution console. Rendered at root fragment level with `position: fixed` outside any transformed or flex-row containers to prevent clipping. Enforces `min-h-0` and `min-w-0` on scrollable flex children.
 - **`DrawerActivityStream.tsx`**: Slim orchestration layer for chronological activity feed, scroll management, and activity card dispatching.
+- **`QuestionPromptCard.tsx`**: Interactive clarifying question card (single/multiple choice, custom input) with streaming markdown rendering and inline token formatting.
 - **`stream/` Subsystem**: Decomposed streaming components:
   - **`MarkdownContent.tsx`**: Lightweight markdown token renderer, tabular monospace tables, and copyable code blocks.
   - **`AgentExplanationCard.tsx`**: Intermediate assistant thoughts, action plans, and todo checklist rendering.
