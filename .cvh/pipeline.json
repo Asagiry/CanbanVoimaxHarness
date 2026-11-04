@@ -136,8 +136,8 @@
         }
       },
       "routes": {
-        "on_approved_after_changes": "retro",
         "on_changes_requested": "dev",
+        "on_approved_after_changes": "retro",
         "on_approved": "ready"
       },
       "autoRun": true,
@@ -343,8 +343,8 @@
             }
           },
           "routes": {
-            "on_approved_after_changes": "retro",
             "on_changes_requested": "dev",
+            "on_approved_after_changes": "retro",
             "on_approved": "ready"
           },
           "autoRun": true,

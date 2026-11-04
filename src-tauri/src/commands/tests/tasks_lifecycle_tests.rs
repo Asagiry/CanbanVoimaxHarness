@@ -1084,7 +1084,7 @@ use std::path::PathBuf;
             project_path: None,
         };
 
-        crate::db::db_upsert_all_tasks(&base, &[task.clone()]).expect("db upsert");
+        crate::db::db_upsert_all_tasks(&base, std::slice::from_ref(&task)).expect("db upsert");
         save_tasks_to_disk(&base, &[task]).await.expect("save tasks");
 
         // 1. Moving to non-existent stage must be rejected with informative error
