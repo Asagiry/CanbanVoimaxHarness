@@ -8,7 +8,6 @@
 [![Tauri v2](https://img.shields.io/badge/Tauri-v2.0-24C8DB?style=flat-square&logo=tauri&logoColor=white)](https://v2.tauri.app/)
 [![React 19](https://img.shields.io/badge/React-19.0-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
 [![Clean Architecture](https://img.shields.io/badge/Clean%20Architecture-9.7%2F10-blueviolet?style=flat-square)](#6-clean-architecture-9710--type-safe-domain-layer)
-[![NASA Test Shield](https://img.shields.io/badge/NASA%20Test%20Shield-572%20PASS%20(100%25)-brightgreen?style=flat-square)](#-nasa-ground-truth-verification-shield-572-automated-tests)
 [![SQLite WAL](https://img.shields.io/badge/SQLite-WAL%20Mode-003B57?style=flat-square&logo=sqlite&logoColor=white)](https://sqlite.org/)
 [![RAM Footprint](https://img.shields.io/badge/RAM_Footprint-~40MB-emerald?style=flat-square)](#-key-architectural-highlights)
 [![Zero-Amnesia Memory](https://img.shields.io/badge/Memory-Zero--Amnesia%20Relay-orange?style=flat-square)](#2-relay-handoff-memory-zero-amnesia-priming)
@@ -101,7 +100,7 @@ Traditional pipelines suffer severe context decay when passing tasks across stag
   ```markdown
   ### [ЭСТАФЕТА ПАЙПЛАЙНА / RELAY HANDOFF]
   Transitioned from: <previous_stage>
-  Handoff Summary: <structured_findings_and_test_verdicts>
+  Handoff Summary: <structured_findings_and_review_verdicts>
   ```
 - The agent starts Turn 1 with **100% memory primed**—zero turns wasted re-reading history or rule files.
 
@@ -224,42 +223,11 @@ Download the latest verified Windows release installer directly:
 - Instant launch, native OS integration, pre-bundled Rust core (~40MB RAM).
 
 ### Option C: Web Development Sandbox
-Test and develop the React 19 UI with instantaneous Vite Hot Module Replacement (HMR):
+Develop and preview the React 19 UI with instantaneous Vite Hot Module Replacement (HMR):
 ```bash
 pnpm run dev
 # Open http://localhost:5173
 ```
-
----
-
-## 🛡️ NASA Ground Truth Verification Shield (572 Automated Tests, 100% PASS)
-
-CanbanVoimaxHarness enforces zero-regression engineering through an unyielding 572-test automated verification shield:
-
-- **Frontend Test Shield (Vitest v5.0.5)**: **297 automated tests** across 24 test suites running in ~6.0s with 100% PASS (0 failures, 0 flaky):
-  - Branded nominal types & domain invariants (`src/types/__tests__/domain.test.ts`)
-  - Board store slices, normalizers & drag-and-drop (`src/stores/__tests__/tasksCrudSlice.test.ts`, `src/stores/board/__tests__/taskNormalizer.test.ts`)
-  - Drawer streaming slices, thought parsers, and console drawer (`src/stores/__tests__/drawerMetaSlice.test.ts`, `src/components/drawer/__tests__/AgentConsoleDrawer.test.tsx`)
-  - Cortex persona and rules management slices (`src/stores/__tests__/cortexStore.test.ts`)
-  - Dialog persistence & streaming subagent synchronization (`src/stores/__tests__/dialogPersistence.test.ts`, `src/stores/__tests__/subagentsTimestamp.test.ts`)
-  - Markdown AST extraction, token counters, and code blocks (`src/lib/markdown/__tests__/parseMarkdownTokens.test.ts`)
-  - KanbanCard memoization, comparators, and tactile badges (`src/components/card/__tests__/cardComponents.test.ts`)
-  - Localization dictionary completeness and fallbacks (`src/i18n/__tests__/i18n.test.ts`)
-- **Backend Test Shield (Cargo Test)**: **275 automated tests** across all subsystems (150 sync + 125 async tokio) running in ~4.8s with 100% PASS (0 failures, 0 flaky):
-  - Domain nominal branded IDs & state machine (`domain/ids.rs`, `domain/state.rs`)
-  - R2D2 SQLite connection pooling, migrations, and repositories (`db/pool.rs`, `db/task_repo.rs`, `db/dialog_repo.rs`, `db/telemetry_repo.rs`)
-  - Config discovery, models, tool policy, and auto-gitignore scaffold (`config/`)
-  - Generic ReAct Engine, stream chunk consumer, compactor, and fuzzy text match (`agent/`)
-  - Task transition pipelines, healing, and lifecycle commands (`commands/tasks/`)
-- **NASA Ground Truth Turbo Sensors (<10s)**:
-  ```bash
-  # Execute full parallel ground-truth sensors:
-  pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings && cargo check
-  
-  # Run complete 572-test shield:
-  pnpm test      # 297 Vitest tests across 24 suites (~6.0s)
-  cargo test     # 275 Rust core tests (~4.8s)
-  ```
 
 ---
 
