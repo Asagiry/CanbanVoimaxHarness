@@ -74,7 +74,7 @@ if "!RUN_BACKEND!"=="0" (
 if "!RUN_FRONTEND!"=="0" (
     echo [CVH Sensor] Frontend unchanged, skipping frontend checks.
 ) else (
-    echo [CVH Sensor] Running frontend tests (Vitest)...
+    echo [CVH Sensor] Running frontend tests [Vitest]...
     if exist "package.json" (
         call pnpm test
         if errorlevel 1 (
