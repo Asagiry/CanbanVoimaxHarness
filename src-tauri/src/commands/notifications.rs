@@ -345,7 +345,9 @@ mod tests {
             .decode(&encoded)
             .expect("Valid base64");
         let u16_chars: Vec<u16> = decoded
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
             .collect();
         let decoded_str = String::from_utf16(&u16_chars).expect("Valid UTF-16");

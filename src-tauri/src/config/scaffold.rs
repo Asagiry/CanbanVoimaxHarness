@@ -4,7 +4,7 @@ use anyhow::Result;
 use std::path::Path;
 
 use crate::config::discovery::{is_app_own_directory, is_binary_or_target_dir};
-use crate::config::io::{atomic_write_file, load_pipeline_config};
+use crate::config::io::{atomic_write_file, load_boards_config, load_pipeline_config};
 use crate::config::models::*;
 use crate::config::tool_policy::{tool_policy_path, ToolPolicyConfig};
 
@@ -81,16 +81,20 @@ pub async fn ensure_cvh_dev_scaffold(repo_root: &Path) -> Result<(), anyhow::Err
     let global_rules_dir = repo_root.join(".cvh").join("rules");
     tokio::fs::create_dir_all(&global_rules_dir).await?;
 
+    let runtime_md_path = global_rules_dir.join("runtime.md");
+    if !runtime_md_path.exists() {
+        atomic_write_file(&runtime_md_path, DEFAULT_RULE_RUNTIME_MD).await?;
+    }
+
     Ok(())
 }
 
 
 /// Automatically scaffold the minimal .cvh workspace structure if missing.
-/// Creates: empty `.cvh/agents/`, `.cvh/dialogs/`,
-/// `.cvh/skills/`, `.cvh/settings/`, `.cvh/hooks/` and default
-/// config/pipeline/tool-policy files. Fresh scaffolds seed NO agents:
-/// `pipeline.json` holds only `backlog` (no persona, first) + `ready`
-/// (terminal, last); the first agent is created by the user via UI.
+/// Creates: empty `.cvh/agents/`, `.cvh/settings/`, `.cvh/hooks/`, `.cvh/rules/`
+/// and default config/boards/pipeline/tool-policy files. Fresh scaffolds seed NO agents:
+/// `boards.json` holds only `backlog` (no persona, first), `dev` (cvh-dev persona),
+/// and `ready` (terminal, last); additional agents are created by the user via UI or autonomous setup.
 pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
     if repo_root.as_os_str().is_empty() {
         return Err(anyhow::anyhow!("Cannot scaffold .cvh in an empty project root path"));
@@ -103,19 +107,20 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
     }
     let cvh_dir = repo_root.join(".cvh");
     let agents_dir = cvh_dir.join("agents");
-    let dialogs_dir = cvh_dir.join("dialogs");
-    let skills_dir = cvh_dir.join("skills");
     let settings_dir = cvh_dir.join("settings");
     let hooks_dir = cvh_dir.join("hooks");
     let rules_dir = cvh_dir.join("rules");
 
     tokio::fs::create_dir_all(&cvh_dir).await?;
     tokio::fs::create_dir_all(&agents_dir).await?;
-    tokio::fs::create_dir_all(&dialogs_dir).await?;
-    tokio::fs::create_dir_all(&skills_dir).await?;
     tokio::fs::create_dir_all(&settings_dir).await?;
     tokio::fs::create_dir_all(&hooks_dir).await?;
     tokio::fs::create_dir_all(&rules_dir).await?;
+
+    let runtime_md_path = rules_dir.join("runtime.md");
+    if !runtime_md_path.exists() {
+        atomic_write_file(&runtime_md_path, DEFAULT_RULE_RUNTIME_MD).await?;
+    }
 
     // 1. config.json if not present
     let config_path = cvh_dir.join("config.json");
@@ -135,29 +140,50 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
         atomic_write_file(&config_path, &serde_json::to_string_pretty(&default_config)?).await?;
     }
 
-    // 2. pipeline.json if not present (minimal 3 stages: backlog -> dev -> ready).
-    let pipeline_path = cvh_dir.join("pipeline.json");
-    let initial_stages = if !pipeline_path.exists() {
-        let minimal_pipeline = minimal_pipeline_config();
-        atomic_write_file(&pipeline_path, &serde_json::to_string_pretty(&minimal_pipeline)?).await?;
-        minimal_pipeline.stages
-    } else {
-        load_pipeline_config(repo_root).await.map(|p| p.stages).unwrap_or_else(|_| minimal_pipeline_config().stages)
-    };
-
-    // 2b. boards.json if not present: seed default 3-stage board with persona: 'cvh-dev'
+    // 2. boards.json (primary source of truth for boards and stages)
     let boards_path = cvh_dir.join("boards.json");
-    if !boards_path.exists() {
+    let boards_cfg = if !boards_path.exists() {
+        let initial_stages = if cvh_dir.join("pipeline.json").exists() {
+            load_pipeline_config(repo_root)
+                .await
+                .map(|p| p.stages)
+                .unwrap_or_else(|_| get_canonical_board_stages())
+        } else {
+            get_canonical_board_stages()
+        };
         let default_board = BoardDef {
             id: "development".to_string(),
             name: "cvh-board".to_string(),
             stages: initial_stages,
         };
-        let boards_cfg = BoardsConfig {
+        let cfg = BoardsConfig {
             active_board_id: "development".to_string(),
             boards: vec![default_board],
         };
-        atomic_write_file(&boards_path, &serde_json::to_string_pretty(&boards_cfg)?).await?;
+        atomic_write_file(&boards_path, &serde_json::to_string_pretty(&cfg)?).await?;
+        cfg
+    } else {
+        load_boards_config(repo_root).await.unwrap_or_else(|_| default_boards_config())
+    };
+
+    // 2b. pipeline.json (mirrored from boards.json for backward compatibility)
+    let pipeline_path = cvh_dir.join("pipeline.json");
+    if !pipeline_path.exists() {
+        let active_board = boards_cfg
+            .boards
+            .iter()
+            .find(|b| b.id == boards_cfg.active_board_id)
+            .cloned()
+            .unwrap_or_else(default_board_def);
+        let pipeline = PipelineConfig {
+            id: "default-engineering".to_string(),
+            title: active_board.name,
+            tool_permissions: None,
+            stages: active_board.stages,
+            boards: Some(boards_cfg.boards),
+            active_board_id: Some(boards_cfg.active_board_id),
+        };
+        atomic_write_file(&pipeline_path, &serde_json::to_string_pretty(&pipeline)?).await?;
     }
 
     // Seed modular cvh-dev router persona, settings, and progressive disclosure rules
