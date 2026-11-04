@@ -29,6 +29,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Agent Console Drawer (Root Container)**| `src/components/drawer/AgentConsoleDrawer.tsx` | Hoisted fixed overlay, flex bounded (`min-h-0 min-w-0`). |
 | **Drawer Header & Action Stepper** | `src/components/drawer/DrawerHeader.tsx` | Task title, tactile stage stepper, abort/run controls. |
 | **Activity Stream & Comment Cards** | `src/components/drawer/DrawerActivityStream.tsx` | Step commentary vs prominent terminal response card. |
+| **Human-in-the-Loop Question Prompt Card** | `src/components/drawer/QuestionPromptCard.tsx` | Interactive clarifying question card, single/multiple choice, custom input, markdown rendering. |
 | **Steer Instruction Prompt Bar** | `src/components/drawer/DrawerSteerBar.tsx` | Interactive steer input bar, optimistic submission. |
 | **Context Gauge Status Ring** | `src/components/drawer/ContextGauge.tsx` | Real-time context token gauge, status bar & header ring. |
 | **Session Statistics Popover** | `src/components/drawer/SessionStatsPopover.tsx` | DSH-style speedometer popover (LLM time, tool time, TTFT, TPS). |
@@ -76,6 +77,8 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Cortex Personas Store Slice** | `src/stores/cortex/slices/personasSlice.ts` | Persona CRUD, settings synchronization. |
 | **Cortex Rules Store Slice** | `src/stores/cortex/slices/rulesSlice.ts` | Rule creation, editing, and frontmatter management. |
 | **Typed Tauri Event Gateway** | `src/services/tauriEventGateway.ts` | 150ms micro-batching, typed events (zero `listen<any>`).|
+| **System Notifications Service** | `src/services/notificationService.ts` | Desktop notification dispatching, click navigation, and user preferences filter. |
+| **Notification Markdown Formatter** | `src/services/notificationFormatter.ts` | Markdown plain-text normalization, word-boundary truncation, and emoji-free titles. |
 | **Nominal Domain Types & Models** | `src/types/domain.ts` | `TaskId`, `StageId`, `BoardId`, `TaskState`. |
 
 ---
@@ -91,6 +94,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 ### 2.2 Console Drawer Subsystem (`src/components/drawer/`)
 - **`AgentConsoleDrawer.tsx`**: Slide-out execution console. Rendered at root fragment level with `position: fixed` outside any transformed or flex-row containers to prevent clipping. Enforces `min-h-0` and `min-w-0` on scrollable flex children.
 - **`DrawerActivityStream.tsx`**: Slim orchestration layer for chronological activity feed, scroll management, and activity card dispatching.
+- **`QuestionPromptCard.tsx`**: Interactive clarifying question card (single/multiple choice, custom input) with streaming markdown rendering and inline token formatting.
 - **`stream/` Subsystem**: Decomposed streaming components:
   - **`MarkdownContent.tsx`**: Lightweight markdown token renderer, tabular monospace tables, and copyable code blocks.
   - **`AgentExplanationCard.tsx`**: Intermediate assistant thoughts, action plans, and todo checklist rendering.
@@ -116,6 +120,10 @@ Authoritative directory topology, component mapping table, and modular store arc
 - **Zero Raw `listen<any>`**: Direct invocations of Tauri `listen` in components or stores are strictly prohibited.
 - **150ms Micro-Batching**: High-frequency streaming events (`agent:thought`, `agent:stream`) are buffered in a 150ms window before flushing to reactive stores, eliminating UI thread locking during high-speed LLM generation (>100 tok/s).
 - **Strongly Typed Payloads**: Emits typed domain events (`AgentThoughtPayload`, `AgentToolCallPayload`, `TaskUpdatedPayload`).
+
+### 2.5 Desktop Notifications Subsystem (`src/services/`)
+- **`notificationService.ts`**: Coordinates native desktop notifications and Windows fallback toasts on background transitions, question prompts, and rejections. Handles focus and drawer routing on click.
+- **`notificationFormatter.ts`**: Normalizes raw markdown summaries into clean plain-text typography with Unicode bullets and vertical code/quote bars, smart word-boundary truncation (up to 320 chars), and clean titles without emojis.
 
 ---
 

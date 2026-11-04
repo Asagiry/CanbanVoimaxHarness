@@ -7,6 +7,7 @@
     "reject_task": true,
     "subagent": true,
     "subagent_list": true,
+
     "web_search": true,
     "advance_task": true,
     "collect_subagent": true,
@@ -47,7 +48,7 @@
       "advance_task": true
     },
     "plan": {
-      "web_search": true,
+"web_search": true,
       "create_task": false,
       "execute_command": false,
       "web_fetch": true,
@@ -80,7 +81,7 @@
       "get_task_history": true
     },
     "retro": {
-      "edit_file": false,
+"edit_file": true,
       "write_file": true,
       "read_file": true,
       "execute_command": true,
@@ -94,7 +95,7 @@
       "edit_file": false,
       "complete_task": false,
       "create_task": false,
-      "web_search": true,
+"web_search": true,
       "write_file": false
     },
     "ready": {

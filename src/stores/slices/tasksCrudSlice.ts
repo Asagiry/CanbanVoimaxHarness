@@ -544,7 +544,7 @@ export const createTasksCrudSlice: StateCreator<
           })
         : updatedTasks.map((t) => {
             const tCol = columns.find((c) => c.id === t.stageId);
-            if (t.id === mapped.id && (t.stageId === 'ready' || t.status === 'done' || tCol?.terminal === true)) {
+            if (t.id === mapped.id && (t.stageId === 'ready' || t.stageId === 'done' || tCol?.terminal === true)) {
               return {
                 ...t,
                 waitingForSubtaskId: undefined,
@@ -593,7 +593,7 @@ export const createTasksCrudSlice: StateCreator<
 
     const cleanedTasks = mapped.map((t) => {
       const colDef = columns.find((c) => c.id === t.stageId);
-      const isTerminal = t.stageId === 'ready' || t.status === 'done' || colDef?.terminal === true;
+      const isTerminal = t.stageId === 'ready' || t.stageId === 'done' || colDef?.terminal === true;
       if (isTerminal) {
         if (t.waitingForSubtaskId || t.status === 'waiting_subtask') {
           return { ...t, waitingForSubtaskId: undefined, status: 'done' as TaskStatus };
@@ -611,7 +611,7 @@ export const createTasksCrudSlice: StateCreator<
           return {
             ...t,
             waitingForSubtaskId: undefined,
-            status,
+            status: 'idle' as TaskStatus,
           };
         }
       }

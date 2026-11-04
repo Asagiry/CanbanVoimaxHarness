@@ -97,7 +97,6 @@ pub fn heal_tasks(tasks: &mut [Task], config: &BoardsConfig) -> bool {
     for t in tasks.iter_mut() {
         let is_terminal = stage_id_matches(&t.stage_id, "ready")
             || stage_id_matches(&t.stage_id, "done")
-            || t.status.as_deref() == Some("done")
             || config.boards.iter().any(|b| {
                 b.stages.iter().any(|c| stage_id_matches(&c.id, &t.stage_id) && c.terminal == Some(true))
             });
@@ -112,6 +111,13 @@ pub fn heal_tasks(tasks: &mut [Task], config: &BoardsConfig) -> bool {
                 any_modified = true;
             }
         } else {
+            if t.waiting_for_subtask_id.is_some() && t.status.as_deref() == Some("idle") {
+                t.status = Some("done".to_string());
+                if t.completed_at.is_none() {
+                    t.completed_at = Some(chrono::Utc::now().timestamp_millis());
+                }
+                any_modified = true;
+            }
             if t.status.as_deref() == Some("waiting_subtask") {
                 t.status = Some("idle".to_string());
                 any_modified = true;

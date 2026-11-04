@@ -287,7 +287,10 @@ pub fn propagate_parent_subtask_advance(
             let now = Utc::now().timestamp_millis();
 
             tasks[parent_idx].waiting_for_subtask_id = Some(new_subtask_id.clone());
-            tasks[parent_idx].status = Some("idle".to_string());
+            tasks[parent_idx].status = Some("done".to_string());
+            if tasks[parent_idx].completed_at.is_none() {
+                tasks[parent_idx].completed_at = Some(now);
+            }
             tasks[parent_idx].updated_at = now;
 
             let has_autorun = next_col.persona.is_some() || next_col.auto_run == Some(true);
@@ -2070,7 +2073,10 @@ pub async fn internal_advance_task_to_stage(
                 // 2. Update parent task waiting_for_subtask_id
                 if let Some(parent) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &parent_id)) {
                     parent.waiting_for_subtask_id = Some(existing_sub.id.clone());
-                    parent.status = Some("idle".to_string());
+                    parent.status = Some("done".to_string());
+                    if parent.completed_at.is_none() {
+                        parent.completed_at = Some(Utc::now().timestamp_millis());
+                    }
                     parent.updated_at = Utc::now().timestamp_millis();
                     let _ = crate::db::db_upsert_task(root, parent);
                 }
@@ -2288,7 +2294,10 @@ pub async fn internal_advance_task_to_stage(
             let mut tasks = load_tasks_from_disk(root).await;
             if let Some(parent) = tasks.iter_mut().find(|t| task_id_matches(&t.id, task_id)) {
                 parent.waiting_for_subtask_id = Some(existing_sub.id.clone());
-                parent.status = Some("idle".to_string());
+                parent.status = Some("done".to_string());
+                if parent.completed_at.is_none() {
+                    parent.completed_at = Some(Utc::now().timestamp_millis());
+                }
                 parent.updated_at = Utc::now().timestamp_millis();
                 let _ = crate::db::db_upsert_task(root, parent);
             }

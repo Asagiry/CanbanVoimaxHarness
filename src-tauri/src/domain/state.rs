@@ -179,7 +179,9 @@ impl TaskState {
     pub fn validate_task(task: &Task) -> Result<(), StateError> {
         let status = task.status.as_deref().unwrap_or("idle");
 
-        if status == "done" {
+        let is_terminal_stage = crate::commands::stage_id_matches(&task.stage_id, "ready")
+            || crate::commands::stage_id_matches(&task.stage_id, "done");
+        if status == "done" && is_terminal_stage {
             if let Some(ref sub_id) = task.waiting_for_subtask_id {
                 let trimmed = sub_id.trim();
                 if !trimmed.is_empty() {

@@ -73,7 +73,7 @@ export interface CardTimerBadgeProps {
 
 export const CardTimerBadge = memo(function CardTimerBadge({
   task,
-  isDone: _isDone = false,
+  isDone = false,
 }: CardTimerBadgeProps) {
   const { t } = useTranslation();
 
@@ -81,14 +81,24 @@ export const CardTimerBadge = memo(function CardTimerBadge({
   const isRunning = status === 'running';
   const currentStageDuration = calculateStageDuration(task, isRunning);
 
+  if (status === 'running') {
+    return (
+      <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#161b22] border border-[#bbf7d0] dark:border-[#30363d]">
+        <span className="h-1.5 w-1.5 rounded-full bg-[#15803d] dark:bg-[#4ade80]" />
+        <span>{t('status.running')} {formatTimerMMSS(currentStageDuration)}</span>
+      </span>
+    );
+  }
+
+  if (status === 'done' || isDone || Boolean(task.waitingForSubtaskId)) {
+    return (
+      <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#161b22] border border-[#bbf7d0] dark:border-[#30363d]">
+        <span>{t('status.done')}</span>
+      </span>
+    );
+  }
+
   switch (status) {
-    case 'running':
-      return (
-        <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#161b22] border border-[#bbf7d0] dark:border-[#30363d]">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#15803d] dark:bg-[#4ade80]" />
-          <span>{t('status.running')} {formatTimerMMSS(currentStageDuration)}</span>
-        </span>
-      );
     case 'waiting_subagent':
       return (
         <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#d97706] dark:text-[#f59e0b] bg-[#fefce8] dark:bg-[#161b22] border border-[#fef08a] dark:border-[#30363d]">
@@ -107,12 +117,6 @@ export const CardTimerBadge = memo(function CardTimerBadge({
       return (
         <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#7e22ce] dark:text-[#c084fc] bg-[#faf5ff] dark:bg-[#161b22] border border-[#e9d5ff] dark:border-[#30363d]">
           <span>{t('status.waitingReview')}</span>
-        </span>
-      );
-    case 'done':
-      return (
-        <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#161b22] border border-[#bbf7d0] dark:border-[#30363d]">
-          <span>{t('status.done')}</span>
         </span>
       );
     case 'blocked':

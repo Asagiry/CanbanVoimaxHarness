@@ -38,7 +38,7 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
     const backendPayload = projectTasks.map((t) => {
       const hasBoard = boards.some((b) => b.id === t.boardId);
       const effectiveBoardId = hasBoard ? t.boardId : fallbackBoardId;
-      const isTerminalTask = t.stageId === 'ready' || t.status === 'done';
+      const isTerminalTask = t.stageId === 'ready' || t.stageId === 'done';
       return {
         id: t.id,
         title: t.title,

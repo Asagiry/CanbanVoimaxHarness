@@ -360,9 +360,10 @@ fn test_task_state_validation_make_illegal_states_unrepresentable() {
     assert!(TaskState::validate_task(&valid_done).is_ok());
     assert!(TaskState::try_from_task(&valid_done).is_ok());
 
-    // 2. Illegal State: Done with active waiting_for_subtask_id
+    // 2. Illegal State: Done in terminal stage with active waiting_for_subtask_id
     let illegal_done_waiting = Task {
         id: "CVH-002".to_string(),
+        stage_id: "ready".to_string(),
         status: Some("done".to_string()),
         verdict: Some("APPROVED".to_string()),
         waiting_for_subtask_id: Some("CVH-002.1".to_string()),
@@ -377,6 +378,16 @@ fn test_task_state_validation_make_illegal_states_unrepresentable() {
         }
     );
     assert!(TaskState::try_from_task(&illegal_done_waiting).is_err());
+
+    // 2b. Valid State: Done in non-terminal stage (e.g. plan) with active waiting_for_subtask_id
+    let valid_plan_done = Task {
+        id: "CVH-002B".to_string(),
+        stage_id: "plan".to_string(),
+        status: Some("done".to_string()),
+        waiting_for_subtask_id: Some("CVH-002B.1".to_string()),
+        ..Default::default()
+    };
+    assert!(TaskState::validate_task(&valid_plan_done).is_ok());
 
     // 3. Illegal State: WaitingSubtask without waiting_for_subtask_id
     let illegal_waiting_empty = Task {

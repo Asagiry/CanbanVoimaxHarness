@@ -122,6 +122,11 @@ export function normalizeKanbanTask(
 
   const stageId = matchedCol?.id ?? (rawId && effectiveColumns.some((c) => c.id === rawId) ? rawId : (effectiveColumns[0]?.id ?? 'backlog'));
   const col = effectiveColumns.find((c) => c.id === stageId);
+  const isTerminalTask = Boolean(col?.terminal || stageId === 'ready' || stageId === 'done');
+  const effectiveWaitingForSubtaskId = isTerminalTask
+    ? undefined
+    : (raw.waitingForSubtaskId ?? raw.waiting_for_subtask_id ?? undefined);
+
   const rawStatus = (raw.status as TaskStatus) || undefined;
   let status: TaskStatus = rawStatus ?? (col?.terminal
     ? 'done'
@@ -129,7 +134,10 @@ export function normalizeKanbanTask(
     ? 'running'
     : 'idle');
   if (status === 'waiting_subtask') {
-    status = (col?.terminal || stageId === 'ready' || stageId === 'done') ? 'done' : 'idle';
+    status = isTerminalTask ? 'done' : 'idle';
+  }
+  if (effectiveWaitingForSubtaskId && status === 'idle') {
+    status = 'done';
   }
   const stageDurations: Record<string, number> =
     raw.stageDurations && typeof raw.stageDurations === 'object' && !Array.isArray(raw.stageDurations)
@@ -225,11 +233,6 @@ export function normalizeKanbanTask(
     // Columns without explicit persona (e.g. intake / backlog)
     effectivePersona = rawPersona ?? workingCols[0]?.persona ?? 'general';
   }
-
-  const isTerminalTask = stageId === 'ready' || status === 'done';
-  const effectiveWaitingForSubtaskId = isTerminalTask
-    ? undefined
-    : (raw.waitingForSubtaskId ?? raw.waiting_for_subtask_id ?? undefined);
 
   return {
     id: raw.id,
