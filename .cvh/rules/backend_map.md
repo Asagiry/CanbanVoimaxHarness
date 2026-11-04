@@ -69,7 +69,7 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 - **`models.rs`**: Canonical data contracts (`BoardDef`, `BoardsConfig`, `PipelineConfig`, `ColumnDef`, `AgentSettings`). Defines system directory resolvers (`agent_rules_dir`, `global_rules_dir`, `tool_policy_path`).
 - **`tool_policy.rs`**: Two-level tool authorization engine. Enforces strict AND-semantics: `effective(tool, stage) = global_enabled[tool] && stage_override[stage][tool]`. Zero-trust stripping purges disabled tools from LLM schemas.
 - **`discovery.rs`**: Four-tier workspace root discovery traversing ancestors, inspecting `.cvh` / `.git`, and persisting active projects to `%LOCALAPPDATA%/com.voimax.cvh/active_project.txt`.
-- **`scaffold.rs`**: Initial project initialization (`ensure_cvh_scaffold`, `ensure_cvh_dev_scaffold`). Enforces auto-gitignore entries (`.cvh/llm.json`, `.cvh/worktrees/`) and seeds initial 3-column boards.
+- **`scaffold.rs`**: Initial project initialization (`scaffold_cvh_project`, `ensure_cvh_dev_scaffold`). Enforces auto-gitignore entries (`.cvh/llm.json`, `.cvh/worktrees/`), seeds initial 3-column boards (`boards.json` primary), and seeds builtin `runtime.md` contract.
 - **`io.rs`**: Atomic disk operations. `atomic_write_file` writes via transient temp files and renames to prevent partial corruption.
 
 ### 2.3 Task Pipeline & Command Subsystem (`src-tauri/src/commands/`)

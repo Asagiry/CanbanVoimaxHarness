@@ -78,6 +78,8 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Cortex Personas Store Slice** | `src/stores/cortex/slices/personasSlice.ts` | Persona CRUD, settings synchronization. |
 | **Cortex Rules Store Slice** | `src/stores/cortex/slices/rulesSlice.ts` | Rule creation, editing, and frontmatter management. |
 | **Typed Tauri Event Gateway** | `src/services/tauriEventGateway.ts` | 150ms micro-batching, typed events (zero `listen<any>`).|
+| **System Notifications Service** | `src/services/notificationService.ts` | Desktop notification dispatching, click navigation, and user preferences filter. |
+| **Notification Markdown Formatter** | `src/services/notificationFormatter.ts` | Markdown plain-text normalization, word-boundary truncation, and emoji-free titles. |
 | **Nominal Domain Types & Models** | `src/types/domain.ts` | `TaskId`, `StageId`, `BoardId`, `TaskState`. |
 
 ---
@@ -120,6 +122,10 @@ Authoritative directory topology, component mapping table, and modular store arc
 - **Zero Raw `listen<any>`**: Direct invocations of Tauri `listen` in components or stores are strictly prohibited.
 - **150ms Micro-Batching**: High-frequency streaming events (`agent:thought`, `agent:stream`) are buffered in a 150ms window before flushing to reactive stores, eliminating UI thread locking during high-speed LLM generation (>100 tok/s).
 - **Strongly Typed Payloads**: Emits typed domain events (`AgentThoughtPayload`, `AgentToolCallPayload`, `TaskUpdatedPayload`).
+
+### 2.5 Desktop Notifications Subsystem (`src/services/`)
+- **`notificationService.ts`**: Coordinates native desktop notifications and Windows fallback toasts on background transitions, question prompts, and rejections. Handles focus and drawer routing on click.
+- **`notificationFormatter.ts`**: Normalizes raw markdown summaries into clean plain-text typography with Unicode bullets and vertical code/quote bars, smart word-boundary truncation (up to 320 chars), and clean titles without emojis.
 
 ---
 
