@@ -685,6 +685,12 @@ pub async fn get_task_git_diff(
             String::new()
         };
 
+        // Filter out phantom "modified" files (e.g. Windows CRLF vs LF stat mismatch or dirty mtime)
+        // where git diff proves there are zero textual or binary changes.
+        if status == "M" && patch.trim().is_empty() {
+            continue;
+        }
+
         let mut additions: usize = 0;
         let mut deletions: usize = 0;
 
