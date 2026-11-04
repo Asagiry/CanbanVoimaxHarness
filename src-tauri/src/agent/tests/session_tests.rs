@@ -654,14 +654,12 @@ use std::sync::Arc;
                 let info = sess.retry_info.lock().await;
                 if info.parent_task_id == parent_id
                     && (info.status == "running" || info.status == "finished")
+                    && info.role.eq_ignore_ascii_case("architect")
+                    && are_subagent_prompts_duplicate(&info.prompt, prompt2)
                 {
-                    if info.role.eq_ignore_ascii_case("architect")
-                        && are_subagent_prompts_duplicate(&info.prompt, prompt2)
-                    {
-                        is_dup_2 = true;
-                        reused_id_2 = Some(sid.clone());
-                        break;
-                    }
+                    is_dup_2 = true;
+                    reused_id_2 = Some(sid.clone());
+                    break;
                 }
             }
         }

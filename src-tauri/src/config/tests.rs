@@ -46,7 +46,8 @@ use std::path::{Path, PathBuf};
         let cvh = base_dir.join(".cvh");
         assert!(cvh.exists());
         assert!(cvh.join("agents").is_dir());
-        assert!(cvh.join("skills").is_dir());
+        assert!(!cvh.join("skills").exists(), "skills directory must NOT be scaffolded");
+        assert!(!cvh.join("dialogs").exists(), "dialogs directory must NOT be scaffolded");
         assert!(cvh.join("settings").is_dir());
 
         // Verify cvh-dev modular rules are seeded
@@ -63,9 +64,10 @@ use std::path::{Path, PathBuf};
             assert!(entry.path().is_dir(), "Expected only directories in agents/, found: {:?}", entry.path());
         }
 
-        // Verify .cvh/rules/ exists as an empty directory without hardcoded CVH maps
+        // Verify .cvh/rules/ exists and seeds runtime.md without hardcoded CVH maps
         let rules_dir = cvh.join("rules");
         assert!(rules_dir.is_dir());
+        assert!(rules_dir.join("runtime.md").is_file(), "runtime.md must be seeded");
         assert!(!rules_dir.join("backend_map.md").exists(), "Fresh scaffold must NOT seed CVH backend_map.md");
         assert!(!rules_dir.join("frontend_map.md").exists(), "Fresh scaffold must NOT seed CVH frontend_map.md");
 
@@ -81,6 +83,9 @@ use std::path::{Path, PathBuf};
 
         let rules_dir = base_dir.join(".cvh").join("rules");
         assert!(rules_dir.is_dir(), ".cvh/rules/ directory must be created");
+        assert!(rules_dir.join("runtime.md").is_file(), "Fresh scaffold must seed runtime.md");
+        assert!(!rules_dir.join("backend_map.md").exists(), "Fresh scaffold must NOT seed CVH backend_map.md");
+        assert!(!rules_dir.join("frontend_map.md").exists(), "Fresh scaffold must NOT seed CVH frontend_map.md");
 
         // Count entries in .cvh/rules/
         let mut entries = tokio::fs::read_dir(&rules_dir).await.expect("read_dir failed");
@@ -88,7 +93,7 @@ use std::path::{Path, PathBuf};
         while let Ok(Some(_)) = entries.next_entry().await {
             count += 1;
         }
-        assert_eq!(count, 0, ".cvh/rules/ must be initially empty without hardcoded maps");
+        assert_eq!(count, 1, ".cvh/rules/ must initially contain only runtime.md");
 
         let _ = tokio::fs::remove_dir_all(&base_dir).await;
     }
@@ -117,9 +122,10 @@ use std::path::{Path, PathBuf};
         ensure_cvh_dev_scaffold(&base_dir).await.expect("ensure_cvh_dev_scaffold re-run failed");
         assert!(cvh_dev.join("persona.md").is_file());
 
-        // Verify .cvh/rules/ exists and contains no hardcoded maps
+        // Verify .cvh/rules/ exists, contains runtime.md, and contains no hardcoded maps
         let rules_dir = base_dir.join(".cvh").join("rules");
         assert!(rules_dir.is_dir());
+        assert!(rules_dir.join("runtime.md").is_file());
         assert!(!rules_dir.join("backend_map.md").exists());
         assert!(!rules_dir.join("frontend_map.md").exists());
 
@@ -177,7 +183,8 @@ use std::path::{Path, PathBuf};
         }
 
         // remaining scaffold files/dirs in place
-        assert!(cvh.join("dialogs").is_dir());
+        assert!(!cvh.join("dialogs").exists(), "dialogs must not be scaffolded");
+        assert!(!cvh.join("skills").exists(), "skills must not be scaffolded");
         assert!(cvh.join("config.json").is_file());
         assert!(!cvh.join("tasks.json").exists(), "tasks.json must not be scaffolded");
         assert!(tool_policy_path(&base_dir).is_file());

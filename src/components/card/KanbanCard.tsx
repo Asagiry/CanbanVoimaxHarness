@@ -55,11 +55,12 @@ function KanbanCard({ task, index }: KanbanCardProps) {
   const ringGlowColor = assignedAgentColor.startsWith('#') && assignedAgentColor.length === 7
     ? `${assignedAgentColor}50`
     : assignedAgentColor;
-  const isDone = Boolean(task.status === 'done' || isDoneColumnDef(taskColumn));
+  const isTerminalColumn = Boolean(taskColumn?.terminal || task.stageId === 'ready' || task.stageId === 'done' || isDoneColumnDef(taskColumn));
+  const isDone = Boolean(task.status === 'done' || isTerminalColumn);
 
   // Subtasks belonging to this task (queried only if card is in done column)
   const subtasks = useBoardStore(
-    useShallow((s) => (isDone ? s.tasks.filter((t) => t.parentId === task.id) : []))
+    useShallow((s) => (isTerminalColumn ? s.tasks.filter((t) => t.parentId === task.id) : []))
   );
 
   // Hook nodes data
@@ -201,7 +202,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
               </div>
 
               {/* In Done column: Collapsible list of completed subtasks with dialogue open */}
-              <CardSubtaskBadge task={task} subtasks={subtasks} isDone={isDone} />
+              <CardSubtaskBadge task={task} subtasks={subtasks} isDone={isTerminalColumn} />
 
               {/* Left Edge Hook Node (on_enter / transition result) */}
               {hookData.hasLeftHook && hookData.effectiveLeftHookName && (

@@ -1,5 +1,10 @@
 import { useSettingsStore } from '../stores/settingsStore';
 import { useDrawerStore } from '../stores/drawerStore';
+import {
+  formatMarkdownForToast,
+  formatNotificationTitle,
+  getStageIconName,
+} from './notificationFormatter';
 
 export interface TaskAdvancedPayload {
   taskId: string;
@@ -73,13 +78,19 @@ export async function initNotifications(): Promise<void> {
   }
 }
 
-async function sendSystemNotification(title: string, body?: string, taskId?: string): Promise<boolean> {
+async function sendSystemNotification(
+  title: string,
+  body?: string,
+  taskId?: string,
+  icon?: string
+): Promise<boolean> {
   try {
     const { invoke } = await import('@tauri-apps/api/core');
     await invoke('show_system_notification', {
       title,
       body: body || null,
       taskId: taskId || null,
+      icon: icon || null,
     });
     return true;
   } catch (err) {
@@ -98,14 +109,13 @@ export async function showAdvanceTaskNotification(payload: TaskAdvancedPayload):
     if (!notificationSettings.onAdvanceTask) return;
   }
 
-  const title = payload.isTerminal
-    ? `Задача ${payload.taskId} завершена.`
-    : `Задача ${payload.taskId} перешла в колонку ${payload.targetStageTitle || payload.targetStageId}`;
+  const title = formatNotificationTitle('advance_task', payload.taskId, {
+    stageTitle: payload.targetStageTitle || payload.targetStageId,
+    isTerminal: payload.isTerminal,
+  });
 
-  const cleanSummary = payload.summary
-    ? payload.summary.replace(/###\s*[^\n]*\n?/g, '').trim()
-    : '';
-  const body = cleanSummary.length > 150 ? cleanSummary.slice(0, 147) + '...' : cleanSummary;
+  const body = formatMarkdownForToast(payload.summary, 320);
+  const icon = getStageIconName(payload.targetStageId, payload.isTerminal);
 
   const id = ++notificationCounter;
   const data: NotificationData = {
@@ -120,16 +130,15 @@ export async function showAdvanceTaskNotification(payload: TaskAdvancedPayload):
     if (oldestKey !== undefined) notificationDataMap.delete(oldestKey);
   }
 
-  await sendSystemNotification(title, body || undefined, payload.taskId);
+  await sendSystemNotification(title, body || undefined, payload.taskId, icon);
 }
 
 export async function showQuestionNotification(payload: QuestionNotificationPayload): Promise<void> {
   const { notificationSettings } = useSettingsStore.getState();
   if (!notificationSettings.enabled || !notificationSettings.onQuestion) return;
 
-  const title = `В задаче ${payload.taskId} вопрос от агента.`;
-  const cleanText = payload.text ? payload.text.trim() : '';
-  const body = cleanText.length > 150 ? cleanText.slice(0, 147) + '...' : cleanText;
+  const title = formatNotificationTitle('question', payload.taskId);
+  const body = formatMarkdownForToast(payload.text, 320);
 
   const id = ++notificationCounter;
   const data: NotificationData = {
@@ -145,16 +154,15 @@ export async function showQuestionNotification(payload: QuestionNotificationPayl
     if (oldestKey !== undefined) notificationDataMap.delete(oldestKey);
   }
 
-  await sendSystemNotification(title, body || undefined, payload.taskId);
+  await sendSystemNotification(title, body || undefined, payload.taskId, 'question');
 }
 
 export async function showRejectTaskNotification(payload: TaskRejectedPayload): Promise<void> {
   const { notificationSettings } = useSettingsStore.getState();
   if (!notificationSettings.enabled) return;
 
-  const title = `Задача ${payload.taskId} возвращена на доработку.`;
-  const cleanReason = payload.reason ? payload.reason.trim() : '';
-  const body = cleanReason.length > 150 ? cleanReason.slice(0, 147) + '...' : cleanReason;
+  const title = formatNotificationTitle('reject_task', payload.taskId);
+  const body = formatMarkdownForToast(payload.reason, 320);
 
   const id = ++notificationCounter;
   const data: NotificationData = {
@@ -169,11 +177,11 @@ export async function showRejectTaskNotification(payload: TaskRejectedPayload): 
     if (oldestKey !== undefined) notificationDataMap.delete(oldestKey);
   }
 
-  await sendSystemNotification(title, body || undefined, payload.taskId);
+  await sendSystemNotification(title, body || undefined, payload.taskId, 'reject');
 }
 
 export async function showTestNotification(): Promise<boolean> {
-  const title = 'CanbanVoimaxHarness';
+  const title = formatNotificationTitle('test');
   const body = 'Тестовое системное уведомление доставлено успешно.';
 
   const id = ++notificationCounter;
@@ -187,5 +195,5 @@ export async function showTestNotification(): Promise<boolean> {
     if (oldestKey !== undefined) notificationDataMap.delete(oldestKey);
   }
 
-  return await sendSystemNotification(title, body);
+  return await sendSystemNotification(title, body, undefined, 'app');
 }

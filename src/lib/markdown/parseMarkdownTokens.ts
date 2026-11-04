@@ -218,7 +218,10 @@ export function isHrLine(row: string): boolean {
  * Tokenizes raw Markdown content into a high-level block AST tokens array.
  */
 export function parseMarkdownTokens(content: string): MarkdownToken[] {
-  const cleanContent = (content ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  let cleanContent = (content ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  if (!cleanContent.includes('\n') && cleanContent.includes('\\n')) {
+    cleanContent = cleanContent.replace(/\\n/g, '\n');
+  }
   const lines = cleanContent.split('\n');
   const tokens: MarkdownToken[] = [];
   let inCodeBlock = false;
@@ -324,7 +327,19 @@ export function parseMarkdownTokens(content: string): MarkdownToken[] {
     }
 
     // Headings
-    if (trimmedLine.startsWith('#### ')) {
+    if (trimmedLine.startsWith('###### ')) {
+      tokens.push({
+        type: 'heading',
+        level: 6,
+        text: trimmedLine.slice(7),
+      });
+    } else if (trimmedLine.startsWith('##### ')) {
+      tokens.push({
+        type: 'heading',
+        level: 6,
+        text: trimmedLine.slice(6),
+      });
+    } else if (trimmedLine.startsWith('#### ')) {
       tokens.push({
         type: 'heading',
         level: 5,

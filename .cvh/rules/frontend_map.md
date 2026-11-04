@@ -37,6 +37,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Agent Console Drawer (Root Container)**| `src/components/drawer/AgentConsoleDrawer.tsx` | Hoisted fixed overlay, flex bounded (`min-h-0 min-w-0`). |
 | **Drawer Header & Action Stepper** | `src/components/drawer/DrawerHeader.tsx` | Task title, tactile stage stepper, abort/run controls. |
 | **Activity Stream & Comment Cards** | `src/components/drawer/DrawerActivityStream.tsx` | Step commentary vs prominent terminal response card. |
+| **Human-in-the-Loop Question Prompt Card** | `src/components/drawer/QuestionPromptCard.tsx` | Interactive clarifying question card, single/multiple choice, custom input, markdown rendering. |
 | **Steer Instruction Prompt Bar** | `src/components/drawer/DrawerSteerBar.tsx` | Interactive steer input bar, optimistic submission. |
 | **Git Diff Realtime Sidebar** | `src/components/drawer/GitDiffSidebar.tsx` | Resizable git diff panel with live change updates. |
 | **Subagents Execution Sidebar** | `src/components/drawer/SubagentsSidebar.tsx` | Subagent hierarchy, active status, subtask logs. |
@@ -112,6 +113,8 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Drawer Subagents Store Slice** | `src/stores/drawer/slices/subagentsSlice.ts` | Subagent lifecycle, active subtasks, subagent logs. |
 | **Drawer Input Drafts Slice** | `src/stores/drawer/slices/draftsSlice.ts` | Per-task draft text persistence for steer input bar. |
 | **Unified Cortex Store Slice** | `src/stores/cortex/cortexStoreSlice.ts` | File tree, personas CRUD, and rules state slice. |
+| **Desktop Notifications Dispatcher** | `src/services/notificationService.ts` | Desktop notification dispatching, click navigation, and user preferences filter. |
+| **Notification Markdown Formatter** | `src/services/notificationFormatter.ts` | Markdown plain-text normalization, word-boundary truncation, and emoji-free titles. |
 | **i18n Translation Dispatcher** | `src/i18n/translations.ts` | Localized translation resolver. |
 | **i18n Russian Dictionary** | `src/i18n/ru.ts` | Russian translation entries. |
 | **i18n English Dictionary** | `src/i18n/en.ts` | English translation entries. |
@@ -140,6 +143,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 ### 2.2 Console Drawer Subsystem (`src/components/drawer/`)
 - **`AgentConsoleDrawer.tsx`**: Slide-out execution console. Rendered at root fragment level with `position: fixed` outside any transformed or flex-row containers to prevent clipping. Enforces `min-h-0` and `min-w-0` on scrollable flex children.
 - **`DrawerActivityStream.tsx`**: Slim orchestration layer for chronological activity feed, scroll management, and activity card dispatching.
+- **`QuestionPromptCard.tsx`**: Interactive clarifying question card (single/multiple choice, custom input) with streaming markdown rendering and inline token formatting.
 - **`stream/` Subsystem**: Decomposed streaming components:
   - **`MarkdownContent.tsx`**: Lightweight markdown token renderer, tabular monospace tables, and copyable code blocks.
   - **`AgentExplanationCard.tsx`**: Intermediate assistant thoughts, action plans, and todo checklist rendering.
@@ -168,6 +172,10 @@ Authoritative directory topology, component mapping table, and modular store arc
 - **Zero Raw `listen<any>`**: Direct invocations of Tauri `listen` in components or stores are strictly prohibited.
 - **150ms Micro-Batching**: High-frequency streaming events (`agent:thought`, `agent:stream`) are buffered in a 150ms window before flushing to reactive stores, eliminating UI thread locking during high-speed LLM generation (>100 tok/s).
 - **Strongly Typed Payloads**: Emits typed domain events (`AgentThoughtPayload`, `AgentToolCallPayload`, `TaskUpdatedPayload`).
+
+### 2.5 Desktop Notifications Subsystem (`src/services/`)
+- **`notificationService.ts`**: Coordinates native desktop notifications and Windows fallback toasts on background transitions, question prompts, and rejections. Handles focus and drawer routing on click.
+- **`notificationFormatter.ts`**: Normalizes raw markdown summaries into clean plain-text typography with Unicode bullets and vertical code/quote bars, smart word-boundary truncation (up to 320 chars), and clean titles without emojis.
 
 ---
 

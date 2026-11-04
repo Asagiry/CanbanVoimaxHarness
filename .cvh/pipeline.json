@@ -132,6 +132,7 @@
           "description": "Сливает утвержденную feature-ветку в main, отправляет в origin/main и удаляет изолированный worktree"
         }
       },
+
       "autoRun": true,
       "terminal": null,
       "isIntake": null
@@ -324,6 +325,7 @@
               "script": ".cvh/hooks/on_review_finish.bat",
               "description": "Сливает утвержденную feature-ветку в main, отправляет в origin/main и удаляет изолированный worktree"
             }
+
           },
           "autoRun": true,
           "terminal": null,
@@ -378,7 +380,7 @@
             "glob",
             "grep"
           ],
-          "hooks": {},
+
           "autoRun": null,
           "terminal": true,
           "isIntake": null

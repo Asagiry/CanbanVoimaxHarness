@@ -282,4 +282,67 @@ describe('taskNormalizer dynamic persona resolution', () => {
     expect(task?.stageId).toBe('dev');
     expect(task?.persona).toBe('cvh-dev');
   });
+
+  it('normalizes task with waitingForSubtaskId and status idle to done while preserving subtask reference', () => {
+    const rawDto: BackendTaskDTO = {
+      id: 'CVH-031',
+      title: 'Planning Task',
+      stageId: 'plan',
+      boardId: 'canban-pipeline',
+      status: 'idle',
+      waiting_for_subtask_id: 'CVH-031.1',
+    };
+
+    const task = normalizeKanbanTask(rawDto, {
+      boards: [multiStageBoard],
+      activeBoardId: 'canban-pipeline',
+      columns: multiStageColumns,
+    });
+
+    expect(task).not.toBeNull();
+    expect(task?.status).toBe('done');
+    expect(task?.waitingForSubtaskId).toBe('CVH-031.1');
+  });
+
+  it('preserves waitingForSubtaskId when task is done in non-terminal column', () => {
+    const rawDto: BackendTaskDTO = {
+      id: 'CVH-032',
+      title: 'Planning Task Done',
+      stageId: 'plan',
+      boardId: 'canban-pipeline',
+      status: 'done',
+      waiting_for_subtask_id: 'CVH-032.1',
+    };
+
+    const task = normalizeKanbanTask(rawDto, {
+      boards: [multiStageBoard],
+      activeBoardId: 'canban-pipeline',
+      columns: multiStageColumns,
+    });
+
+    expect(task).not.toBeNull();
+    expect(task?.status).toBe('done');
+    expect(task?.waitingForSubtaskId).toBe('CVH-032.1');
+  });
+
+  it('clears waitingForSubtaskId when task is in terminal ready column', () => {
+    const rawDto: BackendTaskDTO = {
+      id: 'CVH-033',
+      title: 'Ready Task',
+      stageId: 'ready',
+      boardId: 'canban-pipeline',
+      status: 'done',
+      waiting_for_subtask_id: 'CVH-033.1',
+    };
+
+    const task = normalizeKanbanTask(rawDto, {
+      boards: [multiStageBoard],
+      activeBoardId: 'canban-pipeline',
+      columns: multiStageColumns,
+    });
+
+    expect(task).not.toBeNull();
+    expect(task?.status).toBe('done');
+    expect(task?.waitingForSubtaskId).toBeUndefined();
+  });
 });

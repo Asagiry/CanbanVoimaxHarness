@@ -237,7 +237,6 @@ Build optimized production desktop binaries and installer packages with a single
 - **Windows (PowerShell)**: `.\build-release.ps1`
 - **Linux / macOS**: `./build-release.sh`
 Automatically runs dependency installation, frontend production build, and native Tauri desktop compilation in release profile.
-
 ---
 
 ## 🏛️ Project Directory Structure (9.7/10 Clean Code Modular Architecture)
