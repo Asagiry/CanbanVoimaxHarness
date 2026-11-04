@@ -162,7 +162,7 @@ use std::path::PathBuf;
 
         let loaded = load_tasks_from_disk(&base).await;
         let p1 = loaded.iter().find(|t| t.id == "CVH-200").unwrap();
-        assert_eq!(p1.status.as_deref(), Some("idle"));
+        assert_eq!(p1.status.as_deref(), Some("done"));
         assert_eq!(p1.waiting_for_subtask_id.as_deref(), Some("CVH-200.1"));
 
         // 2. Advance subtask CVH-200.1 to ready (terminal column):
@@ -187,7 +187,7 @@ use std::path::PathBuf;
         let loaded2 = load_tasks_from_disk(&base).await;
         let p2 = loaded2.iter().find(|t| t.id == "CVH-200").unwrap();
         assert_eq!(p2.stage_id, "dev", "Parent stays pinned in dev stage");
-        assert_eq!(p2.status.as_deref(), Some("idle"), "Parent status is idle");
+        assert_eq!(p2.status.as_deref(), Some("done"), "Parent status is done");
         assert_eq!(p2.waiting_for_subtask_id.as_deref(), Some("CVH-200.2"), "Parent waits for CVH-200.2 in retro");
 
         let s2 = loaded2.iter().find(|t| t.id == "CVH-200.2").unwrap();
@@ -586,7 +586,7 @@ use std::path::PathBuf;
 
         let parent = loaded.iter().find(|t| t.id == "CVH-100").unwrap();
         assert_eq!(parent.stage_id, "dev", "Parent must remain pinned in 'dev' stage (§ 2.2)");
-        assert_eq!(parent.status.as_deref(), Some("idle"), "Parent status must be 'idle'");
+        assert_eq!(parent.status.as_deref(), Some("done"), "Parent status must be 'done'");
         assert_eq!(parent.waiting_for_subtask_id.as_deref(), Some("CVH-100.1"), "Parent must be waiting for CVH-100.1");
 
         let subtask = loaded.iter().find(|t| t.id == "CVH-100.1").unwrap();

@@ -573,7 +573,7 @@ mod tests {
             .await
             .expect("write test bat");
 
-        let rel_cmd = format!("sub/sensor.bat");
+        let rel_cmd = "sub/sensor.bat".to_string();
         let res = execute_sensor_command(&rel_cmd, &tmp, Some(Duration::from_secs(10)))
             .await
             .expect("sensor bat execution");

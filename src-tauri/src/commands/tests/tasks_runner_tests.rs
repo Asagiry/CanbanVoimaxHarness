@@ -282,7 +282,7 @@ use std::path::PathBuf;
         };
 
         // Disk has only Task A
-        save_tasks_to_disk(&base, &[task_a.clone()]).await.expect("save task_a to disk");
+        save_tasks_to_disk(&base, std::slice::from_ref(&task_a)).await.expect("save task_a to disk");
 
         // Memory has Task A and Task B
         let mem_tasks = vec![task_a.clone(), task_b.clone()];

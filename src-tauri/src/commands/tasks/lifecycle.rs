@@ -101,7 +101,6 @@ pub async fn internal_save_tasks(
         if let Some(dt) = disk_tasks.iter().find(|d| d.id == t.id) {
             let is_term = stage_id_matches(&t.stage_id, "ready")
                 || stage_id_matches(&t.stage_id, "done")
-                || t.status.as_deref() == Some("done")
                 || boards_cfg.as_ref().is_some_and(|cfg| {
                     cfg.boards.iter().any(|b| {
                         b.stages.iter().any(|c| stage_id_matches(&c.id, &t.stage_id) && c.terminal == Some(true))
@@ -828,7 +827,10 @@ pub async fn internal_create_subtask(
 
     // Update parent task: mark waiting for subtask, keep parent pinned in current stage (§ 2.2)
     tasks[parent_idx].waiting_for_subtask_id = Some(subtask_id.clone());
-    tasks[parent_idx].status = Some("idle".to_string());
+    tasks[parent_idx].status = Some("done".to_string());
+    if tasks[parent_idx].completed_at.is_none() {
+        tasks[parent_idx].completed_at = Some(now);
+    }
     tasks[parent_idx].updated_at = now;
 
     let subtask_title = title
@@ -1109,7 +1111,7 @@ pub async fn delete_task(
         if let Some(ref waiting_id) = t.waiting_for_subtask_id {
             if to_delete.contains(waiting_id) {
                 t.waiting_for_subtask_id = None;
-                if t.status.as_deref() == Some("waiting_subtask") {
+                if t.status.as_deref() == Some("waiting_subtask") || t.status.as_deref() == Some("done") {
                     t.status = Some("idle".to_string());
                 }
             }
