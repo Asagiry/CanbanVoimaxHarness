@@ -26,15 +26,15 @@
   "id": "review",
   "title": "Ревью кода",
   "color": "#8b5cf6",
-  "icon": "CheckSquare",
+  "icon": "ShieldCheck",
   "persona": "reviewer",
   "contextWindow": 200000,
   "modelOverride": "gemini-3.8-flash-high",
   "temperature": 0.1,
-  "gatekeeperSensor": "cargo check",
-  "allowedTools": ["execute_command", "read_file", "glob", "grep", "subagent"],
+  "gatekeeperSensor": "call .cvh\\hooks\\gatekeeper_sensor.bat",
+  "allowedTools": ["execute_command", "read_file", "glob", "grep"],
   "hooks": {
-    "on_enter": ".cvh/hooks/on_enter_review.bat"
+    "on_leave": ".cvh/hooks/on_review_finish.bat"
   },
   "autoRun": true,
   "terminal": false

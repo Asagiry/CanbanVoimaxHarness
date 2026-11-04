@@ -72,13 +72,25 @@ if "!RUN_BACKEND!"=="0" (
 )
 
 if "!RUN_FRONTEND!"=="0" (
-    echo [CVH Sensor] Frontend unchanged, skipping TypeScript check.
+    echo [CVH Sensor] Frontend unchanged, skipping frontend checks.
 ) else (
-    echo [CVH Sensor] Running TypeScript frontend typecheck...
+    echo [CVH Sensor] Running frontend tests [Vitest]...
     if exist "package.json" (
+        call pnpm test
+        if errorlevel 1 (
+            echo [CVH Sensor] ERROR: Frontend Vitest suite failed! >&2
+            exit /b 1
+        )
+        echo [CVH Sensor] Running TypeScript frontend typecheck...
         call pnpm exec tsc --noEmit
         if errorlevel 1 (
             echo [CVH Sensor] ERROR: Frontend TypeScript check failed! >&2
+            exit /b 1
+        )
+        echo [CVH Sensor] Running Oxlint linter...
+        call pnpm exec oxlint --deny-warnings
+        if errorlevel 1 (
+            echo [CVH Sensor] ERROR: Frontend Oxlint check failed! >&2
             exit /b 1
         )
     )

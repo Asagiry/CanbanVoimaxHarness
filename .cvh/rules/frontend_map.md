@@ -11,33 +11,49 @@ Authoritative directory topology, component mapping table, and modular store arc
 
 | UI Feature / Store Action | Exact File Path | Key Invariants & Ceilings |
 | :--- | :--- | :--- |
-| **Kanban Card Container & Layout** | `src/components/card/KanbanCard.tsx` | Layout coordinator, memoized with `areCardPropsEqual`. |
+| **Application Root Entrypoint** | `src/App.tsx` | Root providers, obsidian theme, zoom wrappers. |
+| **Splash Bootstrap Screen** | `src/components/splash/SplashScreen.tsx` | Boot screen displayed while backend state synchronizes. |
+| **Window Titlebar & Controls** | `src/components/layout/WindowControls.tsx` | Tauri window controls (minimize, maximize, close). |
+| **Top Navigation Bar** | `src/components/layout/Topbar.tsx` | Board selector, active project, search filter. |
+| **Kanban Card Container & Layout** | `src/components/card/KanbanCard.tsx` | Layout coordinator (~256 lines), memoized with `areCardPropsEqual`. |
 | **Tactile Stage Stepper Navigation** | `src/components/card/CardHookNode.tsx` | 1-click stage switching, current stage pulse, checkmarks. |
 | **Card Timer & Cadence Badge** | `src/components/card/CardTimerBadge.tsx` | Execution duration, active step timer, tabular-nums. |
 | **Card Context Menu & Model Override** | `src/components/card/CardContextMenu.tsx` | Context actions, model selection, subtask deletion. |
+| **Task Context Menu Alias** | `src/components/card/TaskContextMenu.tsx` | Backward-compatible alias for `CardContextMenu.tsx`. |
 | **Card Subtask Indicator Badge** | `src/components/card/CardSubtaskBadge.tsx` | Subtask counter, status indicator, auto-unlock indicator. |
 | **Card Tactical Checklist Progress** | `src/components/card/CardTodoProgress.tsx` | `todo_write` visual progress bar and count. |
 | **Card Shallow Memo Comparators** | `src/components/card/cardComparators.ts` | `areCardPropsEqual` preventing cascading re-renders. |
 | **Kanban Board Container & Drag-Drop** | `src/components/board/KanbanBoard.tsx` | Multi-column DND layout, column rendering. |
 | **Kanban Column Container** | `src/components/board/KanbanColumn.tsx` | Stage column, auto-run emitter, column settings. |
 | **Multi-Board Tab Header** | `src/components/board/BoardTabsHeader.tsx` | Multi-board tab switching, board creation modal trigger. |
-| **Column Context Menu** | `src/components/board/ColumnContextMenu.tsx` | Column settings, persona assignment, auto-run toggle. |
-| **Column Hook & Sensor Badges** | `src/components/board/ColumnHookBadge.tsx` | Transition script and gatekeeper sensor status. |
+| **Stage Context Menu & Settings** | `src/components/board/StageContextMenu.tsx` | Stage settings, persona assignment, auto-run toggle. |
+| **Stage Hook & Sensor Badges** | `src/components/board/StageHookBadge.tsx` | Transition script and gatekeeper sensor status. |
+| **Column Context Menu Alias** | `src/components/board/ColumnContextMenu.tsx` | Backward-compatible alias for `StageContextMenu.tsx`. |
+| **Column Hook Badge Alias** | `src/components/board/ColumnHookBadge.tsx` | Backward-compatible alias for `StageHookBadge.tsx`. |
 | **Create Task Modal** | `src/components/board/modals/CreateTaskModal.tsx` | Task creation modal with persona & model selection. |
 | **Create Column Modal** | `src/components/board/modals/CreateColumnModal.tsx` | Column creation modal with hook configuration. |
 | **Create Board Modal** | `src/components/board/CreateBoardModal.tsx` | Board creation modal with preset templates. |
+| **Board Image Lightbox Modal** | `src/components/board/modals/ImageLightboxModal.tsx` | Full-screen image preview for board attachments. |
 | **Agent Console Drawer (Root Container)**| `src/components/drawer/AgentConsoleDrawer.tsx` | Hoisted fixed overlay, flex bounded (`min-h-0 min-w-0`). |
 | **Drawer Header & Action Stepper** | `src/components/drawer/DrawerHeader.tsx` | Task title, tactile stage stepper, abort/run controls. |
 | **Activity Stream & Comment Cards** | `src/components/drawer/DrawerActivityStream.tsx` | Step commentary vs prominent terminal response card. |
 | **Human-in-the-Loop Question Prompt Card** | `src/components/drawer/QuestionPromptCard.tsx` | Interactive clarifying question card, single/multiple choice, custom input, markdown rendering. |
 | **Steer Instruction Prompt Bar** | `src/components/drawer/DrawerSteerBar.tsx` | Interactive steer input bar, optimistic submission. |
+| **Git Diff Realtime Sidebar** | `src/components/drawer/GitDiffSidebar.tsx` | Resizable git diff panel with live change updates. |
+| **Subagents Execution Sidebar** | `src/components/drawer/SubagentsSidebar.tsx` | Subagent hierarchy, active status, subtask logs. |
+| **Task Tactical Todos Widget** | `src/components/drawer/TaskTodoWidget.tsx` | Drawer-hoisted checklist progress bar and task item list. |
+| **Compacted Context Notification Card**| `src/components/drawer/CompactedContextCard.tsx`| Notification banner card displaying token compaction savings. |
+| **Human-in-the-Loop Question Card** | `src/components/drawer/QuestionPromptCard.tsx` | Interactive prompt card for user response selection. |
+| **Fullscreen Image Lightbox** | `src/components/drawer/ImageLightboxModal.tsx` | Drawer attachment image lightbox modal. |
+| **Live Thinking Stream Card** | `src/components/drawer/ThinkingCard.tsx` | Real-time reasoning chunk renderer with animated pulse. |
+| **Generic Tool Execution Card** | `src/components/drawer/ToolExecutionCard.tsx` | Collapsible card for standard tool invocations and results. |
 | **Context Gauge Status Ring** | `src/components/drawer/ContextGauge.tsx` | Real-time context token gauge, status bar & header ring. |
 | **Session Statistics Popover** | `src/components/drawer/SessionStatsPopover.tsx` | DSH-style speedometer popover (LLM time, tool time, TTFT, TPS). |
 | **Token Usage Popover** | `src/components/drawer/TokenUsagePopover.tsx` | DSH-style token usage popover (Cache hit, uncached/cached input, output). |
-| **Telemetry Formatters** | `src/components/drawer/telemetryFormatters.ts` | Compact time, TTFT, TPS, and localized token formatters. |
-| **Context Gauge Metrics Hook** | `src/components/drawer/useContextGaugeMetrics.ts` | Extracted context resolution, token counting, and telemetry calculations. |
 | **Context Gauge Hover Popover** | `src/components/drawer/ContextPopover.tsx` | Proportional segment breakdown popover, compaction trigger. |
-| **Subagents Execution Sidebar** | `src/components/drawer/SubagentsSidebar.tsx` | Subagent hierarchy, active status, subtask logs. |
+| **Telemetry Formatters** | `src/components/drawer/telemetryFormatters.ts` | Compact time, TTFT, TPS, and localized token formatters. |
+| **Context Gauge Metrics Hook** | `src/components/drawer/useContextGaugeMetrics.ts` | Extracted context resolution, token counting, and compaction listeners. |
+| **Activity Stream Scroll Hook** | `src/components/drawer/useActivityScroll.ts` | Activity feed scroll management, auto-scroll, and resize observer. |
 | **Git Diff Viewer (Unified & Image)** | `src/components/drawer/diff/ImageDiffViewer.tsx` | Visual image diffs, side-by-side and slider modes. |
 | **Git Diff File List Sidebar** | `src/components/drawer/diff/DiffFileList.tsx` | Changed files sidebar, line additions/deletions. |
 | **Thought Stream Block Card** | `src/components/drawer/stream/ThoughtStreamCard.tsx` | Collapsible reasoning stream card with duration badge. |
@@ -49,7 +65,6 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Task Objective Card** | `src/components/drawer/stream/TaskObjectiveCard.tsx` | Task goal, clean prompt, and attachment gallery. |
 | **Execution Error Banner** | `src/components/drawer/stream/ExecutionErrorBanner.tsx` | In-stream error banner with retry and dismiss controls. |
 | **Stage Summary Card** | `src/components/drawer/stream/StageSummaryCard.tsx` | Dedicated stage handover summary card and reviewer verdict card. |
-| **Activity Stream Scroll Hook** | `src/components/drawer/useActivityScroll.ts` | Activity feed scroll management, auto-scroll, and resize observer. |
 | **Stream Filtering Helpers** | `src/components/drawer/stream/streamHelpers.ts` | Stream activity dedup, prompt cleanup, duration helpers. |
 | **Todo Tool Card** | `src/components/drawer/tools/TodoToolCard.tsx` | `todo_write` checklist progress bar, status icons, and task rendering. |
 | **Todo Shared Checklist** | `src/components/drawer/tools/TodoChecklist.tsx` | Reusable dual-color progress bar and task item checklist. |
@@ -57,28 +72,62 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Shell Command Tool Card** | `src/components/drawer/tools/CommandToolCard.tsx` | Command invocation, exit code, spilled logs link. |
 | **Subagent Tool Card** | `src/components/drawer/tools/SubagentToolCard.tsx` | Child agent execution card with progress spinner. |
 | **Context Compaction Tool Card** | `src/components/drawer/tools/CompactContextToolCard.tsx` | Optimistic compaction card with before/after stats. |
+| **Generic Tool Fallback Card** | `src/components/drawer/tools/GenericToolCard.tsx` | Fallback card for custom or generic tool calls. |
+| **Search Tool Card** | `src/components/drawer/tools/SearchToolCard.tsx` | Search tool results card with hit highlighting. |
+| **Web Research Tool Card** | `src/components/drawer/tools/WebToolCard.tsx` | Web search and web fetch status card. |
+| **Shared Tool Styles & Components** | `src/components/drawer/tools/shared.tsx` | Tool card frame, headers, and status icons. |
 | **Cortex Explorer Tree** | `src/components/cortex/CortexExplorer.tsx` | File navigation tree for personas, rules, and hooks. |
 | **Agent Persona Visual Editor** | `src/components/cortex/AgentSettingVisualEditor.tsx` | Persona prompt editor, settings, icon/color selectors. |
+| **Agent Mind Inspector** | `src/components/cortex/AgentMindInspector.tsx` | Real-time agent state, current prompt and tools viewer. |
+| **Column Stage Config Card** | `src/components/cortex/ColumnStageCard.tsx` | Pipeline stage configuration card in Cortex view. |
+| **Create Agent Persona Modal** | `src/components/cortex/CreateAgentModal.tsx` | Modal dialog for creating new agent personas. |
+| **Edit Agent Persona Modal** | `src/components/cortex/EditAgentPersonaModal.tsx` | Modal dialog for updating agent persona metadata. |
+| **Global Rules Section** | `src/components/cortex/GlobalRulesSection.tsx` | Global rules list, editor triggers, and toggle controls. |
+| **New Cortex File Form** | `src/components/cortex/NewCortexFileForm.tsx` | Inline form for creating new rules or personas. |
 | **Modular Rule Editor Modal** | `src/components/cortex/RuleEditorModal.tsx` | Markdown editor for `.cvh/rules/*.md` and role rules. |
-| **Baked-in Runtime Rule Icon** | `src/components/common/RuntimeRuleIcon.tsx` | Dedicated SVG prompt-chip icon and `isRuntimeRule` helper for `runtime.md`. |
+| **Cortex UI Types & Interfaces** | `src/components/cortex/types.ts` | Cortex explorer interfaces, forms, and tree nodes. |
+| **Dynamic Role Icon** | `src/components/common/AgentIcon.tsx` | SVG/Lucide persona icon with nominal color mapping. |
+| **Brand & File Extension Icons** | `src/components/common/BrandFileIcons.tsx` | File extension brand iconography (TS, RS, JSON, MD). |
+| **Application Error Boundary** | `src/components/common/ErrorBoundary.tsx` | React 19 error boundary preventing entire app unmount. |
+| **Brand Logo Icon** | `src/components/common/Logo.tsx` | CanbanVoimaxHarness application logo. |
+| **Persona Dropdown Selector** | `src/components/common/PersonaSelect.tsx` | Persona select dropdown with colored avatar badges. |
+| **Baked-in Runtime Rule Icon** | `src/components/common/RuntimeRuleIcon.tsx` | Dedicated SVG prompt-chip icon and `isRuntimeRule` helper. |
 | **Two-Level Tool Policy Modal** | `src/components/settings/ToolPolicyModal.tsx` | Interactive policy matrix: global switches & overrides. |
 | **Global Settings Modal** | `src/components/settings/SettingsModal.tsx` | LLM endpoints, active model, and app settings. |
-| **Window Titlebar & Controls** | `src/components/layout/WindowControls.tsx` | Tauri window controls (minimize, maximize, close). |
-| **Top Navigation Bar** | `src/components/layout/Topbar.tsx` | Board selector, active project, search filter. |
-| **Project Management Store** | `src/stores/projectStore.ts` | Multi-project workspace switching, active project persistence, global rules re-sync. |
-| **Task DTO Normalizer & Persona Resolver** | `src/stores/board/taskNormalizer.ts` | Dynamic persona mapping for terminal/working stages, parent-child linking. |
+| **UI Zoom Controller Hook** | `src/hooks/useUiZoom.ts` | Ctrl+Plus/Minus/Wheel viewport scaling. |
+| **Desktop Notifications Dispatcher** | `src/services/notificationService.ts` | Cross-platform notification dispatch & toast formatting. |
+| **Typed Tauri Event Gateway** | `src/services/tauriEventGateway.ts` | 150ms micro-batching, typed events (zero `listen<any>`).|
+| **Project Management Store** | `src/stores/projectStore.ts` | Multi-project workspace switching, active project persistence. |
+| **Agent Session Status Store** | `src/stores/agentSessionStore.ts` | Authoritative background agent execution tracker. |
+| **Settings Store** | `src/stores/settingsStore.ts` | LLM configuration, endpoints, temperature settings. |
+| **Theme Management Store** | `src/stores/themeStore.ts` | Obsidian tactile theme configuration. |
+| **Tool Policy Matrix Store** | `src/stores/toolPolicyStore.ts` | Frontend cache for tool policy permissions. |
+| **Language & Translation Store** | `src/stores/languageStore.ts` | Russian/English localization switching. |
+| **Task DTO Normalizer & Persona Resolver** | `src/stores/board/taskNormalizer.ts` | Dynamic persona mapping for terminal/working stages. |
 | **Tasks CRUD Store Slice** | `src/stores/slices/tasksCrudSlice.ts` | Backend-authoritative task CRUD, monotonic IDs. |
 | **Board Meta Store Slice** | `src/stores/slices/boardMetaSlice.ts` | Active board, board switching, column layout. |
+| **Task Timers Store Slice** | `src/stores/slices/taskTimersSlice.ts` | Active task step timers and execution stopwatch. |
 | **Drawer Meta Store Slice** | `src/stores/drawer/slices/drawerMetaSlice.ts` | `activeTaskId`, drawer open/close, view mode. |
 | **Drawer Activity Store Slice** | `src/stores/drawer/slices/activitySlice.ts` | `activityFeed`, optimistic tool injection, deduplication. |
 | **Drawer Stream Store Slice** | `src/stores/drawer/slices/streamSlice.ts` | Live streaming chunks, thoughts, token telemetry. |
 | **Drawer Subagents Store Slice** | `src/stores/drawer/slices/subagentsSlice.ts` | Subagent lifecycle, active subtasks, subagent logs. |
-| **Cortex Files Store Slice** | `src/stores/cortex/slices/cortexFilesSlice.ts` | File tree hierarchy, disk file read/write. |
-| **Cortex Personas Store Slice** | `src/stores/cortex/slices/personasSlice.ts` | Persona CRUD, settings synchronization. |
-| **Cortex Rules Store Slice** | `src/stores/cortex/slices/rulesSlice.ts` | Rule creation, editing, and frontmatter management. |
-| **Typed Tauri Event Gateway** | `src/services/tauriEventGateway.ts` | 150ms micro-batching, typed events (zero `listen<any>`).|
-| **System Notifications Service** | `src/services/notificationService.ts` | Desktop notification dispatching, click navigation, and user preferences filter. |
+| **Drawer Input Drafts Slice** | `src/stores/drawer/slices/draftsSlice.ts` | Per-task draft text persistence for steer input bar. |
+| **Unified Cortex Store Slice** | `src/stores/cortex/cortexStoreSlice.ts` | File tree, personas CRUD, and rules state slice. |
+| **Desktop Notifications Dispatcher** | `src/services/notificationService.ts` | Desktop notification dispatching, click navigation, and user preferences filter. |
 | **Notification Markdown Formatter** | `src/services/notificationFormatter.ts` | Markdown plain-text normalization, word-boundary truncation, and emoji-free titles. |
+| **i18n Translation Dispatcher** | `src/i18n/translations.ts` | Localized translation resolver. |
+| **i18n Russian Dictionary** | `src/i18n/ru.ts` | Russian translation entries. |
+| **i18n English Dictionary** | `src/i18n/en.ts` | English translation entries. |
+| **i18n Contract Types** | `src/i18n/types.ts` | Nominal types and key interfaces for i18n dictionaries. |
+| **i18n Facade** | `src/i18n/index.ts` | Re-exports for translation helpers. |
+| **Agent Persona Palette** | `src/lib/agentPalette.ts` | Theme-safe color constants for personas. |
+| **Column Stage Icons Mapping** | `src/lib/columnIcons.ts` | Lucide icon resolvers for stages. |
+| **Client Image Compression** | `src/lib/imageCompression.ts` | Attachment image resizer and optimizer. |
+| **Frontend Logging Utility** | `src/lib/logger.ts` | Structured browser logs with backend routing. |
+| **Task Slug Generator** | `src/lib/slug.ts` | Deterministic worktree and git branch naming. |
+| **Decoupled Markdown Token Parser** | `src/lib/markdown/parseMarkdownTokens.ts` | AST token parser for codeblocks, tables, inline styling. |
+| **Markdown Parser Types** | `src/lib/markdown/types.ts` | AST interfaces for markdown tokens. |
+| **Markdown Facade** | `src/lib/markdown/index.ts` | Re-exports for markdown parser. |
 | **Nominal Domain Types & Models** | `src/types/domain.ts` | `TaskId`, `StageId`, `BoardId`, `TaskState`. |
 
 ---
@@ -113,8 +162,11 @@ Authoritative directory topology, component mapping table, and modular store arc
 ### 2.3 Store Slices & State Hygiene (`src/stores/`)
 - **Backend-Authoritative Lifecycle**: Zustand state mutations occur strictly after Tauri IPC backend confirmation. No optimistic card position updates or client-generated task IDs.
 - **`tasksCrudSlice.ts`**: Pure CRUD operations. Auto-unlocks parent tasks when subtasks are deleted or completed.
+- **`taskTimersSlice.ts`**: Active task execution durations and stopwatch timers.
 - **`activitySlice.ts`**: Maintains `activityFeed`. Implements in-place tool deduplication by deterministic `tool_id` to eliminate card flickering upon dialogue reloads.
 - **`streamSlice.ts`**: Accumulates streamed thoughts and assistant tokens. Freezes TPS immediately upon generation termination without metric decay.
+- **`draftsSlice.ts`**: Preserves per-task draft text input for the steer drawer bar across switches.
+- **`cortexStoreSlice.ts`**: Unified state slice for Cortex rule files, agent personas, and pipeline stage synchronization.
 
 ### 2.4 Typed IPC Event Gateway (`src/services/tauriEventGateway.ts`)
 - **Zero Raw `listen<any>`**: Direct invocations of Tauri `listen` in components or stores are strictly prohibited.

@@ -30,11 +30,12 @@ Your sole mission is to **analyze failure root causes**, extract timeless archit
 
 ## 2. Dynamic Knowledge (JIT Modular Rules)
 
-Read modular rules as needed via `read_file`:
-- `.cvh/agents/retro/rules/rule-evolution.md`: Rule evolution hierarchy, CLE triad, and Uncle Bob clean code invariants.
-- `.cvh/agents/reviewer/rules/backend-invariants.md`: Rust backend architecture, modular SRP, Value Objects, ADTs, SQLite WAL.
-- `.cvh/agents/reviewer/rules/frontend-invariants.md`: React 19, `tauriEventGateway`, <=350 lines ceiling, Vitest test requirements.
-- `.cvh/agents/reviewer/rules/review-checklist.md`: The 5-sensor gatekeeper checklist and review gates.
+Load modular guidelines dynamically using `load_rule("<rule>")`:
+- `load_rule("reflection-methodology")`: Retrospective analysis methodology and root cause extraction.
+- `load_rule("rule-evolution")`: Rule evolution hierarchy, CLE triad, and Uncle Bob clean code invariants.
+- `load_rule("backend-invariants")`: Rust backend architecture, modular SRP, Value Objects, ADTs, SQLite WAL.
+- `load_rule("frontend-invariants")`: React 19, `tauriEventGateway`, <=350 lines ceiling, Vitest test requirements.
+- `load_rule("review-checklist")`: The 5-sensor gatekeeper checklist and review gates.
 
 ---
 

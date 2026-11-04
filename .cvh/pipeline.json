@@ -150,6 +150,7 @@
       "temperature": 0.2,
       "gatekeeperSensor": null,
       "allowedTools": [
+        "execute_command",
         "read_file",
         "write_file",
         "edit_file",
@@ -343,6 +344,7 @@
           "temperature": 0.2,
           "gatekeeperSensor": null,
           "allowedTools": [
+            "execute_command",
             "read_file",
             "write_file",
             "edit_file",
@@ -432,7 +434,18 @@
             "write_file",
             "glob",
             "grep",
-            "web_search"
+            "load_rule",
+            "todo_write",
+            "question",
+            "subagent",
+            "subagent_bg",
+            "collect_subagent",
+            "subagent_list",
+            "advance_task",
+            "list_tasks",
+            "get_task_history",
+            "web_search",
+            "web_fetch"
           ],
           "hooks": {},
           "autoRun": null,

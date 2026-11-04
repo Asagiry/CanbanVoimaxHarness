@@ -1,4 +1,4 @@
-�ии Live Diff и Cortex Memory Ledger полностью реализованы в кодовой базе).
+�# 📘 CanbanVoimaxHarness Developer Guide
 
 ---
 
@@ -113,7 +113,7 @@
 | `autoRun` | bool? | автозапуск агента при входе; default = `persona != null` |
 | `terminal` | bool? | терминальная колонка: задача переходит в `done` |
 
-Стабильная нормализация порядка (`normalize_pipeline_columns`, `commands.rs`) — **работает**:
+Стабильная нормализация порядка (`normalize_pipeline_columns`, `src-tauri/src/config/models.rs`) — **работает**:
 `backlog` — всегда первая (если есть), `ready` — всегда последняя (если есть),
 остальные сохраняют относительный порядок; **дублирующийся `id` — ошибка** (переход/сохранение отклоняется).
 
@@ -369,7 +369,7 @@ Env хуков (`execute_hook`, `hooks.rs`) — **работает**: `CVH_TASK_
 `compile_primed_system_prompt(repo_root, role)` собирает строго статический промпт
 (ноль динамических timestamp/UUID — ради кэша):
 
-1. `# Role Persona: <role>` + flat `.cvh/agents/<role>.md` (нет файла → fallback
+1. `# Role Persona: <role>` + модульный `.cvh/agents/<role>/persona.md` (нет файла → fallback
    `You are an expert AI agent in <role>.`);
 2. `## Rule: <filename>` + содержимое каждого `.cvh/agents/<role>/rules/*.md` **по алфавиту**;
 3. `# Scoped Tool Execution Mandate` (read/write/edit/glob/grep/execute + Ground Truth Sensors).
@@ -393,8 +393,8 @@ Env хуков (`execute_hook`, `hooks.rs`) — **работает**: `CVH_TASK_
 ### 5.3 Компактор — **работает** (авто), ручное — **частично**
 
 - Оценка: ~4 chars/token + 4/сообщение (`estimate_tokens`).
-- Испарение (`evaporate_tool_logs`): tool-ответы `> 500 chars` и **старше 3 тернов**
-  (`current_turn - turn > 3`) заменяются плейсхолдером
+- Испарение (`evaporate_tool_logs`): tool-ответы `> 500 chars` и **старше 2 ходов**
+  (`current_turn - turn > 2`, в соответствии с `compactor.rs:1058`) заменяются плейсхолдером
   `[Output evaporated: N chars truncated. Exit code: C. Tool: T]`. Якоря Turn 0 (system + исходный user) неприкосновенны.
 - Авто: в `run_agent_loop` при `turn > 3 && estimate > 40_000` → событие `Compacted`.
 - Ручное `compact_context(task_id)`: жмёт `agent_contexts[task_id]`… **частично**: `run_agent_loop`
@@ -406,10 +406,6 @@ Env хуков (`execute_hook`, `hooks.rs`) — **работает**: `CVH_TASK_
 - `ContextGauge` (фронт) считает токены клиентской эвристикой по ленте + телеметрии и кнопкой
   `⚡ Компактировать` дергает `compact_context`; дополнительно фронт сам испаряет старые tool-логи
   (`evaporateClientToolLogs` в `drawerStore`) — это уже про рендер, не про LLM-контекст.
-
-> Расхождения цифр в доках: `docs/agents.md` пишет «>500 символов старше 2 шагов» и «сортировка определений»,
-> `README` — «старше 3 turns (>500 chars)», «Cache Hit Rate >= 90%», «4 Immutable Anchors».
-> Код: порог именно `>500` и `>3`, автотриггер `>40_000` токенов; «90%» и «4 якоря» — цели/описания, не ассерты.
 
 ---
 

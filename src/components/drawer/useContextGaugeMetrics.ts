@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useDrawerStore, DrawerActivityItem } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
+import { listenToEvent } from '../../services/tauriEventGateway';
 
 export interface UseContextGaugeMetricsOptions {
   taskId: string;
@@ -306,13 +307,11 @@ export function useContextGaugeMetrics({
     let unlisten: (() => void) | undefined;
     const setupListener = async () => {
       try {
-        const { listen } = await import('@tauri-apps/api/event');
         if (isDisposed) return;
-        type CompactedEventPayload = { tokens_after?: number; tokensAfter?: number; saved_tokens?: number; estimatedSavedTokens?: number; savedTokens?: number; };
-        const u = await listen<CompactedEventPayload>('agent:compacted', (event) => {
-          if (event.payload) {
-            const after = event.payload.tokens_after ?? event.payload.tokensAfter;
-            const saved = event.payload.saved_tokens ?? event.payload.estimatedSavedTokens ?? event.payload.savedTokens ?? 0;
+        const u = await listenToEvent('agent:compacted', (payload) => {
+          if (payload) {
+            const after = payload.tokens_after ?? payload.tokensAfter;
+            const saved = payload.saved_tokens ?? payload.estimatedSavedTokens ?? payload.savedTokens ?? 0;
             if (typeof after === 'number' && Number.isFinite(after)) setTaskTokens?.(taskId, after);
             if (saved > 0) triggerSavingsNotice(saved);
           }

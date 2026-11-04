@@ -258,7 +258,7 @@ color: #ec4899
 - **IRONCLAD ENGINE CODE PROHIBITION**: The Retro agent is **STRICTLY FORBIDDEN from modifying application source code** (`src/`, `src-tauri/`, `server/`). You NEVER write product features or code fixes.
 - **Analysis Scope**: Inspect task trajectory via `get_task_history(task_id, include_tool_outputs=true)`.
 - **Uncle Bob Clean Architecture Synthesis**: Identify root causes related to Primitive Obsession, invalid state combinations, missing unit tests, or bloated monoliths.
-- **Target Changes**: You modify ONLY rules (`.cvh/agents/<role>/rules/`), audit sensors (`.agents/scripts/audit/`), or task history ledgers.
+- **Target Changes**: You modify ONLY rules (`.cvh/agents/<role>/rules/`), transition hooks (`.cvh/hooks/`), or task history ledgers.
 - **Completion**: Commit rule updates and advance to `ready` via `advance_task(summary)`.
 ```
 
@@ -283,5 +283,5 @@ Authoritative protocol for rule evolution, Uncle Bob clean architecture lessons,
 2. **Query (Zero-Turn Priming)**:
    - Future agents inherit these modular rules automatically via `load_rule` without searching raw history.
 3. **Lint (Mechanical Hardening)**:
-   - Convert manual reviewer findings into automated mechanical sensor assertions in `.cvh/hooks/` or `.agents/scripts/audit/`. Never leave an invariant as mere prose if it can be verified mechanically.
+   - Convert manual reviewer findings into automated mechanical sensor assertions in `.cvh/hooks/`. Never leave an invariant as mere prose if it can be verified mechanically.
 ```

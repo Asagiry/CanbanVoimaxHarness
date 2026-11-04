@@ -16,6 +16,7 @@ Every code modification must be verified against real compiler, linter, and auto
 1. **Never Run Commands on Startup**: Do NOT run `cargo check`, `pnpm test`, `pnpm exec tsc`, `npm run build`, or test suites at the start of a task before code edits are made. Initial exploration is strictly static (`read_file`, `glob`, `grep`).
 2. **Subsystem-Targeted Sensors**: Run ONLY sensors corresponding to the files you modified. Never run backend checks for frontend-only tasks, and never run frontend builds for backend-only tasks.
 3. **Run Sensors at Verification Phase**: Execute sensors strictly after code implementation is complete, just before calling `advance_task`.
+4. **Strict Prohibition of Unix Pipelines on Windows**: In `execute_command`, NEVER execute Unix shell pipelines (`| wc -l`, `| grep`, `| head`, `| tail`, `export VAR=...`) on Windows. Use dedicated built-in tools (`grep`, `glob`, `read_file`) or platform-safe scripts.
 
 **Never rely on hallucinations or synthetic assumptions.**
 If a sensor command fails, you must analyze the compiler or test diagnostics, fix the root cause, and re-run the sensor until it exits with code 0.
@@ -100,10 +101,10 @@ git merge-tree --write-tree main HEAD
 When invoking `advance_task(summary)`, the Developer MUST include explicit sensor proof:
 ```text
 - Sensors Verified:
-  1. pnpm test: EXIT 0 (139/139 tests passed)
+  1. pnpm test: EXIT 0 (297/297 tests passed across 24 suites)
   2. pnpm exec tsc --noEmit: EXIT 0 (0 type errors)
   3. pnpm exec oxlint --deny-warnings: EXIT 0 (0 warnings)
-  4. mbx check --manifest-path src-tauri/Cargo.toml (or cargo check): EXIT 0 (0 errors)
+  4. mbx check / cargo test: EXIT 0 (277/277 backend tests passed, 0 compiler errors)
   5. git merge-tree --write-tree main HEAD: EXIT 0 (0 merge conflicts)
 ```
 Failure to include concrete sensor results will cause the Reviewer to reject the task under Gate 2.

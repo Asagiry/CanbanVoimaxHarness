@@ -48,7 +48,7 @@ Boards are configured in `.cvh/boards.json` and mirrored in `.cvh/pipeline.json`
 
 ---
 
-## 5. Multi-Stage Pipeline Topologies & Interactive Setup
+## 6. Multi-Stage Pipeline Topologies & Interactive Setup
 When creating or restructuring pipelines, refer to `load_rule("pipeline-setup")`.
 `cvh-dev` must interactively ask the user via `question` to select among standard topologies:
 1. **Standard Peer Review**: `backlog` ➔ `dev` (Developer) ➔ `review` (Reviewer) ➔ `ready`.

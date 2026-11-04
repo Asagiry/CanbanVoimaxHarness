@@ -60,10 +60,14 @@ elif [ -f "src-tauri/Cargo.toml" ]; then
 fi
 
 if [ "$RUN_FRONTEND" -eq 0 ]; then
-    echo "[CVH Sensor] Frontend unchanged, skipping TypeScript check."
+    echo "[CVH Sensor] Frontend unchanged, skipping frontend checks."
 elif [ -f "package.json" ]; then
+    echo "[CVH Sensor] Running frontend tests (Vitest)..."
+    pnpm test
     echo "[CVH Sensor] Running TypeScript frontend typecheck..."
-    npx tsc --noEmit
+    pnpm exec tsc --noEmit
+    echo "[CVH Sensor] Running Oxlint linter..."
+    pnpm exec oxlint --deny-warnings
 fi
 
 echo "[CVH Sensor] All gatekeeper sensors PASSED successfully."
