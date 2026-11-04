@@ -67,7 +67,7 @@ export interface MarkdownImageToken {
 
 export interface MarkdownHeadingToken {
   type: 'heading';
-  level: 2 | 3 | 4 | 5;
+  level: 2 | 3 | 4 | 5 | 6;
   text: string;
 }
 

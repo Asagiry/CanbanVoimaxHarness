@@ -379,5 +379,44 @@ describe('Horizontal Separators (HR) & Headings', () => {
       const hrIndex = tokens.findIndex((t) => t.type === 'hr');
       expect(tokens[hrIndex]).toEqual({ type: 'hr' });
     });
+
+    it('parses level 5 and 6 headings', () => {
+      const md = [
+        '##### Level 5 Markdown Heading',
+        '###### Level 6 Markdown Heading',
+      ].join('\n');
+
+      const tokens = parseMarkdownTokens(md);
+      expect(tokens).toHaveLength(2);
+      expect(tokens[0]).toEqual({
+        type: 'heading',
+        level: 6,
+        text: 'Level 5 Markdown Heading',
+      });
+      expect(tokens[1]).toEqual({
+        type: 'heading',
+        level: 6,
+        text: 'Level 6 Markdown Heading',
+      });
+    });
+  });
+
+  describe('Escaped Newline Normalization', () => {
+    it('normalizes literal \\n strings into actual line breaks when no real newlines exist', () => {
+      const escaped = 'First line\\nSecond line\\n### Heading in escaped';
+      const tokens = parseMarkdownTokens(escaped);
+      expect(tokens.length).toBeGreaterThanOrEqual(3);
+      expect(tokens[0]).toEqual({ type: 'paragraph', text: 'First line' });
+      expect(tokens[1]).toEqual({ type: 'paragraph', text: 'Second line' });
+      expect(tokens[2]).toEqual({ type: 'heading', level: 4, text: 'Heading in escaped' });
+    });
+
+    it('preserves existing real newlines without altering literal \\n', () => {
+      const mixed = 'Line one\nLine two with \\n escaped';
+      const tokens = parseMarkdownTokens(mixed);
+      expect(tokens).toHaveLength(2);
+      expect(tokens[0]).toEqual({ type: 'paragraph', text: 'Line one' });
+      expect(tokens[1]).toEqual({ type: 'paragraph', text: 'Line two with \\n escaped' });
+    });
   });
 });

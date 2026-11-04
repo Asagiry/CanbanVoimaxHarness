@@ -247,29 +247,36 @@ export function MarkdownContent({
             );
 
           case 'heading': {
+            if (token.level === 6) {
+              return (
+                <h6 key={`h6-${index}`} className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] mt-2 mb-1 first:mt-0">
+                  {formatInline(token.text, `h6-${index}`)}
+                </h6>
+              );
+            }
             if (token.level === 5) {
               return (
-                <h5 key={`h5-${index}`} className="text-[13px] md:text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] mt-2 mb-1">
+                <h5 key={`h5-${index}`} className="text-[13px] md:text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] mt-2 mb-1 first:mt-0">
                   {formatInline(token.text, `h5-${index}`)}
                 </h5>
               );
             }
             if (token.level === 4) {
               return (
-                <h4 key={`h4-${index}`} className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] mt-2.5 mb-1">
+                <h4 key={`h4-${index}`} className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] mt-2.5 mb-1 first:mt-0">
                   {formatInline(token.text, `h4-${index}`)}
                 </h4>
               );
             }
             if (token.level === 3) {
               return (
-                <h3 key={`h3-${index}`} className="text-sm md:text-base font-semibold text-[#171717] dark:text-[#f0f6fc] mt-3 mb-1">
+                <h3 key={`h3-${index}`} className="text-sm md:text-base font-semibold text-[#171717] dark:text-[#f0f6fc] mt-3 mb-1 first:mt-0">
                   {formatInline(token.text, `h3-${index}`)}
                 </h3>
               );
             }
             return (
-              <h2 key={`h2-${index}`} className="text-base md:text-lg font-bold text-[#171717] dark:text-[#f0f6fc] mt-3.5 mb-1.5">
+              <h2 key={`h2-${index}`} className="text-base md:text-lg font-bold text-[#171717] dark:text-[#f0f6fc] mt-3.5 mb-1.5 first:mt-0">
                 {formatInline(token.text, `h2-${index}`)}
               </h2>
             );
