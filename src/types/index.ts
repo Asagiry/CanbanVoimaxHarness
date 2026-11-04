@@ -9,7 +9,7 @@ export interface TodoItem {
   status: 'pending' | 'in_progress' | 'completed';
 }
 
-export type TaskStatus = 'idle' | 'running' | 'paused' | 'waiting_review' | 'waiting_subtask' | 'blocked' | 'done';
+export type TaskStatus = 'idle' | 'running' | 'paused' | 'waiting_review' | 'waiting_subtask' | 'waiting_subagent' | 'blocked' | 'done';
 
 export type TaskVerdict = 'NONE' | 'APPROVED' | 'APPROVED_WITH_CAVEATS' | 'CHANGES_REQUESTED';
 
@@ -77,6 +77,7 @@ export interface KanbanTask {
   previousStageId?: string;
   coverImage?: string;
   hookStates?: TaskHookStates;
+  projectPath?: string;
 }
 
 /**
@@ -94,6 +95,8 @@ export interface BackendTaskDTO {
   board_id?: string;
   worktreePath?: string;
   worktree_path?: string;
+  projectPath?: string;
+  project_path?: string;
   branch?: string;
   verdict?: string;
   customFlow?: string[];
@@ -274,7 +277,7 @@ export interface LiveStreamEntry {
   createdAt?: number;
 }
 
-export type ActivityType = 'thought' | 'output' | 'tool' | 'steer' | 'system' | 'error' | 'user' | 'prompt' | 'question' | 'compacted' | 'summary' | 'reject';
+export type ActivityType = 'thought' | 'output' | 'tool' | 'steer' | 'system' | 'error' | 'user' | 'prompt' | 'question' | 'compacted' | 'summary' | 'reject' | 'agent';
 
 export interface ActivityItem {
   id: string;

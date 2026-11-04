@@ -166,19 +166,6 @@ pub async fn set_active_project(
         .await
         .map_err(|e| format!("Failed to scaffold .cvh structure: {}", e))?;
 
-    // Abort active agents from previous project
-    if let Ok(agents) = state.active_agents.lock() {
-        for (task_id, handle) in agents.iter() {
-            crate::logger::cvh_log(
-                Some(&old_root),
-                "WARN",
-                "PROJECT",
-                &format!("Aborting active agent for task '{}' due to project switch", task_id),
-            );
-            handle.abort_flag.store(true, std::sync::atomic::Ordering::SeqCst);
-        }
-    }
-
     // Clear state.tasks cache before changing root so stale tasks are never returned
     if let Ok(mut guard) = state.tasks.lock() {
         guard.clear();

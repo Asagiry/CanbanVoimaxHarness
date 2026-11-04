@@ -65,6 +65,7 @@ pub enum TaskState {
     WaitingSubtask {
         subtask_id: String,
     },
+    WaitingSubagent,
     Done {
         verdict: Option<String>,
     },
@@ -77,6 +78,7 @@ impl TaskState {
             TaskState::Idle => "idle",
             TaskState::Running { .. } => "running",
             TaskState::WaitingSubtask { .. } => "waiting_subtask",
+            TaskState::WaitingSubagent => "waiting_subagent",
             TaskState::Done { .. } => "done",
         }
     }
@@ -94,6 +96,11 @@ impl TaskState {
     /// Returns `true` if the task is waiting on a child subtask.
     pub fn is_waiting_subtask(&self) -> bool {
         matches!(self, TaskState::WaitingSubtask { .. })
+    }
+
+    /// Returns `true` if the task is waiting on a subagent.
+    pub fn is_waiting_subagent(&self) -> bool {
+        matches!(self, TaskState::WaitingSubagent)
     }
 
     /// Returns `true` if the task is completed / finalized.
@@ -150,6 +157,7 @@ impl TaskState {
                     .to_string();
                 TaskState::WaitingSubtask { subtask_id }
             }
+            "waiting_subagent" => TaskState::WaitingSubagent,
             "done" => {
                 let verdict = task
                     .verdict
@@ -219,6 +227,10 @@ impl TaskState {
             TaskState::WaitingSubtask { subtask_id } => {
                 task.status = Some("waiting_subtask".to_string());
                 task.waiting_for_subtask_id = Some(subtask_id.clone());
+            }
+            TaskState::WaitingSubagent => {
+                task.status = Some("waiting_subagent".to_string());
+                task.waiting_for_subtask_id = None;
             }
             TaskState::Done { verdict } => {
                 task.status = Some("done".to_string());
@@ -363,6 +375,7 @@ impl FromStr for TaskState {
             "waiting_subtask" => Ok(TaskState::WaitingSubtask {
                 subtask_id: String::new(),
             }),
+            "waiting_subagent" => Ok(TaskState::WaitingSubagent),
             "done" => Ok(TaskState::Done { verdict: None }),
             other => Err(StateError::InvalidState(other.to_string())),
         }
@@ -391,6 +404,7 @@ impl From<&TaskState> for TaskStatus {
             TaskState::Idle => TaskStatus::Idle,
             TaskState::Running { .. } => TaskStatus::Running,
             TaskState::WaitingSubtask { .. } => TaskStatus::WaitingSubtask,
+            TaskState::WaitingSubagent => TaskStatus::WaitingSubagent,
             TaskState::Done { .. } => TaskStatus::Done,
         }
     }
@@ -412,6 +426,7 @@ impl From<TaskStatus> for TaskState {
             TaskStatus::WaitingSubtask => TaskState::WaitingSubtask {
                 subtask_id: String::new(),
             },
+            TaskStatus::WaitingSubagent => TaskState::WaitingSubagent,
             TaskStatus::Done => TaskState::Done { verdict: None },
             _ => TaskState::Idle,
         }
@@ -432,6 +447,7 @@ enum TaggedSerialize<'a> {
     WaitingSubtask {
         subtask_id: &'a str,
     },
+    WaitingSubagent,
     Done {
         #[serde(skip_serializing_if = "Option::is_none")]
         verdict: Option<&'a str>,
@@ -453,6 +469,7 @@ impl Serialize for TaskState {
                 subtask_id: subtask_id.as_str(),
             }
             .serialize(serializer),
+            TaskState::WaitingSubagent => TaggedSerialize::WaitingSubagent.serialize(serializer),
             TaskState::Done { verdict } => TaggedSerialize::Done {
                 verdict: verdict.as_deref(),
             }
@@ -478,6 +495,7 @@ impl<'de> Deserialize<'de> for TaskState {
                 #[serde(alias = "subtaskId", default)]
                 subtask_id: String,
             },
+            WaitingSubagent,
             Done {
                 #[serde(default)]
                 verdict: Option<String>,
@@ -500,6 +518,7 @@ impl<'de> Deserialize<'de> for TaskState {
                 Tagged::Idle => Ok(TaskState::Idle),
                 Tagged::Running { model } => Ok(TaskState::Running { model }),
                 Tagged::WaitingSubtask { subtask_id } => Ok(TaskState::WaitingSubtask { subtask_id }),
+                Tagged::WaitingSubagent => Ok(TaskState::WaitingSubagent),
                 Tagged::Done { verdict } => Ok(TaskState::Done { verdict }),
             },
             Helper::Str(s) => TaskState::from_str(&s).map_err(serde::de::Error::custom),

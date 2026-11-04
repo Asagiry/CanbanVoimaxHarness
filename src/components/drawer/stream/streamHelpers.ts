@@ -123,11 +123,17 @@ export function shouldSuppressExplanation(
 }
 
 /**
- * Deduplicates question activities and tool executions according to § 2.20 invariant.
+ * Deduplicates question activities, tool executions, and filters legacy foreign stage summaries for root tasks.
  */
-export function filterDisplayActivities(unifiedActivities: DrawerActivityItem[]): DrawerActivityItem[] {
+export function filterDisplayActivities(
+  unifiedActivities: DrawerActivityItem[],
+  currentTaskId?: string
+): DrawerActivityItem[] {
   const list = unifiedActivities || [];
   if (list.length === 0) return list;
+
+  const isRootTask = Boolean(currentTaskId && !currentTaskId.includes('.'));
+  const foreignSummaryRegex = /Саммари этапа \(передано на \S+\.(?:[2-9]|\d{2,})/i;
 
   const questionItems = list.filter((a) => a?.type === 'question');
   const questionSignatures = new Set<string>();
@@ -151,6 +157,16 @@ export function filterDisplayActivities(unifiedActivities: DrawerActivityItem[])
   const seenQuestionIds = new Set<string>();
 
   const filteredQuestions = list.filter((activity) => {
+    if (isRootTask && (activity?.type as string) === 'summary') {
+      const content = activity?.content || '';
+      if (
+        content.includes('Саммари финализации задачи') ||
+        foreignSummaryRegex.test(content)
+      ) {
+        return false;
+      }
+    }
+
     if (activity?.type === 'question') {
       const qParams = activity.tool?.params as Record<string, unknown> | undefined;
       const qId =

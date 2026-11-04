@@ -31,6 +31,10 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Activity Stream & Comment Cards** | `src/components/drawer/DrawerActivityStream.tsx` | Step commentary vs prominent terminal response card. |
 | **Steer Instruction Prompt Bar** | `src/components/drawer/DrawerSteerBar.tsx` | Interactive steer input bar, optimistic submission. |
 | **Context Gauge Status Ring** | `src/components/drawer/ContextGauge.tsx` | Real-time context token gauge, status bar & header ring. |
+| **Session Statistics Popover** | `src/components/drawer/SessionStatsPopover.tsx` | DSH-style speedometer popover (LLM time, tool time, TTFT, TPS). |
+| **Token Usage Popover** | `src/components/drawer/TokenUsagePopover.tsx` | DSH-style token usage popover (Cache hit, uncached/cached input, output). |
+| **Telemetry Formatters** | `src/components/drawer/telemetryFormatters.ts` | Compact time, TTFT, TPS, and localized token formatters. |
+| **Context Gauge Metrics Hook** | `src/components/drawer/useContextGaugeMetrics.ts` | Extracted context resolution, token counting, and telemetry calculations. |
 | **Context Gauge Hover Popover** | `src/components/drawer/ContextPopover.tsx` | Proportional segment breakdown popover, compaction trigger. |
 | **Subagents Execution Sidebar** | `src/components/drawer/SubagentsSidebar.tsx` | Subagent hierarchy, active status, subtask logs. |
 | **Git Diff Viewer (Unified & Image)** | `src/components/drawer/diff/ImageDiffViewer.tsx` | Visual image diffs, side-by-side and slider modes. |
@@ -55,6 +59,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Cortex Explorer Tree** | `src/components/cortex/CortexExplorer.tsx` | File navigation tree for personas, rules, and hooks. |
 | **Agent Persona Visual Editor** | `src/components/cortex/AgentSettingVisualEditor.tsx` | Persona prompt editor, settings, icon/color selectors. |
 | **Modular Rule Editor Modal** | `src/components/cortex/RuleEditorModal.tsx` | Markdown editor for `.cvh/rules/*.md` and role rules. |
+| **Baked-in Runtime Rule Icon** | `src/components/common/RuntimeRuleIcon.tsx` | Dedicated SVG prompt-chip icon and `isRuntimeRule` helper for `runtime.md`. |
 | **Two-Level Tool Policy Modal** | `src/components/settings/ToolPolicyModal.tsx` | Interactive policy matrix: global switches & overrides. |
 | **Global Settings Modal** | `src/components/settings/SettingsModal.tsx` | LLM endpoints, active model, and app settings. |
 | **Window Titlebar & Controls** | `src/components/layout/WindowControls.tsx` | Tauri window controls (minimize, maximize, close). |
@@ -94,8 +99,12 @@ Authoritative directory topology, component mapping table, and modular store arc
   - **`TaskObjectiveCard.tsx`**: Initial task goal and attachment preview gallery card.
   - **`ExecutionErrorBanner.tsx`**: Execution failure alert banner with retry trigger.
   - **`streamHelpers.ts`**: Pure helper functions for activity filtering, question deduplication (§ 2.20), prompt cleaning, and duration calculations.
-- **`ContextGauge.tsx`**: Real-time context window capacity meter. Resolves window capacity from persona settings (`context_window`), proportional segment allocations (System, Tools, Messages), with emerald (`#10b981`) ring under 60% capacity.
+- **`ContextGauge.tsx`**: Real-time context window capacity meter and bottom telemetry bar coordinator. Renders 3 interactive pills (Speedometer, Token Usage, Context Ring) without native tooltips.
+- **`SessionStatsPopover.tsx`**: DSH-style session statistics popover card displaying LLM time, tool time, TTFT, and TPS with hover-bridge protection.
+- **`TokenUsagePopover.tsx`**: DSH-style token usage popover card displaying total tokens, cache hit rate %, uncached input, cached input, and output tokens.
 - **`ContextPopover.tsx`**: Extracted hover card popover displaying segmented token breakdown (System, Tools, Messages) and trigger action for context compaction.
+- **`telemetryFormatters.ts`**: Pure formatting utilities for compact durations, TTFT, TPS, compact tokens, and localized Russian/English pluralization.
+- **`useContextGaugeMetrics.ts`**: Custom hook encapsulating token caching, capacity resolution, telemetry calculation, and compaction listeners.
 - **`diff/ImageDiffViewer.tsx`**: Interactive image diffing component with side-by-side, swipe-slider, and opacity-blend modes.
 
 ### 2.3 Store Slices & State Hygiene (`src/stores/`)

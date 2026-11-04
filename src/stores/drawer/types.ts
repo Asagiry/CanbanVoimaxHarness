@@ -28,7 +28,6 @@ export interface DrawerMetaState {
   isOpen: boolean;
   activeTaskId: string | null;
   activeTab: DrawerTab;
-  taskHistory: string[];
 }
 
 export interface DrawerMetaActions {

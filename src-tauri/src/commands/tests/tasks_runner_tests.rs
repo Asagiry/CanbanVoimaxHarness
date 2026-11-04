@@ -41,6 +41,7 @@ use std::path::PathBuf;
             cover_image: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
 
         // 1. When task.model is set, it strictly overrides global model and column model!
@@ -162,6 +163,7 @@ use std::path::PathBuf;
             completed_at: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
 
         // Step 1: Early persistence (create_task fix)
@@ -244,6 +246,7 @@ use std::path::PathBuf;
             completed_at: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
 
         let task_b = Task {
@@ -275,6 +278,7 @@ use std::path::PathBuf;
             completed_at: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
 
         // Disk has only Task A

@@ -137,10 +137,14 @@ function getSubagentsForTask(
         (params?.isBg === true) ||
         existing?.isBg === true;
       const parsedTime = t.timestamp ? new Date(t.timestamp).getTime() : undefined;
+      const validParsedTime = parsedTime && !isNaN(parsedTime) && parsedTime > 0 ? parsedTime : undefined;
+      const candidateTimes: number[] = [];
+      if (existing?.createdAt && existing.createdAt > 0) candidateTimes.push(existing.createdAt);
+      if (validParsedTime) candidateTimes.push(validParsedTime);
       const toolCreatedAt =
-        existing?.createdAt ||
-        (parsedTime && !isNaN(parsedTime) ? parsedTime : undefined) ||
-        (t.status === 'running' ? Date.now() : undefined);
+        candidateTimes.length > 0
+          ? Math.min(...candidateTimes)
+          : (t.status === 'running' ? Date.now() : undefined);
 
       if (!existing) {
         map.set(subId, {
@@ -161,8 +165,10 @@ function getSubagentsForTask(
         if (isBg) {
           existing.isBg = true;
         }
-        if (!existing.createdAt && toolCreatedAt) {
-          existing.createdAt = toolCreatedAt;
+        if (toolCreatedAt) {
+          if (!existing.createdAt || toolCreatedAt < existing.createdAt) {
+            existing.createdAt = toolCreatedAt;
+          }
         }
         // Do NOT take durationMs from subagent_bg tool call!
         if (!isBg && !existing.durationMs && t.durationMs) {

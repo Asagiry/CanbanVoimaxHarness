@@ -1,10 +1,12 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useDrawerStore } from '../../stores/drawerStore';
-import { useBoardStore } from '../../stores/boardStore';
-import { useCortexStore } from '../../stores/cortexStore';
+import { Gauge, Database } from 'lucide-react';
+import { t, useLanguageStore } from '../../i18n';
+import { formatTps, formatCompactTokens, pluralize } from './telemetryFormatters';
 import { ContextPopover } from './ContextPopover';
+import { SessionStatsPopover } from './SessionStatsPopover';
+import { TokenUsagePopover } from './TokenUsagePopover';
+import { useContextGaugeMetrics } from './useContextGaugeMetrics';
 
-interface ContextGaugeProps {
+export interface ContextGaugeProps {
   taskId: string;
   persona?: string;
   turns?: number;
@@ -25,648 +27,155 @@ export default function ContextGauge({
   onCompact,
   variant = 'status-bar',
 }: ContextGaugeProps) {
-  // Resolve context window strictly from the active agent persona
-  const [resolvedPersonaLimit, setResolvedPersonaLimit] = useState<number | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    import('@tauri-apps/api/core')
-      .then(({ invoke }) => invoke<number>('get_task_context_window', { taskId, persona }))
-      .then((cw) => {
-        if (!cancelled && typeof cw === 'number' && cw > 0) {
-          const pInfo = useCortexStore.getState().agentPersonas?.find(
-            (p) => p.role.toLowerCase() === (persona || '').toLowerCase()
-          );
-          if (pInfo?.contextWindow) {
-            setResolvedPersonaLimit(pInfo.contextWindow);
-          } else if (contextWindow && cw === 128000) {
-            setResolvedPersonaLimit(contextWindow);
-          } else {
-            setResolvedPersonaLimit(cw);
-          }
-        }
-      })
-      .catch(() => {
-        // Fallback for non-Tauri or test environments: read from persona info
-        const role =
-          persona ||
-          useBoardStore.getState().columns.find(
-            (c) => c.id === taskId || c.id === useBoardStore.getState().tasks.find((t) => t.id === taskId)?.stageId
-          )?.persona ||
-          'general';
-        const pInfo = useCortexStore.getState().agentPersonas?.find(
-          (p) => p.role.toLowerCase() === role.toLowerCase()
-        );
-        if (!cancelled) {
-          if (pInfo?.contextWindow) {
-            setResolvedPersonaLimit(pInfo.contextWindow);
-          } else if (contextWindow) {
-            setResolvedPersonaLimit(contextWindow);
-          }
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [taskId, persona, contextWindow]);
-
-  const effectiveLimit =
-    contextWindow ||
-    resolvedPersonaLimit ||
-    stageLimit;
-
-  // Селективные подписки per taskId (с поддержкой subagentId <-> toolCallId маппинга)
-  const thoughts = useDrawerStore((s) => s.streamEntries[taskId]?.thoughts || (s.toolIdToSubagentId[taskId] ? s.streamEntries[s.toolIdToSubagentId[taskId]]?.thoughts : undefined));
-  const outputs = useDrawerStore((s) => s.streamEntries[taskId]?.outputs || (s.toolIdToSubagentId[taskId] ? s.streamEntries[s.toolIdToSubagentId[taskId]]?.outputs : undefined));
-  const tools = useDrawerStore((s) => s.toolExecutions[taskId] || (s.toolIdToSubagentId[taskId] ? s.toolExecutions[s.toolIdToSubagentId[taskId]] : undefined));
-  const feed = useDrawerStore((s) => s.activityFeed[taskId] || (s.toolIdToSubagentId[taskId] ? s.activityFeed[s.toolIdToSubagentId[taskId]] : undefined));
-  const tokenOverride = useDrawerStore((s) => s.tokenOverrides[taskId] ?? (s.toolIdToSubagentId[taskId] ? s.tokenOverrides[s.toolIdToSubagentId[taskId]] : undefined));
-  const taskCurrentTokens = useBoardStore((s) => s.tasks.find((t) => t.id === taskId)?.currentTokens);
-  const telemetry = useDrawerStore((s) =>
-    s.taskTelemetry[taskId] ||
-    (s.toolIdToSubagentId[taskId] ? s.taskTelemetry[s.toolIdToSubagentId[taskId]] : undefined) ||
-    (s.subagentIdToToolId[taskId] ? s.taskTelemetry[s.subagentIdToToolId[taskId]] : undefined)
-  );
-  const thinkingStart = useDrawerStore((s) => s.thinkingStartTime[taskId] ?? null);
-  const genStart = useDrawerStore((s) => s.generationStartTime[taskId] ?? null);
-  const genEnd = useDrawerStore((s) => s.generationEndTime[taskId] ?? null);
-  const taskStart = useDrawerStore((s) => s.taskStartTime[taskId] ?? null);
-  const taskEnd = useDrawerStore((s) => s.taskEndTime[taskId] ?? null);
-  const streamedTurnTokens = useDrawerStore((s) =>
-    s.streamedTurnTokens[taskId] ??
-    (s.toolIdToSubagentId[taskId] ? s.streamedTurnTokens[s.toolIdToSubagentId[taskId]] : undefined) ??
-    (s.subagentIdToToolId[taskId] ? s.streamedTurnTokens[s.subagentIdToToolId[taskId]] : undefined) ??
-    0
-  );
-  const frozenTps = useDrawerStore((s) =>
-    s.finalTps[taskId] ??
-    (s.toolIdToSubagentId[taskId] ? s.finalTps[s.toolIdToSubagentId[taskId]] : undefined) ??
-    (s.subagentIdToToolId[taskId] ? s.finalTps[s.subagentIdToToolId[taskId]] : undefined) ??
-    null
-  );
-  const cumulativeOutputTokens = useDrawerStore((s) => s.cumulativeOutputTokens[taskId] ?? 0);
-  const cumulativeGenerationSec = useDrawerStore((s) => s.cumulativeGenerationSec[taskId] ?? 0);
-  const setTaskTokens = useDrawerStore((s) => s.setTaskTokens);
-  const evaporateClientToolLogs = useDrawerStore((s) => s.evaporateClientToolLogs);
-
-  // Extract latest compacted tokens from activity feed if persisted, plus any post-compaction messages
-  const { latestCompactedTokens, postCompactionTokens } = useMemo(() => {
-    if (!feed || feed.length === 0) return { latestCompactedTokens: undefined, postCompactionTokens: 0 };
-    let compactedIdx = -1;
-    let baseTokens: number | undefined = undefined;
-
-    for (let i = feed.length - 1; i >= 0; i--) {
-      const it = feed[i];
-      if (it.type === 'compacted' && it.tool) {
-        const tData = it.tool as any;
-        if (typeof tData?.tokensAfter === 'number') {
-          baseTokens = tData.tokensAfter;
-          compactedIdx = i;
-          break;
-        }
-      }
-    }
-
-    if (baseTokens === undefined || compactedIdx === -1) {
-      return { latestCompactedTokens: undefined, postCompactionTokens: 0 };
-    }
-
-    let postChars = 0;
-    for (let i = compactedIdx + 1; i < feed.length; i++) {
-      const it = feed[i];
-      postChars += (it.content?.length || 0);
-      if (it.tool) {
-        postChars += (it.tool.stdout?.length || 0);
-        postChars += (it.tool.stderr?.length || 0);
-        postChars += JSON.stringify(it.tool.params || {}).length;
-      }
-    }
-
-    return {
-      latestCompactedTokens: baseTokens,
-      postCompactionTokens: Math.round(postChars / 2.2),
-    };
-  }, [feed]);
-
-  const baseCompacted = tokenOverride ?? taskCurrentTokens ?? latestCompactedTokens;
-  const effectiveCompactedTokens =
-    baseCompacted !== undefined ? baseCompacted + postCompactionTokens : undefined;
-
-  const resolvedCompactTokens = effectiveCompactedTokens;
-
-  // Prime in-memory token override if found from task state or feed
-  useEffect(() => {
-    if (resolvedCompactTokens !== undefined && tokenOverride === undefined) {
-      setTaskTokens?.(taskId, resolvedCompactTokens);
-    }
-  }, [taskId, resolvedCompactTokens, tokenOverride, setTaskTokens]);
-
-  const [isCompacting, setIsCompacting] = useState(false);
-  const [savingsBadge, setSavingsBadge] = useState<string | null>(null);
-  const savingsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Инкрементальный кэш суммы длин thought/output: горячий путь стрима —
-  // та же длина ленты + вырос только последний элемент — досчитываем дельту
-  // вместо O(n) прохода по всей ленте. Формулы и цифры не меняются.
-  const textCache = useRef<{
-    valid: boolean;
-    thoughtsLen: number;
-    outputsLen: number;
-    lastThoughtId?: string;
-    lastOutputId?: string;
-    lastThoughtLen: number;
-    lastOutputLen: number;
-    textChars: number;
-  }>({ valid: false, thoughtsLen: 0, outputsLen: 0, lastThoughtLen: 0, lastOutputLen: 0, textChars: 0 });
-
-  // Dynamic token calculations
-  const { totalUsedTokens, systemPromptTokens, toolDefTokens, messageTokens } = useMemo(() => {
-    const thoughtsArr = thoughts ?? [];
-    const outputsArr = outputs ?? [];
-    const toolsArr = tools ?? [];
-
-    const tLen = thoughtsArr.length;
-    const oLen = outputsArr.length;
-    const lastTh = tLen > 0 ? thoughtsArr[tLen - 1] : undefined;
-    const lastOut = oLen > 0 ? outputsArr[oLen - 1] : undefined;
-    const lastThLen = (lastTh?.content ?? '').length;
-    const lastOutLen = (lastOut?.content ?? '').length;
-
-    const fullTextRecalc = () => {
-      let sum = 0;
-      for (const th of thoughtsArr) sum += (th?.content ?? '').length;
-      for (const out of outputsArr) sum += (out?.content ?? '').length;
-      return sum;
-    };
-    const commitCache = (textChars: number) => {
-      const c = textCache.current;
-      c.valid = true;
-      c.thoughtsLen = tLen;
-      c.outputsLen = oLen;
-      c.lastThoughtId = lastTh?.id;
-      c.lastOutputId = lastOut?.id;
-      c.lastThoughtLen = lastThLen;
-      c.lastOutputLen = lastOutLen;
-      c.textChars = textChars;
-    };
-
-    let textChars: number;
-    const c = textCache.current;
-    if (!c.valid) {
-      textChars = fullTextRecalc();
-      commitCache(textChars);
-    } else if (tLen < c.thoughtsLen || oLen < c.outputsLen) {
-      // Лента ужалась (clear/reload/evict) — полный пересчёт
-      textChars = fullTextRecalc();
-      commitCache(textChars);
-    } else {
-      // Проверка append-only префикса по id граничных элементов (O(1))
-      const thoughtStable =
-        c.thoughtsLen === 0 || thoughtsArr[c.thoughtsLen - 1]?.id === c.lastThoughtId;
-      const outputStable =
-        c.outputsLen === 0 || outputsArr[c.outputsLen - 1]?.id === c.lastOutputId;
-      if (!thoughtStable || !outputStable) {
-        // Перезагрузка с той же/большей длиной, но другим содержимым
-        textChars = fullTextRecalc();
-        commitCache(textChars);
-      } else {
-        // Дельта: подрастание старого последнего + только новые хвосты
-        let delta = 0;
-        let valid = true;
-        if (c.thoughtsLen > 0) {
-          const grow = (thoughtsArr[c.thoughtsLen - 1]?.content ?? '').length - c.lastThoughtLen;
-          if (grow < 0) valid = false;
-          else delta += grow;
-        }
-        if (c.outputsLen > 0) {
-          const grow = (outputsArr[c.outputsLen - 1]?.content ?? '').length - c.lastOutputLen;
-          if (grow < 0) valid = false;
-          else delta += grow;
-        }
-        if (valid) {
-          for (let i = c.thoughtsLen; i < tLen; i++) delta += (thoughtsArr[i]?.content ?? '').length;
-          for (let i = c.outputsLen; i < oLen; i++) delta += (outputsArr[i]?.content ?? '').length;
-          textChars = c.textChars + delta;
-          commitCache(textChars);
-        } else {
-          textChars = fullTextRecalc();
-          commitCache(textChars);
-        }
-      }
-    }
-
-    const isSubagent = taskId.includes('.sub-') || taskId.includes(':sub:') || taskId.includes('.');
-    const baseSystem = isSubagent ? 300 : 650;
-    const baseTool = isSubagent ? 400 : 500;
-
-    let messageChars = textChars;
-    for (const t of toolsArr) {
-      messageChars += (t?.stdout?.length || 0);
-      messageChars += (t?.stderr?.length || 0);
-      messageChars += JSON.stringify(t?.params || {}).length;
-    }
-    const hasMessages =
-      thoughtsArr.length > 0 ||
-      outputsArr.length > 0 ||
-      toolsArr.length > 0 ||
-      ((feed?.length ?? 0) > 0) ||
-      messageChars > 0;
-    // Accurate multilingual BPE estimation for Cyrillic and mixed text (~2.2 chars per token)
-    const rawMsgTokens = Math.max(hasMessages ? 100 : 0, Math.round(messageChars / 2.2));
-
-    // Context resolution priority cascade:
-    // 1. Explicit currentEstimatedTokens prop
-    // 2. Verified server telemetry (telemetry?.inputTokens > 0) has absolute priority over old compaction overrides and resolvedCompactTokens!
-    // 3. In-memory compaction override (tokenOverride) or resolved compacted tokens (resolvedCompactTokens)
-    // 4. Heuristic fallback based on baseSystem + baseTool + dynamicMsgTokens
-    let total: number;
-    if (currentEstimatedTokens !== undefined) {
-      total = currentEstimatedTokens;
-    } else if ((telemetry?.inputTokens || 0) > 0) {
-      total = telemetry.inputTokens + (streamedTurnTokens > 0 ? streamedTurnTokens : 0);
-    } else if (resolvedCompactTokens !== undefined || tokenOverride !== undefined) {
-      const baseCompacted = (tokenOverride ?? resolvedCompactTokens)!;
-      const out = streamedTurnTokens > 0 ? streamedTurnTokens : 0;
-      total = baseCompacted + out;
-    } else {
-      const dynamicMsgTokens = Math.max(100, rawMsgTokens);
-      total = baseSystem + baseTool + dynamicMsgTokens;
-    }
-
-    // Honest segment token allocation:
-    let sys = baseSystem;
-    let tool = baseTool;
-    let msg = 0;
-
-    if (total <= 0) {
-      sys = 0;
-      tool = 0;
-      msg = 0;
-    } else if (
-      (telemetry?.inputTokens || 0) > 0 &&
-      typeof telemetry?.systemTokens === 'number' &&
-      typeof telemetry?.toolTokens === 'number'
-    ) {
-      sys = telemetry.systemTokens;
-      tool = telemetry.toolTokens;
-      msg = Math.max(0, total - sys - tool);
-    } else if (hasMessages) {
-      const msgWeight = Math.max(1, rawMsgTokens);
-      const totalWeight = baseSystem + baseTool + msgWeight;
-
-      if (total < totalWeight) {
-        // Honest proportional allocation across all 3 segments: don't squash messageTokens to 0!
-        const ratio = total / totalWeight;
-        sys = Math.round(baseSystem * ratio);
-        tool = Math.round(baseTool * ratio);
-        msg = Math.max(1, total - sys - tool);
-      } else {
-        sys = baseSystem;
-        tool = baseTool;
-        msg = Math.max(1, total - sys - tool);
-      }
-    } else {
-      // No messages in conversation yet: allocate between system and tool definitions
-      if (total < baseSystem + baseTool) {
-        const ratio = total / (baseSystem + baseTool);
-        sys = Math.round(baseSystem * ratio);
-        tool = Math.max(0, total - sys);
-        msg = 0;
-      } else {
-        sys = baseSystem;
-        tool = baseTool;
-        msg = Math.max(0, total - sys - tool);
-      }
-    }
-
-    return {
-      totalUsedTokens: total,
-      systemPromptTokens: sys,
-      toolDefTokens: tool,
-      messageTokens: msg,
-    };
-    // Lightweight reactive deps: task slices, token override, and server telemetry
-  }, [
+  const metrics = useContextGaugeMetrics({
     taskId,
+    persona,
+    turns,
+    contextWindow,
+    stageLimit,
     currentEstimatedTokens,
-    resolvedCompactTokens,
-    tokenOverride,
-    telemetry?.inputTokens,
-    telemetry?.cacheReadTokens,
-    telemetry?.outputTokens,
-    telemetry?.systemTokens,
-    telemetry?.toolTokens,
-    streamedTurnTokens,
-    thoughts,
-    outputs,
-    tools,
-    feed,
-  ]);
+    onCompact,
+  });
 
-  const percent = Math.min(100, Math.max(0, Math.round((totalUsedTokens / effectiveLimit) * 100)));
-
-  // Segment widths against 100% capacity
-  const systemPct = Math.max(0, (systemPromptTokens / effectiveLimit) * 100);
-  const toolPct = Math.max(0, (toolDefTokens / effectiveLimit) * 100);
-  const msgPct = Math.max(0, (messageTokens / effectiveLimit) * 100);
-
-  const usedTokensK = (totalUsedTokens / 1000) >= 10
-    ? Math.round(totalUsedTokens / 1000)
-    : (totalUsedTokens / 1000).toFixed(1);
-  const maxTokensK = Math.round(effectiveLimit / 1000);
-
-  const calculatedTurns = useMemo(() => {
-    const toolsCount = tools?.length || 0;
-    const thoughtsCount = thoughts?.length || 0;
-    const outputsCount = outputs?.length || 0;
-    return Math.max(toolsCount + outputsCount, thoughtsCount, 0);
-  }, [tools, thoughts, outputs]);
-  const isSubagentTask = taskId.includes('.sub-') || taskId.includes(':sub:') || taskId.includes('.');
-  const effectiveTurns = turns !== undefined && !isSubagentTask ? turns : calculatedTurns;
-
-  // Telemetry: cache hit % + output throughput (TPS) + RPM step rate
-  const totalInputTokens = (telemetry?.inputTokens || 0) + (telemetry?.cacheReadTokens || 0);
-  const safeCacheHitRate = telemetry
-    ? typeof telemetry.cacheHitRate === 'number' && Number.isFinite(telemetry.cacheHitRate) && telemetry.cacheHitRate >= 0
-      ? telemetry.cacheHitRate
-      : totalInputTokens > 0
-        ? ((telemetry.cacheReadTokens || 0) / totalInputTokens) * 100
-        : 0
-    : 0;
-
-  const cacheText = telemetry ? `${Math.round(safeCacheHitRate)}%` : '—';
-  const cacheTitle = telemetry
-    ? `Попадания в prompt cache: ${Math.round(safeCacheHitRate)}% (из кеша прочитано ${(telemetry.cacheReadTokens || 0).toLocaleString('ru-RU')} из ${totalInputTokens.toLocaleString('ru-RU')} входных токенов терна)`
-    : 'Нет данных телеметрии от модели';
-
-  // Active generation time: starts from first token (genStart) or start of generation (thinkingStart)
-  const activeGenStart = genStart ?? thinkingStart;
-  const activeGenEnd = genEnd;
-  const elapsedSec = activeGenStart != null
-    ? Math.max(0.01, ((activeGenEnd ?? Date.now()) - activeGenStart) / 1000)
-    : null;
-
-  const outputTokens = (telemetry?.outputTokens && telemetry.outputTokens > 0)
-    ? telemetry.outputTokens
-    : streamedTurnTokens;
-
-  // Live TPS calculation while streaming (guarded against division by zero and micro-spikes)
-  const liveTps =
-    elapsedSec != null && elapsedSec >= 0.1 && outputTokens > 0 ? outputTokens / elapsedSec : null;
-
-  const lastTurnTps = frozenTps != null ? frozenTps : liveTps;
-
-  // Smooth cumulative average across all turns of the task (eliminates wild dips/spikes on short turns)
-  const avgTps = useMemo(() => {
-    if (cumulativeGenerationSec > 0 && cumulativeOutputTokens > 0) {
-      return cumulativeOutputTokens / cumulativeGenerationSec;
-    }
-    return lastTurnTps;
-  }, [cumulativeGenerationSec, cumulativeOutputTokens, lastTurnTps]);
-
-  const tpsValue = avgTps != null ? avgTps : lastTurnTps;
-  const tpsText = tpsValue != null && Number.isFinite(tpsValue) && tpsValue > 0
-    ? tpsValue.toFixed(1)
-    : '—';
-
-  const tpsTitle =
-    cumulativeGenerationSec > 0 && cumulativeOutputTokens > 0
-      ? `Средняя скорость генерации: ~${cumulativeOutputTokens.toLocaleString('ru-RU')} токенов за ${cumulativeGenerationSec.toFixed(1)} с (${(cumulativeOutputTokens / cumulativeGenerationSec).toFixed(1)} tok/s)`
-      : tpsValue != null && elapsedSec != null
-        ? `Скорость генерации: ${outputTokens.toLocaleString('ru-RU')} токенов (${tpsValue.toFixed(1)} tok/s)`
-        : 'Нет данных для расчёта скорости генерации';
-
-  // Russian pluralization helper for turns
-  const pluralizeTurns = (n: number) => {
-    const abs = Math.abs(n);
-    const mod100 = abs % 100;
-    const mod10 = abs % 10;
-    if (mod100 >= 11 && mod100 <= 19) return 'шагов';
-    if (mod10 === 1) return 'шаг';
-    if (mod10 >= 2 && mod10 <= 4) return 'шага';
-    return 'шагов';
-  };
-
-  // RPM (Requests Per Minute / Step Rate) smooth cumulative calculation over task duration
-  const totalTaskSec = useMemo(() => {
-    if (!taskStart) return null;
-    const end = taskEnd ?? Date.now();
-    return Math.max(1, (end - taskStart) / 1000);
-  }, [taskStart, taskEnd]);
-
-  const rpm = useMemo(() => {
-    if (effectiveTurns <= 0) return null;
-    const sec = totalTaskSec ?? (activeGenStart != null ? Math.max(1, (Date.now() - activeGenStart) / 1000) : null);
-    if (!sec || sec <= 0) return null;
-    return effectiveTurns / Math.max(0.1, sec / 60);
-  }, [effectiveTurns, totalTaskSec, activeGenStart]);
-
-  const rpmText = rpm != null && Number.isFinite(rpm) && rpm > 0
-    ? rpm.toFixed(1)
-    : '—';
-
-  const rpmTitle = rpm != null && totalTaskSec != null
-    ? `Темп выполнения: ${rpmText} шаг/мин (RPM) · ${effectiveTurns} ${pluralizeTurns(effectiveTurns)} за ${(totalTaskSec / 60).toFixed(1)} мин`
-    : `Шагов выполнено: ${effectiveTurns}`;
-
-  // SVG circular gauge geometry (diameter 28px)
-  const radius = 10;
-  const circumference = 2 * Math.PI * radius; // ~62.8318
-  const strokeDashoffset = circumference - (circumference * percent) / 100;
-
-  const strokeColor = useMemo(() => {
-    if (percent < 60) return '#10b981';
-    if (percent <= 85) return '#f59e0b';
-    return '#ef4444';
-  }, [percent]);
-
-  const triggerSavingsNotice = useCallback((savedCount: number) => {
-    setSavingsBadge(`Оптимизировано: ~${savedCount.toLocaleString('ru-RU')} токенов`);
-    if (savingsTimerRef.current) {
-      clearTimeout(savingsTimerRef.current);
-    }
-    savingsTimerRef.current = setTimeout(() => {
-      setSavingsBadge(null);
-      savingsTimerRef.current = null;
-    }, 3000);
-  }, []);
-
-  // Listen to Tauri IPC event
-  useEffect(() => {
-    let isDisposed = false;
-    let unlisten: (() => void) | undefined;
-    const setupListener = async () => {
-      try {
-        const { listen } = await import('@tauri-apps/api/event');
-        if (isDisposed) return;
-        type CompactedEventPayload = {
-          tokens_after?: number;
-          tokensAfter?: number;
-          saved_tokens?: number;
-          estimatedSavedTokens?: number;
-          savedTokens?: number;
-        };
-        const u = await listen<CompactedEventPayload>('agent:compacted', (event) => {
-          if (event.payload) {
-            const p = event.payload;
-            const after = p.tokens_after ?? p.tokensAfter;
-            const saved = p.saved_tokens ?? p.estimatedSavedTokens ?? p.savedTokens ?? 0;
-            if (typeof after === 'number' && Number.isFinite(after)) {
-              setTaskTokens?.(taskId, after);
-            }
-            if (saved > 0) {
-              triggerSavingsNotice(saved);
-            }
-          }
-        });
-        if (isDisposed) {
-          u();
-        } else {
-          unlisten = u;
-        }
-      } catch {
-        // Fallback in web mode
-      }
-    };
-    setupListener();
-
-    return () => {
-      isDisposed = true;
-      if (unlisten) unlisten();
-      if (savingsTimerRef.current) {
-        clearTimeout(savingsTimerRef.current);
-      }
-    };
-  }, [taskId, setTaskTokens, triggerSavingsNotice]);
-
-  const handleCompactClick = async () => {
-    if (isCompacting) return;
-    setIsCompacting(true);
-
-    let saved = 0;
-
-    if (evaporateClientToolLogs) {
-      const clientResult = evaporateClientToolLogs(taskId);
-      saved = clientResult.savedTokens;
-    }
-
-    if (onCompact) {
-      try {
-        const res = await onCompact();
-        if (res) {
-          saved = Math.max(saved, res.savedTokens);
-        }
-      } catch {
-        // Fallback
-      }
-    } else {
-      try {
-        const res = await useDrawerStore.getState().compactTaskContext(taskId);
-        if (res) {
-          saved = Math.max(saved, res.savedTokens);
-        }
-      } catch {
-        // Handled
-      }
-    }
-
-    setIsCompacting(false);
-
-    if (saved > 0) {
-      triggerSavingsNotice(saved);
-    } else {
-      triggerSavingsNotice(2450);
-    }
-  };
-
-  const miniCircumference = 2 * Math.PI * 6; // ~37.699
-  const miniStrokeDashoffset = miniCircumference - (miniCircumference * percent) / 100;
+  const lang = useLanguageStore((s) => s.language);
 
   if (variant === 'header-ring') {
     return (
       <div className="relative group inline-flex items-center">
-        <div
-          className="relative w-7 h-7 flex items-center justify-center cursor-pointer select-none rounded-full hover:ring-2 hover:ring-[#ebebeb] transition"
-          title={`Контекст: ${percent}% (~${usedTokensK}K / ${maxTokensK}K) · Кеш: ${cacheText} · TPS: ${tpsText}`}
-        >
+        <div className="relative w-7 h-7 flex items-center justify-center cursor-pointer select-none rounded-full hover:ring-2 hover:ring-[#ebebeb] dark:hover:ring-[#21262d] transition">
           <svg className="w-7 h-7 -rotate-90 transform" viewBox="0 0 28 28">
-            <circle cx="14" cy="14" r={radius} stroke="#e5e7eb" className="dark:stroke-[#21262d]" strokeWidth="2.5" fill="none" />
             <circle
               cx="14"
               cy="14"
-              r={radius}
-              stroke={strokeColor}
+              r={metrics.radius}
+              stroke="#e5e7eb"
+              className="dark:stroke-[#21262d]"
               strokeWidth="2.5"
-              strokeDasharray={circumference}
-              strokeDashoffset={strokeDashoffset}
+              fill="none"
+            />
+            <circle
+              cx="14"
+              cy="14"
+              r={metrics.radius}
+              stroke={metrics.strokeColor}
+              strokeWidth="2.5"
+              strokeDasharray={metrics.circumference}
+              strokeDashoffset={metrics.strokeDashoffset}
               strokeLinecap="round"
               fill="none"
               className="transition-all duration-300"
             />
           </svg>
           <span className="absolute inset-0 flex items-center justify-center text-[8.5px] font-mono font-semibold text-[#171717] dark:text-[#f0f6fc] tabular-nums">
-            {percent}%
+            {metrics.percent}%
           </span>
         </div>
       </div>
     );
   }
 
-  // Elegant bottom status bar under chat input card
+  const turnWord = pluralize(
+    metrics.effectiveTurns,
+    t('telemetry.turnOne'),
+    t('telemetry.turnFew'),
+    t('telemetry.turnMany'),
+    lang
+  );
+  const stepWord = pluralize(
+    metrics.stepsCount,
+    t('telemetry.stepOne'),
+    t('telemetry.stepFew'),
+    t('telemetry.stepMany'),
+    lang
+  );
+
+  const turnsStepsText =
+    metrics.stepsCount > 0
+      ? `${metrics.effectiveTurns} ${turnWord} ${metrics.stepsCount} ${stepWord}`
+      : `${metrics.effectiveTurns} ${turnWord}`;
+
+  const tpsText = formatTps(metrics.tpsValue);
+  const compactTokens = formatCompactTokens(metrics.totalTokens);
+  const cacheHitRateRounded = Math.round(Math.max(0, Math.min(100, metrics.cacheHitRate)));
+
   return (
-    <div className="font-mono text-xs text-[#8f8f8f] dark:text-[#8b949e] flex items-center justify-center gap-6 py-1.5 select-none">
-      {/* ⏱️ {turns} шагов · {rpm} RPM · {tps} tok/s */}
-      <span className="flex items-center gap-1.5" title={`${tpsTitle} · ${rpmTitle}`}>
-        <span className="tabular-nums">
-          {effectiveTurns} {pluralizeTurns(effectiveTurns)}
-          {rpm != null && rpm > 0 ? ` · ${rpmText} RPM` : ''} · {tpsText} tok/s
-        </span>
-      </span>
-
-      {/* 💾 {tokens} tok · Кэш {cacheHitRate}% */}
-      <span className="flex items-center gap-1.5" title={cacheTitle}>
-        <span className="tabular-nums">{usedTokensK}k tok · Кэш {cacheText}</span>
-      </span>
-
-      {/* ○ {contextPercent}% (миниатюрное кольцо/круг контекста с popover) */}
-      <div className="relative group inline-flex items-center gap-1.5 cursor-pointer">
-        <div
-          className="relative w-3.5 h-3.5 flex items-center justify-center shrink-0"
-          title={`Контекст: ${percent}% (~${usedTokensK}K / ${maxTokensK}K)`}
-        >
-          <svg className="w-3.5 h-3.5 -rotate-90 transform" viewBox="0 0 16 16">
-            <circle cx="8" cy="8" r="6" stroke="#ebebeb" className="dark:stroke-[#21262d]" strokeWidth="2" fill="none" />
-            <circle
-              cx="8"
-              cy="8"
-              r="6"
-              stroke={strokeColor}
-              strokeWidth="2"
-              strokeDasharray={miniCircumference}
-              strokeDashoffset={miniStrokeDashoffset}
-              strokeLinecap="round"
-              fill="none"
-              className="transition-all duration-300"
-            />
-          </svg>
+    <div className="font-mono text-xs text-[#8f8f8f] dark:text-[#8b949e] flex items-center justify-center gap-2 py-1.5 select-none">
+      {/* Speedometer Pill: Session statistics */}
+      <div className="relative group inline-flex items-center">
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md cursor-pointer transition border border-transparent hover:border-[#d0d7de] dark:hover:border-[#30363d] hover:bg-[#ebebeb]/50 dark:hover:bg-[#161b22] text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]">
+          <Gauge className="w-3.5 h-3.5 shrink-0" />
+          <span className="tabular-nums">
+            {turnsStepsText} · {tpsText}
+          </span>
         </div>
-        <span className="tabular-nums text-[#8f8f8f] dark:text-[#8b949e]">{percent}%</span>
+        <SessionStatsPopover
+          llmTimeSec={metrics.llmTimeSec}
+          toolTimeSec={metrics.toolTimeSec}
+          ttftMs={metrics.ttftMs}
+          tpsValue={metrics.tpsValue}
+        />
+      </div>
 
-        {/* Floating Hover Card (pops UPWARDS above status bar) */}
+      {/* Token Usage Pill: Token usage */}
+      <div className="relative group inline-flex items-center">
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md cursor-pointer transition border border-transparent hover:border-[#d0d7de] dark:hover:border-[#30363d] hover:bg-[#ebebeb]/50 dark:hover:bg-[#161b22] text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]">
+          <Database className="w-3.5 h-3.5 shrink-0" />
+          <span className="tabular-nums">
+            {compactTokens} · {t('telemetry.cacheLabel')} {cacheHitRateRounded}%
+          </span>
+        </div>
+        <TokenUsagePopover
+          cacheHitRate={metrics.cacheHitRate}
+          uncachedInput={metrics.uncachedInput}
+          cachedInput={metrics.cachedInput}
+          outputTokens={metrics.outputTokens}
+          totalTokens={metrics.totalTokens}
+        />
+      </div>
+
+      {/* Context Ring Pill: Segment breakdown & compaction */}
+      <div className="relative group inline-flex items-center">
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md cursor-pointer transition border border-transparent hover:border-[#d0d7de] dark:hover:border-[#30363d] hover:bg-[#ebebeb]/50 dark:hover:bg-[#161b22] text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]">
+          <div className="relative w-3.5 h-3.5 flex items-center justify-center shrink-0">
+            <svg className="w-3.5 h-3.5 -rotate-90 transform" viewBox="0 0 16 16">
+              <circle
+                cx="8"
+                cy="8"
+                r="6"
+                stroke="#ebebeb"
+                className="dark:stroke-[#21262d]"
+                strokeWidth="2"
+                fill="none"
+              />
+              <circle
+                cx="8"
+                cy="8"
+                r="6"
+                stroke={metrics.strokeColor}
+                strokeWidth="2"
+                strokeDasharray={metrics.miniCircumference}
+                strokeDashoffset={metrics.miniStrokeDashoffset}
+                strokeLinecap="round"
+                fill="none"
+                className="transition-all duration-300"
+              />
+            </svg>
+          </div>
+          <span className="tabular-nums">{metrics.percent}%</span>
+        </div>
         <ContextPopover
-          percent={percent}
-          usedTokensK={usedTokensK}
-          maxTokensK={maxTokensK}
-          systemPct={systemPct}
-          toolPct={toolPct}
-          msgPct={msgPct}
-          systemPromptTokens={systemPromptTokens}
-          toolDefTokens={toolDefTokens}
-          messageTokens={messageTokens}
-          isCompacting={isCompacting}
-          savingsBadge={savingsBadge}
-          onCompactClick={handleCompactClick}
+          percent={metrics.percent}
+          usedTokensK={metrics.usedTokensK}
+          maxTokensK={metrics.maxTokensK}
+          systemPct={metrics.systemPct}
+          toolPct={metrics.toolPct}
+          msgPct={metrics.msgPct}
+          systemPromptTokens={metrics.systemPromptTokens}
+          toolDefTokens={metrics.toolDefTokens}
+          messageTokens={metrics.messageTokens}
+          isCompacting={metrics.isCompacting}
+          savingsBadge={metrics.savingsBadge}
+          onCompactClick={metrics.handleCompactClick}
         />
       </div>
     </div>

@@ -287,7 +287,7 @@ pub fn propagate_parent_subtask_advance(
             let now = Utc::now().timestamp_millis();
 
             tasks[parent_idx].waiting_for_subtask_id = Some(new_subtask_id.clone());
-            tasks[parent_idx].status = Some("waiting_subtask".to_string());
+            tasks[parent_idx].status = Some("idle".to_string());
             tasks[parent_idx].updated_at = now;
 
             let has_autorun = next_col.persona.is_some() || next_col.auto_run == Some(true);
@@ -340,6 +340,7 @@ pub fn propagate_parent_subtask_advance(
                 completed_at: None,
                 position: Some(next_subtask_pos),
                 hook_states: tasks[parent_idx].hook_states.clone(),
+                project_path: tasks[parent_idx].project_path.clone(),
             };
 
             if has_autorun {
@@ -352,7 +353,7 @@ pub fn propagate_parent_subtask_advance(
                 "fromStage": &old_parent_stage,
                 "toStage": &old_parent_stage,
                 "stageId": &old_parent_stage,
-                "status": "waiting_subtask",
+                "status": "idle",
                 "waitingForSubtaskId": &new_subtask_id,
                 "verdict": parent_clone.verdict,
                 "task": &parent_clone
@@ -452,12 +453,15 @@ impl<'a> TaskTransitionPipeline<'a> {
         let _ = save_tasks_to_disk(self.root, &tasks).await;
 
         if let Some(app) = self.app_handle {
+            let project_path_str = self.root.to_string_lossy().to_string();
             if let Some(state_ref) = app.try_state::<AppState>() {
-                if let Ok(mut guard) = state_ref.tasks.lock() {
-                    if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &failed_task.id)) {
-                        t.verdict = failed_task.verdict.clone();
-                        t.status = failed_task.status.clone();
-                        t.updated_at = failed_task.updated_at;
+                if state_ref.get_root() == self.root {
+                    if let Ok(mut guard) = state_ref.tasks.lock() {
+                        if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &failed_task.id)) {
+                            t.verdict = failed_task.verdict.clone();
+                            t.status = failed_task.status.clone();
+                            t.updated_at = failed_task.updated_at;
+                        }
                     }
                 }
             }
@@ -465,19 +469,22 @@ impl<'a> TaskTransitionPipeline<'a> {
                 let _ = app.emit("task:moved", serde_json::json!({
                     "task": &failed_task,
                     "rejected": true,
-                    "reason": reason_details
+                    "reason": reason_details,
+                    "projectPath": &project_path_str,
                 }));
             }
             let _ = app.emit("task:updated", serde_json::json!({
                 "taskId": failed_task.id,
-                "task": &failed_task
+                "task": &failed_task,
+                "projectPath": &project_path_str,
             }));
-            let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+            let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
 
             if scol_has_autorun {
                 let _ = app.emit("agent:autorun", serde_json::json!({
                     "taskId": failed_task.id,
-                    "prompt": steer_content
+                    "prompt": steer_content,
+                    "projectPath": &project_path_str,
                 }));
             }
         }
@@ -625,10 +632,12 @@ impl<'a> TaskTransitionPipeline<'a> {
                 let _ = crate::db::db_upsert_task(self.root, task);
                 if let Some(app) = self.app_handle {
                     if let Some(state_ref) = app.try_state::<AppState>() {
-                        if let Ok(mut guard) = state_ref.tasks.lock() {
-                            if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &task.id)) {
-                                t.worktree_path = task.worktree_path.clone();
-                                t.branch = task.branch.clone();
+                        if state_ref.get_root() == self.root {
+                            if let Ok(mut guard) = state_ref.tasks.lock() {
+                                if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &task.id)) {
+                                    t.worktree_path = task.worktree_path.clone();
+                                    t.branch = task.branch.clone();
+                                }
                             }
                         }
                     }
@@ -859,10 +868,12 @@ impl<'a> TaskTransitionPipeline<'a> {
                 let _ = crate::db::db_upsert_task(self.root, task);
                 if let Some(app) = self.app_handle {
                     if let Some(state_ref) = app.try_state::<AppState>() {
-                        if let Ok(mut guard) = state_ref.tasks.lock() {
-                            if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &task.id)) {
-                                t.worktree_path = task.worktree_path.clone();
-                                t.branch = task.branch.clone();
+                        if state_ref.get_root() == self.root {
+                            if let Ok(mut guard) = state_ref.tasks.lock() {
+                                if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &task.id)) {
+                                    t.worktree_path = task.worktree_path.clone();
+                                    t.branch = task.branch.clone();
+                                }
                             }
                         }
                     }
@@ -993,10 +1004,12 @@ impl<'a> TaskTransitionPipeline<'a> {
                 let _ = crate::db::db_upsert_task(self.root, task);
                 if let Some(app) = self.app_handle {
                     if let Some(state_ref) = app.try_state::<AppState>() {
-                        if let Ok(mut guard) = state_ref.tasks.lock() {
-                            if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &task.id)) {
-                                t.worktree_path = task.worktree_path.clone();
-                                t.branch = task.branch.clone();
+                        if state_ref.get_root() == self.root {
+                            if let Ok(mut guard) = state_ref.tasks.lock() {
+                                if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &task.id)) {
+                                    t.worktree_path = task.worktree_path.clone();
+                                    t.branch = task.branch.clone();
+                                }
                             }
                         }
                     }
@@ -1462,13 +1475,15 @@ pub async fn internal_move_task_stage(
 
     if let Some(app) = app_handle {
         if let Some(state_ref) = app.try_state::<AppState>() {
-            if let Ok(mut guard) = state_ref.tasks.lock() {
-                for mem_t in guard.iter() {
-                    if !tasks.iter().any(|t| task_id_matches(&t.id, &mem_t.id)) {
-                        tasks.push(mem_t.clone());
+            if state_ref.get_root().as_path() == root {
+                if let Ok(mut guard) = state_ref.tasks.lock() {
+                    for mem_t in guard.iter() {
+                        if !tasks.iter().any(|t| task_id_matches(&t.id, &mem_t.id)) {
+                            tasks.push(mem_t.clone());
+                        }
                     }
+                    *guard = tasks.clone();
                 }
-                *guard = tasks.clone();
             }
         }
     }
@@ -1503,7 +1518,8 @@ pub async fn internal_move_task_stage(
         .unwrap_or(updated);
 
     if let Some(app) = app_handle {
-        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+        let project_path_str = root.to_string_lossy().to_string();
+        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
         let _ = app.emit(
             "task:moved",
             serde_json::json!({
@@ -1513,24 +1529,25 @@ pub async fn internal_move_task_stage(
                 "stageId": &canonical_target_stage_id,
                 "status": final_task.status,
                 "verdict": final_task.verdict,
-                "task": &final_task
+                "task": &final_task,
+                "projectPath": &project_path_str,
             }),
         );
         for ctask in &parent_created_tasks {
-            let _ = app.emit("task:created", serde_json::json!({ "task": ctask }));
-            let _ = app.emit("task:updated", serde_json::json!({ "task": ctask }));
+            let _ = app.emit("task:created", serde_json::json!({ "task": ctask, "projectPath": &project_path_str }));
+            let _ = app.emit("task:updated", serde_json::json!({ "task": ctask, "projectPath": &project_path_str }));
         }
         for p_event in &parent_moved_events {
             let _ = app.emit("task:moved", p_event);
             if let Some(ptask) = p_event.get("task") {
-                let _ = app.emit("task:updated", serde_json::json!({ "task": ptask }));
+                let _ = app.emit("task:updated", serde_json::json!({ "task": ptask, "projectPath": &project_path_str }));
             }
         }
         if target_has_autorun {
-            let _ = app.emit("agent:autorun", serde_json::json!({ "taskId": task_id }));
+            let _ = app.emit("agent:autorun", serde_json::json!({ "taskId": task_id, "projectPath": &project_path_str }));
         }
         for auto_pid in parent_autorun_ids {
-            let _ = app.emit("agent:autorun", serde_json::json!({ "taskId": auto_pid }));
+            let _ = app.emit("agent:autorun", serde_json::json!({ "taskId": auto_pid, "projectPath": &project_path_str }));
         }
     }
 
@@ -1665,13 +1682,16 @@ pub async fn reorder_task(
 
     save_tasks_to_disk(&root, &tasks).await?;
 
-    if let Ok(mut guard) = state.tasks.lock() {
-        *guard = tasks.clone();
+    if state.get_root() == root {
+        if let Ok(mut guard) = state.tasks.lock() {
+            *guard = tasks.clone();
+        }
     }
 
-    let _ = app_handle.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+    let project_path_str = root.to_string_lossy().to_string();
+    let _ = app_handle.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
     if let Some(ref ut) = updated_task {
-        let _ = app_handle.emit("task:updated", serde_json::json!({ "taskId": ut.id, "task": ut }));
+        let _ = app_handle.emit("task:updated", serde_json::json!({ "taskId": ut.id, "task": ut, "projectPath": &project_path_str }));
     }
 
     updated_task.ok_or_else(|| format!("Failed to reorder task {}", task_id))
@@ -1737,17 +1757,21 @@ pub fn auto_complete_task_todos(
 
     if let Some(app) = app_handle {
         if let Some(state_ref) = app.try_state::<AppState>() {
-            if let Ok(mut guard) = state_ref.tasks.lock() {
-                if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &task.id)) {
-                    t.todos = task.todos.clone();
-                    t.updated_at = task.updated_at;
+            if state_ref.get_root().as_path() == root {
+                if let Ok(mut guard) = state_ref.tasks.lock() {
+                    if let Some(t) = guard.iter_mut().find(|t| task_id_matches(&t.id, &task.id)) {
+                        t.todos = task.todos.clone();
+                        t.updated_at = task.updated_at;
+                    }
                 }
             }
         }
+        let project_path_str = root.to_string_lossy().to_string();
         let _ = app.emit("task:updated", serde_json::json!({
             "taskId": &task.id,
             "todos": &task.todos,
             "task": &task,
+            "projectPath": &project_path_str,
         }));
     }
 
@@ -1914,22 +1938,25 @@ pub async fn internal_advance_task_to_stage(
             }
             if let Some(app) = app_handle {
                 if let Some(state_ref) = app.try_state::<AppState>() {
-                    if let Ok(mut guard) = state_ref.tasks.lock() {
-                        if let Some(sub) = guard.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
-                            sub.status = Some("done".to_string());
-                            if sub.completed_at.is_none() {
-                                sub.completed_at = Some(Utc::now().timestamp_millis());
+                    if state_ref.get_root().as_path() == root {
+                        if let Ok(mut guard) = state_ref.tasks.lock() {
+                            if let Some(sub) = guard.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
+                                sub.status = Some("done".to_string());
+                                if sub.completed_at.is_none() {
+                                    sub.completed_at = Some(Utc::now().timestamp_millis());
+                                }
+                                sub.updated_at = Utc::now().timestamp_millis();
                             }
-                            sub.updated_at = Utc::now().timestamp_millis();
                         }
                     }
                 }
             }
             let _ = save_tasks_to_disk(root, &tasks).await;
             if let Some(app) = app_handle {
+                let project_path_str = root.to_string_lossy().to_string();
                 if let Some(sub) = tasks.iter().find(|t| task_id_matches(&t.id, &subtask_id)) {
-                    let _ = app.emit("task:updated", serde_json::json!({ "task": sub }));
-                    let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+                    let _ = app.emit("task:updated", serde_json::json!({ "task": sub, "projectPath": &project_path_str }));
+                    let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
                 }
             }
 
@@ -1981,14 +2008,17 @@ pub async fn internal_advance_task_to_stage(
             let _ = save_tasks_to_disk(root, &final_tasks).await;
             if let Some(app) = app_handle {
                 if let Some(state_ref) = app.try_state::<AppState>() {
-                    if let Ok(mut guard) = state_ref.tasks.lock() {
-                        *guard = final_tasks.clone();
+                    if state_ref.get_root().as_path() == root {
+                        if let Ok(mut guard) = state_ref.tasks.lock() {
+                            *guard = final_tasks.clone();
+                        }
                     }
                 }
+                let project_path_str = root.to_string_lossy().to_string();
                 if let Some(parent) = final_tasks.iter().find(|t| task_id_matches(&t.id, &parent_id)) {
-                    let _ = app.emit("task:updated", serde_json::json!({ "task": parent }));
+                    let _ = app.emit("task:updated", serde_json::json!({ "task": parent, "projectPath": &project_path_str }));
                 }
-                let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &final_tasks }));
+                let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &final_tasks, "projectPath": &project_path_str }));
                 let _ = app.emit("task:advanced", serde_json::json!({
                     "taskId": &parent_id,
                     "sourceTaskId": &subtask_id,
@@ -1999,14 +2029,9 @@ pub async fn internal_advance_task_to_stage(
                     "targetStageTitle": &target_col.title,
                     "isTerminal": true,
                     "summary": summary,
+                    "projectPath": &project_path_str,
                 }));
             }
-
-            let parent_summary_content = format!(
-                "### Саммари финализации задачи {}: {}\n\n{}",
-                parent_id, target_col.title, summary
-            );
-            let _ = append_task_dialog_activity(root, &parent_id, "summary", &parent_summary_content, app_handle).await;
 
             return Ok(format!(
                 "УСПЕШНО: Задача {} завершена в терминальной колонке '{}' ({}), статус: {}",
@@ -2045,7 +2070,7 @@ pub async fn internal_advance_task_to_stage(
                 // 2. Update parent task waiting_for_subtask_id
                 if let Some(parent) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &parent_id)) {
                     parent.waiting_for_subtask_id = Some(existing_sub.id.clone());
-                    parent.status = Some("waiting_subtask".to_string());
+                    parent.status = Some("idle".to_string());
                     parent.updated_at = Utc::now().timestamp_millis();
                     let _ = crate::db::db_upsert_task(root, parent);
                 }
@@ -2063,8 +2088,10 @@ pub async fn internal_advance_task_to_stage(
                 let _ = save_tasks_to_disk(root, &tasks).await;
                 if let Some(app) = app_handle {
                     if let Some(state_ref) = app.try_state::<AppState>() {
-                        if let Ok(mut guard) = state_ref.tasks.lock() {
-                            *guard = tasks.clone();
+                        if state_ref.get_root().as_path() == root {
+                            if let Ok(mut guard) = state_ref.tasks.lock() {
+                                *guard = tasks.clone();
+                            }
                         }
                     }
                 }
@@ -2075,12 +2102,6 @@ pub async fn internal_advance_task_to_stage(
                 );
                 let _ = append_task_dialog_activity(root, &subtask_id, "summary", &sub_summary_content, app_handle).await;
 
-                let parent_summary_content = format!(
-                    "### Саммари этапа (передано на {} {}):\n\n{}",
-                    existing_sub.id, target_col.title, summary
-                );
-                let _ = append_task_dialog_activity(root, &parent_id, "summary", &parent_summary_content, app_handle).await;
-
                 let handover_prompt = format!(
                     "### [ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]\n\nЗамечания исправлены. Отчет исполнителя:\n{}",
                     summary
@@ -2088,16 +2109,17 @@ pub async fn internal_advance_task_to_stage(
                 let _ = append_task_dialog_activity(root, &existing_sub.id, "steer", &handover_prompt, app_handle).await;
 
                 if let Some(app) = app_handle {
+                    let project_path_str = root.to_string_lossy().to_string();
                     if let Some(sub) = tasks.iter().find(|t| task_id_matches(&t.id, &subtask_id)) {
-                        let _ = app.emit("task:updated", serde_json::json!({ "task": sub }));
+                        let _ = app.emit("task:updated", serde_json::json!({ "task": sub, "projectPath": &project_path_str }));
                     }
                     if let Some(parent) = tasks.iter().find(|t| task_id_matches(&t.id, &parent_id)) {
-                        let _ = app.emit("task:updated", serde_json::json!({ "task": parent }));
+                        let _ = app.emit("task:updated", serde_json::json!({ "task": parent, "projectPath": &project_path_str }));
                     }
                     if let Some(target_sub) = tasks.iter().find(|t| task_id_matches(&t.id, &existing_sub.id)) {
-                        let _ = app.emit("task:updated", serde_json::json!({ "task": target_sub }));
+                        let _ = app.emit("task:updated", serde_json::json!({ "task": target_sub, "projectPath": &project_path_str }));
                     }
-                    let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+                    let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
                     let _ = app.emit("task:advanced", serde_json::json!({
                         "taskId": &parent_id,
                         "sourceTaskId": &subtask_id,
@@ -2108,12 +2130,14 @@ pub async fn internal_advance_task_to_stage(
                         "targetStageTitle": &target_col.title,
                         "isTerminal": false,
                         "summary": summary,
+                        "projectPath": &project_path_str,
                     }));
 
                     if target_has_autorun {
                         let _ = app.emit("agent:autorun", serde_json::json!({
                             "taskId": existing_sub.id,
                             "prompt": handover_prompt,
+                            "projectPath": &project_path_str,
                         }));
                     }
                 }
@@ -2134,22 +2158,25 @@ pub async fn internal_advance_task_to_stage(
                 }
                 if let Some(app) = app_handle {
                     if let Some(state_ref) = app.try_state::<AppState>() {
-                        if let Ok(mut guard) = state_ref.tasks.lock() {
-                            if let Some(sub) = guard.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
-                                sub.status = Some("done".to_string());
-                                if sub.completed_at.is_none() {
-                                    sub.completed_at = Some(Utc::now().timestamp_millis());
+                        if state_ref.get_root().as_path() == root {
+                            if let Ok(mut guard) = state_ref.tasks.lock() {
+                                if let Some(sub) = guard.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
+                                    sub.status = Some("done".to_string());
+                                    if sub.completed_at.is_none() {
+                                        sub.completed_at = Some(Utc::now().timestamp_millis());
+                                    }
+                                    sub.updated_at = Utc::now().timestamp_millis();
                                 }
-                                sub.updated_at = Utc::now().timestamp_millis();
                             }
                         }
                     }
                 }
                 let _ = save_tasks_to_disk(root, &tasks).await;
                 if let Some(app) = app_handle {
+                    let project_path_str = root.to_string_lossy().to_string();
                     if let Some(sub) = tasks.iter().find(|t| task_id_matches(&t.id, &subtask_id)) {
-                        let _ = app.emit("task:updated", serde_json::json!({ "task": sub }));
-                        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+                        let _ = app.emit("task:updated", serde_json::json!({ "task": sub, "projectPath": &project_path_str }));
+                        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
                     }
                 }
 
@@ -2170,11 +2197,6 @@ pub async fn internal_advance_task_to_stage(
                 .await?;
 
                 let next_subtask_id = next_subtask.id.clone();
-                let parent_summary_content = format!(
-                    "### Саммари этапа (передано на {} {}):\n\n{}",
-                    next_subtask_id, target_col.title, summary
-                );
-                let _ = append_task_dialog_activity(root, &parent_id, "summary", &parent_summary_content, app_handle).await;
 
                 if let Some(app) = app_handle {
                     let _ = app.emit("task:advanced", serde_json::json!({
@@ -2216,8 +2238,8 @@ pub async fn internal_advance_task_to_stage(
                         ),
                     );
                     let parent_summary_content = format!(
-                        "### Саммари этапа (передано на {} {}):\n\n{}",
-                        existing_sub_id, target_col.title, summary
+                        "### Саммари этапа {}: {}\n\n{}",
+                        current_task.stage_id, current_task.title, summary
                     );
                     let _ = append_task_dialog_activity(root, task_id, "summary", &parent_summary_content, app_handle).await;
 
@@ -2266,7 +2288,7 @@ pub async fn internal_advance_task_to_stage(
             let mut tasks = load_tasks_from_disk(root).await;
             if let Some(parent) = tasks.iter_mut().find(|t| task_id_matches(&t.id, task_id)) {
                 parent.waiting_for_subtask_id = Some(existing_sub.id.clone());
-                parent.status = Some("waiting_subtask".to_string());
+                parent.status = Some("idle".to_string());
                 parent.updated_at = Utc::now().timestamp_millis();
                 let _ = crate::db::db_upsert_task(root, parent);
             }
@@ -2282,15 +2304,17 @@ pub async fn internal_advance_task_to_stage(
             let _ = save_tasks_to_disk(root, &tasks).await;
             if let Some(app) = app_handle {
                 if let Some(state_ref) = app.try_state::<AppState>() {
-                    if let Ok(mut guard) = state_ref.tasks.lock() {
-                        *guard = tasks.clone();
+                    if state_ref.get_root().as_path() == root {
+                        if let Ok(mut guard) = state_ref.tasks.lock() {
+                            *guard = tasks.clone();
+                        }
                     }
                 }
             }
 
             let parent_summary_content = format!(
-                "### Саммари этапа (передано на {} {}):\n\n{}",
-                existing_sub.id, target_col.title, summary
+                "### Саммари этапа {}: {}\n\n{}",
+                current_task.stage_id, current_task.title, summary
             );
             let _ = append_task_dialog_activity(root, task_id, "summary", &parent_summary_content, app_handle).await;
 
@@ -2301,13 +2325,14 @@ pub async fn internal_advance_task_to_stage(
             let _ = append_task_dialog_activity(root, &existing_sub.id, "steer", &handover_prompt, app_handle).await;
 
             if let Some(app) = app_handle {
+                let project_path_str = root.to_string_lossy().to_string();
                 if let Some(parent) = tasks.iter().find(|t| task_id_matches(&t.id, task_id)) {
-                    let _ = app.emit("task:updated", serde_json::json!({ "task": parent }));
+                    let _ = app.emit("task:updated", serde_json::json!({ "task": parent, "projectPath": &project_path_str }));
                 }
                 if let Some(target_sub) = tasks.iter().find(|t| task_id_matches(&t.id, &existing_sub.id)) {
-                    let _ = app.emit("task:updated", serde_json::json!({ "task": target_sub }));
+                    let _ = app.emit("task:updated", serde_json::json!({ "task": target_sub, "projectPath": &project_path_str }));
                 }
-                let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+                let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
                 let _ = app.emit("task:advanced", serde_json::json!({
                     "taskId": task_id,
                     "sourceTaskId": task_id,
@@ -2318,6 +2343,7 @@ pub async fn internal_advance_task_to_stage(
                     "targetStageTitle": &target_col.title,
                     "isTerminal": false,
                     "summary": summary,
+                    "projectPath": &project_path_str,
                 }));
 
                 if target_has_autorun {
@@ -2347,8 +2373,8 @@ pub async fn internal_advance_task_to_stage(
         let subtask_id = subtask.id.clone();
 
         let parent_summary_content = format!(
-            "### Саммари этапа (передано на {} {}):\n\n{}",
-            subtask_id, target_col.title, summary
+            "### Саммари этапа {}: {}\n\n{}",
+            current_task.stage_id, current_task.title, summary
         );
         let _ = append_task_dialog_activity(
             root,

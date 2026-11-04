@@ -277,6 +277,7 @@ pub async fn execute_create_task(
             completed_at: None,
             position: None,
             hook_states: None,
+            project_path: Some(ctx.repo_root.to_string_lossy().to_string()),
         };
 
         tasks.push(new_task);
@@ -590,10 +591,23 @@ pub async fn execute_get_task_history(
 
     for it in &items {
         match it.item_type.as_str() {
-            "steer" | "system" | "prompt" => {
+            "steer" | "system" | "prompt" | "agent" => {
                 let content = it.content.as_deref().unwrap_or("").trim();
                 if !content.is_empty() {
-                    report.push_str(&format!("- Шаг {} [User Steer / System]: {}\n", step_num, content));
+                    let label = if content.contains("[ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ") || content.contains("HANDOVER SUMMARY") {
+                        "Agent Handover"
+                    } else if content.contains("SENSOR REJECTED") || content.contains("ОТКЛОНЕНО СЕНСОРОМ") {
+                        "Sensor Rejection"
+                    } else if content.contains("HOOK REJECTED") || content.contains("ОТКЛОНЕНО ХУКОМ") {
+                        "Hook Rejection"
+                    } else if content.contains("Задача возвращена на этап") {
+                        "Reviewer Rejection"
+                    } else if it.item_type == "agent" {
+                        "Agent Message"
+                    } else {
+                        "User Steer / System"
+                    };
+                    report.push_str(&format!("- Шаг {} [{}]: {}\n", step_num, label, content));
                     step_num += 1;
                 }
             }

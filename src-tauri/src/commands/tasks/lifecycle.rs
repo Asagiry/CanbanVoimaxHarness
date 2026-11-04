@@ -113,19 +113,15 @@ pub async fn internal_save_tasks(
                 if t.status.as_deref() == Some("waiting_subtask") {
                     t.status = Some("done".to_string());
                 }
-            } else if dt.status.as_deref() == Some("waiting_subtask") && t.status.as_deref() != Some("waiting_subtask") {
-                if let Some(ref sub_id) = dt.waiting_for_subtask_id {
-                    if active_sub_ids.contains(sub_id) {
-                        t.status = Some("waiting_subtask".to_string());
-                        t.waiting_for_subtask_id = Some(sub_id.clone());
-                    } else {
-                        t.waiting_for_subtask_id = None;
-                    }
+            } else {
+                if t.status.as_deref() == Some("waiting_subtask") {
+                    t.status = Some("idle".to_string());
                 }
-            } else if dt.waiting_for_subtask_id.is_some() && t.waiting_for_subtask_id.is_none() {
-                if let Some(ref sub_id) = dt.waiting_for_subtask_id {
-                    if active_sub_ids.contains(sub_id) {
-                        t.waiting_for_subtask_id = Some(sub_id.clone());
+                if dt.waiting_for_subtask_id.is_some() && t.waiting_for_subtask_id.is_none() {
+                    if let Some(ref sub_id) = dt.waiting_for_subtask_id {
+                        if active_sub_ids.contains(sub_id) {
+                            t.waiting_for_subtask_id = Some(sub_id.clone());
+                        }
                     }
                 }
             }
@@ -367,6 +363,7 @@ pub async fn internal_create_task(
         completed_at: None,
         position: Some(next_pos),
         hook_states: None,
+        project_path: Some(root.to_string_lossy().to_string()),
     };
 
     // RACE CONDITION PREVENTION (AGENTS.md):
@@ -374,11 +371,15 @@ pub async fn internal_create_task(
     // before launching slow operations (worktree creation, hooks).
     // This guarantees that any concurrent move_task_stage or run_agent calls will find the task.
     if let Some(state_ref) = state {
-        if let Ok(mut guard) = state_ref.tasks.lock() {
-            if !guard.iter().any(|t| t.id == new_task.id) {
-                guard.push(new_task.clone());
+        if state_ref.get_root().as_path() == root {
+            if let Ok(mut guard) = state_ref.tasks.lock() {
+                if !guard.iter().any(|t| t.id == new_task.id) {
+                    guard.push(new_task.clone());
+                }
+                tasks = guard.clone();
+            } else if !tasks.iter().any(|t| t.id == new_task.id) {
+                tasks.push(new_task.clone());
             }
-            tasks = guard.clone();
         } else if !tasks.iter().any(|t| t.id == new_task.id) {
             tasks.push(new_task.clone());
         }
@@ -401,7 +402,8 @@ pub async fn internal_create_task(
         &format!("Initial task '{}' successfully registered in state and saved to disk (total: {})", new_task.id, tasks.len()),
     );
     if let Some(app) = app_handle {
-        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+        let project_path_str = root.to_string_lossy().to_string();
+        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
     }
 
     // Check pipeline config for stage hooks (board-aware: first check columns
@@ -642,21 +644,23 @@ pub async fn internal_create_task(
     }
 
     if let Some(state_ref) = state {
-        if let Ok(mut guard) = state_ref.tasks.lock() {
-            if let Some(t) = guard.iter_mut().find(|t| t.id == new_task.id) {
-                t.worktree_path = new_task.worktree_path.clone();
-                t.branch = new_task.branch.clone();
-                t.hook_states = new_task.hook_states.clone();
-                t.updated_at = new_task.updated_at;
-                new_task.stage_id = t.stage_id.clone();
-                new_task.status = t.status.clone();
-                new_task.board_id = t.board_id.clone();
-            } else {
-                guard.push(new_task.clone());
-            }
-            for mem_t in guard.iter() {
-                if !updated_tasks.iter().any(|t| t.id == mem_t.id) {
-                    updated_tasks.push(mem_t.clone());
+        if state_ref.get_root().as_path() == root {
+            if let Ok(mut guard) = state_ref.tasks.lock() {
+                if let Some(t) = guard.iter_mut().find(|t| t.id == new_task.id) {
+                    t.worktree_path = new_task.worktree_path.clone();
+                    t.branch = new_task.branch.clone();
+                    t.hook_states = new_task.hook_states.clone();
+                    t.updated_at = new_task.updated_at;
+                    new_task.stage_id = t.stage_id.clone();
+                    new_task.status = t.status.clone();
+                    new_task.board_id = t.board_id.clone();
+                } else {
+                    guard.push(new_task.clone());
+                }
+                for mem_t in guard.iter() {
+                    if !updated_tasks.iter().any(|t| t.id == mem_t.id) {
+                        updated_tasks.push(mem_t.clone());
+                    }
                 }
             }
         }
@@ -685,7 +689,8 @@ pub async fn internal_create_task(
         )),
     );
     if let Some(app) = app_handle {
-        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &updated_tasks }));
+        let project_path_str = root.to_string_lossy().to_string();
+        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &updated_tasks, "projectPath": &project_path_str }));
     }
 
     Ok(new_task)
@@ -823,7 +828,7 @@ pub async fn internal_create_subtask(
 
     // Update parent task: mark waiting for subtask, keep parent pinned in current stage (§ 2.2)
     tasks[parent_idx].waiting_for_subtask_id = Some(subtask_id.clone());
-    tasks[parent_idx].status = Some("waiting_subtask".to_string());
+    tasks[parent_idx].status = Some("idle".to_string());
     tasks[parent_idx].updated_at = now;
 
     let subtask_title = title
@@ -880,6 +885,7 @@ pub async fn internal_create_subtask(
         completed_at: None,
         position: Some(next_subtask_pos),
         hook_states: tasks[parent_idx].hook_states.clone(),
+        project_path: Some(root.to_string_lossy().to_string()),
     };
 
     let parent_task_clone = tasks[parent_idx].clone();
@@ -890,26 +896,30 @@ pub async fn internal_create_subtask(
 
     if let Some(app) = app_handle {
         if let Some(state_ref) = app.try_state::<AppState>() {
-            if let Ok(mut guard) = state_ref.tasks.lock() {
-                *guard = tasks.clone();
+            if state_ref.get_root().as_path() == root {
+                if let Ok(mut guard) = state_ref.tasks.lock() {
+                    *guard = tasks.clone();
+                }
             }
         }
     }
     save_tasks_to_disk(root, &tasks).await?;
 
     if let Some(app) = app_handle {
-        let _ = app.emit("task:created", serde_json::json!({ "task": &new_subtask }));
-        let _ = app.emit("task:updated", serde_json::json!({ "task": &parent_task_clone }));
+        let project_path_str = root.to_string_lossy().to_string();
+        let _ = app.emit("task:created", serde_json::json!({ "task": &new_subtask, "projectPath": &project_path_str }));
+        let _ = app.emit("task:updated", serde_json::json!({ "task": &parent_task_clone, "projectPath": &project_path_str }));
         let _ = app.emit(
             "task:moved",
             serde_json::json!({
                 "taskId": parent_id,
-                "status": "waiting_subtask",
+                "status": "idle",
                 "waitingForSubtaskId": &subtask_id,
                 "task": &parent_task_clone,
+                "projectPath": &project_path_str,
             }),
         );
-        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+        let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
 
         if target_col.auto_run == Some(true) || target_col.persona.is_some() {
             trigger_column_on_enter_script(
@@ -920,7 +930,7 @@ pub async fn internal_create_subtask(
                 root,
             )
             .await;
-            let _ = app.emit("agent:autorun", serde_json::json!({ "taskId": &subtask_id }));
+            let _ = app.emit("agent:autorun", serde_json::json!({ "taskId": &subtask_id, "projectPath": &project_path_str }));
         }
     }
 
@@ -989,12 +999,15 @@ pub async fn update_task(
     let _ = crate::db::db_upsert_task(&root, &updated);
     save_tasks_to_disk(&root, &tasks).await?;
 
-    if let Ok(mut guard) = state.tasks.lock() {
-        *guard = tasks.clone();
+    if state.get_root() == root {
+        if let Ok(mut guard) = state.tasks.lock() {
+            *guard = tasks.clone();
+        }
     }
 
-    let _ = app_handle.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
-    let _ = app_handle.emit("task:updated", serde_json::json!({ "task": &updated }));
+    let project_path_str = root.to_string_lossy().to_string();
+    let _ = app_handle.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
+    let _ = app_handle.emit("task:updated", serde_json::json!({ "task": &updated, "projectPath": &project_path_str }));
 
     Ok(updated)
 }
@@ -1105,8 +1118,10 @@ pub async fn delete_task(
 
     save_tasks_to_disk(&root, &tasks).await?;
 
-    if let Ok(mut guard) = state.tasks.lock() {
-        *guard = tasks.clone();
+    if state.get_root() == root {
+        if let Ok(mut guard) = state.tasks.lock() {
+            *guard = tasks.clone();
+        }
     }
 
     // Robust cleanup of git worktree and branch if top-level task
@@ -1130,12 +1145,14 @@ pub async fn delete_task(
     }
 
     // Broadcast tasks:updated and task:deleted events across application
-    let _ = app_handle.emit("tasks:updated", serde_json::json!({ "tasks": &tasks }));
+    let project_path_str = root.to_string_lossy().to_string();
+    let _ = app_handle.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
     let _ = app_handle.emit(
         "task:deleted",
         serde_json::json!({
             "taskId": &task_id,
-            "deletedIds": &to_delete.iter().cloned().collect::<Vec<_>>()
+            "deletedIds": &to_delete.iter().cloned().collect::<Vec<_>>(),
+            "projectPath": &project_path_str,
         }),
     );
 

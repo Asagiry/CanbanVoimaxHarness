@@ -78,13 +78,18 @@ export default function SettingsModal() {
   const [selectedCandidateModels, setSelectedCandidateModels] = useState<Set<string>>(new Set());
   const [searchFilter, setSearchFilter] = useState('');
   const [isCustomModelInput, setIsCustomModelInput] = useState(false);
+  const [testNotifSent, setTestNotifSent] = useState(false);
   const { t } = useTranslation();
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const testNotifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
       if (closeTimerRef.current) {
         clearTimeout(closeTimerRef.current);
+      }
+      if (testNotifTimerRef.current) {
+        clearTimeout(testNotifTimerRef.current);
       }
     };
   }, []);
@@ -165,6 +170,18 @@ export default function SettingsModal() {
       }
     }
     setIsChooseModelsModalOpen(false);
+  };
+
+  const handleTestNotification = async () => {
+    await showTestNotification();
+    setTestNotifSent(true);
+    if (testNotifTimerRef.current) {
+      clearTimeout(testNotifTimerRef.current);
+    }
+    testNotifTimerRef.current = setTimeout(() => {
+      setTestNotifSent(false);
+      testNotifTimerRef.current = null;
+    }, 2000);
   };
 
   return (
@@ -450,11 +467,22 @@ export default function SettingsModal() {
               <div className="pt-2 border-t border-[#ebebeb] dark:border-[#21262d]">
                 <button
                   type="button"
-                  onClick={() => void showTestNotification()}
+                  onClick={() => void handleTestNotification()}
                   className="flex items-center space-x-2 px-3 py-1.5 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] text-xs font-sans transition cursor-pointer"
                 >
-                  <Bell className="w-3.5 h-3.5 text-[#666666] dark:text-[#8b949e]" />
-                  <span>{t('settings.sendTestNotification')}</span>
+                  {testNotifSent ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-500" />
+                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                        {t('settings.testNotificationSent')}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Bell className="w-3.5 h-3.5 text-[#666666] dark:text-[#8b949e]" />
+                      <span>{t('settings.sendTestNotification')}</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

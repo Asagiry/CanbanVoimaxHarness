@@ -132,6 +132,7 @@ use std::sync::Arc;
             cover_image: None,
             position: None,
             hook_states: None,
+            project_path: None,
         };
         crate::commands::tasks::save_tasks_to_disk(&base, &[task]).await.expect("save task");
 
@@ -164,7 +165,7 @@ use std::sync::Arc;
         let tasks_after_adv = crate::commands::tasks::load_tasks_from_disk(&base).await;
         let t = tasks_after_adv.iter().find(|t| t.id == "CVH-050").unwrap();
         assert_eq!(t.stage_id, "dev");
-        assert_eq!(t.status.as_deref(), Some("waiting_subtask"));
+        assert_eq!(t.status.as_deref(), Some("idle"));
         assert_eq!(t.waiting_for_subtask_id.as_deref(), Some("CVH-050.1"));
 
         let sub = tasks_after_adv.iter().find(|t| t.id == "CVH-050.1").unwrap();
@@ -229,7 +230,7 @@ use std::sync::Arc;
         let tasks1 = crate::commands::tasks::load_tasks_from_disk(&base).await;
         let t1 = tasks1.iter().find(|t| t.id == "CVH-060").expect("find task");
         assert_eq!(t1.stage_id, "backlog", "Parent must remain in backlog");
-        assert_eq!(t1.status.as_deref(), Some("waiting_subtask"));
+        assert_eq!(t1.status.as_deref(), Some("idle"));
         assert_eq!(t1.waiting_for_subtask_id.as_deref(), Some("CVH-060.1"));
 
         let sub1 = tasks1.iter().find(|t| t.id == "CVH-060.1").expect("find dev subtask");
@@ -244,7 +245,7 @@ use std::sync::Arc;
         let tasks2 = crate::commands::tasks::load_tasks_from_disk(&base).await;
         let t2 = tasks2.iter().find(|t| t.id == "CVH-060").expect("find parent task");
         assert_eq!(t2.stage_id, "backlog", "Parent must remain in backlog");
-        assert_eq!(t2.status.as_deref(), Some("waiting_subtask"));
+        assert_eq!(t2.status.as_deref(), Some("idle"));
         assert_eq!(t2.waiting_for_subtask_id.as_deref(), Some("CVH-060.2"));
 
         let sub1_done = tasks2.iter().find(|t| t.id == "CVH-060.1").expect("find dev subtask");
@@ -578,7 +579,7 @@ use std::sync::Arc;
         // 1. Seed parent task and first subtask CVH-090.1 in 'dev'
         let mut parent = make_test_task("CVH-090", "dev", "test-board");
         parent.waiting_for_subtask_id = Some("CVH-090.1".to_string());
-        parent.status = Some("waiting_subtask".to_string());
+        parent.status = Some("idle".to_string());
 
         let mut sub1 = make_test_task("CVH-090.1", "dev", "test-board");
         sub1.parent_id = Some("CVH-090".to_string());

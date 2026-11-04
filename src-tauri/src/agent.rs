@@ -117,6 +117,8 @@ pub struct Task {
     pub position: Option<f64>,
     #[serde(rename = "hookStates", alias = "hook_states", default)]
     pub hook_states: Option<serde_json::Value>,
+    #[serde(rename = "projectPath", alias = "project_path", default)]
+    pub project_path: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -127,6 +129,7 @@ pub enum TaskStatus {
     Paused,
     WaitingReview,
     WaitingSubtask,
+    WaitingSubagent,
     Blocked,
     Done,
     #[serde(untagged)]
@@ -141,6 +144,7 @@ impl TaskStatus {
             TaskStatus::Paused => "paused",
             TaskStatus::WaitingReview => "waiting_review",
             TaskStatus::WaitingSubtask => "waiting_subtask",
+            TaskStatus::WaitingSubagent => "waiting_subagent",
             TaskStatus::Blocked => "blocked",
             TaskStatus::Done => "done",
             TaskStatus::Custom(s) => s.as_str(),
@@ -162,6 +166,7 @@ impl From<&str> for TaskStatus {
             "paused" => TaskStatus::Paused,
             "waiting_review" => TaskStatus::WaitingReview,
             "waiting_subtask" => TaskStatus::WaitingSubtask,
+            "waiting_subagent" => TaskStatus::WaitingSubagent,
             "blocked" => TaskStatus::Blocked,
             "done" => TaskStatus::Done,
             other => TaskStatus::Custom(other.to_string()),
@@ -194,6 +199,10 @@ impl Task {
 
     pub fn is_waiting_subtask(&self) -> bool {
         self.get_status() == TaskStatus::WaitingSubtask
+    }
+
+    pub fn is_waiting_subagent(&self) -> bool {
+        self.get_status() == TaskStatus::WaitingSubagent
     }
 
     /// Returns the strongly-typed domain `TaskState` representation of this task.
@@ -937,6 +946,7 @@ pub struct SubagentRetryInfo {
     pub requested_tools: Option<Vec<String>>,
     pub ctx: OwnedToolContext,
     pub status: String,
+    pub created_at: i64,
     pub last_error: Option<String>,
     pub report: Option<String>,
     pub is_bg: bool,
@@ -1400,6 +1410,7 @@ pub fn run_inprocess_subagent(
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String>> + Send>> {
     Box::pin(async move {
     let start_instant = std::time::Instant::now();
+    let start_time_ms = chrono::Utc::now().timestamp_millis();
     let parent_id = ctx.task_id.as_deref().unwrap_or("unknown").to_string();
     let subagent_suffix = match ctx.call_id.as_deref() {
         Some(cid) if !cid.trim().is_empty() => cid.trim().to_string(),
@@ -1472,6 +1483,7 @@ pub fn run_inprocess_subagent(
                 "role": &role,
                 "prompt": &prompt,
                 "tools": &effective_sub_tools,
+                "createdAt": start_time_ms,
             }),
         );
     }
