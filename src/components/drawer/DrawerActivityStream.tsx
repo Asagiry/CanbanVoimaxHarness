@@ -123,9 +123,9 @@ export default function DrawerActivityStream({
           ref={scrollRef}
           onScroll={handleFeedScroll}
           onClick={handleContainerClick}
-          className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6"
+          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 md:p-6"
         >
-          <div className="max-w-4xl mx-auto space-y-3.5">
+          <div className="w-full max-w-4xl mx-auto space-y-3.5 min-w-0">
             {activeSubagentId ? (
               <SubagentActivityCard
                 activeSubagentId={activeSubagentId}
