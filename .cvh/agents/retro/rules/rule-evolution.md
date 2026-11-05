@@ -106,6 +106,16 @@ The Retro agent operates as an **LLM-Wiki Administrator**:
 - Cue: When integrating upstream main into a branch adding translation keys and encountering conflict in src/i18n/__tests__/i18n.test.ts:31-32.
 - Lesson: Calculate (keys in main) + (branch keys added), update both enKeys and ruKeys length assertions, and verify with pnpm test and git merge-tree --write-tree main HEAD.
 - Evidence: CVH-017 (commit a9286e1) and CVH-019 (commit 76597d7) - Gate 6 rejection from unmerged concurrent i18n additions.
+
+### [CLE: Worktree Dual-Write Residue & Merge Hook Safety]
+- Cue: When editing files under .cvh/ (such as frontend_map.md, backend_map.md, or agent rules) within an isolated git worktree (worktrees/<task-id>).
+- Lesson: The harness dual-writes .cvh/ modifications to the root repository. Merge hooks (on_review_finish.{bat,sh}) must defensively clean uncommitted dual-write residue (git restore --staged .cvh && git restore .cvh) before checkout main and git merge --no-ff, and developers must commit .cvh edits cleanly to the feature branch.
+- Evidence: CVH-057 (commit 8ab5ce7a, fixed in 09693c48 / 8d0bea10) - Review on_leave hook failure: 'Your local changes to .cvh/rules/frontend_map.md would be overwritten by merge'.
+
+### [CLE: UI Column Layout Symmetry & Visual Boundaries]
+- Cue: When designing or styling sidebars, drawers, or floating cockpit columns (SubagentsSidebar, GitDiffSidebar, AgentConsoleDrawer cockpit, CortexExplorer).
+- Lesson: Columns must own their full perimeter: apply symmetric vertical margins (my-1.5), precise height calculations matching vertical margins (h-[calc(100%-0.75rem)]), complete 4-corner radius (rounded-xl), closed border (border), and clipping (overflow-hidden) to prevent unstyled flat bottom collisions with screen edges.
+- Evidence: CVH-057 (commit 8ab5ce7a) - Defective asymmetric columns with mt-1, border-t border-x, rounded-tl-xl rounded-tr-xl, and h-[calc(100%-0.25rem)] running off the bottom edge of the window.
 ```
 
 ---
