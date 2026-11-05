@@ -235,22 +235,22 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
 
           {/* Subheader summary strip */}
           {hasTodos && (
-            <div className="px-3.5 py-1.5 bg-white dark:bg-[#0d1117] border-b border-[#f4f4f5] dark:border-[#21262d] flex items-center space-x-3 text-[11px] text-[#737373] dark:text-[#8b949e] select-none">
-              <div className="flex items-center space-x-1">
+            <div className="px-3.5 py-1.5 bg-white dark:bg-[#0d1117] border-b border-[#f4f4f5] dark:border-[#21262d] flex items-baseline space-x-3 text-[11px] text-[#737373] dark:text-[#8b949e] select-none">
+              <div className="flex items-baseline space-x-1">
                 <span className="font-mono tabular-nums text-[#15803d] dark:text-[#4ade80] font-semibold">
                   {completedCount}
                 </span>
                 <span className="text-[#737373] dark:text-[#8b949e]">{t('drawer.todosDone')}</span>
               </div>
               <span className="text-[#e4e4e7] dark:text-[#30363d]">·</span>
-              <div className="flex items-center space-x-1">
+              <div className="flex items-baseline space-x-1">
                 <span className="font-mono tabular-nums text-amber-700 dark:text-amber-400 font-semibold">
                   {inProgressCount}
                 </span>
                 <span className="text-[#737373] dark:text-[#8b949e]">{t('drawer.todosInProgress')}</span>
               </div>
               <span className="text-[#e4e4e7] dark:text-[#30363d]">·</span>
-              <div className="flex items-center space-x-1">
+              <div className="flex items-baseline space-x-1">
                 <span className="font-mono tabular-nums text-[#737373] dark:text-[#8b949e] font-semibold">
                   {pendingCount}
                 </span>
