@@ -165,9 +165,12 @@ pub async fn delete_cortex_file_at(root: &Path, rel_path: &str) -> Result<(), St
     let norm = rel_path.replace('\\', "/");
     let trimmed = norm.trim_start_matches('/');
 
-    // Security invariant: only files inside .cvh/rules/ or .cvh/agents/ may be deleted
-    if !trimmed.starts_with(".cvh/rules/") && !trimmed.starts_with(".cvh/agents/") {
-        return Err("Forbidden: file path must be inside .cvh/rules/ or .cvh/agents/".to_string());
+    // Security invariant: only files inside .cvh/rules/, .cvh/agents/, or .cvh/hooks/ may be deleted
+    if !trimmed.starts_with(".cvh/rules/")
+        && !trimmed.starts_with(".cvh/agents/")
+        && !trimmed.starts_with(".cvh/hooks/")
+    {
+        return Err("Forbidden: file path must be inside .cvh/rules/, .cvh/agents/, or .cvh/hooks/".to_string());
     }
 
     // Security invariant: strictly reject path traversal attempts

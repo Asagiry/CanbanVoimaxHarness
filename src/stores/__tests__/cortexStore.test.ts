@@ -265,6 +265,70 @@ describe('cortexStore (Clean Deterministic Store Tests)', () => {
       expect(useCortexStore.getState().isEditorOpen).toBe(true);
     });
 
+    it('createCortexFile creates a column stage hook in .cvh/hooks/ and binds to col.hooks', async () => {
+      mockInvoke.mockResolvedValue(true);
+
+      await useCortexStore.getState().createCortexFile('backlog', '', 'hook', {
+        hookMoment: 'on_enter',
+        hookExt: 'bat',
+      });
+
+      const stage = useCortexStore.getState().stages.find((s) => s.stageId === 'backlog');
+      const hookFile = stage?.files.find((f) => f.name === 'on_enter_backlog.bat');
+
+      expect(hookFile).toBeDefined();
+      expect(hookFile?.path).toBe('.cvh/hooks/on_enter_backlog.bat');
+      expect(hookFile?.content).toContain('%CVH_WORKTREE_PATH%');
+
+      // Verify col.hooks in boardStore
+      const backlogCol = useBoardStore.getState().columns.find((c) => c.id === 'backlog');
+      const hookDef = backlogCol?.hooks?.['on_enter'];
+      expect(hookDef).toBeDefined();
+      const scriptPath = typeof hookDef === 'string' ? hookDef : hookDef?.script;
+      expect(scriptPath).toBe('.cvh/hooks/on_enter_backlog.bat');
+
+      expect(mockInvoke).toHaveBeenCalledWith('save_cortex_file', {
+        path: '.cvh/hooks/on_enter_backlog.bat',
+        content: expect.stringContaining('%CVH_STAGE_ID%'),
+      });
+      expect(mockInvoke).toHaveBeenCalledWith('save_pipeline', expect.anything());
+    });
+
+    it('createCortexFile creates an agent hook in .cvh/agents/<role>/hooks/ without modifying col.hooks', async () => {
+      mockInvoke.mockResolvedValue(true);
+
+      useCortexStore.setState({
+        agentStages: [
+          {
+            stageId: 'agent:reviewer',
+            stageTitle: 'Reviewer Agent',
+            color: '#f59e0b',
+            icon: 'ShieldCheck',
+            personaName: 'reviewer',
+            isExpanded: true,
+            files: [],
+          },
+        ],
+      });
+
+      await useCortexStore.getState().createCortexFile('agent:reviewer', '', 'hook', {
+        hookMoment: 'on_enter',
+        hookExt: 'bat',
+      });
+
+      const agentStage = useCortexStore.getState().agentStages.find((s) => s.stageId === 'agent:reviewer');
+      const hookFile = agentStage?.files.find((f) => f.name === 'on_enter.bat');
+
+      expect(hookFile).toBeDefined();
+      expect(hookFile?.path).toBe('.cvh/agents/reviewer/hooks/on_enter.bat');
+      expect(hookFile?.content).toContain('Хук входа задачи агента reviewer');
+
+      expect(mockInvoke).toHaveBeenCalledWith('save_cortex_file', {
+        path: '.cvh/agents/reviewer/hooks/on_enter.bat',
+        content: expect.stringContaining('Хук входа задачи агента reviewer'),
+      });
+    });
+
     it('createCortexFile creates a new rule file with template and opens it in editor', async () => {
       mockInvoke.mockResolvedValue(true);
 

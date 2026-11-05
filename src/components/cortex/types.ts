@@ -1,5 +1,5 @@
 import type { CortexHookMoment } from '../../stores/cortexStore';
-import type { PipelineStage, PipelineConfig, CortexAgentStage } from '../../types';
+import type { CortexAgentStage } from '../../types';
 
 export function hookMomentOf(fileName: string): CortexHookMoment | null {
   if (fileName.startsWith('on_enter')) return 'on_enter';
@@ -14,25 +14,4 @@ export function isBacklogSystemStage(stage: CortexAgentStage): boolean {
   return persona === 'система' || persona.toLowerCase() === 'system';
 }
 
-export async function savePipelineConfig(next: PipelineStage[]): Promise<boolean> {
-  try {
-    const { invoke } = await import('@tauri-apps/api/core');
-    let cfg: PipelineConfig | null = null;
-    try {
-      cfg = await invoke<PipelineConfig>('get_pipeline');
-    } catch {
-      cfg = null;
-    }
-    const pipeline: PipelineConfig = {
-      id: cfg?.id ?? 'default-engineering',
-      title: cfg?.title ?? 'Инженерный пайплайн',
-      stages: next,
-      columns: next,
-    };
-    await invoke('save_pipeline', { pipeline });
-    return true;
-  } catch (err) {
-    console.info('save_pipeline недоступен, изменения колонок откачены:', err);
-    return false;
-  }
-}
+export { savePipelineConfig } from '../../stores/cortex/cortexHelpers';

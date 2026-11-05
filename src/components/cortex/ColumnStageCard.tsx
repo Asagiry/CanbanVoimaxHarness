@@ -201,7 +201,7 @@ export function ColumnStageCard({
         <NewCortexFileForm
           stage={stage}
           initialKind="hook"
-          fixedKind={isBacklogSystem ? undefined : 'hook'}
+          fixedKind="hook"
           onClose={() => setIsCreatingHook(false)}
         />
       )}
