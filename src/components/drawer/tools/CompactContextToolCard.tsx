@@ -137,7 +137,7 @@ export default function CompactContextToolCard({ tool }: ToolCardProps) {
 
           {/* Saved tokens badge when finished */}
           {isSuccess && formattedSaved && (
-            <span className="inline-flex items-center font-mono tabular-nums text-[#15803d] dark:text-[#7ee787] text-[11px] bg-[#ecfdf5] dark:bg-[#12281e] px-1.5 py-0.2 rounded border border-[#a7f3d0] dark:border-[#238636] font-medium shrink-0">
+            <span className="inline-flex items-center font-mono tabular-nums text-[#15803d] dark:text-[#7ee787] text-[11px] bg-[#ecfdf5] dark:bg-[#12281e] px-1.5 py-0.5 rounded border border-[#a7f3d0] dark:border-[#238636] font-medium leading-none shrink-0">
               Освобождено -{formattedSaved} токенов
             </span>
           )}

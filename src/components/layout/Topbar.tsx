@@ -177,7 +177,7 @@ export default function Topbar() {
                         <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                       </span>
                       {runningSessionsCount > 1 && (
-                        <span className="font-mono text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                        <span className="font-mono text-xs text-emerald-600 dark:text-emerald-400 font-semibold tabular-nums leading-none translate-y-[0.5px]">
                           {runningSessionsCount}
                         </span>
                       )}

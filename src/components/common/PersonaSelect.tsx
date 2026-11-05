@@ -122,7 +122,7 @@ export default function PersonaSelect({
                 {selected.role}
               </span>
               {isBuiltin && (
-                <span className="px-1 py-0.2 rounded text-[9px] font-sans font-medium bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shrink-0">
+                <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-sans font-medium leading-none bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shrink-0">
                   {compact ? t('personaSelect.builtinShort') : t('personaSelect.builtin')}
                 </span>
               )}
@@ -196,7 +196,7 @@ export default function PersonaSelect({
                     {p.role}
                   </span>
                   {pIsBuiltin && (
-                    <span className="px-1 py-0.2 rounded text-[9px] font-sans font-medium bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shrink-0">
+                    <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-sans font-medium leading-none bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shrink-0">
                       {t('personaSelect.builtin')}
                     </span>
                   )}

@@ -560,7 +560,7 @@ export default function ToolPolicyModal() {
                           </span>
                         </div>
                         {agent.isBuiltin && (
-                          <span className="px-1 py-0.2 rounded text-[9px] font-sans font-medium bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                          <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-sans font-medium leading-none bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                             {t('toolPolicy.builtin')}
                           </span>
                         )}
@@ -623,11 +623,11 @@ export default function ToolPolicyModal() {
                                           {toolLabel}
                                         </span>
                                         {toolCustomSchemas[tool.id] !== undefined ? (
-                                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono leading-none bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
                                             Кастомная схема
                                           </span>
                                         ) : toolDescriptions[tool.id] !== undefined && toolDescriptions[tool.id] !== tool.description ? (
-                                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono leading-none bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
                                             Кастомное описание
                                           </span>
                                         ) : null}

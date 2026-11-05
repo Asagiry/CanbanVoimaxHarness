@@ -104,7 +104,7 @@ export function AgentExplanationCard({
                   >
                     {item.content}
                   </span>
-                  <span className="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded border shrink-0 text-[#71717a] dark:text-[#8b949e] border-[#e4e4e7] dark:border-[#30363d]">
+                  <span className="inline-flex items-center text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border shrink-0 leading-none text-[#71717a] dark:text-[#8b949e] border-[#e4e4e7] dark:border-[#30363d]">
                     {item.status === 'completed'
                       ? t('status.done')
                       : item.status === 'in_progress'

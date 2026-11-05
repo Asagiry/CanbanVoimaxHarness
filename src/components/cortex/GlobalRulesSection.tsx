@@ -101,7 +101,7 @@ export function GlobalRulesSection({
             <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
           )}
           <span className="font-sans text-xs font-semibold">{t('cortex.globalRulesSection')}</span>
-          <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] tabular-nums">
+          <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] tabular-nums leading-none translate-y-px">
             ({totalCount})
           </span>
         </button>

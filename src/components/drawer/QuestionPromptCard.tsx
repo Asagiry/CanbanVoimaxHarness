@@ -250,7 +250,7 @@ export default function QuestionPromptCard({ activity, taskId }: QuestionPromptC
                     {formatInline(cleanLabel, `opt-${idx}`)}
                   </span>
                   {isRecommended && (
-                    <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] border border-[#bbf7d0] dark:border-[#238636]">
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono leading-none bg-[#f0fdf4] dark:bg-[#12281e] text-[#15803d] dark:text-[#7ee787] border border-[#bbf7d0] dark:border-[#238636]">
                       Рекомендуется
                     </span>
                   )}

@@ -275,7 +275,7 @@ export function ColumnStageCard({
                   )}
                   <span className="text-xs font-mono">{t('cortex.hooks')}</span>
                   <span className="text-[10px] font-mono text-[#8f8f8f]">hooks/</span>
-                  <span className="text-[10px] text-[#8f8f8f] tabular-nums">({hookFiles.length})</span>
+                  <span className="text-[10px] text-[#8f8f8f] tabular-nums leading-none translate-y-px">({hookFiles.length})</span>
                 </button>
                 <button
                   type="button"

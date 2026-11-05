@@ -433,12 +433,12 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
             {(additions > 0 || deletions > 0) && (
               <div className="flex items-center space-x-1 font-mono text-[11px] tabular-nums font-semibold shrink-0 ml-1">
                 {additions > 0 && (
-                  <span className="inline-flex items-center text-[#16a34a] dark:text-[#7ee787] bg-[#f0fdf4] dark:bg-[#12281e] px-1 py-0.2 rounded border border-[#bbf7d0] dark:border-[#238636]">
+                  <span className="inline-flex items-center text-[#16a34a] dark:text-[#7ee787] bg-[#f0fdf4] dark:bg-[#12281e] px-1 py-0.5 rounded leading-none border border-[#bbf7d0] dark:border-[#238636]">
                     +{additions}
                   </span>
                 )}
                 {deletions > 0 && (
-                  <span className="inline-flex items-center text-[#dc2626] dark:text-[#ff7b72] bg-[#fef2f2] dark:bg-[#3b1219] px-1 py-0.2 rounded border border-[#fecaca] dark:border-[#da3633]">
+                  <span className="inline-flex items-center text-[#dc2626] dark:text-[#ff7b72] bg-[#fef2f2] dark:bg-[#3b1219] px-1 py-0.5 rounded leading-none border border-[#fecaca] dark:border-[#da3633]">
                     -{deletions}
                   </span>
                 )}
