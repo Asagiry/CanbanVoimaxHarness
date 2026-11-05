@@ -327,7 +327,7 @@ export const createTasksCrudSlice: StateCreator<
         if (isTerminalMove) {
           merged.waitingForSubtaskId = undefined;
           merged.status = 'done';
-          merged.completedAt = merged.completedAt || Date.now();
+          merged.completedAt = Date.now();
           const sumOfStageDurations = Object.values(merged.stageDurations || {}).reduce(
             (acc, val) => acc + (typeof val === 'number' && Number.isFinite(val) ? val : 0),
             0
@@ -336,11 +336,9 @@ export const createTasksCrudSlice: StateCreator<
             typeof merged.totalElapsed === 'number' && merged.totalElapsed > 0
               ? merged.totalElapsed
               : sumOfStageDurations;
-          if (activeElapsed > 0) {
-            merged.totalElapsed = activeElapsed;
-          } else if (merged.createdAt) {
-            merged.totalElapsed = Math.max(0, Math.floor((merged.completedAt - merged.createdAt) / 1000));
-          }
+          merged.totalElapsed = merged.createdAt
+            ? Math.max(0, Math.floor((merged.completedAt - merged.createdAt) / 1000))
+            : activeElapsed;
         } else {
           merged.completedAt = undefined;
         }
@@ -406,7 +404,7 @@ export const createTasksCrudSlice: StateCreator<
         if (isTerminalMove) {
           mapped.waitingForSubtaskId = undefined;
           mapped.status = 'done';
-          mapped.completedAt = mapped.completedAt || Date.now();
+          mapped.completedAt = Date.now();
           if (mapped.createdAt) {
             mapped.totalElapsed = Math.max(0, Math.floor((mapped.completedAt - mapped.createdAt) / 1000));
           }

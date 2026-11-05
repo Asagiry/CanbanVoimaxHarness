@@ -40,7 +40,7 @@ export function NotificationToggle({
       className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-hidden ${
         disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
       } ${
-        checked ? 'bg-[#10b981]' : 'bg-[#e5e7eb] dark:bg-[#30363d]'
+        checked ? 'bg-[#10b981]' : 'bg-[#e5e7eb] dark:bg-[#2c2c33]'
       }`}
     >
       <span
@@ -187,15 +187,15 @@ export default function SettingsModal() {
   return (
     <>
       <div style={getZoomOverlayStyle(zoom)} className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 dark:bg-black/80 p-4 animate-in fade-in duration-100">
-        <div className="relative flex flex-col w-[500px] max-w-full max-h-[90%] overflow-y-auto rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-md p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors">
+        <div className="relative flex flex-col w-[500px] max-w-full max-h-[90%] overflow-y-auto rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] shadow-md p-5 text-[#171717] dark:text-[#f4f4f5] transition-colors">
           {/* Header */}
-          <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#21262d]">
+          <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#212126]">
             <div className="flex items-center space-x-2">
-              <h2 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] tracking-tight">{t('settings.title')}</h2>
+              <h2 className="text-sm font-semibold text-[#171717] dark:text-[#f4f4f5] tracking-tight">{t('settings.title')}</h2>
             </div>
             <button
               onClick={closeSettings}
-              className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
+              className="p-1 rounded-md text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23] transition cursor-pointer"
               aria-label={t('common.close')}
             >
               <X className="h-4 w-4" />
@@ -203,14 +203,14 @@ export default function SettingsModal() {
           </div>
 
           {/* Tabs */}
-          <div className="flex border-b border-[#ebebeb] dark:border-[#21262d] mt-2">
+          <div className="flex border-b border-[#ebebeb] dark:border-[#212126] mt-2">
             <button
               type="button"
               onClick={() => setActiveTab('llm')}
               className={`px-3 py-1.5 text-xs font-sans font-medium transition cursor-pointer border-b-2 -mb-px flex items-center gap-1.5 ${
                 activeTab === 'llm'
-                  ? 'border-[#171717] dark:border-[#f0f6fc] text-[#171717] dark:text-[#f0f6fc]'
-                  : 'border-transparent text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
+                  ? 'border-[#171717] dark:border-[#f4f4f5] text-[#171717] dark:text-[#f4f4f5]'
+                  : 'border-transparent text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
               }`}
             >
               <Cpu className="h-3.5 w-3.5" />
@@ -221,8 +221,8 @@ export default function SettingsModal() {
               onClick={() => setActiveTab('notifications')}
               className={`px-3 py-1.5 text-xs font-sans font-medium transition cursor-pointer border-b-2 -mb-px flex items-center gap-1.5 ${
                 activeTab === 'notifications'
-                  ? 'border-[#171717] dark:border-[#f0f6fc] text-[#171717] dark:text-[#f0f6fc]'
-                  : 'border-transparent text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
+                  ? 'border-[#171717] dark:border-[#f4f4f5] text-[#171717] dark:text-[#f4f4f5]'
+                  : 'border-transparent text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
               }`}
             >
               <Bell className="h-3.5 w-3.5" />
@@ -236,7 +236,7 @@ export default function SettingsModal() {
               <>
             {/* Provider */}
             <div className="space-y-1">
-              <label htmlFor={providerId} className="block text-[#4d4d4d] dark:text-[#8b949e] font-sans text-xs font-medium">
+              <label htmlFor={providerId} className="block text-[#4d4d4d] dark:text-[#71717a] font-sans text-xs font-medium">
                 {t('settings.provider')}
               </label>
               <div className="relative">
@@ -244,7 +244,7 @@ export default function SettingsModal() {
                   id={providerId}
                   value={settings.provider}
                   onChange={(e) => setSettings({ provider: e.target.value })}
-                  className="w-full rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] px-2.5 py-1.5 text-[#171717] dark:text-[#f0f6fc] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-mono transition"
+                  className="w-full rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] px-2.5 py-1.5 text-[#171717] dark:text-[#f4f4f5] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-mono transition"
                 >
                   <option value="Antigravity Proxy">Antigravity Proxy</option>
                   <option value="OpenAI">OpenAI</option>
@@ -260,7 +260,7 @@ export default function SettingsModal() {
 
             {/* API Gateway URL */}
             <div className="space-y-1">
-              <label htmlFor={gatewayId} className="block text-[#4d4d4d] dark:text-[#8b949e] font-sans text-xs font-medium">
+              <label htmlFor={gatewayId} className="block text-[#4d4d4d] dark:text-[#71717a] font-sans text-xs font-medium">
                 {t('settings.gatewayUrl')}
               </label>
               <div className="relative flex items-center">
@@ -271,7 +271,7 @@ export default function SettingsModal() {
                   value={settings.gatewayUrl}
                   onChange={(e) => setSettings({ gatewayUrl: e.target.value, baseUrl: e.target.value })}
                   placeholder="http://127.0.0.1:port/v1"
-                  className="w-full rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#6e7681] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-mono transition"
+                  className="w-full rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-mono transition"
                   required
                 />
               </div>
@@ -279,7 +279,7 @@ export default function SettingsModal() {
 
             {/* API Key (Masked) */}
             <div className="space-y-1">
-              <label htmlFor={apiKeyId} className="block text-[#4d4d4d] dark:text-[#8b949e] font-sans text-xs font-medium">
+              <label htmlFor={apiKeyId} className="block text-[#4d4d4d] dark:text-[#71717a] font-sans text-xs font-medium">
                 {t('settings.apiKey')}
               </label>
               <div className="relative flex items-center">
@@ -294,7 +294,7 @@ export default function SettingsModal() {
                       ? t('settings.apiKeyPlaceholderProxy')
                       : 'sk-...'
                   }
-                  className="w-full rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] pl-8 pr-8 py-1.5 text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#6e7681] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-mono transition"
+                  className="w-full rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] pl-8 pr-8 py-1.5 text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-mono transition"
                 />
                 <button
                   type="button"
@@ -310,14 +310,14 @@ export default function SettingsModal() {
             {/* Model Section */}
             <div className="space-y-1 pt-1">
               <div className="flex items-center justify-between">
-                <label htmlFor={modelId} className="block text-[#4d4d4d] dark:text-[#8b949e] font-sans text-xs font-medium">
+                <label htmlFor={modelId} className="block text-[#4d4d4d] dark:text-[#71717a] font-sans text-xs font-medium">
                   {t('settings.model')}
                 </label>
                 <button
                   type="button"
                   onClick={handleFetchModels}
                   disabled={isFetchingModels}
-                  className="flex items-center space-x-1.5 text-[11px] font-sans font-medium text-[#171717] dark:text-[#f0f6fc] hover:text-[#4d4d4d] dark:hover:text-[#8b949e] disabled:opacity-50 transition cursor-pointer px-1.5 py-0.5 rounded-md hover:bg-[#f4f4f5] dark:hover:bg-[#161b22]"
+                  className="flex items-center space-x-1.5 text-[11px] font-sans font-medium text-[#171717] dark:text-[#f4f4f5] hover:text-[#4d4d4d] dark:hover:text-[#71717a] disabled:opacity-50 transition cursor-pointer px-1.5 py-0.5 rounded-md hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23]"
                   aria-label={t('settings.fetchModels')}
                 >
                   <RefreshCw className={`h-3 w-3 ${isFetchingModels ? 'animate-spin' : ''}`} />
@@ -334,7 +334,7 @@ export default function SettingsModal() {
                     value={settings.model}
                     onChange={(e) => setSettings({ model: e.target.value })}
                     placeholder={t('settings.customModelPlaceholder')}
-                    className="w-full rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#6e7681] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-mono transition"
+                    className="w-full rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-mono transition"
                     required
                   />
                 </div>
@@ -345,7 +345,7 @@ export default function SettingsModal() {
                     id={modelId}
                     value={settings.model}
                     onChange={(e) => setSettings({ model: e.target.value })}
-                    className="w-full rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f0f6fc] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-mono text-xs transition cursor-pointer"
+                    className="w-full rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f4f4f5] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-mono text-xs transition cursor-pointer"
                   >
                     {!availableModels.includes(settings.model) && settings.model && (
                       <option value={settings.model}>{settings.model}</option>
@@ -374,8 +374,8 @@ export default function SettingsModal() {
             </div>
 
             {/* Compactor Model Section */}
-            <div className="space-y-1 pt-1 border-t border-[#f4f4f5] dark:border-[#21262d]">
-              <label htmlFor={compactorModelId} className="block text-[#4d4d4d] dark:text-[#8b949e] font-sans text-xs font-medium">
+            <div className="space-y-1 pt-1 border-t border-[#f4f4f5] dark:border-[#212126]">
+              <label htmlFor={compactorModelId} className="block text-[#4d4d4d] dark:text-[#71717a] font-sans text-xs font-medium">
                 {t('settings.compactorModel')}
               </label>
               <div className="relative flex items-center">
@@ -384,7 +384,7 @@ export default function SettingsModal() {
                   id={compactorModelId}
                   value={settings.compactorModel || 'inherit'}
                   onChange={(e) => setSettings({ compactorModel: e.target.value })}
-                  className="w-full rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f0f6fc] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-mono text-xs transition cursor-pointer"
+                  className="w-full rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f4f4f5] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-mono text-xs transition cursor-pointer"
                 >
                   <option value="inherit">{t('settings.inheritModel')}</option>
                   {availableModels.map((m) => (
@@ -405,12 +405,12 @@ export default function SettingsModal() {
             ) : (
             <div className="space-y-4 py-1">
               {/* Master toggle */}
-              <div className="flex items-center justify-between p-3 rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#161b22]">
+              <div className="flex items-center justify-between p-3 rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-[#fafafa] dark:bg-[#17171b]">
                 <div className="space-y-0.5 pr-2">
-                  <span className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc] font-sans block">
+                  <span className="text-xs font-medium text-[#171717] dark:text-[#f4f4f5] font-sans block">
                     {t('settings.notifyWindowsMaster')}
                   </span>
-                  <span className="text-[10px] text-[#666666] dark:text-[#8b949e] font-sans block">
+                  <span className="text-[10px] text-[#666666] dark:text-[#71717a] font-sans block">
                     {t('settings.notificationsDesc')}
                   </span>
                 </div>
@@ -424,8 +424,8 @@ export default function SettingsModal() {
               {/* Sub-toggles */}
               <div className={`space-y-2 px-3 transition-opacity ${notificationSettings.enabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
                 {/* On Question */}
-                <div className="flex items-center justify-between py-1.5 border-b border-[#f4f4f5] dark:border-[#21262d]">
-                  <span className="text-xs text-[#171717] dark:text-[#f0f6fc] font-sans">
+                <div className="flex items-center justify-between py-1.5 border-b border-[#f4f4f5] dark:border-[#212126]">
+                  <span className="text-xs text-[#171717] dark:text-[#f4f4f5] font-sans">
                     {t('settings.notifyOnQuestion')}
                   </span>
                   <NotificationToggle
@@ -437,8 +437,8 @@ export default function SettingsModal() {
                 </div>
 
                 {/* On Advance Task */}
-                <div className="flex items-center justify-between py-1.5 border-b border-[#f4f4f5] dark:border-[#21262d]">
-                  <span className="text-xs text-[#171717] dark:text-[#f0f6fc] font-sans">
+                <div className="flex items-center justify-between py-1.5 border-b border-[#f4f4f5] dark:border-[#212126]">
+                  <span className="text-xs text-[#171717] dark:text-[#f4f4f5] font-sans">
                     {t('settings.notifyOnAdvanceTask')}
                   </span>
                   <NotificationToggle
@@ -451,7 +451,7 @@ export default function SettingsModal() {
 
                 {/* On Task Completed */}
                 <div className="flex items-center justify-between py-1.5">
-                  <span className="text-xs text-[#171717] dark:text-[#f0f6fc] font-sans">
+                  <span className="text-xs text-[#171717] dark:text-[#f4f4f5] font-sans">
                     {t('settings.notifyOnTaskCompleted')}
                   </span>
                   <NotificationToggle
@@ -464,11 +464,11 @@ export default function SettingsModal() {
               </div>
 
               {/* Test Notification Button */}
-              <div className="pt-2 border-t border-[#ebebeb] dark:border-[#21262d]">
+              <div className="pt-2 border-t border-[#ebebeb] dark:border-[#212126]">
                 <button
                   type="button"
                   onClick={() => void handleTestNotification()}
-                  className="flex items-center space-x-2 px-3 py-1.5 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] text-xs font-sans transition cursor-pointer"
+                  className="flex items-center space-x-2 px-3 py-1.5 rounded-md border border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] text-xs font-sans transition cursor-pointer"
                 >
                   {testNotifSent ? (
                     <>
@@ -479,7 +479,7 @@ export default function SettingsModal() {
                     </>
                   ) : (
                     <>
-                      <Bell className="w-3.5 h-3.5 text-[#666666] dark:text-[#8b949e]" />
+                      <Bell className="w-3.5 h-3.5 text-[#666666] dark:text-[#71717a]" />
                       <span>{t('settings.sendTestNotification')}</span>
                     </>
                   )}
@@ -489,18 +489,18 @@ export default function SettingsModal() {
             )}
 
             {/* Action buttons */}
-            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#ebebeb] dark:border-[#21262d]">
+            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#ebebeb] dark:border-[#212126]">
               <button
                 type="button"
                 onClick={closeSettings}
-                className="px-3 py-1.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] font-sans text-xs transition cursor-pointer"
+                className="px-3 py-1.5 rounded-md bg-white dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] font-sans text-xs transition cursor-pointer"
               >
                 {t('common.cancel')}
               </button>
               <button
                 type="submit"
                 disabled={isSaving}
-                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white font-sans font-medium text-xs transition cursor-pointer disabled:opacity-50 shadow-xs border border-transparent dark:border-[#30363d]"
+                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#232328] hover:bg-[#262626] dark:hover:bg-[#2c2c33] text-white font-sans font-medium text-xs transition cursor-pointer disabled:opacity-50 shadow-xs border border-transparent dark:border-[#2c2c33]"
               >
                 {saveStatus === 'saved' ? (
                   <>
@@ -519,16 +519,16 @@ export default function SettingsModal() {
       {/* Modal Dialog: "Choose models to add" */}
       {isChooseModelsModalOpen && (
         <div style={getZoomOverlayStyle(zoom)} className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 dark:bg-black/80 p-4 animate-in fade-in duration-100">
-          <div className="relative flex flex-col w-[520px] max-w-full max-h-[90%] overflow-y-auto rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-md p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors">
+          <div className="relative flex flex-col w-[520px] max-w-full max-h-[90%] overflow-y-auto rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] shadow-md p-5 text-[#171717] dark:text-[#f4f4f5] transition-colors">
             {/* Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#21262d]">
+            <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#212126]">
               <div className="flex items-center space-x-2">
-                <Cpu className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
-                <h3 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] tracking-tight">{t('settings.chooseModelsTitle')}</h3>
+                <Cpu className="h-4 w-4 text-[#171717] dark:text-[#f4f4f5]" />
+                <h3 className="text-sm font-semibold text-[#171717] dark:text-[#f4f4f5] tracking-tight">{t('settings.chooseModelsTitle')}</h3>
               </div>
               <button
                 onClick={() => setIsChooseModelsModalOpen(false)}
-                className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
+                className="p-1 rounded-md text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23] transition cursor-pointer"
                 aria-label={t('common.close')}
               >
                 <X className="h-4 w-4" />
@@ -538,36 +538,36 @@ export default function SettingsModal() {
             {/* Search Input */}
             <div className="mt-4">
               <div className="relative flex items-center">
-                <Search className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e] pointer-events-none" />
+                <Search className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#71717a] pointer-events-none" />
                 <input
                   type="text"
                   value={searchFilter}
                   onChange={(e) => setSearchFilter(e.target.value)}
                   placeholder={t('settings.searchModels')}
-                  className="w-full rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f0f6fc] text-xs placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-sans transition"
+                  className="w-full rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] pl-8 pr-2.5 py-1.5 text-[#171717] dark:text-[#f4f4f5] text-xs placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-sans transition"
                   autoFocus
                 />
               </div>
             </div>
 
             {/* Selection Quick Action & Count */}
-            <div className="mt-2.5 flex items-center justify-between text-xs text-[#666666] dark:text-[#8b949e] px-0.5 select-none font-sans">
+            <div className="mt-2.5 flex items-center justify-between text-xs text-[#666666] dark:text-[#71717a] px-0.5 select-none font-sans">
               <button
                 type="button"
                 onClick={handleToggleSelectAll}
-                className="text-[#171717] dark:text-[#f0f6fc] hover:underline font-medium cursor-pointer transition"
+                className="text-[#171717] dark:text-[#f4f4f5] hover:underline font-medium cursor-pointer transition"
               >
                 {selectedCandidateModels.size === filteredCandidates.length && filteredCandidates.length > 0
                   ? t('settings.deselectAll')
                   : t('settings.selectAll')}
               </button>
-              <span className="text-[11px] text-[#8f8f8f] dark:text-[#8b949e] tabular-nums">
+              <span className="text-[11px] text-[#8f8f8f] dark:text-[#71717a] tabular-nums">
                 {t('settings.selectedCount', { selected: selectedCandidateModels.size, total: filteredCandidates.length })}
               </span>
             </div>
 
             {/* Models Checkbox List */}
-            <div className="mt-2 border border-[#ebebeb] dark:border-[#30363d] rounded-md bg-white dark:bg-[#161b22] max-h-64 overflow-y-auto divide-y divide-[#ebebeb] dark:divide-[#21262d]">
+            <div className="mt-2 border border-[#ebebeb] dark:border-[#2c2c33] rounded-md bg-white dark:bg-[#17171b] max-h-64 overflow-y-auto divide-y divide-[#ebebeb] dark:divide-[#212126]">
               {filteredCandidates.length > 0 ? (
                 filteredCandidates.map((modelName) => {
                   const isChecked = selectedCandidateModels.has(modelName);
@@ -577,19 +577,19 @@ export default function SettingsModal() {
                       key={modelName}
                       onClick={() => toggleSelectCandidate(modelName)}
                       className={`flex items-center space-x-2.5 px-3 py-2 cursor-pointer transition select-none ${
-                        isChecked ? 'bg-[#f4f4f5] dark:bg-[#21262d]' : 'hover:bg-[#fafafa] dark:hover:bg-[#21262d]/50'
+                        isChecked ? 'bg-[#f4f4f5] dark:bg-[#232328]' : 'hover:bg-[#fafafa] dark:hover:bg-[#232328]/50'
                       }`}
                     >
                       {isChecked ? (
-                        <CheckSquare className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
+                        <CheckSquare className="h-4 w-4 text-[#171717] dark:text-[#f4f4f5] shrink-0" />
                       ) : (
-                        <Square className="h-4 w-4 text-[#8f8f8f] dark:text-[#8b949e] shrink-0" />
+                        <Square className="h-4 w-4 text-[#8f8f8f] dark:text-[#71717a] shrink-0" />
                       )}
-                      <span className="font-mono text-xs text-[#171717] dark:text-[#f0f6fc] truncate flex-1">
+                      <span className="font-mono text-xs text-[#171717] dark:text-[#f4f4f5] truncate flex-1">
                         {modelName}
                       </span>
                       {isAlreadyAdded && (
-                        <span className="text-[10px] text-[#666666] dark:text-[#8b949e] bg-[#f4f4f5] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] px-1.5 py-0.5 rounded-md font-sans">
+                        <span className="text-[10px] text-[#666666] dark:text-[#71717a] bg-[#f4f4f5] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] px-1.5 py-0.5 rounded-md font-sans">
                           {t('settings.alreadyAdded')}
                         </span>
                       )}
@@ -597,18 +597,18 @@ export default function SettingsModal() {
                   );
                 })
               ) : (
-                <div className="p-6 text-center text-xs text-[#8f8f8f] dark:text-[#8b949e] font-sans">
+                <div className="p-6 text-center text-xs text-[#8f8f8f] dark:text-[#71717a] font-sans">
                   {t('settings.noModelsFound')}
                 </div>
               )}
             </div>
 
             {/* Footer Buttons */}
-            <div className="flex items-center justify-end space-x-2 pt-4 mt-3 border-t border-[#ebebeb] dark:border-[#21262d]">
+            <div className="flex items-center justify-end space-x-2 pt-4 mt-3 border-t border-[#ebebeb] dark:border-[#212126]">
               <button
                 type="button"
                 onClick={() => setIsChooseModelsModalOpen(false)}
-                className="px-3 py-1.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] font-sans text-xs transition cursor-pointer"
+                className="px-3 py-1.5 rounded-md bg-white dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] font-sans text-xs transition cursor-pointer"
               >
                 {t('common.cancel')}
               </button>

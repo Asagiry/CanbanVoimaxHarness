@@ -575,7 +575,7 @@ export default function AgentConsoleDrawer() {
   return (
     <div
       style={getZoomOverlayStyle(zoom)}
-      className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] select-none animate-in fade-in duration-150 transition-colors"
+      className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-white dark:bg-[#111114] text-[#171717] dark:text-[#f4f4f5] select-none animate-in fade-in duration-150 transition-colors"
     >
       {/* Outer guard: header/banner are outside inner boundaries */}
       <ErrorBoundary scopeLabel="окно чата" onClose={closeDrawer}>
@@ -612,7 +612,7 @@ export default function AgentConsoleDrawer() {
 
         {/* Three-Column Layout: Left (SubagentsSidebar) | Center (Feed + Steer Bar) | Right (GitDiffSidebar) */}
         {/* Obeying § 2.13 Viewport Overlay & Flex Boundary Invariants (min-h-0, min-w-0, overflow-hidden) */}
-        <div className="flex-1 flex flex-row min-h-0 min-w-0 overflow-hidden bg-[#f4f4f5] dark:bg-[#0d1117]">
+        <div className="flex-1 flex flex-row min-h-0 min-w-0 overflow-hidden bg-[#f4f4f5] dark:bg-[#111114]">
           {/* Left Column: Subagents Interactive Sidebar */}
           <ErrorBoundary scopeLabel="панель субагентов" onClose={() => setIsSubagentsCollapsed(true)}>
             <SubagentsSidebar
@@ -624,7 +624,7 @@ export default function AgentConsoleDrawer() {
           </ErrorBoundary>
 
           {/* Center Column: Activity Feed + Steer Bar - DSH-style inset cockpit card */}
-          <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] dark:bg-[#090a0f] overflow-hidden transition-colors rounded-xl border border-[#ebebeb] dark:border-[#21262d] shadow-2xs my-1.5 mx-1.5">
+          <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] dark:bg-[#0b0b0e] overflow-hidden transition-colors rounded-xl border border-[#ebebeb] dark:border-[#212126] shadow-2xs my-1.5 mx-1.5">
             <ErrorBoundary scopeLabel="чат задачи" onClose={closeDrawer}>
               {/* Modular Activity Stream: Objective card, Relay handoff, Live thinking, Tools, Subagent cards */}
               <DrawerActivityStream

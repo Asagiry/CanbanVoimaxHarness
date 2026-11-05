@@ -42,14 +42,14 @@ export default function ContextGauge({
   if (variant === 'header-ring') {
     return (
       <div className="relative group inline-flex items-center">
-        <div className="relative w-7 h-7 flex items-center justify-center cursor-pointer select-none rounded-full hover:ring-2 hover:ring-[#ebebeb] dark:hover:ring-[#21262d] transition">
+        <div className="relative w-7 h-7 flex items-center justify-center cursor-pointer select-none rounded-full hover:ring-2 hover:ring-[#ebebeb] dark:hover:ring-[#212126] transition">
           <svg className="w-7 h-7 -rotate-90 transform" viewBox="0 0 28 28">
             <circle
               cx="14"
               cy="14"
               r={metrics.radius}
               stroke="#e5e7eb"
-              className="dark:stroke-[#21262d]"
+              className="dark:stroke-[#212126]"
               strokeWidth="2.5"
               fill="none"
             />
@@ -66,7 +66,7 @@ export default function ContextGauge({
               className="transition-all duration-300"
             />
           </svg>
-          <span className="absolute inset-0 flex items-center justify-center text-[8.5px] font-mono font-semibold text-[#171717] dark:text-[#f0f6fc] tabular-nums">
+          <span className="absolute inset-0 flex items-center justify-center text-[8.5px] font-mono font-semibold text-[#171717] dark:text-[#f4f4f5] tabular-nums">
             {metrics.percent}%
           </span>
         </div>
@@ -99,10 +99,10 @@ export default function ContextGauge({
   const cacheHitRateRounded = Math.round(Math.max(0, Math.min(100, metrics.cacheHitRate)));
 
   return (
-    <div className="font-mono text-xs text-[#8f8f8f] dark:text-[#8b949e] flex items-center justify-center gap-2 py-1.5 select-none">
+    <div className="font-mono text-xs text-[#8f8f8f] dark:text-[#71717a] flex items-center justify-center gap-2 py-1.5 select-none">
       {/* Speedometer Pill: Session statistics */}
       <div className="relative group inline-flex items-center">
-        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md cursor-pointer transition border border-transparent hover:border-[#d0d7de] dark:hover:border-[#30363d] hover:bg-[#ebebeb]/50 dark:hover:bg-[#161b22] text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]">
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md cursor-pointer transition border border-transparent hover:border-[#d0d7de] dark:hover:border-[#2c2c33] hover:bg-[#ebebeb]/50 dark:hover:bg-[#17171b] text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]">
           <Gauge className="w-3.5 h-3.5 shrink-0" />
           <span className="tabular-nums">
             {turnsStepsText} · {tpsText}
@@ -118,7 +118,7 @@ export default function ContextGauge({
 
       {/* Token Usage Pill: Token usage */}
       <div className="relative group inline-flex items-center">
-        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md cursor-pointer transition border border-transparent hover:border-[#d0d7de] dark:hover:border-[#30363d] hover:bg-[#ebebeb]/50 dark:hover:bg-[#161b22] text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]">
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md cursor-pointer transition border border-transparent hover:border-[#d0d7de] dark:hover:border-[#2c2c33] hover:bg-[#ebebeb]/50 dark:hover:bg-[#17171b] text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]">
           <Database className="w-3.5 h-3.5 shrink-0" />
           <span className="tabular-nums">
             {compactTokens} · {t('telemetry.cacheLabel')} {cacheHitRateRounded}%
@@ -135,7 +135,7 @@ export default function ContextGauge({
 
       {/* Context Ring Pill: Segment breakdown & compaction */}
       <div className="relative group inline-flex items-center">
-        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md cursor-pointer transition border border-transparent hover:border-[#d0d7de] dark:hover:border-[#30363d] hover:bg-[#ebebeb]/50 dark:hover:bg-[#161b22] text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]">
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md cursor-pointer transition border border-transparent hover:border-[#d0d7de] dark:hover:border-[#2c2c33] hover:bg-[#ebebeb]/50 dark:hover:bg-[#17171b] text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]">
           <div className="relative w-3.5 h-3.5 flex items-center justify-center shrink-0">
             <svg className="w-3.5 h-3.5 -rotate-90 transform" viewBox="0 0 16 16">
               <circle
@@ -143,7 +143,7 @@ export default function ContextGauge({
                 cy="8"
                 r="6"
                 stroke="#ebebeb"
-                className="dark:stroke-[#21262d]"
+                className="dark:stroke-[#212126]"
                 strokeWidth="2"
                 fill="none"
               />

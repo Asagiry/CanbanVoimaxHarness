@@ -73,17 +73,17 @@ export function AccordionFileItem({ taskId, file, isExpanded, onToggle }: Accord
   };
 
   return (
-    <div className="rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] overflow-hidden shadow-xs transition duration-150">
+    <div className="rounded-md border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#17171b] overflow-hidden shadow-xs transition duration-150">
       {/* File Header Row (Clickable Accordion Trigger) */}
       <div
         onClick={onToggle}
-        className="flex items-center justify-between px-3 py-2 bg-[#fcfcfc] dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#1c2128] cursor-pointer transition select-none"
+        className="flex items-center justify-between px-3 py-2 bg-[#fcfcfc] dark:bg-[#17171b] hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23] cursor-pointer transition select-none"
       >
         <div className="flex items-center space-x-2 min-w-0 mr-2">
           {isExpanded ? (
-            <ChevronDown className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
+            <ChevronDown className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
           ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
+            <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
           )}
 
           <span
@@ -93,12 +93,12 @@ export function AccordionFileItem({ taskId, file, isExpanded, onToggle }: Accord
           </span>
 
           {isImage && (
-            <ImageIcon className="h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e] shrink-0" />
+            <ImageIcon className="h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#71717a] shrink-0" />
           )}
 
           <span className="truncate text-xs font-mono" title={file.path}>
-            {dirPart && <span className="text-[#8f8f8f] dark:text-[#8b949e]">{dirPart}</span>}
-            <span className="font-semibold text-[#171717] dark:text-[#f0f6fc]">{filePart}</span>
+            {dirPart && <span className="text-[#8f8f8f] dark:text-[#71717a]">{dirPart}</span>}
+            <span className="font-semibold text-[#171717] dark:text-[#f4f4f5]">{filePart}</span>
           </span>
         </div>
 
@@ -114,7 +114,7 @@ export function AccordionFileItem({ taskId, file, isExpanded, onToggle }: Accord
             <button
               type="button"
               onClick={handleCopyPatch}
-              className="p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb] dark:hover:bg-[#21262d] transition cursor-pointer"
+              className="p-1 rounded text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#ebebeb] dark:hover:bg-[#232328] transition cursor-pointer"
               aria-label={copied ? t('gitDiff.patchCopied') : t('gitDiff.copyPatch')}
             >
               {copied ? (
@@ -132,9 +132,9 @@ export function AccordionFileItem({ taskId, file, isExpanded, onToggle }: Accord
         isImage ? (
           <ImageDiffViewer taskId={taskId} filePath={file.path} />
         ) : (
-          <div className="border-t border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] font-mono text-[11px] leading-relaxed select-text overflow-x-auto max-h-[460px] overflow-y-auto">
+          <div className="border-t border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] font-mono text-[11px] leading-relaxed select-text overflow-x-auto max-h-[460px] overflow-y-auto">
             {parsedLines.length === 0 ? (
-              <div className="p-3 text-center text-[#8f8f8f] dark:text-[#8b949e] text-xs">
+              <div className="p-3 text-center text-[#8f8f8f] dark:text-[#71717a] text-xs">
                 {t('gitDiff.noTextChanges')}
               </div>
             ) : (
@@ -143,7 +143,7 @@ export function AccordionFileItem({ taskId, file, isExpanded, onToggle }: Accord
                   return (
                     <div
                       key={idx}
-                      className="bg-[#f4f4f5] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] border-y border-[#ebebeb] dark:border-[#21262d] my-0.5 py-0.5 px-2 text-[10px] font-semibold select-text"
+                      className="bg-[#f4f4f5] dark:bg-[#17171b] text-[#666666] dark:text-[#71717a] border-y border-[#ebebeb] dark:border-[#212126] my-0.5 py-0.5 px-2 text-[10px] font-semibold select-text"
                     >
                       {line.text}
                     </div>
@@ -156,7 +156,7 @@ export function AccordionFileItem({ taskId, file, isExpanded, onToggle }: Accord
                       key={idx}
                       className="flex items-start bg-[#f0fdf4] dark:bg-[#12281e] text-[#166534] dark:text-[#7ee787] hover:bg-[#dcfce7] dark:hover:bg-[#173a2b] py-0.5"
                     >
-                      <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] dark:text-[#8b949e] select-none text-[10px]">
+                      <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] dark:text-[#71717a] select-none text-[10px]">
                         {/* empty old line */}
                       </span>
                       <span className="w-8 shrink-0 text-right pr-2 text-[#16a34a] dark:text-[#7ee787] select-none text-[10px] tabular-nums font-mono">
@@ -181,7 +181,7 @@ export function AccordionFileItem({ taskId, file, isExpanded, onToggle }: Accord
                       <span className="w-8 shrink-0 text-right pr-2 text-[#ef4444] dark:text-[#ff7b72] select-none text-[10px] tabular-nums font-mono">
                         {line.oldNum}
                       </span>
-                      <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] dark:text-[#8b949e] select-none text-[10px]">
+                      <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] dark:text-[#71717a] select-none text-[10px]">
                         {/* empty new line */}
                       </span>
                       <span className="w-4 shrink-0 text-center text-[#ef4444] dark:text-[#ff7b72] font-bold select-none">
@@ -198,15 +198,15 @@ export function AccordionFileItem({ taskId, file, isExpanded, onToggle }: Accord
                 return (
                   <div
                     key={idx}
-                    className="flex items-start hover:bg-[#f9f9f9] dark:hover:bg-[#161b22] py-0.5 text-[#171717] dark:text-[#f0f6fc]"
+                    className="flex items-start hover:bg-[#f9f9f9] dark:hover:bg-[#17171b] py-0.5 text-[#171717] dark:text-[#f4f4f5]"
                   >
-                    <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] dark:text-[#8b949e] select-none text-[10px] tabular-nums font-mono">
+                    <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] dark:text-[#71717a] select-none text-[10px] tabular-nums font-mono">
                       {line.oldNum}
                     </span>
-                    <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] dark:text-[#8b949e] select-none text-[10px] tabular-nums font-mono">
+                    <span className="w-8 shrink-0 text-right pr-2 text-[#8f8f8f] dark:text-[#71717a] select-none text-[10px] tabular-nums font-mono">
                       {line.newNum}
                     </span>
-                    <span className="w-4 shrink-0 text-center text-[#8f8f8f] dark:text-[#8b949e] select-none">
+                    <span className="w-4 shrink-0 text-center text-[#8f8f8f] dark:text-[#71717a] select-none">
                       {' '}
                     </span>
                     <span className="flex-1 whitespace-pre-wrap break-all pr-2">
@@ -279,24 +279,24 @@ export function DiffFileList({
   // Loading skeleton state
   if (!hasInitialLoaded) {
     return (
-      <div className="flex-1 overflow-y-auto p-3 space-y-2.5 min-h-0 bg-[#fafafa] dark:bg-[#090a0f]">
-        <div className="flex items-center justify-center py-4 space-x-2 text-xs text-[#8f8f8f] dark:text-[#8b949e]">
+      <div className="flex-1 overflow-y-auto p-3 space-y-2.5 min-h-0 bg-[#fafafa] dark:bg-[#0b0b0e]">
+        <div className="flex items-center justify-center py-4 space-x-2 text-xs text-[#8f8f8f] dark:text-[#71717a]">
           <RefreshCw className="h-3.5 w-3.5 animate-spin text-emerald-600 dark:text-emerald-400" />
           <span>{t('gitDiff.loadingChanges')}</span>
         </div>
         {[1, 2, 3].map((i) => (
           <div
             key={i}
-            className="rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-3 animate-pulse space-y-2"
+            className="rounded-md border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] p-3 animate-pulse space-y-2"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <div className="h-3.5 w-3.5 bg-[#e5e7eb] dark:bg-[#21262d] rounded" />
-                <div className="h-3 w-36 bg-[#e5e7eb] dark:bg-[#21262d] rounded" />
+                <div className="h-3.5 w-3.5 bg-[#e5e7eb] dark:bg-[#232328] rounded" />
+                <div className="h-3 w-36 bg-[#e5e7eb] dark:bg-[#232328] rounded" />
               </div>
-              <div className="h-3 w-10 bg-[#e5e7eb] dark:bg-[#21262d] rounded" />
+              <div className="h-3 w-10 bg-[#e5e7eb] dark:bg-[#232328] rounded" />
             </div>
-            <div className="h-2 w-24 bg-[#f3f4f6] dark:bg-[#161b22] rounded" />
+            <div className="h-2 w-24 bg-[#f3f4f6] dark:bg-[#17171b] rounded" />
           </div>
         ))}
       </div>
@@ -306,19 +306,19 @@ export function DiffFileList({
   // Clean empty state placeholder
   if (files.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center bg-[#fafafa] dark:bg-[#090a0f]">
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center bg-[#fafafa] dark:bg-[#0b0b0e]">
         <div className="h-12 w-12 rounded-full bg-[#f0fdf4] dark:bg-[#052e16]/50 border border-[#bbf7d0] dark:border-[#166534] flex items-center justify-center mb-3">
           <CheckCircle2 className="h-6 w-6 text-[#15803d] dark:text-[#4ade80]" />
         </div>
-        <h3 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">
+        <h3 className="text-sm font-semibold text-[#171717] dark:text-[#f4f4f5] font-sans">
           {t('gitDiff.cleanWorktree')}
         </h3>
-        <p className="text-xs text-[#666666] dark:text-[#8b949e] mt-1 max-w-[260px] leading-relaxed">
+        <p className="text-xs text-[#666666] dark:text-[#71717a] mt-1 max-w-[260px] leading-relaxed">
           {t('gitDiff.noChanges')}
         </p>
         {branch && (
-          <div className="mt-4 px-2.5 py-1 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[11px] font-mono text-[#666666] dark:text-[#8b949e] flex items-center space-x-1.5">
-            <GitBranch className="h-3 w-3 text-[#8f8f8f] dark:text-[#8b949e]" />
+          <div className="mt-4 px-2.5 py-1 rounded-md bg-white dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[11px] font-mono text-[#666666] dark:text-[#71717a] flex items-center space-x-1.5">
+            <GitBranch className="h-3 w-3 text-[#8f8f8f] dark:text-[#71717a]" />
             <span>{t('gitDiff.branch', { branch })}</span>
           </div>
         )}
@@ -330,25 +330,25 @@ export function DiffFileList({
   const showToolbar = files.length > 3 || searchQuery !== '' || (hasMultipleStatuses && statusFilter !== 'all');
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[#fafafa] dark:bg-[#090a0f]">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[#fafafa] dark:bg-[#0b0b0e]">
       {/* File Search & Filter Bar */}
       {showToolbar && (
-        <div className="px-3 pt-2 pb-1.5 border-b border-[#ebebeb] dark:border-[#21262d] bg-[#fcfcfc] dark:bg-[#0d1117] flex flex-col gap-1.5 shrink-0">
+        <div className="px-3 pt-2 pb-1.5 border-b border-[#ebebeb] dark:border-[#212126] bg-[#fcfcfc] dark:bg-[#111114] flex flex-col gap-1.5 shrink-0">
           {/* Search Input */}
           <div className="relative flex items-center">
-            <Search className="absolute left-2 h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e] pointer-events-none" />
+            <Search className="absolute left-2 h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#71717a] pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Фильтр файлов..."
-              className="w-full pl-7 pr-6 py-1 bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] rounded text-xs font-mono text-[#171717] dark:text-[#f0f6fc] placeholder-[#8f8f8f] dark:placeholder-[#6e7681] focus:outline-hidden focus:border-emerald-500 transition"
+              className="w-full pl-7 pr-6 py-1 bg-white dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] rounded text-xs font-mono text-[#171717] dark:text-[#f4f4f5] placeholder-[#8f8f8f] dark:placeholder-[#52525b] focus:outline-hidden focus:border-emerald-500 transition"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                className="absolute right-1.5 p-0.5 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] cursor-pointer"
+                className="absolute right-1.5 p-0.5 text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] cursor-pointer"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -363,8 +363,8 @@ export function DiffFileList({
                 onClick={() => setStatusFilter('all')}
                 className={'px-1.5 py-0.5 rounded cursor-pointer transition ' +
                   (statusFilter === 'all'
-                    ? 'bg-[#171717] text-white dark:bg-[#f0f6fc] dark:text-[#090d16] font-semibold'
-                    : 'bg-[#f4f4f5] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d]')}
+                    ? 'bg-[#171717] text-white dark:bg-[#f4f4f5] dark:text-[#0b0b0e] font-semibold'
+                    : 'bg-[#f4f4f5] dark:bg-[#17171b] text-[#666666] dark:text-[#71717a] hover:bg-[#e4e4e7] dark:hover:bg-[#232328]')}
               >
                 Все ({statusCounts.all})
               </button>
@@ -412,7 +412,7 @@ export function DiffFileList({
       {/* Filtered File List */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
         {filteredFiles.length === 0 ? (
-          <div className="p-6 text-center text-xs text-[#8f8f8f] dark:text-[#8b949e]">
+          <div className="p-6 text-center text-xs text-[#8f8f8f] dark:text-[#71717a]">
             <p>Нет файлов, соответствующих фильтру</p>
             {(searchQuery || statusFilter !== 'all') && (
               <button

@@ -179,8 +179,8 @@ export default function StageHookBadge({
         onMouseLeave={handleMouseLeave}
         className={`w-5 h-5 rounded flex items-center justify-center cursor-pointer transition-colors border select-none ${
           isHovered
-            ? 'bg-neutral-200 text-neutral-900 border-neutral-300 dark:bg-[#30363d] dark:text-[#f0f6fc] dark:border-[#484f58]'
-            : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200/80 hover:text-neutral-900 border-neutral-200/80 dark:bg-[#21262d] dark:text-[#8b949e] dark:hover:bg-[#30363d] dark:hover:text-[#f0f6fc] dark:border-[#30363d]'
+            ? 'bg-neutral-200 text-neutral-900 border-neutral-300 dark:bg-[#2c2c33] dark:text-[#f4f4f5] dark:border-[#3a3a44]'
+            : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200/80 hover:text-neutral-900 border-neutral-200/80 dark:bg-[#232328] dark:text-[#71717a] dark:hover:bg-[#2c2c33] dark:hover:text-[#f4f4f5] dark:border-[#2c2c33]'
         }`}
       >
         {side === 'left' ? (
@@ -193,7 +193,7 @@ export default function StageHookBadge({
       {isHovered && coords && typeof document !== 'undefined' && createPortal(
         <div
           ref={popoverRef}
-          className="fixed z-[9999] w-[340px] max-w-[calc(100vw-24px)] shadow-2xl rounded-lg border border-neutral-200 dark:border-[#30363d] bg-white dark:bg-[#161b22] p-3 text-left cursor-default select-text pointer-events-auto"
+          className="fixed z-[9999] w-[340px] max-w-[calc(100vw-24px)] shadow-2xl rounded-lg border border-neutral-200 dark:border-[#2c2c33] bg-white dark:bg-[#17171b] p-3 text-left cursor-default select-text pointer-events-auto"
           style={{
             top: `${coords.top}px`,
             left: `${coords.left}px`,
@@ -204,14 +204,14 @@ export default function StageHookBadge({
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header row */}
-          <div className="flex items-center justify-between gap-2 pb-2 border-b border-neutral-100 dark:border-[#21262d]">
+          <div className="flex items-center justify-between gap-2 pb-2 border-b border-neutral-100 dark:border-[#212126]">
             <div className="flex items-center gap-1.5 min-w-0">
               {side === 'left' ? (
                 <ArrowRightToLine className="w-3.5 h-3.5 text-neutral-500 dark:text-neutral-400 shrink-0 stroke-[2.2]" />
               ) : (
                 <ArrowRightFromLine className="w-3.5 h-3.5 text-neutral-500 dark:text-neutral-400 shrink-0 stroke-[2.2]" />
               )}
-              <span className="text-xs font-mono font-medium text-neutral-700 dark:text-[#f0f6fc] truncate">
+              <span className="text-xs font-mono font-medium text-neutral-700 dark:text-[#f4f4f5] truncate">
                 {side === 'left' ? t('board.onEnterHook') : t('board.onLeaveHook')}
               </span>
             </div>
@@ -233,10 +233,10 @@ export default function StageHookBadge({
             <div className="text-[10px] font-mono uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-1">
               {t('board.hookScript')}
             </div>
-            <div className="flex items-center gap-1.5 p-1.5 rounded bg-neutral-50 dark:bg-[#0d1117] border border-neutral-200 dark:border-[#30363d]">
+            <div className="flex items-center gap-1.5 p-1.5 rounded bg-neutral-50 dark:bg-[#111114] border border-neutral-200 dark:border-[#2c2c33]">
               <Terminal className="w-3.5 h-3.5 text-neutral-500 dark:text-neutral-400 shrink-0" />
               <span
-                className="font-mono text-xs text-neutral-900 dark:text-[#c9d1d9] truncate flex-1 select-all"
+                className="font-mono text-xs text-neutral-900 dark:text-[#a1a1aa] truncate flex-1 select-all"
                 title={script}
               >
                 {script}
@@ -244,7 +244,7 @@ export default function StageHookBadge({
               <button
                 type="button"
                 onClick={handleCopyScript}
-                className="shrink-0 p-1 rounded hover:bg-neutral-200 dark:hover:bg-[#21262d] text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-[#f0f6fc] transition-colors cursor-pointer"
+                className="shrink-0 p-1 rounded hover:bg-neutral-200 dark:hover:bg-[#232328] text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-[#f4f4f5] transition-colors cursor-pointer"
                 title={copied ? t('board.hookCopied') : t('common.copy')}
                 aria-label={copied ? t('board.hookCopied') : t('common.copy')}
               >

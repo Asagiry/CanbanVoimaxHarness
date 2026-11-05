@@ -47,35 +47,35 @@ export function AgentExplanationCard({
   const durationText = formatDurationCompact(effectiveDurationMs);
 
   return (
-    <div className="rounded-lg border border-[#e4e4e7] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-xs overflow-hidden my-2.5 transition duration-150">
+    <div className="rounded-lg border border-[#e4e4e7] dark:border-[#212126] bg-white dark:bg-[#111114] shadow-xs overflow-hidden my-2.5 transition duration-150 min-w-0">
       <div
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center justify-between px-3.5 py-2.5 bg-[#f8f8f9] dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#1c2128] cursor-pointer transition select-none border-l-2 border-l-[#171717] dark:border-l-[#58a6ff]"
+        className="flex items-center justify-between px-3.5 py-2.5 bg-[#f8f8f9] dark:bg-[#17171b] hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23] cursor-pointer transition select-none border-l-2 border-l-[#171717] dark:border-l-[#58a6ff]"
       >
-        <div className="flex items-center space-x-2 text-[#171717] dark:text-[#f0f6fc]">
+        <div className="flex items-center space-x-2 text-[#171717] dark:text-[#f4f4f5]">
           {isExpanded ? (
-            <ChevronDown className="h-3.5 w-3.5 text-[#71717a] dark:text-[#8b949e] shrink-0" />
+            <ChevronDown className="h-3.5 w-3.5 text-[#71717a] dark:text-[#71717a] shrink-0" />
           ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-[#71717a] dark:text-[#8b949e] shrink-0" />
+            <ChevronRight className="h-3.5 w-3.5 text-[#71717a] dark:text-[#71717a] shrink-0" />
           )}
           {effectiveTodos ? (
             <ListTodo className="h-3.5 w-3.5 text-[#171717] dark:text-[#58a6ff] shrink-0" />
           ) : (
             <Bot className="h-3.5 w-3.5 text-[#171717] dark:text-[#58a6ff] shrink-0" />
           )}
-          <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">
+          <span className="text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] font-sans">
             {effectiveTodos ? t('drawer.actionPlan') : t('drawer.agentExplanation')}
           </span>
         </div>
         {durationText && (
-          <span className="flex items-center space-x-1 text-[10px] font-mono text-[#71717a] dark:text-[#8b949e] tabular-nums">
-            <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
+          <span className="flex items-center space-x-1 text-[10px] font-mono text-[#71717a] dark:text-[#71717a] tabular-nums">
+            <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
             <span>{durationText}</span>
           </span>
         )}
       </div>
       {isExpanded && (
-        <div className="px-3.5 py-3 border-t border-[#f4f4f5] dark:border-[#21262d] text-sm leading-relaxed text-[#27272a] dark:text-[#d4d4d8] select-text space-y-2.5">
+        <div className="px-3.5 py-3 border-t border-[#f4f4f5] dark:border-[#212126] text-sm leading-relaxed text-[#27272a] dark:text-[#a1a1aa] select-text space-y-2.5 min-w-0 break-words">
           {effectiveLeadingText && (
             <MarkdownContent content={effectiveLeadingText} onImageClick={onImageClick} />
           )}
@@ -84,7 +84,7 @@ export function AgentExplanationCard({
               {effectiveTodos.map((item, i) => (
                 <div
                   key={item.id || i}
-                  className="flex items-start space-x-2 text-xs font-sans p-2 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#f0f0f0] dark:border-[#21262d]"
+                  className="flex items-start space-x-2 text-xs font-sans p-2 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#f0f0f0] dark:border-[#212126]"
                 >
                   <span className="mt-0.5 shrink-0">
                     {item.status === 'completed' ? (
@@ -92,19 +92,19 @@ export function AgentExplanationCard({
                     ) : item.status === 'in_progress' ? (
                       <Clock className="h-3.5 w-3.5 text-amber-500 animate-pulse" />
                     ) : (
-                      <Circle className="h-3.5 w-3.5 text-[#a1a1aa] dark:text-[#6e7681]" />
+                      <Circle className="h-3.5 w-3.5 text-[#a1a1aa] dark:text-[#52525b]" />
                     )}
                   </span>
                   <span
                     className={`flex-1 leading-normal ${
                       item.status === 'completed'
-                        ? 'line-through text-[#71717a] dark:text-[#8b949e]'
-                        : 'text-[#171717] dark:text-[#f0f6fc]'
+                        ? 'line-through text-[#71717a] dark:text-[#71717a]'
+                        : 'text-[#171717] dark:text-[#f4f4f5]'
                     }`}
                   >
                     {item.content}
                   </span>
-                  <span className="inline-flex items-center text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border shrink-0 leading-none text-[#71717a] dark:text-[#8b949e] border-[#e4e4e7] dark:border-[#30363d]">
+                  <span className="inline-flex items-center text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border shrink-0 leading-none text-[#71717a] dark:text-[#71717a] border-[#e4e4e7] dark:border-[#2c2c33]">
                     {item.status === 'completed'
                       ? t('status.done')
                       : item.status === 'in_progress'

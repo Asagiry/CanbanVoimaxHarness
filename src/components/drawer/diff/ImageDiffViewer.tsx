@@ -126,7 +126,7 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
 
   if (isLoading) {
     return (
-      <div className="border-t border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-5 flex flex-col items-center justify-center space-y-2 text-[#8f8f8f] dark:text-[#8b949e]">
+      <div className="border-t border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] p-5 flex flex-col items-center justify-center space-y-2 text-[#8f8f8f] dark:text-[#71717a]">
         <Loader2 className="h-4 w-4 animate-spin text-amber-500" />
         <span className="text-xs font-mono">{t('gitDiff.imageLoading')}</span>
       </div>
@@ -135,7 +135,7 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
 
   if (error || !data) {
     return (
-      <div className="border-t border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-4 flex flex-col items-center justify-center space-y-1.5 text-rose-500">
+      <div className="border-t border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] p-4 flex flex-col items-center justify-center space-y-1.5 text-rose-500">
         <AlertCircle className="h-4 w-4" />
         <span className="text-xs font-mono text-center">{error || t('gitDiff.imageFailed')}</span>
       </div>
@@ -151,24 +151,24 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
     'bg-[#f8fafc] dark:bg-[#090d16] ' +
     '[background-image:linear-gradient(45deg,#e2e8f0_25%,transparent_25%),linear-gradient(-45deg,#e2e8f0_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#e2e8f0_75%),linear-gradient(-45deg,transparent_75%,#e2e8f0_75%)] ' +
     'dark:[background-image:linear-gradient(45deg,#1c2128_25%,transparent_25%),linear-gradient(-45deg,#1c2128_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#1c2128_75%),linear-gradient(-45deg,transparent_75%,#1c2128_75%)] ' +
-    '[background-size:16px_16px] [background-position:0_0,0_8px,8px_-8px,-8px_0px] border border-[#e5e7eb] dark:border-[#21262d]';
+    '[background-size:16px_16px] [background-position:0_0,0_8px,8px_-8px,-8px_0px] border border-[#e5e7eb] dark:border-[#212126]';
 
   const bytesDelta =
     data.currentBytes && data.previousBytes ? data.currentBytes - data.previousBytes : null;
 
   return (
-    <div className="border-t border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] font-mono text-xs select-text overflow-hidden">
+    <div className="border-t border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] font-mono text-xs select-text overflow-hidden">
       {/* Subheader Toolbar: Mode Toggles & Size Badges */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#ebebeb] dark:border-[#21262d] bg-[#fcfcfc] dark:bg-[#161b22] text-[11px] gap-2 flex-wrap">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#ebebeb] dark:border-[#212126] bg-[#fcfcfc] dark:bg-[#17171b] text-[11px] gap-2 flex-wrap">
         {hasBoth ? (
-          <div className="flex items-center border border-[#e5e7eb] dark:border-[#30363d] rounded p-0.5 bg-[#f4f4f5] dark:bg-[#0d1117] gap-0.5">
+          <div className="flex items-center border border-[#e5e7eb] dark:border-[#2c2c33] rounded p-0.5 bg-[#f4f4f5] dark:bg-[#111114] gap-0.5">
             <button
               type="button"
               onClick={() => setViewMode('2up')}
               className={'flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold transition cursor-pointer ' +
                 (viewMode === '2up'
-                  ? 'bg-white dark:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] shadow-xs'
-                  : 'text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]')}
+                  ? 'bg-white dark:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] shadow-xs'
+                  : 'text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]')}
               title="2-up Side-by-Side comparison"
             >
               <Columns className="h-3 w-3" />
@@ -179,8 +179,8 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
               onClick={() => setViewMode('split')}
               className={'flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold transition cursor-pointer ' +
                 (viewMode === 'split'
-                  ? 'bg-white dark:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] shadow-xs'
-                  : 'text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]')}
+                  ? 'bg-white dark:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] shadow-xs'
+                  : 'text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]')}
               title="Split swipe slider comparison"
             >
               <Sliders className="h-3 w-3" />
@@ -191,8 +191,8 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
               onClick={() => setViewMode('onion')}
               className={'flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold transition cursor-pointer ' +
                 (viewMode === 'onion'
-                  ? 'bg-white dark:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] shadow-xs'
-                  : 'text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]')}
+                  ? 'bg-white dark:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] shadow-xs'
+                  : 'text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]')}
               title="Onion skin opacity comparison"
             >
               <Layers className="h-3 w-3" />
@@ -203,8 +203,8 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
               onClick={() => setViewMode('new')}
               className={'px-2 py-0.5 rounded text-[10px] font-semibold transition cursor-pointer ' +
                 (viewMode === 'new'
-                  ? 'bg-white dark:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] shadow-xs'
-                  : 'text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]')}
+                  ? 'bg-white dark:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] shadow-xs'
+                  : 'text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]')}
             >
               {t('gitDiff.imageNew')}
             </button>
@@ -213,8 +213,8 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
               onClick={() => setViewMode('old')}
               className={'px-2 py-0.5 rounded text-[10px] font-semibold transition cursor-pointer ' +
                 (viewMode === 'old'
-                  ? 'bg-white dark:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] shadow-xs'
-                  : 'text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]')}
+                  ? 'bg-white dark:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] shadow-xs'
+                  : 'text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]')}
             >
               {t('gitDiff.imageOld')}
             </button>
@@ -228,7 +228,7 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
             {t('gitDiff.imageDeleted')}
           </span>
         ) : (
-          <span className="text-[#8f8f8f] dark:text-[#8b949e] text-[10px]">
+          <span className="text-[#8f8f8f] dark:text-[#71717a] text-[10px]">
             {data.mimeType}
           </span>
         )}
@@ -236,12 +236,12 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
         {/* Size Metrics & Delta */}
         <div className="flex items-center space-x-2 tabular-nums text-[10px] shrink-0">
           {data.previousBytes && !hasBoth && (
-            <span className="text-[#8f8f8f] dark:text-[#8b949e]">
+            <span className="text-[#8f8f8f] dark:text-[#71717a]">
               {formatBytes(data.previousBytes)}
             </span>
           )}
           {data.currentBytes && !hasBoth && (
-            <span className="text-[#8f8f8f] dark:text-[#8b949e]">
+            <span className="text-[#8f8f8f] dark:text-[#71717a]">
               {formatBytes(data.currentBytes)}
             </span>
           )}
@@ -252,7 +252,7 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
                   ? 'text-[#b91c1c] dark:text-[#ff7b72]'
                   : bytesDelta < 0
                   ? 'text-[#15803d] dark:text-[#7ee787]'
-                  : 'text-[#8f8f8f] dark:text-[#8b949e]')}
+                  : 'text-[#8f8f8f] dark:text-[#71717a]')}
             >
               {bytesDelta > 0 ? ('+' + formatBytes(bytesDelta)) : bytesDelta < 0 ? ('-' + formatBytes(Math.abs(bytesDelta))) : '±0 B'}
             </span>
@@ -269,7 +269,7 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
               <span className="text-[#b91c1c] dark:text-[#ff7b72] font-semibold">
                 {t('gitDiff.imageOld')}
               </span>
-              <div className="flex items-center space-x-1.5 text-[#8f8f8f] dark:text-[#8b949e] tabular-nums text-[9px]">
+              <div className="flex items-center space-x-1.5 text-[#8f8f8f] dark:text-[#71717a] tabular-nums text-[9px]">
                 {data.previousBytes && <span>{formatBytes(data.previousBytes)}</span>}
                 {prevDims && <span>{prevDims.width}&times;{prevDims.height}</span>}
               </div>
@@ -294,7 +294,7 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
               <span className="text-[#15803d] dark:text-[#7ee787] font-semibold">
                 {t('gitDiff.imageNew')}
               </span>
-              <div className="flex items-center space-x-1.5 text-[#8f8f8f] dark:text-[#8b949e] tabular-nums text-[9px]">
+              <div className="flex items-center space-x-1.5 text-[#8f8f8f] dark:text-[#71717a] tabular-nums text-[9px]">
                 {data.currentBytes && <span>{formatBytes(data.currentBytes)}</span>}
                 {currentDims && <span>{currentDims.width}&times;{currentDims.height}</span>}
               </div>
@@ -379,7 +379,7 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
               max="100"
               value={splitPercent}
               onChange={(e) => setSplitPercent(parseInt(e.target.value, 10))}
-              className="flex-1 h-1.5 bg-[#e5e7eb] dark:bg-[#21262d] rounded-lg appearance-none cursor-pointer accent-amber-500"
+              className="flex-1 h-1.5 bg-[#e5e7eb] dark:bg-[#232328] rounded-lg appearance-none cursor-pointer accent-amber-500"
             />
             <span className="text-[10px] text-[#15803d] dark:text-[#7ee787] font-semibold">{t('gitDiff.imageNew')}</span>
           </div>
@@ -388,7 +388,7 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
         /* Onion Skin Mode with Opacity Slider */
         <div className="p-2.5 flex flex-col space-y-2">
           <div className="flex items-center justify-between text-[10px] px-0.5">
-            <span className="text-[#8f8f8f] dark:text-[#8b949e]">
+            <span className="text-[#8f8f8f] dark:text-[#71717a]">
               {t('gitDiff.imageOld')}: {100 - onionOpacity}%
             </span>
             <span className="text-amber-600 dark:text-amber-400 font-semibold tabular-nums">
@@ -429,7 +429,7 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
               max="100"
               value={onionOpacity}
               onChange={(e) => setOnionOpacity(parseInt(e.target.value, 10))}
-              className="flex-1 h-1.5 bg-[#e5e7eb] dark:bg-[#21262d] rounded-lg appearance-none cursor-pointer accent-amber-500"
+              className="flex-1 h-1.5 bg-[#e5e7eb] dark:bg-[#232328] rounded-lg appearance-none cursor-pointer accent-amber-500"
             />
             <span className="text-[10px] text-[#15803d] dark:text-[#7ee787] font-semibold">{t('gitDiff.imageNew')}</span>
           </div>
@@ -445,7 +445,7 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
 
             if (!activeUrl) {
               return (
-                <div className="p-4 text-center text-[#8f8f8f] dark:text-[#8b949e] text-xs">
+                <div className="p-4 text-center text-[#8f8f8f] dark:text-[#71717a] text-xs">
                   {t('gitDiff.imageNoPreview')}
                 </div>
               );
@@ -462,7 +462,7 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
                   >
                     {isShowingNew ? t('gitDiff.imageNew') : t('gitDiff.imageOld')}
                   </span>
-                  <div className="flex items-center space-x-1.5 text-[#8f8f8f] dark:text-[#8b949e] tabular-nums text-[9px]">
+                  <div className="flex items-center space-x-1.5 text-[#8f8f8f] dark:text-[#71717a] tabular-nums text-[9px]">
                     {activeBytes && <span>{formatBytes(activeBytes)}</span>}
                     {activeDims && <span>{activeDims.width}&times;{activeDims.height} px</span>}
                   </div>
@@ -512,12 +512,12 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
           >
             {/* Lightbox Toolbar */}
             <div
-              className="flex items-center justify-between px-4 py-3 bg-[#0d1117]/95 border-b border-[#30363d] select-none text-white z-10 shrink-0"
+              className="flex items-center justify-between px-4 py-3 bg-[#111114]/95 border-b border-[#2c2c33] select-none text-white z-10 shrink-0"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center space-x-2.5 min-w-0 mr-4">
-                <ImageIcon className="h-4 w-4 text-[#8b949e] shrink-0" />
-                <span className="font-mono text-xs font-semibold truncate text-[#f0f6fc]">
+                <ImageIcon className="h-4 w-4 text-[#71717a] shrink-0" />
+                <span className="font-mono text-xs font-semibold truncate text-[#f4f4f5]">
                   {lightbox.title}
                 </span>
               </div>
@@ -526,7 +526,7 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
                 <button
                   type="button"
                   onClick={() => setLightboxZoom((prev) => !prev)}
-                  className="flex items-center space-x-1 px-2.5 py-1 rounded bg-[#21262d] hover:bg-[#30363d] text-xs font-mono text-[#f0f6fc] transition cursor-pointer"
+                  className="flex items-center space-x-1 px-2.5 py-1 rounded bg-[#232328] hover:bg-[#2c2c33] text-xs font-mono text-[#f4f4f5] transition cursor-pointer"
                 >
                   {lightboxZoom ? (
                     <ZoomOut className="h-3.5 w-3.5" />
@@ -542,7 +542,7 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
                     setLightbox(null);
                     setLightboxZoom(false);
                   }}
-                  className="p-1 rounded bg-[#21262d] hover:bg-[#30363d] text-[#8b949e] hover:text-[#f0f6fc] transition cursor-pointer"
+                  className="p-1 rounded bg-[#232328] hover:bg-[#2c2c33] text-[#71717a] hover:text-[#f4f4f5] transition cursor-pointer"
                   aria-label="Close"
                 >
                   <X className="h-4 w-4" />

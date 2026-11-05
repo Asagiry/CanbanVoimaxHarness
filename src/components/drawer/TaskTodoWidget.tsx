@@ -161,10 +161,10 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
         aria-label={t('drawer.todosAriaTrigger')}
         className={`group px-2.5 py-1 rounded-md text-xs font-sans transition-colors cursor-pointer flex items-center gap-1.5 select-none border ${
           isOpen
-            ? 'bg-[#e4e4e7] dark:bg-[#21262d] border-[#d4d4d8] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc]'
+            ? 'bg-[#e4e4e7] dark:bg-[#232328] border-[#d4d4d8] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5]'
             : hasTodos
-            ? 'bg-[#f4f4f5] dark:bg-[#161b22] hover:bg-[#ececee] dark:hover:bg-[#21262d] border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc]'
-            : 'bg-[#f4f4f5]/60 dark:bg-[#161b22]/60 hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] border-[#ebebeb] dark:border-[#30363d] text-[#737373] dark:text-[#8b949e]'
+            ? 'bg-[#f4f4f5] dark:bg-[#17171b] hover:bg-[#ececee] dark:hover:bg-[#232328] border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5]'
+            : 'bg-[#f4f4f5]/60 dark:bg-[#17171b]/60 hover:bg-[#f4f4f5] dark:hover:bg-[#17171b] border-[#ebebeb] dark:border-[#2c2c33] text-[#737373] dark:text-[#71717a]'
         }`}
       >
         <ListTodo className="h-3.5 w-3.5 shrink-0 text-indigo-600 dark:text-indigo-400 transition-colors" />
@@ -175,13 +175,13 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
             <span className="font-mono tabular-nums text-[11px] font-semibold text-[#15803d] dark:text-[#4ade80]">
               {completedCount}
             </span>
-            <span className="font-mono tabular-nums text-[11px] text-[#a1a1aa] dark:text-[#8b949e]">/</span>
-            <span className="font-mono tabular-nums text-[11px] font-medium text-[#52525b] dark:text-[#8b949e]">
+            <span className="font-mono tabular-nums text-[11px] text-[#a1a1aa] dark:text-[#71717a]">/</span>
+            <span className="font-mono tabular-nums text-[11px] font-medium text-[#52525b] dark:text-[#71717a]">
               {todos.length}
             </span>
           </div>
         ) : (
-          <span className="font-mono tabular-nums text-[11px] text-[#8f8f8f] dark:text-[#8b949e] leading-none translate-y-px">0</span>
+          <span className="font-mono tabular-nums text-[11px] text-[#8f8f8f] dark:text-[#71717a] leading-none translate-y-px">0</span>
         )}
 
         {/* Static indicator when an item is currently in progress */}
@@ -190,8 +190,8 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
         )}
 
         <ChevronDown
-          className={`h-3 w-3 text-[#8f8f8f] dark:text-[#8b949e] group-hover:text-[#171717] dark:group-hover:text-[#f0f6fc] transition-transform duration-200 shrink-0 ${
-            isOpen ? 'rotate-180 text-[#171717] dark:text-[#f0f6fc]' : ''
+          className={`h-3 w-3 text-[#8f8f8f] dark:text-[#71717a] group-hover:text-[#171717] dark:group-hover:text-[#f4f4f5] transition-transform duration-200 shrink-0 ${
+            isOpen ? 'rotate-180 text-[#171717] dark:text-[#f4f4f5]' : ''
           }`}
         />
       </button>
@@ -203,13 +203,13 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
           aria-label={t('drawer.todosAriaDialog')}
           className={`absolute bottom-full mb-2 ${
             align === 'right' ? 'right-0' : 'left-0'
-          } w-[340px] sm:w-[420px] max-w-[calc(100vw-2rem)] z-30 bg-white dark:bg-[#0d1117] rounded-lg border border-[#ebebeb] dark:border-[#21262d] shadow-md overflow-hidden select-text font-sans text-[#171717] dark:text-[#f0f6fc]`}
+          } w-[340px] sm:w-[420px] max-w-[calc(100vw-2rem)] z-30 bg-white dark:bg-[#111114] rounded-lg border border-[#ebebeb] dark:border-[#212126] shadow-md overflow-hidden select-text font-sans text-[#171717] dark:text-[#f4f4f5]`}
         >
           {/* Popover Header */}
-          <div className="px-3.5 py-2.5 bg-[#fafafa] dark:bg-[#161b22] border-b border-[#ebebeb] dark:border-[#21262d] flex items-center justify-between gap-2 select-none">
+          <div className="px-3.5 py-2.5 bg-[#fafafa] dark:bg-[#17171b] border-b border-[#ebebeb] dark:border-[#212126] flex items-center justify-between gap-2 select-none">
             <div className="flex items-center space-x-2 min-w-0">
               <ListTodo className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-              <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] tracking-tight shrink-0 truncate max-w-[240px]">
+              <span className="text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] tracking-tight shrink-0 truncate max-w-[240px]">
                 {activeSubagentId
                   ? activeSubagentTitle
                     ? t('drawer.todosSubagentPlanWithTitle', { title: activeSubagentTitle })
@@ -226,7 +226,7 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
             <button
               type="button"
               onClick={() => setIsOpen(false)}
-              className="h-6 w-6 rounded-md hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] flex items-center justify-center transition cursor-pointer"
+              className="h-6 w-6 rounded-md hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] flex items-center justify-center transition cursor-pointer"
               aria-label={t('drawer.todosAriaClose')}
             >
               <X className="h-3.5 w-3.5" />
@@ -235,26 +235,26 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
 
           {/* Subheader summary strip */}
           {hasTodos && (
-            <div className="px-3.5 py-1.5 bg-white dark:bg-[#0d1117] border-b border-[#f4f4f5] dark:border-[#21262d] flex items-baseline space-x-3 text-[11px] text-[#737373] dark:text-[#8b949e] select-none">
+            <div className="px-3.5 py-1.5 bg-white dark:bg-[#111114] border-b border-[#f4f4f5] dark:border-[#212126] flex items-baseline space-x-3 text-[11px] text-[#737373] dark:text-[#71717a] select-none">
               <div className="flex items-baseline space-x-1">
                 <span className="font-mono tabular-nums text-[#15803d] dark:text-[#4ade80] font-semibold">
                   {completedCount}
                 </span>
-                <span className="text-[#737373] dark:text-[#8b949e]">{t('drawer.todosDone')}</span>
+                <span className="text-[#737373] dark:text-[#71717a]">{t('drawer.todosDone')}</span>
               </div>
-              <span className="text-[#e4e4e7] dark:text-[#30363d]">·</span>
+              <span className="text-[#e4e4e7] dark:text-[#2c2c33]">·</span>
               <div className="flex items-baseline space-x-1">
                 <span className="font-mono tabular-nums text-amber-700 dark:text-amber-400 font-semibold">
                   {inProgressCount}
                 </span>
-                <span className="text-[#737373] dark:text-[#8b949e]">{t('drawer.todosInProgress')}</span>
+                <span className="text-[#737373] dark:text-[#71717a]">{t('drawer.todosInProgress')}</span>
               </div>
-              <span className="text-[#e4e4e7] dark:text-[#30363d]">·</span>
+              <span className="text-[#e4e4e7] dark:text-[#2c2c33]">·</span>
               <div className="flex items-baseline space-x-1">
-                <span className="font-mono tabular-nums text-[#737373] dark:text-[#8b949e] font-semibold">
+                <span className="font-mono tabular-nums text-[#737373] dark:text-[#71717a] font-semibold">
                   {pendingCount}
                 </span>
-                <span className="text-[#737373] dark:text-[#8b949e]">{t('drawer.todosQueued')}</span>
+                <span className="text-[#737373] dark:text-[#71717a]">{t('drawer.todosQueued')}</span>
               </div>
             </div>
           )}
@@ -265,7 +265,7 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
               todos={todos}
               maxHeightClass="max-h-64 sm:max-h-72"
               emptyMessage={
-                <div className="p-2 text-center text-xs text-[#8f8f8f] dark:text-[#8b949e] font-sans leading-relaxed">
+                <div className="p-2 text-center text-xs text-[#8f8f8f] dark:text-[#71717a] font-sans leading-relaxed">
                   {activeSubagentId
                     ? t('drawer.todosSubagentEmptyPlan', { tool: 'todo_write' })
                     : t('drawer.todosEmptyPlan', { tool: 'todo_write' })}

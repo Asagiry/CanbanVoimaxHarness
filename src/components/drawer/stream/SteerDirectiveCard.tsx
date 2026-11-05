@@ -85,7 +85,7 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
   if (isSensorRejection || isHookRejection) {
     const titleKey = isSensorRejection ? 'drawer.sensorRejection' : 'drawer.hookRejection';
     return (
-      <div className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-amber-500/20 bg-amber-500/10 p-3.5 shadow-xs">
+      <div className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-amber-500/20 bg-amber-500/10 p-3.5 shadow-xs min-w-0 overflow-hidden">
         <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-amber-500/20 text-[10px] font-mono">
           <div className="flex items-center space-x-1.5 text-amber-500 dark:text-amber-400 font-medium">
             <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
@@ -104,7 +104,7 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
               <div
                 key={i}
                 onClick={() => handleImageClick?.(imgUrl, `${t('drawer.attachImage')} ${i + 1}`)}
-                className="relative rounded-lg overflow-hidden border border-amber-500/20 max-w-[240px] max-h-40 bg-[#f4f4f5] dark:bg-[#161b22] shadow-xs group cursor-zoom-in"
+                className="relative rounded-lg overflow-hidden border border-amber-500/20 max-w-[240px] max-h-40 bg-[#f4f4f5] dark:bg-[#17171b] shadow-xs group cursor-zoom-in"
               >
                 <img
                   src={imgUrl}
@@ -120,7 +120,7 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
             ))}
           </div>
         )}
-        <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed select-text font-sans">
+        <div className="text-sm text-[#171717] dark:text-[#f4f4f5] leading-relaxed select-text font-sans min-w-0 break-words">
           <MarkdownContent content={activity?.content ?? ''} onImageClick={handleImageClick} />
         </div>
       </div>
@@ -128,9 +128,9 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
   }
 
   return (
-    <div className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#0d1117] p-3.5 shadow-xs">
-      <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-[#ebebeb] dark:border-[#21262d] text-[10px] font-mono text-[#666666] dark:text-[#8b949e]">
-        <div className="flex items-center space-x-1.5 text-[#171717] dark:text-[#f0f6fc] font-medium">
+    <div className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-[#f9f9f9] dark:bg-[#111114] p-3.5 shadow-xs min-w-0 overflow-hidden">
+      <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-[#ebebeb] dark:border-[#212126] text-[10px] font-mono text-[#666666] dark:text-[#71717a]">
+        <div className="flex items-center space-x-1.5 text-[#171717] dark:text-[#f4f4f5] font-medium">
           {isAgentMessage ? (
             <>
               <Bot className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400 shrink-0" />
@@ -148,15 +148,15 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
             <button
               type="button"
               onClick={() => onDelete(activity.id)}
-              className="p-0.5 rounded text-[#71717a] hover:text-red-500 hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] transition cursor-pointer"
+              className="p-0.5 rounded text-[#71717a] hover:text-red-500 hover:bg-[#e4e4e7] dark:hover:bg-[#232328] transition cursor-pointer"
               title={t('drawer.deleteMessage') || 'Удалить сообщение'}
             >
               <Trash2 className="h-3 w-3" />
             </button>
           )}
           {formattedTime && (
-            <span className="flex items-center space-x-1 text-[#71717a] dark:text-[#8b949e] tabular-nums">
-              <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
+            <span className="flex items-center space-x-1 text-[#71717a] dark:text-[#71717a] tabular-nums">
+              <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
               <span>{formattedTime}</span>
             </span>
           )}
@@ -168,7 +168,7 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
             <div
               key={i}
               onClick={() => handleImageClick?.(imgUrl, `${t('drawer.attachImage')} ${i + 1}`)}
-              className="relative rounded-lg overflow-hidden border border-[#ebebeb] dark:border-[#21262d] max-w-[240px] max-h-40 bg-[#f4f4f5] dark:bg-[#161b22] shadow-xs group cursor-zoom-in"
+              className="relative rounded-lg overflow-hidden border border-[#ebebeb] dark:border-[#212126] max-w-[240px] max-h-40 bg-[#f4f4f5] dark:bg-[#17171b] shadow-xs group cursor-zoom-in"
             >
               <img
                 src={imgUrl}
@@ -184,7 +184,7 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
           ))}
         </div>
       )}
-      <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed select-text font-sans">
+      <div className="text-sm text-[#171717] dark:text-[#f4f4f5] leading-relaxed select-text font-sans min-w-0 break-words">
         <MarkdownContent content={activity?.content ?? ''} onImageClick={handleImageClick} />
       </div>
     </div>

@@ -109,7 +109,7 @@ export default function App() {
     <>
       <div
         style={rootStyle}
-        className="flex flex-col h-screen w-screen overflow-hidden bg-[#fafafa] dark:bg-[#090a0f] text-[#171717] dark:text-[#f0f6fc] select-none relative transition-colors"
+        className="flex flex-col h-screen w-screen overflow-hidden bg-[#fafafa] dark:bg-[#0b0b0e] text-[#171717] dark:text-[#f4f4f5] select-none relative transition-colors"
       >
         {/* Top Navigation Bar */}
         <Topbar />
@@ -138,12 +138,12 @@ export default function App() {
 
       {/* Zoom Indicator Toast (rendered at root level above modals and drawer with z-[120]) */}
       {showIndicator && (
-        <div className="fixed bottom-4 right-4 z-[120] flex items-center space-x-2 px-3 py-1.5 rounded-md bg-[#161b22] text-[#f0f6fc] border border-[#30363d] font-mono text-xs shadow-md transition-opacity duration-150 animate-in fade-in select-none">
+        <div className="fixed bottom-4 right-4 z-[120] flex items-center space-x-2 px-3 py-1.5 rounded-md bg-[#17171b] text-[#f4f4f5] border border-[#2c2c33] font-mono text-xs shadow-md transition-opacity duration-150 animate-in fade-in select-none">
           <span>Масштаб: {zoomPercent}%</span>
           {zoomPercent !== 100 && (
             <button
               onClick={resetZoom}
-              className="text-[#8b949e] hover:text-[#f0f6fc] underline text-[11px] ml-1 cursor-pointer"
+              className="text-[#71717a] hover:text-[#f4f4f5] underline text-[11px] ml-1 cursor-pointer"
             >
               Сброс
             </button>

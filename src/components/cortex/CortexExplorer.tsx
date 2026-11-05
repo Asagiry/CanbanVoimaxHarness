@@ -217,27 +217,27 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
 
   return (
     <aside
-      className={`w-64 shrink-0 my-1.5 ml-1.5 mr-1.5 rounded-xl border border-[#ebebeb] dark:border-[#21262d] shadow-2xs bg-[#f9f9f9] dark:bg-[#0d1117] flex flex-col min-h-0 h-[calc(100%-0.75rem)] overflow-hidden select-none text-[#171717] dark:text-[#f0f6fc] transition-colors ${className}`}
+      className={`w-64 shrink-0 my-1.5 ml-1.5 mr-1.5 rounded-xl border border-[#ebebeb] dark:border-[#212126] shadow-2xs bg-[#f9f9f9] dark:bg-[#111114] flex flex-col min-h-0 h-[calc(100%-0.75rem)] overflow-hidden select-none text-[#171717] dark:text-[#f4f4f5] transition-colors ${className}`}
     >
       {/* Sidebar Header */}
-      <div className="h-12 shrink-0 px-3.5 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] flex items-center justify-between transition-colors">
-        <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc]">
+      <div className="h-12 shrink-0 px-3.5 border-b border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] flex items-center justify-between transition-colors">
+        <span className="text-xs font-semibold text-[#171717] dark:text-[#f4f4f5]">
           {t('cortex.title')}
         </span>
         <button
           type="button"
           onClick={handleRefreshPersonas}
           aria-label={t('cortex.refreshAgents')}
-          className="p-1 rounded hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] transition cursor-pointer"
+          className="p-1 rounded hover:bg-[#e4e4e7] dark:hover:bg-[#232328] text-[#71717a] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] transition cursor-pointer"
         >
           <RotateCw className={`h-3.5 w-3.5 ${isRefreshingPersonas ? 'animate-spin' : ''}`} />
         </button>
       </div>
 
       {/* Filter Search Input */}
-      <div className="p-2.5 border-b border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#0d1117]">
+      <div className="p-2.5 border-b border-[#ebebeb] dark:border-[#212126] bg-[#f9f9f9] dark:bg-[#111114]">
         <div className="relative flex items-center">
-          <Search className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e] pointer-events-none" />
+          <Search className="absolute left-2.5 h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#71717a] pointer-events-none" />
           <input
             id={searchInputId}
             name="cortexMindSearch"
@@ -245,7 +245,7 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
             value={filterQuery}
             onChange={(e) => setFilterQuery(e.target.value)}
             placeholder={t('cortex.searchPlaceholder')}
-            className="w-full pl-8 pr-2.5 py-1 text-xs rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] font-sans transition"
+            className="w-full pl-8 pr-2.5 py-1 text-xs rounded-md bg-white dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] font-sans transition"
           />
         </div>
       </div>
@@ -254,7 +254,7 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
       <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1 font-mono text-xs">
         {/* СЕКЦИЯ 1: Колонки */}
         <section aria-label={t('cortex.columnsSection')}>
-          <div className="w-full flex items-center justify-between px-1.5 py-1 rounded-md text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition group">
+          <div className="w-full flex items-center justify-between px-1.5 py-1 rounded-md text-[#171717] dark:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23] transition group">
             <button
               type="button"
               onClick={() => toggleSection('columns')}
@@ -262,12 +262,12 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
               className="flex-1 flex items-center gap-1.5 py-1 text-left cursor-pointer"
             >
               {openSections.columns ? (
-                <ChevronDown className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
+                <ChevronDown className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
               ) : (
-                <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
+                <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
               )}
               <span className="font-sans text-xs font-semibold">{t('cortex.columnsSection')}</span>
-              <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] tabular-nums leading-none translate-y-px">
+              <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a] tabular-nums leading-none translate-y-px">
                 ({stages.length})
               </span>
             </button>
@@ -276,22 +276,22 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
           {openSections.columns && (
             <div className="space-y-1">
               {stages.length === 0 && (
-                <div className="mx-1 mt-1 rounded-md border border-dashed border-[#d4d4d4] dark:border-[#30363d] bg-white dark:bg-[#161b22] px-3 py-4 text-center space-y-1.5">
-                  <div className="text-xs font-sans font-semibold text-[#171717] dark:text-[#f0f6fc]">
+                <div className="mx-1 mt-1 rounded-md border border-dashed border-[#d4d4d4] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] px-3 py-4 text-center space-y-1.5">
+                  <div className="text-xs font-sans font-semibold text-[#171717] dark:text-[#f4f4f5]">
                     {t('cortex.noAgentsInColumns')}
                   </div>
-                  <div className="text-[11px] font-sans text-[#666666] dark:text-[#8b949e] leading-relaxed">
+                  <div className="text-[11px] font-sans text-[#666666] dark:text-[#71717a] leading-relaxed">
                     {t('cortex.createFirstColumnAgent')}
                   </div>
-                  <div className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e]">
+                  <div className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a]">
                     {t('cortex.freshProjectNotice')}
                   </div>
                 </div>
               )}
 
               {stages.length > 0 && filteredColumnStages.length === 0 && (
-                <div className="mx-1 mt-1 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] px-3 py-4 text-center">
-                  <div className="text-[11px] font-sans text-[#666666] dark:text-[#8b949e]">
+                <div className="mx-1 mt-1 rounded-md border border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] px-3 py-4 text-center">
+                  <div className="text-[11px] font-sans text-[#666666] dark:text-[#71717a]">
                     {t('cortex.columnsNothingFound')}
                   </div>
                 </div>
@@ -317,7 +317,7 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
 
         {/* СЕКЦИЯ 2: Агенты */}
         <section aria-label={t('cortex.agentsSection')}>
-          <div className="w-full flex items-center justify-between px-1.5 py-1 rounded-md text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition group">
+          <div className="w-full flex items-center justify-between px-1.5 py-1 rounded-md text-[#171717] dark:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23] transition group">
             <button
               type="button"
               onClick={() => toggleSection('agents')}
@@ -325,12 +325,12 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
               className="flex-1 flex items-center gap-1.5 py-1 text-left cursor-pointer"
             >
               {openSections.agents ? (
-                <ChevronDown className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
+                <ChevronDown className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
               ) : (
-                <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
+                <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
               )}
               <span className="font-sans text-xs font-semibold">{t('cortex.agentsSection')}</span>
-              <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] tabular-nums leading-none translate-y-px">
+              <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a] tabular-nums leading-none translate-y-px">
                 ({agentStages.length})
               </span>
             </button>
@@ -341,7 +341,7 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
                 setIsCreateAgentOpen(true);
               }}
               aria-label={t('cortex.createAgent')}
-              className="p-1 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d] transition cursor-pointer shrink-0"
+              className="p-1 rounded-md text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#ebebeb]/60 dark:hover:bg-[#232328] transition cursor-pointer shrink-0"
             >
               <Plus className="h-3.5 w-3.5" />
             </button>
@@ -350,19 +350,19 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
           {openSections.agents && (
             <div className="space-y-1">
               {agentStages.length === 0 && (
-                <div className="mx-1 mt-1 rounded-md border border-dashed border-[#d4d4d4] dark:border-[#30363d] bg-white dark:bg-[#161b22] px-3 py-4 text-center space-y-1.5">
-                  <div className="text-xs font-sans font-semibold text-[#171717] dark:text-[#f0f6fc]">
+                <div className="mx-1 mt-1 rounded-md border border-dashed border-[#d4d4d4] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] px-3 py-4 text-center space-y-1.5">
+                  <div className="text-xs font-sans font-semibold text-[#171717] dark:text-[#f4f4f5]">
                     {t('cortex.noAvailableAgents')}
                   </div>
-                  <div className="text-[11px] font-sans text-[#666666] dark:text-[#8b949e] leading-relaxed">
+                  <div className="text-[11px] font-sans text-[#666666] dark:text-[#71717a] leading-relaxed">
                     {t('cortex.agentsFromProject')}
                   </div>
                 </div>
               )}
 
               {agentStages.length > 0 && filteredAgentStages.length === 0 && (
-                <div className="mx-1 mt-1 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] px-3 py-4 text-center">
-                  <div className="text-[11px] font-sans text-[#666666] dark:text-[#8b949e]">
+                <div className="mx-1 mt-1 rounded-md border border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] px-3 py-4 text-center">
+                  <div className="text-[11px] font-sans text-[#666666] dark:text-[#71717a]">
                     {t('cortex.agentsNothingFound')}
                   </div>
                 </div>
@@ -394,7 +394,7 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
       {/* Контекстное меню агента (ПКМ) */}
       {agentContextMenu && (
         <div
-          className="fixed z-50 min-w-[190px] bg-white dark:bg-[#161b22] rounded-lg shadow-md border border-[#ebebeb] dark:border-[#30363d] p-1 text-xs font-sans animate-in fade-in zoom-in-95 duration-100"
+          className="fixed z-50 min-w-[190px] bg-white dark:bg-[#17171b] rounded-lg shadow-md border border-[#ebebeb] dark:border-[#2c2c33] p-1 text-xs font-sans animate-in fade-in zoom-in-95 duration-100"
           style={{
             top: Math.min(agentContextMenu.y, window.innerHeight - 120),
             left: Math.min(agentContextMenu.x, window.innerWidth - 210),
@@ -402,7 +402,7 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
           onClick={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
         >
-          <div className="px-3 py-1.5 text-[10px] font-semibold text-[#a1a1aa] dark:text-[#8b949e] uppercase tracking-wider border-b border-[#f4f4f5] dark:border-[#21262d] mb-1 truncate">
+          <div className="px-3 py-1.5 text-[10px] font-semibold text-[#a1a1aa] dark:text-[#71717a] uppercase tracking-wider border-b border-[#f4f4f5] dark:border-[#212126] mb-1 truncate">
             {t('cortex.agentContextMenu', { role: agentContextMenu.role })}
           </div>
           <button
@@ -411,9 +411,9 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
               setAgentContextMenu(null);
               setEditingAgentPersona(persona);
             }}
-            className="w-full flex items-center space-x-2 px-3 py-1.5 text-left transition rounded-sm text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer"
+            className="w-full flex items-center space-x-2 px-3 py-1.5 text-left transition rounded-sm text-[#171717] dark:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] cursor-pointer"
           >
-            <Palette className="h-3.5 w-3.5 text-[#71717a] dark:text-[#8b949e]" />
+            <Palette className="h-3.5 w-3.5 text-[#71717a] dark:text-[#71717a]" />
             <span>{t('cortex.configureColorIcon')}</span>
           </button>
           <button
@@ -425,12 +425,12 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
             disabled={agentContextMenu.isBuiltin}
             className={`w-full flex items-center space-x-2 px-3 py-1.5 text-left transition rounded-sm ${
               agentContextMenu.isBuiltin
-                ? 'text-[#a1a1aa] dark:text-[#6e7681] cursor-not-allowed opacity-50'
-                : 'text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer'
+                ? 'text-[#a1a1aa] dark:text-[#52525b] cursor-not-allowed opacity-50'
+                : 'text-[#171717] dark:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] cursor-pointer'
             }`}
             aria-label={agentContextMenu.isBuiltin ? t('cortex.cannotRenameBuiltin') : undefined}
           >
-            <Pencil className="h-3.5 w-3.5 text-[#71717a] dark:text-[#8b949e]" />
+            <Pencil className="h-3.5 w-3.5 text-[#71717a] dark:text-[#71717a]" />
             <span>{t('cortex.renameAgent')}</span>
           </button>
           <button
@@ -443,7 +443,7 @@ export default function CortexExplorer({ className = '' }: CortexExplorerProps =
             disabled={agentContextMenu.isBuiltin}
             className={`w-full flex items-center space-x-2 px-3 py-1.5 text-left transition rounded-sm ${
               agentContextMenu.isBuiltin
-                ? 'text-[#a1a1aa] dark:text-[#6e7681] cursor-not-allowed opacity-50'
+                ? 'text-[#a1a1aa] dark:text-[#52525b] cursor-not-allowed opacity-50'
                 : 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-700 dark:hover:text-red-300 cursor-pointer'
             }`}
             aria-label={agentContextMenu.isBuiltin ? t('cortex.cannotDeleteBuiltin') : undefined}

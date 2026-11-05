@@ -109,18 +109,18 @@ function KanbanCard({ task, index }: KanbanCardProps) {
               }}
               className={`group relative mb-2 rounded-md border p-3 select-none ${
                 snapshot.isDragging
-                  ? 'scale-[1.02] rotate-[1.5deg] shadow-2xl ring-1 ring-black/10 dark:ring-white/20 cursor-grabbing z-50 border-[#171717] dark:border-[#30363d] bg-white dark:bg-[#161b22]'
-                  : `transition-transform duration-100 ease-out cursor-pointer active:scale-[0.99] bg-white dark:bg-[#161b22] ${
+                  ? 'scale-[1.02] rotate-[1.5deg] shadow-2xl ring-1 ring-black/10 dark:ring-white/20 cursor-grabbing z-50 border-[#171717] dark:border-[#2c2c33] bg-white dark:bg-[#17171b]'
+                  : `transition-transform duration-100 ease-out cursor-pointer active:scale-[0.99] bg-white dark:bg-[#17171b] ${
                       isHighlighted
                         ? 'shadow-md'
-                        : 'border-[#ebebeb] dark:border-[#21262d] hover:border-[#d4d4d8] dark:hover:border-[#30363d] shadow-xs'
+                        : 'border-[#ebebeb] dark:border-[#212126] hover:border-[#d4d4d8] dark:hover:border-[#2c2c33] shadow-xs'
                     }`
               }`}
             >
               {/* Header: ID & Concise Status */}
               <div className="flex items-center justify-between mb-2 gap-1.5 flex-wrap">
                 <div className="flex items-center space-x-1.5">
-                  <span className="font-mono text-[10px] font-semibold text-[#171717] dark:text-[#f0f6fc] bg-[#f4f4f5] dark:bg-[#0d1117] px-1.5 py-0.5 rounded border border-[#ebebeb] dark:border-[#30363d] tabular-nums">
+                  <span className="font-mono text-[10px] font-semibold text-[#171717] dark:text-[#f4f4f5] bg-[#f4f4f5] dark:bg-[#111114] px-1.5 py-0.5 rounded border border-[#ebebeb] dark:border-[#2c2c33] tabular-nums">
                     {task.id}
                   </span>
                 </div>
@@ -156,7 +156,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                     <span className="text-[10px] font-mono font-bold tracking-tight shrink-0">
                       {t('card.agentQuestion')}:
                     </span>
-                    <span className="text-[10px] font-sans truncate text-[#4d4d4d] dark:text-[#d4d4d8]">
+                    <span className="text-[10px] font-sans truncate text-[#4d4d4d] dark:text-[#a1a1aa]">
                       {activeQuestion.text}
                     </span>
                   </div>
@@ -164,7 +164,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
               )}
 
               {/* Title */}
-              <h4 className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc] leading-snug mb-2 font-sans break-words">
+              <h4 className="text-xs font-medium text-[#171717] dark:text-[#f4f4f5] leading-snug mb-2 font-sans break-words">
                 {task.title}
               </h4>
 
@@ -178,10 +178,10 @@ function KanbanCard({ task, index }: KanbanCardProps) {
               />
 
               {/* Footer: model, branch, created & elapsed time */}
-              <div className="pt-2 border-t border-[#ebebeb] dark:border-[#21262d]">
+              <div className="pt-2 border-t border-[#ebebeb] dark:border-[#212126]">
                 {task.model && task.model.trim().length > 0 && (
                   <div
-                    className="truncate font-mono text-[10px] text-[#666666] dark:text-[#8b949e] mb-1"
+                    className="truncate font-mono text-[10px] text-[#666666] dark:text-[#71717a] mb-1"
                     aria-label={t('card.model', { model: task.model })}
                   >
                     {task.model}
@@ -191,14 +191,14 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                   const cardBranch = task.branch || (task.parentId ? useBoardStore.getState().tasks.find((t) => t.id === task.parentId)?.branch : undefined);
                   return cardBranch ? (
                     <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
-                      <span className="inline-flex items-center gap-1 truncate text-[#8f8f8f] dark:text-[#8b949e] min-w-0">
+                      <span className="inline-flex items-center gap-1 truncate text-[#8f8f8f] dark:text-[#71717a] min-w-0">
                         <GitBranch className="h-2.5 w-2.5 shrink-0" />
                         <span className="truncate">{cardBranch}</span>
                       </span>
                     </div>
                   ) : null;
                 })()}
-                <CardTimeFooter task={task} isDone={isDone} />
+                <CardTimeFooter task={task} isDone={isTerminalColumn} />
               </div>
 
               {/* In Done column: Collapsible list of completed subtasks with dialogue open */}

@@ -158,10 +158,10 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
       const newLines = newString ? newString.split('\n') : [];
 
       return (
-        <div className="rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] overflow-hidden font-mono text-[11px]">
+        <div className="rounded-md border border-[#ebebeb] dark:border-[#212126] bg-[#fafafa] dark:bg-[#111114] overflow-hidden font-mono text-[11px]">
           {rawFilePath && (
-            <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#f4f4f5] dark:bg-[#161b22] border-b border-[#ebebeb] dark:border-[#21262d] text-[#666666] dark:text-[#8b949e] text-[10px]">
-              <span className="truncate max-w-[340px] text-[#171717] dark:text-[#f0f6fc] font-semibold">
+            <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#f4f4f5] dark:bg-[#17171b] border-b border-[#ebebeb] dark:border-[#212126] text-[#666666] dark:text-[#71717a] text-[10px]">
+              <span className="truncate max-w-[340px] text-[#171717] dark:text-[#f4f4f5] font-semibold">
                 {rawFilePath}
               </span>
               <div className="flex items-center space-x-2 font-mono tabular-nums">
@@ -171,12 +171,12 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
                 {newLines.length > 0 && (
                   <span className="text-[#16a34a] dark:text-[#7ee787]">+{newLines.length}</span>
                 )}
-                <span className="text-[#8f8f8f] dark:text-[#8b949e]">Различия</span>
+                <span className="text-[#8f8f8f] dark:text-[#71717a]">Различия</span>
               </div>
             </div>
           )}
 
-          <div className="divide-y divide-[#ebebeb] dark:divide-[#21262d] select-text overflow-x-auto max-h-72 font-mono">
+          <div className="divide-y divide-[#ebebeb] dark:divide-[#212126] select-text overflow-x-auto max-h-72 font-mono">
             {oldLines.map((line, idx) => (
               <div
                 key={`old-${idx}`}
@@ -185,7 +185,7 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
                 <span className="w-4 shrink-0 text-[#ef4444] dark:text-[#ff7b72] select-none text-center font-bold">
                   -
                 </span>
-                <span className="w-8 shrink-0 text-[#8f8f8f] dark:text-[#8b949e] select-none text-right pr-2 tabular-nums">
+                <span className="w-8 shrink-0 text-[#8f8f8f] dark:text-[#71717a] select-none text-right pr-2 tabular-nums">
                   {idx + 1}
                 </span>
                 <span className="whitespace-pre-wrap break-all">
@@ -202,7 +202,7 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
                 <span className="w-4 shrink-0 text-[#22c55e] dark:text-[#7ee787] select-none text-center font-bold">
                   +
                 </span>
-                <span className="w-8 shrink-0 text-[#8f8f8f] dark:text-[#8b949e] select-none text-right pr-2 tabular-nums">
+                <span className="w-8 shrink-0 text-[#8f8f8f] dark:text-[#71717a] select-none text-right pr-2 tabular-nums">
                   {idx + 1}
                 </span>
                 <span className="whitespace-pre-wrap break-all">
@@ -222,27 +222,27 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
     const lines = newString.split('\n');
 
     return (
-      <div className="rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] overflow-hidden font-mono text-[11px]">
+      <div className="rounded-md border border-[#ebebeb] dark:border-[#212126] bg-[#fafafa] dark:bg-[#111114] overflow-hidden font-mono text-[11px]">
         {rawFilePath && (
-          <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#f4f4f5] dark:bg-[#161b22] border-b border-[#ebebeb] dark:border-[#21262d] text-[#666666] dark:text-[#8b949e] text-[10px]">
-            <span className="truncate max-w-[340px] text-[#171717] dark:text-[#f0f6fc] font-semibold">
+          <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#f4f4f5] dark:bg-[#17171b] border-b border-[#ebebeb] dark:border-[#212126] text-[#666666] dark:text-[#71717a] text-[10px]">
+            <span className="truncate max-w-[340px] text-[#171717] dark:text-[#f4f4f5] font-semibold">
               {rawFilePath}
             </span>
-            <span className="text-[#8f8f8f] dark:text-[#8b949e] tabular-nums font-mono">
+            <span className="text-[#8f8f8f] dark:text-[#71717a] tabular-nums font-mono">
               {lines.length} {lines.length === 1 ? 'строка' : 'строк'}
             </span>
           </div>
         )}
-        <div className="divide-y divide-[#f0f0f0] dark:divide-[#21262d] select-text overflow-x-auto max-h-72 font-mono bg-white dark:bg-[#0d1117]">
+        <div className="divide-y divide-[#f0f0f0] dark:divide-[#212126] select-text overflow-x-auto max-h-72 font-mono bg-white dark:bg-[#111114]">
           {lines.map((line, idx) => (
             <div
               key={`line-${idx}`}
-              className="flex items-start px-2 py-0.5 leading-relaxed hover:bg-[#fafafa] dark:hover:bg-[#161b22]"
+              className="flex items-start px-2 py-0.5 leading-relaxed hover:bg-[#fafafa] dark:hover:bg-[#17171b]"
             >
-              <span className="w-8 shrink-0 text-[#a1a1aa] dark:text-[#8b949e] select-none text-right pr-2.5 tabular-nums text-[10px]">
+              <span className="w-8 shrink-0 text-[#a1a1aa] dark:text-[#71717a] select-none text-right pr-2.5 tabular-nums text-[10px]">
                 {idx + 1}
               </span>
-              <span className="whitespace-pre-wrap break-all text-[#171717] dark:text-[#f0f6fc]">
+              <span className="whitespace-pre-wrap break-all text-[#171717] dark:text-[#f4f4f5]">
                 {line || ' '}
               </span>
             </div>
@@ -263,18 +263,18 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
     const baseLineNumber = startLine ?? 1;
 
     return (
-      <div className="rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] overflow-hidden font-mono text-[11px]">
+      <div className="rounded-md border border-[#ebebeb] dark:border-[#212126] bg-[#fafafa] dark:bg-[#111114] overflow-hidden font-mono text-[11px]">
         {rawFilePath && (
-          <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#f4f4f5] dark:bg-[#161b22] border-b border-[#ebebeb] dark:border-[#21262d] text-[#666666] dark:text-[#8b949e] text-[10px]">
-            <span className="truncate max-w-[340px] text-[#171717] dark:text-[#f0f6fc] font-semibold">
+          <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#f4f4f5] dark:bg-[#17171b] border-b border-[#ebebeb] dark:border-[#212126] text-[#666666] dark:text-[#71717a] text-[10px]">
+            <span className="truncate max-w-[340px] text-[#171717] dark:text-[#f4f4f5] font-semibold">
               {rawFilePath}
             </span>
-            <span className="text-[#8f8f8f] dark:text-[#8b949e] tabular-nums font-mono">
+            <span className="text-[#8f8f8f] dark:text-[#71717a] tabular-nums font-mono">
               {lineRangeBadge || `${rawLines.length} строк`}
             </span>
           </div>
         )}
-        <div className="divide-y divide-[#f0f0f0] dark:divide-[#21262d] select-text overflow-x-auto max-h-80 font-mono bg-white dark:bg-[#0d1117]">
+        <div className="divide-y divide-[#f0f0f0] dark:divide-[#212126] select-text overflow-x-auto max-h-80 font-mono bg-white dark:bg-[#111114]">
           {rawLines.map((line, idx) => {
             const prefixMatch = line.match(/^(\d+)[:|]\s?(.*)$/);
             let displayLineNum: number | string = baseLineNumber + idx;
@@ -288,12 +288,12 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
             return (
               <div
                 key={`readline-${idx}`}
-                className="flex items-start px-2 py-0.5 leading-relaxed hover:bg-[#fafafa] dark:hover:bg-[#161b22]"
+                className="flex items-start px-2 py-0.5 leading-relaxed hover:bg-[#fafafa] dark:hover:bg-[#17171b]"
               >
-                <span className="w-10 shrink-0 text-[#a1a1aa] dark:text-[#8b949e] select-none text-right pr-2.5 tabular-nums text-[10px]">
+                <span className="w-10 shrink-0 text-[#a1a1aa] dark:text-[#71717a] select-none text-right pr-2.5 tabular-nums text-[10px]">
                   {displayLineNum}
                 </span>
-                <span className="whitespace-pre-wrap break-all text-[#171717] dark:text-[#f0f6fc]">
+                <span className="whitespace-pre-wrap break-all text-[#171717] dark:text-[#f4f4f5]">
                   {displayContent || ' '}
                 </span>
               </div>
@@ -306,17 +306,17 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
 
   return (
     <div
-      className={`group rounded-md border text-xs shadow-2xs hover:shadow-xs overflow-hidden my-1 animate-silk-entrance transition-colors bg-white dark:bg-[#161b22] ${
+      className={`group rounded-md border text-xs shadow-2xs hover:shadow-xs overflow-hidden my-1 animate-silk-entrance transition-colors bg-white dark:bg-[#17171b] ${
         isRunning
           ? 'border-amber-500/40 dark:border-amber-500/30 bg-amber-500/[0.02]'
-          : 'border-[#ebebeb] dark:border-[#21262d]'
+          : 'border-[#ebebeb] dark:border-[#212126]'
       } ${isSkipped ? 'opacity-70 dark:opacity-65' : ''}`}
     >
       {/* Header Strip */}
       <div
         onClick={() => setIsExpanded(!isExpanded)}
-        className={`flex items-center justify-between px-2.5 py-1.5 bg-[#f8f8f9] dark:bg-[#161b22] hover:bg-[#f2f2f3] dark:hover:bg-[#1c2128] transition-colors cursor-pointer select-none gap-2 text-xs min-h-[30px] ${
-          isExpanded ? 'border-b border-[#ebebeb] dark:border-[#21262d]' : ''
+        className={`flex items-center justify-between px-2.5 py-1.5 bg-[#f8f8f9] dark:bg-[#17171b] hover:bg-[#f2f2f3] dark:hover:bg-[#1e1e23] transition-colors cursor-pointer select-none gap-2 text-xs min-h-[30px] ${
+          isExpanded ? 'border-b border-[#ebebeb] dark:border-[#212126]' : ''
         }`}
       >
         {isReadOp ? (
@@ -324,7 +324,7 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
           <div className="flex items-center space-x-2 min-w-0 flex-1">
             <button
               type="button"
-              className="p-0.5 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] rounded shrink-0 transition cursor-pointer"
+              className="p-0.5 text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] rounded shrink-0 transition cursor-pointer"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsExpanded(!isExpanded);
@@ -333,7 +333,7 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
             >
               <ChevronRight
                 className={`h-3 w-3 transition-transform duration-150 ${
-                  isExpanded ? 'rotate-90 text-[#171717] dark:text-[#f0f6fc]' : ''
+                  isExpanded ? 'rotate-90 text-[#171717] dark:text-[#f4f4f5]' : ''
                 }`}
               />
             </button>
@@ -347,32 +347,32 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
             {langBadge ? (
               <FileExtensionBadge ext={ext} />
             ) : (
-              <DocIcon className="h-3.5 w-3.5 text-[#52525b] dark:text-[#8b949e] shrink-0" />
+              <DocIcon className="h-3.5 w-3.5 text-[#52525b] dark:text-[#71717a] shrink-0" />
             )}
 
             {/* Clean filename with muted path */}
             <div className="flex items-center min-w-0 font-mono text-xs overflow-hidden">
               {dirPath && (
-                <span className="text-[#8f8f8f] dark:text-[#8b949e] truncate max-w-[120px] sm:max-w-[180px] shrink-0">
+                <span className="text-[#8f8f8f] dark:text-[#71717a] truncate max-w-[120px] sm:max-w-[180px] shrink-0">
                   {dirPath}/
                 </span>
               )}
-              <span className="font-semibold text-[#171717] dark:text-[#f0f6fc] truncate">
+              <span className="font-semibold text-[#171717] dark:text-[#f4f4f5] truncate">
                 {fileName || rawFilePath || 'file'}
               </span>
             </div>
 
             {/* Line range badge (#L4270-4300 or · 61 lines) */}
             {lineRangeBadge && (
-              <span className="font-mono text-[11px] text-[#71717a] dark:text-[#8b949e] tabular-nums shrink-0 ml-1">
+              <span className="font-mono text-[11px] text-[#71717a] dark:text-[#71717a] tabular-nums shrink-0 ml-1">
                 {lineRangeBadge}
               </span>
             )}
 
             {durationText && (
               <>
-                <span className="text-[#a1a1aa] dark:text-[#6e7681] select-none text-[10px]">•</span>
-                <span className="font-mono text-[#71717a] dark:text-[#8b949e] shrink-0 tabular-nums text-[11px]">
+                <span className="text-[#a1a1aa] dark:text-[#52525b] select-none text-[10px]">•</span>
+                <span className="font-mono text-[#71717a] dark:text-[#71717a] shrink-0 tabular-nums text-[11px]">
                   {durationText}
                 </span>
               </>
@@ -383,7 +383,7 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
           <div className="flex items-center space-x-2 min-w-0 flex-1">
             <button
               type="button"
-              className="p-0.5 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] rounded shrink-0 transition cursor-pointer"
+              className="p-0.5 text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] rounded shrink-0 transition cursor-pointer"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsExpanded(!isExpanded);
@@ -392,7 +392,7 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
             >
               <ChevronRight
                 className={`h-3 w-3 transition-transform duration-150 ${
-                  isExpanded ? 'rotate-90 text-[#171717] dark:text-[#f0f6fc]' : ''
+                  isExpanded ? 'rotate-90 text-[#171717] dark:text-[#f4f4f5]' : ''
                 }`}
               />
             </button>
@@ -414,17 +414,17 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
             {langBadge ? (
               <FileExtensionBadge ext={ext} />
             ) : (
-              <DocIcon className="h-3.5 w-3.5 text-[#52525b] dark:text-[#8b949e] shrink-0" />
+              <DocIcon className="h-3.5 w-3.5 text-[#52525b] dark:text-[#71717a] shrink-0" />
             )}
 
             {/* Clean filename with muted path */}
             <div className="flex items-center min-w-0 font-mono text-xs overflow-hidden">
               {dirPath && (
-                <span className="text-[#8f8f8f] dark:text-[#8b949e] truncate max-w-[120px] sm:max-w-[180px] shrink-0">
+                <span className="text-[#8f8f8f] dark:text-[#71717a] truncate max-w-[120px] sm:max-w-[180px] shrink-0">
                   {dirPath}/
                 </span>
               )}
-              <span className="font-semibold text-[#171717] dark:text-[#f0f6fc] truncate">
+              <span className="font-semibold text-[#171717] dark:text-[#f4f4f5] truncate">
                 {fileName || rawFilePath || 'file'}
               </span>
             </div>
@@ -447,8 +447,8 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
 
             {durationText && (
               <>
-                <span className="text-[#a1a1aa] dark:text-[#6e7681] select-none text-[10px]">•</span>
-                <span className="font-mono text-[#71717a] dark:text-[#8b949e] shrink-0 tabular-nums text-[11px]">
+                <span className="text-[#a1a1aa] dark:text-[#52525b] select-none text-[10px]">•</span>
+                <span className="font-mono text-[#71717a] dark:text-[#71717a] shrink-0 tabular-nums text-[11px]">
                   {durationText}
                 </span>
               </>
@@ -465,18 +465,18 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
 
       {/* Expanded Details */}
       {isExpanded && (
-        <div className="bg-white dark:bg-[#0d1117] p-3 border-t border-[#ebebeb] dark:border-[#21262d] space-y-2.5 font-mono text-xs">
+        <div className="bg-white dark:bg-[#111114] p-3 border-t border-[#ebebeb] dark:border-[#212126] space-y-2.5 font-mono text-xs">
           {isReadOp ? (
             <div className="space-y-2">
               {rawFilePath && (
                 <div className="flex items-baseline space-x-2 py-0.5 text-[11px] font-mono">
-                  <span className="text-[#666666] dark:text-[#8b949e] font-semibold shrink-0">Файл:</span>
-                  <span className="text-[#171717] dark:text-[#f0f6fc] select-text break-all">{rawFilePath}</span>
+                  <span className="text-[#666666] dark:text-[#71717a] font-semibold shrink-0">Файл:</span>
+                  <span className="text-[#171717] dark:text-[#f4f4f5] select-text break-all">{rawFilePath}</span>
                 </div>
               )}
               {tool.stdout ? (
                 <div>
-                  <span className="text-[10px] text-[#666666] dark:text-[#8b949e] block mb-1">
+                  <span className="text-[10px] text-[#666666] dark:text-[#71717a] block mb-1">
                     Прочитанные строки {lineRangeBadge ? `(${lineRangeBadge})` : ''}
                   </span>
                   {renderReadContent()}
@@ -490,20 +490,20 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
             <div className="space-y-2">
               {rawFilePath && (
                 <div className="flex items-baseline space-x-2 py-0.5 text-[11px] font-mono">
-                  <span className="text-[#666666] dark:text-[#8b949e] font-semibold shrink-0">Файл:</span>
-                  <span className="text-[#171717] dark:text-[#f0f6fc] select-text break-all">{rawFilePath}</span>
+                  <span className="text-[#666666] dark:text-[#71717a] font-semibold shrink-0">Файл:</span>
+                  <span className="text-[#171717] dark:text-[#f4f4f5] select-text break-all">{rawFilePath}</span>
                 </div>
               )}
               {oldString !== undefined && newString !== undefined ? (
                 <div>
-                  <span className="text-[10px] text-[#666666] dark:text-[#8b949e] block mb-1">
+                  <span className="text-[10px] text-[#666666] dark:text-[#71717a] block mb-1">
                     {isFailed ? 'Запланированные изменения (не применены)' : 'Дифф изменений'}
                   </span>
                   {renderUnifiedDiff()}
                 </div>
               ) : newString ? (
                 <div>
-                  <span className="text-[10px] text-[#666666] dark:text-[#8b949e] block mb-1">
+                  <span className="text-[10px] text-[#666666] dark:text-[#71717a] block mb-1">
                     Содержимое файла
                   </span>
                   {renderFileContentPreview()}
@@ -517,12 +517,12 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
             <div className="space-y-2">
               {rawFilePath && (
                 <div className="flex items-baseline space-x-2 py-0.5 text-[11px] font-mono">
-                  <span className="text-[#666666] dark:text-[#8b949e] font-semibold shrink-0">Файл:</span>
-                  <span className="text-[#171717] dark:text-[#f0f6fc] select-text break-all">{rawFilePath}</span>
+                  <span className="text-[#666666] dark:text-[#71717a] font-semibold shrink-0">Файл:</span>
+                  <span className="text-[#171717] dark:text-[#f4f4f5] select-text break-all">{rawFilePath}</span>
                 </div>
               )}
               <div>
-                <span className="text-[10px] text-[#666666] dark:text-[#8b949e] block mb-1">
+                <span className="text-[10px] text-[#666666] dark:text-[#71717a] block mb-1">
                   {isFailed ? 'Запланированные изменения (не применены)' : 'Дифф изменений'}
                 </span>
                 {renderUnifiedDiff()}
@@ -535,10 +535,10 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
 
           {!isReadOp && tool.stdout && (
             <div>
-              <span className="text-[10px] text-[#666666] dark:text-[#8b949e] block mb-1">
+              <span className="text-[10px] text-[#666666] dark:text-[#71717a] block mb-1">
                 Вывод команды
               </span>
-              <pre className="p-2.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#21262d] text-[11px] text-[#171717] dark:text-[#f0f6fc] overflow-x-auto leading-relaxed max-h-48 whitespace-pre-wrap select-text">
+              <pre className="p-2.5 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#212126] text-[11px] text-[#171717] dark:text-[#f4f4f5] overflow-x-auto leading-relaxed max-h-48 whitespace-pre-wrap select-text">
                 {tool.stdout}
               </pre>
             </div>
@@ -555,7 +555,7 @@ export default function FileOpsToolCard({ tool }: ToolCardProps) {
             </div>
           )}
 
-          <div className="flex items-center justify-between pt-1 border-t border-[#f4f4f5] dark:border-[#21262d] text-[10px] text-[#8f8f8f] dark:text-[#8b949e]">
+          <div className="flex items-center justify-between pt-1 border-t border-[#f4f4f5] dark:border-[#212126] text-[10px] text-[#8f8f8f] dark:text-[#71717a]">
             <span>Статус: {isFailed ? `failed (код ${tool.exitCode ?? 1})` : tool.status}</span>
           </div>
         </div>

@@ -32,20 +32,20 @@ export function ContextPopover({
       {/* Invisible hit bridge to prevent losing hover on cursor transition */}
       <div className="absolute -bottom-3 left-0 right-0 h-3" />
 
-      <div className="w-72 rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-3.5 shadow-md text-[#171717] dark:text-[#f0f6fc] select-none font-sans">
+      <div className="w-72 rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] p-3.5 shadow-md text-[#171717] dark:text-[#f4f4f5] select-none font-sans">
         {/* Top Line */}
         <div className="flex items-center justify-between mb-2">
           <div>
-            <span className="font-semibold text-xs text-[#171717] dark:text-[#f0f6fc]">{percent}%</span>{' '}
-            <span className="text-xs text-[#666666] dark:text-[#8b949e]">заполнено</span>
+            <span className="font-semibold text-xs text-[#171717] dark:text-[#f4f4f5]">{percent}%</span>{' '}
+            <span className="text-xs text-[#666666] dark:text-[#71717a]">заполнено</span>
           </div>
-          <span className="font-mono text-xs text-[#666666] dark:text-[#8b949e] tabular-nums">
+          <span className="font-mono text-xs text-[#666666] dark:text-[#71717a] tabular-nums">
             ~{usedTokensK}K / {maxTokensK}K
           </span>
         </div>
 
         {/* Segmented Progress Bar */}
-        <div className="w-full h-2 rounded-full bg-[#f4f4f5] dark:bg-[#21262d] overflow-hidden flex mb-3">
+        <div className="w-full h-2 rounded-full bg-[#f4f4f5] dark:bg-[#232328] overflow-hidden flex mb-3">
           {systemPromptTokens > 0 && (
             <div
               style={{ width: `${systemPct}%` }}
@@ -74,9 +74,9 @@ export function ContextPopover({
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <span className="w-2.5 h-2.5 rounded-xs bg-[#71717a] shrink-0" />
-              <span className="text-[#666666] dark:text-[#8b949e]">Системный промпт</span>
+              <span className="text-[#666666] dark:text-[#71717a]">Системный промпт</span>
             </div>
-            <span className="font-mono text-xs text-[#171717] dark:text-[#f0f6fc] tabular-nums">
+            <span className="font-mono text-xs text-[#171717] dark:text-[#f4f4f5] tabular-nums">
               ~{systemPromptTokens.toLocaleString('ru-RU')}
             </span>
           </div>
@@ -84,9 +84,9 @@ export function ContextPopover({
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <span className="w-2.5 h-2.5 rounded-xs bg-[#8b5cf6] shrink-0" />
-              <span className="text-[#666666] dark:text-[#8b949e]">Схемы инструментов</span>
+              <span className="text-[#666666] dark:text-[#71717a]">Схемы инструментов</span>
             </div>
-            <span className="font-mono text-xs text-[#171717] dark:text-[#f0f6fc] tabular-nums">
+            <span className="font-mono text-xs text-[#171717] dark:text-[#f4f4f5] tabular-nums">
               ~{toolDefTokens.toLocaleString('ru-RU')}
             </span>
           </div>
@@ -94,21 +94,21 @@ export function ContextPopover({
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <span className="w-2.5 h-2.5 rounded-xs bg-[#3b82f6] shrink-0" />
-              <span className="text-[#666666] dark:text-[#8b949e]">Сообщения диалога</span>
+              <span className="text-[#666666] dark:text-[#71717a]">Сообщения диалога</span>
             </div>
-            <span className="font-mono text-xs text-[#171717] dark:text-[#f0f6fc] tabular-nums">
+            <span className="font-mono text-xs text-[#171717] dark:text-[#f4f4f5] tabular-nums">
               ~{messageTokens.toLocaleString('ru-RU')}
             </span>
           </div>
         </div>
 
         {/* Action Row */}
-        <div className="mt-3 pt-2.5 border-t border-[#ebebeb] dark:border-[#21262d] flex items-center justify-between">
+        <div className="mt-3 pt-2.5 border-t border-[#ebebeb] dark:border-[#212126] flex items-center justify-between">
           <button
             type="button"
             onClick={onCompactClick}
             disabled={isCompacting}
-            className="px-2.5 py-1 rounded-md bg-[#fafafa] dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] text-[11px] font-mono transition cursor-pointer disabled:opacity-50 active:scale-[0.98]"
+            className="px-2.5 py-1 rounded-md bg-[#fafafa] dark:bg-[#17171b] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] text-[11px] font-mono transition cursor-pointer disabled:opacity-50 active:scale-[0.98]"
           >
             {isCompacting ? 'Сжатие...' : 'Сжать контекст'}
           </button>

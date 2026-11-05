@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { ArrowRightToLine, ArrowRightFromLine } from 'lucide-react';
 import type { PipelineStage, PipelineConfig, HookDefinition } from '../../types';
 import { getHookScript } from '../../types';
 import { useBoardStore } from '../../stores/boardStore';
@@ -378,7 +379,7 @@ export default function StageContextMenu({
     <div
       ref={menuRef}
       role="menu"
-      className="fixed z-50 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] py-1 font-sans text-xs text-[#171717] dark:text-[#f0f6fc] shadow-md transition-colors"
+      className="fixed z-50 rounded-md border border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] py-1 font-sans text-xs text-[#171717] dark:text-[#f4f4f5] shadow-md transition-colors"
       style={{ left: pos.left, top: pos.top, width: MENU_WIDTH }}
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
@@ -393,7 +394,7 @@ export default function StageContextMenu({
               setRenameError(null);
               setMode('rename');
             }}
-            className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer"
+            className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#232328] cursor-pointer"
           >
             {t('columnMenu.rename')}
           </button>
@@ -402,7 +403,7 @@ export default function StageContextMenu({
               type="button"
               role="menuitem"
               onClick={() => setMode('persona')}
-              className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer"
+              className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#232328] cursor-pointer"
             >
               {t('columnMenu.changeAgent')}
             </button>
@@ -416,11 +417,14 @@ export default function StageContextMenu({
               setScriptError(null);
               setMode('script');
             }}
-            className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer flex items-center justify-between"
+            className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#232328] cursor-pointer flex items-center justify-between"
           >
-            <span>{t('columnMenu.enterScript')}</span>
+            <span className="flex items-center gap-1.5 min-w-0">
+              <ArrowRightToLine className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 stroke-[2.2]" />
+              <span>{t('columnMenu.enterScript')}</span>
+            </span>
             {currentEnterScript && (
-              <span className="ml-2 font-mono text-[10px] text-[#8f8f8f] dark:text-[#8b949e] truncate max-w-[120px]">
+              <span className="ml-2 font-mono text-[10px] text-[#8f8f8f] dark:text-[#71717a] truncate max-w-[120px]">
                 {currentEnterScript.split(/[\\/]/).pop()}
               </span>
             )}
@@ -434,16 +438,19 @@ export default function StageContextMenu({
               setScriptError(null);
               setMode('script');
             }}
-            className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer flex items-center justify-between"
+            className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#232328] cursor-pointer flex items-center justify-between"
           >
-            <span>{t('columnMenu.leaveScript')}</span>
+            <span className="flex items-center gap-1.5 min-w-0">
+              <ArrowRightFromLine className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0 stroke-[2.2]" />
+              <span>{t('columnMenu.leaveScript')}</span>
+            </span>
             {currentLeaveScript && (
-              <span className="ml-2 font-mono text-[10px] text-[#8f8f8f] dark:text-[#8b949e] truncate max-w-[120px]">
+              <span className="ml-2 font-mono text-[10px] text-[#8f8f8f] dark:text-[#71717a] truncate max-w-[120px]">
                 {currentLeaveScript.split(/[\\/]/).pop()}
               </span>
             )}
           </button>
-          <div className="my-1 border-t border-[#ebebeb] dark:border-[#21262d]" />
+          <div className="my-1 border-t border-[#ebebeb] dark:border-[#212126]" />
           <button
             type="button"
             role="menuitem"
@@ -452,7 +459,7 @@ export default function StageContextMenu({
             onClick={handleDelete}
             className={`w-full px-3 py-1.5 text-left ${
               isProtected
-                ? 'text-[#8f8f8f] dark:text-[#8b949e] cursor-not-allowed'
+                ? 'text-[#8f8f8f] dark:text-[#71717a] cursor-not-allowed'
                 : 'text-[#b91c1c] dark:text-[#f87171] hover:bg-[#fef2f2] dark:hover:bg-[#450a0a]/40 cursor-pointer'
             }`}
           >
@@ -463,7 +470,7 @@ export default function StageContextMenu({
 
       {mode === 'rename' && (
         <div className="px-3 py-2">
-          <div className="text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">{t('columnMenu.newTitle')}</div>
+          <div className="text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1">{t('columnMenu.newTitle')}</div>
           <input
             type="text"
             autoFocus
@@ -475,7 +482,7 @@ export default function StageContextMenu({
                 void handleSaveRename();
               }
             }}
-            className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#161b22] transition"
+            className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#17171b] transition"
           />
           {renameError && (
             <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
@@ -486,7 +493,7 @@ export default function StageContextMenu({
             <button
               type="button"
               onClick={() => setMode('main')}
-              className="px-2.5 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer text-[#171717] dark:text-[#f0f6fc]"
+              className="px-2.5 py-1.5 rounded-md bg-white dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] transition cursor-pointer text-[#171717] dark:text-[#f4f4f5]"
             >
               {t('common.cancel')}
             </button>
@@ -494,7 +501,7 @@ export default function StageContextMenu({
               type="button"
               disabled={!draftTitle.trim() || renameSaving}
               onClick={() => void handleSaveRename()}
-              className="px-3 py-1.5 rounded-md bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-default border border-transparent dark:border-[#30363d]"
+              className="px-3 py-1.5 rounded-md bg-[#171717] dark:bg-[#232328] hover:bg-[#262626] dark:hover:bg-[#2c2c33] text-white font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-default border border-transparent dark:border-[#2c2c33]"
             >
               {t('common.save')}
             </button>
@@ -504,8 +511,8 @@ export default function StageContextMenu({
 
       {mode === 'persona' && (
         <div className="px-3 py-2">
-          <div className="text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">{t('columnMenu.agentColumn')}</div>
-          <div className="mb-1.5 text-[#8f8f8f] dark:text-[#8b949e]">
+          <div className="text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1">{t('columnMenu.agentColumn')}</div>
+          <div className="mb-1.5 text-[#8f8f8f] dark:text-[#71717a]">
             {t('columnMenu.currentAgent', { agent: currentStage.persona ?? t('columnMenu.notAssigned') })}
           </div>
           {usePersonaSelect ? (
@@ -531,7 +538,7 @@ export default function StageContextMenu({
               value={selectedPersona}
               onChange={(e) => setSelectedPersona(e.target.value)}
               placeholder={personasLoading ? t('board.loadingAgents') : 'developer'}
-              className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#6e7681] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#161b22] font-mono transition"
+              className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#52525b] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#17171b] font-mono transition"
             />
           )}
           {usePersonaSelect && isNewAgentSelected && (
@@ -542,7 +549,7 @@ export default function StageContextMenu({
                 value={newAgentName}
                 onChange={(e) => setNewAgentName(e.target.value)}
                 placeholder={t('board.newAgentNamePlaceholder')}
-                className="mt-1.5 w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#6e7681] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#161b22] font-mono transition"
+                className="mt-1.5 w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#52525b] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#17171b] font-mono transition"
               />
               {newAgentName.trim() !== '' ? (
                 <div className="mt-1 text-[10px] font-mono text-[#8f8f8f]">
@@ -568,7 +575,7 @@ export default function StageContextMenu({
             <button
               type="button"
               onClick={() => setMode('main')}
-              className="px-2.5 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] transition cursor-pointer"
+              className="px-2.5 py-1.5 rounded-md bg-white dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] transition cursor-pointer"
             >
               {t('common.back')}
             </button>
@@ -576,7 +583,7 @@ export default function StageContextMenu({
               type="button"
               disabled={personaSaving || personasLoading}
               onClick={() => void handleSavePersona()}
-              className="px-3 py-1.5 rounded-md bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-default border border-transparent dark:border-[#30363d]"
+              className="px-3 py-1.5 rounded-md bg-[#171717] dark:bg-[#232328] hover:bg-[#262626] dark:hover:bg-[#2c2c33] text-white font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-default border border-transparent dark:border-[#2c2c33]"
             >
               {t('common.save')}
             </button>
@@ -586,11 +593,16 @@ export default function StageContextMenu({
 
       {mode === 'script' && (
         <div className="px-3 py-2">
-          <div className="text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">
-            {scriptType === 'on_enter' ? t('columnMenu.enterScript') : t('columnMenu.leaveScript')}
+          <div className="text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1 flex items-center gap-1.5">
+            {scriptType === 'on_enter' ? (
+              <ArrowRightToLine className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 stroke-[2.2]" />
+            ) : (
+              <ArrowRightFromLine className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0 stroke-[2.2]" />
+            )}
+            <span>{scriptType === 'on_enter' ? t('columnMenu.enterScript') : t('columnMenu.leaveScript')}</span>
           </div>
           <div
-            className="mb-1.5 text-[#8f8f8f] dark:text-[#8b949e] truncate font-mono text-[10px]"
+            className="mb-1.5 text-[#8f8f8f] dark:text-[#71717a] truncate font-mono text-[10px]"
             title={(scriptType === 'on_enter' ? currentEnterScript : currentLeaveScript) || t('columnMenu.notSet')}
           >
             {t('columnMenu.currentScript', {
@@ -609,9 +621,9 @@ export default function StageContextMenu({
               }
             }}
             placeholder="scripts/setup.bat, .py, .ps1, .sh"
-            className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#6e7681] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#161b22] font-mono text-xs transition"
+            className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#52525b] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#17171b] font-mono text-xs transition"
           />
-          <div className="mt-1 text-[10px] text-[#8f8f8f] dark:text-[#8b949e]">
+          <div className="mt-1 text-[10px] text-[#8f8f8f] dark:text-[#71717a]">
             {scriptType === 'on_enter' ? t('columnMenu.enterScriptHint') : t('columnMenu.leaveScriptHint')}
           </div>
           {scriptError && (
@@ -623,7 +635,7 @@ export default function StageContextMenu({
             <button
               type="button"
               onClick={() => setMode('main')}
-              className="px-2.5 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] transition cursor-pointer"
+              className="px-2.5 py-1.5 rounded-md bg-white dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] transition cursor-pointer"
             >
               {t('common.back')}
             </button>
@@ -631,7 +643,7 @@ export default function StageContextMenu({
               type="button"
               disabled={scriptSaving}
               onClick={() => void handleSaveScript()}
-              className="px-3 py-1.5 rounded-md bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-default border border-transparent dark:border-[#30363d]"
+              className="px-3 py-1.5 rounded-md bg-[#171717] dark:bg-[#232328] hover:bg-[#262626] dark:hover:bg-[#2c2c33] text-white font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-default border border-transparent dark:border-[#2c2c33]"
             >
               {t('common.save')}
             </button>

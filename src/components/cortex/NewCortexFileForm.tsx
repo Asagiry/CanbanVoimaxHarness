@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ArrowRightToLine, ArrowRightFromLine } from 'lucide-react';
 import { useCortexStore, cortexAgentDir, previewCortexFileName } from '../../stores/cortexStore';
 import type { CortexHookExt, CortexHookMoment } from '../../stores/cortexStore';
 import type { CortexAgentStage } from '../../types';
@@ -107,8 +108,8 @@ export function NewCortexFileForm({
   };
 
   return (
-    <div className="mx-1 mb-1 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] px-2 py-2 space-y-2">
-      <div className="text-[11px] font-sans font-semibold text-[#171717] dark:text-[#f0f6fc]">
+    <div className="mx-1 mb-1 rounded-md border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#17171b] px-2 py-2 space-y-2">
+      <div className="text-[11px] font-sans font-semibold text-[#171717] dark:text-[#f4f4f5]">
         {kind === 'hook' ? t('cortex.newHook') : t('cortex.newRule')}
       </div>
 
@@ -125,21 +126,21 @@ export function NewCortexFileForm({
         }}
         placeholder={kind === 'rule' ? t('cortex.ruleFileNamePlaceholder') : t('cortex.hookFileNamePlaceholder')}
         autoFocus
-        className="w-full px-2 py-1 text-xs rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] font-mono placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] transition"
+        className="w-full px-2 py-1 text-xs rounded-md bg-white dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] font-mono placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] transition"
       />
-      <div className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e]">
+      <div className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a]">
         {t('cortex.fileNamingHint')}
       </div>
 
       {!fixedKind && (
-        <div className="flex items-center gap-3 text-[11px] font-mono text-[#4d4d4d] dark:text-[#c9d1d9]">
+        <div className="flex items-center gap-3 text-[11px] font-mono text-[#4d4d4d] dark:text-[#a1a1aa]">
           <label className="flex items-center gap-1 cursor-pointer">
             <input
               type="radio"
               name={`cortex-kind-${stage.stageId}`}
               checked={kind === 'rule'}
               onChange={() => setKind('rule')}
-              className="accent-[#171717] dark:accent-[#f0f6fc]"
+              className="accent-[#171717] dark:accent-[#f4f4f5]"
             />
             <span>{t('cortex.rule')}</span>
           </label>
@@ -149,7 +150,7 @@ export function NewCortexFileForm({
               name={`cortex-kind-${stage.stageId}`}
               checked={kind === 'hook'}
               onChange={() => setKind('hook')}
-              className="accent-[#171717] dark:accent-[#f0f6fc]"
+              className="accent-[#171717] dark:accent-[#f4f4f5]"
             />
             <span>{t('cortex.hook')}</span>
           </label>
@@ -157,16 +158,17 @@ export function NewCortexFileForm({
       )}
 
       {kind === 'hook' && (
-        <div className="space-y-1.5 rounded-md bg-[#f9f9f9] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] px-2 py-1.5">
-          <div className="flex items-center gap-3 text-[11px] font-mono text-[#4d4d4d] dark:text-[#c9d1d9]">
+        <div className="space-y-1.5 rounded-md bg-[#f9f9f9] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] px-2 py-1.5">
+          <div className="flex items-center gap-3 text-[11px] font-mono text-[#4d4d4d] dark:text-[#a1a1aa]">
             <label className="flex items-center gap-1 cursor-pointer">
               <input
                 type="radio"
                 name={`cortex-moment-${stage.stageId}`}
                 checked={hookMoment === 'on_enter'}
                 onChange={() => setHookMoment('on_enter')}
-                className="accent-[#171717] dark:accent-[#f0f6fc]"
+                className="accent-[#171717] dark:accent-[#f4f4f5]"
               />
+              <ArrowRightToLine className="h-3 w-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span>on_enter</span>
             </label>
             <label className="flex items-center gap-1 cursor-pointer">
@@ -175,17 +177,18 @@ export function NewCortexFileForm({
                 name={`cortex-moment-${stage.stageId}`}
                 checked={hookMoment === 'on_leave'}
                 onChange={() => setHookMoment('on_leave')}
-                className="accent-[#171717] dark:accent-[#f0f6fc]"
+                className="accent-[#171717] dark:accent-[#f4f4f5]"
               />
+              <ArrowRightFromLine className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0" />
               <span>on_leave</span>
             </label>
           </div>
-          <label className="flex items-center gap-1.5 text-[11px] font-mono text-[#4d4d4d] dark:text-[#c9d1d9]">
+          <label className="flex items-center gap-1.5 text-[11px] font-mono text-[#4d4d4d] dark:text-[#a1a1aa]">
             <span>{t('cortex.type')}</span>
             <select
               value={hookExt}
               onChange={(e) => setHookExt(e.target.value as CortexHookExt)}
-              className="px-1.5 py-0.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] font-mono text-[11px] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] cursor-pointer"
+              className="px-1.5 py-0.5 rounded-md bg-white dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] font-mono text-[11px] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] cursor-pointer"
             >
               <option value="bat">.bat</option>
               <option value="ps1">.ps1</option>
@@ -196,7 +199,7 @@ export function NewCortexFileForm({
         </div>
       )}
 
-      <div className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] truncate" title={`${targetDir}${previewName}`}>
+      <div className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a] truncate" title={`${targetDir}${previewName}`}>
         {targetDir}{previewName}
       </div>
 
@@ -215,7 +218,7 @@ export function NewCortexFileForm({
         <button
           onClick={onClose}
           disabled={isSaving}
-          className="px-2.5 py-1 rounded-md text-[11px] font-mono bg-white dark:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#4d4d4d] dark:text-[#c9d1d9] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#30363d] transition cursor-pointer disabled:opacity-50"
+          className="px-2.5 py-1 rounded-md text-[11px] font-mono bg-white dark:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] text-[#4d4d4d] dark:text-[#a1a1aa] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#2c2c33] transition cursor-pointer disabled:opacity-50"
         >
           {t('common.cancel')}
         </button>

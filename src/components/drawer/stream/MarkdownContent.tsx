@@ -16,20 +16,20 @@ export function renderInlineNodes(nodes: InlineNode[], prefix: string): React.Re
         return (
           <code
             key={key}
-            className="px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] font-mono text-[13px]"
+            className="px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] font-mono text-[13px] break-all"
           >
             {node.text}
           </code>
         );
       case 'bold':
         return (
-          <strong key={key} className="font-semibold text-[#171717] dark:text-[#f0f6fc]">
+          <strong key={key} className="font-semibold text-[#171717] dark:text-[#f4f4f5]">
             {renderInlineNodes(node.children, `${key}-b`)}
           </strong>
         );
       case 'italic':
         return (
-          <em key={key} className="italic text-[#171717] dark:text-[#f0f6fc]">
+          <em key={key} className="italic text-[#171717] dark:text-[#f4f4f5]">
             {renderInlineNodes(node.children, `${key}-i`)}
           </em>
         );
@@ -97,16 +97,16 @@ function CodeBlock({
     <div
       className={
         unfinished
-          ? 'my-2.5 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] overflow-hidden font-mono text-[13px]'
-          : 'my-2.5 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22] overflow-hidden font-mono text-[13px]'
+          ? 'my-2.5 w-full max-w-full rounded-md border border-[#ebebeb] dark:border-[#212126] bg-[#fafafa] dark:bg-[#111114] overflow-hidden font-mono text-[13px]'
+          : 'my-2.5 w-full max-w-full rounded-md border border-[#ebebeb] dark:border-[#2c2c33] bg-[#fafafa] dark:bg-[#17171b] overflow-hidden font-mono text-[13px]'
       }
     >
       {(language || unfinished) ? (
         <div
           className={
             unfinished
-              ? 'px-3 py-1 bg-[#f4f4f5] dark:bg-[#161b22] border-b border-[#ebebeb] dark:border-[#21262d] text-xs text-[#666666] dark:text-[#8b949e] font-medium flex justify-between items-center'
-              : 'px-3 py-1 bg-[#f4f4f5] dark:bg-[#0d1117] border-b border-[#ebebeb] dark:border-[#30363d] text-xs text-[#666666] dark:text-[#8b949e] font-medium flex justify-between items-center'
+              ? 'px-3 py-1 bg-[#f4f4f5] dark:bg-[#17171b] border-b border-[#ebebeb] dark:border-[#212126] text-xs text-[#666666] dark:text-[#71717a] font-medium flex justify-between items-center'
+              : 'px-3 py-1 bg-[#f4f4f5] dark:bg-[#111114] border-b border-[#ebebeb] dark:border-[#2c2c33] text-xs text-[#666666] dark:text-[#71717a] font-medium flex justify-between items-center'
           }
         >
           <span>{language || (unfinished ? 'streaming...' : '')}</span>
@@ -114,7 +114,7 @@ function CodeBlock({
             type="button"
             onClick={handleCopy}
             aria-label="Copy code block"
-            className="flex items-center space-x-1 p-0.5 text-[11px] text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] transition cursor-pointer"
+            className="flex items-center space-x-1 p-0.5 text-[11px] text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] transition cursor-pointer"
           >
             {copied ? (
               <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
@@ -124,12 +124,12 @@ function CodeBlock({
           </button>
         </div>
       ) : (
-        <div className="px-3 py-1 bg-[#f4f4f5] dark:bg-[#0d1117] border-b border-[#ebebeb] dark:border-[#30363d] text-xs text-[#666666] dark:text-[#8b949e] font-medium flex justify-end items-center">
+        <div className="px-3 py-1 bg-[#f4f4f5] dark:bg-[#111114] border-b border-[#ebebeb] dark:border-[#2c2c33] text-xs text-[#666666] dark:text-[#71717a] font-medium flex justify-end items-center">
           <button
             type="button"
             onClick={handleCopy}
             aria-label="Copy code block"
-            className="flex items-center space-x-1 p-0.5 text-[11px] text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] transition cursor-pointer"
+            className="flex items-center space-x-1 p-0.5 text-[11px] text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] transition cursor-pointer"
           >
             {copied ? (
               <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
@@ -139,7 +139,7 @@ function CodeBlock({
           </button>
         </div>
       )}
-      <pre className="p-3 text-[#171717] dark:text-[#f0f6fc] overflow-x-auto leading-relaxed select-text font-mono text-[13px]">
+      <pre className="p-3 text-[#171717] dark:text-[#f4f4f5] overflow-x-auto leading-relaxed select-text font-mono text-[13px]">
         {code}
       </pre>
     </div>
@@ -162,7 +162,7 @@ export function MarkdownContent({
   const tokens = useMemo(() => parseMarkdownTokens(content ?? ''), [content]);
 
   return (
-    <div className="space-y-1 select-text font-sans">
+    <div className="space-y-1 select-text font-sans break-words [overflow-wrap:anywhere] min-w-0">
       {tokens.map((token, index) => {
         switch (token.type) {
           case 'code':
@@ -179,7 +179,7 @@ export function MarkdownContent({
             return (
               <div
                 key={`table-${index}`}
-                className="my-2 overflow-x-auto rounded-md border border-[#ebebeb] dark:border-[#21262d]"
+                className="my-2 w-full max-w-full overflow-x-auto rounded-md border border-[#ebebeb] dark:border-[#212126]"
               >
                 <table className="w-full border-collapse text-[13px] font-mono tabular-nums">
                   <thead>
@@ -188,7 +188,7 @@ export function MarkdownContent({
                         <th
                           key={k}
                           style={{ textAlign: token.aligns[k] }}
-                          className="border border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#161b22] px-2 py-1.5 font-semibold text-[#171717] dark:text-[#f0f6fc]"
+                          className="border border-[#ebebeb] dark:border-[#212126] bg-[#f9f9f9] dark:bg-[#17171b] px-2 py-1.5 font-semibold text-[#171717] dark:text-[#f4f4f5]"
                         >
                           {formatInline(cell, `th-${index}-${k}`)}
                         </th>
@@ -202,7 +202,7 @@ export function MarkdownContent({
                           <td
                             key={k}
                             style={{ textAlign: token.aligns[k] }}
-                            className="border border-[#ebebeb] dark:border-[#21262d] px-2 py-1.5 text-[#171717] dark:text-[#f0f6fc]"
+                            className="border border-[#ebebeb] dark:border-[#212126] px-2 py-1.5 text-[#171717] dark:text-[#f4f4f5]"
                           >
                             {formatInline(cell, `td-${index}-${r}-${k}`)}
                           </td>
@@ -215,13 +215,13 @@ export function MarkdownContent({
             );
 
           case 'hr':
-            return <hr key={`hr-${index}`} className="border-[#ebebeb] dark:border-[#21262d] my-2.5" />;
+            return <hr key={`hr-${index}`} className="border-[#ebebeb] dark:border-[#212126] my-2.5" />;
 
           case 'blockquote':
             return (
               <blockquote
                 key={`quote-${index}`}
-                className="my-2 border-l-2 border-[#7c3aed]/50 bg-[#f9f9fb] dark:bg-[#161b22]/40 rounded-r-md px-3.5 py-2 text-sm italic text-[#666666] dark:text-[#8b949e] space-y-1"
+                className="my-2 border-l-2 border-[#7c3aed]/50 bg-[#f9f9fb] dark:bg-[#17171b]/40 rounded-r-md px-3.5 py-2 text-sm italic text-[#666666] dark:text-[#71717a] space-y-1"
               >
                 {token.lines.map((ql, qIdx) => (
                   <div key={qIdx} className="leading-relaxed">
@@ -236,7 +236,7 @@ export function MarkdownContent({
               <div
                 key={`img-${index}`}
                 onClick={() => handleImageClick?.(token.src, token.alt)}
-                className="my-2 rounded-lg overflow-hidden border border-[#ebebeb] dark:border-[#21262d] max-w-lg bg-[#f4f4f5] dark:bg-[#161b22] shadow-xs group cursor-zoom-in"
+                className="my-2 rounded-lg overflow-hidden border border-[#ebebeb] dark:border-[#212126] max-w-full max-w-lg bg-[#f4f4f5] dark:bg-[#17171b] shadow-xs group cursor-zoom-in"
               >
                 <img
                   src={token.src}
@@ -249,34 +249,34 @@ export function MarkdownContent({
           case 'heading': {
             if (token.level === 6) {
               return (
-                <h6 key={`h6-${index}`} className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] mt-2 mb-1 first:mt-0">
+                <h6 key={`h6-${index}`} className="text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] mt-2 mb-1 first:mt-0">
                   {formatInline(token.text, `h6-${index}`)}
                 </h6>
               );
             }
             if (token.level === 5) {
               return (
-                <h5 key={`h5-${index}`} className="text-[13px] md:text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] mt-2 mb-1 first:mt-0">
+                <h5 key={`h5-${index}`} className="text-[13px] md:text-sm font-semibold text-[#171717] dark:text-[#f4f4f5] mt-2 mb-1 first:mt-0">
                   {formatInline(token.text, `h5-${index}`)}
                 </h5>
               );
             }
             if (token.level === 4) {
               return (
-                <h4 key={`h4-${index}`} className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] mt-2.5 mb-1 first:mt-0">
+                <h4 key={`h4-${index}`} className="text-sm font-semibold text-[#171717] dark:text-[#f4f4f5] mt-2.5 mb-1 first:mt-0">
                   {formatInline(token.text, `h4-${index}`)}
                 </h4>
               );
             }
             if (token.level === 3) {
               return (
-                <h3 key={`h3-${index}`} className="text-sm md:text-base font-semibold text-[#171717] dark:text-[#f0f6fc] mt-3 mb-1 first:mt-0">
+                <h3 key={`h3-${index}`} className="text-sm md:text-base font-semibold text-[#171717] dark:text-[#f4f4f5] mt-3 mb-1 first:mt-0">
                   {formatInline(token.text, `h3-${index}`)}
                 </h3>
               );
             }
             return (
-              <h2 key={`h2-${index}`} className="text-base md:text-lg font-bold text-[#171717] dark:text-[#f0f6fc] mt-3.5 mb-1.5 first:mt-0">
+              <h2 key={`h2-${index}`} className="text-base md:text-lg font-bold text-[#171717] dark:text-[#f4f4f5] mt-3.5 mb-1.5 first:mt-0">
                 {formatInline(token.text, `h2-${index}`)}
               </h2>
             );
@@ -285,8 +285,8 @@ export function MarkdownContent({
           case 'numbered': {
             const mlClass = token.indent >= 4 ? 'ml-8' : token.indent >= 2 ? 'ml-6' : 'ml-4';
             return (
-              <div key={`num-${index}`} className={`${mlClass} text-sm leading-relaxed text-[#171717] dark:text-[#f0f6fc] flex items-start gap-1.5`}>
-                <span className="font-semibold text-[#171717] dark:text-[#f0f6fc] select-none shrink-0 font-mono text-[13px]">
+              <div key={`num-${index}`} className={`${mlClass} text-sm leading-relaxed text-[#171717] dark:text-[#f4f4f5] flex items-start gap-1.5`}>
+                <span className="font-semibold text-[#171717] dark:text-[#f4f4f5] select-none shrink-0 font-mono text-[13px]">
                   {token.number}
                 </span>
                 <span className="flex-1 min-w-0">{formatInline(token.text, `num-${index}`)}</span>
@@ -306,11 +306,11 @@ export function MarkdownContent({
                     <Check className="w-2.5 h-2.5 stroke-[3]" />
                   </span>
                 ) : (
-                  <span className="w-4 h-4 rounded border border-[#d4d4d8] dark:border-[#30363d] bg-transparent shrink-0 mt-0.5 select-none" />
+                  <span className="w-4 h-4 rounded border border-[#d4d4d8] dark:border-[#2c2c33] bg-transparent shrink-0 mt-0.5 select-none" />
                 )}
                 <span
                   className={`flex-1 min-w-0 ${
-                    token.checked ? 'line-through text-[#71717a] dark:text-[#8b949e]' : 'text-[#171717] dark:text-[#f0f6fc]'
+                    token.checked ? 'line-through text-[#71717a] dark:text-[#71717a]' : 'text-[#171717] dark:text-[#f4f4f5]'
                   }`}
                 >
                   {formatInline(token.text, `task-${index}`)}
@@ -322,8 +322,8 @@ export function MarkdownContent({
           case 'bullet': {
             const mlClass = token.indent >= 4 ? 'ml-8' : token.indent >= 2 ? 'ml-6' : 'ml-4';
             return (
-              <div key={`bullet-${index}`} className={`${mlClass} text-sm leading-relaxed text-[#171717] dark:text-[#f0f6fc] flex items-start gap-2`}>
-                <span className="text-[#666666] dark:text-[#8b949e] select-none shrink-0 leading-relaxed">•</span>
+              <div key={`bullet-${index}`} className={`${mlClass} text-sm leading-relaxed text-[#171717] dark:text-[#f4f4f5] flex items-start gap-2`}>
+                <span className="text-[#666666] dark:text-[#71717a] select-none shrink-0 leading-relaxed">•</span>
                 <span className="flex-1 min-w-0">{formatInline(token.text, `bullet-${index}`)}</span>
               </div>
             );
@@ -335,7 +335,7 @@ export function MarkdownContent({
           case 'paragraph':
           default:
             return (
-              <p key={`p-${index}`} className="text-sm leading-relaxed text-[#171717] dark:text-[#f0f6fc]">
+              <p key={`p-${index}`} className="text-sm leading-relaxed text-[#171717] dark:text-[#f4f4f5] break-words">
                 {formatInline(token.text, `p-${index}`)}
               </p>
             );

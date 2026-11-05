@@ -138,9 +138,9 @@ export const StageDurationsPopover = memo(function StageDurationsPopover({
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       style={{ top: `${pos.top}px`, left: `${pos.left}px`, width: `${POPOVER_WIDTH}px` }}
-      className="fixed z-50 bg-[#161b22] border border-[#30363d] text-[#c9d1d9] rounded-lg shadow-xl p-2.5 text-xs font-sans pointer-events-auto select-none transition-opacity duration-150 animate-in fade-in"
+      className="fixed z-50 bg-[#17171b] border border-[#2c2c33] text-[#a1a1aa] rounded-lg shadow-xl p-2.5 text-xs font-sans pointer-events-auto select-none transition-opacity duration-150 animate-in fade-in"
     >
-      <div className="text-[10px] font-semibold text-[#8b949e] uppercase tracking-wider mb-2">
+      <div className="text-[10px] font-semibold text-[#71717a] uppercase tracking-wider mb-2">
         {t('card.stageDurationsTitle')}
       </div>
       <div className="space-y-1">
@@ -150,9 +150,9 @@ export const StageDurationsPopover = memo(function StageDurationsPopover({
               {st.isRunning ? (
                 <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e] animate-pulse shrink-0" />
               ) : (
-                <span className="h-1.5 w-1.5 rounded-full bg-[#484f58] shrink-0" />
+                <span className="h-1.5 w-1.5 rounded-full bg-[#3a3a44] shrink-0" />
               )}
-              <span className="truncate max-w-[130px] text-[#e6edf3] font-medium" title={st.title}>
+              <span className="truncate max-w-[130px] text-[#f4f4f5] font-medium" title={st.title}>
                 {st.title}
               </span>
             </div>
@@ -162,10 +162,10 @@ export const StageDurationsPopover = memo(function StageDurationsPopover({
           </div>
         ))}
       </div>
-      <div className="my-1.5 border-t border-[#30363d]" />
+      <div className="my-1.5 border-t border-[#2c2c33]" />
       <div className="flex items-center justify-between text-xs pt-0.5">
-        <span className="text-[#8b949e] font-medium">{t('card.totalActiveTime')}</span>
-        <span className="font-mono font-semibold tabular-nums text-[#e6edf3]">
+        <span className="text-[#71717a] font-medium">{t('card.totalActiveTime')}</span>
+        <span className="font-mono font-semibold tabular-nums text-[#f4f4f5]">
           {formatTimerMMSS(totalActiveSec)}
         </span>
       </div>

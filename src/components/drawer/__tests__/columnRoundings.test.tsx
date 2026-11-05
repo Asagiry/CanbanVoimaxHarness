@@ -145,7 +145,7 @@ describe('Column Roundings and Visible Endings Invariant', () => {
 
     // Assert full rounded corners, full border, and balanced vertical margin
     expect(html).toContain('rounded-xl');
-    expect(html).toContain('border border-[#ebebeb] dark:border-[#21262d]');
+    expect(html).toContain('border border-[#ebebeb] dark:border-[#212126]');
     expect(html).toContain('my-1.5 ml-1.5');
     expect(html).toContain('h-[calc(100%-0.75rem)]');
 
@@ -167,7 +167,7 @@ describe('Column Roundings and Visible Endings Invariant', () => {
 
     // Assert full rounded corners, full border, and balanced vertical margin
     expect(html).toContain('rounded-xl');
-    expect(html).toContain('border border-[#ebebeb] dark:border-[#21262d]');
+    expect(html).toContain('border border-[#ebebeb] dark:border-[#212126]');
     expect(html).toContain('my-1.5 mr-1.5');
     expect(html).toContain('h-[calc(100%-0.75rem)]');
 
@@ -182,7 +182,7 @@ describe('Column Roundings and Visible Endings Invariant', () => {
     const htmlDefault = renderToString(<CortexExplorer />);
 
     expect(htmlDefault).toContain('rounded-xl');
-    expect(htmlDefault).toContain('border border-[#ebebeb] dark:border-[#21262d]');
+    expect(htmlDefault).toContain('border border-[#ebebeb] dark:border-[#212126]');
     expect(htmlDefault).toContain('my-1.5 ml-1.5 mr-1.5');
     expect(htmlDefault).toContain('h-[calc(100%-0.75rem)]');
     expect(htmlDefault).not.toContain('border-r border-[#ebebeb]');
@@ -197,9 +197,9 @@ describe('Column Roundings and Visible Endings Invariant', () => {
     const html = renderToString(tree);
 
     // Central column container assertions
-    expect(html).toContain('rounded-xl border border-[#ebebeb] dark:border-[#21262d] shadow-2xs my-1.5 mx-1.5');
+    expect(html).toContain('rounded-xl border border-[#ebebeb] dark:border-[#212126] shadow-2xs my-1.5 mx-1.5');
 
     // Obsolete cut-off classes are absent
-    expect(html).not.toContain('rounded-tl-xl rounded-tr-xl border-t border-x border-[#ebebeb] dark:border-[#21262d] shadow-2xs mt-1 mx-1.5');
+    expect(html).not.toContain('rounded-tl-xl rounded-tr-xl border-t border-x border-[#ebebeb] dark:border-[#212126] shadow-2xs mt-1 mx-1.5');
   });
 });

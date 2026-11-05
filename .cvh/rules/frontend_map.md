@@ -89,6 +89,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **New Cortex File Form** | `src/components/cortex/NewCortexFileForm.tsx` | Inline form for creating new rules or personas. |
 | **Modular Rule Editor Modal** | `src/components/cortex/RuleEditorModal.tsx` | Markdown editor for `.cvh/rules/*.md` and role rules. |
 | **Cortex UI Types & Interfaces** | `src/components/cortex/types.ts` | Cortex explorer interfaces, forms, and tree nodes. |
+| **Cortex Antigravity Dark Unit Tests** | `src/components/cortex/__tests__/cortexAntigravityDark.test.ts` | Vitest suite validating 0 legacy tokens across Cortex & common components. |
 | **Dynamic Role Icon** | `src/components/common/AgentIcon.tsx` | SVG/Lucide persona icon with nominal color mapping. |
 | **Brand & File Extension Icons** | `src/components/common/BrandFileIcons.tsx` | File extension brand iconography (TS, RS, JSON, MD). |
 | **Application Error Boundary** | `src/components/common/ErrorBoundary.tsx` | React 19 error boundary preventing entire app unmount. |
@@ -103,6 +104,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Hook Moment Icon Unit Tests** | `src/components/common/__tests__/HookIcon.test.tsx` | Vitest suite for hook moment resolution and visual icon rendering. |
 | **Column Roundings Unit Tests** | `src/components/drawer/__tests__/columnRoundings.test.tsx` | Vitest suite for drawer and CortexExplorer column roundings and full borders. |
 | **Tool Time Tracking Unit Tests** | `src/stores/__tests__/toolTimeTracking.test.ts` | Vitest suite for tool execution duration, fallback, and metric tracking. |
+| **Stream Scroll Containment Unit Tests** | `src/components/drawer/stream/__tests__/streamScrollContainment.test.ts` | Vitest suite for drawer feed overflow containment, token wrapping, and card bounds. |
 | **Desktop Notifications Dispatcher** | `src/services/notificationService.ts` | Cross-platform notification dispatch & toast formatting. |
 | **Typed Tauri Event Gateway** | `src/services/tauriEventGateway.ts` | 150ms micro-batching, typed events (zero `listen<any>`).|
 | **Project Management Store** | `src/stores/projectStore.ts` | Multi-project workspace switching, active project persistence. |
