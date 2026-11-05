@@ -601,7 +601,6 @@ export default function StageContextMenu({
             )}
             <span>{scriptType === 'on_enter' ? t('columnMenu.enterScript') : t('columnMenu.leaveScript')}</span>
           </div>
-          </div>
           <div
             className="mb-1.5 text-[#8f8f8f] dark:text-[#71717a] truncate font-mono text-[10px]"
             title={(scriptType === 'on_enter' ? currentEnterScript : currentLeaveScript) || t('columnMenu.notSet')}
