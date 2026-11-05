@@ -245,6 +245,8 @@ pub enum AgentEvent {
         result: String,
         success: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        duration_ms: Option<f64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         batch: Option<serde_json::Value>,
     },
     TurnStart {
@@ -3575,6 +3577,7 @@ Messages count: {}
                     name: tc.function.name.clone(),
                     result: skip_msg.clone(),
                     success: false,
+                    duration_ms: Some(0.0),
                     batch: batch_info.clone(),
                 });
                 messages.push(ChatMessage::tool_response(tc.id.clone(), skip_msg));
@@ -3622,6 +3625,7 @@ Messages count: {}
                         name: tc.function.name.clone(),
                         result: prev.result.clone(),
                         success: true,
+                        duration_ms: Some(0.0),
                         batch: batch_info.clone(),
                     });
                     messages.push(ChatMessage::tool_response(tc.id.clone(), prev.result.clone()));
@@ -3632,12 +3636,14 @@ Messages count: {}
             let mut call_tool_ctx = tool_ctx.clone();
             call_tool_ctx.call_id = Some(&tc.id);
 
+            let tool_start = std::time::Instant::now();
             let exec_result = execute_tool(
                 &call_tool_ctx,
                 &tc.function.name,
                 &parsed_args,
             )
             .await;
+            let duration_ms = tool_start.elapsed().as_secs_f64() * 1000.0;
 
             if abort_flag.load(Ordering::SeqCst) {
                 event_sink(AgentEvent::ToolResult {
@@ -3645,6 +3651,7 @@ Messages count: {}
                     name: tc.function.name.clone(),
                     result: "Прервано пользователем".to_string(),
                     success: false,
+                    duration_ms: Some(duration_ms),
                     batch: batch_info.clone(),
                 });
                 sanitize_unclosed_tool_calls(&mut messages);
@@ -3725,6 +3732,7 @@ Messages count: {}
                 name: tc.function.name.clone(),
                 result: result_str.clone(),
                 success,
+                duration_ms: Some(duration_ms),
                 batch: batch_info.clone(),
             });
 

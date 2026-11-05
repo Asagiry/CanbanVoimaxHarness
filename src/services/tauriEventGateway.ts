@@ -55,6 +55,7 @@ export interface AgentToolResultPayload {
   result?: unknown;
   success?: boolean;
   batch?: { index: number; total: number };
+  durationMs?: number;
 }
 
 export interface QuestionOptionItem {
@@ -532,13 +533,14 @@ export function setupTauriEventGateway(): () => void {
             status: status === 'queued' ? 'queued' : 'running',
             params: parsedParams,
             batch: batch ?? undefined,
+            createdAt: Date.now(),
           });
         }
       });
 
       // 4. agent:tool_result
       await addListener('agent:tool_result', (payload) => {
-        const { taskId, id, result, success, batch } = payload || {};
+        const { taskId, id, result, success, batch, durationMs } = payload || {};
         if (!taskId) return;
         if (!isTaskActiveInDrawer(taskId)) {
           return;
@@ -551,6 +553,7 @@ export function setupTauriEventGateway(): () => void {
             stdout: success ? outStr : undefined,
             stderr: !success ? outStr : undefined,
             ...(batch ? { batch } : {}),
+            ...(typeof durationMs === 'number' && Number.isFinite(durationMs) ? { durationMs } : {}),
           });
         }
       });

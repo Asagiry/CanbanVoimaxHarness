@@ -14,7 +14,7 @@ pub struct ActivityItem {
     pub content: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool: Option<serde_json::Value>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, alias = "duration_ms", skip_serializing_if = "Option::is_none")]
     pub duration_ms: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub images: Option<Vec<String>>,

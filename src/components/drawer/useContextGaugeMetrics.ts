@@ -3,6 +3,7 @@ import { useDrawerStore, DrawerActivityItem } from '../../stores/drawerStore';
 import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import { listenToEvent } from '../../services/tauriEventGateway';
+import { computeActivityDurations } from '../../stores/drawer/drawerHelpers';
 
 export interface UseContextGaugeMetricsOptions {
   taskId: string;
@@ -96,6 +97,7 @@ export function useContextGaugeMetrics({
   const cumulativeGenerationSec = useDrawerStore((s) => s.cumulativeGenerationSec[taskId] ?? 0);
   const setTaskTokens = useDrawerStore((s) => s.setTaskTokens);
   const evaporateClientToolLogs = useDrawerStore((s) => s.evaporateClientToolLogs);
+  const isAgentRunning = useDrawerStore((s) => Boolean(s.activeAgentTaskIds[taskId] || (s.toolIdToSubagentId[taskId] && s.activeAgentTaskIds[s.toolIdToSubagentId[taskId]])));
 
   const { latestCompactedTokens, postCompactionTokens } = useMemo(() => parseCompactedFromFeed(feed), [feed]);
   const baseCompacted = tokenOverride ?? taskCurrentTokens ?? latestCompactedTokens;
@@ -276,7 +278,41 @@ export function useContextGaugeMetrics({
 
   const tpsValue = avgTps != null ? avgTps : lastTurnTps;
   const llmTimeSec = cumulativeGenerationSec + (elapsedSec ?? 0);
-  const toolTimeSec = (tools ?? []).reduce((sum, t) => sum + (t?.durationMs || 0), 0) / 1000;
+
+  const toolTimeSec = useMemo(() => {
+    let sumMs = 0;
+    const toolList = tools ?? [];
+
+    for (const t of toolList) {
+      if (!t) continue;
+      if (t.status === 'running' && t.createdAt) {
+        sumMs += Math.max(0, Date.now() - t.createdAt);
+      } else if (typeof t.durationMs === 'number' && t.durationMs > 0) {
+        sumMs += t.durationMs;
+      }
+    }
+
+    // Fallback: If tools sum is 0 (e.g. legacy tasks or before store update), calculate from activity feed
+    if (sumMs === 0 && feed && feed.length > 0) {
+      const computed = computeActivityDurations(feed, isAgentRunning);
+      for (let i = 0; i < feed.length; i++) {
+        const item = feed[i];
+        if (item && (item.type === 'tool' || item.tool)) {
+          const rawToolDur = item.tool?.durationMs ?? (item.tool as any)?.duration_ms;
+          const rawItemDur = item.durationMs ?? (item as any)?.duration_ms;
+          const dur = (typeof rawToolDur === 'number' && rawToolDur > 0)
+            ? rawToolDur
+            : (typeof rawItemDur === 'number' && rawItemDur > 0)
+              ? rawItemDur
+              : (computed[i] || 0);
+          sumMs += dur;
+        }
+      }
+    }
+
+    return sumMs / 1000;
+  }, [tools, feed, isAgentRunning]);
+
   const ttftMs = telemetry?.ttftMs ?? null;
 
   const cachedInput = telemetry?.cacheReadTokens || 0;

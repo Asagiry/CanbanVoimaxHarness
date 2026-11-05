@@ -276,45 +276,4 @@ export function filterDisplayActivities(
   return result;
 }
 
-/**
- * Pre-computes elapsed durations for activity items based on timestamps or explicit durationMs.
- */
-export function computeActivityDurations(
-  activities: DrawerActivityItem[],
-  isRunning: boolean
-): (number | undefined)[] {
-  const list = activities || [];
-  const res: (number | undefined)[] = Array.from({ length: list.length });
-  for (let i = 0; i < list.length; i++) {
-    const act = list[i];
-    if (act?.durationMs && act.durationMs > 0) {
-      res[i] = act.durationMs;
-    } else if (act?.tool?.durationMs && act.tool.durationMs > 0) {
-      res[i] = act.tool.durationMs;
-    } else {
-      const curTime = act?.timestamp ? new Date(act.timestamp).getTime() : NaN;
-      if (!isNaN(curTime) && curTime > 0) {
-        let nextTime = NaN;
-        for (let j = i + 1; j < list.length; j++) {
-          const t = list[j]?.timestamp ? new Date(list[j].timestamp).getTime() : NaN;
-          if (!isNaN(t) && t > curTime) {
-            nextTime = t;
-            break;
-          }
-        }
-        if (!isNaN(nextTime) && nextTime >= curTime) {
-          const diff = nextTime - curTime;
-          if (diff > 50 && diff < 3600000) {
-            res[i] = diff;
-          }
-        } else if (i === list.length - 1 && isRunning) {
-          const diff = Date.now() - curTime;
-          if (diff > 50 && diff < 3600000) {
-            res[i] = diff;
-          }
-        }
-      }
-    }
-  }
-  return res;
-}
+export { computeActivityDurations } from '../../../stores/drawer/drawerHelpers';
