@@ -26,7 +26,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Kanban Board Container & Drag-Drop** | `src/components/board/KanbanBoard.tsx` | Multi-column DND layout, column rendering. |
 | **Kanban Column Container** | `src/components/board/KanbanColumn.tsx` | Stage column, auto-run emitter, column settings. |
 | **Multi-Board Tab Header** | `src/components/board/BoardTabsHeader.tsx` | Multi-board tab switching, board creation modal trigger. |
-| **Stage Context Menu & Settings** | `src/components/board/StageContextMenu.tsx` | Stage settings, persona assignment, auto-run toggle. |
+| **Stage Context Menu & Settings** | `src/components/board/StageContextMenu.tsx` | Stage settings, persona assignment, entry/leave hook scripts, rename/delete. |
 | **Stage Hook & Sensor Badges** | `src/components/board/StageHookBadge.tsx` | Transition script and gatekeeper sensor status. |
 | **Column Context Menu Alias** | `src/components/board/ColumnContextMenu.tsx` | Backward-compatible alias for `StageContextMenu.tsx`. |
 | **Column Hook Badge Alias** | `src/components/board/ColumnHookBadge.tsx` | Backward-compatible alias for `StageHookBadge.tsx`. |
