@@ -15,6 +15,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Splash Bootstrap Screen** | `src/components/splash/SplashScreen.tsx` | Boot screen displayed while backend state synchronizes. |
 | **Window Titlebar & Controls** | `src/components/layout/WindowControls.tsx` | Tauri window controls (minimize, maximize, close). |
 | **Top Navigation Bar** | `src/components/layout/Topbar.tsx` | Board selector, active project, search filter. |
+| **Number Alignment Unit Tests** | `src/components/layout/__tests__/numberAlignment.test.tsx` | Vitest suite for project, board, and subagent counter baseline alignment. |
 | **Kanban Card Container & Layout** | `src/components/card/KanbanCard.tsx` | Layout coordinator (~256 lines), memoized with `areCardPropsEqual`. |
 | **Tactile Stage Stepper Navigation** | `src/components/card/CardHookNode.tsx` | 1-click stage switching, current stage pulse, checkmarks. |
 | **Card Timer & Cadence Badge** | `src/components/card/CardTimerBadge.tsx` | Execution duration, active step timer, tabular-nums. |

@@ -503,7 +503,7 @@ export default function SubagentsSidebar({
             <span className="font-sans font-semibold text-xs text-[#171717] dark:text-[#f0f6fc] tracking-tight">
               {t('subagents.title')}
             </span>
-            <span className="font-mono text-[11px] tabular-nums px-1.5 py-0.2 rounded-full bg-[#e4e4e7] dark:bg-[#21262d] text-[#52525b] dark:text-[#8b949e] font-medium">
+            <span className="inline-flex items-center justify-center font-mono text-[11px] tabular-nums px-1.5 py-0.5 rounded-full leading-none bg-[#e4e4e7] dark:bg-[#21262d] text-[#52525b] dark:text-[#8b949e] font-medium">
               {allSubagents.length}
             </span>
             {runningCount > 0 && (
@@ -537,7 +537,7 @@ export default function SubagentsSidebar({
                     <span className="text-[11px] font-mono uppercase tracking-wider text-[#71717a] dark:text-[#8b949e] font-semibold">
                       {t('subagents.boardSubtasks')}
                     </span>
-                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-[#e4e4e7] dark:bg-[#21262d] text-[#52525b] dark:text-[#8b949e] font-medium">
+                    <span className="inline-flex items-center justify-center text-[10px] font-mono tabular-nums px-1.5 py-0.5 rounded-full leading-none bg-[#e4e4e7] dark:bg-[#21262d] text-[#52525b] dark:text-[#8b949e] font-medium">
                       {boardSubtasks.length}
                     </span>
                   </div>
@@ -655,7 +655,7 @@ export default function SubagentsSidebar({
                     <span className="text-[11px] font-mono uppercase tracking-wider text-[#71717a] dark:text-[#8b949e] font-semibold">
                       {t('subagents.inProcess')}
                     </span>
-                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-[#e4e4e7] dark:bg-[#21262d] text-[#52525b] dark:text-[#8b949e] font-medium">
+                    <span className="inline-flex items-center justify-center text-[10px] font-mono tabular-nums px-1.5 py-0.5 rounded-full leading-none bg-[#e4e4e7] dark:bg-[#21262d] text-[#52525b] dark:text-[#8b949e] font-medium">
                       {inProcessSubagents.length}
                     </span>
                   </div>

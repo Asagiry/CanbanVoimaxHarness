@@ -87,7 +87,7 @@ export function AccordionFileItem({ taskId, file, isExpanded, onToggle }: Accord
           )}
 
           <span
-            className={'px-1.5 py-0.2 rounded text-[10px] font-bold border shrink-0 font-mono ' + statusColor}
+            className={'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border shrink-0 font-mono leading-none ' + statusColor}
           >
             {file.status}
           </span>

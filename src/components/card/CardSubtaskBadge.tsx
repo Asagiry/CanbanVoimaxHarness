@@ -160,7 +160,7 @@ export const CardSubtaskBadge = memo(function CardSubtaskBadge({
                   )}
                   {sub?.verdict && sub.verdict !== 'NONE' ? (
                     <span
-                      className={`px-1 py-0.2 rounded text-[9px] font-mono ${
+                      className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] font-mono leading-none ${
                         sub?.verdict === 'APPROVED'
                           ? 'bg-[#f0fdf4] dark:bg-[#161b22] text-[#15803d] dark:text-[#7ee787] border border-[#bbf7d0] dark:border-[#238636]'
                           : sub?.verdict === 'APPROVED_WITH_CAVEATS'
@@ -175,7 +175,7 @@ export const CardSubtaskBadge = memo(function CardSubtaskBadge({
                         : 'REWORK'}
                     </span>
                   ) : (
-                    <span className="px-1 py-0.2 rounded text-[9px] font-mono bg-[#f4f4f5] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] border border-[#ebebeb] dark:border-[#30363d]">
+                    <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-mono leading-none bg-[#f4f4f5] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] border border-[#ebebeb] dark:border-[#30363d]">
                       Готово
                     </span>
                   )}
