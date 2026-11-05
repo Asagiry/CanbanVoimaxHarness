@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { PipelineStage, PipelineConfig } from '../../types';
+import type { PipelineStage, PipelineConfig, HookDefinition } from '../../types';
+import { getHookScript } from '../../types';
 import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import { slugifyTitle } from '../../lib/slug';
@@ -47,17 +48,34 @@ export default function StageContextMenu({
   onDeleteStage,
   onDeleteColumn,
 }: StageContextMenuProps) {
-  const currentStage = stage ?? column!;
+  const { stages, setStages, updateStage } = useBoardStore();
+  const currentStage = stages.find((s) => s.id === (stage?.id ?? column?.id)) ?? stage ?? column!;
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
   const [mode, setMode] = useState<'main' | 'rename' | 'persona' | 'script'>('main');
   const { t } = useTranslation();
 
-  const { stages, setStages, updateStage } = useBoardStore();
   const isProtected =
     PROTECTED_STAGE_IDS.has(currentStage.id) ||
     Boolean(currentStage.isIntake) ||
     Boolean(currentStage.terminal);
+
+  const canChangeAgent =
+    currentStage.id !== 'backlog' &&
+    currentStage.id !== 'ready' &&
+    !currentStage.isIntake &&
+    !currentStage.terminal;
+
+  const enterHookDef =
+    currentStage.hooks?.['on_enter'] ??
+    (currentStage.onEnterScript ? { script: currentStage.onEnterScript } : undefined);
+  const leaveHookDef =
+    currentStage.hooks?.['on_leave'] ??
+    currentStage.hooks?.['on_exit'] ??
+    currentStage.hooks?.['on_finish'];
+
+  const currentEnterScript = getHookScript(enterHookDef) ?? '';
+  const currentLeaveScript = getHookScript(leaveHookDef) ?? '';
 
   // Переименование
   const [draftTitle, setDraftTitle] = useState(currentStage.title);
@@ -65,7 +83,8 @@ export default function StageContextMenu({
   const [renameSaving, setRenameSaving] = useState(false);
 
   // Скрипт перехода
-  const [draftScript, setDraftScript] = useState(currentStage.onEnterScript ?? '');
+  const [scriptType, setScriptType] = useState<'on_enter' | 'on_leave'>('on_enter');
+  const [draftScript, setDraftScript] = useState('');
   const [scriptError, setScriptError] = useState<string | null>(null);
   const [scriptSaving, setScriptSaving] = useState(false);
 
@@ -289,8 +308,8 @@ export default function StageContextMenu({
 
   const handleSaveScript = async () => {
     const trimmed = draftScript.trim();
-    const nextScript = trimmed.length > 0 ? trimmed : undefined;
-    if (nextScript === (currentStage.onEnterScript ?? undefined)) {
+    const currentVal = scriptType === 'on_enter' ? currentEnterScript : currentLeaveScript;
+    if (trimmed === currentVal) {
       setMode('main');
       return;
     }
@@ -298,10 +317,43 @@ export default function StageContextMenu({
     setScriptError(null);
     setScriptSaving(true);
     const prev = stages;
-    const next = prev.map((c) => (c.id === currentStage.id ? { ...c, onEnterScript: nextScript } : c));
+
+    const existingHooks = { ...currentStage.hooks };
+    const updatedHooks: Record<string, HookDefinition> = { ...existingHooks };
+    let updatedOnEnterScript: string | null | undefined = currentStage.onEnterScript;
+
+    if (scriptType === 'on_enter') {
+      if (trimmed) {
+        const existingEnter = existingHooks['on_enter'];
+        const desc = typeof existingEnter === 'object' && existingEnter !== null ? existingEnter.description : undefined;
+        updatedHooks['on_enter'] = desc ? { script: trimmed, description: desc } : { script: trimmed };
+        updatedOnEnterScript = trimmed;
+      } else {
+        delete updatedHooks['on_enter'];
+        updatedOnEnterScript = null;
+      }
+    } else {
+      if (trimmed) {
+        const existingLeave = existingHooks['on_leave'] ?? existingHooks['on_exit'] ?? existingHooks['on_finish'];
+        const desc = typeof existingLeave === 'object' && existingLeave !== null ? existingLeave.description : undefined;
+        updatedHooks['on_leave'] = desc ? { script: trimmed, description: desc } : { script: trimmed };
+      } else {
+        delete updatedHooks['on_leave'];
+      }
+      delete updatedHooks['on_exit'];
+      delete updatedHooks['on_finish'];
+    }
+
+    const finalHooks = Object.keys(updatedHooks).length > 0 ? updatedHooks : undefined;
+    const updatedFields: Partial<PipelineStage> = {
+      hooks: finalHooks,
+      ...(scriptType === 'on_enter' ? { onEnterScript: updatedOnEnterScript } : {}),
+    };
+
+    const next = prev.map((c) => (c.id === currentStage.id ? { ...c, ...updatedFields } : c));
     setStages(next);
     if (updateStage) {
-      await updateStage(currentStage.id, { onEnterScript: nextScript });
+      await updateStage(currentStage.id, updatedFields);
     }
     const saved = await savePipelineConfig(next);
     setScriptSaving(false);
@@ -345,25 +397,51 @@ export default function StageContextMenu({
           >
             {t('columnMenu.rename')}
           </button>
+          {canChangeAgent && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => setMode('persona')}
+              className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer"
+            >
+              {t('columnMenu.changeAgent')}
+            </button>
+          )}
           <button
             type="button"
             role="menuitem"
-            onClick={() => setMode('persona')}
-            className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer"
+            onClick={() => {
+              setDraftScript(currentEnterScript);
+              setScriptType('on_enter');
+              setScriptError(null);
+              setMode('script');
+            }}
+            className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer flex items-center justify-between"
           >
-            {t('columnMenu.changeAgent')}
+            <span>{t('columnMenu.enterScript')}</span>
+            {currentEnterScript && (
+              <span className="ml-2 font-mono text-[10px] text-[#8f8f8f] dark:text-[#8b949e] truncate max-w-[120px]">
+                {currentEnterScript.split(/[\\/]/).pop()}
+              </span>
+            )}
           </button>
           <button
             type="button"
             role="menuitem"
             onClick={() => {
-              setDraftScript(currentStage.onEnterScript ?? '');
+              setDraftScript(currentLeaveScript);
+              setScriptType('on_leave');
               setScriptError(null);
               setMode('script');
             }}
-            className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer"
+            className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer flex items-center justify-between"
           >
-            {t('columnMenu.transitionScript')}
+            <span>{t('columnMenu.leaveScript')}</span>
+            {currentLeaveScript && (
+              <span className="ml-2 font-mono text-[10px] text-[#8f8f8f] dark:text-[#8b949e] truncate max-w-[120px]">
+                {currentLeaveScript.split(/[\\/]/).pop()}
+              </span>
+            )}
           </button>
           <div className="my-1 border-t border-[#ebebeb] dark:border-[#21262d]" />
           <button
@@ -508,12 +586,16 @@ export default function StageContextMenu({
 
       {mode === 'script' && (
         <div className="px-3 py-2">
-          <div className="text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">{t('columnMenu.transitionScript')}</div>
+          <div className="text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">
+            {scriptType === 'on_enter' ? t('columnMenu.enterScript') : t('columnMenu.leaveScript')}
+          </div>
           <div
             className="mb-1.5 text-[#8f8f8f] dark:text-[#8b949e] truncate font-mono text-[10px]"
-            title={currentStage.onEnterScript ?? t('columnMenu.notSet')}
+            title={(scriptType === 'on_enter' ? currentEnterScript : currentLeaveScript) || t('columnMenu.notSet')}
           >
-            {t('columnMenu.currentScript', { script: currentStage.onEnterScript ?? t('columnMenu.notSet') })}
+            {t('columnMenu.currentScript', {
+              script: (scriptType === 'on_enter' ? currentEnterScript : currentLeaveScript) || t('columnMenu.notSet'),
+            })}
           </div>
           <input
             type="text"
@@ -530,7 +612,7 @@ export default function StageContextMenu({
             className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#6e7681] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#161b22] font-mono text-xs transition"
           />
           <div className="mt-1 text-[10px] text-[#8f8f8f] dark:text-[#8b949e]">
-            {t('columnMenu.scriptHint')}
+            {scriptType === 'on_enter' ? t('columnMenu.enterScriptHint') : t('columnMenu.leaveScriptHint')}
           </div>
           {scriptError && (
             <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
@@ -559,5 +641,8 @@ export default function StageContextMenu({
     </div>
   );
 
+  if (typeof document === 'undefined') {
+    return menu;
+  }
   return createPortal(menu, document.body);
 }
