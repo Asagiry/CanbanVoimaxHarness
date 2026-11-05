@@ -38,11 +38,23 @@ fn run_encoded_powershell(encoded: &str) -> std::io::Result<std::process::Output
 
 /// Resolves the dedicated local cache directory for CVH notification assets.
 pub fn get_cache_directory() -> Option<PathBuf> {
-    let base = std::env::var("LOCALAPPDATA").or_else(|_| std::env::var("APPDATA"))
-        .map(PathBuf::from).unwrap_or_else(|_| std::env::temp_dir());
-    let dir = base.join("com.voimax.cvh");
-    let _ = std::fs::create_dir_all(&dir);
-    Some(dir)
+    #[cfg(test)]
+    {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("tmp")
+            .join("notification_cache");
+        let _ = std::fs::create_dir_all(&dir);
+        Some(dir)
+    }
+    #[cfg(not(test))]
+    {
+        let base = std::env::var("LOCALAPPDATA").or_else(|_| std::env::var("APPDATA"))
+            .map(PathBuf::from).unwrap_or_else(|_| std::env::temp_dir());
+        let dir = base.join("com.voimax.cvh");
+        let _ = std::fs::create_dir_all(&dir);
+        Some(dir)
+    }
 }
 
 fn ensure_cached_asset(name: &str, bytes: &[u8]) -> Option<PathBuf> {
@@ -54,8 +66,16 @@ fn ensure_cached_asset(name: &str, bytes: &[u8]) -> Option<PathBuf> {
     };
     if needs_write {
         if let Err(e) = std::fs::write(&icon_path, bytes) {
-            eprintln!("[Notification] Failed to cache {}: {}", name, e);
-            return None;
+            eprintln!("[Notification] Failed to cache {} at {:?}: {}", name, icon_path, e);
+            // Fallback to temp_dir if LocalAppData is not writable (e.g. sandbox/permissions)
+            let fallback_dir = std::env::temp_dir().join("com.voimax.cvh");
+            let _ = std::fs::create_dir_all(&fallback_dir);
+            let fallback_path = fallback_dir.join(name);
+            if let Err(e2) = std::fs::write(&fallback_path, bytes) {
+                eprintln!("[Notification] Fallback cache failed for {} at {:?}: {}", name, fallback_path, e2);
+                return None;
+            }
+            return Some(fallback_path);
         }
     }
     Some(icon_path)
