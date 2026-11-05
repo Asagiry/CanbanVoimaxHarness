@@ -387,6 +387,8 @@ static QUESTION_TEST_MUTEX: std::sync::LazyLock<tokio::sync::Mutex<()>> = std::s
             position: Some(0.0),
             hook_states: None,
             project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
         };
 
         let task2 = Task {
@@ -419,6 +421,8 @@ static QUESTION_TEST_MUTEX: std::sync::LazyLock<tokio::sync::Mutex<()>> = std::s
             position: Some(1.0),
             hook_states: None,
             project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
         };
 
         crate::db::db_upsert_task(&base, &task1).expect("upsert task1");
@@ -508,6 +512,8 @@ static QUESTION_TEST_MUTEX: std::sync::LazyLock<tokio::sync::Mutex<()>> = std::s
             position: Some(0.0),
             hook_states: None,
             project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
         };
         crate::db::db_upsert_task(&base, &task).expect("upsert task");
 

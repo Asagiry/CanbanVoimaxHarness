@@ -14,7 +14,7 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
                     custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
                     handover_summary, cover_image, priority, current_tokens, skip_worktree,
                     created_at, updated_at, attachments, tags, position, hook_states, completed_at,
-                    stage_entered_at
+                    stage_entered_at, stage_durations, total_elapsed
              FROM tasks
              ORDER BY position ASC, created_at ASC",
         )
@@ -49,13 +49,15 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
             let hook_states_raw: Option<String> = row.get(24).ok();
             let completed_at: Option<i64> = row.get(25).ok();
             let stage_entered_at: Option<i64> = row.get(26).ok();
+            let stage_durations_raw: Option<String> = row.get(27).ok();
+            let total_elapsed: Option<i64> = row.get(28).ok();
 
             Ok((
                 id, title, description, stage_id, board_id, worktree_path, branch, verdict,
                 custom_flow_raw, status, model, parent_id, subtask_index_i64, waiting_for_subtask_id,
                 handover_summary, cover_image, priority, current_tokens_i64, skip_worktree_i64,
                 created_at, updated_at, attachments_raw, tags_raw, position, hook_states_raw, completed_at,
-                stage_entered_at,
+                stage_entered_at, stage_durations_raw, total_elapsed,
             ))
         })
         .map_err(|e| format!("Query tasks failed: {}", e))?;
@@ -86,13 +88,14 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
             custom_flow_raw, status, model, parent_id, subtask_index_i64, waiting_for_subtask_id,
             handover_summary, cover_image, priority, current_tokens_i64, skip_worktree_i64,
             created_at, updated_at, attachments_raw, tags_raw, position, hook_states_raw, completed_at,
-            stage_entered_at,
+            stage_entered_at, stage_durations_raw, total_elapsed,
         ) = row_res.map_err(|e| format!("Row extraction failed: {}", e))?;
 
         let custom_flow = custom_flow_raw.and_then(|s| serde_json::from_str(&s).ok());
         let attachments = attachments_raw.and_then(|s| serde_json::from_str(&s).ok());
         let tags = tags_raw.and_then(|s| serde_json::from_str(&s).ok());
         let hook_states = hook_states_raw.and_then(|s| serde_json::from_str(&s).ok());
+        let stage_durations = stage_durations_raw.and_then(|s| serde_json::from_str(&s).ok());
         let todos = todos_by_task.remove(&id);
 
         tasks.push(Task {
@@ -125,6 +128,8 @@ pub fn db_get_all_tasks(root: &Path) -> Result<Vec<Task>, String> {
             position,
             hook_states,
             project_path: Some(root.to_string_lossy().to_string()),
+            stage_durations,
+            total_elapsed,
         });
     }
 
@@ -140,7 +145,7 @@ pub fn db_get_task(root: &Path, task_id: &str) -> Result<Option<Task>, String> {
                     custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
                     handover_summary, cover_image, priority, current_tokens, skip_worktree,
                     created_at, updated_at, attachments, tags, position, hook_states, completed_at,
-                    stage_entered_at
+                    stage_entered_at, stage_durations, total_elapsed
              FROM tasks
              WHERE id = ?1 OR LOWER(id) = LOWER(?1)
              LIMIT 1",
@@ -183,6 +188,8 @@ pub fn db_get_task(root: &Path, task_id: &str) -> Result<Option<Task>, String> {
     let hook_states_raw: Option<String> = row.get(24).ok();
     let completed_at: Option<i64> = row.get(25).ok();
     let stage_entered_at: Option<i64> = row.get(26).ok();
+    let stage_durations_raw: Option<String> = row.get(27).ok();
+    let total_elapsed: Option<i64> = row.get(28).ok();
 
     // Load todos for this task
     let mut todo_stmt = conn
@@ -205,6 +212,7 @@ pub fn db_get_task(root: &Path, task_id: &str) -> Result<Option<Task>, String> {
     let attachments = attachments_raw.and_then(|s| serde_json::from_str(&s).ok());
     let tags = tags_raw.and_then(|s| serde_json::from_str(&s).ok());
     let hook_states = hook_states_raw.and_then(|s| serde_json::from_str(&s).ok());
+    let stage_durations = stage_durations_raw.and_then(|s| serde_json::from_str(&s).ok());
 
     Ok(Some(Task {
         id,
@@ -236,6 +244,8 @@ pub fn db_get_task(root: &Path, task_id: &str) -> Result<Option<Task>, String> {
         position,
         hook_states,
         project_path: Some(root.to_string_lossy().to_string()),
+        stage_durations,
+        total_elapsed,
     }))
 }
 
@@ -250,6 +260,7 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
     let attachments_json = task.attachments.as_ref().and_then(|v| serde_json::to_string(v).ok());
     let tags_json = task.tags.as_ref().and_then(|v| serde_json::to_string(v).ok());
     let hook_states_json = task.hook_states.as_ref().and_then(|v| serde_json::to_string(v).ok());
+    let stage_durations_json = task.stage_durations.as_ref().and_then(|v| serde_json::to_string(v).ok());
     let skip_wt = if task.skip_worktree.unwrap_or(false) { 1i64 } else { 0i64 };
     let cur_tokens = task.current_tokens.map(|v| v as i64);
     let sub_idx = task.subtask_index.map(|v| v as i64);
@@ -261,8 +272,8 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
             custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
             handover_summary, cover_image, priority, current_tokens, skip_worktree,
             created_at, updated_at, completed_at, attachments, tags, position, hook_states,
-            stage_entered_at
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)
+            stage_entered_at, stage_durations, total_elapsed
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, COALESCE(?29, 0))
         ON CONFLICT(id) DO UPDATE SET
             title = excluded.title,
             description = excluded.description,
@@ -288,7 +299,9 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
             tags = excluded.tags,
             position = excluded.position,
             hook_states = excluded.hook_states,
-            stage_entered_at = COALESCE(excluded.stage_entered_at, tasks.stage_entered_at, excluded.created_at)",
+            stage_entered_at = COALESCE(excluded.stage_entered_at, tasks.stage_entered_at, excluded.created_at),
+            stage_durations = COALESCE(excluded.stage_durations, tasks.stage_durations),
+            total_elapsed = COALESCE(excluded.total_elapsed, tasks.total_elapsed)",
         params![
             task.id,
             task.title,
@@ -317,6 +330,8 @@ pub fn db_upsert_task(root: &Path, task: &Task) -> Result<(), String> {
             pos_val,
             hook_states_json,
             task.stage_entered_at,
+            stage_durations_json,
+            task.total_elapsed,
         ],
     )
     .map_err(|e| format!("Failed to upsert task {}: {}", task.id, e))?;
@@ -355,6 +370,7 @@ pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
         let attachments_json = task.attachments.as_ref().and_then(|v| serde_json::to_string(v).ok());
         let tags_json = task.tags.as_ref().and_then(|v| serde_json::to_string(v).ok());
         let hook_states_json = task.hook_states.as_ref().and_then(|v| serde_json::to_string(v).ok());
+        let stage_durations_json = task.stage_durations.as_ref().and_then(|v| serde_json::to_string(v).ok());
         let skip_wt = if task.skip_worktree.unwrap_or(false) { 1i64 } else { 0i64 };
         let cur_tokens = task.current_tokens.map(|v| v as i64);
         let sub_idx = task.subtask_index.map(|v| v as i64);
@@ -366,8 +382,8 @@ pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
                 custom_flow, status, model, parent_id, subtask_index, waiting_for_subtask_id,
                 handover_summary, cover_image, priority, current_tokens, skip_worktree,
                 created_at, updated_at, completed_at, attachments, tags, position, hook_states,
-                stage_entered_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)
+                stage_entered_at, stage_durations, total_elapsed
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, COALESCE(?29, 0))
             ON CONFLICT(id) DO UPDATE SET
                 title = excluded.title,
                 description = excluded.description,
@@ -393,7 +409,9 @@ pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
                 tags = excluded.tags,
                 position = excluded.position,
                 hook_states = excluded.hook_states,
-                stage_entered_at = COALESCE(excluded.stage_entered_at, tasks.stage_entered_at, excluded.created_at)",
+                stage_entered_at = COALESCE(excluded.stage_entered_at, tasks.stage_entered_at, excluded.created_at),
+                stage_durations = COALESCE(excluded.stage_durations, tasks.stage_durations),
+                total_elapsed = COALESCE(excluded.total_elapsed, tasks.total_elapsed)",
             params![
                 task.id,
                 task.title,
@@ -422,6 +440,8 @@ pub fn db_upsert_all_tasks(root: &Path, tasks: &[Task]) -> Result<(), String> {
                 pos_val,
                 hook_states_json,
                 task.stage_entered_at,
+                stage_durations_json,
+                task.total_elapsed,
             ],
         )
         .map_err(|e| format!("Failed to upsert task {}: {}", task.id, e))?;

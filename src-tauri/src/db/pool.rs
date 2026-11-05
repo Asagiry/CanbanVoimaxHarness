@@ -92,6 +92,8 @@ pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
                   completed_at INTEGER,
                   position REAL NOT NULL DEFAULT 0.0,
                   hook_states TEXT,
+                  stage_durations TEXT,
+                  total_elapsed INTEGER NOT NULL DEFAULT 0,
                   FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE CASCADE
               );
               CREATE INDEX IF NOT EXISTS idx_tasks_stage ON tasks(stage_id);
@@ -150,6 +152,8 @@ pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
         let _ = conn.execute("ALTER TABLE tasks ADD COLUMN hook_states TEXT", []);
         let _ = conn.execute("ALTER TABLE tasks ADD COLUMN completed_at INTEGER", []);
         let _ = conn.execute("ALTER TABLE tasks ADD COLUMN stage_entered_at INTEGER", []);
+        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN stage_durations TEXT", []);
+        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN total_elapsed INTEGER DEFAULT 0", []);
         let _ = conn.execute("UPDATE tasks SET stage_entered_at = created_at WHERE stage_entered_at IS NULL", []);
         let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_stage_pos ON tasks(stage_id, position)", []);
 

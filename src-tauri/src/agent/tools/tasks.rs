@@ -278,6 +278,8 @@ pub async fn execute_create_task(
             position: None,
             hook_states: None,
             project_path: Some(ctx.repo_root.to_string_lossy().to_string()),
+            stage_durations: None,
+            total_elapsed: None,
         };
 
         tasks.push(new_task);

@@ -24,6 +24,21 @@ export function areTodosEqual(a?: TodoItem[], b?: TodoItem[]): boolean {
   return true;
 }
 
+export function areStageDurationsEqual(
+  a?: Record<string, number>,
+  b?: Record<string, number>
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  for (const k of keysA) {
+    if (a[k] !== b[k]) return false;
+  }
+  return true;
+}
+
 export function areCardPropsEqual(prev: KanbanCardProps, next: KanbanCardProps): boolean {
   if (prev.index !== next.index) return false;
   if (prev.task === next.task) return true;
@@ -60,6 +75,7 @@ export function areCardPropsEqual(prev: KanbanCardProps, next: KanbanCardProps):
     a.returnsCount === b.returnsCount &&
     a.attachments === b.attachments &&
     a.hookStates === b.hookStates &&
-    areTodosEqual(a.todos, b.todos)
+    areTodosEqual(a.todos, b.todos) &&
+    areStageDurationsEqual(a.stageDurations, b.stageDurations)
   );
 }

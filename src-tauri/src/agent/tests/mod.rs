@@ -128,6 +128,8 @@ pub(crate) fn make_test_task(id: &str, stage_id: &str, board_id: &str) -> Task {
         position: None,
         hook_states: None,
         project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
     }
 }
 

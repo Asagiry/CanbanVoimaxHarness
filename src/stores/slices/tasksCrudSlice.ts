@@ -317,7 +317,7 @@ export const createTasksCrudSlice: StateCreator<
           activeStageDuration: 0,
           stageDurations: {
             ...prevStageDurations,
-            [prev.stageId]: (prevStageDurations[prev.stageId] || 0) + currentDuration,
+            [prev.stageId]: Math.max(prevStageDurations[prev.stageId] || 0, currentDuration),
           },
           totalElapsed: prev.totalElapsed,
           isTimerRunning: mapped.status === 'running',
@@ -328,7 +328,17 @@ export const createTasksCrudSlice: StateCreator<
           merged.waitingForSubtaskId = undefined;
           merged.status = 'done';
           merged.completedAt = merged.completedAt || Date.now();
-          if (merged.createdAt) {
+          const sumOfStageDurations = Object.values(merged.stageDurations || {}).reduce(
+            (acc, val) => acc + (typeof val === 'number' && Number.isFinite(val) ? val : 0),
+            0
+          );
+          const activeElapsed =
+            typeof merged.totalElapsed === 'number' && merged.totalElapsed > 0
+              ? merged.totalElapsed
+              : sumOfStageDurations;
+          if (activeElapsed > 0) {
+            merged.totalElapsed = activeElapsed;
+          } else if (merged.createdAt) {
             merged.totalElapsed = Math.max(0, Math.floor((merged.completedAt - merged.createdAt) / 1000));
           }
         } else {

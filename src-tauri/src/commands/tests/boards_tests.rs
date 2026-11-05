@@ -204,6 +204,8 @@ use std::path::PathBuf;
             position: None,
             hook_states: None,
             project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
         };
 
         let modified = heal_task_board_and_column(&mut orphaned_task, &custom_cfg);
@@ -242,6 +244,8 @@ use std::path::PathBuf;
             position: None,
             hook_states: None,
             project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
         };
 
         let modified_valid = heal_task_board_and_column(&mut valid_task, &custom_cfg);
@@ -322,6 +326,8 @@ use std::path::PathBuf;
             position: None,
             hook_states: None,
             project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
         };
         save_tasks_to_disk(&base, &[task]).await.expect("save task");
 
@@ -461,6 +467,8 @@ use std::path::PathBuf;
             position: None,
             hook_states: None,
             project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
         };
         save_tasks_to_disk(&base, &[task]).await.expect("save task");
 

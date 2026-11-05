@@ -8,6 +8,7 @@ import AgentIcon from '../common/AgentIcon';
 import { getRoleBadgeStyle } from '../../lib/agentPalette';
 import { formatSubagentDisplayTitle, formatSubagentRoleDisplay, getSubagentOrderMap } from './SubagentsSidebar';
 import WindowControls, { toggleMaximizeWindow } from '../layout/WindowControls';
+import { formatTimerMMSS } from '../card/CardTimerBadge';
 import {
   ArrowLeft,
   ChevronRight,
@@ -248,6 +249,10 @@ export default function DrawerHeader({
                     (currentStageIdx >= 0 &&
                       columns.findIndex((c) => c.id === col.id) < currentStageIdx));
 
+                const stageSec = matchingSubtask
+                  ? (matchingSubtask.stageDurations?.[col.id] || matchingSubtask.totalElapsed || matchingSubtask.activeStageDuration || 0)
+                  : (task?.stageDurations?.[col.id] || (isCurrent ? task?.activeStageDuration : 0) || 0);
+
                 return (
                   <div key={col.id} className="flex items-center shrink-0">
                     {idx > 0 && (
@@ -285,7 +290,9 @@ export default function DrawerHeader({
                       {isRunningStage && (
                         <span className="h-2 w-2 rounded-full bg-[#22c55e] shrink-0" />
                       )}
-                      <span className="truncate max-w-[180px] sm:max-w-[240px]">{col.title}</span>
+                      <span className="truncate max-w-[180px] sm:max-w-[240px]">
+                        {stageSec > 0 ? `${col.title} ${formatTimerMMSS(stageSec)}` : col.title}
+                      </span>
                     </button>
                   </div>
                 );
