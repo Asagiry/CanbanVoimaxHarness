@@ -1,5 +1,6 @@
 import { CortexHookExt, CortexHookMoment } from './types';
 import { SCRIPT_EXTENSIONS } from './cortexConstants';
+import type { PipelineStage, PipelineConfig } from '../../types';
 import {
   getDeterministicAgentColor,
   getDeterministicAgentIcon,
@@ -54,11 +55,24 @@ export function buildHookTemplate(
   label: string,
   role: string,
   stageTitle: string,
+  isColumn?: boolean,
 ): string {
+  const isSystemRole =
+    !role ||
+    role === 'система' ||
+    role.toLowerCase() === 'system' ||
+    role === 'колонка' ||
+    role === 'без агента' ||
+    role === stageTitle;
+
   const head =
-    moment === 'on_enter'
-      ? `Хук входа задачи агента ${role} (${stageTitle})`
-      : `Хук завершения задачи агента ${role} (${stageTitle})`;
+    isColumn || isSystemRole
+      ? moment === 'on_enter'
+        ? `Хук входа задачи стадии ${stageTitle}`
+        : `Хук выхода задачи стадии ${stageTitle}`
+      : moment === 'on_enter'
+        ? `Хук входа задачи агента ${role} (${stageTitle})`
+        : `Хук завершения задачи агента ${role} (${stageTitle})`;
   switch (ext) {
     case 'bat':
       return `@echo off\nREM ${head}: ${label}\nREM Добавьте команды проверки и завершения.\n`;
@@ -251,9 +265,13 @@ export function buildHookFileName(
   rawName: string,
   moment: CortexHookMoment,
   ext: CortexHookExt,
+  stageId?: string,
 ): string {
   const typed = rawName.trim().replace(/\.[A-Za-z0-9]+$/, '').trim();
-  return typed ? `${moment}-${typed}.${ext}` : `${moment}.${ext}`;
+  if (typed) {
+    return `${moment}-${typed}.${ext}`;
+  }
+  return stageId ? `${moment}_${stageId}.${ext}` : `${moment}.${ext}`;
 }
 
 // Нормализация имени: trim + автосуффикс .md. Возвращает { base, fileName }.
@@ -268,10 +286,39 @@ export function normalizeCortexFileName(rawName: string): { base: string; fileNa
 export function previewCortexFileName(
   rawName: string,
   kind: 'rule' | 'hook',
-  opts?: { hookMoment?: CortexHookMoment; hookExt?: CortexHookExt },
+  opts?: { hookMoment?: CortexHookMoment; hookExt?: CortexHookExt; stageId?: string },
 ): string {
   if (kind === 'rule') return normalizeCortexFileName(rawName).fileName;
-  return buildHookFileName(rawName, opts?.hookMoment ?? 'on_enter', opts?.hookExt ?? 'bat');
+  return buildHookFileName(
+    rawName,
+    opts?.hookMoment ?? 'on_enter',
+    opts?.hookExt ?? 'bat',
+    opts?.stageId,
+  );
+}
+
+// Сохранение конфигурации пайплайна через invoke
+export async function savePipelineConfig(next: PipelineStage[]): Promise<boolean> {
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    let cfg: PipelineConfig | null = null;
+    try {
+      cfg = await invoke<PipelineConfig>('get_pipeline');
+    } catch {
+      cfg = null;
+    }
+    const pipeline: PipelineConfig = {
+      id: cfg?.id ?? 'default-engineering',
+      title: cfg?.title ?? 'Инженерный пайплайн',
+      stages: next,
+      columns: next,
+    };
+    await invoke('save_pipeline', { pipeline });
+    return true;
+  } catch (err) {
+    console.info('save_pipeline недоступен, изменения колонок откачены:', err);
+    return false;
+  }
 }
 
 // English persona template for missing .cvh/agents/<persona>.md (English-Only Invariant)

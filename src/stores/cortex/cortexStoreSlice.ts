@@ -12,6 +12,7 @@ import {
   buildBuiltinHookDescription,
   buildCommandHookDescription,
   buildGlobalRuleTemplate,
+  buildHookFileName,
   buildHookTemplate,
   buildPersonaTemplate,
   buildRuleTemplate,
@@ -20,6 +21,7 @@ import {
   cortexAgentDir,
   extractScriptPath,
   normalizeCortexFileName,
+  savePipelineConfig,
 } from './cortexHelpers';
 import {
   BACKLOG_COLOR,
@@ -121,24 +123,25 @@ export const createCortexSlice: StateCreator<
           .sort(([a], [b]) => a.localeCompare(b));
         const hookFiles = hookMoments.map(([moment, target]) => {
           const hookId = `${col.id}-hook-${moment}`;
-          const prev = prevFileById.get(hookId);
           const targetPath = typeof target === 'string' ? target : target?.script || (target as any)?.path || '';
+          const scriptName = targetPath.startsWith('builtin:') ? moment : (targetPath.split(/[/\\]/).pop() || moment);
+          const prev = prevFileById.get(hookId) ?? prevStages.flatMap((s) => s.files).find((f) => f.path === targetPath || f.id === hookId);
           return {
             id: hookId,
-            name: moment,
+            name: scriptName,
             stageId: col.id,
             type: 'hook' as const,
             path: targetPath,
             content: prev?.content ?? '',
-            isDirty: false,
+            isDirty: prev?.isDirty ?? false,
           };
         });
         const extras = (prevExtrasByStage.get(col.id) ?? [])
           .filter(
             (f) =>
-              !hookFiles.some((h) => h.id === f.id) &&
+              !hookFiles.some((h) => h.id === f.id || (h.path && f.path && h.path.toLowerCase() === f.path.toLowerCase())) &&
               (f.type === 'rule' || f.type === 'hook') &&
-              f.path.startsWith(`${dir}/`),
+              (f.path.startsWith(`${dir}/`) || (f.type === 'hook' && f.path.startsWith('.cvh/hooks/'))),
           )
           .sort((a, b) => {
             const order = (t: string) => (t === 'rule' ? 0 : 1);
@@ -165,16 +168,17 @@ export const createCortexSlice: StateCreator<
         .sort(([a], [b]) => a.localeCompare(b));
       const hookFiles = hookMoments.map(([moment, target]) => {
         const hookId = `${col.id}-hook-${moment}`;
-        const prev = prevFileById.get(hookId);
         const targetPath = typeof target === 'string' ? target : target?.script || (target as any)?.path || '';
+        const scriptName = targetPath.startsWith('builtin:') ? moment : (targetPath.split(/[/\\]/).pop() || moment);
+        const prev = prevFileById.get(hookId) ?? prevStages.flatMap((s) => s.files).find((f) => f.path === targetPath || f.id === hookId);
         return {
           id: hookId,
-          name: moment,
+          name: scriptName,
           stageId: col.id,
           type: 'hook' as const,
           path: targetPath,
           content: prev?.content ?? '',
-          isDirty: false,
+          isDirty: prev?.isDirty ?? false,
         };
       });
       const extras = (prevExtrasByStage.get(col.id) ?? [])
@@ -182,9 +186,9 @@ export const createCortexSlice: StateCreator<
           (f) =>
             f.id !== personaId &&
             f.id !== settingsId &&
-            !hookFiles.some((h) => h.id === f.id) &&
+            !hookFiles.some((h) => h.id === f.id || (h.path && f.path && h.path.toLowerCase() === f.path.toLowerCase())) &&
             (f.type === 'rule' || f.type === 'hook') &&
-            (f.path.startsWith(`${dir}/`) || f.type === 'hook' || !persona),
+            (f.path.startsWith(`${dir}/`) || (f.type === 'hook' && f.path.startsWith('.cvh/hooks/')) || f.type === 'hook' || !persona),
         )
         .sort((a, b) => {
           const order = (t: string) => (t === 'rule' ? 0 : 1);
@@ -888,6 +892,7 @@ export const createCortexSlice: StateCreator<
       agentStages.find((st) => st.stageId === stageId);
     if (!stage) throw new Error('Стадия не найдена');
 
+    const isColumnStage = !stageId.startsWith('agent:') && stages.some((st) => st.stageId === stageId);
     const role = (stage.personaName ?? '').trim() || stageId;
     const dir = cortexAgentDir(stage.personaName, stageId);
 
@@ -919,10 +924,15 @@ export const createCortexSlice: StateCreator<
       if (typed && !/^[A-Za-z0-9-_]+$/.test(typed)) {
         throw new Error('Только латиница, цифры, - и _');
       }
-      fileName = typed ? `${moment}-${typed}.${ext}` : `${moment}.${ext}`;
+      fileName = buildHookFileName(rawName, moment, ext, isColumnStage ? stageId : undefined);
       fileType = 'hook';
-      targetPath = `${dir}/hooks/${fileName}`;
-      content = buildHookTemplate(moment, ext, typed || moment, role, stage.stageTitle);
+      if (isColumnStage) {
+        targetPath = `.cvh/hooks/${fileName}`;
+        content = buildScriptTemplate(targetPath, moment, stageId);
+      } else {
+        targetPath = `${dir}/hooks/${fileName}`;
+        content = buildHookTemplate(moment, ext, typed || moment, role, stage.stageTitle, false);
+      }
     }
 
     const duplicate = stage.files.some(
@@ -947,8 +957,10 @@ export const createCortexSlice: StateCreator<
       suffix += 1;
     }
 
+    const createdId = isColumnStage && fileType === 'hook' ? `${stageId}-hook-${opts?.hookMoment ?? 'on_enter'}` : fileId;
+
     const created: CortexAgentFile = {
-      id: fileId,
+      id: createdId,
       name: fileName,
       stageId,
       type: fileType,
@@ -968,6 +980,29 @@ export const createCortexSlice: StateCreator<
       isEditorOpen: true,
       saveFeedback: null,
     }));
+
+    if (isColumnStage && fileType === 'hook') {
+      const moment: CortexHookMoment = opts?.hookMoment ?? 'on_enter';
+      const currentColumns = useBoardStore.getState().columns;
+      const nextColumns = currentColumns.map((col) => {
+        if (col.id === stageId) {
+          const currentHooks = { ...col.hooks };
+          currentHooks[moment] = {
+            script: targetPath,
+            description: `Хук ${moment} для стадии ${stage.stageTitle}`,
+          };
+          return {
+            ...col,
+            hooks: currentHooks,
+          };
+        }
+        return col;
+      });
+
+      useBoardStore.getState().setColumns(nextColumns);
+      await savePipelineConfig(nextColumns);
+      get().syncStagesFromColumns(nextColumns);
+    }
   },
 
   createGlobalRule: async (rawName: string) => {

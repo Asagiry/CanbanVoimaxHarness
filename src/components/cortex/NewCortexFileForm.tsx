@@ -27,14 +27,27 @@ export function NewCortexFileForm({
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  const isColumnStage = !stage.stageId.startsWith('agent:');
   const agentDir = cortexAgentDir(stage.personaName, stage.stageId);
-  const targetDir = kind === 'rule' ? `${agentDir}/rules/` : `${agentDir}/hooks/`;
+  const targetDir =
+    isColumnStage && kind === 'hook'
+      ? '.cvh/hooks/'
+      : kind === 'rule'
+        ? `${agentDir}/rules/`
+        : `${agentDir}/hooks/`;
+  const defaultHookName = isColumnStage
+    ? `${hookMoment}_${stage.stageId}.${hookExt}`
+    : `${hookMoment}.${hookExt}`;
   const previewName =
     rawName.trim().length === 0
       ? kind === 'rule'
         ? `${t('cortex.ruleFileNamePlaceholder')}.md`
-        : `${hookMoment}.${hookExt}`
-      : previewCortexFileName(rawName, kind, { hookMoment, hookExt });
+        : defaultHookName
+      : previewCortexFileName(rawName, kind, {
+          hookMoment,
+          hookExt,
+          stageId: isColumnStage ? stage.stageId : undefined,
+        });
 
   const handleSubmit = async () => {
     try {
@@ -63,7 +76,11 @@ export function NewCortexFileForm({
           setError(t('cortex.latinDigitsOnly'));
           return;
         }
-        const fileName = previewCortexFileName(rawName, 'hook', { hookMoment, hookExt });
+        const fileName = previewCortexFileName(rawName, 'hook', {
+          hookMoment,
+          hookExt,
+          stageId: isColumnStage ? stage.stageId : undefined,
+        });
         const duplicate = stage.files.some(
           (f) => f.name.toLowerCase() === fileName.toLowerCase()
         );
@@ -92,7 +109,7 @@ export function NewCortexFileForm({
   return (
     <div className="mx-1 mb-1 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] px-2 py-2 space-y-2">
       <div className="text-[11px] font-sans font-semibold text-[#171717] dark:text-[#f0f6fc]">
-        {t('cortex.newAgentFile')}
+        {kind === 'hook' ? t('cortex.newHook') : t('cortex.newRule')}
       </div>
 
       <input
