@@ -1,6 +1,6 @@
 import { CortexAgentFile, CortexAgentStage, PipelineStage, PipelineColumn } from '../../types';
 
-export type CortexHookMoment = 'on_enter' | 'on_leave' | 'on_finish';
+export type CortexHookMoment = 'on_enter' | 'on_leave' | 'on_finish' | 'on_exit';
 export type CortexHookExt = 'bat' | 'ps1' | 'py' | 'sh';
 
 export interface AgentPersonaInfo {

@@ -229,6 +229,8 @@ export interface PipelineConfig {
   columns?: PipelineStage[];
 }
 
+export type CortexHookMoment = 'on_enter' | 'on_leave' | 'on_finish' | 'on_exit';
+
 export interface CortexAgentFile {
   id: string;
   name: string;
@@ -237,6 +239,7 @@ export interface CortexAgentFile {
   // `.cvh/agents/<role>/rules/*.md` (rule), `.cvh/agents/<role>/hooks/*` (hook),
   // `.cvh/agents/<role>/setting` (settings, JSON без расширения).
   type: 'persona' | 'rule' | 'settings' | 'hook';
+  hookMoment?: CortexHookMoment;
   path: string;
   content: string;
   isDirty?: boolean;

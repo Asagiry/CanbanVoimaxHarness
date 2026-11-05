@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { ArrowRightToLine, ArrowRightFromLine } from 'lucide-react';
 import type { PipelineStage, PipelineConfig, HookDefinition } from '../../types';
 import { getHookScript } from '../../types';
 import { useBoardStore } from '../../stores/boardStore';
@@ -418,7 +419,10 @@ export default function StageContextMenu({
             }}
             className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer flex items-center justify-between"
           >
-            <span>{t('columnMenu.enterScript')}</span>
+            <span className="flex items-center gap-1.5 min-w-0">
+              <ArrowRightToLine className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 stroke-[2.2]" />
+              <span>{t('columnMenu.enterScript')}</span>
+            </span>
             {currentEnterScript && (
               <span className="ml-2 font-mono text-[10px] text-[#8f8f8f] dark:text-[#8b949e] truncate max-w-[120px]">
                 {currentEnterScript.split(/[\\/]/).pop()}
@@ -436,7 +440,10 @@ export default function StageContextMenu({
             }}
             className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer flex items-center justify-between"
           >
-            <span>{t('columnMenu.leaveScript')}</span>
+            <span className="flex items-center gap-1.5 min-w-0">
+              <ArrowRightFromLine className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0 stroke-[2.2]" />
+              <span>{t('columnMenu.leaveScript')}</span>
+            </span>
             {currentLeaveScript && (
               <span className="ml-2 font-mono text-[10px] text-[#8f8f8f] dark:text-[#8b949e] truncate max-w-[120px]">
                 {currentLeaveScript.split(/[\\/]/).pop()}
@@ -586,8 +593,13 @@ export default function StageContextMenu({
 
       {mode === 'script' && (
         <div className="px-3 py-2">
-          <div className="text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">
-            {scriptType === 'on_enter' ? t('columnMenu.enterScript') : t('columnMenu.leaveScript')}
+          <div className="text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1 flex items-center gap-1.5">
+            {scriptType === 'on_enter' ? (
+              <ArrowRightToLine className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 stroke-[2.2]" />
+            ) : (
+              <ArrowRightFromLine className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0 stroke-[2.2]" />
+            )}
+            <span>{scriptType === 'on_enter' ? t('columnMenu.enterScript') : t('columnMenu.leaveScript')}</span>
           </div>
           <div
             className="mb-1.5 text-[#8f8f8f] dark:text-[#8b949e] truncate font-mono text-[10px]"

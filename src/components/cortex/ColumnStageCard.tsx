@@ -4,13 +4,13 @@ import {
   ChevronRight,
   Folder,
   FolderOpen,
-  Zap,
   Settings,
   Plus,
 } from 'lucide-react';
 import type { PipelineColumn, CortexAgentFile, CortexAgentStage } from '../../types';
 import AgentIcon from '../common/AgentIcon';
 import PersonaSelect from '../common/PersonaSelect';
+import HookIcon from '../common/HookIcon';
 import { useTranslation } from '../../stores/languageStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import { useBoardStore } from '../../stores/boardStore';
@@ -291,13 +291,14 @@ export function ColumnStageCard({
                 <div className="pl-4 space-y-0.5 border-l border-[#ebebeb] dark:border-[#21262d] ml-2">
                   {hookFiles.map((hookFile) => {
                     const isBuiltinHook = hookFile.path.startsWith('builtin:');
+                    const moment = hookMomentOf(hookFile);
                     return (
                       <TreeFileRow
                         key={hookFile.id}
                         file={hookFile}
                         isActive={activeFile?.id === hookFile.id}
-                        badge={isBuiltinHook ? t('personaSelect.builtin') : hookMomentOf(hookFile.name)}
-                        icon={<Zap className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />}
+                        badge={isBuiltinHook ? t('personaSelect.builtin') : moment}
+                        icon={<HookIcon file={hookFile} className="h-3.5 w-3.5" />}
                         onSelect={() => void openFile(hookFile.id)}
                       />
                     );

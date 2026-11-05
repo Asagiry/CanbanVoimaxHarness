@@ -321,11 +321,8 @@ describe('StageContextMenu: Agent Assignment and On Enter / On Leave Hooks', () 
       const buttons = React.Children.toArray(mainFrag.props.children);
 
       const leaveButton = buttons.find((btn: any) => {
-        const text = btn?.props?.children;
-        if (Array.isArray(text)) {
-          return text.some((child: any) => child?.props?.children === 'Скрипт выхода');
-        }
-        return false;
+        const html = renderToString(btn);
+        return html.includes('Скрипт выхода');
       }) as React.ReactElement<any>;
 
       expect(leaveButton).toBeDefined();
@@ -361,11 +358,8 @@ describe('StageContextMenu: Agent Assignment and On Enter / On Leave Hooks', () 
       const buttons = React.Children.toArray(mainFrag.props.children);
 
       const enterButton = buttons.find((btn: any) => {
-        const text = btn?.props?.children;
-        if (Array.isArray(text)) {
-          return text.some((child: any) => child?.props?.children === 'Скрипт входа');
-        }
-        return false;
+        const html = renderToString(btn);
+        return html.includes('Скрипт входа');
       }) as React.ReactElement<any>;
 
       expect(enterButton).toBeDefined();
