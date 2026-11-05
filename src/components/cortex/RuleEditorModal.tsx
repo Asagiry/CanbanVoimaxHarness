@@ -4,6 +4,8 @@ import { useTranslation } from '../../stores/languageStore';
 import AgentSettingVisualEditor from './AgentSettingVisualEditor';
 import { useUiZoom, getZoomOverlayStyle } from '../../hooks/useUiZoom';
 import { RuntimeRuleIcon, isRuntimeRule } from '../common/RuntimeRuleIcon';
+import HookIcon from '../common/HookIcon';
+import { hookMomentOf } from './types';
 import {
   X,
   Save,
@@ -11,7 +13,6 @@ import {
   FileText,
   Eye,
   Edit3,
-  Zap,
   SlidersHorizontal,
   Code2,
 } from 'lucide-react';
@@ -287,7 +288,7 @@ export default function RuleEditorModal() {
             {isSettings ? (
               <SlidersHorizontal className="h-4 w-4 text-[#6366f1] dark:text-[#818cf8] shrink-0" />
             ) : isHook ? (
-              <Zap className="h-4 w-4 text-[#666666] dark:text-[#71717a] shrink-0" />
+              <HookIcon file={activeFile} className="h-4 w-4" />
             ) : isRuntime ? (
               <RuntimeRuleIcon className="h-4 w-4 text-indigo-500 dark:text-indigo-400 shrink-0" />
             ) : (
@@ -298,7 +299,7 @@ export default function RuleEditorModal() {
             </span>
             {isHook && (
               <span className="px-1.5 py-0.5 rounded border border-[#ebebeb] dark:border-[#2c2c33] bg-[#f4f4f5] dark:bg-[#232328] text-[10px] font-mono text-[#666666] dark:text-[#71717a] shrink-0">
-                {t('ruleEditor.hookBadge')}
+                {hookMomentOf(activeFile) ?? t('ruleEditor.hookBadge')}
               </span>
             )}
             {isRuntime && (

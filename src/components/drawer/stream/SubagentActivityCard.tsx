@@ -56,7 +56,7 @@ export const SubagentActivityCard = memo(function SubagentActivityCard({
     const durationText = formatDurationCompact(effectiveDuration);
 
     return (
-      <div className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] p-3.5 shadow-xs my-2">
+      <div className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] p-3.5 shadow-xs my-2 min-w-0 overflow-hidden">
         <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#ebebeb] dark:border-[#212126]">
           <div className="flex items-center space-x-2 min-w-0">
             <AgentIcon name={matchedPersona?.icon} className="h-3.5 w-3.5 text-[#171717] dark:text-[#f4f4f5] shrink-0" />
@@ -78,7 +78,7 @@ export const SubagentActivityCard = memo(function SubagentActivityCard({
           )}
         </div>
         {activity.content && (
-          <div className="text-sm text-[#171717] dark:text-[#f4f4f5] leading-relaxed select-text font-sans">
+          <div className="text-sm text-[#171717] dark:text-[#f4f4f5] leading-relaxed select-text font-sans min-w-0 break-words">
             <MarkdownContent content={activity.content} onImageClick={handleImageClick} />
           </div>
         )}
@@ -92,7 +92,7 @@ export const SubagentActivityCard = memo(function SubagentActivityCard({
   );
 
   return (
-    <div className="rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] p-4 shadow-xs">
+    <div className="rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] p-4 shadow-xs min-w-0 overflow-hidden">
       <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#ebebeb] dark:border-[#212126]">
         <div className="flex items-center space-x-2 min-w-0">
           <AgentIcon name={matchedPersona?.icon} className="h-4 w-4 text-[#171717] dark:text-[#f4f4f5] shrink-0" />
@@ -109,7 +109,7 @@ export const SubagentActivityCard = memo(function SubagentActivityCard({
           </span>
         </div>
       </div>
-      <div className="text-sm text-[#171717] dark:text-[#f4f4f5] leading-relaxed select-text font-sans bg-[#fafafa] dark:bg-[#17171b] p-3 rounded-md border border-[#ebebeb] dark:border-[#2c2c33]">
+      <div className="text-sm text-[#171717] dark:text-[#f4f4f5] leading-relaxed select-text font-sans bg-[#fafafa] dark:bg-[#17171b] p-3 rounded-md border border-[#ebebeb] dark:border-[#2c2c33] min-w-0 break-words">
         <MarkdownContent
           content={activeSubagentPrompt || t('drawer.subagentInstruction')}
           onImageClick={handleImageClick}

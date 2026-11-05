@@ -411,6 +411,26 @@ export const createActivitySlice: StateCreator<
     return { savedTokens, evaporatedCount };
   },
 
+  deleteDialogItem: async (taskId, itemId) => {
+    set((state) => {
+      const feed = state.activityFeed[taskId] || [];
+      const nextFeed = feed.filter((it) => it.id !== itemId);
+      return {
+        activityFeed: {
+          ...state.activityFeed,
+          [taskId]: nextFeed,
+        },
+      };
+    });
+
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('delete_dialog_item', { taskId, itemId });
+    } catch (err) {
+      console.warn('[ActivitySlice] Failed to delete dialog item on backend:', err);
+    }
+  },
+
   clearTaskActivity: async (taskId) => {
     cancelActivitySave(taskId);
     get().clearTaskDraft(taskId);

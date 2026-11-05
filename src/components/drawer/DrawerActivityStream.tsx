@@ -123,9 +123,9 @@ export default function DrawerActivityStream({
           ref={scrollRef}
           onScroll={handleFeedScroll}
           onClick={handleContainerClick}
-          className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6"
+          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 md:p-6"
         >
-          <div className="max-w-4xl mx-auto space-y-3.5">
+          <div className="w-full max-w-4xl mx-auto space-y-3.5 min-w-0">
             {activeSubagentId ? (
               <SubagentActivityCard
                 activeSubagentId={activeSubagentId}
@@ -186,6 +186,10 @@ export default function DrawerActivityStream({
 
               // d) Inline Tool Execution Card (including subagent tool executions)
               if (activity?.type === 'tool' && activity?.tool) {
+                // Suppress duplicate tool card when compaction succeeded — CompactedContextCard already displays the full report
+                if (activity.tool.toolName === 'compact_context' && activity.tool.status === 'success') {
+                  return null;
+                }
                 const toolWithDuration = {
                   ...activity.tool,
                   durationMs: activity.tool.durationMs || activityDurations[idx] || 0,
@@ -222,6 +226,7 @@ export default function DrawerActivityStream({
                     key={key}
                     activity={activity}
                     onImageClick={handleOpenLightbox}
+                    onDelete={(id) => useDrawerStore.getState().deleteDialogItem?.(task.id, id)}
                   />
                 );
               }

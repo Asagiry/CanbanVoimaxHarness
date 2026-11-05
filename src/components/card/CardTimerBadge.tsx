@@ -141,9 +141,10 @@ export const CardTimerBadge = memo(function CardTimerBadge({
     const sumDurations = task.stageDurations
       ? Object.values(task.stageDurations).reduce((acc, v) => acc + (typeof v === 'number' && Number.isFinite(v) ? v : 0), 0)
       : 0;
+    const computedElapsed = calculateTotalElapsed(task, false, isCompleted);
     const totalActiveSec = typeof task.totalElapsed === 'number' && task.totalElapsed > 0
       ? task.totalElapsed
-      : sumDurations;
+      : (sumDurations > 0 ? sumDurations : computedElapsed);
 
     const doneLabel = isCompleted && totalActiveSec > 0
       ? t('status.doneWithDuration', { time: formatTimerMMSS(totalActiveSec) })

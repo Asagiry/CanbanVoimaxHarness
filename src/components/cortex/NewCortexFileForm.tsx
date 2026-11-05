@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ArrowRightToLine, ArrowRightFromLine } from 'lucide-react';
 import { useCortexStore, cortexAgentDir, previewCortexFileName } from '../../stores/cortexStore';
 import type { CortexHookExt, CortexHookMoment } from '../../stores/cortexStore';
 import type { CortexAgentStage } from '../../types';
@@ -167,6 +168,7 @@ export function NewCortexFileForm({
                 onChange={() => setHookMoment('on_enter')}
                 className="accent-[#171717] dark:accent-[#f4f4f5]"
               />
+              <ArrowRightToLine className="h-3 w-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span>on_enter</span>
             </label>
             <label className="flex items-center gap-1 cursor-pointer">
@@ -177,6 +179,7 @@ export function NewCortexFileForm({
                 onChange={() => setHookMoment('on_leave')}
                 className="accent-[#171717] dark:accent-[#f4f4f5]"
               />
+              <ArrowRightFromLine className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0" />
               <span>on_leave</span>
             </label>
           </div>

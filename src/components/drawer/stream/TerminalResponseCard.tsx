@@ -70,7 +70,7 @@ export function TerminalResponseCard({
   const durationText = formatDurationCompact(effectiveDurationMs);
 
   return (
-    <div className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-[#e4e4e7] dark:border-[#212126] bg-white dark:bg-[#111114] shadow-xs overflow-hidden my-2">
+    <div className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-[#e4e4e7] dark:border-[#212126] bg-white dark:bg-[#111114] shadow-xs overflow-hidden my-2 min-w-0">
       <div
         onClick={handleToggle}
         className="flex items-center justify-between px-4 py-3 hover:bg-[#fafafa] dark:hover:bg-[#17171b] cursor-pointer transition select-none"
@@ -119,7 +119,7 @@ export function TerminalResponseCard({
       </div>
 
       {isExpanded && (
-        <div className="px-4 pb-4 pt-3 border-t border-[#f4f4f5] dark:border-[#212126]">
+        <div className="px-4 pb-4 pt-3 border-t border-[#f4f4f5] dark:border-[#212126] min-w-0 break-words">
           {activity?.content ? (
             <MarkdownContent content={activity.content} onImageClick={onImageClick} />
           ) : (

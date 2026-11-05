@@ -242,6 +242,17 @@ pub fn persist_compacted_dialog(
     Ok(())
 }
 
+/// Deletes a specific dialog item for a task by ID.
+pub fn delete_dialog_item(root: &Path, task_id: &str, item_id: &str) -> Result<(), String> {
+    let conn = get_db_conn(root).map_err(|e| format!("Failed to open database: {}", e))?;
+    conn.execute(
+        "DELETE FROM dialog_items WHERE (task_id = ?1 OR LOWER(task_id) = LOWER(?1)) AND id = ?2",
+        params![task_id, item_id],
+    )
+    .map_err(|e| format!("Failed to delete dialog item: {}", e))?;
+    Ok(())
+}
+
 /// Deletes all dialog items for a specific task and its cascaded subagents.
 pub fn clear_dialog_items(root: &Path, task_id: &str) -> Result<(), String> {
     let conn = get_db_conn(root).map_err(|e| format!("Failed to open database: {}", e))?;
@@ -541,5 +552,6 @@ pub use load_dialog_items as db_load_dialog_items;
 pub use append_dialog_items as append_activity_items;
 pub use load_dialog_items as load_activity_items;
 pub use clear_dialog_items as clear_activity_items;
+pub use delete_dialog_item as db_delete_dialog_item;
 pub use append_dialog_items as db_append_activity_items;
 pub use load_dialog_items as db_load_activity_items;

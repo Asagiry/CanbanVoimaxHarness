@@ -651,6 +651,24 @@ pub async fn compile_primed_system_prompt_with_tools(
         sections.push(sub_mandate.trim().to_string());
     }
 
+    let can_read = resolved_tools.iter().any(|t| t == "read_file" || t == "grep" || t == "glob");
+    let can_edit = resolved_tools.iter().any(|t| t == "edit_file" || t == "write_file");
+    if can_read || can_edit {
+        let mut batch_mandate = String::from("## Concurrent Tool Execution & Batching Discipline
+- Two-Phase Action Pattern:
+");
+        if can_read {
+            batch_mandate.push_str("  1. Inspection Batching: When inspecting files, searching symbols, or exploring code, emit multiple tool calls concurrently in a single turn rather than reading files sequentially across separate turns.
+");
+        }
+        if can_edit {
+            batch_mandate.push_str("  2. Mutation Batching: When applying independent modifications across multiple distinct files, emit concurrent edit/write calls in a single turn.
+");
+        }
+        batch_mandate.push_str("- Single-Action Exceptions: Terminal commands and subagent collections should run as single tool actions to consume outputs before next steps.");
+        sections.push(batch_mandate.trim().to_string());
+    }
+
     Ok(sections.join("\n\n---\n\n"))
 }
 
@@ -2831,15 +2849,25 @@ pub fn sync_context_state(
     app_handle: &Option<AppHandle>,
     task_id: &str,
     turn: usize,
-    messages: &[ChatMessage],
+    messages: &mut Vec<ChatMessage>,
+    local_compaction_rev: &mut u64,
 ) {
     if let Some(ref app) = app_handle {
         if let Some(state) = app.try_state::<crate::commands::AppState>() {
             if let Ok(map) = state.agent_contexts.lock() {
                 if let Some(cs) = map.get(task_id) {
                     if let Ok(mut guard) = cs.lock() {
-                        guard.current_turn = turn;
-                        guard.messages = messages.to_vec();
+                        if guard.compaction_revision > *local_compaction_rev {
+                            eprintln!(
+                                "CVH [agent]: Detected external compaction (rev {} > {}) for task {}, adopting {} messages",
+                                guard.compaction_revision, *local_compaction_rev, task_id, guard.messages.len()
+                            );
+                            *local_compaction_rev = guard.compaction_revision;
+                            *messages = guard.messages.clone();
+                        } else {
+                            guard.current_turn = turn;
+                            guard.messages = messages.clone();
+                        }
                     }
                 }
             }
@@ -2937,6 +2965,19 @@ where
             state.agent_contexts.lock().ok().and_then(|map| {
                 map.get(&config.task_id).and_then(|cs| {
                     let guard = cs.lock().ok()?;
+                    // Discard stale in-memory context if SQLite was compacted and in-memory is not
+                    let in_memory_has_compacted = guard.messages.iter().any(|m| {
+                        m.content.as_deref().map(|c| c.contains("# Compacted Context Summary")).unwrap_or(false)
+                    });
+                    let sqlite_has_compacted = crate::db::load_dialog_items(&config.repo_root, &config.task_id)
+                        .map(|items| items.iter().any(|it| it.item_type == "compacted"))
+                        .unwrap_or(false);
+
+                    if !in_memory_has_compacted && sqlite_has_compacted {
+                        eprintln!("CVH [agent]: In-memory context is stale (missing compaction found in SQLite). Rebuilding from SQLite.");
+                        return None;
+                    }
+
                     if guard.messages.len() > 2 {
                         Some((guard.current_turn, guard.messages.clone()))
                     } else {
@@ -3127,14 +3168,20 @@ where
     }
 
     // 6. Synchronize active context state with AppState
+    let mut local_compaction_rev: u64 = 0;
     if let Some(ref app) = config.app_handle {
         if let Some(state) = app.try_state::<crate::commands::AppState>() {
             if let Ok(mut map) = state.agent_contexts.lock() {
+                let initial_rev = map.get(&config.task_id)
+                    .and_then(|cs| cs.lock().ok().map(|g| g.compaction_revision))
+                    .unwrap_or(0);
+                local_compaction_rev = initial_rev;
                 map.insert(
                     config.task_id.clone(),
                     std::sync::Arc::new(std::sync::Mutex::new(compactor::AgentContextState {
                         current_turn: starting_turn,
                         messages: messages.clone(),
+                        compaction_revision: initial_rev,
                     })),
                 );
             }
@@ -3150,7 +3197,7 @@ where
     loop {
         turn += 1;
         if abort_flag.load(Ordering::SeqCst) {
-            sync_context_state(&config.app_handle, &config.task_id, turn, &messages);
+            sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
             event_sink(AgentEvent::Aborted);
             bail!("Agent execution aborted by user");
         }
@@ -3164,11 +3211,12 @@ where
                     if let Some(cs) = map.get(&config.task_id) {
                         if let Ok(guard) = cs.lock() {
                             // If external manual compaction condensed messages, adopt them
-                            if guard.messages.len() < messages.len() && !guard.messages.is_empty() {
+                            if guard.compaction_revision > local_compaction_rev || (guard.messages.len() < messages.len() && !guard.messages.is_empty()) {
                                 eprintln!(
-                                    "CVH [compactor]: Adopting externally compacted messages (from {} to {}) for task {}",
-                                    messages.len(), guard.messages.len(), config.task_id
+                                    "CVH [compactor]: Adopting externally compacted messages (rev {} > {}, count {} -> {}) for task {}",
+                                    guard.compaction_revision, local_compaction_rev, messages.len(), guard.messages.len(), config.task_id
                                 );
+                                local_compaction_rev = guard.compaction_revision;
                                 messages = guard.messages.clone();
                             }
                         }
@@ -3267,10 +3315,12 @@ where
                     );
                     let _ = app.emit("dialog:updated", serde_json::json!({ "taskId": config.task_id }));
 
+                    local_compaction_rev += 1;
                     if let Some(state) = app.try_state::<crate::commands::AppState>() {
                         if let Ok(map) = state.agent_contexts.lock() {
                             if let Some(cs) = map.get(&config.task_id) {
                                 if let Ok(mut guard) = cs.lock() {
+                                    guard.compaction_revision = local_compaction_rev;
                                     guard.messages = messages.clone();
                                 }
                             }
@@ -3437,7 +3487,7 @@ Messages count: {}
         let stream_res = engine.consume_turn_stream(&mut rx, &abort_flag, &stream_opts).await;
 
         if stream_res.aborted {
-            sync_context_state(&config.app_handle, &config.task_id, turn, &messages);
+            sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
             event_sink(AgentEvent::Aborted);
             bail!("Agent execution aborted by user");
         }
@@ -3501,7 +3551,7 @@ Messages count: {}
             if !turn_content.is_empty() {
                 messages.push(ChatMessage::assistant(Some(turn_content.clone()), None));
             }
-            sync_context_state(&config.app_handle, &config.task_id, turn, &messages);
+            sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
             event_sink(AgentEvent::Finished {
                 final_response: turn_content.clone(),
             });
@@ -3563,7 +3613,7 @@ Messages count: {}
 
             if abort_flag.load(Ordering::SeqCst) {
                 sanitize_unclosed_tool_calls(&mut messages);
-                sync_context_state(&config.app_handle, &config.task_id, turn, &messages);
+                sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
                 event_sink(AgentEvent::Aborted);
                 bail!("Agent execution aborted by user");
             }
@@ -3659,7 +3709,7 @@ Messages count: {}
                     batch: batch_info.clone(),
                 });
                 sanitize_unclosed_tool_calls(&mut messages);
-                sync_context_state(&config.app_handle, &config.task_id, turn, &messages);
+                sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
                 event_sink(AgentEvent::Aborted);
                 bail!("Agent execution aborted by user");
             }
@@ -3764,7 +3814,7 @@ Messages count: {}
                 abort_flag.store(true, Ordering::SeqCst);
 
                 // Synchronize messages to in-memory context state before exiting
-                sync_context_state(&config.app_handle, &config.task_id, turn, &messages);
+                sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
 
                 // Advance_task and stage transitions already append dedicated "summary" or "reject"
                 // dialog activity cards via append_task_dialog_activity. Suppress intermediate stream
@@ -3777,7 +3827,7 @@ Messages count: {}
         }
 
         // Sync messages to in-memory context state
-        sync_context_state(&config.app_handle, &config.task_id, turn, &messages);
+        sync_context_state(&config.app_handle, &config.task_id, turn, &mut messages, &mut local_compaction_rev);
     }
 
     // Недостижимо: цикл выше бесконечен и выходит только через

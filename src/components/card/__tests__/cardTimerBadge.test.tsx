@@ -50,6 +50,20 @@ describe('CardTimerBadge component rendering', () => {
     expect(html).toContain('Done in 02:05');
   });
 
+  it('renders Done in MM:SS from timestamps fallback when totalElapsed and stageDurations are empty', () => {
+    const task = createSampleTask({
+      status: 'done',
+      totalElapsed: 0,
+      stageDurations: {},
+      createdAt: 10000,
+      completedAt: 839000, // 829 seconds = 13m 49s
+    });
+    const html = renderToString(<CardTimerBadge task={task} />);
+
+    expect(html).toContain('Done in 13:49');
+    expect(html).toContain('text-[#15803d]');
+  });
+
   it('renders green Done badge when task has waitingForSubtaskId and status is idle', () => {
     const task = createSampleTask({ status: 'idle', waitingForSubtaskId: 'CVH-001.1' });
     const html = renderToString(<CardTimerBadge task={task} />);

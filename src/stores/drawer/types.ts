@@ -93,6 +93,7 @@ export interface ActivityActions {
   clearTaskLogs: (taskId: string) => Promise<void> | void;
   clearTaskActivity: (taskId: string) => Promise<void> | void;
   clearTaskDialog?: (taskId: string) => Promise<void> | void;
+  deleteDialogItem?: (taskId: string, itemId: string) => Promise<void>;
   evaporateClientToolLogs: (taskId: string) => { evaporatedCount: number; savedTokens: number };
   loadTaskActivity: (taskId: string) => Promise<void>;
   loadTaskDialog: (taskId: string) => Promise<void>;

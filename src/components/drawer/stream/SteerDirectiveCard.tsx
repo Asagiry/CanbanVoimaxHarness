@@ -1,12 +1,13 @@
 import { memo, useContext, useMemo } from 'react';
 import type { DrawerActivityItem } from '../../../stores/drawerStore';
 import { useTranslation } from '../../../stores/languageStore';
-import { ShieldAlert, User, ZoomIn, Clock, Bot } from 'lucide-react';
+import { ShieldAlert, User, ZoomIn, Clock, Bot, Trash2 } from 'lucide-react';
 import { MarkdownContent, LightboxContext } from './MarkdownContent';
 
 export interface SteerDirectiveCardProps {
   activity: DrawerActivityItem;
   onImageClick?: (src: string, alt?: string) => void;
+  onDelete?: (activityId: string) => void;
 }
 
 export function isSensorRejectionActivity(activity?: DrawerActivityItem): boolean {
@@ -51,6 +52,7 @@ export function isAgentMessageActivity(activity?: DrawerActivityItem): boolean {
 export const SteerDirectiveCard = memo(function SteerDirectiveCard({
   activity,
   onImageClick,
+  onDelete,
 }: SteerDirectiveCardProps) {
   const { t } = useTranslation();
   const contextLightbox = useContext(LightboxContext);
@@ -83,7 +85,7 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
   if (isSensorRejection || isHookRejection) {
     const titleKey = isSensorRejection ? 'drawer.sensorRejection' : 'drawer.hookRejection';
     return (
-      <div className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-amber-500/20 bg-amber-500/10 p-3.5 shadow-xs">
+      <div className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-amber-500/20 bg-amber-500/10 p-3.5 shadow-xs min-w-0 overflow-hidden">
         <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-amber-500/20 text-[10px] font-mono">
           <div className="flex items-center space-x-1.5 text-amber-500 dark:text-amber-400 font-medium">
             <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
@@ -118,7 +120,7 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
             ))}
           </div>
         )}
-        <div className="text-sm text-[#171717] dark:text-[#f4f4f5] leading-relaxed select-text font-sans">
+        <div className="text-sm text-[#171717] dark:text-[#f4f4f5] leading-relaxed select-text font-sans min-w-0 break-words">
           <MarkdownContent content={activity?.content ?? ''} onImageClick={handleImageClick} />
         </div>
       </div>
@@ -126,7 +128,7 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
   }
 
   return (
-    <div className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-[#f9f9f9] dark:bg-[#111114] p-3.5 shadow-xs">
+    <div className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-[#f9f9f9] dark:bg-[#111114] p-3.5 shadow-xs min-w-0 overflow-hidden">
       <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-[#ebebeb] dark:border-[#212126] text-[10px] font-mono text-[#666666] dark:text-[#71717a]">
         <div className="flex items-center space-x-1.5 text-[#171717] dark:text-[#f4f4f5] font-medium">
           {isAgentMessage ? (
@@ -141,12 +143,24 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
             </>
           )}
         </div>
-        {formattedTime && (
-          <span className="flex items-center space-x-1 text-[#71717a] dark:text-[#71717a] tabular-nums">
-            <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
-            <span>{formattedTime}</span>
-          </span>
-        )}
+        <div className="flex items-center space-x-2">
+          {onDelete && !isAgentMessage && (
+            <button
+              type="button"
+              onClick={() => onDelete(activity.id)}
+              className="p-0.5 rounded text-[#71717a] hover:text-red-500 hover:bg-[#e4e4e7] dark:hover:bg-[#232328] transition cursor-pointer"
+              title={t('drawer.deleteMessage') || 'Удалить сообщение'}
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          )}
+          {formattedTime && (
+            <span className="flex items-center space-x-1 text-[#71717a] dark:text-[#71717a] tabular-nums">
+              <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
+              <span>{formattedTime}</span>
+            </span>
+          )}
+        </div>
       </div>
       {images.length > 0 && (
         <div className="flex items-center gap-2 mb-2.5 flex-wrap">
@@ -170,7 +184,7 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
           ))}
         </div>
       )}
-      <div className="text-sm text-[#171717] dark:text-[#f4f4f5] leading-relaxed select-text font-sans">
+      <div className="text-sm text-[#171717] dark:text-[#f4f4f5] leading-relaxed select-text font-sans min-w-0 break-words">
         <MarkdownContent content={activity?.content ?? ''} onImageClick={handleImageClick} />
       </div>
     </div>

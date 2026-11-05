@@ -5,7 +5,7 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
     vec![
         ToolDefinition::function(
             "read_file",
-            "Read UTF-8 text file contents with line numbers from the isolated worktree.",
+            "Read UTF-8 text file contents with line numbers from the isolated worktree. (Batch-friendly: emit multiple read_file calls concurrently in one turn to inspect several files at once).",
             serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -18,7 +18,7 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "write_file",
-            "Write complete UTF-8 content to a file inside the isolated worktree.",
+            "Write complete UTF-8 content to a file inside the isolated worktree. (Batch-friendly: safe to emit concurrently alongside writes to other distinct files).",
             serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -30,7 +30,7 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "edit_file",
-            "Targeted text replacement in an existing file inside the isolated worktree. Aliased as 'str_replace'.",
+            "Targeted text replacement in an existing file inside the isolated worktree. Aliased as 'str_replace'. (Batch-friendly: safe to emit concurrently alongside edits to other distinct files).",
             serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -44,7 +44,7 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "glob",
-            "Find files matching a glob pattern inside the isolated worktree.",
+            "Find files matching a glob pattern inside the isolated worktree. (Batch-friendly: safe to emit concurrently alongside other search/read operations).",
             serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -56,7 +56,7 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "grep",
-            "Search file contents with a regular expression inside the isolated worktree.",
+            "Search file contents with a regular expression inside the isolated worktree. (Batch-friendly: emit multiple grep/read_file calls concurrently to search different patterns or paths).",
             serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -122,7 +122,7 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "subagent_bg",
-            "Launch a specialized subagent in the background (asynchronous). Returns immediately with a subagent_id and status 'running'. Use collect_subagent with subagent_id to retrieve the report when needed.",
+            "Launch a specialized subagent in the background (asynchronous). Returns immediately with a subagent_id and status 'running'. (Batch-friendly: emit multiple subagent_bg calls in one turn for parallel execution across decoupled modules, then collect them via collect_subagent).",
             serde_json::json!({
                 "type": "object",
                 "properties": {

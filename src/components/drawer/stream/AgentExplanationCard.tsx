@@ -47,7 +47,7 @@ export function AgentExplanationCard({
   const durationText = formatDurationCompact(effectiveDurationMs);
 
   return (
-    <div className="rounded-lg border border-[#e4e4e7] dark:border-[#212126] bg-white dark:bg-[#111114] shadow-xs overflow-hidden my-2.5 transition duration-150">
+    <div className="rounded-lg border border-[#e4e4e7] dark:border-[#212126] bg-white dark:bg-[#111114] shadow-xs overflow-hidden my-2.5 transition duration-150 min-w-0">
       <div
         onClick={() => setIsExpanded(!isExpanded)}
         className="flex items-center justify-between px-3.5 py-2.5 bg-[#f8f8f9] dark:bg-[#17171b] hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23] cursor-pointer transition select-none border-l-2 border-l-[#171717] dark:border-l-[#58a6ff]"
@@ -75,7 +75,7 @@ export function AgentExplanationCard({
         )}
       </div>
       {isExpanded && (
-        <div className="px-3.5 py-3 border-t border-[#f4f4f5] dark:border-[#212126] text-sm leading-relaxed text-[#27272a] dark:text-[#a1a1aa] select-text space-y-2.5">
+        <div className="px-3.5 py-3 border-t border-[#f4f4f5] dark:border-[#212126] text-sm leading-relaxed text-[#27272a] dark:text-[#a1a1aa] select-text space-y-2.5 min-w-0 break-words">
           {effectiveLeadingText && (
             <MarkdownContent content={effectiveLeadingText} onImageClick={onImageClick} />
           )}

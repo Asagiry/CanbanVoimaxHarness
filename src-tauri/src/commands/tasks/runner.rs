@@ -1526,6 +1526,16 @@ pub async fn compact_context(
 
     let tokens_before = crate::agent::compactor::estimate_tokens(&messages_to_condense);
 
+    let (task_title, task_desc) = {
+        if let Ok(guard) = state.tasks.lock() {
+            guard.iter().find(|t| t.id == task_id)
+                .map(|t| (t.title.clone(), t.description.clone()))
+                .unwrap_or_default()
+        } else {
+            (String::new(), String::new())
+        }
+    };
+
     // 5. Run LLM condensation with the 7-section structured prompt
     let compacted_markdown = crate::agent::compactor::condense_context_with_llm(
         &task_id,
@@ -1533,6 +1543,8 @@ pub async fn compact_context(
         &compactor_model,
         &base_url,
         api_key,
+        Some(&task_title),
+        Some(&task_desc),
     )
     .await;
 
@@ -1614,7 +1626,7 @@ pub async fn compact_context(
         }
     };
 
-    if let Some(cs) = context_state_opt {
+    let (sys_tokens, tool_tokens, total_tokens_after) = if let Some(cs) = context_state_opt {
         if let Ok(mut guard) = cs.lock() {
             let mut new_messages = Vec::new();
             if !guard.messages.is_empty() {
@@ -1637,12 +1649,25 @@ pub async fn compact_context(
             // Enforce safe ceiling guarantee on in-memory context as well
             let _ = crate::agent::compactor::compact_conversation_to_target(&mut new_messages, 96_000, None);
             guard.messages = new_messages;
+            guard.compaction_revision += 1;
+
+            let sys = guard.messages.first()
+                .and_then(|m| m.content.as_deref())
+                .map(crate::agent::compactor::estimate_text_tokens)
+                .unwrap_or(3593);
+            let tool = 2604usize;
+            let tot = crate::agent::compactor::estimate_tokens(&guard.messages) + tool;
+            (sys, tool, tot)
+        } else {
+            (3593, 2604, tokens_after + 3593 + 2604)
         }
-    }
+    } else {
+        (3593, 2604, tokens_after + 3593 + 2604)
+    };
 
     let report = crate::agent::compactor::CompactionReport {
         tokens_before,
-        tokens_after,
+        tokens_after: total_tokens_after,
         evaporated_count: compacted_count,
         saved_tokens,
         compacted_messages_count: compacted_count,
@@ -1665,11 +1690,13 @@ pub async fn compact_context(
         "agent:telemetry",
         serde_json::json!({
             "taskId": task_id,
-            "inputTokens": tokens_after,
+            "inputTokens": total_tokens_after,
             "outputTokens": 0,
             "cacheReadTokens": 0,
             "cacheCreationTokens": 0,
             "cacheHitRate": 90.0,
+            "systemTokens": sys_tokens,
+            "toolTokens": tool_tokens,
         }),
     );
     let _ = app_handle.emit("dialog:updated", serde_json::json!({ "taskId": task_id }));

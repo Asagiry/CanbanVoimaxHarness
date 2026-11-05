@@ -22,6 +22,7 @@ You MUST preserve all essential technical facts, file paths, function names, arc
 Format your output STRICTLY with the following 7 Markdown headers:
 ## Primary Request and Intent
 - State the initial user request, target goals, and core requirements.
+- CRITICAL INVARIANT: State the immutable primary task goal. Do NOT replace or confuse it with intermediate user steer messages, corrections, questions, or side notes.
 
 ## Key Technical Concepts
 - Outline the technical architecture, paradigms, protocols, and data models involved.
@@ -583,6 +584,8 @@ pub async fn condense_context_with_llm(
     model: &str,
     base_url: &str,
     api_key: Option<&str>,
+    task_title: Option<&str>,
+    task_desc: Option<&str>,
 ) -> String {
     let mut msgs = messages_to_condense.to_vec();
     // Pre-evaporate bulky tool logs & thoughts before preparing transcript for LLM
@@ -627,6 +630,18 @@ pub async fn condense_context_with_llm(
         }
     }
 
+    let title_str = task_title.unwrap_or("").trim();
+    let desc_str = task_desc.unwrap_or("").trim();
+    let desc_truncated = if desc_str.len() > 600 { &desc_str[..600] } else { desc_str };
+    let goal_clause = if !title_str.is_empty() {
+        format!(
+            "\n                     - In '## Primary Request and Intent': The immutable PRIMARY TASK GOAL is: \"{}\" (Description: {}).\n                       You MUST state this primary task goal. DO NOT replace or confuse it with intermediate user steer directives, feedback, questions, or side notes.",
+            title_str, desc_truncated
+        )
+    } else {
+        "\n                     - In '## Primary Request and Intent': State the original task goal. DO NOT replace or confuse it with intermediate user steer directives.".to_string()
+    };
+
     let payload = serde_json::json!({
         "model": model,
         "temperature": 0.1,
@@ -639,8 +654,8 @@ pub async fn condense_context_with_llm(
             {
                 "role": "user",
                 "content": format!(
-                    "Summarize and condense the following conversation history for task {} into the 7 structured sections.\n                     CRITICAL INSTRUCTIONS FOR STATE PRESERVATION:\n                     - In '## Files and Code': List every single file touched via edit_file/write_file/read_file with exact paths and what changed.\n                     - In '## Errors and Fixes': Detail all compiler errors, sensor results, and test outcomes (passed/failed).\n                     - In '## Current Work & Next Step': Preserve the active todos/checklist status and state the exact next technical action to take.\n\n                     Conversation Transcript:\n{}",
-                    task_id, transcript
+                    "Summarize and condense the following conversation history for task {} into the 7 structured sections.\n                     CRITICAL INSTRUCTIONS FOR STATE PRESERVATION:{}\n                     - In '## Files and Code': List every single file touched via edit_file/write_file/read_file with exact paths and what changed.\n                     - In '## Errors and Fixes': Detail all compiler errors, sensor results, and test outcomes (passed/failed).\n                     - In '## Current Work & Next Step': Preserve the active todos/checklist status and state the exact next technical action to take.\n\n                     Conversation Transcript:\n{}",
+                    task_id, goal_clause, transcript
                 )
             }
         ]
@@ -706,6 +721,8 @@ impl ExecutionStateSnapshot {
 pub struct AgentContextState {
     pub current_turn: usize,
     pub messages: Vec<ChatMessage>,
+    #[serde(default)]
+    pub compaction_revision: u64,
 }
 
 /// Estimates tokens for a given text using multilingual-aware BPE heuristics:
