@@ -337,12 +337,12 @@ export default function GitDiffSidebar({
                 </span>
               )}
               {totalAdditions > 0 && (
-                <span className="text-[10px] font-mono font-medium text-[#15803d]">
+                <span className="text-[10px] font-mono font-medium text-[#15803d] leading-none">
                   +{totalAdditions}
                 </span>
               )}
               {totalDeletions > 0 && (
-                <span className="text-[10px] font-mono font-medium text-[#b91c1c]">
+                <span className="text-[10px] font-mono font-medium text-[#b91c1c] leading-none">
                   -{totalDeletions}
                 </span>
               )}
@@ -402,7 +402,7 @@ export default function GitDiffSidebar({
 
             {/* Additions / deletions badges */}
             {(totalAdditions > 0 || totalDeletions > 0) && (
-              <div className="flex items-center gap-1 text-[10px] font-mono tabular-nums font-semibold shrink-0">
+              <div className="flex items-center gap-1 text-[10px] font-mono tabular-nums font-semibold shrink-0 leading-none translate-y-px">
                 {totalAdditions > 0 && (
                   <span className="text-[#15803d] dark:text-[#4ade80]" title={t('gitDiff.linesAdded', { count: totalAdditions })}>
                     +{totalAdditions}

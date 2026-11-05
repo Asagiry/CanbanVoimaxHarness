@@ -171,7 +171,7 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
         <span className="font-medium text-xs tracking-tight">{t('drawer.todos')}</span>
 
         {hasTodos ? (
-          <div className="flex items-center space-x-1 pl-0.5">
+          <div className="flex items-center space-x-1 pl-0.5 leading-none translate-y-px">
             <span className="font-mono tabular-nums text-[11px] font-semibold text-[#15803d] dark:text-[#4ade80]">
               {completedCount}
             </span>
@@ -181,7 +181,7 @@ const TaskTodoWidget: React.FC<TaskTodoWidgetProps> = ({
             </span>
           </div>
         ) : (
-          <span className="font-mono tabular-nums text-[11px] text-[#8f8f8f] dark:text-[#8b949e]">0</span>
+          <span className="font-mono tabular-nums text-[11px] text-[#8f8f8f] dark:text-[#8b949e] leading-none translate-y-px">0</span>
         )}
 
         {/* Static indicator when an item is currently in progress */}

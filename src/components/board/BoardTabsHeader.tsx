@@ -189,7 +189,7 @@ export default function BoardTabsHeader({
                     <Layout className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate max-w-[140px]">{b.name}</span>
                     <span
-                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-medium shrink-0 ${
+                      className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[10px] font-mono font-medium leading-none tabular-nums shrink-0 ${
                         isActive
                           ? 'bg-[#27272a] dark:bg-[#30363d] text-[#d4d4d8] dark:text-[#f0f6fc]'
                           : 'bg-[#e4e4e7] dark:bg-[#21262d] text-[#71717a] dark:text-[#8b949e]'
@@ -246,7 +246,7 @@ export default function BoardTabsHeader({
         <div className="flex items-center space-x-3 shrink-0">
           <div className="hidden sm:flex items-center space-x-1.5 text-[#666666] dark:text-[#8b949e] text-xs">
             <span>{t('board.tasksOnBoard')}</span>
-            <span className="text-[#171717] dark:text-[#f0f6fc] font-semibold tabular-nums font-mono">
+            <span className="text-[#171717] dark:text-[#f0f6fc] font-semibold tabular-nums font-mono leading-none translate-y-px">
               {tasksCount}
             </span>
           </div>
