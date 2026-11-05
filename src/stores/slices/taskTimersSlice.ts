@@ -16,28 +16,69 @@ export const createTaskTimersSlice: StateCreator<
   },
 
   tickTimers: () => {
-    const now = Date.now();
-    set((state) => ({
-      tasks: state.tasks.map((task) => {
-        if (task.status === 'done' || task.status === 'paused') {
-          return task;
-        }
-        const stageStart = task.stageEnteredAt || task.createdAt;
-        const activeStageDuration = stageStart
-          ? Math.max(0, Math.floor((now - stageStart) / 1000))
-          : (typeof task.activeStageDuration === 'number' && Number.isFinite(task.activeStageDuration) ? task.activeStageDuration + 1 : 1);
+    set((state) => {
+      const hasRunningTask = state.tasks.some(
+        (task) =>
+          (task.status === 'running' || task.isTimerRunning === true) &&
+          task.status !== 'done' &&
+          task.status !== 'paused' &&
+          task.status !== 'blocked' &&
+          task.status !== 'idle' &&
+          task.status !== 'waiting_review' &&
+          task.status !== 'waiting_subtask' &&
+          task.status !== 'waiting_subagent'
+      );
 
-        const totalElapsed = task.createdAt
-          ? Math.max(0, Math.floor((now - task.createdAt) / 1000))
-          : (typeof task.totalElapsed === 'number' && Number.isFinite(task.totalElapsed) ? task.totalElapsed + 1 : 1);
+      if (!hasRunningTask) {
+        return state;
+      }
 
-        return {
-          ...task,
-          activeStageDuration,
-          totalElapsed,
-        };
-      }),
-    }));
+      return {
+        tasks: state.tasks.map((task) => {
+          const isActivelyRunning =
+            (task.status === 'running' || task.isTimerRunning === true) &&
+            task.status !== 'done' &&
+            task.status !== 'paused' &&
+            task.status !== 'blocked' &&
+            task.status !== 'idle' &&
+            task.status !== 'waiting_review' &&
+            task.status !== 'waiting_subtask' &&
+            task.status !== 'waiting_subagent';
+
+          if (!isActivelyRunning) {
+            return task;
+          }
+
+          const currentStage = task.stageId;
+          const prevStageDurations =
+            task.stageDurations && typeof task.stageDurations === 'object'
+              ? task.stageDurations
+              : {};
+          const currentStageDuration = (prevStageDurations[currentStage] || 0) + 1;
+          const nextStageDurations = {
+            ...prevStageDurations,
+            [currentStage]: currentStageDuration,
+          };
+
+          const activeStageDuration =
+            typeof task.activeStageDuration === 'number' && Number.isFinite(task.activeStageDuration)
+              ? task.activeStageDuration + 1
+              : 1;
+
+          const totalElapsed =
+            typeof task.totalElapsed === 'number' && Number.isFinite(task.totalElapsed)
+              ? task.totalElapsed + 1
+              : 1;
+
+          return {
+            ...task,
+            activeStageDuration,
+            stageDurations: nextStageDurations,
+            totalElapsed,
+          };
+        }),
+      };
+    });
   },
 
   startTaskTimer: (taskId) => {

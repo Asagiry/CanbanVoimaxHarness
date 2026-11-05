@@ -129,6 +129,11 @@ fn test_tasks_crud_and_todos() {
             }
         })),
         project_path: None,
+        stage_durations: Some(serde_json::json!({
+            "plan": 65,
+            "dev": 952
+        })),
+        total_elapsed: Some(1017),
     };
 
     db_upsert_task(root, &task1).expect("upsert task1");
@@ -139,6 +144,11 @@ fn test_tasks_crud_and_todos() {
     assert_eq!(loaded.stage_entered_at, Some(1000));
     assert_eq!(loaded.tags, Some(vec!["backend".to_string(), "sqlite".to_string()]));
     assert_eq!(loaded.current_tokens, Some(1500));
+    assert_eq!(loaded.total_elapsed, Some(1017));
+    assert_eq!(
+        loaded.stage_durations.as_ref().unwrap()["dev"],
+        952
+    );
     assert!(loaded.hook_states.is_some());
     assert_eq!(
         loaded.hook_states.as_ref().unwrap()["on_enter"]["status"],
@@ -201,6 +211,8 @@ fn test_tasks_crud_and_todos() {
         position: Some(1.0),
         hook_states: None,
         project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
     };
     db_upsert_task(root, &subtask).expect("upsert subtask");
 
@@ -260,6 +272,8 @@ fn test_sequence_allocation() {
         position: None,
         hook_states: None,
         project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
     };
     db_upsert_task(root, &high_task).expect("upsert high task");
 

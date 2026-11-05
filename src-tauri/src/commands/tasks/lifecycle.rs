@@ -384,6 +384,8 @@ pub async fn internal_create_task(
         position: Some(next_pos),
         hook_states: None,
         project_path: Some(root.to_string_lossy().to_string()),
+        stage_durations: None,
+        total_elapsed: None,
     };
 
     // RACE CONDITION PREVENTION (AGENTS.md):
@@ -898,6 +900,8 @@ pub async fn internal_create_subtask(
         position: Some(next_subtask_pos),
         hook_states: tasks[parent_idx].hook_states.clone(),
         project_path: Some(root.to_string_lossy().to_string()),
+        stage_durations: None,
+        total_elapsed: None,
     };
 
     let parent_task_clone = tasks[parent_idx].clone();

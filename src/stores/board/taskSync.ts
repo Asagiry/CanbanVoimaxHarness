@@ -76,6 +76,8 @@ export async function syncTasksBackend(tasks: KanbanTask[]): Promise<void> {
         skipWorktree: t.skipWorktree ?? false,
         hookStates: t.hookStates ?? null,
         projectPath: t.projectPath || activeRoot || null,
+        stageDurations: t.stageDurations ?? null,
+        totalElapsed: typeof t.totalElapsed === 'number' ? t.totalElapsed : null,
       };
     });
     await invoke('save_tasks', { tasks: backendPayload });

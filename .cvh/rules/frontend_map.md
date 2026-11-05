@@ -19,6 +19,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Kanban Card Container & Layout** | `src/components/card/KanbanCard.tsx` | Layout coordinator (~256 lines), memoized with `areCardPropsEqual`. |
 | **Tactile Stage Stepper Navigation** | `src/components/card/CardHookNode.tsx` | 1-click stage switching, current stage pulse, checkmarks. |
 | **Card Timer & Cadence Badge** | `src/components/card/CardTimerBadge.tsx` | Execution duration, active step timer, tabular-nums. |
+| **Column Durations Hover Popover** | `src/components/card/StageDurationsPopover.tsx` | Per-stage active duration breakdown, animated running indicator, total active time. |
 | **Card Context Menu & Model Override** | `src/components/card/CardContextMenu.tsx` | Context actions, model selection, subtask deletion. |
 | **Task Context Menu Alias** | `src/components/card/TaskContextMenu.tsx` | Backward-compatible alias for `CardContextMenu.tsx`. |
 | **Card Subtask Indicator Badge** | `src/components/card/CardSubtaskBadge.tsx` | Subtask counter, status indicator, auto-unlock indicator. |
@@ -142,6 +143,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 - **`KanbanCard.tsx`**: Clean, lightweight layout coordinator. Wraps components in `React.memo` with `areCardPropsEqual`. Strictly avoids wholesale subscriptions to `useBoardStore`.
 - **`CardHookNode.tsx`**: Renders the tactile stage stepper on every card. Enables 1-click stage advancement, displays pulse animations for active stages, and verifies gatekeeper sensors.
 - **`CardTimerBadge.tsx`**: Displays active step time and cumulative execution duration using monospace numerals (`tabular-nums`) to prevent layout shifts.
+- **`StageDurationsPopover.tsx`**: Dark obsidian hover popover displaying per-stage active time breakdown, live pulsing indicator for running columns, and total active duration.
 - **`CardContextMenu.tsx`**: Right-click actions for cards: model overrides, manual compaction, stage moving, subtask inspection, and deletion.
 
 ### 2.2 Console Drawer Subsystem (`src/components/drawer/`)

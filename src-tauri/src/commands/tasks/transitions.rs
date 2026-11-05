@@ -344,6 +344,8 @@ pub fn propagate_parent_subtask_advance(
                 position: Some(next_subtask_pos),
                 hook_states: tasks[parent_idx].hook_states.clone(),
                 project_path: tasks[parent_idx].project_path.clone(),
+                stage_durations: None,
+                total_elapsed: None,
             };
 
             if has_autorun {

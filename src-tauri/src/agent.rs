@@ -119,6 +119,10 @@ pub struct Task {
     pub hook_states: Option<serde_json::Value>,
     #[serde(rename = "projectPath", alias = "project_path", default)]
     pub project_path: Option<String>,
+    #[serde(rename = "stageDurations", alias = "stage_durations", default)]
+    pub stage_durations: Option<serde_json::Value>,
+    #[serde(rename = "totalElapsed", alias = "total_elapsed", default)]
+    pub total_elapsed: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

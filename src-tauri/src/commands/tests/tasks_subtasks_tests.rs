@@ -146,6 +146,8 @@ use std::path::PathBuf;
             position: None,
             hook_states: None,
             project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
         };
         save_tasks_to_disk(&base, &[parent]).await.expect("save parent");
 
@@ -323,6 +325,8 @@ use std::path::PathBuf;
             position: None,
             hook_states: None,
             project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
         };
 
         // Parent CVH-300.1 waiting on Child CVH-300.1.1
@@ -356,6 +360,8 @@ use std::path::PathBuf;
             position: None,
             hook_states: None,
             project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
         };
 
         // Child CVH-300.1.1 running in dev
@@ -389,6 +395,8 @@ use std::path::PathBuf;
             position: None,
             hook_states: None,
             project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
         };
 
         save_tasks_to_disk(&base, &[gp, parent, child]).await.expect("save tasks");
@@ -553,6 +561,8 @@ use std::path::PathBuf;
             position: None,
             hook_states: None,
             project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
         };
         save_tasks_to_disk(&base, &[parent_task]).await.expect("save parent task");
 
@@ -838,6 +848,8 @@ use std::path::PathBuf;
                 position: None,
                 hook_states: None,
             project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
             },
             Task {
                 id: "CVH-500.1".to_string(),
@@ -869,6 +881,8 @@ use std::path::PathBuf;
                 position: None,
                 hook_states: None,
             project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
             },
             Task {
                 id: "CVH-501".to_string(),
@@ -900,6 +914,8 @@ use std::path::PathBuf;
                 position: None,
                 hook_states: None,
             project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
             },
             Task {
                 id: "CVH-501.1".to_string(),
@@ -931,6 +947,8 @@ use std::path::PathBuf;
                 position: None,
                 hook_states: None,
             project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
             },
         ];
 
@@ -976,6 +994,8 @@ use std::path::PathBuf;
             position: None,
             hook_states: None,
             project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
         };
         let child_active = Task {
             id: "CVH-600.1".to_string(),
@@ -1007,6 +1027,8 @@ use std::path::PathBuf;
             position: None,
             hook_states: None,
             project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
         };
         save_tasks_to_disk(&tmp, &[parent_active, child_active]).await.expect("save active tasks");
 

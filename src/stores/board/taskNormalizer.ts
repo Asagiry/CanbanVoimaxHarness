@@ -139,9 +139,10 @@ export function normalizeKanbanTask(
   if (effectiveWaitingForSubtaskId && status === 'idle') {
     status = 'done';
   }
+  const rawStageDurations = raw.stageDurations ?? (raw as any).stage_durations;
   const stageDurations: Record<string, number> =
-    raw.stageDurations && typeof raw.stageDurations === 'object' && !Array.isArray(raw.stageDurations)
-      ? raw.stageDurations
+    rawStageDurations && typeof rawStageDurations === 'object' && !Array.isArray(rawStageDurations)
+      ? { ...(rawStageDurations as Record<string, number>) }
       : {};
   const createdAt = typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt)
     ? raw.createdAt
@@ -158,28 +159,24 @@ export function normalizeKanbanTask(
     ? raw.completedAt
     : (typeof raw.completed_at === 'number' && Number.isFinite(raw.completed_at) ? raw.completed_at : undefined);
 
-  const stageStart = stageEnteredAt || createdAt;
-  const isDoneTask = status === 'done';
-  const finishTime = completedAt || (isDoneTask ? updatedAt : undefined);
-  const computedStageDuration = isDoneTask
-    ? (typeof raw.activeStageDuration === 'number' && Number.isFinite(raw.activeStageDuration) && raw.activeStageDuration > 0
-        ? raw.activeStageDuration
-        : (stageStart && finishTime ? Math.max(0, Math.floor((finishTime - stageStart) / 1000)) : 0))
-    : (stageStart ? Math.max(0, Math.floor((Date.now() - stageStart) / 1000)) : 0);
-
   const activeStageDuration = typeof raw.activeStageDuration === 'number' && Number.isFinite(raw.activeStageDuration) && raw.activeStageDuration > 0
     ? raw.activeStageDuration
-    : computedStageDuration;
+    : (typeof stageDurations[stageId] === 'number' && stageDurations[stageId] > 0 ? stageDurations[stageId] : 0);
 
-  const computedTotalElapsed = isDoneTask
-    ? (typeof raw.totalElapsed === 'number' && Number.isFinite(raw.totalElapsed) && raw.totalElapsed > 0
-        ? raw.totalElapsed
-        : (createdAt && finishTime ? Math.max(0, Math.floor((finishTime - createdAt) / 1000)) : 0))
-    : (createdAt ? Math.max(0, Math.floor((Date.now() - createdAt) / 1000)) : 0);
+  const sumStageDurations = Object.values(stageDurations).reduce(
+    (acc, v) => acc + (typeof v === 'number' && Number.isFinite(v) ? v : 0),
+    0
+  );
 
-  const totalElapsed = typeof raw.totalElapsed === 'number' && Number.isFinite(raw.totalElapsed) && raw.totalElapsed > 0
+  const rawTotalElapsed = typeof raw.totalElapsed === 'number' && Number.isFinite(raw.totalElapsed)
     ? raw.totalElapsed
-    : computedTotalElapsed;
+    : (typeof (raw as any).total_elapsed === 'number' && Number.isFinite((raw as any).total_elapsed)
+      ? (raw as any).total_elapsed
+      : undefined);
+
+  const totalElapsed = typeof rawTotalElapsed === 'number' && rawTotalElapsed > 0
+    ? rawTotalElapsed
+    : (sumStageDurations > 0 ? sumStageDurations : 0);
 
   const returnsCount = typeof raw.returnsCount === 'number' && Number.isFinite(raw.returnsCount)
     ? raw.returnsCount
