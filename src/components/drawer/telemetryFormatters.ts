@@ -2,6 +2,14 @@ export function formatDurationCompact(seconds?: number | null): string {
   if (seconds == null || seconds <= 0 || !Number.isFinite(seconds)) {
     return '0s';
   }
+  if (seconds < 1) {
+    const ms = Math.round(seconds * 1000);
+    return ms > 0 ? `${ms}ms` : '0s';
+  }
+  if (seconds < 10) {
+    const s = Number(seconds.toFixed(1));
+    return s % 1 === 0 ? `${s}s` : `${seconds.toFixed(1)}s`;
+  }
   const total = Math.round(seconds);
   if (total < 60) {
     return `${total}s`;

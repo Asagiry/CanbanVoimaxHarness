@@ -32,6 +32,14 @@ describe('telemetryFormatters', () => {
       expect(formatDurationCompact(NaN)).toBe('0s');
     });
 
+    it('formats sub-second and small durations without rounding to 0s', () => {
+      expect(formatDurationCompact(0.05)).toBe('50ms');
+      expect(formatDurationCompact(0.409)).toBe('409ms');
+      expect(formatDurationCompact(0.605)).toBe('605ms');
+      expect(formatDurationCompact(1)).toBe('1s');
+      expect(formatDurationCompact(2.4)).toBe('2.4s');
+    });
+
     it('formats durations under 60 seconds', () => {
       expect(formatDurationCompact(12)).toBe('12s');
       expect(formatDurationCompact(45.4)).toBe('45s');
