@@ -594,7 +594,7 @@ pub async fn run_agent(
                     };
                     let _ = crate::db::append_dialog_items(&root_inner, &tid_inner, std::slice::from_ref(&tool_item));
                 }
-                AgentEvent::ToolResult { id, name, result, success, batch } => {
+                AgentEvent::ToolResult { id, name, result, success, duration_ms, batch } => {
                     let sanitized_result = if result.len() > 65536 {
                         let half = 32768;
                         let head_end = result
@@ -626,6 +626,7 @@ pub async fn run_agent(
                             "name": name,
                             "result": &sanitized_result,
                             "success": success,
+                            "durationMs": duration_ms,
                             "batch": batch,
                         }),
                     );
@@ -644,6 +645,7 @@ pub async fn run_agent(
                         // Invariant § 2.20 & Defect 7: Persist FULL output in SQLite, keeping sanitized only for IPC
                         obj.insert("stdout".to_string(), serde_json::json!(&result));
                         obj.insert("result".to_string(), serde_json::json!(&result));
+                        obj.insert("durationMs".to_string(), serde_json::json!(duration_ms.unwrap_or(0.0)));
                         if !success {
                             obj.insert("stderr".to_string(), serde_json::json!(&result));
                         }
@@ -654,7 +656,7 @@ pub async fn run_agent(
 
                     let tool_json_str = serde_json::to_string(&tool_obj).unwrap_or_default();
                     // Invariant § 2.4 & Defect 6: Targeted update without deserializing/rewriting entire dialog history
-                    let _ = crate::db::db_update_dialog_tool_result(&root_inner, &tid_inner, &id, &tool_json_str, None);
+                    let _ = crate::db::db_update_dialog_tool_result(&root_inner, &tid_inner, &id, &tool_json_str, duration_ms);
                 }
                 AgentEvent::TurnStart { turn } => {
                     let _ = app_inner.emit(
