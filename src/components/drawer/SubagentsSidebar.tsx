@@ -442,7 +442,7 @@ export default function SubagentsSidebar({
   return (
     <aside
       style={{ width: `${isCollapsed ? 44 : sidebarWidth}px` }}
-      className={`relative shrink-0 mt-1 ml-1.5 rounded-tl-xl rounded-tr-xl border-t border-x border-[#ebebeb] dark:border-[#21262d] shadow-2xs bg-white dark:bg-[#0d1117] flex flex-col min-h-0 h-[calc(100%-0.25rem)] overflow-hidden select-none transition-colors ${
+      className={`relative shrink-0 my-1.5 ml-1.5 rounded-xl border border-[#ebebeb] dark:border-[#21262d] shadow-2xs bg-white dark:bg-[#0d1117] flex flex-col min-h-0 h-[calc(100%-0.75rem)] overflow-hidden select-none transition-colors ${
         isResizing ? 'select-none' : 'transition-[width] duration-200 ease-out'
       } ${className || ''}`}
       aria-label={t('subagents.panelAria')}
