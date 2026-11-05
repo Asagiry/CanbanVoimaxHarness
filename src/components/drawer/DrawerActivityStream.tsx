@@ -186,6 +186,10 @@ export default function DrawerActivityStream({
 
               // d) Inline Tool Execution Card (including subagent tool executions)
               if (activity?.type === 'tool' && activity?.tool) {
+                // Suppress duplicate tool card when compaction succeeded — CompactedContextCard already displays the full report
+                if (activity.tool.toolName === 'compact_context' && activity.tool.status === 'success') {
+                  return null;
+                }
                 const toolWithDuration = {
                   ...activity.tool,
                   durationMs: activity.tool.durationMs || activityDurations[idx] || 0,
@@ -222,6 +226,7 @@ export default function DrawerActivityStream({
                     key={key}
                     activity={activity}
                     onImageClick={handleOpenLightbox}
+                    onDelete={(id) => useDrawerStore.getState().deleteDialogItem?.(task.id, id)}
                   />
                 );
               }

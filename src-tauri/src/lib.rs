@@ -80,6 +80,7 @@ pub fn run() {
             retry_subagent,
             clear_task_activity,
             clear_task_dialog,
+            delete_dialog_item,
             log_ui_error,
             log_event,
             create_task,

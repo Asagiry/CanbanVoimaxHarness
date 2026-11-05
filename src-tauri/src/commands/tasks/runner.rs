@@ -1526,6 +1526,16 @@ pub async fn compact_context(
 
     let tokens_before = crate::agent::compactor::estimate_tokens(&messages_to_condense);
 
+    let (task_title, task_desc) = {
+        if let Ok(guard) = state.tasks.lock() {
+            guard.iter().find(|t| t.id == task_id)
+                .map(|t| (t.title.clone(), t.description.clone()))
+                .unwrap_or_default()
+        } else {
+            (String::new(), String::new())
+        }
+    };
+
     // 5. Run LLM condensation with the 7-section structured prompt
     let compacted_markdown = crate::agent::compactor::condense_context_with_llm(
         &task_id,
@@ -1533,6 +1543,8 @@ pub async fn compact_context(
         &compactor_model,
         &base_url,
         api_key,
+        Some(&task_title),
+        Some(&task_desc),
     )
     .await;
 

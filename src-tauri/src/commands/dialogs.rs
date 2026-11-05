@@ -489,6 +489,36 @@ pub async fn log_ui_error(message: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn delete_dialog_item(
+    task_id: String,
+    item_id: String,
+    app_handle: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let safe_id = sanitize_task_id(&task_id)?;
+    let root = state.get_root();
+    crate::db::delete_dialog_item(&root, &safe_id, &item_id)?;
+
+    if let Ok(map) = state.agent_contexts.lock() {
+        if let Some(cs) = map.get(&safe_id) {
+            if let Ok(mut guard) = cs.lock() {
+                guard.messages.retain(|m| {
+                    if let Some(ref c) = m.content {
+                        !c.contains(&item_id)
+                    } else {
+                        true
+                    }
+                });
+                guard.compaction_revision += 1;
+            }
+        }
+    }
+
+    let _ = app_handle.emit("dialog:updated", serde_json::json!({ "taskId": &safe_id, "deletedItemId": &item_id }));
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn clear_task_activity(
     task_id: String,
     state: State<'_, AppState>,

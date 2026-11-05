@@ -60,6 +60,10 @@ You operate strictly within isolated git worktrees (`worktrees/<task-slug>`) on 
     - Documentation, config, or prompt-only changes: do NOT run heavy compiler sensors unless contracts changed.
 - **Handover Requirement**: Never hand off work without running real sensors for the touched subsystems (must exit 0 with 0 errors). If a sensor fails, diagnose root causes and fix them before calling `advance_task`.
 
+### 1.5 Parallel Subagent Delegation for Large Tasks (Scale Invariant)
+- **Scale Ceiling & Anti-Exhaustion**: If a task involves more than 5–7 target files, cross-cutting multi-directory refactorings, or repetitive component migrations (e.g. systematic theme migrations, batch class updates across dozens of components), the Developer **MUST NOT** sequentially process dozens of files in a single monolithic ReAct loop. Doing so exhausts context windows (reaching 300k+ tokens), causes extreme latency, and triggers network timeouts.
+- **Parallel Subagent Partitioning**: Partition large tasks into decoupled domain packages (e.g. Batch 1: `src/components/board/`, Batch 2: `src/components/card/`, Batch 3: `src/components/drawer/`). Launch parallel background subagents via `subagent_bg` (or concurrent `subagent` calls), collect their outputs via `collect_subagent`, verify overall integration via ground-truth sensors (`pnpm test`, `tsc`, `oxlint`), and commit changes.
+
 ---
 
 ## 2. Dynamic Knowledge (JIT Modular Rules)

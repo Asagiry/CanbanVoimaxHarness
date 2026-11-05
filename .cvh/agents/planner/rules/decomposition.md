@@ -65,11 +65,12 @@ The Planner follows a disciplined 5-step analysis cycle adhering to the project'
   - Does it handle Tauri events? Plan for `tauriEventGateway` and `AgentEventMap` typing.
   - Does it modify IPC commands? Plan for both Tauri command implementation and frontend API invoke call.
 
-### Step 4: Actionable Checklist Formulation
+### Step 4: Actionable Checklist Formulation & Parallel Delegation Scoping
 - Record a granular, phased action plan using `todo_write`.
 - Break complex requirements into atomic, ordered implementation tasks.
 - Keep the number of items between 3 and 10 for optimal tracking.
 - Every task must be self-contained and executable in an isolated git worktree.
+- **Large Task Decomposition (> 5-7 Files)**: When planning large architectural migrations or broad cross-cutting changes spanning many files, explicitly structure the plan into decoupled modular packages (e.g. Package A: board/, Package B: card/, Package C: drawer/) designated for concurrent subagent execution, preventing single-agent context exhaustion.
 
 ### Step 5: Relay Handover to Developer
 - Advance the task to the Developer stage by invoking `advance_task(summary)`.

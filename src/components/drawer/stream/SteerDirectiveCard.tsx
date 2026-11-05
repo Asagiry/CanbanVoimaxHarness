@@ -1,12 +1,13 @@
 import { memo, useContext, useMemo } from 'react';
 import type { DrawerActivityItem } from '../../../stores/drawerStore';
 import { useTranslation } from '../../../stores/languageStore';
-import { ShieldAlert, User, ZoomIn, Clock, Bot } from 'lucide-react';
+import { ShieldAlert, User, ZoomIn, Clock, Bot, Trash2 } from 'lucide-react';
 import { MarkdownContent, LightboxContext } from './MarkdownContent';
 
 export interface SteerDirectiveCardProps {
   activity: DrawerActivityItem;
   onImageClick?: (src: string, alt?: string) => void;
+  onDelete?: (activityId: string) => void;
 }
 
 export function isSensorRejectionActivity(activity?: DrawerActivityItem): boolean {
@@ -51,6 +52,7 @@ export function isAgentMessageActivity(activity?: DrawerActivityItem): boolean {
 export const SteerDirectiveCard = memo(function SteerDirectiveCard({
   activity,
   onImageClick,
+  onDelete,
 }: SteerDirectiveCardProps) {
   const { t } = useTranslation();
   const contextLightbox = useContext(LightboxContext);
@@ -141,12 +143,24 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
             </>
           )}
         </div>
-        {formattedTime && (
-          <span className="flex items-center space-x-1 text-[#71717a] dark:text-[#8b949e] tabular-nums">
-            <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
-            <span>{formattedTime}</span>
-          </span>
-        )}
+        <div className="flex items-center space-x-2">
+          {onDelete && !isAgentMessage && (
+            <button
+              type="button"
+              onClick={() => onDelete(activity.id)}
+              className="p-0.5 rounded text-[#71717a] hover:text-red-500 hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] transition cursor-pointer"
+              title={t('drawer.deleteMessage') || 'Удалить сообщение'}
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          )}
+          {formattedTime && (
+            <span className="flex items-center space-x-1 text-[#71717a] dark:text-[#8b949e] tabular-nums">
+              <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
+              <span>{formattedTime}</span>
+            </span>
+          )}
+        </div>
       </div>
       {images.length > 0 && (
         <div className="flex items-center gap-2 mb-2.5 flex-wrap">

@@ -216,7 +216,12 @@ export function useContextGaugeMetrics({
     } else if (typeof telemetry?.systemTokens === 'number' && typeof telemetry?.toolTokens === 'number') {
       sys = telemetry.systemTokens;
       tool = telemetry.toolTokens;
-      msg = Math.max(0, total - sys - tool);
+      if (total < sys + tool) {
+        msg = total;
+        total = sys + tool + msg;
+      } else {
+        msg = Math.max(0, total - sys - tool);
+      }
     } else {
       const fixedOverhead = baseSystem + baseTool;
       if (total <= fixedOverhead) {
