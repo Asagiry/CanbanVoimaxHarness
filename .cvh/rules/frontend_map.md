@@ -95,6 +95,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Two-Level Tool Policy Modal** | `src/components/settings/ToolPolicyModal.tsx` | Interactive policy matrix: global switches & overrides. |
 | **Global Settings Modal** | `src/components/settings/SettingsModal.tsx` | LLM endpoints, active model, and app settings. |
 | **UI Zoom Controller Hook** | `src/hooks/useUiZoom.ts` | Ctrl+Plus/Minus/Wheel viewport scaling. |
+| **UI Zoom Controller Unit Tests** | `src/hooks/__tests__/useUiZoom.test.ts` | Vitest suite for UI zoom scaling, modal overlays, and wheel listeners. |
 | **Desktop Notifications Dispatcher** | `src/services/notificationService.ts` | Cross-platform notification dispatch & toast formatting. |
 | **Typed Tauri Event Gateway** | `src/services/tauriEventGateway.ts` | 150ms micro-batching, typed events (zero `listen<any>`).|
 | **Project Management Store** | `src/stores/projectStore.ts` | Multi-project workspace switching, active project persistence. |

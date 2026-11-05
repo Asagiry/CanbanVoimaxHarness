@@ -180,8 +180,10 @@ export function adjustDndTransformForZoom(transform: string | undefined | null, 
 export function useUiZoom() {
   attachGlobalZoomListeners();
 
-  const zoom = useUiZoomStore((s) => s.zoom);
-  const showIndicator = useUiZoomStore((s) => s.showIndicator);
+  const storeZoom = useUiZoomStore((s) => s.zoom);
+  const storeShowIndicator = useUiZoomStore((s) => s.showIndicator);
+  const zoom = typeof window === 'undefined' ? useUiZoomStore.getState().zoom : storeZoom;
+  const showIndicator = typeof window === 'undefined' ? useUiZoomStore.getState().showIndicator : storeShowIndicator;
   const setZoom = useUiZoomStore((s) => s.setZoom);
   const zoomIn = useUiZoomStore((s) => s.zoomIn);
   const zoomOut = useUiZoomStore((s) => s.zoomOut);

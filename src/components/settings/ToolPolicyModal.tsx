@@ -519,7 +519,7 @@ export default function ToolPolicyModal() {
 
   return (
     <div style={getZoomOverlayStyle(zoom)} className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 dark:bg-black/80 p-3">
-      <div className="w-full max-w-4xl rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] shadow-md overflow-hidden flex flex-col max-h-[85vh] transition-colors">
+      <div className="w-full max-w-4xl rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] shadow-md overflow-hidden flex flex-col max-h-[85%] transition-colors">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#ebebeb] dark:border-[#21262d] px-4 py-3 bg-white dark:bg-[#0d1117]">
           <div>

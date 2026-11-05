@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { GitImageDiff } from '../../../types';
 import { useTranslation } from '../../../stores/languageStore';
+import { useUiZoom, getZoomOverlayStyle } from '../../../hooks/useUiZoom';
 import { formatBytes } from './utils';
 
 export interface ImageDiffViewerProps {
@@ -24,6 +25,7 @@ export type ImageViewMode = '2up' | 'split' | 'onion' | 'new' | 'old';
 
 export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
   const { t } = useTranslation();
+  const { zoom } = useUiZoom();
   const [data, setData] = useState<GitImageDiff | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -501,6 +503,7 @@ export function ImageDiffViewer({ taskId, filePath }: ImageDiffViewerProps) {
           <div
             role="dialog"
             aria-modal="true"
+            style={getZoomOverlayStyle(zoom)}
             className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-sm flex flex-col animate-in fade-in duration-150"
             onClick={() => {
               setLightbox(null);
