@@ -41,6 +41,21 @@ pub async fn execute_advance_task(
         .or(task_id)
         .context("No active task ID for advance_task / move_task")?;
 
+    let verdict = args
+        .get("verdict")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty());
+
+    if let Some(v) = verdict {
+        let mut tasks = crate::commands::tasks::load_tasks_from_disk(repo_root).await;
+        if let Some(t) = tasks.iter_mut().find(|t| crate::commands::tasks::task_id_matches(&t.id, task_id)) {
+            t.verdict = Some(v.to_string());
+            let _ = crate::db::db_upsert_task(repo_root, t);
+            let _ = crate::commands::tasks::save_tasks_to_disk(repo_root, &tasks).await;
+        }
+    }
+
     crate::commands::internal_advance_task_to_stage(
         repo_root,
         task_id,

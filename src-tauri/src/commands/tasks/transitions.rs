@@ -1905,12 +1905,29 @@ pub async fn internal_advance_task_to_stage(
                 .unwrap_or(false)
     };
 
+    let is_review_stage = source_col
+        .as_ref()
+        .map(|c| c.persona.as_deref() == Some("reviewer") || stage_id_matches(&c.id, "review"))
+        .unwrap_or(false);
+
+    let effective_verdict = current_task.verdict.clone().or_else(|| {
+        if is_terminal || is_review_stage {
+            Some("APPROVED".to_string())
+        } else {
+            None
+        }
+    });
+
+    if effective_verdict.is_some() && current_task.verdict.is_none() {
+        current_task.verdict = effective_verdict.clone();
+    }
+
     let pipeline = TaskTransitionPipeline::new(
         root,
         source_col.as_ref(),
         &target_col,
         is_source_intake,
-        current_task.verdict.clone(),
+        effective_verdict.clone(),
         false, // emit_task_moved
         app_handle,
     );
@@ -1932,6 +1949,9 @@ pub async fn internal_advance_task_to_stage(
             let mut tasks = load_tasks_from_disk(root).await;
             if let Some(sub) = tasks.iter_mut().find(|t| task_id_matches(&t.id, &subtask_id)) {
                 sub.status = Some("done".to_string());
+                if sub.verdict.is_none() && effective_verdict.is_some() {
+                    sub.verdict = effective_verdict.clone();
+                }
                 if sub.completed_at.is_none() {
                     sub.completed_at = Some(Utc::now().timestamp_millis());
                 }
