@@ -50,7 +50,7 @@ function renderInlineMarkdown(text: string): React.ReactNode[] {
           nodes.push(
             <code
               key={`code-${i}`}
-              className="px-1.5 py-0.5 bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] rounded text-xs font-mono text-[#09090b] dark:text-[#f0f6fc]"
+              className="px-1.5 py-0.5 bg-[#f4f4f5] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] rounded text-xs font-mono text-[#09090b] dark:text-[#f4f4f5]"
             >
               {candidate}
             </code>
@@ -71,7 +71,7 @@ function renderInlineMarkdown(text: string): React.ReactNode[] {
         if (candidate.length > 0 && candidate.length <= 300) {
           flushText();
           nodes.push(
-            <strong key={`bold-${i}`} className="font-semibold text-[#171717] dark:text-[#f0f6fc]">
+            <strong key={`bold-${i}`} className="font-semibold text-[#171717] dark:text-[#f4f4f5]">
               {candidate}
             </strong>
           );
@@ -110,14 +110,14 @@ function renderMarkdownBlocks(content: string) {
         elements.push(
           <div
             key={`code-${idx}`}
-            className="my-2 rounded-md border border-[#e4e4e7] dark:border-[#21262d] bg-[#f8fafc] dark:bg-[#161b22] overflow-hidden"
+            className="my-2 rounded-md border border-[#e4e4e7] dark:border-[#212126] bg-[#f8fafc] dark:bg-[#17171b] overflow-hidden"
           >
             {codeLang && (
-              <div className="px-3 py-1 bg-[#f1f5f9] dark:bg-[#21262d] border-b border-[#e4e4e7] dark:border-[#30363d] text-xs font-mono text-[#64748b] dark:text-[#8b949e]">
+              <div className="px-3 py-1 bg-[#f1f5f9] dark:bg-[#232328] border-b border-[#e4e4e7] dark:border-[#2c2c33] text-xs font-mono text-[#64748b] dark:text-[#71717a]">
                 {codeLang}
               </div>
             )}
-            <pre className="p-3 font-mono text-xs text-[#0f172a] dark:text-[#f0f6fc] overflow-x-auto leading-relaxed">
+            <pre className="p-3 font-mono text-xs text-[#0f172a] dark:text-[#f4f4f5] overflow-x-auto leading-relaxed">
               <code>{codeText}</code>
             </pre>
           </div>
@@ -139,7 +139,7 @@ function renderMarkdownBlocks(content: string) {
 
     if (trimmedLine.startsWith('# ')) {
       elements.push(
-        <h1 key={idx} className="text-base font-bold text-[#171717] dark:text-[#f0f6fc] mt-3.5 mb-1.5">
+        <h1 key={idx} className="text-base font-bold text-[#171717] dark:text-[#f4f4f5] mt-3.5 mb-1.5">
           {renderInlineMarkdown(trimmedLine.slice(2))}
         </h1>
       );
@@ -149,7 +149,7 @@ function renderMarkdownBlocks(content: string) {
       elements.push(
         <h2
           key={idx}
-          className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc] mt-2.5 mb-1 pb-1 border-b border-[#f4f4f5] dark:border-[#21262d]"
+          className="text-sm font-semibold text-[#171717] dark:text-[#f4f4f5] mt-2.5 mb-1 pb-1 border-b border-[#f4f4f5] dark:border-[#212126]"
         >
           {renderInlineMarkdown(trimmedLine.slice(3))}
         </h2>
@@ -158,7 +158,7 @@ function renderMarkdownBlocks(content: string) {
     }
     if (trimmedLine.startsWith('### ')) {
       elements.push(
-        <h3 key={idx} className="text-sm font-medium text-[#4d4d4d] dark:text-[#c9d1d9] mt-2 mb-0.5">
+        <h3 key={idx} className="text-sm font-medium text-[#4d4d4d] dark:text-[#a1a1aa] mt-2 mb-0.5">
           {renderInlineMarkdown(trimmedLine.slice(4))}
         </h3>
       );
@@ -169,8 +169,8 @@ function renderMarkdownBlocks(content: string) {
       const indent = numMatch[1].length;
       const mlClass = indent >= 4 ? 'ml-6' : indent >= 2 ? 'ml-4' : 'ml-2';
       elements.push(
-        <div key={idx} className={`flex items-start space-x-2 py-0.5 text-xs text-[#171717] dark:text-[#f0f6fc] ${mlClass}`}>
-          <span className="text-[#8f8f8f] dark:text-[#8b949e] font-mono text-xs shrink-0 font-medium">
+        <div key={idx} className={`flex items-start space-x-2 py-0.5 text-xs text-[#171717] dark:text-[#f4f4f5] ${mlClass}`}>
+          <span className="text-[#8f8f8f] dark:text-[#71717a] font-mono text-xs shrink-0 font-medium">
             {numMatch[2]}
           </span>
           <span className="flex-1 min-w-0">{renderInlineMarkdown(numMatch[4])}</span>
@@ -183,8 +183,8 @@ function renderMarkdownBlocks(content: string) {
       const indent = bulletMatch[1].length;
       const mlClass = indent >= 4 ? 'ml-6' : indent >= 2 ? 'ml-4' : 'ml-2';
       elements.push(
-        <div key={idx} className={`flex items-start space-x-1.5 py-0.5 text-xs text-[#171717] dark:text-[#f0f6fc] ${mlClass}`}>
-          <span className="text-[#8f8f8f] dark:text-[#8b949e] shrink-0 leading-relaxed">•</span>
+        <div key={idx} className={`flex items-start space-x-1.5 py-0.5 text-xs text-[#171717] dark:text-[#f4f4f5] ${mlClass}`}>
+          <span className="text-[#8f8f8f] dark:text-[#71717a] shrink-0 leading-relaxed">•</span>
           <span className="flex-1 min-w-0">{renderInlineMarkdown(bulletMatch[3])}</span>
         </div>
       );
@@ -195,7 +195,7 @@ function renderMarkdownBlocks(content: string) {
       continue;
     }
     elements.push(
-      <p key={idx} className="text-sm text-[#171717] dark:text-[#f0f6fc] py-0.5 leading-relaxed">
+      <p key={idx} className="text-sm text-[#171717] dark:text-[#f4f4f5] py-0.5 leading-relaxed">
         {renderInlineMarkdown(line)}
       </p>
     );
@@ -205,14 +205,14 @@ function renderMarkdownBlocks(content: string) {
     elements.push(
       <div
         key="code-tail"
-        className="my-2 rounded-md border border-[#e4e4e7] dark:border-[#21262d] bg-[#f8fafc] dark:bg-[#161b22] overflow-hidden"
+        className="my-2 rounded-md border border-[#e4e4e7] dark:border-[#212126] bg-[#f8fafc] dark:bg-[#17171b] overflow-hidden"
       >
         {codeLang && (
-          <div className="px-3 py-1 bg-[#f1f5f9] dark:bg-[#21262d] border-b border-[#e4e4e7] dark:border-[#30363d] text-xs font-mono text-[#64748b] dark:text-[#8b949e]">
+          <div className="px-3 py-1 bg-[#f1f5f9] dark:bg-[#232328] border-b border-[#e4e4e7] dark:border-[#2c2c33] text-xs font-mono text-[#64748b] dark:text-[#71717a]">
             {codeLang}
           </div>
         )}
-        <pre className="p-3 font-mono text-xs text-[#0f172a] dark:text-[#f0f6fc] overflow-x-auto leading-relaxed">
+        <pre className="p-3 font-mono text-xs text-[#0f172a] dark:text-[#f4f4f5] overflow-x-auto leading-relaxed">
           <code>{codeBuffer.join('\n')}</code>
         </pre>
       </div>
@@ -281,9 +281,9 @@ export default function RuleEditorModal() {
 
   return (
     <div style={getZoomOverlayStyle(zoom)} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 p-3">
-      <div className="relative flex flex-col h-[85%] max-h-[calc(100%-2rem)] w-[860px] max-w-[95%] rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-md overflow-hidden">
+      <div className="relative flex flex-col h-[85%] max-h-[calc(100%-2rem)] w-[860px] max-w-[95%] rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] shadow-md overflow-hidden">
         {/* Editor Top Bar */}
-        <div className="flex items-center justify-between border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] px-4 py-2.5">
+        <div className="flex items-center justify-between border-b border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#17171b] px-4 py-2.5">
           <div className="flex items-center space-x-2 min-w-0">
             {isSettings ? (
               <SlidersHorizontal className="h-4 w-4 text-[#6366f1] dark:text-[#818cf8] shrink-0" />
@@ -292,13 +292,13 @@ export default function RuleEditorModal() {
             ) : isRuntime ? (
               <RuntimeRuleIcon className="h-4 w-4 text-indigo-500 dark:text-indigo-400 shrink-0" />
             ) : (
-              <FileText className="h-4 w-4 text-[#666666] dark:text-[#8b949e] shrink-0" />
+              <FileText className="h-4 w-4 text-[#666666] dark:text-[#71717a] shrink-0" />
             )}
-            <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] truncate">
+            <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] truncate">
               {activeFile.name}
             </span>
             {isHook && (
-              <span className="px-1.5 py-0.5 rounded border border-[#ebebeb] dark:border-[#30363d] bg-[#f4f4f5] dark:bg-[#21262d] text-[10px] font-mono text-[#666666] dark:text-[#8b949e] shrink-0">
+              <span className="px-1.5 py-0.5 rounded border border-[#ebebeb] dark:border-[#2c2c33] bg-[#f4f4f5] dark:bg-[#232328] text-[10px] font-mono text-[#666666] dark:text-[#71717a] shrink-0">
                 {hookMomentOf(activeFile) ?? t('ruleEditor.hookBadge')}
               </span>
             )}
@@ -321,14 +321,14 @@ export default function RuleEditorModal() {
             )}
 
             {isSettings ? (
-              <div className="flex items-center rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-[#f4f4f5] dark:bg-[#21262d] p-0.5 text-xs font-mono">
+              <div className="flex items-center rounded-md border border-[#ebebeb] dark:border-[#2c2c33] bg-[#f4f4f5] dark:bg-[#232328] p-0.5 text-xs font-mono">
                 <button
                   type="button"
                   onClick={() => setSettingsTab('visual')}
                   className={`flex items-center space-x-1.5 px-2.5 py-1 rounded transition cursor-pointer ${
                     settingsTab === 'visual'
-                      ? 'bg-white dark:bg-[#161b22] text-[#171717] dark:text-[#f0f6fc] shadow-2xs font-semibold'
-                      : 'text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
+                      ? 'bg-white dark:bg-[#17171b] text-[#171717] dark:text-[#f4f4f5] shadow-2xs font-semibold'
+                      : 'text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
                   }`}
                 >
                   <SlidersHorizontal className="h-3.5 w-3.5 text-[#6366f1] dark:text-[#818cf8]" />
@@ -339,21 +339,21 @@ export default function RuleEditorModal() {
                   onClick={() => setSettingsTab('code')}
                   className={`flex items-center space-x-1.5 px-2.5 py-1 rounded transition cursor-pointer ${
                     settingsTab === 'code'
-                      ? 'bg-white dark:bg-[#161b22] text-[#171717] dark:text-[#f0f6fc] shadow-2xs font-semibold'
-                      : 'text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
+                      ? 'bg-white dark:bg-[#17171b] text-[#171717] dark:text-[#f4f4f5] shadow-2xs font-semibold'
+                      : 'text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
                   }`}
                 >
-                  <Code2 className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e]" />
+                  <Code2 className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a]" />
                   <span>{t('ruleEditor.settingsTabCode')}</span>
                 </button>
               </div>
             ) : (
               <button
                 onClick={() => setPreviewMode(!previewMode)}
-                className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] transition cursor-pointer"
+                className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-mono text-[#171717] dark:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] bg-white dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] transition cursor-pointer"
                 aria-label={t('ruleEditor.togglePreview')}
               >
-                {previewMode ? <Edit3 className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e]" /> : <Eye className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e]" />}
+                {previewMode ? <Edit3 className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a]" /> : <Eye className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a]" />}
                 <span>{previewMode ? t('ruleEditor.edit') : t('ruleEditor.preview')}</span>
               </button>
             )}
@@ -370,7 +370,7 @@ export default function RuleEditorModal() {
 
             <button
               onClick={closeEditor}
-              className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer"
+              className="p-1 rounded-md text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] transition cursor-pointer"
               aria-label={t('common.close')}
             >
               <X className="h-4 w-4" />
@@ -379,7 +379,7 @@ export default function RuleEditorModal() {
         </div>
 
         {/* Editor Body */}
-        <div className="flex-1 overflow-hidden flex bg-white dark:bg-[#0d1117] font-mono text-xs text-[#171717] dark:text-[#f0f6fc]">
+        <div className="flex-1 overflow-hidden flex bg-white dark:bg-[#111114] font-mono text-xs text-[#171717] dark:text-[#f4f4f5]">
           {isSettings ? (
             settingsTab === 'visual' ? (
               <AgentSettingVisualEditor
@@ -391,7 +391,7 @@ export default function RuleEditorModal() {
             ) : (
               <div className="flex w-full h-full">
                 {/* Line Numbers */}
-                <div className="w-10 py-2.5 bg-[#f9f9f9] dark:bg-[#161b22] border-r border-[#ebebeb] dark:border-[#21262d] text-right pr-2 select-none text-[#8f8f8f] dark:text-[#8b949e] font-mono text-xs leading-5 tabular-nums">
+                <div className="w-10 py-2.5 bg-[#f9f9f9] dark:bg-[#17171b] border-r border-[#ebebeb] dark:border-[#212126] text-right pr-2 select-none text-[#8f8f8f] dark:text-[#71717a] font-mono text-xs leading-5 tabular-nums">
                   {lines.map((_, i) => (
                     <div key={i}>{i + 1}</div>
                   ))}
@@ -402,7 +402,7 @@ export default function RuleEditorModal() {
                   value={activeFile.content}
                   onChange={(e) => updateActiveFileContent(e.target.value)}
                   spellCheck={false}
-                  className="flex-1 w-full h-full p-2.5 bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] font-mono text-xs leading-5 resize-none focus:outline-hidden selection:bg-[#e5e5e5] dark:selection:bg-[#264f78]"
+                  className="flex-1 w-full h-full p-2.5 bg-white dark:bg-[#111114] text-[#171717] dark:text-[#f4f4f5] font-mono text-xs leading-5 resize-none focus:outline-hidden selection:bg-[#e5e5e5] dark:selection:bg-[#264f78]"
                   placeholder={t('ruleEditor.placeholder')}
                 />
               </div>
@@ -410,7 +410,7 @@ export default function RuleEditorModal() {
           ) : !previewMode ? (
             <div className="flex w-full h-full">
               {/* Line Numbers */}
-              <div className="w-10 py-2.5 bg-[#f9f9f9] dark:bg-[#161b22] border-r border-[#ebebeb] dark:border-[#21262d] text-right pr-2 select-none text-[#8f8f8f] dark:text-[#8b949e] font-mono text-xs leading-5 tabular-nums">
+              <div className="w-10 py-2.5 bg-[#f9f9f9] dark:bg-[#17171b] border-r border-[#ebebeb] dark:border-[#212126] text-right pr-2 select-none text-[#8f8f8f] dark:text-[#71717a] font-mono text-xs leading-5 tabular-nums">
                 {lines.map((_, i) => (
                   <div key={i}>{i + 1}</div>
                 ))}
@@ -421,12 +421,12 @@ export default function RuleEditorModal() {
                 value={activeFile.content}
                 onChange={(e) => updateActiveFileContent(e.target.value)}
                 spellCheck={false}
-                className="flex-1 w-full h-full p-2.5 bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] font-mono text-xs leading-5 resize-none focus:outline-hidden selection:bg-[#e5e5e5] dark:selection:bg-[#264f78]"
+                className="flex-1 w-full h-full p-2.5 bg-white dark:bg-[#111114] text-[#171717] dark:text-[#f4f4f5] font-mono text-xs leading-5 resize-none focus:outline-hidden selection:bg-[#e5e5e5] dark:selection:bg-[#264f78]"
                 placeholder={t('ruleEditor.placeholder')}
               />
             </div>
           ) : (
-            <div className="w-full h-full overflow-y-auto bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] font-sans leading-relaxed">
+            <div className="w-full h-full overflow-y-auto bg-white dark:bg-[#111114] text-[#171717] dark:text-[#f4f4f5] font-sans leading-relaxed">
               <div className="w-full max-w-4xl px-5 py-4 space-y-2 text-sm">
                 {renderMarkdownBlocks(activeFile.content)}
               </div>
@@ -435,15 +435,15 @@ export default function RuleEditorModal() {
         </div>
 
         {/* Editor Footer */}
-        <div className="flex items-center justify-between border-t border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#161b22] px-4 py-1.5 text-[10px] text-[#666666] dark:text-[#8b949e] font-mono">
+        <div className="flex items-center justify-between border-t border-[#ebebeb] dark:border-[#212126] bg-[#f9f9f9] dark:bg-[#17171b] px-4 py-1.5 text-[10px] text-[#666666] dark:text-[#71717a] font-mono">
           <div className="flex items-center space-x-3">
-            <span>{t('ruleEditor.stage')} <strong className="text-[#171717] dark:text-[#f0f6fc] uppercase">{activeFile.stageId}</strong></span>
+            <span>{t('ruleEditor.stage')} <strong className="text-[#171717] dark:text-[#f4f4f5] uppercase">{activeFile.stageId}</strong></span>
             {isSettings && settingsTab === 'visual' ? (
               <span className="text-[#6366f1] dark:text-[#818cf8] font-medium">UI Editor</span>
             ) : (
               <>
-                <span>{t('ruleEditor.lines')} <strong className="text-[#171717] dark:text-[#f0f6fc] tabular-nums">{lineCount}</strong></span>
-                <span>{t('ruleEditor.words')} <strong className="text-[#171717] dark:text-[#f0f6fc] tabular-nums">{wordCount}</strong></span>
+                <span>{t('ruleEditor.lines')} <strong className="text-[#171717] dark:text-[#f4f4f5] tabular-nums">{lineCount}</strong></span>
+                <span>{t('ruleEditor.words')} <strong className="text-[#171717] dark:text-[#f4f4f5] tabular-nums">{wordCount}</strong></span>
               </>
             )}
           </div>

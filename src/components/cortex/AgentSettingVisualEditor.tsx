@@ -372,10 +372,10 @@ export default function AgentSettingVisualEditor({
         <div className="inline-flex p-3 rounded-full bg-amber-500/10 text-amber-500">
           <AlertTriangle className="h-8 w-8" />
         </div>
-        <h3 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc]">
+        <h3 className="text-sm font-semibold text-[#171717] dark:text-[#f4f4f5]">
           {t('ruleEditor.jsonParseError')}
         </h3>
-        <p className="text-xs text-[#666666] dark:text-[#8b949e] font-mono bg-[#f4f4f5] dark:bg-[#161b22] p-3 rounded-md border border-[#ebebeb] dark:border-[#30363d] text-left break-all">
+        <p className="text-xs text-[#666666] dark:text-[#71717a] font-mono bg-[#f4f4f5] dark:bg-[#17171b] p-3 rounded-md border border-[#ebebeb] dark:border-[#2c2c33] text-left break-all">
           {parseError}
         </p>
         {onSwitchToCode && (
@@ -395,20 +395,20 @@ export default function AgentSettingVisualEditor({
   const isModelInherit = !model || model === 'inherit';
 
   return (
-    <div className="w-full h-full overflow-y-auto px-5 py-4 space-y-5 font-sans select-none text-[#171717] dark:text-[#f0f6fc]">
+    <div className="w-full h-full overflow-y-auto px-5 py-4 space-y-5 font-sans select-none text-[#171717] dark:text-[#f4f4f5]">
       {/* СЕКЦИЯ 1: КАСТОМИЗАЦИЯ АГЕНТА (ИКОНКА И ЦВЕТ) */}
-      <section className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-[#fdfdfd] dark:bg-[#161b22]/70 p-4 space-y-4 shadow-2xs">
-        <div className="flex items-center justify-between border-b border-[#ebebeb] dark:border-[#21262d] pb-2.5">
+      <section className="rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-[#fdfdfd] dark:bg-[#17171b]/70 p-4 space-y-4 shadow-2xs">
+        <div className="flex items-center justify-between border-b border-[#ebebeb] dark:border-[#212126] pb-2.5">
           <div className="flex items-center space-x-2">
             <Palette className="h-4 w-4" style={{ color }} />
-            <h2 className="text-xs font-bold font-mono uppercase tracking-wider text-[#171717] dark:text-[#f0f6fc]">
+            <h2 className="text-xs font-bold font-mono uppercase tracking-wider text-[#171717] dark:text-[#f4f4f5]">
               {t('ruleEditor.customizationSection')}
             </h2>
           </div>
 
           {/* Live Preview бейдж */}
           <div className="flex items-center space-x-2">
-            <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e]">
+            <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a]">
               {t('ruleEditor.previewLabel')}:
             </span>
             <div
@@ -424,15 +424,15 @@ export default function AgentSettingVisualEditor({
         {/* Палитра цветов */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc] flex items-center space-x-1.5">
+            <label className="text-xs font-medium text-[#171717] dark:text-[#f4f4f5] flex items-center space-x-1.5">
               <span>{t('ruleEditor.colorLabel')}</span>
             </label>
-            <span className="text-[10px] font-mono font-semibold text-[#666666] dark:text-[#8b949e] px-1.5 py-0.5 rounded bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d]">
+            <span className="text-[10px] font-mono font-semibold text-[#666666] dark:text-[#71717a] px-1.5 py-0.5 rounded bg-white dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33]">
               {color}
             </span>
           </div>
 
-          <div className="p-2.5 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#0d1117] space-y-2">
+          <div className="p-2.5 rounded-md border border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#111114] space-y-2">
             <div className="flex flex-wrap gap-2 items-center">
               {AGENT_PALETTE.map((c) => {
                 const isSelected = color.toLowerCase() === c.toLowerCase();
@@ -444,7 +444,7 @@ export default function AgentSettingVisualEditor({
                     aria-label={c}
                     className={`h-7 w-7 rounded-full transition-transform cursor-pointer flex items-center justify-center shadow-2xs ${
                       isSelected
-                        ? 'scale-110 ring-2 ring-offset-2 ring-[#171717] dark:ring-[#f0f6fc]'
+                        ? 'scale-110 ring-2 ring-offset-2 ring-[#171717] dark:ring-[#f4f4f5]'
                         : 'hover:scale-105'
                     }`}
                     style={{ backgroundColor: c }}
@@ -454,24 +454,24 @@ export default function AgentSettingVisualEditor({
                 );
               })}
             </div>
-            <p className="text-[10px] font-sans text-[#8f8f8f] dark:text-[#8b949e] leading-tight">
+            <p className="text-[10px] font-sans text-[#8f8f8f] dark:text-[#71717a] leading-tight">
               {t('cortex.colorNotice')}
             </p>
           </div>
         </div>
 
         {/* Сетка SVG иконок */}
-        <div className="space-y-2 pt-2 border-t border-[#f4f4f5] dark:border-[#21262d]">
+        <div className="space-y-2 pt-2 border-t border-[#f4f4f5] dark:border-[#212126]">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc] flex items-center space-x-1.5">
+            <label className="text-xs font-medium text-[#171717] dark:text-[#f4f4f5] flex items-center space-x-1.5">
               <span>{t('ruleEditor.iconLabel')}</span>
             </label>
-            <span className="text-[10px] font-mono font-semibold text-[#666666] dark:text-[#8b949e] px-1.5 py-0.5 rounded bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d]">
+            <span className="text-[10px] font-mono font-semibold text-[#666666] dark:text-[#71717a] px-1.5 py-0.5 rounded bg-white dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33]">
               [{icon}]
             </span>
           </div>
 
-          <div className="p-2 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#0d1117]">
+          <div className="p-2 rounded-md border border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#111114]">
             <div className="grid grid-cols-6 sm:grid-cols-9 gap-1.5 max-h-36 overflow-y-auto p-1">
               {AGENT_ICONS.map((ic) => {
                 const isSelected = icon === ic;
@@ -483,8 +483,8 @@ export default function AgentSettingVisualEditor({
                     aria-label={ic}
                     className={`flex flex-col items-center justify-center p-2 rounded-md transition cursor-pointer ${
                       isSelected
-                        ? 'bg-[#f4f4f5] dark:bg-[#21262d] border-2 border-[#171717] dark:border-[#f0f6fc] shadow-2xs'
-                        : 'hover:bg-[#f9f9fb] dark:hover:bg-[#161b22] border border-transparent text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
+                        ? 'bg-[#f4f4f5] dark:bg-[#232328] border-2 border-[#171717] dark:border-[#f4f4f5] shadow-2xs'
+                        : 'hover:bg-[#f9f9fb] dark:hover:bg-[#1e1e23] border border-transparent text-[#71717a] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
                     }`}
                   >
                     <AgentIcon
@@ -501,10 +501,10 @@ export default function AgentSettingVisualEditor({
       </section>
 
       {/* СЕКЦИЯ 2: МОДЕЛЬ И ТЕМПЕРАТУРА */}
-      <section className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-[#fdfdfd] dark:bg-[#161b22]/70 p-4 space-y-4 shadow-2xs">
-        <div className="flex items-center space-x-2 border-b border-[#ebebeb] dark:border-[#21262d] pb-2.5">
+      <section className="rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-[#fdfdfd] dark:bg-[#17171b]/70 p-4 space-y-4 shadow-2xs">
+        <div className="flex items-center space-x-2 border-b border-[#ebebeb] dark:border-[#212126] pb-2.5">
           <Bot className="h-4 w-4 text-[#6366f1] dark:text-[#818cf8]" />
-          <h2 className="text-xs font-bold font-mono uppercase tracking-wider text-[#171717] dark:text-[#f0f6fc]">
+          <h2 className="text-xs font-bold font-mono uppercase tracking-wider text-[#171717] dark:text-[#f4f4f5]">
             {t('ruleEditor.modelSection')}
           </h2>
         </div>
@@ -512,10 +512,10 @@ export default function AgentSettingVisualEditor({
         {/* Выбор модели */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc] flex items-center space-x-1.5">
+            <label className="text-xs font-medium text-[#171717] dark:text-[#f4f4f5] flex items-center space-x-1.5">
               <span>{t('ruleEditor.modelLabel')}</span>
               {isModelInherit && (
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#666666] dark:text-[#8b949e]">
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] text-[#666666] dark:text-[#71717a]">
                   {t('ruleEditor.modelInherit')}
                 </span>
               )}
@@ -530,7 +530,7 @@ export default function AgentSettingVisualEditor({
                 value={model === 'inherit' ? '' : model}
                 onChange={(e) => handleModelChange(e.target.value || 'inherit')}
                 placeholder={t('ruleEditor.modelPlaceholder')}
-                className="w-full px-3 py-1.5 rounded-md border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] font-mono text-xs focus:outline-hidden focus:border-[#6366f1] dark:focus:border-[#818cf8] transition"
+                className="w-full px-3 py-1.5 rounded-md border border-[#d4d4d8] dark:border-[#2c2c33] bg-white dark:bg-[#111114] text-[#171717] dark:text-[#f4f4f5] font-mono text-xs focus:outline-hidden focus:border-[#6366f1] dark:focus:border-[#818cf8] transition"
               />
               <datalist id="model-options">
                 {dynamicModels.map((m) => (
@@ -543,7 +543,7 @@ export default function AgentSettingVisualEditor({
               <button
                 type="button"
                 onClick={() => handleModelChange('inherit')}
-                className="px-2.5 py-1.5 rounded-md text-xs font-mono border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#0d1117] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] transition cursor-pointer"
+                className="px-2.5 py-1.5 rounded-md text-xs font-mono border border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#111114] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] transition cursor-pointer"
               >
                 Сбросить
               </button>
@@ -565,7 +565,7 @@ export default function AgentSettingVisualEditor({
                   className={`px-2.5 py-1 rounded text-xs font-mono transition cursor-pointer flex items-center space-x-1 border ${
                     isSelected
                       ? 'border-[#6366f1] bg-[#6366f1]/10 text-[#6366f1] dark:text-[#818cf8] font-semibold'
-                      : 'border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#0d1117] text-[#666666] dark:text-[#8b949e] hover:border-[#d4d4d8] dark:hover:border-[#484f58] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
+                      : 'border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#111114] text-[#666666] dark:text-[#71717a] hover:border-[#d4d4d8] dark:hover:border-[#3a3a44] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
                   }`}
                 >
                   <span>{item}</span>
@@ -576,21 +576,21 @@ export default function AgentSettingVisualEditor({
         </div>
 
         {/* Температура */}
-        <div className="space-y-2 pt-2 border-t border-[#f4f4f5] dark:border-[#21262d]">
+        <div className="space-y-2 pt-2 border-t border-[#f4f4f5] dark:border-[#212126]">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc] flex items-center space-x-1.5">
+            <label className="text-xs font-medium text-[#171717] dark:text-[#f4f4f5] flex items-center space-x-1.5">
               <Thermometer className="h-3.5 w-3.5 text-[#ef4444]" />
               <span>{t('ruleEditor.temperatureLabel')}</span>
             </label>
             <div className="flex items-center space-x-1.5">
-              <span className="font-mono text-xs font-bold tabular-nums px-2 py-0.5 rounded bg-white dark:bg-[#0d1117] border border-[#d4d4d8] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc]">
+              <span className="font-mono text-xs font-bold tabular-nums px-2 py-0.5 rounded bg-white dark:bg-[#111114] border border-[#d4d4d8] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5]">
                 {temperature.toFixed(2)}
               </span>
             </div>
           </div>
 
           <div className="flex items-center space-x-3">
-            <span className="text-[11px] font-mono text-[#8f8f8f] dark:text-[#8b949e]">0.0</span>
+            <span className="text-[11px] font-mono text-[#8f8f8f] dark:text-[#71717a]">0.0</span>
             <input
               type="range"
               min="0"
@@ -598,9 +598,9 @@ export default function AgentSettingVisualEditor({
               step="0.05"
               value={temperature}
               onChange={(e) => handleTemperatureChange(parseFloat(e.target.value))}
-              className="flex-1 h-1.5 bg-[#e4e4e7] dark:bg-[#30363d] rounded-lg appearance-none cursor-pointer accent-[#6366f1] dark:accent-[#818cf8]"
+              className="flex-1 h-1.5 bg-[#e4e4e7] dark:bg-[#2c2c33] rounded-lg appearance-none cursor-pointer accent-[#6366f1] dark:accent-[#818cf8]"
             />
-            <span className="text-[11px] font-mono text-[#8f8f8f] dark:text-[#8b949e]">1.0</span>
+            <span className="text-[11px] font-mono text-[#8f8f8f] dark:text-[#71717a]">1.0</span>
           </div>
 
           {/* Быстрые кнопки температуры */}
@@ -611,7 +611,7 @@ export default function AgentSettingVisualEditor({
               className={`px-2.5 py-1 rounded text-xs font-mono transition cursor-pointer border ${
                 temperature === 0.0
                   ? 'border-[#6366f1] bg-[#6366f1]/10 text-[#6366f1] dark:text-[#818cf8] font-semibold'
-                  : 'border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#0d1117] text-[#666666] dark:text-[#8b949e] hover:border-[#d4d4d8] dark:hover:border-[#484f58]'
+                  : 'border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#111114] text-[#666666] dark:text-[#71717a] hover:border-[#d4d4d8] dark:hover:border-[#3a3a44]'
               }`}
             >
               {t('ruleEditor.tempAccurate')}
@@ -622,7 +622,7 @@ export default function AgentSettingVisualEditor({
               className={`px-2.5 py-1 rounded text-xs font-mono transition cursor-pointer border ${
                 temperature === 0.2
                   ? 'border-[#6366f1] bg-[#6366f1]/10 text-[#6366f1] dark:text-[#818cf8] font-semibold'
-                  : 'border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#0d1117] text-[#666666] dark:text-[#8b949e] hover:border-[#d4d4d8] dark:hover:border-[#484f58]'
+                  : 'border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#111114] text-[#666666] dark:text-[#71717a] hover:border-[#d4d4d8] dark:hover:border-[#3a3a44]'
               }`}
             >
               {t('ruleEditor.tempBalanced')}
@@ -633,7 +633,7 @@ export default function AgentSettingVisualEditor({
               className={`px-2.5 py-1 rounded text-xs font-mono transition cursor-pointer border ${
                 temperature === 0.7
                   ? 'border-[#6366f1] bg-[#6366f1]/10 text-[#6366f1] dark:text-[#818cf8] font-semibold'
-                  : 'border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#0d1117] text-[#666666] dark:text-[#8b949e] hover:border-[#d4d4d8] dark:hover:border-[#484f58]'
+                  : 'border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#111114] text-[#666666] dark:text-[#71717a] hover:border-[#d4d4d8] dark:hover:border-[#3a3a44]'
               }`}
             >
               {t('ruleEditor.tempCreative')}
@@ -643,19 +643,19 @@ export default function AgentSettingVisualEditor({
       </section>
 
       {/* СЕКЦИЯ 3: ЛИМИТЫ КОНТЕКСТА И ТОКЕНОВ */}
-      <section className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-[#fdfdfd] dark:bg-[#161b22]/70 p-4 space-y-4 shadow-2xs">
-        <div className="flex items-center space-x-2 border-b border-[#ebebeb] dark:border-[#21262d] pb-2.5">
+      <section className="rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-[#fdfdfd] dark:bg-[#17171b]/70 p-4 space-y-4 shadow-2xs">
+        <div className="flex items-center space-x-2 border-b border-[#ebebeb] dark:border-[#212126] pb-2.5">
           <Maximize2 className="h-4 w-4 text-[#10b981] dark:text-[#34d399]" />
-          <h2 className="text-xs font-bold font-mono uppercase tracking-wider text-[#171717] dark:text-[#f0f6fc]">
+          <h2 className="text-xs font-bold font-mono uppercase tracking-wider text-[#171717] dark:text-[#f4f4f5]">
             {t('ruleEditor.limitsSection')}
           </h2>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Размер контекстного окна */}
-          <div className="space-y-2 p-3 rounded-md border border-[#f4f4f5] dark:border-[#21262d] bg-white dark:bg-[#0d1117]">
+          <div className="space-y-2 p-3 rounded-md border border-[#f4f4f5] dark:border-[#212126] bg-white dark:bg-[#111114]">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc]">
+              <label className="text-xs font-medium text-[#171717] dark:text-[#f4f4f5]">
                 {t('ruleEditor.contextWindowLabel')}
               </label>
               <span className="font-mono text-xs font-semibold tabular-nums text-[#6366f1] dark:text-[#818cf8]">
@@ -670,7 +670,7 @@ export default function AgentSettingVisualEditor({
               step="1000"
               value={contextWindow}
               onChange={(e) => handleContextWindowChange(parseInt(e.target.value, 10) || 128000)}
-              className="w-full px-2.5 py-1.5 rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#161b22] text-[#171717] dark:text-[#f0f6fc] font-mono text-xs tabular-nums focus:outline-hidden focus:border-[#10b981] dark:focus:border-[#34d399]"
+              className="w-full px-2.5 py-1.5 rounded border border-[#d4d4d8] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] text-[#171717] dark:text-[#f4f4f5] font-mono text-xs tabular-nums focus:outline-hidden focus:border-[#10b981] dark:focus:border-[#34d399]"
             />
 
             {/* Быстрые чипы */}
@@ -685,7 +685,7 @@ export default function AgentSettingVisualEditor({
                     className={`px-2 py-0.5 rounded text-[11px] font-mono transition cursor-pointer border ${
                       isActive
                         ? 'border-[#10b981] bg-[#10b981]/10 text-[#059669] dark:text-[#34d399] font-bold'
-                        : 'border-[#ebebeb] dark:border-[#30363d] bg-[#f9f9fb] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] hover:border-[#d4d4d8]'
+                        : 'border-[#ebebeb] dark:border-[#2c2c33] bg-[#f9f9fb] dark:bg-[#17171b] text-[#666666] dark:text-[#71717a] hover:border-[#d4d4d8]'
                     }`}
                   >
                     {chip.label}
@@ -693,15 +693,15 @@ export default function AgentSettingVisualEditor({
                 );
               })}
             </div>
-            <p className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] font-sans leading-tight pt-1">
+            <p className="text-[10px] text-[#8f8f8f] dark:text-[#71717a] font-sans leading-tight pt-1">
               {t('ruleEditor.contextWindowHint')}
             </p>
           </div>
 
           {/* Максимально токенов вывода */}
-          <div className="space-y-2 p-3 rounded-md border border-[#f4f4f5] dark:border-[#21262d] bg-white dark:bg-[#0d1117]">
+          <div className="space-y-2 p-3 rounded-md border border-[#f4f4f5] dark:border-[#212126] bg-white dark:bg-[#111114]">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc]">
+              <label className="text-xs font-medium text-[#171717] dark:text-[#f4f4f5]">
                 {t('ruleEditor.maxTokensLabel')}
               </label>
               <span className="font-mono text-xs font-semibold tabular-nums text-[#10b981] dark:text-[#34d399]">
@@ -716,7 +716,7 @@ export default function AgentSettingVisualEditor({
               step="512"
               value={maxTokens}
               onChange={(e) => handleMaxTokensChange(parseInt(e.target.value, 10) || 4096)}
-              className="w-full px-2.5 py-1.5 rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#161b22] text-[#171717] dark:text-[#f0f6fc] font-mono text-xs tabular-nums focus:outline-hidden focus:border-[#10b981] dark:focus:border-[#34d399]"
+              className="w-full px-2.5 py-1.5 rounded border border-[#d4d4d8] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] text-[#171717] dark:text-[#f4f4f5] font-mono text-xs tabular-nums focus:outline-hidden focus:border-[#10b981] dark:focus:border-[#34d399]"
             />
 
             {/* Быстрые чипы */}
@@ -731,7 +731,7 @@ export default function AgentSettingVisualEditor({
                     className={`px-2 py-0.5 rounded text-[11px] font-mono transition cursor-pointer border ${
                       isActive
                         ? 'border-[#10b981] bg-[#10b981]/10 text-[#059669] dark:text-[#34d399] font-bold'
-                        : 'border-[#ebebeb] dark:border-[#30363d] bg-[#f9f9fb] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] hover:border-[#d4d4d8]'
+                        : 'border-[#ebebeb] dark:border-[#2c2c33] bg-[#f9f9fb] dark:bg-[#17171b] text-[#666666] dark:text-[#71717a] hover:border-[#d4d4d8]'
                     }`}
                   >
                     {chip.label}
@@ -739,7 +739,7 @@ export default function AgentSettingVisualEditor({
                 );
               })}
             </div>
-            <p className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] font-sans leading-tight pt-1">
+            <p className="text-[10px] text-[#8f8f8f] dark:text-[#71717a] font-sans leading-tight pt-1">
               {t('ruleEditor.maxTokensHint')}
             </p>
           </div>

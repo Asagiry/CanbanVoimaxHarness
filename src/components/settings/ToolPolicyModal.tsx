@@ -36,11 +36,11 @@ function Toggle({
       aria-label={title}
       aria-pressed={enabled}
       className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer shrink-0 ${
-        enabled ? 'bg-[#171717] dark:bg-[#f0f6fc]' : 'bg-[#e4e4e7] dark:bg-[#30363d]'
+        enabled ? 'bg-[#171717] dark:bg-[#f4f4f5]' : 'bg-[#e4e4e7] dark:bg-[#2c2c33]'
       } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
     >
       <span
-        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white dark:bg-[#0d1117] shadow transition-all ${
+        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white dark:bg-[#111114] shadow transition-all ${
           enabled ? 'left-[18px]' : 'left-0.5'
         }`}
       />
@@ -109,10 +109,10 @@ function ToolParamRow({
   return (
     <div className="flex items-center justify-between gap-3 text-xs">
       <div className="min-w-0 flex-1">
-        <span className="text-[11px] font-mono text-[#171717] dark:text-[#f0f6fc] block">
+        <span className="text-[11px] font-mono text-[#171717] dark:text-[#f4f4f5] block">
           {paramLabel}
         </span>
-        <span className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] font-mono block">
+        <span className="text-[10px] text-[#8f8f8f] dark:text-[#71717a] font-mono block">
           {t('toolPolicy.rangeStep', { min: param.min, max: param.max, step: param.step })}
         </span>
       </div>
@@ -122,7 +122,7 @@ function ToolParamRow({
           type="button"
           disabled={currentValue <= param.min}
           onClick={() => handleStep(-param.step)}
-          className="w-6 h-6 flex items-center justify-center rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] text-xs font-mono font-bold transition select-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+          className="w-6 h-6 flex items-center justify-center rounded border border-[#d4d4d8] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] text-xs font-mono font-bold transition select-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
           aria-label={t('toolPolicy.decreaseBy', { step: param.step })}
         >
           -
@@ -137,20 +137,20 @@ function ToolParamRow({
           onChange={(e) => setDraft(e.target.value)}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
-          className="w-16 h-6 rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] font-mono text-xs tabular-nums text-center px-1 focus:outline-hidden focus:border-[#171717] dark:focus:border-[#58a6ff]"
+          className="w-16 h-6 rounded border border-[#d4d4d8] dark:border-[#2c2c33] bg-white dark:bg-[#111114] text-[#171717] dark:text-[#f4f4f5] font-mono text-xs tabular-nums text-center px-1 focus:outline-hidden focus:border-[#171717] dark:focus:border-[#58a6ff]"
         />
 
         <button
           type="button"
           disabled={currentValue >= param.max}
           onClick={() => handleStep(param.step)}
-          className="w-6 h-6 flex items-center justify-center rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] text-xs font-mono font-bold transition select-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+          className="w-6 h-6 flex items-center justify-center rounded border border-[#d4d4d8] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] text-xs font-mono font-bold transition select-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
           aria-label={t('toolPolicy.increaseBy', { step: param.step })}
         >
           +
         </button>
 
-        <span className="text-[10px] text-[#666666] dark:text-[#8b949e] font-mono min-w-[42px] text-left">
+        <span className="text-[10px] text-[#666666] dark:text-[#71717a] font-mono min-w-[42px] text-left">
           {paramUnit}
         </span>
       </div>
@@ -167,11 +167,11 @@ function ToolParamsEditor({ toolId }: { toolId: string }) {
   return (
     <div
       onClick={(e) => e.stopPropagation()}
-      className="mt-2.5 p-2.5 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9fb] dark:bg-[#07090e] space-y-2 select-none"
+      className="mt-2.5 p-2.5 rounded-md border border-[#ebebeb] dark:border-[#212126] bg-[#f9f9fb] dark:bg-[#0b0b0e] space-y-2 select-none"
     >
-      <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-[#666666] dark:text-[#8b949e] font-semibold border-b border-[#ebebeb] dark:border-[#21262d] pb-1.5">
+      <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-[#666666] dark:text-[#71717a] font-semibold border-b border-[#ebebeb] dark:border-[#212126] pb-1.5">
         <span>{t('toolPolicy.toolParams')}</span>
-        <span className="text-[9px] text-[#8f8f8f] dark:text-[#6e7681] lowercase font-normal">
+        <span className="text-[9px] text-[#8f8f8f] dark:text-[#52525b] lowercase font-normal">
           {t('toolPolicy.savedInPolicies')}
         </span>
       </div>
@@ -262,11 +262,11 @@ function ToolSchemaEditor({ tool }: { tool: ToolMeta }) {
   return (
     <div
       onClick={(e) => e.stopPropagation()}
-      className="mt-2.5 p-2.5 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9fb] dark:bg-[#07090e] space-y-2 select-none"
+      className="mt-2.5 p-2.5 rounded-md border border-[#ebebeb] dark:border-[#212126] bg-[#f9f9fb] dark:bg-[#0b0b0e] space-y-2 select-none"
     >
-      <div className="flex items-center justify-between gap-2 border-b border-[#ebebeb] dark:border-[#21262d] pb-1.5 flex-wrap">
+      <div className="flex items-center justify-between gap-2 border-b border-[#ebebeb] dark:border-[#212126] pb-1.5 flex-wrap">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-mono uppercase tracking-wider text-[#666666] dark:text-[#8b949e] font-semibold">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-[#666666] dark:text-[#71717a] font-semibold">
             Схема инструмента (JSON)
           </span>
           {isCustomized && (
@@ -285,14 +285,14 @@ function ToolSchemaEditor({ tool }: { tool: ToolMeta }) {
           <button
             type="button"
             onClick={handleFormat}
-            className="px-2 py-0.5 rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#161b22] text-[#171717] dark:text-[#f0f6fc] text-[10px] font-mono hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer"
+            className="px-2 py-0.5 rounded border border-[#d4d4d8] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] text-[#171717] dark:text-[#f4f4f5] text-[10px] font-mono hover:bg-[#f4f4f5] dark:hover:bg-[#232328] transition cursor-pointer"
           >
             Форматировать
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className="px-2 py-0.5 rounded border border-[#171717] dark:border-[#f0f6fc] bg-[#171717] dark:bg-[#f0f6fc] text-white dark:text-[#0d1117] text-[10px] font-mono font-medium hover:opacity-90 transition cursor-pointer"
+            className="px-2 py-0.5 rounded border border-[#171717] dark:border-[#f4f4f5] bg-[#171717] dark:bg-[#f4f4f5] text-white dark:text-[#111114] text-[10px] font-mono font-medium hover:opacity-90 transition cursor-pointer"
           >
             Сохранить JSON
           </button>
@@ -317,7 +317,7 @@ function ToolSchemaEditor({ tool }: { tool: ToolMeta }) {
           }}
           rows={11}
           spellCheck={false}
-          className="w-full rounded border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#0d1117] text-[#24292f] dark:text-[#c9d1d9] font-mono text-xs p-2.5 focus:outline-hidden focus:border-[#171717] dark:focus:border-[#58a6ff] leading-relaxed resize-y select-text"
+          className="w-full rounded border border-[#d4d4d8] dark:border-[#2c2c33] bg-white dark:bg-[#111114] text-[#24292f] dark:text-[#a1a1aa] font-mono text-xs p-2.5 focus:outline-hidden focus:border-[#171717] dark:focus:border-[#58a6ff] leading-relaxed resize-y select-text"
           placeholder='{ "type": "function", "function": { ... } }'
         />
 
@@ -519,20 +519,20 @@ export default function ToolPolicyModal() {
 
   return (
     <div style={getZoomOverlayStyle(zoom)} className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 dark:bg-black/80 p-3">
-      <div className="w-full max-w-4xl rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] shadow-md overflow-hidden flex flex-col max-h-[85%] transition-colors">
+      <div className="w-full max-w-4xl rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] text-[#171717] dark:text-[#f4f4f5] shadow-md overflow-hidden flex flex-col max-h-[85%] transition-colors">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#ebebeb] dark:border-[#21262d] px-4 py-3 bg-white dark:bg-[#0d1117]">
+        <div className="flex items-center justify-between border-b border-[#ebebeb] dark:border-[#212126] px-4 py-3 bg-white dark:bg-[#111114]">
           <div>
-            <h2 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc]">
+            <h2 className="text-sm font-semibold text-[#171717] dark:text-[#f4f4f5]">
               {t('toolPolicy.modalTitle')}
             </h2>
-            <p className="text-[11px] text-[#666666] dark:text-[#8b949e] font-mono mt-0.5">
+            <p className="text-[11px] text-[#666666] dark:text-[#71717a] font-mono mt-0.5">
               {t('toolPolicy.modalSubtitle')}
             </p>
           </div>
           <button
             onClick={closeModal}
-            className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
+            className="p-1 rounded-md text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23] transition cursor-pointer"
             aria-label={t('common.close')}
           >
             <X className="h-4 w-4" />
@@ -541,21 +541,21 @@ export default function ToolPolicyModal() {
 
         {/* Body Content */}
         <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 font-mono text-xs">
-          <div className="overflow-x-auto rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117]">
+          <div className="overflow-x-auto rounded-md border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114]">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] text-[10px] uppercase">
+                <tr className="border-b border-[#ebebeb] dark:border-[#212126] bg-[#f9f9f9] dark:bg-[#17171b] text-[#666666] dark:text-[#71717a] text-[10px] uppercase">
                   <th className="py-2.5 px-3 font-medium">{t('toolPolicy.toolHeader')}</th>
                   <th className="py-2.5 px-2 text-right font-medium">{t('toolPolicy.weightHeader')}</th>
                   {agents.map((agent) => (
-                    <th key={agent.role} className="py-2.5 px-2 text-center font-medium border-l border-[#ebebeb] dark:border-[#21262d] min-w-[95px]">
+                    <th key={agent.role} className="py-2.5 px-2 text-center font-medium border-l border-[#ebebeb] dark:border-[#212126] min-w-[95px]">
                       <div className="flex flex-col items-center gap-1">
                         <div className="flex items-center gap-1.5 justify-center max-w-[110px]">
                           <AgentIcon
                             name={agent.icon || (agent.isBuiltin ? 'Cpu' : 'Bot')}
-                            className={`h-3.5 w-3.5 shrink-0 ${agent.isBuiltin ? 'text-indigo-600 dark:text-indigo-400' : 'text-[#171717] dark:text-[#f0f6fc]'}`}
+                            className={`h-3.5 w-3.5 shrink-0 ${agent.isBuiltin ? 'text-indigo-600 dark:text-indigo-400' : 'text-[#171717] dark:text-[#f4f4f5]'}`}
                           />
-                          <span className="truncate block font-mono font-semibold text-[#171717] dark:text-[#f0f6fc]" title={agent.role}>
+                          <span className="truncate block font-mono font-semibold text-[#171717] dark:text-[#f4f4f5]" title={agent.role}>
                             {agent.role}
                           </span>
                         </div>
@@ -570,17 +570,17 @@ export default function ToolPolicyModal() {
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-[#ebebeb] dark:divide-[#21262d]">
+              <tbody className="divide-y divide-[#ebebeb] dark:divide-[#212126]">
                 {CATEGORY_ORDER.map((catKey) => {
                   const toolsInCat = AVAILABLE_TOOLS.filter((t) => t.category === catKey);
                   if (toolsInCat.length === 0) return null;
 
                   return (
                     <Fragment key={`cat-grp-${catKey}`}>
-                      <tr className="bg-[#f4f4f5]/90 dark:bg-[#161b22] border-y border-[#ebebeb] dark:border-[#21262d]">
+                      <tr className="bg-[#f4f4f5]/90 dark:bg-[#17171b] border-y border-[#ebebeb] dark:border-[#212126]">
                         <td
                           colSpan={2 + agents.length}
-                          className="py-1.5 px-3 text-[10px] font-semibold text-[#52525b] dark:text-[#8b949e] uppercase tracking-wider"
+                          className="py-1.5 px-3 text-[10px] font-semibold text-[#52525b] dark:text-[#71717a] uppercase tracking-wider"
                         >
                           {getCategoryLabel(catKey, t)}
                         </td>
@@ -594,14 +594,14 @@ export default function ToolPolicyModal() {
                         return (
                           <Fragment key={tool.id}>
                             <tr
-                              className={`hover:bg-[#fafafa] dark:hover:bg-[#161b22] transition text-[#171717] dark:text-[#f0f6fc] ${
-                                isChild ? 'bg-[#fafafc] dark:bg-[#090a0f]' : ''
+                              className={`hover:bg-[#fafafa] dark:hover:bg-[#1e1e23] transition text-[#171717] dark:text-[#f4f4f5] ${
+                                isChild ? 'bg-[#fafafc] dark:bg-[#0b0b0e]' : ''
                               }`}
                             >
                               <td className={`py-2 px-3 align-middle ${isChild ? 'pl-7' : ''}`}>
                                 <div className="flex items-start gap-1.5 text-left w-full">
                                   {isChild && (
-                                    <span className="text-[#8f8f8f] dark:text-[#6e7681] font-mono text-xs select-none shrink-0 mt-0.5 leading-none">
+                                    <span className="text-[#8f8f8f] dark:text-[#52525b] font-mono text-xs select-none shrink-0 mt-0.5 leading-none">
                                       {tool.id === 'subagent_list' ? '└──' : '├──'}
                                     </span>
                                   )}
@@ -611,12 +611,12 @@ export default function ToolPolicyModal() {
                                     className="flex items-start gap-1.5 text-left cursor-pointer min-w-0 flex-1 group"
                                   >
                                     <ChevronDown
-                                      className={`w-3.5 h-3.5 shrink-0 mt-0.5 text-[#8f8f8f] dark:text-[#8b949e] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                      className={`w-3.5 h-3.5 shrink-0 mt-0.5 text-[#8f8f8f] dark:text-[#71717a] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                                     />
                                     <div className="min-w-0 flex-1">
                                       <div className="flex items-center gap-1.5 flex-wrap">
                                         <span
-                                          className={`font-medium text-[#171717] dark:text-[#f0f6fc] leading-tight group-hover:underline underline-offset-2 ${
+                                          className={`font-medium text-[#171717] dark:text-[#f4f4f5] leading-tight group-hover:underline underline-offset-2 ${
                                             tool.isSubagentMaster ? 'font-semibold' : ''
                                           }`}
                                         >
@@ -632,7 +632,7 @@ export default function ToolPolicyModal() {
                                           </span>
                                         ) : null}
                                       </div>
-                                      <div className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] font-mono leading-tight mt-0.5">
+                                      <div className="text-[10px] text-[#8f8f8f] dark:text-[#71717a] font-mono leading-tight mt-0.5">
                                         {tool.name}
                                       </div>
                                     </div>
@@ -640,7 +640,7 @@ export default function ToolPolicyModal() {
                                 </div>
                               </td>
 
-                              <td className="py-2 px-2 text-right text-[#666666] dark:text-[#8b949e] tabular-nums text-[11px] align-middle">
+                              <td className="py-2 px-2 text-right text-[#666666] dark:text-[#71717a] tabular-nums text-[11px] align-middle">
                                 {tool.tokenWeight}
                               </td>
 
@@ -657,7 +657,7 @@ export default function ToolPolicyModal() {
                                   : '';
 
                                 return (
-                                  <td key={agent.role} className="py-2 px-2 text-center border-l border-[#ebebeb] dark:border-[#21262d] align-middle">
+                                  <td key={agent.role} className="py-2 px-2 text-center border-l border-[#ebebeb] dark:border-[#212126] align-middle">
                                     {isDisabled ? (
                                       <span className="inline-flex justify-center opacity-40 pt-0.5">
                                         <Toggle
@@ -696,7 +696,7 @@ export default function ToolPolicyModal() {
                               })}
                             </tr>
                             {isExpanded && (
-                              <tr className="bg-[#f9f9fb] dark:bg-[#07090e] border-b border-[#ebebeb] dark:border-[#21262d]">
+                              <tr className="bg-[#f9f9fb] dark:bg-[#0b0b0e] border-b border-[#ebebeb] dark:border-[#212126]">
                                 <td colSpan={2 + agents.length} className="p-3">
                                   <div className="space-y-2 max-w-3xl">
                                     <ToolParamsEditor toolId={tool.id} />
@@ -718,7 +718,7 @@ export default function ToolPolicyModal() {
 
                   return (
                     <Fragment key={customId}>
-                      <tr className="hover:bg-[#fafafa] dark:hover:bg-[#161b22] transition text-[#171717] dark:text-[#f0f6fc]">
+                      <tr className="hover:bg-[#fafafa] dark:hover:bg-[#1e1e23] transition text-[#171717] dark:text-[#f4f4f5]">
                         <td className="py-2 px-3 align-middle">
                           <div className="flex items-start gap-1.5 text-left w-full">
                             <button
@@ -727,18 +727,18 @@ export default function ToolPolicyModal() {
                               className="flex items-start gap-1.5 text-left cursor-pointer min-w-0 flex-1 group"
                             >
                               <ChevronDown
-                                className={`w-3.5 h-3.5 shrink-0 mt-0.5 text-[#8f8f8f] dark:text-[#8b949e] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                className={`w-3.5 h-3.5 shrink-0 mt-0.5 text-[#8f8f8f] dark:text-[#71717a] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                               />
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-1.5">
-                                  <span className="font-medium text-[#171717] dark:text-[#f0f6fc] leading-tight group-hover:underline underline-offset-2">
+                                  <span className="font-medium text-[#171717] dark:text-[#f4f4f5] leading-tight group-hover:underline underline-offset-2">
                                     {customTool.name}
                                   </span>
-                                  <span className="rounded border border-[#ebebeb] dark:border-[#30363d] bg-[#f4f4f5] dark:bg-[#161b22] px-1 py-px text-[10px] leading-none text-[#666666] dark:text-[#8b949e] align-middle">
+                                  <span className="rounded border border-[#ebebeb] dark:border-[#2c2c33] bg-[#f4f4f5] dark:bg-[#17171b] px-1 py-px text-[10px] leading-none text-[#666666] dark:text-[#71717a] align-middle">
                                     {t('toolPolicy.customBadge')}
                                   </span>
                                 </div>
-                                <div className="text-[10px] text-[#8f8f8f] dark:text-[#8b949e] font-mono leading-tight mt-0.5 truncate">
+                                <div className="text-[10px] text-[#8f8f8f] dark:text-[#71717a] font-mono leading-tight mt-0.5 truncate">
                                   {customTool.description}
                                 </div>
                               </div>
@@ -754,7 +754,7 @@ export default function ToolPolicyModal() {
                           const isCustomAllowed = isToolAllowed(customTool.name, agent.role);
 
                           return (
-                            <td key={agent.role} className="py-2 px-2 text-center border-l border-[#ebebeb] dark:border-[#21262d] align-middle">
+                            <td key={agent.role} className="py-2 px-2 text-center border-l border-[#ebebeb] dark:border-[#212126] align-middle">
                               <span className="inline-flex justify-center pt-0.5">
                                 <Toggle
                                   enabled={isCustomAllowed}
@@ -779,11 +779,11 @@ export default function ToolPolicyModal() {
                       </tr>
 
                       {isExpanded && (
-                        <tr className="bg-[#f9f9fb] dark:bg-[#07090e] border-b border-[#ebebeb] dark:border-[#21262d]">
+                        <tr className="bg-[#f9f9fb] dark:bg-[#0b0b0e] border-b border-[#ebebeb] dark:border-[#212126]">
                           <td colSpan={2 + agents.length} className="p-3">
                             <div className="space-y-1.5 text-xs font-mono">
                               <div className="flex items-center justify-between">
-                                <span className="text-[#666666] dark:text-[#8b949e]">{t('toolPolicy.commandPrefix')} <code className="bg-[#f4f4f5] dark:bg-[#21262d] px-1 py-0.5 rounded">{customTool.command}</code></span>
+                                <span className="text-[#666666] dark:text-[#71717a]">{t('toolPolicy.commandPrefix')} <code className="bg-[#f4f4f5] dark:bg-[#232328] px-1 py-0.5 rounded">{customTool.command}</code></span>
                                 <button
                                   type="button"
                                   onClick={() => void handleDeleteCustomTool(customTool.name)}
@@ -806,12 +806,12 @@ export default function ToolPolicyModal() {
 
           {/* Custom Tools Creation Form */}
           <div className="pt-2">
-            <h3 className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">
+            <h3 className="text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] font-sans">
               {t('toolPolicy.customTools')}
             </h3>
 
             {customLoading && (
-              <p className="text-[11px] text-[#666666] dark:text-[#8b949e] font-sans mt-2">{t('common.loading')}</p>
+              <p className="text-[11px] text-[#666666] dark:text-[#71717a] font-sans mt-2">{t('common.loading')}</p>
             )}
             {customListError && (
               <p className="text-[11px] font-sans mt-2 text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-md px-3 py-1.5">
@@ -819,13 +819,13 @@ export default function ToolPolicyModal() {
               </p>
             )}
 
-            <form onSubmit={(e) => void handleAddCustomTool(e)} className="mt-3 p-3 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#161b22] space-y-2.5">
-              <p className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc] font-sans">
+            <form onSubmit={(e) => void handleAddCustomTool(e)} className="mt-3 p-3 rounded-md border border-[#ebebeb] dark:border-[#212126] bg-[#fafafa] dark:bg-[#17171b] space-y-2.5">
+              <p className="text-xs font-medium text-[#171717] dark:text-[#f4f4f5] font-sans">
                 {t('toolPolicy.addTool')}
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div>
-                  <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1 text-[11px]">
+                  <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1 text-[11px]">
                     {t('toolPolicy.nameLabel')}
                   </label>
                   <input
@@ -833,11 +833,11 @@ export default function ToolPolicyModal() {
                     value={customName}
                     onChange={(e) => setCustomName(e.target.value)}
                     placeholder="my_tool"
-                    className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] font-mono text-xs transition"
+                    className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] font-mono text-xs transition"
                   />
                 </div>
                 <div>
-                  <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1 text-[11px]">
+                  <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1 text-[11px]">
                     {t('toolPolicy.commandLabel')}
                   </label>
                   <input
@@ -845,12 +845,12 @@ export default function ToolPolicyModal() {
                     value={customCommand}
                     onChange={(e) => setCustomCommand(e.target.value)}
                     placeholder="my-script --input {args}"
-                    className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] font-mono text-xs transition"
+                    className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] font-mono text-xs transition"
                   />
                 </div>
               </div>
               <div>
-                <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1 text-[11px]">
+                <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1 text-[11px]">
                   {t('toolPolicy.descLabel')}
                 </label>
                 <input
@@ -858,11 +858,11 @@ export default function ToolPolicyModal() {
                   value={customDescription}
                   onChange={(e) => setCustomDescription(e.target.value)}
                   placeholder={t('toolPolicy.descPlaceholder')}
-                  className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] font-sans text-xs transition"
+                  className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] font-sans text-xs transition"
                 />
               </div>
               <div>
-                <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1 text-[11px]">
+                <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1 text-[11px]">
                   {t('toolPolicy.paramsLabel')}
                 </label>
                 <textarea
@@ -871,7 +871,7 @@ export default function ToolPolicyModal() {
                   onChange={(e) => setCustomParamsText(e.target.value)}
                   placeholder={'{"type": "object", "properties": {}}'}
                   spellCheck={false}
-                  className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] font-mono text-xs resize-y transition"
+                  className="w-full px-3 py-1.5 rounded-md bg-white dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] font-mono text-xs resize-y transition"
                 />
               </div>
               {customFormError && (
@@ -893,10 +893,10 @@ export default function ToolPolicyModal() {
         </div>
 
         {/* Footer */}
-        <div className="border-t border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#161b22] px-4 py-2.5 flex items-center justify-end font-mono text-xs">
+        <div className="border-t border-[#ebebeb] dark:border-[#212126] bg-[#f9f9f9] dark:bg-[#17171b] px-4 py-2.5 flex items-center justify-end font-mono text-xs">
           <button
             onClick={closeModal}
-            className="px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white font-medium transition cursor-pointer shadow-xs"
+            className="px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#232328] hover:bg-[#262626] dark:hover:bg-[#2c2c33] text-white font-medium transition cursor-pointer shadow-xs"
           >
             {t('common.close')}
           </button>

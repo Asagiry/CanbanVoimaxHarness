@@ -155,16 +155,16 @@ export default function QuestionPromptCard({ activity, taskId }: QuestionPromptC
   };
 
   return (
-    <div className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-4 text-[#171717] dark:text-[#f0f6fc] shadow-xs my-3 transition-colors">
+    <div className="rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] p-4 text-[#171717] dark:text-[#f4f4f5] shadow-xs my-3 transition-colors">
       {/* 1. Header with Question Counter & Icon */}
-      <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-[#ebebeb] dark:border-[#21262d]">
-        <div className="flex items-center space-x-2 text-[#71717a] dark:text-[#8b949e]">
-          <QuestionMarkIcon className="w-3.5 h-3.5 text-[#171717] dark:text-[#f0f6fc]" />
-          <span className="text-xs font-mono font-medium text-[#71717a] dark:text-[#8b949e] tabular-nums">
+      <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-[#ebebeb] dark:border-[#212126]">
+        <div className="flex items-center space-x-2 text-[#71717a] dark:text-[#71717a]">
+          <QuestionMarkIcon className="w-3.5 h-3.5 text-[#171717] dark:text-[#f4f4f5]" />
+          <span className="text-xs font-mono font-medium text-[#71717a] dark:text-[#71717a] tabular-nums">
             1 из 1 вопросов
           </span>
           {isMultiple && !isAnswered && (
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#161b22] text-[#71717a] dark:text-[#8b949e] border border-[#ebebeb] dark:border-[#30363d]">
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#17171b] text-[#71717a] dark:text-[#71717a] border border-[#ebebeb] dark:border-[#2c2c33]">
               множественный выбор
             </span>
           )}
@@ -183,7 +183,7 @@ export default function QuestionPromptCard({ activity, taskId }: QuestionPromptC
             </div>
           )}
           {activity.durationMs ? (
-            <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] tabular-nums">
+            <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a] tabular-nums">
               {activity.durationMs < 1000 ? `${Math.round(activity.durationMs)}ms` : `${(activity.durationMs / 1000).toFixed(1)}s`}
             </span>
           ) : null}
@@ -191,7 +191,7 @@ export default function QuestionPromptCard({ activity, taskId }: QuestionPromptC
       </div>
 
       {/* 2. Question Text with Markdown Support */}
-      <div className="mb-4 select-text leading-relaxed text-[#171717] dark:text-[#f0f6fc]">
+      <div className="mb-4 select-text leading-relaxed text-[#171717] dark:text-[#f4f4f5]">
         <MarkdownContent content={questionText} />
       </div>
 
@@ -222,8 +222,8 @@ export default function QuestionPromptCard({ activity, taskId }: QuestionPromptC
               onClick={() => handleSelectOption(option.label)}
               className={`w-full text-left p-3 rounded-md border transition-colors flex items-start space-x-3 group ${
                 isSelected
-                  ? 'border-[#171717] dark:border-[#f0f6fc] bg-[#f9fafb] dark:bg-[#161b22]'
-                  : 'border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#0d1117] hover:border-[#a1a1aa] dark:hover:border-[#6e7681]'
+                  ? 'border-[#171717] dark:border-[#f4f4f5] bg-[#f9fafb] dark:bg-[#17171b]'
+                  : 'border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#111114] hover:border-[#a1a1aa] dark:hover:border-[#52525b]'
               } ${
                 isAnswered
                   ? 'cursor-default opacity-85'
@@ -234,19 +234,19 @@ export default function QuestionPromptCard({ activity, taskId }: QuestionPromptC
               <div
                 className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
                   isSelected
-                    ? 'border-[#171717] dark:border-[#f0f6fc] bg-[#171717] dark:bg-[#f0f6fc]'
-                    : 'border-[#a1a1aa] dark:border-[#6e7681]'
+                    ? 'border-[#171717] dark:border-[#f4f4f5] bg-[#171717] dark:bg-[#f4f4f5]'
+                    : 'border-[#a1a1aa] dark:border-[#52525b]'
                 }`}
               >
                 {isSelected && (
-                  <div className="w-1.5 h-1.5 rounded-full bg-white dark:bg-[#0d1117]" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-white dark:bg-[#111114]" />
                 )}
               </div>
 
               {/* Title & Subtitle */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-medium text-[#171717] dark:text-[#f0f6fc]">
+                  <span className="text-sm font-medium text-[#171717] dark:text-[#f4f4f5]">
                     {formatInline(cleanLabel, `opt-${idx}`)}
                   </span>
                   {isRecommended && (
@@ -262,7 +262,7 @@ export default function QuestionPromptCard({ activity, taskId }: QuestionPromptC
                   )}
                 </div>
                 {option.description && (
-                  <p className="text-xs text-[#71717a] dark:text-[#8b949e] font-mono mt-1 leading-relaxed">
+                  <p className="text-xs text-[#71717a] dark:text-[#71717a] font-mono mt-1 leading-relaxed">
                     {formatInline(option.description, `desc-${idx}`)}
                   </p>
                 )}
@@ -277,20 +277,20 @@ export default function QuestionPromptCard({ activity, taskId }: QuestionPromptC
             onSubmit={handleCustomSubmit}
             className={`rounded-md border transition-colors p-2.5 px-3 flex items-center space-x-3 ${
               isCustomFocused || customInput.length > 0
-                ? 'border-[#171717] dark:border-[#f0f6fc] bg-[#fafafa] dark:bg-[#161b22]'
-                : 'border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:border-[#a1a1aa] dark:hover:border-[#6e7681]'
+                ? 'border-[#171717] dark:border-[#f4f4f5] bg-[#fafafa] dark:bg-[#17171b]'
+                : 'border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] hover:border-[#a1a1aa] dark:hover:border-[#52525b]'
             }`}
           >
             {/* Radio circle */}
             <div
               className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
                 customInput.length > 0
-                  ? 'border-[#171717] dark:border-[#f0f6fc] bg-[#171717] dark:bg-[#f0f6fc]'
-                  : 'border-[#a1a1aa] dark:border-[#6e7681]'
+                  ? 'border-[#171717] dark:border-[#f4f4f5] bg-[#171717] dark:bg-[#f4f4f5]'
+                  : 'border-[#a1a1aa] dark:border-[#52525b]'
               }`}
             >
               {customInput.length > 0 && (
-                <div className="w-1.5 h-1.5 rounded-full bg-white dark:bg-[#0d1117]" />
+                <div className="w-1.5 h-1.5 rounded-full bg-white dark:bg-[#111114]" />
               )}
             </div>
 
@@ -303,14 +303,14 @@ export default function QuestionPromptCard({ activity, taskId }: QuestionPromptC
               onFocus={() => setIsCustomFocused(true)}
               onBlur={() => setIsCustomFocused(false)}
               placeholder="Введите свой ответ..."
-              className="flex-1 bg-transparent border-none text-sm text-[#171717] dark:text-[#f0f6fc] placeholder-[#8f8f8f] dark:placeholder-[#6e7681] focus:outline-none font-sans"
+              className="flex-1 bg-transparent border-none text-sm text-[#171717] dark:text-[#f4f4f5] placeholder-[#8f8f8f] dark:placeholder-[#52525b] focus:outline-none font-sans"
             />
 
             {customInput.trim().length > 0 && (
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-2.5 py-1 rounded-md bg-[#171717] dark:bg-[#f0f6fc] hover:bg-black dark:hover:bg-white text-white dark:text-[#090a0f] text-xs font-medium flex items-center space-x-1 transition-colors cursor-pointer shadow-xs"
+                className="px-2.5 py-1 rounded-md bg-[#171717] dark:bg-[#f4f4f5] hover:bg-black dark:hover:bg-white text-white dark:text-[#0b0b0e] text-xs font-medium flex items-center space-x-1 transition-colors cursor-pointer shadow-xs"
               >
                 <span>Отправить</span>
                 <CornerDownLeft className="w-3 h-3 ml-0.5" />
@@ -321,13 +321,13 @@ export default function QuestionPromptCard({ activity, taskId }: QuestionPromptC
           /* Answered custom response display (if selected answer wasn't among predefined) */
           activeAnswer &&
           !rawOptions.some((o) => o.label === activeAnswer) && (
-            <div className="p-3 rounded-md border border-[#171717] dark:border-[#f0f6fc] bg-[#f9fafb] dark:bg-[#161b22] flex items-start space-x-3">
-              <div className="w-4 h-4 rounded-full border border-[#171717] dark:border-[#f0f6fc] bg-[#171717] dark:bg-[#f0f6fc] flex items-center justify-center shrink-0 mt-0.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-white dark:bg-[#0d1117]" />
+            <div className="p-3 rounded-md border border-[#171717] dark:border-[#f4f4f5] bg-[#f9fafb] dark:bg-[#17171b] flex items-start space-x-3">
+              <div className="w-4 h-4 rounded-full border border-[#171717] dark:border-[#f4f4f5] bg-[#171717] dark:bg-[#f4f4f5] flex items-center justify-center shrink-0 mt-0.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-white dark:bg-[#111114]" />
               </div>
               <div className="flex-1 min-w-0">
-                <span className="text-xs font-mono text-[#71717a] dark:text-[#8b949e]">Пользовательский ответ:</span>
-                <p className="text-sm font-medium text-[#171717] dark:text-[#f0f6fc] mt-0.5 break-words">
+                <span className="text-xs font-mono text-[#71717a] dark:text-[#71717a]">Пользовательский ответ:</span>
+                <p className="text-sm font-medium text-[#171717] dark:text-[#f4f4f5] mt-0.5 break-words">
                   {formatInline(activeAnswer, 'ans-custom')}
                 </p>
               </div>

@@ -125,7 +125,7 @@ export const CardContextMenu = memo(function CardContextMenu({
     <div
       ref={menuRef}
       role="menu"
-      className="fixed z-50 w-56 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] py-1 font-mono text-xs text-[#171717] dark:text-[#f0f6fc] shadow-md transition-colors"
+      className="fixed z-50 w-56 rounded-md border border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] py-1 font-mono text-xs text-[#171717] dark:text-[#f4f4f5] shadow-md transition-colors"
       style={{ left: pos.left, top: pos.top }}
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
@@ -134,7 +134,7 @@ export const CardContextMenu = memo(function CardContextMenu({
         type="button"
         role="menuitem"
         onClick={handleOpen}
-        className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer"
+        className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#232328] cursor-pointer"
       >
         {t('taskMenu.open')}
       </button>
@@ -143,7 +143,7 @@ export const CardContextMenu = memo(function CardContextMenu({
         type="button"
         role="menuitem"
         onClick={handleRunAgent}
-        className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer"
+        className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#232328] cursor-pointer"
       >
         {t('taskMenu.runAgent')}
       </button>
@@ -152,14 +152,14 @@ export const CardContextMenu = memo(function CardContextMenu({
         type="button"
         role="menuitem"
         onClick={handleCreateSubtask}
-        className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer text-[#171717] dark:text-[#f0f6fc]"
+        className="w-full px-3 py-1.5 text-left hover:bg-[#f4f4f5] dark:hover:bg-[#232328] cursor-pointer text-[#171717] dark:text-[#f4f4f5]"
       >
         {t('taskMenu.createSubtask')}
       </button>
 
-      <div className="my-1 border-t border-[#ebebeb] dark:border-[#21262d]" />
+      <div className="my-1 border-t border-[#ebebeb] dark:border-[#212126]" />
 
-      <div className="px-3 py-1 text-[#8f8f8f] dark:text-[#8b949e] select-none">{t('taskMenu.moveTo')}</div>
+      <div className="px-3 py-1 text-[#8f8f8f] dark:text-[#71717a] select-none">{t('taskMenu.moveTo')}</div>
       {columns.map((col) => {
         const isCurrent = col.id === task.stageId;
         return (
@@ -171,8 +171,8 @@ export const CardContextMenu = memo(function CardContextMenu({
             onClick={() => handleMove(col.id)}
             className={`w-full px-3 py-1.5 text-left ${
               isCurrent
-                ? 'text-[#8f8f8f] dark:text-[#8b949e] cursor-default'
-                : 'hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer'
+                ? 'text-[#8f8f8f] dark:text-[#71717a] cursor-default'
+                : 'hover:bg-[#f4f4f5] dark:hover:bg-[#232328] cursor-pointer'
             }`}
           >
             {isCurrent ? t('taskMenu.current', { title: col.title }) : col.title}
@@ -180,7 +180,7 @@ export const CardContextMenu = memo(function CardContextMenu({
         );
       })}
 
-      <div className="my-1 border-t border-[#ebebeb] dark:border-[#21262d]" />
+      <div className="my-1 border-t border-[#ebebeb] dark:border-[#212126]" />
 
       <button
         type="button"

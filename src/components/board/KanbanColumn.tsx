@@ -132,12 +132,12 @@ function KanbanColumn({
               ...(baseColTransform ? { transform: baseColTransform } : {}),
               borderColor: colSnapshot.isDragging ? undefined : isFocused ? undefined : `${assignedAgentColor}40`,
             }}
-      className={`flex flex-col w-72 shrink-0 h-full rounded-lg bg-[#f9f9f9] dark:bg-[#0d1117] border select-none overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
+      className={`flex flex-col w-72 shrink-0 h-full rounded-lg bg-[#f9f9f9] dark:bg-[#111114] border select-none overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
         colSnapshot.isDragging
-          ? 'border-[#171717] dark:border-[#30363d] shadow-md opacity-90'
+          ? 'border-[#171717] dark:border-[#2c2c33] shadow-md opacity-90'
           : isFocused
-            ? 'border-[#171717] dark:border-[#30363d] shadow-sm'
-            : 'border-[#ebebeb] dark:border-[#21262d] hover:border-[#d4d4d8] dark:hover:border-[#30363d]'
+            ? 'border-[#171717] dark:border-[#2c2c33] shadow-sm'
+            : 'border-[#ebebeb] dark:border-[#212126] hover:border-[#d4d4d8] dark:hover:border-[#2c2c33]'
       }`}
     >
       {/* Top Hairline Accent Bar */}
@@ -159,7 +159,7 @@ function KanbanColumn({
             ? t('board.columnPinnedTitle')
             : t('board.columnDragTitle')
         }
-        className={`flex items-center justify-between h-9 px-2.5 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#161b22] hover:bg-[#fafafa] dark:hover:bg-[#1c2128] transition-colors ${
+        className={`flex items-center justify-between h-9 px-2.5 border-b border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#17171b] hover:bg-[#fafafa] dark:hover:bg-[#1e1e23] transition-colors ${
           isPinned ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
         } group overflow-visible`}
       >
@@ -179,14 +179,14 @@ function KanbanColumn({
 
         {/* Center Slot: Agent icon + Column Title + Task count */}
         <div className="flex-1 min-w-0 flex items-center justify-center gap-1.5 px-1 overflow-hidden">
-          <AgentIcon name={effectiveIcon} className="h-3.5 w-3.5 shrink-0 text-[#171717] dark:text-[#f0f6fc]" />
-          <h3 className="text-[13px] font-semibold text-[#171717] dark:text-[#f0f6fc] truncate text-center leading-[1.35]">
+          <AgentIcon name={effectiveIcon} className="h-3.5 w-3.5 shrink-0 text-[#171717] dark:text-[#f4f4f5]" />
+          <h3 className="text-[13px] font-semibold text-[#171717] dark:text-[#f4f4f5] truncate text-center leading-[1.35]">
             {column.title}
           </h3>
           {/* Task Counter (same baseline as the title) */}
           <span
             className={`text-[10px] font-mono tabular-nums whitespace-nowrap leading-[1.35] shrink-0 translate-y-[1px] ${
-              isAtWipLimit ? 'text-red-600 dark:text-red-400' : 'text-[#8f8f8f] dark:text-[#8b949e]'
+              isAtWipLimit ? 'text-red-600 dark:text-red-400' : 'text-[#8f8f8f] dark:text-[#71717a]'
             }`}
           >
             {t('board.totalTasks', { count: displayTasks.length })}
@@ -216,7 +216,7 @@ function KanbanColumn({
             {...provided.droppableProps}
             className={`flex-1 min-h-0 p-2 overflow-y-auto overscroll-y-contain transition-colors kanban-column-scroll ${
               snapshot.isDraggingOver
-                ? 'bg-[#f4f4f5] dark:bg-[#161b22]/50 border border-dashed border-[#171717]/30 dark:border-[#30363d] rounded-b-lg'
+                ? 'bg-[#f4f4f5] dark:bg-[#17171b]/50 border border-dashed border-[#171717]/30 dark:border-[#2c2c33] rounded-b-lg'
                 : 'bg-transparent'
             }`}
           >
@@ -228,9 +228,9 @@ function KanbanColumn({
               <button
                 type="button"
                 onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
-                className="w-full mt-1 mb-2 py-2 px-3 flex items-center justify-center gap-1.5 rounded-[6px] border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] hover:bg-[#f9f9f9] dark:hover:bg-[#21262d] text-[#0d0d0d] dark:text-[#f0f6fc] font-mono text-xs font-medium transition-colors duration-150 cursor-pointer shadow-xs active:bg-[#f4f4f5] dark:active:bg-[#1c2128] select-none"
+                className="w-full mt-1 mb-2 py-2 px-3 flex items-center justify-center gap-1.5 rounded-[6px] border border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] hover:bg-[#f9f9f9] dark:hover:bg-[#232328] text-[#0d0d0d] dark:text-[#f4f4f5] font-mono text-xs font-medium transition-colors duration-150 cursor-pointer shadow-xs active:bg-[#f4f4f5] dark:active:bg-[#1e1e23] select-none"
               >
-                <ChevronDown className="h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e] transition-transform duration-150" />
+                <ChevronDown className="h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#71717a] transition-transform duration-150" />
                 <span>{t('board.loadMore', { nextCount, remaining })}</span>
               </button>
             )}

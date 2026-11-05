@@ -92,23 +92,23 @@ export default function CompactContextToolCard({ tool }: ToolCardProps) {
 
   return (
     <div
-      className={`group rounded-md border text-xs shadow-2xs hover:shadow-xs overflow-hidden my-1 animate-silk-entrance transition-colors bg-white dark:bg-[#161b22] ${
+      className={`group rounded-md border text-xs shadow-2xs hover:shadow-xs overflow-hidden my-1 animate-silk-entrance transition-colors bg-white dark:bg-[#17171b] ${
         isRunning
           ? 'border-amber-500/40 dark:border-amber-500/30 bg-amber-500/[0.02]'
-          : 'border-[#ebebeb] dark:border-[#21262d]'
+          : 'border-[#ebebeb] dark:border-[#212126]'
       } ${isSkipped ? 'opacity-70 dark:opacity-65' : ''}`}
     >
       {/* Header Strip */}
       <div
         onClick={() => setIsExpanded(!isExpanded)}
-        className={`flex items-center justify-between px-2.5 py-1.5 bg-[#f8f8f9] dark:bg-[#161b22] hover:bg-[#f2f2f3] dark:hover:bg-[#1c2128] transition-colors cursor-pointer select-none gap-2 text-xs min-h-[30px] ${
-          isExpanded ? 'border-b border-[#ebebeb] dark:border-[#21262d]' : ''
+        className={`flex items-center justify-between px-2.5 py-1.5 bg-[#f8f8f9] dark:bg-[#17171b] hover:bg-[#f2f2f3] dark:hover:bg-[#1e1e23] transition-colors cursor-pointer select-none gap-2 text-xs min-h-[30px] ${
+          isExpanded ? 'border-b border-[#ebebeb] dark:border-[#212126]' : ''
         }`}
       >
         <div className="flex items-center space-x-2 min-w-0 flex-1">
           <button
             type="button"
-            className="p-0.5 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] rounded shrink-0 transition cursor-pointer"
+            className="p-0.5 text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] rounded shrink-0 transition cursor-pointer"
             onClick={(e) => {
               e.stopPropagation();
               setIsExpanded(!isExpanded);
@@ -117,7 +117,7 @@ export default function CompactContextToolCard({ tool }: ToolCardProps) {
           >
             <ChevronRight
               className={`h-3 w-3 transition-transform duration-150 ${
-                isExpanded ? 'rotate-90 text-[#171717] dark:text-[#f0f6fc]' : ''
+                isExpanded ? 'rotate-90 text-[#171717] dark:text-[#f4f4f5]' : ''
               }`}
             />
           </button>
@@ -131,7 +131,7 @@ export default function CompactContextToolCard({ tool }: ToolCardProps) {
           </span>
 
           {/* Title */}
-          <span className="font-semibold text-[#171717] dark:text-[#f0f6fc] shrink-0 font-sans">
+          <span className="font-semibold text-[#171717] dark:text-[#f4f4f5] shrink-0 font-sans">
             Оптимизация контекста
           </span>
 
@@ -145,8 +145,8 @@ export default function CompactContextToolCard({ tool }: ToolCardProps) {
           {/* Duration */}
           {durationText && (
             <>
-              <span className="text-[#a1a1aa] dark:text-[#6e7681] select-none text-[10px]">•</span>
-              <span className="font-mono text-[#71717a] dark:text-[#8b949e] shrink-0 tabular-nums text-[11px]">
+              <span className="text-[#a1a1aa] dark:text-[#52525b] select-none text-[10px]">•</span>
+              <span className="font-mono text-[#71717a] dark:text-[#71717a] shrink-0 tabular-nums text-[11px]">
                 {durationText}
               </span>
             </>
@@ -159,7 +159,7 @@ export default function CompactContextToolCard({ tool }: ToolCardProps) {
           <button
             type="button"
             onClick={handleCopy}
-            className={`p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-white dark:hover:bg-[#161b22] transition cursor-pointer ${
+            className={`p-1 rounded text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-white dark:hover:bg-[#17171b] transition cursor-pointer ${
               isExpanded ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
             }`}
             aria-label="Скопировать вывод"
@@ -192,11 +192,11 @@ export default function CompactContextToolCard({ tool }: ToolCardProps) {
 
       {/* Running State: Animated Progress Bar & Stages Stepper */}
       {isRunning && (
-        <div className="px-3 pb-3 pt-1 border-t border-[#ebebeb]/70 dark:border-[#21262d]/70 space-y-2.5">
+        <div className="px-3 pb-3 pt-1 border-t border-[#ebebeb]/70 dark:border-[#212126]/70 space-y-2.5">
           {/* Progress bar with percentage */}
           <div className="space-y-1">
             <div className="flex items-center justify-between text-[11px] font-mono">
-              <span className="text-[#52525b] dark:text-[#8b949e] flex items-center gap-1.5">
+              <span className="text-[#52525b] dark:text-[#71717a] flex items-center gap-1.5">
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-indigo-500 animate-ping" />
                 {currentStageLabel}
               </span>
@@ -204,7 +204,7 @@ export default function CompactContextToolCard({ tool }: ToolCardProps) {
                 {progressPct}%
               </span>
             </div>
-            <div className="h-1.5 w-full bg-[#f4f4f5] dark:bg-[#161b22] border border-transparent dark:border-[#30363d] rounded-full overflow-hidden">
+            <div className="h-1.5 w-full bg-[#f4f4f5] dark:bg-[#17171b] border border-transparent dark:border-[#2c2c33] rounded-full overflow-hidden">
               <div
                 className="h-full bg-indigo-600 dark:bg-indigo-500 transition-all duration-300 ease-out rounded-full"
                 style={{ width: `${progressPct}%` }}
@@ -225,7 +225,7 @@ export default function CompactContextToolCard({ tool }: ToolCardProps) {
                       ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80 font-semibold'
                       : isPassed
                       ? 'bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 font-medium border border-emerald-200/50 dark:border-emerald-800/40'
-                      : 'text-[#8f8f8f] dark:text-[#6e7681] bg-[#f4f4f5]/60 dark:bg-[#161b22]/60 border border-transparent'
+                      : 'text-[#8f8f8f] dark:text-[#52525b] bg-[#f4f4f5]/60 dark:bg-[#17171b]/60 border border-transparent'
                   }`}
                 >
                   {isPassed ? (
@@ -233,7 +233,7 @@ export default function CompactContextToolCard({ tool }: ToolCardProps) {
                   ) : isCurrent ? (
                     <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse shrink-0" />
                   ) : (
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#d4d4d8] dark:bg-[#30363d] shrink-0" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#d4d4d8] dark:bg-[#2c2c33] shrink-0" />
                   )}
                   <span className="truncate">{st.label}</span>
                 </div>
@@ -245,7 +245,7 @@ export default function CompactContextToolCard({ tool }: ToolCardProps) {
 
       {/* Completed Success State: Compact Stages Completed Strip */}
       {!isRunning && isSuccess && (
-        <div className="px-3 py-1.5 border-t border-[#ebebeb]/60 dark:border-[#21262d]/60 flex items-center justify-between text-[11px] font-mono text-[#52525b] dark:text-[#8b949e]">
+        <div className="px-3 py-1.5 border-t border-[#ebebeb]/60 dark:border-[#212126]/60 flex items-center justify-between text-[11px] font-mono text-[#52525b] dark:text-[#71717a]">
           <div className="flex items-center space-x-1.5">
             <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400 stroke-[2.5]" />
             <span>1. Анализ диалога → 2. Испарение логов тулов → 3. Сборка выжимки</span>
@@ -258,13 +258,13 @@ export default function CompactContextToolCard({ tool }: ToolCardProps) {
 
       {/* Expanded Details */}
       {isExpanded && (
-        <div className="bg-white dark:bg-[#0d1117] p-3 border-t border-[#ebebeb] dark:border-[#21262d] space-y-2 font-mono text-xs">
+        <div className="bg-white dark:bg-[#111114] p-3 border-t border-[#ebebeb] dark:border-[#212126] space-y-2 font-mono text-xs">
           {tool.stdout && (
             <div>
-              <span className="text-[10px] text-[#666666] dark:text-[#8b949e] block mb-1">
+              <span className="text-[10px] text-[#666666] dark:text-[#71717a] block mb-1">
                 Результат оптимизации
               </span>
-              <pre className="p-2.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#21262d] text-[11px] text-[#171717] dark:text-[#f0f6fc] overflow-x-auto leading-relaxed max-h-48 whitespace-pre-wrap select-text">
+              <pre className="p-2.5 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#212126] text-[11px] text-[#171717] dark:text-[#f4f4f5] overflow-x-auto leading-relaxed max-h-48 whitespace-pre-wrap select-text">
                 {tool.stdout}
               </pre>
             </div>
@@ -281,7 +281,7 @@ export default function CompactContextToolCard({ tool }: ToolCardProps) {
             </div>
           )}
 
-          <div className="flex items-center justify-between pt-1 border-t border-[#f4f4f5] dark:border-[#21262d] text-[10px] text-[#8f8f8f] dark:text-[#8b949e]">
+          <div className="flex items-center justify-between pt-1 border-t border-[#f4f4f5] dark:border-[#212126] text-[10px] text-[#8f8f8f] dark:text-[#71717a]">
             <span>{isFailed ? `failed (код ${tool.exitCode ?? 1})` : `Этапы завершены`}</span>
             {durationText && <span>Длительность: {durationText}</span>}
           </div>

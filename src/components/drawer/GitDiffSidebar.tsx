@@ -302,19 +302,19 @@ export default function GitDiffSidebar({
   return (
     <aside
       style={{ width: (isCollapsed ? 44 : sidebarWidth) + 'px' }}
-      className={'relative shrink-0 my-1.5 mr-1.5 rounded-xl border border-[#ebebeb] dark:border-[#21262d] shadow-2xs bg-[#fafafa] dark:bg-[#090a0f] flex flex-col min-h-0 h-[calc(100%-0.75rem)] text-[#171717] dark:text-[#f0f6fc] overflow-hidden select-none transition-colors ' +
+      className={'relative shrink-0 my-1.5 mr-1.5 rounded-xl border border-[#ebebeb] dark:border-[#212126] shadow-2xs bg-[#fafafa] dark:bg-[#0b0b0e] flex flex-col min-h-0 h-[calc(100%-0.75rem)] text-[#171717] dark:text-[#f4f4f5] overflow-hidden select-none transition-colors ' +
         (isResizing ? 'select-none' : 'transition-[width] duration-200 ease-out') + ' ' + (className || '')}
       aria-label={t('gitDiff.panelAria')}
     >
       {/* Collapsed Rail View (44px wide, smoothly fades in when collapsed) */}
       <div
-        className={'absolute inset-0 w-11 bg-white dark:bg-[#0d1117] flex flex-col items-center py-3 select-none transition-opacity duration-200 ' +
+        className={'absolute inset-0 w-11 bg-white dark:bg-[#111114] flex flex-col items-center py-3 select-none transition-opacity duration-200 ' +
           (isCollapsed ? 'opacity-100 pointer-events-auto z-10' : 'opacity-0 pointer-events-none -z-10')}
       >
         <button
           type="button"
           onClick={onToggleCollapse}
-          className="p-1.5 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
+          className="p-1.5 rounded-md text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#17171b] transition cursor-pointer"
           aria-label={t('gitDiff.expandPanel')}
         >
           <PanelRightOpen className="h-4 w-4" />
@@ -325,14 +325,14 @@ export default function GitDiffSidebar({
             className={'h-4 w-4 ' +
               (isLoading
                 ? 'animate-pulse text-emerald-500'
-                : 'text-[#8f8f8f] dark:text-[#8b949e]')}
+                : 'text-[#8f8f8f] dark:text-[#71717a]')}
           />
           {!hasInitialLoaded ? (
             <span className="w-3.5 h-3.5 rounded-full border-2 border-emerald-500/20 border-t-emerald-500 animate-spin" />
           ) : (
             <>
               {filesCount > 0 && (
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-[#f4f4f5] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] border border-[#ebebeb] dark:border-[#30363d]">
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-[#f4f4f5] dark:bg-[#17171b] text-[#666666] dark:text-[#71717a] border border-[#ebebeb] dark:border-[#2c2c33]">
                   {filesCount}
                 </span>
               )}
@@ -355,7 +355,7 @@ export default function GitDiffSidebar({
           className="mt-6 flex-1 flex items-center justify-center cursor-pointer group"
           aria-label={t('gitDiff.expandPanel')}
         >
-          <span className="text-[11px] font-mono text-[#8f8f8f] dark:text-[#8b949e] group-hover:text-[#171717] dark:group-hover:text-[#f0f6fc] transition tracking-wider [writing-mode:vertical-rl] rotate-180">
+          <span className="text-[11px] font-mono text-[#8f8f8f] dark:text-[#71717a] group-hover:text-[#171717] dark:group-hover:text-[#f4f4f5] transition tracking-wider [writing-mode:vertical-rl] rotate-180">
             Git Diff
           </span>
         </div>
@@ -382,19 +382,19 @@ export default function GitDiffSidebar({
         )}
 
         {/* 1. Header: Title, Badges, Expand/Collapse All, Refresh, Panel Collapse */}
-        <header className="px-3 py-2 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] flex flex-wrap items-center justify-between gap-1.5 shrink-0 shadow-xs min-w-0 transition-colors">
+        <header className="px-3 py-2 border-b border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] flex flex-wrap items-center justify-between gap-1.5 shrink-0 shadow-xs min-w-0 transition-colors">
           {/* Left Section: Title, File count, Diff stats */}
           <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
             <div className="flex items-center gap-1.5 shrink-0">
-              <GitCompare className="h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e] shrink-0" />
-              <span className="font-semibold text-xs text-[#171717] dark:text-[#f0f6fc] tracking-tight font-sans">
+              <GitCompare className="h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#71717a] shrink-0" />
+              <span className="font-semibold text-xs text-[#171717] dark:text-[#f4f4f5] tracking-tight font-sans">
                 Git Diff
               </span>
             </div>
 
             {/* Changed files count badge */}
             <span
-              className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-[#f4f4f5] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] border border-[#ebebeb] dark:border-[#30363d] shrink-0 whitespace-nowrap"
+              className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-[#f4f4f5] dark:bg-[#17171b] text-[#666666] dark:text-[#71717a] border border-[#ebebeb] dark:border-[#2c2c33] shrink-0 whitespace-nowrap"
               title={t('gitDiff.changedFiles', { count: filesCount })}
             >
               {formatFilesCount(filesCount, language)}
@@ -422,30 +422,30 @@ export default function GitDiffSidebar({
             {/* Branch badge with clean truncation and tooltip */}
             {diff?.branch && (
               <div
-                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[10px] font-mono text-[#666666] dark:text-[#8b949e] max-w-[130px] min-w-0 cursor-default"
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[10px] font-mono text-[#666666] dark:text-[#71717a] max-w-[130px] min-w-0 cursor-default"
                 title={t('gitDiff.currentBranch', { branch: diff.branch })}
               >
-                <GitBranch className="h-3 w-3 text-[#8f8f8f] dark:text-[#8b949e] shrink-0" />
+                <GitBranch className="h-3 w-3 text-[#8f8f8f] dark:text-[#71717a] shrink-0" />
                 <span className="truncate">{diff.branch}</span>
               </div>
             )}
 
             {/* Expand / Collapse All Quick Actions */}
             {filesCount > 1 && (
-              <div className="flex items-center border border-[#ebebeb] dark:border-[#30363d] rounded bg-white dark:bg-[#161b22]">
+              <div className="flex items-center border border-[#ebebeb] dark:border-[#2c2c33] rounded bg-white dark:bg-[#17171b]">
                 <button
                   type="button"
                   onClick={handleExpandAll}
-                  className="p-1 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer"
+                  className="p-1 text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] transition cursor-pointer"
                   aria-label={t('gitDiff.expandAllTitle')}
                 >
                   <ChevronsUpDown className="h-3 w-3" />
                 </button>
-                <div className="w-px h-3 bg-[#ebebeb] dark:bg-[#30363d]" />
+                <div className="w-px h-3 bg-[#ebebeb] dark:bg-[#2c2c33]" />
                 <button
                   type="button"
                   onClick={handleCollapseAll}
-                  className="p-1 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer"
+                  className="p-1 text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] transition cursor-pointer"
                   aria-label={t('gitDiff.collapseAllTitle')}
                 >
                   <ChevronsDownUp className="h-3 w-3" />
@@ -458,7 +458,7 @@ export default function GitDiffSidebar({
               type="button"
               onClick={fetchDiff}
               disabled={isLoading}
-              className="p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] disabled:opacity-50 transition cursor-pointer"
+              className="p-1 rounded text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] disabled:opacity-50 transition cursor-pointer"
               aria-label={t('gitDiff.refresh')}
             >
               <RefreshCw
@@ -470,7 +470,7 @@ export default function GitDiffSidebar({
             <button
               type="button"
               onClick={onToggleCollapse}
-              className="p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition-colors cursor-pointer"
+              className="p-1 rounded text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] transition-colors cursor-pointer"
               aria-label={t('gitDiff.collapsePanel')}
             >
               <PanelRightClose className="h-3.5 w-3.5" />
@@ -486,7 +486,7 @@ export default function GitDiffSidebar({
             <button
               type="button"
               onClick={fetchDiff}
-              className="underline hover:text-[#171717] dark:hover:text-[#f0f6fc] cursor-pointer ml-1 text-[11px]"
+              className="underline hover:text-[#171717] dark:hover:text-[#f4f4f5] cursor-pointer ml-1 text-[11px]"
             >
               Повторить
             </button>

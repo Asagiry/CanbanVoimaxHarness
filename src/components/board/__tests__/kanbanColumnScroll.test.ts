@@ -36,8 +36,8 @@ describe('Kanban Column Hover-Only 3px Scrollbar', () => {
       expect(indexCss).toContain('.dark [data-kanban-column]:hover .kanban-column-scroll');
       expect(indexCss).toMatch(/\.dark\s+\[data-kanban-column\]:hover\s+\.kanban-column-scroll::-webkit-scrollbar-thumb/);
       expect(indexCss).toContain('.dark .kanban-column-scroll::-webkit-scrollbar-thumb:active');
-      expect(indexCss).toContain('background: #30363d;');
-      expect(indexCss).toContain('background: #484f58;');
+      expect(indexCss).toContain('background: #2c2c33;');
+      expect(indexCss).toContain('background: #3a3a44;');
     });
   });
 

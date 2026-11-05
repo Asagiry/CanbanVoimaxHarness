@@ -270,14 +270,14 @@ export default function DrawerSteerBar({
   const hasContent = Boolean(interactiveInput.trim() || attachedImages.length > 0);
 
   return (
-    <footer className="bg-[#fafafa] dark:bg-[#090a0f] px-3 pb-3 pt-1 shrink-0 shadow-xs z-10 transition-colors">
+    <footer className="bg-[#fafafa] dark:bg-[#0b0b0e] px-3 pb-3 pt-1 shrink-0 shadow-xs z-10 transition-colors">
       <div className="max-w-4xl mx-auto">
         {/* Floating Modern Card */}
         <div
           onDragOver={handleChatDragOver}
           onDragLeave={handleChatDragLeave}
           onDrop={handleChatDrop}
-          className={`rounded-xl bg-white dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] transition-colors shadow-xs p-3 ${
+          className={`rounded-xl bg-white dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] transition-colors shadow-xs p-3 ${
             isDragOverChat ? 'ring-2 ring-blue-500/30 bg-blue-50/40 dark:bg-blue-950/40' : ''
           }`}
         >
@@ -289,7 +289,7 @@ export default function DrawerSteerBar({
               {attachedImages.map((img) => (
                 <div
                   key={img.id}
-                  className="relative group shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-[#ebebeb] dark:border-[#30363d] bg-[#f4f4f5] dark:bg-[#161b22]"
+                  className="relative group shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-[#ebebeb] dark:border-[#2c2c33] bg-[#f4f4f5] dark:bg-[#17171b]"
                 >
                   <img
                     src={img.dataUrl}
@@ -299,12 +299,12 @@ export default function DrawerSteerBar({
                   <button
                     type="button"
                     onClick={() => handleRemoveImage(img.id)}
-                    className="absolute top-1 right-1 w-4 h-4 rounded-full bg-white/90 dark:bg-[#161b22]/90 hover:bg-white dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] border border-[#ebebeb] dark:border-[#30363d] flex items-center justify-center text-xs leading-none transition cursor-pointer"
+                    className="absolute top-1 right-1 w-4 h-4 rounded-full bg-white/90 dark:bg-[#17171b]/90 hover:bg-white dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] border border-[#ebebeb] dark:border-[#2c2c33] flex items-center justify-center text-xs leading-none transition cursor-pointer"
                     aria-label={t('drawer.removeImage')}
                   >
                     ×
                   </button>
-                  <div className="absolute inset-x-0 bottom-0 bg-white/90 dark:bg-[#161b22]/90 px-1 py-0.5 text-[8.5px] font-mono text-[#666666] dark:text-[#8b949e] truncate text-center border-t border-[#ebebeb] dark:border-[#30363d]">
+                  <div className="absolute inset-x-0 bottom-0 bg-white/90 dark:bg-[#17171b]/90 px-1 py-0.5 text-[8.5px] font-mono text-[#666666] dark:text-[#71717a] truncate text-center border-t border-[#ebebeb] dark:border-[#2c2c33]">
                     {img.name}
                   </div>
                 </div>
@@ -325,18 +325,18 @@ export default function DrawerSteerBar({
                 ? t('drawer.steerSubagentPlaceholder')
                 : t('drawer.steerTaskPlaceholder')
             }
-            className="w-full bg-transparent text-sm text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-none resize-none leading-relaxed min-h-[44px] max-h-44 overflow-y-auto font-sans"
+            className="w-full bg-transparent text-sm text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-none resize-none leading-relaxed min-h-[44px] max-h-44 overflow-y-auto font-sans"
           />
 
           {/* Bottom toolbar inside card */}
-          <div className="flex items-center justify-between pt-2 mt-1 border-t border-[#ebebeb] dark:border-[#21262d] select-none">
+          <div className="flex items-center justify-between pt-2 mt-1 border-t border-[#ebebeb] dark:border-[#212126] select-none">
             {/* Left Toolbar Items */}
             <div className="flex items-center space-x-2">
               {/* Round "+" Button */}
               <button
                 type="button"
                 onClick={() => chatFileInputRef.current?.click()}
-                className="w-7 h-7 rounded-full bg-[#f4f4f5] dark:bg-[#161b22] hover:bg-[#171717] dark:hover:bg-[#f0f6fc] text-[#171717] dark:text-[#f0f6fc] hover:text-white dark:hover:text-[#090a0f] flex items-center justify-center transition cursor-pointer"
+                className="w-7 h-7 rounded-full bg-[#f4f4f5] dark:bg-[#17171b] hover:bg-[#171717] dark:hover:bg-[#f4f4f5] text-[#171717] dark:text-[#f4f4f5] hover:text-white dark:hover:text-[#0b0b0e] flex items-center justify-center transition cursor-pointer"
                 aria-label={t('drawer.attachImage')}
               >
                 <Plus className="h-4 w-4" />
@@ -385,15 +385,15 @@ export default function DrawerSteerBar({
                 <button
                   type="button"
                   onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
-                  className="px-2.5 py-1 rounded-full bg-[#f4f4f5] dark:bg-[#161b22] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] font-mono text-xs border border-[#ebebeb] dark:border-[#30363d] transition cursor-pointer flex items-center gap-1.5 max-w-[200px]"
+                  className="px-2.5 py-1 rounded-full bg-[#f4f4f5] dark:bg-[#17171b] hover:bg-[#e4e4e7] dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] font-mono text-xs border border-[#ebebeb] dark:border-[#2c2c33] transition cursor-pointer flex items-center gap-1.5 max-w-[200px]"
                   aria-label={t('drawer.taskModel', { model: effectiveModel })}
                 >
                   <span className="truncate">{effectiveModel}</span>
-                  <ChevronDown className="h-3 w-3 text-[#8f8f8f] dark:text-[#8b949e] shrink-0" />
+                  <ChevronDown className="h-3 w-3 text-[#8f8f8f] dark:text-[#71717a] shrink-0" />
                 </button>
                 {isModelMenuOpen && (
-                  <div className="absolute bottom-full right-0 mb-2 w-56 rounded-lg bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] shadow-md p-1 z-30 font-mono text-xs max-h-60 overflow-y-auto">
-                    <div className="px-2 py-1 text-[#8f8f8f] dark:text-[#8b949e] text-[10px] uppercase">{t('drawer.selectModel')}</div>
+                  <div className="absolute bottom-full right-0 mb-2 w-56 rounded-lg bg-white dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] shadow-md p-1 z-30 font-mono text-xs max-h-60 overflow-y-auto">
+                    <div className="px-2 py-1 text-[#8f8f8f] dark:text-[#71717a] text-[10px] uppercase">{t('drawer.selectModel')}</div>
                     {selectableModels.map((m) => (
                       <button
                         key={m}
@@ -403,7 +403,7 @@ export default function DrawerSteerBar({
                           setIsModelMenuOpen(false);
                         }}
                         className={`w-full text-left px-2 py-1.5 rounded flex items-center justify-between cursor-pointer ${
-                          effectiveModel === m ? 'bg-[#f4f4f5] dark:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc]' : 'text-[#4d4d4d] dark:text-[#8b949e] hover:bg-[#f9f9f9] dark:hover:bg-[#21262d]'
+                          effectiveModel === m ? 'bg-[#f4f4f5] dark:bg-[#232328] text-[#171717] dark:text-[#f4f4f5]' : 'text-[#4d4d4d] dark:text-[#71717a] hover:bg-[#f9f9f9] dark:hover:bg-[#232328]'
                         }`}
                       >
                         <span className="truncate">{m}</span>
@@ -428,7 +428,7 @@ export default function DrawerSteerBar({
                 <button
                   type="button"
                   onClick={() => handleSubmit()}
-                  className="w-8 h-8 rounded-full bg-[#171717] dark:bg-[#f0f6fc] hover:bg-black dark:hover:bg-white text-white dark:text-[#090a0f] flex items-center justify-center shadow-xs transition-colors cursor-pointer"
+                  className="w-8 h-8 rounded-full bg-[#171717] dark:bg-[#f4f4f5] hover:bg-black dark:hover:bg-white text-white dark:text-[#0b0b0e] flex items-center justify-center shadow-xs transition-colors cursor-pointer"
                   aria-label={t('drawer.sendMessage')}
                   title={t('drawer.sendMessage')}
                 >
@@ -438,7 +438,7 @@ export default function DrawerSteerBar({
                 <button
                   type="button"
                   onClick={() => handleSubmit()}
-                  className="h-8 px-2.5 rounded-full bg-[#171717] dark:bg-[#f0f6fc] hover:bg-black dark:hover:bg-white text-white dark:text-[#090a0f] flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer text-xs font-medium"
+                  className="h-8 px-2.5 rounded-full bg-[#171717] dark:bg-[#f4f4f5] hover:bg-black dark:hover:bg-white text-white dark:text-[#0b0b0e] flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer text-xs font-medium"
                   aria-label={t('drawer.runLoop')}
                   title={t('drawer.runLoop')}
                 >

@@ -199,18 +199,18 @@ export default function CreateColumnModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="relative flex flex-col w-[520px] max-w-[95%] max-h-[90%] rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-md p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors overflow-hidden">
-        <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#21262d] shrink-0">
+      <div className="relative flex flex-col w-[520px] max-w-[95%] max-h-[90%] rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] shadow-md p-5 text-[#171717] dark:text-[#f4f4f5] transition-colors overflow-hidden">
+        <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#212126] shrink-0">
           <div className="flex items-center space-x-2">
             <AgentIcon name={effectiveIcon} className="h-4 w-4" style={{ color: effectiveColor }} />
-            <h3 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc]">
+            <h3 className="text-sm font-semibold text-[#171717] dark:text-[#f4f4f5]">
               {t('board.addColumnTitle')}
             </h3>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
+            className="p-1 rounded-md text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#17171b] transition cursor-pointer"
             aria-label={t('common.close')}
           >
             <X className="h-4 w-4" />
@@ -219,7 +219,7 @@ export default function CreateColumnModal({
 
         <form onSubmit={handleCreateColumn} className="mt-4 flex flex-col flex-1 min-h-0 overflow-y-auto space-y-4 text-xs pr-1">
           <div>
-            <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">
+            <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1">
               {t('board.columnTitleLabel')}
             </label>
             <input
@@ -229,12 +229,12 @@ export default function CreateColumnModal({
               value={newColumnTitle}
               onChange={(e) => setNewColumnTitle(e.target.value)}
               placeholder={t('board.columnTitlePlaceholder')}
-              className="w-full px-3 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-sans transition"
+              className="w-full px-3 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-sans transition"
             />
           </div>
 
           <div>
-            <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">
+            <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1">
               {t('board.agentLabel')}
             </label>
             {usePersonaSelect ? (
@@ -260,14 +260,14 @@ export default function CreateColumnModal({
                 value={newColumnPersona}
                 onChange={(e) => setNewColumnPersona(e.target.value)}
                 placeholder={personasLoading ? t('board.loadingAgents') : 'developer'}
-                className="w-full px-3 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-mono transition"
+                className="w-full px-3 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-mono transition"
               />
             )}
           </div>
 
           {usePersonaSelect && isNewAgentSelected && (
             <div>
-              <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">
+              <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1">
                 {t('board.newAgentNameLabel')}
               </label>
               <input
@@ -276,10 +276,10 @@ export default function CreateColumnModal({
                 value={newAgentName}
                 onChange={(e) => setNewAgentName(e.target.value)}
                 placeholder={t('board.newAgentNamePlaceholder')}
-                className="w-full px-3 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-sans transition"
+                className="w-full px-3 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-sans transition"
               />
               {newAgentName.trim() !== '' && (
-                <div className="mt-1 text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e]">
+                <div className="mt-1 text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a]">
                   {t('board.newAgentRoleHint', {
                     role: slugifyTitle(newAgentName) === 'column' ? '—' : slugifyTitle(newAgentName),
                   })}
@@ -291,20 +291,20 @@ export default function CreateColumnModal({
           {/* Color Selection Palette */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium">
+              <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium">
                 {t('board.autoColor')}
               </label>
               {selectedColor && (
                 <button
                   type="button"
                   onClick={() => setSelectedColor(null)}
-                  className="text-[10px] text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] underline cursor-pointer"
+                  className="text-[10px] text-[#71717a] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] underline cursor-pointer"
                 >
                   Авто ({autoColor})
                 </button>
               )}
             </div>
-            <div className="flex flex-wrap items-center gap-2 p-2 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d]">
+            <div className="flex flex-wrap items-center gap-2 p-2 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33]">
               {AGENT_PALETTE.map((c) => {
                 const isSelected = effectiveColor === c;
                 return (
@@ -326,20 +326,20 @@ export default function CreateColumnModal({
           {/* Icon Selection Grid */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium">
+              <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium">
                 Иконка [{effectiveIcon}]
               </label>
               {selectedIcon && (
                 <button
                   type="button"
                   onClick={() => setSelectedIcon(null)}
-                  className="text-[10px] text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] underline cursor-pointer"
+                  className="text-[10px] text-[#71717a] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] underline cursor-pointer"
                 >
                   Авто ({autoIcon})
                 </button>
               )}
             </div>
-            <div className="p-2 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d]">
+            <div className="p-2 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33]">
               <div className="grid grid-cols-6 gap-1.5 max-h-32 overflow-y-auto p-0.5">
                 {AGENT_ICONS.map((ic) => {
                   const isSelected = effectiveIcon === ic;
@@ -350,8 +350,8 @@ export default function CreateColumnModal({
                       onClick={() => setSelectedIcon(ic)}
                       className={`flex items-center justify-center p-1.5 rounded-md transition cursor-pointer ${
                         isSelected
-                          ? 'bg-white dark:bg-[#21262d] border-2 border-[#171717] dark:border-[#f0f6fc] shadow-xs'
-                          : 'hover:bg-white/80 dark:hover:bg-[#21262d]/80 border border-transparent text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
+                          ? 'bg-white dark:bg-[#232328] border-2 border-[#171717] dark:border-[#f4f4f5] shadow-xs'
+                          : 'hover:bg-white/80 dark:hover:bg-[#232328]/80 border border-transparent text-[#71717a] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
                       }`}
                       aria-label={ic}
                     >
@@ -368,24 +368,24 @@ export default function CreateColumnModal({
           </div>
 
           {columnFormError && (
-            <div className="w-full text-xs font-sans text-[#ef4444] bg-[#fef2f2] dark:bg-[#161b22] border border-[#fecaca] dark:border-[#3b1219] rounded-md px-3 py-1.5">
+            <div className="w-full text-xs font-sans text-[#ef4444] bg-[#fef2f2] dark:bg-[#17171b] border border-[#fecaca] dark:border-[#3b1219] rounded-md px-3 py-1.5">
               {columnFormError}
             </div>
           )}
 
-          <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#ebebeb] dark:border-[#21262d] shrink-0">
+          <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#ebebeb] dark:border-[#212126] shrink-0">
             <button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-3 py-1.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer font-sans disabled:opacity-50"
+              className="px-3 py-1.5 rounded-md bg-white dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] transition cursor-pointer font-sans disabled:opacity-50"
             >
               {t('common.cancel')}
             </button>
             <button
               type="submit"
               disabled={isSubmitting || !newColumnTitle.trim()}
-              className="px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white font-medium transition cursor-pointer font-sans shadow-xs border border-transparent dark:border-[#30363d] disabled:opacity-50"
+              className="px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#232328] hover:bg-[#262626] dark:hover:bg-[#2c2c33] text-white font-medium transition cursor-pointer font-sans shadow-xs border border-transparent dark:border-[#2c2c33] disabled:opacity-50"
             >
               {t('common.create')}
             </button>

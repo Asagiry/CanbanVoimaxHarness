@@ -96,8 +96,8 @@ export default function PersonaSelect({
         onClick={() => !disabled && setIsOpen((prev) => !prev)}
         className={`w-full flex items-center justify-between gap-1.5 ${
           compact ? 'px-1.5 py-1 text-[11px]' : 'px-2.5 py-1.5 text-xs'
-        } rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] hover:border-[#d4d4d8] dark:hover:border-[#484f58] transition cursor-pointer font-mono disabled:opacity-50 disabled:cursor-not-allowed select-none min-w-0 ${
-          isOpen ? 'border-[#171717] dark:border-[#f0f6fc]' : ''
+        } rounded-md bg-[#fafafa] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] hover:border-[#d4d4d8] dark:hover:border-[#3a3a44] transition cursor-pointer font-mono disabled:opacity-50 disabled:cursor-not-allowed select-none min-w-0 ${
+          isOpen ? 'border-[#171717] dark:border-[#f4f4f5]' : ''
         }`}
       >
         <div className="flex items-center gap-1.5 min-w-0 flex-1 text-left">
@@ -109,7 +109,7 @@ export default function PersonaSelect({
               </span>
             </div>
           ) : !value && allowEmpty ? (
-            <div className="flex items-center gap-1.5 min-w-0 flex-1 text-[#8f8f8f] dark:text-[#8b949e]">
+            <div className="flex items-center gap-1.5 min-w-0 flex-1 text-[#8f8f8f] dark:text-[#71717a]">
               <UserX className="h-3.5 w-3.5 shrink-0" />
               <span className="font-sans truncate">{resolvedEmptyLabel}</span>
             </div>
@@ -130,19 +130,19 @@ export default function PersonaSelect({
           ) : value ? (
             <div className="flex items-center gap-1.5 min-w-0 flex-1">
               <AgentIcon name="Bot" className="h-3.5 w-3.5 text-[#8f8f8f] shrink-0" />
-              <span className="font-semibold truncate leading-none text-[#171717] dark:text-[#f0f6fc] min-w-0 flex-1" title={value}>
+              <span className="font-semibold truncate leading-none text-[#171717] dark:text-[#f4f4f5] min-w-0 flex-1" title={value}>
                 {value}
               </span>
             </div>
           ) : (
-            <span className="text-[#8f8f8f] dark:text-[#8b949e] font-sans truncate">
+            <span className="text-[#8f8f8f] dark:text-[#71717a] font-sans truncate">
               {resolvedPlaceholder}
             </span>
           )}
         </div>
 
         <ChevronDown
-          className={`h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#8b949e] shrink-0 transition-transform ${
+          className={`h-3.5 w-3.5 text-[#8f8f8f] dark:text-[#71717a] shrink-0 transition-transform ${
             isOpen ? 'rotate-180' : ''
           }`}
         />
@@ -150,7 +150,7 @@ export default function PersonaSelect({
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute z-[90] left-0 right-0 mt-1 min-w-[200px] max-h-60 overflow-y-auto rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] shadow-md py-1 text-xs font-mono">
+        <div className="absolute z-[90] left-0 right-0 mt-1 min-w-[200px] max-h-60 overflow-y-auto rounded-md border border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] shadow-md py-1 text-xs font-mono">
           {allowEmpty && (
             <button
               type="button"
@@ -158,15 +158,15 @@ export default function PersonaSelect({
                 onChange('');
                 setIsOpen(false);
               }}
-              className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-left cursor-pointer transition select-none ${
-                !value ? 'bg-[#f0f0f2] dark:bg-[#21262d]' : ''
+              className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-left cursor-pointer transition select-none ${
+                !value ? 'bg-[#f0f0f2] dark:bg-[#232328]' : ''
               }`}
             >
-              <div className="flex items-center gap-2 min-w-0 flex-1 text-[#8f8f8f] dark:text-[#8b949e]">
+              <div className="flex items-center gap-2 min-w-0 flex-1 text-[#8f8f8f] dark:text-[#71717a]">
                 <UserX className="h-3.5 w-3.5 shrink-0" />
                 <span className="font-sans">{resolvedEmptyLabel}</span>
               </div>
-              {!value && <Check className="h-3.5 w-3.5 text-[#171717] dark:text-[#f0f6fc] shrink-0" />}
+              {!value && <Check className="h-3.5 w-3.5 text-[#171717] dark:text-[#f4f4f5] shrink-0" />}
             </button>
           )}
 
@@ -184,8 +184,8 @@ export default function PersonaSelect({
                   onChange(p.role);
                   setIsOpen(false);
                 }}
-                className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-left cursor-pointer transition select-none ${
-                  isCurrent ? 'bg-[#f0f0f2] dark:bg-[#21262d]' : ''
+                className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-left cursor-pointer transition select-none ${
+                  isCurrent ? 'bg-[#f0f0f2] dark:bg-[#232328]' : ''
                 }`}
               >
                 <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -201,20 +201,20 @@ export default function PersonaSelect({
                     </span>
                   )}
                 </div>
-                {isCurrent && <Check className="h-3.5 w-3.5 text-[#171717] dark:text-[#f0f6fc] shrink-0" />}
+                {isCurrent && <Check className="h-3.5 w-3.5 text-[#171717] dark:text-[#f4f4f5] shrink-0" />}
               </button>
             );
           })}
 
           {allowNewAgent && (
-            <div className="border-t border-[#ebebeb] dark:border-[#21262d] mt-1 pt-1">
+            <div className="border-t border-[#ebebeb] dark:border-[#212126] mt-1 pt-1">
               <button
                 type="button"
                 onClick={() => {
                   onChange(newAgentOptionValue);
                   setIsOpen(false);
                 }}
-                className={`w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] text-left cursor-pointer transition select-none text-indigo-600 dark:text-indigo-400 font-medium ${
+                className={`w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-[#f4f4f5] dark:hover:bg-[#232328] text-left cursor-pointer transition select-none text-indigo-600 dark:text-indigo-400 font-medium ${
                   isNewAgent ? 'bg-indigo-50 dark:bg-indigo-950/40' : ''
                 }`}
               >

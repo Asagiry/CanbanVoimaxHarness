@@ -50,7 +50,7 @@ describe('NotificationToggle component', () => {
 
     expect(el.props['aria-checked']).toBe(false);
     expect(el.props.className).toContain('bg-[#e5e7eb]');
-    expect(el.props.className).toContain('dark:bg-[#30363d]');
+    expect(el.props.className).toContain('dark:bg-[#2c2c33]');
 
     const thumb = el.props.children;
     expect(thumb.props.className).toContain('translate-x-0');

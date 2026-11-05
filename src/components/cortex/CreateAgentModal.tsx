@@ -101,19 +101,19 @@ export function CreateAgentModal({
       onClick={isSubmitting ? undefined : onClose}
     >
       <div
-        className="w-full max-w-md max-h-[90%] overflow-y-auto rounded-xl border border-[#e4e4e7] dark:border-[#21262d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] p-5 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150"
+        className="w-full max-w-md max-h-[90%] overflow-y-auto rounded-xl border border-[#e4e4e7] dark:border-[#212126] bg-white dark:bg-[#111114] text-[#171717] dark:text-[#f4f4f5] p-5 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-[#f4f4f5] dark:border-[#21262d] pb-3">
+        <div className="flex items-center justify-between border-b border-[#f4f4f5] dark:border-[#212126] pb-3">
           <div className="flex items-center space-x-2.5">
-            <div className="h-7 w-7 rounded-lg bg-[#f4f4f5] dark:bg-[#161b22] border border-[#e4e4e7] dark:border-[#30363d] flex items-center justify-center text-[#171717] dark:text-[#f0f6fc]">
+            <div className="h-7 w-7 rounded-lg bg-[#f4f4f5] dark:bg-[#17171b] border border-[#e4e4e7] dark:border-[#2c2c33] flex items-center justify-center text-[#171717] dark:text-[#f4f4f5]">
               <Bot className="h-4 w-4" />
             </div>
             <div>
-              <h3 className="font-semibold text-sm text-[#171717] dark:text-[#f0f6fc]">
+              <h3 className="font-semibold text-sm text-[#171717] dark:text-[#f4f4f5]">
                 {t('cortex.newAgentModalTitle')}
               </h3>
-              <p className="text-[11px] text-[#71717a] dark:text-[#8b949e]">
+              <p className="text-[11px] text-[#71717a] dark:text-[#71717a]">
                 {t('cortex.newAgentSubtitle')}
               </p>
             </div>
@@ -123,7 +123,7 @@ export function CreateAgentModal({
             onClick={onClose}
             disabled={isSubmitting}
             aria-label={t('common.close')}
-            className="p-1 rounded-md text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer disabled:opacity-50"
+            className="p-1 rounded-md text-[#71717a] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23] transition cursor-pointer disabled:opacity-50"
           >
             <X className="h-4 w-4" />
           </button>
@@ -131,7 +131,7 @@ export function CreateAgentModal({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-[#52525b] dark:text-[#8b949e] mb-1">
+            <label className="block text-xs font-medium text-[#52525b] dark:text-[#71717a] mb-1">
               {t('cortex.roleName')}
             </label>
             <input
@@ -144,26 +144,26 @@ export function CreateAgentModal({
                 if (error) setError(null);
               }}
               placeholder="architect, tester, security, db-lead"
-              className="w-full px-3 py-2 rounded-lg border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#161b22] text-[#171717] dark:text-[#f0f6fc] text-xs font-mono placeholder-[#a1a1aa] dark:placeholder-[#6e7681] focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:outline-hidden transition disabled:opacity-50"
+              className="w-full px-3 py-2 rounded-lg border border-[#d4d4d8] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] text-[#171717] dark:text-[#f4f4f5] text-xs font-mono placeholder-[#a1a1aa] dark:placeholder-[#71717a] focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:outline-hidden transition disabled:opacity-50"
             />
-            <p className="mt-1 text-[11px] text-[#71717a] dark:text-[#8b949e]">
+            <p className="mt-1 text-[11px] text-[#71717a] dark:text-[#71717a]">
               {t('cortex.roleNameRulesHint')}
             </p>
           </div>
 
-          <div className="rounded-lg border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22] p-2.5 text-[11px] font-mono text-[#52525b] dark:text-[#8b949e] space-y-1">
-            <div className="text-[10px] uppercase font-sans font-semibold text-[#a1a1aa] dark:text-[#8b949e] tracking-wider mb-1">
+          <div className="rounded-lg border border-[#ebebeb] dark:border-[#2c2c33] bg-[#fafafa] dark:bg-[#17171b] p-2.5 text-[11px] font-mono text-[#52525b] dark:text-[#71717a] space-y-1">
+            <div className="text-[10px] uppercase font-sans font-semibold text-[#a1a1aa] dark:text-[#71717a] tracking-wider mb-1">
               {t('cortex.willBeCreated')}
             </div>
             <div className="flex items-center gap-1.5 truncate">
-              <Folder className="h-3.5 w-3.5 text-[#71717a] dark:text-[#8b949e] shrink-0" />
+              <Folder className="h-3.5 w-3.5 text-[#71717a] dark:text-[#71717a] shrink-0" />
               <span className="truncate">.cvh/agents/{previewRole}/</span>
             </div>
-            <div className="flex items-center gap-1.5 pl-4 truncate text-[#71717a] dark:text-[#8b949e]">
+            <div className="flex items-center gap-1.5 pl-4 truncate text-[#71717a] dark:text-[#71717a]">
               <FileText className="h-3 w-3 shrink-0 text-[#6366f1]" />
               <span className="truncate">{t('cortex.personaTemplatePreview')}</span>
             </div>
-            <div className="flex items-center gap-1.5 pl-4 truncate text-[#71717a] dark:text-[#8b949e]">
+            <div className="flex items-center gap-1.5 pl-4 truncate text-[#71717a] dark:text-[#71717a]">
               <Folder className="h-3 w-3 shrink-0" />
               <span className="truncate">{t('cortex.rulesDirPreview')}</span>
             </div>
@@ -175,12 +175,12 @@ export function CreateAgentModal({
             </div>
           )}
 
-          <div className="flex items-center justify-end space-x-2 pt-2 border-t border-[#f4f4f5] dark:border-[#21262d]">
+          <div className="flex items-center justify-end space-x-2 pt-2 border-t border-[#f4f4f5] dark:border-[#212126]">
             <button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-3.5 py-1.5 rounded-md text-xs font-medium text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer disabled:opacity-50"
+              className="px-3.5 py-1.5 rounded-md text-xs font-medium text-[#71717a] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23] transition cursor-pointer disabled:opacity-50"
             >
               {t('common.cancel')}
             </button>

@@ -119,7 +119,7 @@ export const CardTimerBadge = memo(function CardTimerBadge({
           ref={triggerRef}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
-          className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#161b22] border border-[#bbf7d0] dark:border-[#30363d] cursor-help"
+          className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#17171b] border border-[#bbf7d0] dark:border-[#2c2c33] cursor-help"
         >
           <span className="h-1.5 w-1.5 rounded-full bg-[#15803d] dark:bg-[#4ade80]" />
           <span>{t('status.running')} {formatTimerMMSS(currentStageDuration)}</span>
@@ -157,7 +157,7 @@ export const CardTimerBadge = memo(function CardTimerBadge({
           ref={triggerRef}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
-          className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#161b22] border border-[#bbf7d0] dark:border-[#30363d] cursor-help"
+          className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#17171b] border border-[#bbf7d0] dark:border-[#2c2c33] cursor-help"
         >
           <span>{doneLabel}</span>
         </span>
@@ -177,34 +177,34 @@ export const CardTimerBadge = memo(function CardTimerBadge({
   switch (status) {
     case 'waiting_subagent':
       return (
-        <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#d97706] dark:text-[#f59e0b] bg-[#fefce8] dark:bg-[#161b22] border border-[#fef08a] dark:border-[#30363d]">
+        <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#d97706] dark:text-[#f59e0b] bg-[#fefce8] dark:bg-[#17171b] border border-[#fef08a] dark:border-[#2c2c33]">
           <span className="h-1.5 w-1.5 rounded-full bg-[#f59e0b] animate-pulse" />
           <span>{t('status.waitingSubagent')}</span>
         </span>
       );
     case 'paused':
       return (
-        <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#b45309] dark:text-[#fbbf24] bg-[#fefce8] dark:bg-[#161b22] border border-[#fef08a] dark:border-[#30363d]">
+        <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#b45309] dark:text-[#fbbf24] bg-[#fefce8] dark:bg-[#17171b] border border-[#fef08a] dark:border-[#2c2c33]">
           <span className="h-1.5 w-1.5 rounded-full bg-[#b45309] dark:bg-[#fbbf24]" />
           <span>{t('status.paused')}</span>
         </span>
       );
     case 'waiting_review':
       return (
-        <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#7e22ce] dark:text-[#c084fc] bg-[#faf5ff] dark:bg-[#161b22] border border-[#e9d5ff] dark:border-[#30363d]">
+        <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#7e22ce] dark:text-[#c084fc] bg-[#faf5ff] dark:bg-[#17171b] border border-[#e9d5ff] dark:border-[#2c2c33]">
           <span>{t('status.waitingReview')}</span>
         </span>
       );
     case 'blocked':
       return (
-        <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#b91c1c] dark:text-[#f87171] bg-[#fef2f2] dark:bg-[#161b22] border border-[#fecaca] dark:border-[#30363d]">
+        <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#b91c1c] dark:text-[#f87171] bg-[#fef2f2] dark:bg-[#17171b] border border-[#fecaca] dark:border-[#2c2c33]">
           <span>{t('status.blocked')}</span>
         </span>
       );
     case 'idle':
     default:
       return (
-        <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#666666] dark:text-[#8b949e] bg-[#f4f4f5] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#21262d]">
+        <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#666666] dark:text-[#71717a] bg-[#f4f4f5] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#212126]">
           <span>{t('status.idle')}</span>
         </span>
       );
@@ -241,7 +241,7 @@ export const CardTimeFooter = memo(function CardTimeFooter({
   }
 
   return (
-    <div className="mt-1 flex items-center justify-between gap-1 font-mono text-[10px] text-[#8f8f8f] dark:text-[#8b949e] tabular-nums whitespace-nowrap">
+    <div className="mt-1 flex items-center justify-between gap-1 font-mono text-[10px] text-[#8f8f8f] dark:text-[#71717a] tabular-nums whitespace-nowrap">
       <div className="flex items-center gap-1 min-w-0 truncate">
         {task.createdAt ? (
           <span>{t('card.created', { date: formatCardDate(task.createdAt) })}</span>
@@ -263,7 +263,7 @@ export const CardTimeFooter = memo(function CardTimeFooter({
       </div>
       {task.attachments && task.attachments.length > 0 && (
         <span
-          className="inline-flex items-center gap-0.5 text-[10px] font-mono text-[#666666] dark:text-[#8b949e] shrink-0 tabular-nums"
+          className="inline-flex items-center gap-0.5 text-[10px] font-mono text-[#666666] dark:text-[#71717a] shrink-0 tabular-nums"
           aria-label={t('newTask.attachmentsLabel')}
         >
           <Paperclip className="h-2.5 w-2.5 shrink-0" />

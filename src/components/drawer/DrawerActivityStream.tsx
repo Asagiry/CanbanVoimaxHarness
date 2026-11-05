@@ -108,7 +108,7 @@ export default function DrawerActivityStream({
 
   return (
     <LightboxContext.Provider value={handleOpenLightbox}>
-      <div className="relative flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] dark:bg-[#090a0f] overflow-hidden transition-colors">
+      <div className="relative flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] dark:bg-[#0b0b0e] overflow-hidden transition-colors">
         {/* Warning Banner on agent run error */}
         {runError && (
           <ExecutionErrorBanner
@@ -248,9 +248,9 @@ export default function DrawerActivityStream({
                 return (
                   <div
                     key={key}
-                    className="animate-silk-entrance motion-reduce:animate-none flex items-center space-x-2 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#f4f4f5] dark:bg-[#161b22] px-3 py-2 text-xs text-[#4d4d4d] dark:text-[#c9d1d9] font-mono shadow-xs"
+                    className="animate-silk-entrance motion-reduce:animate-none flex items-center space-x-2 rounded-md border border-[#ebebeb] dark:border-[#212126] bg-[#f4f4f5] dark:bg-[#17171b] px-3 py-2 text-xs text-[#4d4d4d] dark:text-[#a1a1aa] font-mono shadow-xs"
                   >
-                    <Info className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
+                    <Info className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
                     <span className="flex-1">{activity?.content ?? ''}</span>
                   </div>
                 );

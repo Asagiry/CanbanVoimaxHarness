@@ -108,17 +108,17 @@ export function EditAgentPersonaModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-lg border border-[#e4e4e7] dark:border-[#21262d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] p-5 shadow-md space-y-4 max-h-[90%] overflow-y-auto"
+        className="w-full max-w-md rounded-lg border border-[#e4e4e7] dark:border-[#212126] bg-white dark:bg-[#111114] text-[#171717] dark:text-[#f4f4f5] p-5 shadow-md space-y-4 max-h-[90%] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-[#f4f4f5] dark:border-[#21262d] pb-3">
+        <div className="flex items-center justify-between border-b border-[#f4f4f5] dark:border-[#212126] pb-3">
           <div className="flex items-center space-x-2">
-            <Palette className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
-            <h3 className="font-semibold text-sm text-[#171717] dark:text-[#f0f6fc]">{t('cortex.configAgentTitle', { role })}</h3>
+            <Palette className="h-4 w-4 text-[#171717] dark:text-[#f4f4f5]" />
+            <h3 className="font-semibold text-sm text-[#171717] dark:text-[#f4f4f5]">{t('cortex.configAgentTitle', { role })}</h3>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-md text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
+            className="p-1 rounded-md text-[#71717a] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23] transition cursor-pointer"
           >
             <X className="h-4 w-4" />
           </button>
@@ -127,7 +127,7 @@ export function EditAgentPersonaModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Имя роли */}
           <div>
-            <label className="block text-xs font-medium text-[#52525b] dark:text-[#8b949e] mb-1">
+            <label className="block text-xs font-medium text-[#52525b] dark:text-[#71717a] mb-1">
               {t('cortex.roleNameLabel')}
             </label>
             <input
@@ -139,10 +139,10 @@ export function EditAgentPersonaModal({
                 setError(null);
               }}
               placeholder={t('cortex.roleNamePlaceholder')}
-              className="w-full px-3 py-1.5 rounded-lg border border-[#d4d4d8] dark:border-[#30363d] bg-white dark:bg-[#161b22] text-[#171717] dark:text-[#f0f6fc] text-xs font-mono focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:outline-hidden transition disabled:opacity-50 disabled:bg-[#f4f4f5] dark:disabled:bg-[#0d1117] disabled:text-[#8f8f8f] dark:disabled:text-[#6e7681]"
+              className="w-full px-3 py-1.5 rounded-lg border border-[#d4d4d8] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] text-[#171717] dark:text-[#f4f4f5] text-xs font-mono focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:outline-hidden transition disabled:opacity-50 disabled:bg-[#f4f4f5] dark:disabled:bg-[#111114] disabled:text-[#8f8f8f] dark:disabled:text-[#52525b]"
             />
             {isBuiltin && (
-              <p className="mt-1 text-[11px] text-[#71717a] dark:text-[#8b949e]">
+              <p className="mt-1 text-[11px] text-[#71717a] dark:text-[#71717a]">
                 {t('cortex.builtinCannotRename')}
               </p>
             )}
@@ -151,14 +151,14 @@ export function EditAgentPersonaModal({
           {/* Палитра цветов агента */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-medium text-[#52525b] dark:text-[#8b949e]">
+              <label className="block text-xs font-medium text-[#52525b] dark:text-[#71717a]">
                 {t('cortex.agentColorLabel')}
               </label>
-              <span className="text-[10px] font-mono text-[#71717a] dark:text-[#8b949e]">
+              <span className="text-[10px] font-mono text-[#71717a] dark:text-[#71717a]">
                 {selectedColor}
               </span>
             </div>
-            <div className="p-2.5 rounded-lg border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22] space-y-2">
+            <div className="p-2.5 rounded-lg border border-[#ebebeb] dark:border-[#2c2c33] bg-[#fafafa] dark:bg-[#17171b] space-y-2">
               <div className="flex flex-wrap gap-2 items-center">
                 {AGENT_PALETTE.map((c) => {
                   const isSelected = selectedColor.toLowerCase() === c.toLowerCase();
@@ -169,7 +169,7 @@ export function EditAgentPersonaModal({
                       onClick={() => setSelectedColor(c)}
                       aria-label={c}
                       className={`h-7 w-7 rounded-full transition-transform cursor-pointer flex items-center justify-center shadow-xs ${
-                        isSelected ? 'scale-110 ring-2 ring-offset-2 ring-[#171717] dark:ring-[#f0f6fc]' : 'hover:scale-105'
+                        isSelected ? 'scale-110 ring-2 ring-offset-2 ring-[#171717] dark:ring-[#f4f4f5]' : 'hover:scale-105'
                       }`}
                       style={{ backgroundColor: c }}
                     >
@@ -178,7 +178,7 @@ export function EditAgentPersonaModal({
                   );
                 })}
               </div>
-              <p className="text-[10px] font-sans text-[#71717a] dark:text-[#8b949e] leading-tight">
+              <p className="text-[10px] font-sans text-[#71717a] dark:text-[#71717a] leading-tight">
                 {t('cortex.colorNotice')}
               </p>
             </div>
@@ -187,14 +187,14 @@ export function EditAgentPersonaModal({
           {/* Выбор SVG иконки */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-medium text-[#52525b] dark:text-[#8b949e]">
+              <label className="block text-xs font-medium text-[#52525b] dark:text-[#71717a]">
                 {t('cortex.agentIconLabel')}
               </label>
-              <span className="text-[10px] font-mono text-[#71717a] dark:text-[#8b949e]">
+              <span className="text-[10px] font-mono text-[#71717a] dark:text-[#71717a]">
                 [{selectedIcon}]
               </span>
             </div>
-            <div className="p-2 rounded-lg border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22]">
+            <div className="p-2 rounded-lg border border-[#ebebeb] dark:border-[#2c2c33] bg-[#fafafa] dark:bg-[#17171b]">
               <div className="grid grid-cols-6 gap-1.5 max-h-36 overflow-y-auto p-1">
                 {AGENT_ICONS.map((ic) => {
                   const isSelected = selectedIcon === ic;
@@ -206,8 +206,8 @@ export function EditAgentPersonaModal({
                       aria-label={ic}
                       className={`flex flex-col items-center justify-center p-2 rounded-md transition cursor-pointer ${
                         isSelected
-                          ? 'bg-white dark:bg-[#21262d] border-2 border-[#171717] dark:border-[#f0f6fc] shadow-xs'
-                          : 'hover:bg-white/80 dark:hover:bg-[#21262d]/80 border border-transparent text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
+                          ? 'bg-white dark:bg-[#232328] border-2 border-[#171717] dark:border-[#f4f4f5] shadow-xs'
+                          : 'hover:bg-white/80 dark:hover:bg-[#232328]/80 border border-transparent text-[#71717a] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
                       }`}
                     >
                       <AgentIcon
@@ -228,12 +228,12 @@ export function EditAgentPersonaModal({
             </div>
           )}
 
-          <div className="flex items-center justify-end space-x-2 pt-2 border-t border-[#f4f4f5] dark:border-[#21262d]">
+          <div className="flex items-center justify-end space-x-2 pt-2 border-t border-[#f4f4f5] dark:border-[#212126]">
             <button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-3 py-1.5 rounded-md text-xs font-medium text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
+              className="px-3 py-1.5 rounded-md text-xs font-medium text-[#71717a] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23] transition cursor-pointer"
             >
               {t('common.cancel')}
             </button>

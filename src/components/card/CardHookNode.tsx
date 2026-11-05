@@ -297,14 +297,14 @@ export const CardHookNode = memo(function CardHookNode({
   const nodeColorClass = (() => {
     switch (status) {
       case 'running':
-        return 'bg-amber-500 text-black border-2 border-white dark:border-[#0d1117] animate-pulse shadow-md';
+        return 'bg-amber-500 text-black border-2 border-white dark:border-[#111114] animate-pulse shadow-md';
       case 'success':
-        return 'bg-emerald-500 text-white border-2 border-white dark:border-[#0d1117] shadow-md';
+        return 'bg-emerald-500 text-white border-2 border-white dark:border-[#111114] shadow-md';
       case 'failed':
-        return 'bg-rose-500 text-white border-2 border-white dark:border-[#0d1117] shadow-md';
+        return 'bg-rose-500 text-white border-2 border-white dark:border-[#111114] shadow-md';
       case 'idle':
       default:
-        return 'bg-white dark:bg-[#161b22] border border-neutral-300 dark:border-neutral-600 hover:border-amber-400 dark:hover:border-amber-400 shadow-xs';
+        return 'bg-white dark:bg-[#17171b] border border-neutral-300 dark:border-neutral-600 hover:border-amber-400 dark:hover:border-amber-400 shadow-xs';
     }
   })();
 
@@ -337,7 +337,7 @@ export const CardHookNode = memo(function CardHookNode({
       {isHovered && coords && typeof document !== 'undefined' && createPortal(
         <div
           ref={popoverRef}
-          className="fixed z-[9999] w-[420px] max-w-[calc(100vw-24px)] shadow-2xl rounded-lg border border-neutral-200 dark:border-[#30363d] bg-white dark:bg-[#161b22] p-3.5 text-left cursor-default select-text pointer-events-auto overscroll-contain"
+          className="fixed z-[9999] w-[420px] max-w-[calc(100vw-24px)] shadow-2xl rounded-lg border border-neutral-200 dark:border-[#2c2c33] bg-white dark:bg-[#17171b] p-3.5 text-left cursor-default select-text pointer-events-auto overscroll-contain"
           style={{
             top: `${coords.top}px`,
             left: `${coords.left}px`,
@@ -347,8 +347,8 @@ export const CardHookNode = memo(function CardHookNode({
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between gap-1.5 pb-2 border-b border-neutral-100 dark:border-[#21262d]">
-            <span className="text-xs font-mono font-medium text-[#71717a] dark:text-[#8b949e]">
+          <div className="flex items-center justify-between gap-1.5 pb-2 border-b border-neutral-100 dark:border-[#212126]">
+            <span className="text-xs font-mono font-medium text-[#71717a] dark:text-[#71717a]">
               {isTransition
                 ? 'Хук перехода (on_leave)'
                 : side === 'left'
@@ -375,7 +375,7 @@ export const CardHookNode = memo(function CardHookNode({
                 </span>
               )}
               {status === 'idle' && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono text-neutral-600 dark:text-neutral-400 bg-neutral-100 dark:bg-[#0d1117] border border-neutral-200 dark:border-[#30363d]">
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono text-neutral-600 dark:text-neutral-400 bg-neutral-100 dark:bg-[#111114] border border-neutral-200 dark:border-[#2c2c33]">
                   Готов к запуску
                 </span>
               )}
@@ -383,16 +383,16 @@ export const CardHookNode = memo(function CardHookNode({
           </div>
 
           {/* Hook name */}
-          <div className="mt-2 text-[13px] font-mono font-semibold text-neutral-900 dark:text-[#f0f6fc] truncate" aria-label={hookName} title={hookName}>
+          <div className="mt-2 text-[13px] font-mono font-semibold text-neutral-900 dark:text-[#f4f4f5] truncate" aria-label={hookName} title={hookName}>
             {hookName}
           </div>
 
           {isTransition && sourceStageTitle ? (
-            <div className="text-xs text-[#71717a] dark:text-[#8b949e] font-mono mt-0.5">
+            <div className="text-xs text-[#71717a] dark:text-[#71717a] font-mono mt-0.5">
               Переход из: {sourceStageTitle}
             </div>
           ) : stageTitle ? (
-            <div className="text-xs text-[#71717a] dark:text-[#8b949e] font-mono mt-0.5">
+            <div className="text-xs text-[#71717a] dark:text-[#71717a] font-mono mt-0.5">
               Стадия: {stageTitle}
             </div>
           ) : null}
@@ -417,7 +417,7 @@ export const CardHookNode = memo(function CardHookNode({
           {/* Terminal log output */}
           {hasOutput ? (
             <div className="mt-2.5">
-              <div className="flex items-center justify-between text-xs font-mono text-[#71717a] dark:text-[#8b949e] mb-1">
+              <div className="flex items-center justify-between text-xs font-mono text-[#71717a] dark:text-[#71717a] mb-1">
                 <span className="flex items-center gap-1">
                   <Terminal className="w-3.5 h-3.5" />
                   <span>Лог терминала</span>
@@ -426,13 +426,13 @@ export const CardHookNode = memo(function CardHookNode({
                   {stdout.length > 0 ? 'stdout' : ''} {stderr.length > 0 ? 'stderr' : ''}
                 </span>
               </div>
-              <div className="p-2.5 rounded bg-[#0d1117] border border-[#30363d] font-mono text-xs text-[#c9d1d9] leading-relaxed max-h-56 overflow-y-auto whitespace-pre-wrap break-words [word-break:break-word] select-text overscroll-contain">
+              <div className="p-2.5 rounded bg-[#111114] border border-[#2c2c33] font-mono text-xs text-[#a1a1aa] leading-relaxed max-h-56 overflow-y-auto whitespace-pre-wrap break-words [word-break:break-word] select-text overscroll-contain">
                 {stdout || stderr}
               </div>
             </div>
           ) : (
             (!hookDescription || status === 'running') && (
-              <div className="mt-2 text-xs text-[#71717a] dark:text-[#8b949e] font-sans leading-relaxed">
+              <div className="mt-2 text-xs text-[#71717a] dark:text-[#71717a] font-sans leading-relaxed">
                 {status === 'running'
                   ? 'Выполняется скрипт жизненного цикла стадии...'
                   : isTransition

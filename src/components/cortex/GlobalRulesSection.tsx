@@ -88,7 +88,7 @@ export function GlobalRulesSection({
   return (
     <section aria-label={t('cortex.globalRulesSection')} className="mt-2">
       {/* Section Header */}
-      <div className="w-full flex items-center justify-between px-1.5 py-1 rounded-md text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition group">
+      <div className="w-full flex items-center justify-between px-1.5 py-1 rounded-md text-[#171717] dark:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23] transition group">
         <button
           type="button"
           onClick={onToggle}
@@ -96,12 +96,12 @@ export function GlobalRulesSection({
           className="flex-1 flex items-center gap-1.5 py-1 text-left cursor-pointer"
         >
           {isOpen ? (
-            <ChevronDown className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
+            <ChevronDown className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
           ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
+            <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
           )}
           <span className="font-sans text-xs font-semibold">{t('cortex.globalRulesSection')}</span>
-          <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] tabular-nums leading-none translate-y-px">
+          <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a] tabular-nums leading-none translate-y-px">
             ({totalCount})
           </span>
         </button>
@@ -110,7 +110,7 @@ export function GlobalRulesSection({
           type="button"
           onClick={handleStartCreate}
           aria-label={t('cortex.newGlobalRule')}
-          className="p-1 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d] transition cursor-pointer shrink-0"
+          className="p-1 rounded-md text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#ebebeb]/60 dark:hover:bg-[#232328] transition cursor-pointer shrink-0"
         >
           <Plus className="h-3.5 w-3.5" />
         </button>
@@ -122,9 +122,9 @@ export function GlobalRulesSection({
           {isCreating && (
             <form
               onSubmit={handleCreateSubmit}
-              className="mx-1 mt-1 p-2 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#161b22] space-y-1.5 shadow-xs"
+              className="mx-1 mt-1 p-2 rounded-md border border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] space-y-1.5 shadow-xs"
             >
-              <div className="text-[10px] font-sans font-medium text-[#71717a] dark:text-[#8b949e]">
+              <div className="text-[10px] font-sans font-medium text-[#71717a] dark:text-[#71717a]">
                 {t('cortex.newGlobalRule')}
               </div>
               <input
@@ -133,7 +133,7 @@ export function GlobalRulesSection({
                 onChange={(e) => setRuleName(e.target.value)}
                 placeholder="architecture.md"
                 autoFocus
-                className="w-full px-2 py-1 text-xs rounded-md bg-[#fafafa] dark:bg-[#0d1117] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] font-mono focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc]"
+                className="w-full px-2 py-1 text-xs rounded-md bg-[#fafafa] dark:bg-[#111114] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] font-mono focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5]"
               />
               {createError && (
                 <div className="text-[10px] text-red-600 dark:text-red-400 font-sans">
@@ -151,7 +151,7 @@ export function GlobalRulesSection({
                 <button
                   type="button"
                   onClick={() => setIsCreating(false)}
-                  className="px-2 py-0.5 text-[10px] font-mono rounded border border-[#ebebeb] dark:border-[#30363d] text-[#71717a] dark:text-[#8b949e] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] cursor-pointer"
+                  className="px-2 py-0.5 text-[10px] font-mono rounded border border-[#ebebeb] dark:border-[#2c2c33] text-[#71717a] dark:text-[#71717a] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] cursor-pointer"
                 >
                   {t('common.cancel')}
                 </button>
@@ -161,7 +161,7 @@ export function GlobalRulesSection({
 
           {/* List of Global Rules */}
           {rules.length === 0 && !isSearching && !isCreating && (
-            <div className="mx-1 mt-1 p-3 text-center rounded-md border border-dashed border-[#ebebeb] dark:border-[#30363d] text-[11px] text-[#8f8f8f] dark:text-[#8b949e] font-sans">
+            <div className="mx-1 mt-1 p-3 text-center rounded-md border border-dashed border-[#ebebeb] dark:border-[#2c2c33] text-[11px] text-[#8f8f8f] dark:text-[#71717a] font-sans">
               {t('cortex.noGlobalRules')}
             </div>
           )}
@@ -172,22 +172,22 @@ export function GlobalRulesSection({
             return (
               <div
                 key={rule.id}
-                className="group/rule flex items-center justify-between px-2 py-1 rounded-md text-left transition hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d] cursor-pointer"
+                className="group/rule flex items-center justify-between px-2 py-1 rounded-md text-left transition hover:bg-[#ebebeb]/60 dark:hover:bg-[#232328] cursor-pointer"
                 onClick={() => void openFile(rule.id)}
               >
                 <button
                   type="button"
                   className={`flex-1 min-w-0 flex items-center space-x-1.5 text-left cursor-pointer ${
                     isActive
-                      ? 'text-[#171717] dark:text-[#f0f6fc] font-semibold'
-                      : 'text-[#4d4d4d] dark:text-[#8b949e]'
+                      ? 'text-[#171717] dark:text-[#f4f4f5] font-semibold'
+                      : 'text-[#4d4d4d] dark:text-[#71717a]'
                   }`}
                   title={isRuntime ? t('cortex.runtimeRuleTooltip') : rule.path}
                 >
                   {isRuntime ? (
                     <RuntimeRuleIcon className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400 shrink-0" />
                   ) : (
-                    <Globe className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
+                    <Globe className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
                   )}
                   <span className="text-xs font-mono truncate">{rule.name}</span>
                   {isRuntime && (
@@ -210,7 +210,7 @@ export function GlobalRulesSection({
                   type="button"
                   onClick={(e) => void handleDeleteRule(e, rule.name)}
                   aria-label={t('common.delete')}
-                  className="p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover/rule:opacity-100 transition cursor-pointer shrink-0"
+                  className="p-1 rounded text-[#8f8f8f] dark:text-[#71717a] hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover/rule:opacity-100 transition cursor-pointer shrink-0"
                 >
                   <Trash2 className="h-3 w-3" />
                 </button>
