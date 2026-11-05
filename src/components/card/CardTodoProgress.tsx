@@ -121,6 +121,7 @@ export const CardTodoProgress = memo(function CardTodoProgress({
     };
 
     const handleTriggerWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) return;
       if (!listRef.current) return;
       if (e.deltaY !== 0) {
         e.preventDefault();
@@ -130,6 +131,7 @@ export const CardTodoProgress = memo(function CardTodoProgress({
     };
 
     const handlePopoverWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) return;
       if (!listRef.current) return;
       e.stopPropagation();
       const list = listRef.current;

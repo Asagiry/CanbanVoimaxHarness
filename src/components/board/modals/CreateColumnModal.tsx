@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Check } from 'lucide-react';
 import { useBoardStore } from '../../../stores/boardStore';
 import { useCortexStore } from '../../../stores/cortexStore';
@@ -13,6 +14,7 @@ import {
   getDeterministicAgentColor,
   isAllowedAgentColor,
 } from '../../../lib/agentPalette';
+import { useUiZoom, getZoomOverlayStyle } from '../../../hooks/useUiZoom';
 
 interface AgentPersonaOption {
   role: string;
@@ -45,6 +47,7 @@ export default function CreateColumnModal({
   const effectiveStages = stages ?? columns ?? [];
   const { setStages, saveCurrentBoard } = useBoardStore();
   const { t } = useTranslation();
+  const { zoom } = useUiZoom();
 
   const [newColumnTitle, setNewColumnTitle] = useState('');
   const [newColumnPersona, setNewColumnPersona] = useState('developer');
@@ -186,14 +189,17 @@ export default function CreateColumnModal({
     }
   };
 
-  return (
+  if (!isOpen) return null;
+
+  const modalContent = (
     <div
+      style={getZoomOverlayStyle(zoom)}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 p-3 animate-in fade-in duration-100"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="relative flex flex-col w-[520px] max-w-[95vw] max-h-[90vh] rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-md p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors overflow-hidden">
+      <div className="relative flex flex-col w-[520px] max-w-[95%] max-h-[90%] rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-md p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors overflow-hidden">
         <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#21262d] shrink-0">
           <div className="flex items-center space-x-2">
             <AgentIcon name={effectiveIcon} className="h-4 w-4" style={{ color: effectiveColor }} />
@@ -388,4 +394,6 @@ export default function CreateColumnModal({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 }

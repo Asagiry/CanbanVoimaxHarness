@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ImagePlus, Paperclip, ZoomIn } from 'lucide-react';
 import { useBoardStore } from '../../../stores/boardStore';
 import { useSettingsStore } from '../../../stores/settingsStore';
 import { useTranslation } from '../../../stores/languageStore';
 import { compressImageFile } from '../../../lib/imageCompression';
 import { PipelineStage, PipelineColumn } from '../../../types';
+import { useUiZoom, getZoomOverlayStyle } from '../../../hooks/useUiZoom';
 import ImageLightboxModal from './ImageLightboxModal';
 
 export interface CreateTaskModalProps {
@@ -29,6 +31,7 @@ export default function CreateTaskModal({
   const { addTask, activeBoardId } = useBoardStore();
   const { availableModels, settings } = useSettingsStore();
   const { t } = useTranslation();
+  const { zoom } = useUiZoom();
   const effectiveStages = stages ?? columns;
   const initialStage = defaultStageId ?? defaultColumnId;
 
@@ -211,9 +214,10 @@ export default function CreateTaskModal({
 
   if (!isOpen) return null;
 
-  return (
+  const modalContent = (
     <>
       <div
+        style={getZoomOverlayStyle(zoom)}
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 p-3 animate-in fade-in duration-100"
         onKeyDown={handleModalKeyDown}
         onClick={(e) => {
@@ -221,7 +225,7 @@ export default function CreateTaskModal({
         }}
       >
         <div
-          className="relative flex flex-col w-[620px] max-w-[95vw] max-h-[90vh] rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-md p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors overflow-hidden"
+          className="relative flex flex-col w-[620px] max-w-[95%] max-h-[90%] rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-md p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors overflow-hidden"
           onPaste={handleModalPaste}
         >
           <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#21262d] shrink-0">
@@ -416,4 +420,6 @@ export default function CreateTaskModal({
       )}
     </>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 }

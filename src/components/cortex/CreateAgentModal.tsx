@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Bot, X, Folder, FileText, RotateCw, Plus } from 'lucide-react';
 import { useTranslation } from '../../stores/languageStore';
 import { useCortexStore } from '../../stores/cortexStore';
+import { useUiZoom, getZoomOverlayStyle } from '../../hooks/useUiZoom';
 
 export interface CreateAgentModalProps {
   isOpen: boolean;
@@ -17,6 +19,7 @@ export function CreateAgentModal({
   onCreateSuccess,
 }: CreateAgentModalProps) {
   const { t } = useTranslation();
+  const { zoom } = useUiZoom();
   const [roleName, setRoleName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -91,13 +94,14 @@ export function CreateAgentModal({
 
   const previewRole = roleName.trim().toLowerCase() || 'architect';
 
-  return (
+  const modalContent = (
     <div
+      style={getZoomOverlayStyle(zoom)}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 p-4 animate-in fade-in duration-150"
       onClick={isSubmitting ? undefined : onClose}
     >
       <div
-        className="w-full max-w-md rounded-xl border border-[#e4e4e7] dark:border-[#21262d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] p-5 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150"
+        className="w-full max-w-md max-h-[90%] overflow-y-auto rounded-xl border border-[#e4e4e7] dark:border-[#21262d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] p-5 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[#f4f4f5] dark:border-[#21262d] pb-3">
@@ -202,6 +206,8 @@ export function CreateAgentModal({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 }
 
 export default CreateAgentModal;

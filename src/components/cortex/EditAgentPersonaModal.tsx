@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Palette, X, Check } from 'lucide-react';
 import AgentIcon from '../common/AgentIcon';
 import { useTranslation } from '../../stores/languageStore';
@@ -8,6 +9,7 @@ import {
   getDeterministicAgentColor,
   isAllowedAgentColor,
 } from '../../lib/agentPalette';
+import { useUiZoom, getZoomOverlayStyle } from '../../hooks/useUiZoom';
 import type { AgentPersonaInfo } from '../../stores/cortexStore';
 
 export interface EditAgentPersonaModalProps {
@@ -41,6 +43,7 @@ export function EditAgentPersonaModal({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { t } = useTranslation();
+  const { zoom } = useUiZoom();
 
   useEffect(() => {
     if (isOpen && persona) {
@@ -98,13 +101,14 @@ export function EditAgentPersonaModal({
     }
   };
 
-  return (
+  const modalContent = (
     <div
+      style={getZoomOverlayStyle(zoom)}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 p-4 animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-lg border border-[#e4e4e7] dark:border-[#21262d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] p-5 shadow-md space-y-4 max-h-[90vh] overflow-y-auto"
+        className="w-full max-w-md rounded-lg border border-[#e4e4e7] dark:border-[#21262d] bg-white dark:bg-[#0d1117] text-[#171717] dark:text-[#f0f6fc] p-5 shadow-md space-y-4 max-h-[90%] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[#f4f4f5] dark:border-[#21262d] pb-3">
@@ -245,6 +249,8 @@ export function EditAgentPersonaModal({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 }
 
 export default EditAgentPersonaModal;

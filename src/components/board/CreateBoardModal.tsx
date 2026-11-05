@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Layers, ArrowRight } from 'lucide-react';
 import { useBoardStore } from '../../stores/boardStore';
 import { useCortexStore } from '../../stores/cortexStore';
 import { useTranslation } from '../../stores/languageStore';
+import { useUiZoom, getZoomOverlayStyle } from '../../hooks/useUiZoom';
 import PersonaSelect from '../common/PersonaSelect';
 
 interface CreateBoardModalProps {
@@ -19,6 +21,7 @@ interface PersonaOption {
 export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalProps) {
   const { createBoard, saveBoard } = useBoardStore();
   const { t } = useTranslation();
+  const { zoom } = useUiZoom();
   const [boardName, setBoardName] = useState('');
   const [selectedPersona, setSelectedPersona] = useState('developer');
   const [personas, setPersonas] = useState<PersonaOption[]>([]);
@@ -105,13 +108,14 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
     }
   };
 
-  return (
+  const modalContent = (
     <div
+      style={getZoomOverlayStyle(zoom)}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 p-4 animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md bg-white dark:bg-[#0d1117] rounded-lg shadow-md border border-[#ebebeb] dark:border-[#21262d] overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col transition-colors"
+        className="w-full max-w-md max-h-[90%] overflow-y-auto bg-white dark:bg-[#0d1117] rounded-lg shadow-md border border-[#ebebeb] dark:border-[#21262d] overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col transition-colors"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -231,4 +235,6 @@ export default function CreateBoardModal({ isOpen, onClose }: CreateBoardModalPr
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from '../../stores/languageStore';
+import { useUiZoom, getZoomOverlayStyle } from '../../hooks/useUiZoom';
 import {
   X,
   ZoomIn,
@@ -23,6 +24,7 @@ export default function ImageLightboxModal({
   onClose,
 }: ImageLightboxModalProps) {
   const { t } = useTranslation();
+  const { zoom: uiZoom } = useUiZoom();
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -89,6 +91,7 @@ export default function ImageLightboxModal({
 
   // Mouse wheel zoom
   const handleWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) return;
     e.preventDefault();
     if (e.deltaY < 0) {
       handleZoomIn();
@@ -171,7 +174,7 @@ export default function ImageLightboxModal({
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
       className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex flex-col select-none overflow-hidden transition-opacity duration-200 ease-out"
-      style={{ animation: 'cvhFadeIn 0.2s ease-out' }}
+      style={{ ...getZoomOverlayStyle(uiZoom), animation: 'cvhFadeIn 0.2s ease-out' }}
     >
       <style>{'\
         @keyframes cvhFadeIn {\
@@ -324,5 +327,5 @@ export default function ImageLightboxModal({
     </div>
   );
 
-  return createPortal(modal, document.body);
+  return typeof document !== 'undefined' ? createPortal(modal, document.body) : modal;
 }
