@@ -244,9 +244,9 @@ export default function KanbanBoard() {
       ? 'running'
       : 'idle';
 
-    const completedAt = isDone ? (movedTask.completedAt || Date.now()) : undefined;
-    const totalElapsed = isDone && movedTask.createdAt
-      ? Math.max(0, Math.floor((completedAt! - movedTask.createdAt) / 1000))
+    const completedAt = isDone ? Date.now() : undefined;
+    const totalElapsed = isDone && movedTask.createdAt && completedAt
+      ? Math.max(0, Math.floor((completedAt - movedTask.createdAt) / 1000))
       : movedTask.totalElapsed;
 
     const updatedMovedTask: KanbanTask = {

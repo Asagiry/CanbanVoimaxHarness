@@ -840,9 +840,6 @@ pub async fn internal_create_subtask(
     // Update parent task: mark waiting for subtask, keep parent pinned in current stage (§ 2.2)
     tasks[parent_idx].waiting_for_subtask_id = Some(subtask_id.clone());
     tasks[parent_idx].status = Some("done".to_string());
-    if tasks[parent_idx].completed_at.is_none() {
-        tasks[parent_idx].completed_at = Some(now);
-    }
     tasks[parent_idx].updated_at = now;
 
     let subtask_title = title

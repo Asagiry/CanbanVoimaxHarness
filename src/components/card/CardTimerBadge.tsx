@@ -54,15 +54,16 @@ export function calculateStageDuration(task: KanbanTask, isRunning: boolean): nu
     : (task.activeStageDuration ?? 0);
 }
 
-export function calculateTotalElapsed(task: KanbanTask, isRunning: boolean, isDone: boolean): number {
+export function calculateTotalElapsed(task: KanbanTask, _isRunning: boolean, isDone: boolean): number {
   const finishTime = task.completedAt || (isDone ? task.updatedAt : undefined);
   if (isDone) {
-    return task.totalElapsed > 0
-      ? task.totalElapsed
-      : (task.createdAt && finishTime ? Math.max(0, Math.floor((finishTime - task.createdAt) / 1000)) : 0);
+    if (task.createdAt && finishTime) {
+      return Math.max(0, Math.floor((finishTime - task.createdAt) / 1000));
+    }
+    return task.totalElapsed ?? 0;
   }
-  if (isRunning) {
-    return task.createdAt ? Math.max(0, Math.floor((Date.now() - task.createdAt) / 1000)) : (task.totalElapsed ?? 0);
+  if (task.createdAt) {
+    return Math.max(0, Math.floor((Date.now() - task.createdAt) / 1000));
   }
   return task.totalElapsed ?? 0;
 }
@@ -220,6 +221,18 @@ export const CardTimeFooter = memo(function CardTimeFooter({
   isDone = false,
 }: CardTimeFooterProps) {
   const { language, t } = useTranslation();
+  const isBacklogIdle = !isDone && task.stageId === 'backlog' && task.status !== 'running' && !task.isTimerRunning;
+  const shouldTick = !isDone && Boolean(task.createdAt) && !isBacklogIdle;
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    if (!shouldTick) return;
+    const timer = setInterval(() => {
+      setTick((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [shouldTick]);
+
   const isRunning = task.status === 'running';
   const currentTotalElapsed = calculateTotalElapsed(task, isRunning, isDone);
 
@@ -233,7 +246,7 @@ export const CardTimeFooter = memo(function CardTimeFooter({
         {task.createdAt ? (
           <span>{t('card.created', { date: formatCardDate(task.createdAt) })}</span>
         ) : null}
-        {task.createdAt && (currentTotalElapsed > 0 || isDone) ? <span>·</span> : null}
+        {task.createdAt && !isBacklogIdle ? <span>·</span> : null}
         {isDone ? (
           <span className="tabular-nums">
             {t('card.completedDuration', {
@@ -242,13 +255,9 @@ export const CardTimeFooter = memo(function CardTimeFooter({
                 : `<1${language === 'ru' ? 'с' : 's'}`,
             })}
           </span>
-        ) : isRunning && currentTotalElapsed > 0 ? (
+        ) : !isBacklogIdle ? (
           <span className="tabular-nums">
             {t('card.elapsed', { time: formatStageDuration(currentTotalElapsed, language) })}
-          </span>
-        ) : currentTotalElapsed > 0 ? (
-          <span className="tabular-nums">
-            {formatStageDuration(currentTotalElapsed, language)}
           </span>
         ) : null}
       </div>
