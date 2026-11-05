@@ -116,6 +116,16 @@ The Retro agent operates as an **LLM-Wiki Administrator**:
 - Cue: When designing or styling sidebars, drawers, or floating cockpit columns (SubagentsSidebar, GitDiffSidebar, AgentConsoleDrawer cockpit, CortexExplorer).
 - Lesson: Columns must own their full perimeter: apply symmetric vertical margins (my-1.5), precise height calculations matching vertical margins (h-[calc(100%-0.75rem)]), complete 4-corner radius (rounded-xl), closed border (border), and clipping (overflow-hidden) to prevent unstyled flat bottom collisions with screen edges.
 - Evidence: CVH-057 (commit 8ab5ce7a) - Defective asymmetric columns with mt-1, border-t border-x, rounded-tl-xl rounded-tr-xl, and h-[calc(100%-0.25rem)] running off the bottom edge of the window.
+
+### [CLE: Antigravity Stealth Dark Palette Enforcement]
+- Cue: When styling dark mode variants in frontend UI components (`src/components/`, `src/index.css`).
+- Lesson: Enforce Antigravity stealth dark palette tokens (`#111114`, `#17171b`, `#232328`, `#212126`, `#2c2c33`, `#3a3a44`, `#f4f4f5`, `#a1a1aa`, `#71717a`, `#52525b`); ban legacy GitHub dark tokens (`#0d1117`, `#161b22`, `#21262d`, `#30363d`, `#f0f6fc`, `#8b949e`) to prevent styling drift and merge conflicts with `main`.
+- Evidence: CVH-064 (commit `8e49b1c9`) - Gate 6 merge conflict in `DrawerHeader.tsx` after concurrent CVH-062 dark theme migration.
+
+### [CLE: Pipeline Stage Stepper & Duration Traversal Separation]
+- Cue: When rendering stage progress, timers, or execution indicators across parent tasks and child subtasks (`rootTask`, `subtasks`).
+- Lesson: Decompose hierarchy traversal and duration resolution into pure, testable helper functions (`resolveStageTask`, `resolveStageDuration`, `resolveStageStatus`); never leak cumulative `totalElapsed` into individual stage pills, and preserve parent stage durations when switching views.
+- Evidence: CVH-064 (commit `b99f10ed`) - Resolving disappearing planning duration, 02:04 cumulative bleed on developer stage, and inverted active dot indicators.
 ```
 
 ---

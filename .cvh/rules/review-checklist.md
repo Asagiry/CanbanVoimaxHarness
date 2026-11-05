@@ -75,7 +75,7 @@ The Reviewer MUST execute and verify all Ground Truth Sensors via `execute_comma
 - **Vitest Unit Test Coverage**: Pure utilities in `src/lib/`, `src/types/`, and store slices in `src/stores/` must have matching Vitest unit tests in `__tests__/`.
 - Zustand store selections returning objects or arrays wrapped in `useShallow`.
 - Nested scrollable flex containers chaining `flex flex-col min-h-0 min-w-0 overflow-hidden`.
-- Light Paper (`#fafafa`) or Obsidian Dark (`#090a0f`) design tokens; zero neon gradients.
+- Light Paper (`#fafafa`) or Antigravity Stealth Dark (`#111114`, `#17171b`, `#232328`, `#212126`, `#2c2c33`, `#3a3a44`, `#f4f4f5`, `#a1a1aa`, `#71717a`, `#52525b`) design tokens; zero neon gradients and zero legacy dark tokens (`#161b22`, `#21262d`, `#30363d`, `#f0f6fc`, `#8b949e`).
 - Overlays mounted outside `useUiZoom` canvas root.
 - Zero silent failures: reject empty `catch {}` blocks or dangerous fallbacks (`.catch(() => [])`, `.catch(() => null)`).
 - Redundant copy elimination (§ 2.39) and Tri-partite experience synergy (§ 2.40).

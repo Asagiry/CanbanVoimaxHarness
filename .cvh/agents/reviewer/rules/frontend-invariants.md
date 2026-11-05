@@ -49,9 +49,11 @@ Authoritative frontend audit checklist for the **Reviewer** persona in CanbanVoi
 
 ---
 
-## 6. Dual Design System Fidelity (Light Paper / Obsidian Dark)
-- **Rule**: UI components must strictly adhere to either Vercel Light Paper (`#fafafa`, `#171717`, `#ebebeb`) or Obsidian Dark (`#07090e`, `#0d1117`, `#161b22`, `#21262d`, `#f0f6fc`).
-- **Audit**: Reject arbitrary neon gradients, random purple accent chips, or unstandardized shadows. Relational task families use standardized bidirectional hover glow (`ring-2 ring-[#8b5cf6]/50 bg-purple-50/20 dark:bg-[#1c1b29]`).
+## 6. Dual Design System Fidelity (Light Paper / Antigravity Stealth Dark)
+- **Rule**: UI components must strictly adhere to either Vercel Light Paper (`#fafafa`, `#171717`, `#ebebeb`) or Antigravity Stealth Dark:
+  - Surface/Canvas: `#111114`, Card/Drawer: `#17171b`, Active/Hover: `#232328`, Hairline: `#212126`, Border: `#2c2c33`, Hover Border: `#3a3a44`, Text: `#f4f4f5`, Secondary: `#a1a1aa`, Muted: `#71717a`, Dim/Divider: `#52525b`.
+- **Audit**: Check all new or modified `.tsx`/`.css` styles for legacy dark tokens (`#0d1117`, `#161b22`, `#21262d`, `#30363d`, `#f0f6fc`, `#8b949e`).
+- **REJECTION TRIGGER**: Introducing deprecated legacy dark tokens or unstandardized neon gradients triggers immediate rejection (`CHANGES_REQUESTED`). Relational task families use standardized bidirectional hover glow (`ring-2 ring-[#8b5cf6]/50 bg-purple-50/20 dark:bg-[#1c1b29]`).
 
 ---
 

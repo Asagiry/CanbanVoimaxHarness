@@ -84,17 +84,32 @@ Stores are decomposed into modular slices composed into a root store:
   - `activitySlice.ts`: Tool execution cards, user steer cards, dialog history.
   - `subagentsSlice.ts`: Background subagent sessions, listeners, and progress.
 
+### 3.6 Pipeline Stage Stepper & Duration Traversal (Clean Code SRP)
+- **Hierarchy Traversal Decoupling**: Stage duration aggregation, running status detection, and parent/subtask traversal must NEVER be performed inline within React JSX or component render loops.
+- **Dedicated Pure Helpers**: Always extract hierarchy resolution into dedicated pure helper functions (e.g. `src/components/drawer/stageStepperHelpers.ts`: `resolveStageTask`, `resolveStageDuration`, `resolveStageStatus`), maintaining strict component line count ceilings (<= 350 lines).
+- **Stage Timer Preservation**: Never leak cumulative `totalElapsed` into individual stage pills; preserve completed parent stage durations (`rootTask.stageDurations[stageId]`) when viewing child subtasks, and ensure live duration timers tick accurately without mutating parent records.
+
 ---
 
 ## 4. Design System & UI Invariants
 
-### 4.1 Dual Design System: Light Paper & Obsidian Dark
+### 4.1 Dual Design System: Light Paper & Antigravity Stealth Dark
 - **Light Mode (Vercel & ChatGPT Paper Aesthetic)**:
   - Page Canvas: `#fafafa`, Elevated Cards: `#ffffff`, Sidebar: `#f9f9f9`.
   - High-contrast typography: `#171717` (headings, primary labels), `#4d4d4d` (body).
   - Hairline dividers: `#ebebeb` and `#d4d4d8` (1px subtle separation; zero blurry shadows).
-- **Dark Mode (Obsidian Console Aesthetic)**:
-  - Background: `#090a0f`, Surface: `#0d1117`, Card: `#161b22`, Border: `#21262d`, Text: `#f0f6fc`, Muted: `#8b949e`.
+- **Dark Mode (Antigravity Stealth Dark Palette)**:
+  - Surface & Backdrop Canvas: `#111114`
+  - Elevated Card & Drawer Base: `#17171b`
+  - Interactive Hover / Active Pill: `#232328`
+  - Subtle Hairline Divider: `#212126`
+  - Card & Component Border: `#2c2c33`
+  - Hover & Active Border: `#3a3a44`
+  - Primary Typography: `#f4f4f5`
+  - Secondary Typography: `#a1a1aa`
+  - Muted Text & Icons: `#71717a`
+  - Subtle Divider / Dim Text: `#52525b`
+  - **STRICT PROHIBITION**: Legacy dark tokens (`#0d1117`, `#161b22`, `#21262d`, `#30363d`, `#f0f6fc`, `#8b949e`) are strictly deprecated and prohibited. Always use Antigravity stealth dark tokens.
   - Circular reveal transition originating from theme toggle coordinates via View Transitions API.
 - **Tabular Numerics**: Apply `.tabular-nums` across all timers, token telemetry, TPS counters, and duration pills to eliminate layout jitter.
 - **Bidirectional Subtask Illumination**: Hovering a parent or subtask card highlights the entire task family (parent, child subtasks, sibling subtasks) with `ring-2 ring-[#8b5cf6]/50 bg-purple-50/20 dark:bg-[#1c1b29]` for clear relational context without visual clutter.
