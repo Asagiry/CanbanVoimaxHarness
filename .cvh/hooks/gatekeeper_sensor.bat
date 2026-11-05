@@ -2,6 +2,12 @@
 setlocal enabledelayedexpansion
 set "PATH=%USERPROFILE%\.cargo\bin;%PATH%"
 
+if not "%CVH_WORKTREE_PATH%"=="" (
+    if exist "%CVH_WORKTREE_PATH%" (
+        cd /d "%CVH_WORKTREE_PATH%"
+    )
+)
+
 REM Ensure shared Cargo build cache across all worktrees to prevent cold compilations
 if "%CARGO_TARGET_DIR%"=="" set "CARGO_TARGET_DIR=%~dp0..\..\src-tauri\target"
 

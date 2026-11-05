@@ -31,10 +31,16 @@
   "contextWindow": 200000,
   "modelOverride": "gemini-3.8-flash-high",
   "temperature": 0.1,
-  "gatekeeperSensor": "call .cvh\\hooks\\gatekeeper_sensor.bat",
   "allowedTools": ["execute_command", "read_file", "glob", "grep"],
   "hooks": {
-    "on_leave": ".cvh/hooks/on_review_finish.bat"
+    "on_enter": {
+      "script": ".cvh/hooks/gatekeeper_sensor.bat",
+      "description": "Запуск gatekeeper-сенсоров: проверка git mergeability, cargo check, Vitest, tsc и Oxlint"
+    },
+    "on_leave": {
+      "script": ".cvh/hooks/on_review_finish.bat",
+      "description": "Сливает утвержденную feature-ветку в main, отправляет в origin/main и удаляет изолированный worktree"
+    }
   },
   "autoRun": true,
   "terminal": false
