@@ -94,12 +94,15 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Brand Logo Icon** | `src/components/common/Logo.tsx` | CanbanVoimaxHarness application logo. |
 | **Persona Dropdown Selector** | `src/components/common/PersonaSelect.tsx` | Persona select dropdown with colored avatar badges. |
 | **Baked-in Runtime Rule Icon** | `src/components/common/RuntimeRuleIcon.tsx` | Dedicated SVG prompt-chip icon and `isRuntimeRule` helper. |
+| **Hook Moment Icon** | `src/components/common/HookIcon.tsx` | Visual icon resolver for on_enter (ArrowRightToLine) vs on_leave/on_finish (ArrowRightFromLine) hooks. |
 | **Two-Level Tool Policy Modal** | `src/components/settings/ToolPolicyModal.tsx` | Interactive policy matrix: global switches & overrides. |
 | **Global Settings Modal** | `src/components/settings/SettingsModal.tsx` | LLM endpoints, active model, and app settings. |
 | **UI Zoom Controller Hook** | `src/hooks/useUiZoom.ts` | Ctrl+Plus/Minus/Wheel viewport scaling. |
 | **UI Zoom Controller Unit Tests** | `src/hooks/__tests__/useUiZoom.test.ts` | Vitest suite for UI zoom scaling, modal overlays, and wheel listeners. |
+| **Hook Moment Icon Unit Tests** | `src/components/common/__tests__/HookIcon.test.tsx` | Vitest suite for hook moment resolution and visual icon rendering. |
 | **Column Roundings Unit Tests** | `src/components/drawer/__tests__/columnRoundings.test.tsx` | Vitest suite for drawer and CortexExplorer column roundings and full borders. |
 | **Tool Time Tracking Unit Tests** | `src/stores/__tests__/toolTimeTracking.test.ts` | Vitest suite for tool execution duration, fallback, and metric tracking. |
+| **Stream Scroll Containment Unit Tests** | `src/components/drawer/stream/__tests__/streamScrollContainment.test.ts` | Vitest suite for drawer feed overflow containment, token wrapping, and card bounds. |
 | **Desktop Notifications Dispatcher** | `src/services/notificationService.ts` | Cross-platform notification dispatch & toast formatting. |
 | **Typed Tauri Event Gateway** | `src/services/tauriEventGateway.ts` | 150ms micro-batching, typed events (zero `listen<any>`).|
 | **Project Management Store** | `src/stores/projectStore.ts` | Multi-project workspace switching, active project persistence. |

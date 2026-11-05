@@ -85,7 +85,7 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
   if (isSensorRejection || isHookRejection) {
     const titleKey = isSensorRejection ? 'drawer.sensorRejection' : 'drawer.hookRejection';
     return (
-      <div className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-amber-500/20 bg-amber-500/10 p-3.5 shadow-xs">
+      <div className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-amber-500/20 bg-amber-500/10 p-3.5 shadow-xs min-w-0 overflow-hidden">
         <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-amber-500/20 text-[10px] font-mono">
           <div className="flex items-center space-x-1.5 text-amber-500 dark:text-amber-400 font-medium">
             <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
@@ -120,7 +120,7 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
             ))}
           </div>
         )}
-        <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed select-text font-sans">
+        <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed select-text font-sans min-w-0 break-words">
           <MarkdownContent content={activity?.content ?? ''} onImageClick={handleImageClick} />
         </div>
       </div>
@@ -128,7 +128,7 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
   }
 
   return (
-    <div className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#0d1117] p-3.5 shadow-xs">
+    <div className="animate-silk-entrance motion-reduce:animate-none rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-[#f9f9f9] dark:bg-[#0d1117] p-3.5 shadow-xs min-w-0 overflow-hidden">
       <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-[#ebebeb] dark:border-[#21262d] text-[10px] font-mono text-[#666666] dark:text-[#8b949e]">
         <div className="flex items-center space-x-1.5 text-[#171717] dark:text-[#f0f6fc] font-medium">
           {isAgentMessage ? (
@@ -184,7 +184,7 @@ export const SteerDirectiveCard = memo(function SteerDirectiveCard({
           ))}
         </div>
       )}
-      <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed select-text font-sans">
+      <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed select-text font-sans min-w-0 break-words">
         <MarkdownContent content={activity?.content ?? ''} onImageClick={handleImageClick} />
       </div>
     </div>

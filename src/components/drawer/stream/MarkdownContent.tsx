@@ -16,7 +16,7 @@ export function renderInlineNodes(nodes: InlineNode[], prefix: string): React.Re
         return (
           <code
             key={key}
-            className="px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] font-mono text-[13px]"
+            className="px-1.5 py-0.5 rounded bg-[#f4f4f5] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] font-mono text-[13px] break-all"
           >
             {node.text}
           </code>
@@ -97,8 +97,8 @@ function CodeBlock({
     <div
       className={
         unfinished
-          ? 'my-2.5 rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] overflow-hidden font-mono text-[13px]'
-          : 'my-2.5 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22] overflow-hidden font-mono text-[13px]'
+          ? 'my-2.5 w-full max-w-full rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fafafa] dark:bg-[#0d1117] overflow-hidden font-mono text-[13px]'
+          : 'my-2.5 w-full max-w-full rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22] overflow-hidden font-mono text-[13px]'
       }
     >
       {(language || unfinished) ? (
@@ -162,7 +162,7 @@ export function MarkdownContent({
   const tokens = useMemo(() => parseMarkdownTokens(content ?? ''), [content]);
 
   return (
-    <div className="space-y-1 select-text font-sans">
+    <div className="space-y-1 select-text font-sans break-words [overflow-wrap:anywhere] min-w-0">
       {tokens.map((token, index) => {
         switch (token.type) {
           case 'code':
@@ -179,7 +179,7 @@ export function MarkdownContent({
             return (
               <div
                 key={`table-${index}`}
-                className="my-2 overflow-x-auto rounded-md border border-[#ebebeb] dark:border-[#21262d]"
+                className="my-2 w-full max-w-full overflow-x-auto rounded-md border border-[#ebebeb] dark:border-[#21262d]"
               >
                 <table className="w-full border-collapse text-[13px] font-mono tabular-nums">
                   <thead>
@@ -236,7 +236,7 @@ export function MarkdownContent({
               <div
                 key={`img-${index}`}
                 onClick={() => handleImageClick?.(token.src, token.alt)}
-                className="my-2 rounded-lg overflow-hidden border border-[#ebebeb] dark:border-[#21262d] max-w-lg bg-[#f4f4f5] dark:bg-[#161b22] shadow-xs group cursor-zoom-in"
+                className="my-2 rounded-lg overflow-hidden border border-[#ebebeb] dark:border-[#21262d] max-w-full max-w-lg bg-[#f4f4f5] dark:bg-[#161b22] shadow-xs group cursor-zoom-in"
               >
                 <img
                   src={token.src}
@@ -335,7 +335,7 @@ export function MarkdownContent({
           case 'paragraph':
           default:
             return (
-              <p key={`p-${index}`} className="text-sm leading-relaxed text-[#171717] dark:text-[#f0f6fc]">
+              <p key={`p-${index}`} className="text-sm leading-relaxed text-[#171717] dark:text-[#f0f6fc] break-words">
                 {formatInline(token.text, `p-${index}`)}
               </p>
             );

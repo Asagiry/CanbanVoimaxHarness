@@ -18,7 +18,7 @@ export function TaskObjectiveCard({
   const { t } = useTranslation();
 
   return (
-    <div className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-4 shadow-xs">
+    <div className="rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-4 shadow-xs min-w-0 overflow-hidden">
       <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#ebebeb] dark:border-[#21262d]">
         <div className="flex items-center space-x-2">
           <Target className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc]" />
@@ -30,7 +30,7 @@ export function TaskObjectiveCard({
           {t('drawer.taskObjective')}
         </span>
       </div>
-      <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed select-text font-sans">
+      <div className="text-sm text-[#171717] dark:text-[#f0f6fc] leading-relaxed select-text font-sans min-w-0 break-words">
         <MarkdownContent
           content={getCleanPrompt(task.description, task.title)}
           onImageClick={onImageClick}
