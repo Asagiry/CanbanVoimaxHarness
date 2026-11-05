@@ -38,6 +38,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Board Image Lightbox Modal** | `src/components/board/modals/ImageLightboxModal.tsx` | Full-screen image preview for board attachments. |
 | **Agent Console Drawer (Root Container)**| `src/components/drawer/AgentConsoleDrawer.tsx` | Hoisted fixed overlay, flex bounded (`min-h-0 min-w-0`). |
 | **Drawer Header & Action Stepper** | `src/components/drawer/DrawerHeader.tsx` | Task title, tactile stage stepper, abort/run controls. |
+| **Drawer Stage Stepper Helpers** | `src/components/drawer/stageStepperHelpers.ts` | Stage duration, running status, and task resolution logic. |
 | **Activity Stream & Comment Cards** | `src/components/drawer/DrawerActivityStream.tsx` | Step commentary vs prominent terminal response card. |
 | **Human-in-the-Loop Question Prompt Card** | `src/components/drawer/QuestionPromptCard.tsx` | Interactive clarifying question card, single/multiple choice, custom input, markdown rendering. |
 | **Steer Instruction Prompt Bar** | `src/components/drawer/DrawerSteerBar.tsx` | Interactive steer input bar, optimistic submission. |

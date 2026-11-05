@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
+import { Check } from 'lucide-react';
 import DrawerHeader, { DrawerHeaderProps } from '../DrawerHeader';
 import { KanbanTask, PipelineColumn } from '../../../types';
 import { useDrawerStore } from '../../../stores/drawerStore';
@@ -59,6 +60,20 @@ function findStepper(node: any): any {
     return findStepper(node.props.children);
   }
   return null;
+}
+
+function getButtonProps(item: any) {
+  const btn = item.props?.children?.[1] ?? item.props?.children?.[0] ?? item.props?.children ?? item;
+  const children = Array.isArray(btn.props?.children) ? btn.props.children : [btn.props?.children];
+  const hasCheck = children.some((c: any) => c && typeof c === 'object' && c.type === Check);
+  const hasRunningDot = children.some(
+    (c: any) => c && typeof c === 'object' && typeof c.props?.className === 'string' && c.props.className.includes('bg-[#22c55e]')
+  );
+  const textSpan = children.find(
+    (c: any) => c && typeof c === 'object' && typeof c.props?.className === 'string' && c.props.className.includes('truncate')
+  );
+  const text = textSpan?.props?.children;
+  return { btn, hasCheck, hasRunningDot, text };
 }
 
 describe('DrawerHeader Stage Breadcrumb Navigation', () => {
@@ -211,5 +226,126 @@ describe('DrawerHeader Stage Breadcrumb Navigation', () => {
     // Current active task is CVH-040.1, so Developer button is disabled (already current)
     const devButton = stageItems[1].props.children[1];
     expect(devButton.props.disabled).toBe(true);
+  });
+
+  describe('Bug scenario regression verification', () => {
+    const rootTaskWithPlanning: KanbanTask = {
+      id: 'CVH-042',
+      title: 'Root Planning Task',
+      stageId: 'plan',
+      status: 'done',
+      persona: 'planner',
+      priority: 'high',
+      activeStageDuration: 0,
+      stageDurations: { plan: 109 },
+      totalElapsed: 124,
+      isTimerRunning: false,
+      returnsCount: 0,
+      verdict: 'NONE',
+    };
+
+    const devSubtaskActive: KanbanTask = {
+      id: 'CVH-042.1',
+      parentId: 'CVH-042',
+      title: 'CVH-042 (Developer)',
+      stageId: 'dev',
+      status: 'running',
+      persona: 'developer',
+      priority: 'high',
+      activeStageDuration: 15,
+      stageDurations: { dev: 15 },
+      totalElapsed: 124,
+      isTimerRunning: true,
+      returnsCount: 0,
+      verdict: 'NONE',
+    };
+
+    it('preserves Planning stage duration (01:49) when drawer switches to Developer subtask', () => {
+      const headerElement = renderDrawerHeader({
+        task: devSubtaskActive,
+        rootTask: rootTaskWithPlanning,
+        subtasks: [devSubtaskActive],
+        activeTaskId: 'CVH-042.1',
+        isRunning: true,
+      });
+
+      const stepper = findStepper(headerElement);
+      expect(stepper).not.toBeNull();
+      const planProps = getButtonProps(stepper.props.children[0]);
+      expect(planProps.text).toBe('Planning 01:49');
+    });
+
+    it('displays Developer own stage duration (00:15) instead of Planning duration or total elapsed (02:04)', () => {
+      const headerElement = renderDrawerHeader({
+        task: devSubtaskActive,
+        rootTask: rootTaskWithPlanning,
+        subtasks: [devSubtaskActive],
+        activeTaskId: 'CVH-042.1',
+        isRunning: true,
+      });
+
+      const stepper = findStepper(headerElement);
+      expect(stepper).not.toBeNull();
+      const devProps = getButtonProps(stepper.props.children[1]);
+      expect(devProps.text).toBe('Developer 00:15');
+      expect(devProps.text).not.toContain('02:04');
+      expect(devProps.text).not.toContain('01:49');
+    });
+
+    it('renders green running dot on Developer when running, NOT on completed Planning', () => {
+      const headerElement = renderDrawerHeader({
+        task: devSubtaskActive,
+        rootTask: rootTaskWithPlanning,
+        subtasks: [devSubtaskActive],
+        activeTaskId: 'CVH-042.1',
+        isRunning: true,
+      });
+
+      const stepper = findStepper(headerElement);
+      expect(stepper).not.toBeNull();
+      const planProps = getButtonProps(stepper.props.children[0]);
+      const devProps = getButtonProps(stepper.props.children[1]);
+
+      expect(devProps.hasRunningDot).toBe(true);
+      expect(planProps.hasRunningDot).toBe(false);
+    });
+
+    it('displays checkmark on Planning when parent is done and subtask is running', () => {
+      const headerElement = renderDrawerHeader({
+        task: devSubtaskActive,
+        rootTask: rootTaskWithPlanning,
+        subtasks: [devSubtaskActive],
+        activeTaskId: 'CVH-042.1',
+        isRunning: true,
+      });
+
+      const stepper = findStepper(headerElement);
+      expect(stepper).not.toBeNull();
+      const planProps = getButtonProps(stepper.props.children[0]);
+      const devProps = getButtonProps(stepper.props.children[1]);
+
+      expect(planProps.hasCheck).toBe(true);
+      expect(devProps.hasCheck).toBe(false);
+    });
+
+    it('navigates back to parent task when clicking Planning from Developer subtask', () => {
+      const onOpenDrawerMock = vi.fn();
+      const headerElement = renderDrawerHeader({
+        task: devSubtaskActive,
+        rootTask: rootTaskWithPlanning,
+        subtasks: [devSubtaskActive],
+        activeTaskId: 'CVH-042.1',
+        isRunning: true,
+        onOpenDrawer: onOpenDrawerMock,
+      });
+
+      const stepper = findStepper(headerElement);
+      expect(stepper).not.toBeNull();
+      const planProps = getButtonProps(stepper.props.children[0]);
+
+      expect(planProps.btn.props.disabled).toBe(false);
+      planProps.btn.props.onClick({ stopPropagation: vi.fn() });
+      expect(onOpenDrawerMock).toHaveBeenCalledWith('CVH-042');
+    });
   });
 });
