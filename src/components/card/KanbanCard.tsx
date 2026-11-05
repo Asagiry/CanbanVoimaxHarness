@@ -198,7 +198,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                     </div>
                   ) : null;
                 })()}
-                <CardTimeFooter task={task} isDone={isDone} />
+                <CardTimeFooter task={task} isDone={isTerminalColumn} />
               </div>
 
               {/* In Done column: Collapsible list of completed subtasks with dialogue open */}

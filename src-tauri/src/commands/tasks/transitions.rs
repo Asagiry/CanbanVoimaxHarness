@@ -250,9 +250,7 @@ pub fn propagate_parent_subtask_advance(
             tasks[parent_idx].stage_id = next_col.id.clone();
             tasks[parent_idx].verdict = Some(verdict.unwrap_or("APPROVED").to_string());
             tasks[parent_idx].status = Some("done".to_string());
-            if tasks[parent_idx].completed_at.is_none() {
-                tasks[parent_idx].completed_at = Some(Utc::now().timestamp_millis());
-            }
+            tasks[parent_idx].completed_at = Some(Utc::now().timestamp_millis());
             tasks[parent_idx].updated_at = Utc::now().timestamp_millis();
 
             // Also mark any child subtasks of this parent as done so they collapse into parent (§ 3)
@@ -288,9 +286,6 @@ pub fn propagate_parent_subtask_advance(
 
             tasks[parent_idx].waiting_for_subtask_id = Some(new_subtask_id.clone());
             tasks[parent_idx].status = Some("done".to_string());
-            if tasks[parent_idx].completed_at.is_none() {
-                tasks[parent_idx].completed_at = Some(now);
-            }
             tasks[parent_idx].updated_at = now;
 
             let has_autorun = next_col.persona.is_some() || next_col.auto_run == Some(true);
@@ -1250,10 +1245,8 @@ pub async fn internal_move_task_stage(
     } else {
         current_task.status = Some("idle".to_string());
     }
-    if is_terminal_col || current_task.status.as_deref() == Some("done") {
-        if current_task.completed_at.is_none() {
-            current_task.completed_at = Some(Utc::now().timestamp_millis());
-        }
+    if is_terminal_col {
+        current_task.completed_at = Some(Utc::now().timestamp_millis());
         current_task.waiting_for_subtask_id = None;
         auto_complete_task_todos(root, current_task, app_handle);
     } else {
