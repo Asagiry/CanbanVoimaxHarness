@@ -651,6 +651,24 @@ pub async fn compile_primed_system_prompt_with_tools(
         sections.push(sub_mandate.trim().to_string());
     }
 
+    let can_read = resolved_tools.iter().any(|t| t == "read_file" || t == "grep" || t == "glob");
+    let can_edit = resolved_tools.iter().any(|t| t == "edit_file" || t == "write_file");
+    if can_read || can_edit {
+        let mut batch_mandate = String::from("## Concurrent Tool Execution & Batching Discipline
+- Two-Phase Action Pattern:
+");
+        if can_read {
+            batch_mandate.push_str("  1. Inspection Batching: When inspecting files, searching symbols, or exploring code, emit multiple tool calls concurrently in a single turn rather than reading files sequentially across separate turns.
+");
+        }
+        if can_edit {
+            batch_mandate.push_str("  2. Mutation Batching: When applying independent modifications across multiple distinct files, emit concurrent edit/write calls in a single turn.
+");
+        }
+        batch_mandate.push_str("- Single-Action Exceptions: Terminal commands and subagent collections should run as single tool actions to consume outputs before next steps.");
+        sections.push(batch_mandate.trim().to_string());
+    }
+
     Ok(sections.join("\n\n---\n\n"))
 }
 
