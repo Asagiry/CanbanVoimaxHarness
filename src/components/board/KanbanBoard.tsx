@@ -378,12 +378,14 @@ export default function KanbanBoard() {
   const doneParentIds = useMemo(() => {
     const set = new Set<string>();
     for (const t of tasks) {
-      if (t.status === 'done' || t.stageId === 'ready') {
+      const col = columns.find((c) => c.id === t.stageId);
+      const isTerminal = isDoneColumnDef(col) || t.stageId === 'ready' || t.stageId === 'done';
+      if (isTerminal) {
         set.add(t.id);
       }
     }
     return set;
-  }, [tasks]);
+  }, [tasks, columns]);
 
   const handleBoardWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     // Zooming via Ctrl/Meta + wheel is handled globally by useUiZoom
