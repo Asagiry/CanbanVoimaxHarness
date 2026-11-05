@@ -185,9 +185,9 @@ export function useContextGaugeMetrics({
       }
     }
 
-    const isSubagent = taskId.includes('.sub-') || taskId.includes(':sub:') || taskId.includes('.');
-    const baseSystem = isSubagent ? 300 : 650;
-    const baseTool = isSubagent ? 400 : 500;
+    const isExploratorySubagent = taskId.includes('.sub-') || taskId.includes(':sub:');
+    const baseSystem = isExploratorySubagent ? 800 : 3593;
+    const baseTool = isExploratorySubagent ? 1000 : 2604;
 
     let messageChars = textChars;
     for (const t of toolsArr) {
@@ -213,25 +213,21 @@ export function useContextGaugeMetrics({
 
     if (total <= 0) {
       sys = 0; tool = 0; msg = 0;
-    } else if ((telemetry?.inputTokens || 0) > 0 && typeof telemetry?.systemTokens === 'number' && typeof telemetry?.toolTokens === 'number') {
+    } else if (typeof telemetry?.systemTokens === 'number' && typeof telemetry?.toolTokens === 'number') {
       sys = telemetry.systemTokens;
       tool = telemetry.toolTokens;
       msg = Math.max(0, total - sys - tool);
-    } else if (hasMessages) {
-      const totalWeight = baseSystem + baseTool + Math.max(1, rawMsgTokens);
-      const ratio = total < totalWeight ? total / totalWeight : 1;
-      sys = Math.round(baseSystem * ratio);
-      tool = Math.round(baseTool * ratio);
-      msg = Math.max(1, total - sys - tool);
     } else {
-      if (total < baseSystem + baseTool) {
-        const ratio = total / (baseSystem + baseTool);
+      const fixedOverhead = baseSystem + baseTool;
+      if (total <= fixedOverhead) {
+        const ratio = fixedOverhead > 0 ? total / fixedOverhead : 1;
         sys = Math.round(baseSystem * ratio);
         tool = Math.max(0, total - sys);
+        msg = 0;
       } else {
         sys = baseSystem;
         tool = baseTool;
-        msg = Math.max(0, total - sys - tool);
+        msg = total - fixedOverhead;
       }
     }
 
