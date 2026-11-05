@@ -706,6 +706,8 @@ impl ExecutionStateSnapshot {
 pub struct AgentContextState {
     pub current_turn: usize,
     pub messages: Vec<ChatMessage>,
+    #[serde(default)]
+    pub compaction_revision: u64,
 }
 
 /// Estimates tokens for a given text using multilingual-aware BPE heuristics:

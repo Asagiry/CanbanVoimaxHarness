@@ -1637,6 +1637,7 @@ pub async fn compact_context(
             // Enforce safe ceiling guarantee on in-memory context as well
             let _ = crate::agent::compactor::compact_conversation_to_target(&mut new_messages, 96_000, None);
             guard.messages = new_messages;
+            guard.compaction_revision += 1;
         }
     }
 
