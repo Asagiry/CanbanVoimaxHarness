@@ -264,6 +264,7 @@ export interface ToolExecution {
   stdout?: string;
   stderr?: string;
   batch?: { index: number; total: number };
+  createdAt?: number;
 }
 
 export interface LiveStreamEntry {

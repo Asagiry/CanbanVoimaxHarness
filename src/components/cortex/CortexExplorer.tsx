@@ -21,7 +21,11 @@ import GlobalRulesSection from './GlobalRulesSection';
 import EditAgentPersonaModal from './EditAgentPersonaModal';
 import CreateAgentModal from './CreateAgentModal';
 
-export default function CortexExplorer() {
+export interface CortexExplorerProps {
+  className?: string;
+}
+
+export default function CortexExplorer({ className = '' }: CortexExplorerProps = {}) {
   const {
     stages,
     agentStages,
@@ -212,7 +216,9 @@ export default function CortexExplorer() {
   const filteredGlobalRules = globalRules.filter((f) => !isSearching || matchFile(f));
 
   return (
-    <aside className="w-64 shrink-0 h-full flex flex-col bg-[#f9f9f9] dark:bg-[#0d1117] border-r border-[#ebebeb] dark:border-[#21262d] select-none text-[#171717] dark:text-[#f0f6fc]">
+    <aside
+      className={`w-64 shrink-0 my-1.5 ml-1.5 mr-1.5 rounded-xl border border-[#ebebeb] dark:border-[#21262d] shadow-2xs bg-[#f9f9f9] dark:bg-[#0d1117] flex flex-col min-h-0 h-[calc(100%-0.75rem)] overflow-hidden select-none text-[#171717] dark:text-[#f0f6fc] transition-colors ${className}`}
+    >
       {/* Sidebar Header */}
       <div className="h-12 shrink-0 px-3.5 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] flex items-center justify-between transition-colors">
         <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc]">
@@ -261,7 +267,7 @@ export default function CortexExplorer() {
                 <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
               )}
               <span className="font-sans text-xs font-semibold">{t('cortex.columnsSection')}</span>
-              <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] tabular-nums">
+              <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] tabular-nums leading-none translate-y-px">
                 ({stages.length})
               </span>
             </button>
@@ -324,7 +330,7 @@ export default function CortexExplorer() {
                 <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
               )}
               <span className="font-sans text-xs font-semibold">{t('cortex.agentsSection')}</span>
-              <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] tabular-nums">
+              <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] tabular-nums leading-none translate-y-px">
                 ({agentStages.length})
               </span>
             </button>

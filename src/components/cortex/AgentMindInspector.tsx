@@ -193,7 +193,7 @@ export function AgentMindInspector({
                   )}
                   <span className="text-xs font-mono">{t('cortex.rules')}</span>
                   <span className="text-[10px] font-mono text-[#8f8f8f]">rules/</span>
-                  <span className="text-[10px] text-[#8f8f8f] tabular-nums">({ruleFiles.length})</span>
+                  <span className="text-[10px] text-[#8f8f8f] tabular-nums leading-none translate-y-px">({ruleFiles.length})</span>
                 </button>
                 <button
                   type="button"

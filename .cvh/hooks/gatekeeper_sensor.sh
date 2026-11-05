@@ -7,6 +7,10 @@ if [ -z "$CARGO_TARGET_DIR" ]; then
     export CARGO_TARGET_DIR="$(cd "$SCRIPT_DIR/../../src-tauri/target" 2>/dev/null && pwd || echo "$SCRIPT_DIR/../../src-tauri/target")"
 fi
 
+if [ -n "$CVH_WORKTREE_PATH" ] && [ -d "$CVH_WORKTREE_PATH" ]; then
+    cd "$CVH_WORKTREE_PATH"
+fi
+
 echo "[CVH Sensor] Checking git mergeability with main..."
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     # Gate 6: Working tree must be clean and committed before handover (excluding gen artifacts)

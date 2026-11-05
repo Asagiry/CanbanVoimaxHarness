@@ -15,6 +15,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Splash Bootstrap Screen** | `src/components/splash/SplashScreen.tsx` | Boot screen displayed while backend state synchronizes. |
 | **Window Titlebar & Controls** | `src/components/layout/WindowControls.tsx` | Tauri window controls (minimize, maximize, close). |
 | **Top Navigation Bar** | `src/components/layout/Topbar.tsx` | Board selector, active project, search filter. |
+| **Number Alignment Unit Tests** | `src/components/layout/__tests__/numberAlignment.test.tsx` | Vitest suite for project, board, and subagent counter baseline alignment. |
 | **Kanban Card Container & Layout** | `src/components/card/KanbanCard.tsx` | Layout coordinator (~256 lines), memoized with `areCardPropsEqual`. |
 | **Tactile Stage Stepper Navigation** | `src/components/card/CardHookNode.tsx` | 1-click stage switching, current stage pulse, checkmarks. |
 | **Card Timer & Cadence Badge** | `src/components/card/CardTimerBadge.tsx` | Execution duration, active step timer, tabular-nums. |
@@ -98,6 +99,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **UI Zoom Controller Hook** | `src/hooks/useUiZoom.ts` | Ctrl+Plus/Minus/Wheel viewport scaling. |
 | **UI Zoom Controller Unit Tests** | `src/hooks/__tests__/useUiZoom.test.ts` | Vitest suite for UI zoom scaling, modal overlays, and wheel listeners. |
 | **Column Roundings Unit Tests** | `src/components/drawer/__tests__/columnRoundings.test.tsx` | Vitest suite for drawer and CortexExplorer column roundings and full borders. |
+| **Tool Time Tracking Unit Tests** | `src/stores/__tests__/toolTimeTracking.test.ts` | Vitest suite for tool execution duration, fallback, and metric tracking. |
 | **Desktop Notifications Dispatcher** | `src/services/notificationService.ts` | Cross-platform notification dispatch & toast formatting. |
 | **Typed Tauri Event Gateway** | `src/services/tauriEventGateway.ts` | 150ms micro-batching, typed events (zero `listen<any>`).|
 | **Project Management Store** | `src/stores/projectStore.ts` | Multi-project workspace switching, active project persistence. |

@@ -12,7 +12,7 @@ use crate::commands::git::apply_worktree_from_hook_stdout;
 use crate::commands::state::AppState;
 use crate::config::{load_boards_config, load_pipeline_config, resolve_actual_repo_root};
 use crate::git::create_worktree;
-use crate::hooks::{execute_hook, execute_sensor_command, HookContext};
+use crate::hooks::{execute_hook, HookContext};
 use super::healing::{stage_id_matches, task_id_matches};
 use super::lifecycle::{
     internal_create_subtask, record_task_hook_result,
@@ -382,9 +382,8 @@ pub fn propagate_parent_subtask_advance(
 #[allow(clippy::too_many_arguments)]
 /// Unifies stage transition lifecycle execution (§ 2.2, § 2.6, § 2.7, § 2.27):
 /// 1. `on_leave` / `on_exit` hook of the source column.
-/// 2. `gatekeeper_sensor` validation of the target column.
-/// 3. `on_enter` hook of the target column.
-/// 4. Unified rejection handling and event broadcasting.
+/// 2. `on_enter` hook of the target column.
+/// 3. Unified rejection handling and event broadcasting.
 pub struct TaskTransitionPipeline<'a> {
     pub root: &'a Path,
     pub source_col: Option<&'a crate::config::PipelineColumn>,
@@ -698,124 +697,6 @@ impl<'a> TaskTransitionPipeline<'a> {
         }
     }
 
-    /// Step: Validate gatekeeper sensor of target column.
-    pub async fn validate_gatekeeper(&self, task: &mut Task) -> Result<(), String> {
-        let sensor_cmd = match &self.target_col.gatekeeper_sensor {
-            Some(cmd) => cmd,
-            None => return Ok(()),
-        };
-
-        let abs_wt_path = match task.worktree_path.as_deref() {
-            Some(p) => {
-                let pb = PathBuf::from(p);
-                if pb.is_absolute() { pb } else { self.root.join(pb) }
-            }
-            None => self.root.to_path_buf(),
-        };
-        let effective_wt_path = if abs_wt_path.exists() {
-            abs_wt_path.clone()
-        } else {
-            self.root.to_path_buf()
-        };
-
-        let wt_missing_or_empty = task.worktree_path.is_none()
-            || !abs_wt_path.exists()
-            || abs_wt_path.read_dir().map(|mut it| it.next().is_none()).unwrap_or(true);
-
-        if self.is_source_intake {
-            crate::logger::cvh_log(
-                Some(self.root),
-                "INFO",
-                "GATEKEEPER",
-                &format!(
-                    "Skipping gatekeeper sensor '{}' for initial intake transition of task {} from '{}' to '{}'",
-                    sensor_cmd, task.id, task.stage_id, self.target_col.id
-                ),
-            );
-            return Ok(());
-        }
-
-        if wt_missing_or_empty {
-            crate::logger::cvh_log(
-                Some(self.root),
-                "INFO",
-                "GATEKEEPER",
-                &format!(
-                    "Skipping gatekeeper sensor '{}' for task {} because worktree does not exist or is empty",
-                    sensor_cmd, task.id
-                ),
-            );
-            return Ok(());
-        }
-
-        crate::logger::cvh_log(
-            Some(self.root),
-            "INFO",
-            "GATEKEEPER",
-            &format!("Executing gatekeeper sensor '{}' for task '{}' in {:?}", sensor_cmd, task.id, effective_wt_path),
-        );
-
-        let sensor_res = execute_sensor_command(sensor_cmd, &effective_wt_path, None).await;
-        match sensor_res {
-            Ok(res) => {
-                if !res.success {
-                    let stdout_trim = res.stdout.trim();
-                    let stderr_trim = res.stderr.trim();
-                    let mut details = String::new();
-                    if !stdout_trim.is_empty() {
-                        details.push_str(&format!("\n--- STDOUT ---\n{}", stdout_trim));
-                    }
-                    if !stderr_trim.is_empty() {
-                        details.push_str(&format!("\n--- STDERR ---\n{}", stderr_trim));
-                    }
-                    if details.is_empty() {
-                        details = "\n(No stdout/stderr produced by sensor command)".to_string();
-                    }
-                    crate::logger::cvh_log_with_details(
-                        Some(self.root),
-                        "WARN",
-                        "GATEKEEPER",
-                        &format!("Gatekeeper sensor '{}' REJECTED transition for task '{}' (exit code: {:?})", sensor_cmd, task.id, res.exit_code),
-                        Some(&details),
-                    );
-
-                    let steer_content = format!(
-                        "### [ОТКЛОНЕНО СЕНСОРОМ / SENSOR REJECTED: {}]\n\nGatekeeper-сенсор целевой колонки '{}' завершился с ошибкой (код {:?}).\n\n**Лог ошибки:**\n```\n{}\n```\n\nИсправь указанную ошибку.",
-                        sensor_cmd, self.target_col.id, res.exit_code, details
-                    );
-                    let err_msg = format!(
-                        "Gatekeeper Sensor '{}' rejected transition (Exit code: {:?}):{}",
-                        sensor_cmd, res.exit_code, details
-                    );
-                    return self.handle_rejection(task, &steer_content, err_msg, &details).await;
-                }
-                crate::logger::cvh_log(
-                    Some(self.root),
-                    "INFO",
-                    "GATEKEEPER",
-                    &format!("Gatekeeper sensor '{}' PASSED for task '{}'", sensor_cmd, task.id),
-                );
-                Ok(())
-            }
-            Err(e) => {
-                let err_details = e.to_string();
-                crate::logger::cvh_log_with_details(
-                    Some(self.root),
-                    "WARN",
-                    "GATEKEEPER",
-                    &format!("Gatekeeper sensor '{}' EXECUTION FAILED for task '{}': {}", sensor_cmd, task.id, err_details),
-                    Some(&err_details),
-                );
-                let steer_content = format!(
-                    "### [ОТКЛОНЕНО СЕНСОРОМ / SENSOR REJECTED: {}]\n\nОшибка исполнения gatekeeper-сенсора целевой колонки '{}': {}\n\nИсправь указанную ошибку.",
-                    sensor_cmd, self.target_col.id, err_details
-                );
-                let err_msg = format!("Gatekeeper Sensor '{}' execution failed: {}", sensor_cmd, err_details);
-                self.handle_rejection(task, &steer_content, err_msg, &err_details).await
-            }
-        }
-    }
-
     /// Step: Execute target column `on_enter` hook, or builtin:create_worktree, or backlog worktree allocation.
     pub async fn run_on_enter(&self, task: &mut Task) -> Result<(), String> {
         let hook_cfg_opt = self.target_col.hooks.get("on_enter").cloned();
@@ -1063,10 +944,9 @@ impl<'a> TaskTransitionPipeline<'a> {
         }
     }
 
-    /// Master execution: run `on_leave` -> `validate_gatekeeper` -> `on_enter`.
+    /// Master execution: run `on_leave` -> `on_enter`.
     pub async fn execute(&self, task: &mut Task) -> Result<(), String> {
         self.run_on_leave(task).await?;
-        self.validate_gatekeeper(task).await?;
         self.run_on_enter(task).await?;
         Ok(())
     }

@@ -28,7 +28,7 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 | **Commands Facade & Module Exports** | `src-tauri/src/commands/mod.rs` | Top-level IPC command module aggregation. |
 | **Central Application State Container** | `src-tauri/src/commands/state.rs` | `AppState`, connection pool, workspace root, active session registry. |
 | **Task IPC Command Dispatcher** | `src-tauri/src/commands/tasks.rs` | IPC invoke gateway routing for tasks and agent lifecycle. |
-| **Task Stage Transition Pipeline** | `src-tauri/src/commands/tasks/transitions.rs` | `TaskTransitionPipeline`, hooks, gatekeeper sensors. |
+| **Task Stage Transition Pipeline** | `src-tauri/src/commands/tasks/transitions.rs` | `TaskTransitionPipeline`, hooks, lifecycle execution. |
 | **Task Lifecycle (Create, Delete, Subtask)**| `src-tauri/src/commands/tasks/lifecycle.rs` | Backend-authoritative card lifecycle, auto-unlock. |
 | **Agent Runner Trigger & Steer** | `src-tauri/src/commands/tasks/runner.rs` | `run_agent`, `steer_agent`, active task registry. |
 | **Task Serialization & Storage** | `src-tauri/src/commands/tasks/storage.rs` | `list_tasks`, `sync_tasks_to_disk`, foreign task filtration. |
@@ -90,7 +90,7 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 - **`mod.rs`**: IPC command handler facades and module re-exports.
 - **`state.rs`**: Central application state container (`AppState`) managing database pool, workspace discovery root, and active session registries.
 - **`tasks.rs`**: Top-level IPC command gateway routing commands (`list_tasks`, `create_task`, `advance_task`, `move_task_stage`, etc.) to modular pipelines.
-- **`tasks/transitions.rs`**: Modular `TaskTransitionPipeline`. Executes stage movement, triggers `on_leave` and `on_enter` scripts, runs `gatekeeperSensor` commands in isolated worktrees, and transitions on verdicts (`APPROVED`, `APPROVED_WITH_CAVEATS`, `CHANGES_REQUESTED`).
+- **`tasks/transitions.rs`**: Modular `TaskTransitionPipeline`. Executes stage movement, triggers `on_leave` and `on_enter` scripts, and transitions on verdicts (`APPROVED`, `APPROVED_WITH_CAVEATS`, `CHANGES_REQUESTED`).
 - **`tasks/lifecycle.rs`**: Task creation and destruction commands. Enforces monotonic task numbers, parent-subtask waiting locks, and symmetric worktree teardown.
 - **`tasks/runner.rs`**: Agent execution initiation (`run_agent`, `steer_agent`). Resolves active model hierarchy, prepares primed system messages, and tracks active agent runs.
 - **`tasks/storage.rs`**: Task serialization, foreign task sanitization, and synchronization with disk ledgers and frontend subscribers via `tasks:updated`.

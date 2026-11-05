@@ -5,7 +5,7 @@ import {
   DrawerActivityItem,
 } from '../types';
 import { ToolExecution, CompactionReport, LiveStreamEntry } from '../../../types';
-import { scheduleActivitySave, cancelActivitySave } from '../drawerHelpers';
+import { scheduleActivitySave, cancelActivitySave, computeActivityDurations } from '../drawerHelpers';
 import { useBoardStore } from '../../boardStore';
 
 export const createActivitySlice: StateCreator<
@@ -99,18 +99,23 @@ export const createActivitySlice: StateCreator<
   },
 
   addToolExecution: (taskId, tool) => {
+    const toolWithCreatedAt: ToolExecution = {
+      ...tool,
+      createdAt: tool.createdAt || Date.now(),
+    };
+
     // If tool is a subagent execution, extract subagent_id if already present
-    if (tool.toolName === 'subagent' || tool.toolName === 'subagent_bg') {
-      const pSubId = (tool.params as Record<string, unknown> | undefined)?.subagent_id;
+    if (toolWithCreatedAt.toolName === 'subagent' || toolWithCreatedAt.toolName === 'subagent_bg') {
+      const pSubId = (toolWithCreatedAt.params as Record<string, unknown> | undefined)?.subagent_id;
       if (typeof pSubId === 'string' && pSubId) {
-        get().registerSubagentMapping(tool.id, pSubId);
-      } else if (tool.stdout) {
+        get().registerSubagentMapping(toolWithCreatedAt.id, pSubId);
+      } else if (toolWithCreatedAt.stdout) {
         try {
-          const parsed = JSON.parse(tool.stdout);
-          if (parsed.subagent_id) get().registerSubagentMapping(tool.id, parsed.subagent_id);
+          const parsed = JSON.parse(toolWithCreatedAt.stdout);
+          if (parsed.subagent_id) get().registerSubagentMapping(toolWithCreatedAt.id, parsed.subagent_id);
         } catch {}
-        const match = tool.stdout.match(/\[Subagent ID:\s*([^\s\]]+)\]/);
-        if (match && match[1]) get().registerSubagentMapping(tool.id, match[1]);
+        const match = toolWithCreatedAt.stdout.match(/\[Subagent ID:\s*([^\s\]]+)\]/);
+        if (match && match[1]) get().registerSubagentMapping(toolWithCreatedAt.id, match[1]);
       }
     }
 
@@ -121,8 +126,8 @@ export const createActivitySlice: StateCreator<
       // Obeying § 2.20 & Question Tool Dedup:
       // If tool is question/ask_user and there is already an existing question item in feed,
       // synchronize tool call info into that existing question item rather than duplicating feed!
-      if (tool.toolName === 'question' || tool.toolName === 'ask_user') {
-        const qParamId = (tool.params as Record<string, unknown> | undefined)?.questionId as string | undefined;
+      if (toolWithCreatedAt.toolName === 'question' || toolWithCreatedAt.toolName === 'ask_user') {
+        const qParamId = (toolWithCreatedAt.params as Record<string, unknown> | undefined)?.questionId as string | undefined;
         let qIndex = -1;
         for (let i = existingFeed.length - 1; i >= 0; i--) {
           const f = existingFeed[i];
@@ -134,8 +139,8 @@ export const createActivitySlice: StateCreator<
                 (!qParamId &&
                   f.tool?.status === 'running' &&
                   !(f.tool?.params as Record<string, unknown> | undefined)?.callId))) ||
-            f.id === `q-${tool.id}` ||
-            f.tool?.id === tool.id
+            f.id === `q-${toolWithCreatedAt.id}` ||
+            f.tool?.id === toolWithCreatedAt.id
           ) {
             qIndex = i;
             break;
@@ -149,21 +154,21 @@ export const createActivitySlice: StateCreator<
             ...prev,
             tool: {
               ...prev.tool,
-              ...tool,
-              id: prev.tool?.id || tool.id,
+              ...toolWithCreatedAt,
+              id: prev.tool?.id || toolWithCreatedAt.id,
               toolName: 'question',
               params: {
-                ...(tool.params as Record<string, unknown>),
+                ...(toolWithCreatedAt.params as Record<string, unknown>),
                 ...(prev.tool?.params as Record<string, unknown>),
-                callId: tool.id,
+                callId: toolWithCreatedAt.id,
               },
             },
           };
 
-          const toolExists = existing.some((t) => t.id === tool.id);
+          const toolExists = existing.some((t) => t.id === toolWithCreatedAt.id);
           const updatedTools = toolExists
-            ? existing.map((t) => (t.id === tool.id ? { ...t, ...tool } : t))
-            : [tool, ...existing];
+            ? existing.map((t) => (t.id === toolWithCreatedAt.id ? { ...t, ...toolWithCreatedAt } : t))
+            : [toolWithCreatedAt, ...existing];
 
           return {
             toolExecutions: {
@@ -179,25 +184,27 @@ export const createActivitySlice: StateCreator<
       }
 
       const feedItem: DrawerActivityItem = {
-        id: tool.id,
+        id: toolWithCreatedAt.id,
         type: 'tool',
-        timestamp: tool.timestamp,
-        tool,
+        timestamp: toolWithCreatedAt.timestamp,
+        tool: toolWithCreatedAt,
+        createdAt: toolWithCreatedAt.createdAt,
+        durationMs: toolWithCreatedAt.durationMs || undefined,
       };
 
-      const feedExists = existingFeed.some((item) => item.id === tool.id || item.tool?.id === tool.id);
+      const feedExists = existingFeed.some((item) => item.id === toolWithCreatedAt.id || item.tool?.id === toolWithCreatedAt.id);
       const updatedFeed = feedExists
         ? existingFeed.map((item) =>
-            item.id === tool.id || item.tool?.id === tool.id
-              ? { ...item, tool: { ...item.tool, ...tool } }
+            item.id === toolWithCreatedAt.id || item.tool?.id === toolWithCreatedAt.id
+              ? { ...item, tool: { ...item.tool, ...toolWithCreatedAt } }
               : item
           )
         : [...existingFeed, feedItem];
 
-      const toolExists = existing.some((t) => t.id === tool.id);
+      const toolExists = existing.some((t) => t.id === toolWithCreatedAt.id);
       const updatedTools = toolExists
-        ? existing.map((t) => (t.id === tool.id ? { ...t, ...tool } : t))
-        : [tool, ...existing];
+        ? existing.map((t) => (t.id === toolWithCreatedAt.id ? { ...t, ...toolWithCreatedAt } : t))
+        : [toolWithCreatedAt, ...existing];
 
       return {
         toolExecutions: {
@@ -231,7 +238,22 @@ export const createActivitySlice: StateCreator<
 
     set((state) => {
       const existing = state.toolExecutions[taskId] || [];
-      const updated = existing.map((t) => (t.id === toolId ? { ...t, ...partial } : t));
+      const existingTool = existing.find((t) => t.id === toolId);
+
+      let durationMs = (typeof partial.durationMs === 'number' && Number.isFinite(partial.durationMs))
+        ? partial.durationMs
+        : undefined;
+
+      if (durationMs === undefined && existingTool?.createdAt) {
+        durationMs = Math.max(0, Date.now() - existingTool.createdAt);
+      }
+
+      const mergedPartial: Partial<ToolExecution> = {
+        ...partial,
+        ...(typeof durationMs === 'number' && Number.isFinite(durationMs) ? { durationMs } : {}),
+      };
+
+      const updated = existing.map((t) => (t.id === toolId ? { ...t, ...mergedPartial } : t));
 
       const existingFeed = state.activityFeed[taskId] || [];
       const updatedFeed = existingFeed.map((item) => {
@@ -244,7 +266,8 @@ export const createActivitySlice: StateCreator<
         ) {
           return {
             ...item,
-            tool: item.tool ? { ...item.tool, ...partial } : undefined,
+            ...(typeof durationMs === 'number' && Number.isFinite(durationMs) ? { durationMs } : {}),
+            tool: item.tool ? { ...item.tool, ...mergedPartial } : undefined,
           };
         }
         return item;
@@ -273,6 +296,7 @@ export const createActivitySlice: StateCreator<
       timestamp,
       durationMs: 0,
       status: 'running',
+      createdAt: Date.now(),
       params: {
         taskId,
         title: 'Оптимизация контекста',
@@ -667,13 +691,35 @@ export const createActivitySlice: StateCreator<
                 dedupedItems.push(item);
               }
 
+              const computedDurations = computeActivityDurations(dedupedItems, false);
               const tools: ToolExecution[] = [];
               const thoughts: LiveStreamEntry[] = [];
               const outputs: LiveStreamEntry[] = [];
 
-              for (const item of dedupedItems) {
+              for (let i = 0; i < dedupedItems.length; i++) {
+                const item = dedupedItems[i];
+                const computedDur = computedDurations[i];
                 if (item.type === 'tool' && item.tool) {
-                  tools.unshift(item.tool);
+                  const rawToolDur = item.tool.durationMs ?? (item.tool as any).duration_ms;
+                  const rawItemDur = item.durationMs ?? (item as any).duration_ms;
+                  const dur =
+                    (typeof rawToolDur === 'number' && rawToolDur > 0)
+                      ? rawToolDur
+                      : (typeof rawItemDur === 'number' && rawItemDur > 0)
+                        ? rawItemDur
+                        : (typeof computedDur === 'number' && computedDur > 0)
+                          ? computedDur
+                          : 0;
+
+                  const toolWithDuration: ToolExecution = {
+                    ...item.tool,
+                    durationMs: dur,
+                    createdAt: item.tool.createdAt || item.createdAt || (item.timestamp && !isNaN(new Date(item.timestamp).getTime()) ? new Date(item.timestamp).getTime() : undefined),
+                  };
+                  item.tool = toolWithDuration;
+                  item.durationMs = dur > 0 ? dur : undefined;
+
+                  tools.unshift(toolWithDuration);
                   if (item.tool.toolName === 'subagent' || item.tool.toolName === 'subagent_bg') {
                     const pSubId = (item.tool.params as Record<string, unknown> | undefined)?.subagent_id;
                     if (typeof pSubId === 'string' && pSubId) {
@@ -688,12 +734,20 @@ export const createActivitySlice: StateCreator<
                     }
                   }
                 } else if (item.type === 'thought') {
+                  const rawItemDur = item.durationMs ?? (item as any).duration_ms;
+                  const dur =
+                    (typeof rawItemDur === 'number' && rawItemDur > 0)
+                      ? rawItemDur
+                      : (typeof computedDur === 'number' && computedDur > 0)
+                        ? computedDur
+                        : undefined;
+                  item.durationMs = dur;
                   thoughts.push({
                     id: item.id,
                     timestamp: item.timestamp,
                     type: 'thought',
                     content: item.content || '',
-                    durationMs: item.durationMs,
+                    durationMs: dur,
                     createdAt: item.createdAt,
                   });
                 } else {

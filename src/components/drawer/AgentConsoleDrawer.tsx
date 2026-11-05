@@ -624,7 +624,7 @@ export default function AgentConsoleDrawer() {
           </ErrorBoundary>
 
           {/* Center Column: Activity Feed + Steer Bar - DSH-style inset cockpit card */}
-          <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] dark:bg-[#090a0f] overflow-hidden transition-colors rounded-tl-xl rounded-tr-xl border-t border-x border-[#ebebeb] dark:border-[#21262d] shadow-2xs mt-1 mx-1.5">
+          <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-[#fafafa] dark:bg-[#090a0f] overflow-hidden transition-colors rounded-xl border border-[#ebebeb] dark:border-[#21262d] shadow-2xs my-1.5 mx-1.5">
             <ErrorBoundary scopeLabel="чат задачи" onClose={closeDrawer}>
               {/* Modular Activity Stream: Objective card, Relay handoff, Live thinking, Tools, Subagent cards */}
               <DrawerActivityStream
