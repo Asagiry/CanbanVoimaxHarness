@@ -35,14 +35,26 @@ if not errorlevel 1 (
 )
 
 echo [CVH Merge Hook] Checking out main...
+REM Discard uncommitted dual-write residue before checkout/pull/merge (§ 2.23)
+git restore --staged .cvh >nul 2>&1
+git restore .cvh >nul 2>&1
+
 git checkout main
 if errorlevel 1 (
     echo [CVH Merge Hook] ERROR: Failed to checkout main >&2
     exit /b 1
 )
 
+REM Discard uncommitted dual-write residue on main before merge
+git restore --staged .cvh >nul 2>&1
+git restore .cvh >nul 2>&1
+
 echo [CVH Merge Hook] Pulling latest main from origin...
 git pull --rebase origin main >nul 2>&1
+
+REM Ensure clean state before merge
+git restore --staged .cvh >nul 2>&1
+git restore .cvh >nul 2>&1
 
 echo [CVH Merge Hook] Merging branch '%CVH_BRANCH%' into main...
 git merge --no-ff "%CVH_BRANCH%" -m "feat(%CVH_TASK_ID%): %CVH_TASK_TITLE% [approved]"
