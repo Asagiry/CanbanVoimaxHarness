@@ -36,7 +36,7 @@ export const TodoChecklist: React.FC<TodoChecklistProps> = ({
     <div className={`space-y-2.5 ${className}`}>
       {/* Dual Progress Bar Track */}
       {showProgressBar && total > 0 && (
-        <div className="w-full bg-[#e4e4e7] dark:bg-[#21262d] h-1.5 rounded-full overflow-hidden flex">
+        <div className="w-full bg-[#e4e4e7] dark:bg-[#232328] h-1.5 rounded-full overflow-hidden flex">
           <div
             className="bg-emerald-500 h-full transition-all duration-300"
             style={{ width: `${(completed / total) * 100}%` }}

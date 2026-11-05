@@ -192,20 +192,20 @@ export const ThoughtStreamCard = memo(function ThoughtStreamCard({
 
   return (
     <div className="animate-silk-entrance motion-reduce:animate-none">
-      <div className="rounded-md border border-[#ebebeb] dark:border-[#21262d] bg-[#fcfcfc] dark:bg-[#0d1117] overflow-hidden shadow-xs transition duration-150 animate-in fade-in duration-300 slide-in-from-top-1">
+      <div className="rounded-md border border-[#ebebeb] dark:border-[#212126] bg-[#fcfcfc] dark:bg-[#111114] overflow-hidden shadow-xs transition duration-150 animate-in fade-in duration-300 slide-in-from-top-1">
         {/* Header bar */}
         <div
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center justify-between px-3 py-2 bg-[#f8f8f9] dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#1c2128] cursor-pointer transition select-none"
+          className="flex items-center justify-between px-3 py-2 bg-[#f8f8f9] dark:bg-[#17171b] hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23] cursor-pointer transition select-none"
         >
           <div className="flex items-center space-x-2">
             {isExpanded ? (
-              <ChevronDown className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e]" />
+              <ChevronDown className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a]" />
             ) : (
-              <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e]" />
+              <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a]" />
             )}
-            <Brain className="h-3.5 w-3.5 text-[#171717] dark:text-[#8b949e]" />
-            <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f0f6fc]">
+            <Brain className="h-3.5 w-3.5 text-[#171717] dark:text-[#71717a]" />
+            <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f4f4f5]">
               {isReasoningTag ? '<reasoning>' : '<thinking>'}
             </span>
             {!isFinished && isTaskRunning && (
@@ -219,7 +219,7 @@ export const ThoughtStreamCard = memo(function ThoughtStreamCard({
             )}
           </div>
 
-          <div className="flex items-center space-x-2.5 text-[10px] font-mono text-[#71717a] dark:text-[#8b949e]">
+          <div className="flex items-center space-x-2.5 text-[10px] font-mono text-[#71717a] dark:text-[#71717a]">
             {timerText && (
               <span className="flex items-center space-x-1 tabular-nums">
                 <Clock className="h-3 w-3" />
@@ -231,7 +231,7 @@ export const ThoughtStreamCard = memo(function ThoughtStreamCard({
               type="button"
               onClick={handleCopy}
               aria-label="Скопировать размышления"
-              className="p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-white dark:hover:bg-[#21262d] transition cursor-pointer"
+              className="p-1 rounded text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-white dark:hover:bg-[#232328] transition cursor-pointer"
             >
               {copied ? (
                 <Check className="h-3 w-3 text-emerald-600" />
@@ -247,12 +247,12 @@ export const ThoughtStreamCard = memo(function ThoughtStreamCard({
           <div
             ref={scrollRef}
             onScroll={handleBodyScroll}
-            className="px-3 pt-2.5 pb-2 border-t border-[#ebebeb] dark:border-[#21262d] bg-[#ffffff] dark:bg-[#090a0f] font-mono text-[13px] leading-relaxed text-[#333333] dark:text-[#c9d1d9] whitespace-pre-wrap select-text max-h-96 overflow-y-auto"
+            className="px-3 pt-2.5 pb-2 border-t border-[#ebebeb] dark:border-[#212126] bg-[#ffffff] dark:bg-[#0b0b0e] font-mono text-[13px] leading-relaxed text-[#333333] dark:text-[#a1a1aa] whitespace-pre-wrap select-text max-h-96 overflow-y-auto"
           >
             {visibleText}
             {isTyping && (
               <span
-                className="inline-block w-1.5 h-3.5 bg-[#171717] dark:bg-[#f0f6fc] animate-pulse ml-0.5 align-middle select-none"
+                className="inline-block w-1.5 h-3.5 bg-[#171717] dark:bg-[#f4f4f5] animate-pulse ml-0.5 align-middle select-none"
               />
             )}
           </div>

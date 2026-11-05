@@ -35,7 +35,7 @@ export const CardWaitingSubtaskBadge = memo(function CardWaitingSubtaskBadge({
     <button
       type="button"
       onClick={handleClick}
-      className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#d97706] dark:text-[#f59e0b] bg-[#fefce8] dark:bg-[#161b22] border border-[#fef08a] dark:border-[#30363d] hover:border-[#f59e0b] transition cursor-pointer"
+      className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#d97706] dark:text-[#f59e0b] bg-[#fefce8] dark:bg-[#17171b] border border-[#fef08a] dark:border-[#2c2c33] hover:border-[#f59e0b] transition cursor-pointer"
       aria-label={waitingForSubtaskId ? `${t('status.waitingSubtask')}: ${waitingForSubtaskId}` : undefined}
     >
       <span className="h-1.5 w-1.5 rounded-full bg-[#f59e0b]" />
@@ -58,13 +58,13 @@ export const CardSubtaskProgressBar = memo(function CardSubtaskProgressBar({
 
   return (
     <div className="w-full mt-1.5 mb-1 flex items-center gap-1.5">
-      <div className="flex-1 h-1 bg-[#e5e7eb] dark:bg-[#21262d] rounded-full overflow-hidden">
+      <div className="flex-1 h-1 bg-[#e5e7eb] dark:bg-[#212126] rounded-full overflow-hidden">
         <div
           className="h-full bg-[#8b5cf6] transition-all duration-300 rounded-full"
           style={{ width: `${percentage}%` }}
         />
       </div>
-      <span className="text-[9px] font-mono tabular-nums text-[#8f8f8f] dark:text-[#8b949e]">
+      <span className="text-[9px] font-mono tabular-nums text-[#8f8f8f] dark:text-[#71717a]">
         {completedCount}/{totalCount}
       </span>
     </div>
@@ -92,14 +92,14 @@ export const CardSubtaskBadge = memo(function CardSubtaskBadge({
   }
 
   return (
-    <div className="mt-2.5 pt-2 border-t border-[#ebebeb] dark:border-[#21262d]">
+    <div className="mt-2.5 pt-2 border-t border-[#ebebeb] dark:border-[#212126]">
       <button
         type="button"
         onClick={(e) => {
           e.stopPropagation();
           setIsSubtasksOpen(!isSubtasksOpen);
         }}
-        className="flex items-center justify-between w-full text-[10px] font-mono font-medium text-[#4d4d4d] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] transition cursor-pointer py-1 px-1 rounded hover:bg-[#f4f4f5] dark:hover:bg-[#21262d]"
+        className="flex items-center justify-between w-full text-[10px] font-mono font-medium text-[#4d4d4d] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] transition cursor-pointer py-1 px-1 rounded hover:bg-[#f4f4f5] dark:hover:bg-[#232328]"
         aria-label={t('card.expandSubtasks')}
       >
         <span className="flex items-center gap-1.5">
@@ -141,20 +141,20 @@ export const CardSubtaskBadge = memo(function CardSubtaskBadge({
                   e.stopPropagation();
                   if (subId) openDrawer(subId);
                 }}
-                className="flex items-center justify-between p-1.5 rounded bg-[#f8f9fa] dark:bg-[#0d1117] hover:bg-[#f1f3f5] dark:hover:bg-[#21262d] border border-[#e9ecef] dark:border-[#30363d] cursor-pointer transition text-[10px] font-mono group"
+                className="flex items-center justify-between p-1.5 rounded bg-[#f8f9fa] dark:bg-[#111114] hover:bg-[#f1f3f5] dark:hover:bg-[#232328] border border-[#e9ecef] dark:border-[#2c2c33] cursor-pointer transition text-[10px] font-mono group"
                 aria-label={t('card.openSubtaskDialog', { id: sub.id })}
               >
                 <div className="flex items-center gap-1.5 truncate min-w-0">
                   <span className="font-semibold text-[#8b5cf6] shrink-0">
                     {subSuffix} {stageTitle}
                   </span>
-                  <span className="text-[#666666] dark:text-[#8b949e] truncate">
+                  <span className="text-[#666666] dark:text-[#71717a] truncate">
                     {(sub?.title ?? '').replace(/^\[.*?\]\s*/, '')}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0 ml-2">
                   {subDuration > 0 && (
-                    <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] tabular-nums">
+                    <span className="text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a] tabular-nums">
                       {formatStageDuration(subDuration, language)}
                     </span>
                   )}
@@ -162,10 +162,10 @@ export const CardSubtaskBadge = memo(function CardSubtaskBadge({
                     <span
                       className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] font-mono leading-none ${
                         sub?.verdict === 'APPROVED'
-                          ? 'bg-[#f0fdf4] dark:bg-[#161b22] text-[#15803d] dark:text-[#7ee787] border border-[#bbf7d0] dark:border-[#238636]'
+                          ? 'bg-[#f0fdf4] dark:bg-[#17171b] text-[#15803d] dark:text-[#7ee787] border border-[#bbf7d0] dark:border-[#238636]'
                           : sub?.verdict === 'APPROVED_WITH_CAVEATS'
-                          ? 'bg-[#fffbeb] dark:bg-[#161b22] text-[#b45309] dark:text-[#facc15] border border-[#fde68a] dark:border-[#713f12]'
-                          : 'bg-[#fef2f2] dark:bg-[#161b22] text-[#b91c1c] dark:text-[#ff7b72] border border-[#fecaca] dark:border-[#da3633]'
+                          ? 'bg-[#fffbeb] dark:bg-[#17171b] text-[#b45309] dark:text-[#facc15] border border-[#fde68a] dark:border-[#713f12]'
+                          : 'bg-[#fef2f2] dark:bg-[#17171b] text-[#b91c1c] dark:text-[#ff7b72] border border-[#fecaca] dark:border-[#da3633]'
                       }`}
                     >
                       {sub?.verdict === 'APPROVED'
@@ -175,11 +175,11 @@ export const CardSubtaskBadge = memo(function CardSubtaskBadge({
                         : 'REWORK'}
                     </span>
                   ) : (
-                    <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-mono leading-none bg-[#f4f4f5] dark:bg-[#161b22] text-[#666666] dark:text-[#8b949e] border border-[#ebebeb] dark:border-[#30363d]">
+                    <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-mono leading-none bg-[#f4f4f5] dark:bg-[#17171b] text-[#666666] dark:text-[#71717a] border border-[#ebebeb] dark:border-[#2c2c33]">
                       Готово
                     </span>
                   )}
-                  <MessageSquare className="h-3 w-3 text-[#8f8f8f] dark:text-[#8b949e] group-hover:text-[#171717] dark:group-hover:text-[#f0f6fc] transition" />
+                  <MessageSquare className="h-3 w-3 text-[#8f8f8f] dark:text-[#71717a] group-hover:text-[#171717] dark:group-hover:text-[#f4f4f5] transition" />
                 </div>
               </div>
             );

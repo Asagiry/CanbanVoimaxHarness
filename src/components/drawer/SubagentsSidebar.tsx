@@ -442,21 +442,21 @@ export default function SubagentsSidebar({
   return (
     <aside
       style={{ width: `${isCollapsed ? 44 : sidebarWidth}px` }}
-      className={`relative shrink-0 my-1.5 ml-1.5 rounded-xl border border-[#ebebeb] dark:border-[#21262d] shadow-2xs bg-white dark:bg-[#0d1117] flex flex-col min-h-0 h-[calc(100%-0.75rem)] overflow-hidden select-none transition-colors ${
+      className={`relative shrink-0 my-1.5 ml-1.5 rounded-xl border border-[#ebebeb] dark:border-[#212126] shadow-2xs bg-white dark:bg-[#111114] flex flex-col min-h-0 h-[calc(100%-0.75rem)] overflow-hidden select-none transition-colors ${
         isResizing ? 'select-none' : 'transition-[width] duration-200 ease-out'
       } ${className || ''}`}
       aria-label={t('subagents.panelAria')}
     >
       {/* Collapsed Rail View (44px wide, smoothly fades in when collapsed) */}
       <div
-        className={`absolute inset-0 w-11 bg-white dark:bg-[#0d1117] flex flex-col items-center py-3 select-none transition-opacity duration-200 ${
+        className={`absolute inset-0 w-11 bg-white dark:bg-[#111114] flex flex-col items-center py-3 select-none transition-opacity duration-200 ${
           isCollapsed ? 'opacity-100 pointer-events-auto z-10' : 'opacity-0 pointer-events-none -z-10'
         }`}
       >
         <button
           type="button"
           onClick={onToggleCollapse}
-          className="p-1.5 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
+          className="p-1.5 rounded-md text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#17171b] transition cursor-pointer"
           aria-label={t('subagents.expandPanel')}
         >
           <PanelLeftOpen className="h-4 w-4" />
@@ -466,7 +466,7 @@ export default function SubagentsSidebar({
           className="mt-6 flex-1 flex items-center justify-center cursor-pointer group"
           aria-label={t('subagents.expandPanel')}
         >
-          <span className="text-[11px] font-mono text-[#8f8f8f] dark:text-[#8b949e] group-hover:text-[#171717] dark:group-hover:text-[#f0f6fc] transition tracking-wider [writing-mode:vertical-rl] rotate-180">
+          <span className="text-[11px] font-mono text-[#8f8f8f] dark:text-[#71717a] group-hover:text-[#171717] dark:group-hover:text-[#f4f4f5] transition tracking-wider [writing-mode:vertical-rl] rotate-180">
             {t('subagents.title')}
           </span>
         </div>
@@ -497,13 +497,13 @@ export default function SubagentsSidebar({
         )}
 
         {/* Sidebar Header */}
-        <div className="h-10 px-3.5 border-b border-[#ebebeb] dark:border-[#21262d] flex items-center justify-between shrink-0 bg-[#fafafa] dark:bg-[#161b22]">
+        <div className="h-10 px-3.5 border-b border-[#ebebeb] dark:border-[#212126] flex items-center justify-between shrink-0 bg-[#fafafa] dark:bg-[#17171b]">
           <div className="flex items-center space-x-2 min-w-0">
-            <Bot className="h-4 w-4 text-[#171717] dark:text-[#f0f6fc] shrink-0" />
-            <span className="font-sans font-semibold text-xs text-[#171717] dark:text-[#f0f6fc] tracking-tight">
+            <Bot className="h-4 w-4 text-[#171717] dark:text-[#f4f4f5] shrink-0" />
+            <span className="font-sans font-semibold text-xs text-[#171717] dark:text-[#f4f4f5] tracking-tight">
               {t('subagents.title')}
             </span>
-            <span className="inline-flex items-center justify-center font-mono text-[11px] tabular-nums px-1.5 py-0.5 rounded-full leading-none bg-[#e4e4e7] dark:bg-[#21262d] text-[#52525b] dark:text-[#8b949e] font-medium">
+            <span className="inline-flex items-center justify-center font-mono text-[11px] tabular-nums px-1.5 py-0.5 rounded-full leading-none bg-[#e4e4e7] dark:bg-[#232328] text-[#52525b] dark:text-[#71717a] font-medium">
               {allSubagents.length}
             </span>
             {runningCount > 0 && (
@@ -517,7 +517,7 @@ export default function SubagentsSidebar({
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="p-1 rounded-md text-[#71717a] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#e4e4e7] dark:hover:bg-[#21262d] transition cursor-pointer"
+            className="p-1 rounded-md text-[#71717a] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#e4e4e7] dark:hover:bg-[#232328] transition cursor-pointer"
             aria-label={t('subagents.collapsePanel')}
           >
             <PanelLeftClose className="h-3.5 w-3.5" />
@@ -534,10 +534,10 @@ export default function SubagentsSidebar({
               {boardSubtasks.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between px-1 pt-0.5 pb-0.5">
-                    <span className="text-[11px] font-mono uppercase tracking-wider text-[#71717a] dark:text-[#8b949e] font-semibold">
+                    <span className="text-[11px] font-mono uppercase tracking-wider text-[#71717a] dark:text-[#71717a] font-semibold">
                       {t('subagents.boardSubtasks')}
                     </span>
-                    <span className="inline-flex items-center justify-center text-[10px] font-mono tabular-nums px-1.5 py-0.5 rounded-full leading-none bg-[#e4e4e7] dark:bg-[#21262d] text-[#52525b] dark:text-[#8b949e] font-medium">
+                    <span className="inline-flex items-center justify-center text-[10px] font-mono tabular-nums px-1.5 py-0.5 rounded-full leading-none bg-[#e4e4e7] dark:bg-[#232328] text-[#52525b] dark:text-[#71717a] font-medium">
                       {boardSubtasks.length}
                     </span>
                   </div>
@@ -564,7 +564,7 @@ export default function SubagentsSidebar({
                             openDrawer(sub.id);
                           }
                         }}
-                        className="group relative rounded-lg border p-2.5 transition-all duration-150 cursor-pointer select-none text-left bg-white dark:bg-[#0d1117] border-[#ebebeb] dark:border-[#21262d] hover:bg-[#fafafa] dark:hover:bg-[#161b22] hover:border-[#d4d4d8] dark:hover:border-[#30363d]"
+                        className="group relative rounded-lg border p-2.5 transition-all duration-150 cursor-pointer select-none text-left bg-white dark:bg-[#111114] border-[#ebebeb] dark:border-[#212126] hover:bg-[#fafafa] dark:hover:bg-[#17171b] hover:border-[#d4d4d8] dark:hover:border-[#2c2c33]"
                       >
                         {/* Top row: GitBranch + Stage Badge + Task ID + Status */}
                         <div className="flex items-center justify-between gap-1.5 mb-1.5">
@@ -576,7 +576,7 @@ export default function SubagentsSidebar({
                             >
                               {stageBadge}
                             </span>
-                            <span className="font-mono text-[11px] font-semibold text-[#52525b] dark:text-[#8b949e]">
+                            <span className="font-mono text-[11px] font-semibold text-[#52525b] dark:text-[#71717a]">
                               {sub.id}
                             </span>
                           </div>
@@ -623,21 +623,21 @@ export default function SubagentsSidebar({
                         </div>
 
                         {/* Title */}
-                        <div className="font-sans font-medium text-xs text-[#171717] dark:text-[#f0f6fc] group-hover:text-black dark:group-hover:text-white transition-colors line-clamp-2 leading-snug mb-2">
+                        <div className="font-sans font-medium text-xs text-[#171717] dark:text-[#f4f4f5] group-hover:text-black dark:group-hover:text-white transition-colors line-clamp-2 leading-snug mb-2">
                           {sub.title}
                         </div>
 
                         {/* Footer: Duration + Steps */}
-                        <div className="flex items-center justify-between text-[11px] font-mono text-[#71717a] dark:text-[#8b949e] pt-1.5 border-t border-[#f4f4f5] dark:border-[#21262d]/60">
+                        <div className="flex items-center justify-between text-[11px] font-mono text-[#71717a] dark:text-[#71717a] pt-1.5 border-t border-[#f4f4f5] dark:border-[#212126]/60">
                           <div className="flex items-center space-x-2">
                             <div className="flex items-center space-x-1">
-                              <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
+                              <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
                               <span className="tabular-nums">
                                 {formatDuration(sub.durationMs, sub.status === 'running')}
                               </span>
                             </div>
                             <div className="flex items-center space-x-1">
-                              <Layers className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
+                              <Layers className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
                               <span className="tabular-nums">{formatSteps(sub.stepsCount || 0, language)}</span>
                             </div>
                           </div>
@@ -652,10 +652,10 @@ export default function SubagentsSidebar({
               {inProcessSubagents.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between px-1 pt-2 pb-0.5">
-                    <span className="text-[11px] font-mono uppercase tracking-wider text-[#71717a] dark:text-[#8b949e] font-semibold">
+                    <span className="text-[11px] font-mono uppercase tracking-wider text-[#71717a] dark:text-[#71717a] font-semibold">
                       {t('subagents.inProcess')}
                     </span>
-                    <span className="inline-flex items-center justify-center text-[10px] font-mono tabular-nums px-1.5 py-0.5 rounded-full leading-none bg-[#e4e4e7] dark:bg-[#21262d] text-[#52525b] dark:text-[#8b949e] font-medium">
+                    <span className="inline-flex items-center justify-center text-[10px] font-mono tabular-nums px-1.5 py-0.5 rounded-full leading-none bg-[#e4e4e7] dark:bg-[#232328] text-[#52525b] dark:text-[#71717a] font-medium">
                       {inProcessSubagents.length}
                     </span>
                   </div>
@@ -694,7 +694,7 @@ export default function SubagentsSidebar({
                         className={`group relative rounded-lg border p-2.5 transition-all duration-150 cursor-pointer select-none text-left ${
                           isActive
                             ? 'shadow-xs'
-                            : 'bg-white dark:bg-[#0d1117] border-[#ebebeb] dark:border-[#21262d] hover:bg-[#fafafa] dark:hover:bg-[#161b22] hover:border-[#d4d4d8] dark:hover:border-[#30363d]'
+                            : 'bg-white dark:bg-[#111114] border-[#ebebeb] dark:border-[#212126] hover:bg-[#fafafa] dark:hover:bg-[#17171b] hover:border-[#d4d4d8] dark:hover:border-[#2c2c33]'
                         }`}
                         style={isActive ? activeCardStyle : undefined}
                       >
@@ -704,12 +704,12 @@ export default function SubagentsSidebar({
                             {sub.isBg ? (
                               <div className="relative shrink-0 flex items-center justify-center">
                                 <Layers className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
-                                <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-purple-500 ring-1 ring-white dark:ring-[#0d1117]" />
+                                <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-purple-500 ring-1 ring-white dark:ring-[#111114]" />
                               </div>
                             ) : (
                               <div className="relative shrink-0 flex items-center justify-center">
                                 <Zap className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 fill-sky-500/20" />
-                                <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-sky-500 ring-1 ring-white dark:ring-[#0d1117]" />
+                                <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-sky-500 ring-1 ring-white dark:ring-[#111114]" />
                               </div>
                             )}
                             <span
@@ -768,17 +768,17 @@ export default function SubagentsSidebar({
                         </div>
 
                         {/* Subagent Title */}
-                        <div className="font-sans font-medium text-xs text-[#171717] dark:text-[#f0f6fc] group-hover:text-black dark:group-hover:text-white transition-colors line-clamp-2 leading-snug mb-2">
+                        <div className="font-sans font-medium text-xs text-[#171717] dark:text-[#f4f4f5] group-hover:text-black dark:group-hover:text-white transition-colors line-clamp-2 leading-snug mb-2">
                           {formatSubagentDisplayTitle(sub.title, language)}
                         </div>
 
                         {/* Card Footer: Metrics (Duration + Steps + Execution Mode) */}
-                        <div className="flex items-center justify-between text-[11px] font-mono text-[#71717a] dark:text-[#8b949e] pt-1.5 border-t border-[#f4f4f5] dark:border-[#21262d]/60">
+                        <div className="flex items-center justify-between text-[11px] font-mono text-[#71717a] dark:text-[#71717a] pt-1.5 border-t border-[#f4f4f5] dark:border-[#212126]/60">
                           <div className="flex items-center space-x-2">
                             <div
                               className="flex items-center space-x-1"
                             >
-                              <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
+                              <Clock className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
                               <span className="tabular-nums">
                                 {(() => {
                                   const isSubRunning = sub.status === 'running';
@@ -819,7 +819,7 @@ export default function SubagentsSidebar({
                             <div
                               className="flex items-center space-x-1"
                             >
-                              <Layers className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#6e7681]" />
+                              <Layers className="h-3 w-3 shrink-0 text-[#a1a1aa] dark:text-[#52525b]" />
                               <span className="tabular-nums">{formatSteps(sub.stepsCount || 0, language)}</span>
                             </div>
                           </div>

@@ -88,6 +88,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **New Cortex File Form** | `src/components/cortex/NewCortexFileForm.tsx` | Inline form for creating new rules or personas. |
 | **Modular Rule Editor Modal** | `src/components/cortex/RuleEditorModal.tsx` | Markdown editor for `.cvh/rules/*.md` and role rules. |
 | **Cortex UI Types & Interfaces** | `src/components/cortex/types.ts` | Cortex explorer interfaces, forms, and tree nodes. |
+| **Cortex Antigravity Dark Unit Tests** | `src/components/cortex/__tests__/cortexAntigravityDark.test.ts` | Vitest suite validating 0 legacy tokens across Cortex & common components. |
 | **Dynamic Role Icon** | `src/components/common/AgentIcon.tsx` | SVG/Lucide persona icon with nominal color mapping. |
 | **Brand & File Extension Icons** | `src/components/common/BrandFileIcons.tsx` | File extension brand iconography (TS, RS, JSON, MD). |
 | **Application Error Boundary** | `src/components/common/ErrorBoundary.tsx` | React 19 error boundary preventing entire app unmount. |

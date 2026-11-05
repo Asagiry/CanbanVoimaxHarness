@@ -420,7 +420,7 @@ export default function KanbanBoard() {
   const rootTasksCount = currentBoardTasks.filter((t) => !t.parentId).length;
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#fafafa] dark:bg-[#090a0f] transition-colors">
+    <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#fafafa] dark:bg-[#0b0b0e] transition-colors">
       <BoardTabsHeader
         tasksCount={rootTasksCount}
         onOpenAddColumn={() => setIsAddColumnOpen(true)}
@@ -428,7 +428,7 @@ export default function KanbanBoard() {
       />
 
       {columnsError && (
-        <div className="mx-3.5 mt-2 flex items-center justify-between gap-2 rounded-md border border-[#fecaca] dark:border-[#3b1219] bg-[#fef2f2] dark:bg-[#161b22] px-3 py-1.5 text-xs font-sans text-[#ef4444]">
+        <div className="mx-3.5 mt-2 flex items-center justify-between gap-2 rounded-md border border-[#fecaca] dark:border-[#3b1219] bg-[#fef2f2] dark:bg-[#17171b] px-3 py-1.5 text-xs font-sans text-[#ef4444]">
           <span>{columnsError}</span>
           <button
             type="button"

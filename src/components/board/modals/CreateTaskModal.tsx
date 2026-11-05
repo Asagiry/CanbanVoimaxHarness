@@ -225,17 +225,17 @@ export default function CreateTaskModal({
         }}
       >
         <div
-          className="relative flex flex-col w-[620px] max-w-[95%] max-h-[90%] rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] shadow-md p-5 text-[#171717] dark:text-[#f0f6fc] transition-colors overflow-hidden"
+          className="relative flex flex-col w-[620px] max-w-[95%] max-h-[90%] rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] shadow-md p-5 text-[#171717] dark:text-[#f4f4f5] transition-colors overflow-hidden"
           onPaste={handleModalPaste}
         >
-          <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#21262d] shrink-0">
-            <h3 className="text-sm font-semibold text-[#171717] dark:text-[#f0f6fc]">
+          <div className="flex items-center justify-between pb-3 border-b border-[#ebebeb] dark:border-[#212126] shrink-0">
+            <h3 className="text-sm font-semibold text-[#171717] dark:text-[#f4f4f5]">
               {t('newTask.modalTitle')}
             </h3>
             <button
               type="button"
               onClick={onClose}
-              className="p-1 rounded-md text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#161b22] transition cursor-pointer"
+              className="p-1 rounded-md text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#17171b] transition cursor-pointer"
               aria-label={t('common.close')}
             >
               <X className="h-4 w-4" />
@@ -247,7 +247,7 @@ export default function CreateTaskModal({
             className="mt-4 flex flex-col flex-1 min-h-0 overflow-y-auto space-y-4 text-xs pr-1"
           >
             <div>
-              <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">
+              <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1">
                 {t('newTask.titleLabel')}
               </label>
               <input
@@ -257,12 +257,12 @@ export default function CreateTaskModal({
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 placeholder={t('newTask.titlePlaceholder')}
-                className="w-full px-3 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-sans transition"
+                className="w-full px-3 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-sans transition"
               />
             </div>
 
             <div>
-              <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">
+              <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1">
                 {t('newTask.descLabel')}
               </label>
               <textarea
@@ -270,23 +270,23 @@ export default function CreateTaskModal({
                 value={newDescription}
                 onChange={(e) => setNewDescription(e.target.value)}
                 placeholder={t('newTask.descPlaceholder')}
-                className="w-full min-h-[130px] px-3 py-2 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] placeholder:text-[#8f8f8f] dark:placeholder:text-[#8b949e] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-sans leading-relaxed resize-y transition"
+                className="w-full min-h-[130px] px-3 py-2 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] placeholder:text-[#8f8f8f] dark:placeholder:text-[#71717a] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-sans leading-relaxed resize-y transition"
               />
             </div>
 
             {/* Target Column Selection (if columns provided) */}
             {columns && columns.length > 0 && (
               <div>
-                <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">
+                <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1">
                   {t('board.columnTitleLabel')}
                 </label>
                 <select
                   value={selectedColumnId}
                   onChange={(e) => setSelectedColumnId(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-sans text-xs cursor-pointer transition"
+                  className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-sans text-xs cursor-pointer transition"
                 >
                   {columns.map((col) => (
-                    <option key={col.id} value={col.id} className="dark:bg-[#161b22] dark:text-[#f0f6fc]">
+                    <option key={col.id} value={col.id} className="dark:bg-[#17171b] dark:text-[#f4f4f5]">
                       {col.title}
                     </option>
                   ))}
@@ -297,13 +297,13 @@ export default function CreateTaskModal({
             {/* Attachments Section */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block font-sans text-[#4d4d4d] dark:text-[#c9d1d9] font-medium">
+                <label className="block font-sans text-[#4d4d4d] dark:text-[#a1a1aa] font-medium">
                   {t('newTask.attachmentsLabel')}
                 </label>
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-sans text-[#4d4d4d] dark:text-[#c9d1d9] bg-[#fafafa] dark:bg-[#161b22] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] transition cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-sans text-[#4d4d4d] dark:text-[#a1a1aa] bg-[#fafafa] dark:bg-[#17171b] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] transition cursor-pointer"
                 >
                   <ImagePlus className="h-3 w-3" />
                   <span>{t('newTask.pasteHint')}</span>
@@ -320,11 +320,11 @@ export default function CreateTaskModal({
 
               {/* Thumbnail gallery */}
               {newAttachments.length > 0 ? (
-                <div className="flex flex-wrap gap-2.5 p-2 rounded-md border border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22]/50 max-h-40 overflow-y-auto">
+                <div className="flex flex-wrap gap-2.5 p-2 rounded-md border border-[#ebebeb] dark:border-[#2c2c33] bg-[#fafafa] dark:bg-[#17171b]/50 max-h-40 overflow-y-auto">
                   {newAttachments.map((att, idx) => (
                     <div
                       key={att.id}
-                      className="group relative flex flex-col items-center w-24 rounded-md overflow-hidden border border-[#ebebeb] dark:border-[#30363d] bg-white dark:bg-[#0d1117] shadow-2xs hover:border-[#171717] dark:hover:border-[#f0f6fc] transition"
+                      className="group relative flex flex-col items-center w-24 rounded-md overflow-hidden border border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#111114] shadow-2xs hover:border-[#171717] dark:hover:border-[#f4f4f5] transition"
                     >
                       <div
                         className="relative w-full h-16 cursor-pointer overflow-hidden bg-black/5 dark:bg-white/5"
@@ -340,7 +340,7 @@ export default function CreateTaskModal({
                           <ZoomIn className="h-4 w-4 text-white drop-shadow" />
                         </div>
                       </div>
-                      <div className="w-full px-1.5 py-0.5 flex items-center justify-between text-[10px] font-mono text-[#8f8f8f] dark:text-[#8b949e] border-t border-[#ebebeb] dark:border-[#30363d] bg-[#fafafa] dark:bg-[#161b22]">
+                      <div className="w-full px-1.5 py-0.5 flex items-center justify-between text-[10px] font-mono text-[#8f8f8f] dark:text-[#71717a] border-t border-[#ebebeb] dark:border-[#2c2c33] bg-[#fafafa] dark:bg-[#17171b]">
                         <span className="truncate max-w-[60px]" title={att.name}>
                           #{idx + 1}
                         </span>
@@ -362,10 +362,10 @@ export default function CreateTaskModal({
               ) : (
                 <div
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex flex-col items-center justify-center p-3 rounded-md border border-dashed border-[#d4d4d8] dark:border-[#30363d] bg-[#fafafa]/50 dark:bg-[#161b22]/30 text-center cursor-pointer hover:bg-[#fafafa] dark:hover:bg-[#161b22] transition"
+                  className="flex flex-col items-center justify-center p-3 rounded-md border border-dashed border-[#d4d4d8] dark:border-[#2c2c33] bg-[#fafafa]/50 dark:bg-[#17171b]/30 text-center cursor-pointer hover:bg-[#fafafa] dark:hover:bg-[#17171b] transition"
                 >
-                  <Paperclip className="h-4 w-4 text-[#8f8f8f] dark:text-[#8b949e] mb-1" />
-                  <span className="text-[11px] font-sans text-[#666666] dark:text-[#8b949e]">
+                  <Paperclip className="h-4 w-4 text-[#8f8f8f] dark:text-[#71717a] mb-1" />
+                  <span className="text-[11px] font-sans text-[#666666] dark:text-[#71717a]">
                     {t('newTask.pasteHint')}
                   </span>
                 </div>
@@ -373,35 +373,35 @@ export default function CreateTaskModal({
             </div>
 
             <div>
-              <label className="block font-mono text-[#4d4d4d] dark:text-[#c9d1d9] font-medium mb-1">
+              <label className="block font-mono text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1">
                 {t('newTask.modelLabel')}
               </label>
               <select
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f0f6fc] focus:bg-white dark:focus:bg-[#0d1117] font-mono text-xs cursor-pointer transition"
+                className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-mono text-xs cursor-pointer transition"
               >
                 {Array.from(new Set([selectedModel, ...(availableModels.length > 0 ? availableModels : [settings.model || 'gemini-3.8-flash-high'])])).map((m) => (
-                  <option key={m} value={m} className="dark:bg-[#161b22] dark:text-[#f0f6fc]">
+                  <option key={m} value={m} className="dark:bg-[#17171b] dark:text-[#f4f4f5]">
                     {m}
                   </option>
                 ))}
               </select>
             </div>
 
-            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#ebebeb] dark:border-[#21262d] shrink-0">
+            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#ebebeb] dark:border-[#212126] shrink-0">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={isSubmitting}
-                className="px-3 py-1.5 rounded-md bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] hover:bg-[#f4f4f5] dark:hover:bg-[#21262d] transition cursor-pointer font-sans disabled:opacity-50"
+                className="px-3 py-1.5 rounded-md bg-white dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] hover:bg-[#f4f4f5] dark:hover:bg-[#232328] transition cursor-pointer font-sans disabled:opacity-50"
               >
                 {t('common.cancel')}
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting || !newTitle.trim()}
-                className="px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white font-medium transition cursor-pointer font-sans shadow-xs border border-transparent dark:border-[#30363d] disabled:opacity-50"
+                className="px-3.5 py-1.5 rounded-md bg-[#171717] dark:bg-[#232328] hover:bg-[#262626] dark:hover:bg-[#2c2c33] text-white font-medium transition cursor-pointer font-sans shadow-xs border border-transparent dark:border-[#2c2c33] disabled:opacity-50"
               >
                 {t('common.create')}
               </button>

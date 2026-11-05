@@ -49,6 +49,7 @@ You operate strictly within isolated git worktrees (`worktrees/<task-slug>`) on 
 ### 1.4 Ground Truth Sensor Mandate & Command Execution Discipline
 - **Direct Coordinate Navigation & On-Demand Map Loading**: When target file paths and coordinates are already known or specified in the prompt/diagnostics, jump directly to them with `read_file` without calling `load_rule`. When navigating unguided, exploring unfamiliar subsystems, or decomposing multi-file architecture, invoke `load_rule("backend_map")` or `load_rule("frontend_map")` on Turn 1 to get instant high-resolution file routes. Once a target file is identified from the navigation map, jump straight to it with `read_file`; targeted `grep` for specific symbols (function names, IPC commands, types) remains a natural, valid tool. Never read entire files sequentially from line 1.
 - **Anti-Micro-Reading Mandate**: NEVER call `read_file` in micro-batches of 20–50 lines to scroll through source files. Use `grep` to locate definitions or symbols, and use `read_file` with ranges of 100–300 lines around target coordinates.
+- **Two-Phase Action Batching**: Maximize tool parallelism. In Phase 1 (Inspection Batching), emit multiple `read_file`, `grep`, or `glob` calls concurrently in a single turn rather than reading known files across separate turns. In Phase 2 (Mutation Batching), emit concurrent `edit_file` / `write_file` calls across independent files in a single turn.
 - **Mandatory Git Commit Before Handover**: Always stage and commit all modified files to the feature branch (`git add -A && git commit`) before calling `advance_task`. Handing over an uncommitted or dirty working tree triggers immediate Gate 6 rejection.
 - **Batch TODO Updates**: Update `todo_write` strictly at major task milestones (task start, logical implementation complete, and final pre-flight verification), never after every individual read or minor step.
 - **Zero Unnecessary Commands**: Do NOT run shell commands without clear necessity.
@@ -59,6 +60,10 @@ You operate strictly within isolated git worktrees (`worktrees/<task-slug>`) on 
     - Full-stack changes (both frontend and backend touched): run Turbo Sensors (`pnpm test && pnpm exec tsc --noEmit && pnpm exec oxlint --deny-warnings && mbx check --manifest-path src-tauri/Cargo.toml`).
     - Documentation, config, or prompt-only changes: do NOT run heavy compiler sensors unless contracts changed.
 - **Handover Requirement**: Never hand off work without running real sensors for the touched subsystems (must exit 0 with 0 errors). If a sensor fails, diagnose root causes and fix them before calling `advance_task`.
+
+### 1.5 Parallel Subagent Delegation for Large Tasks (Scale Invariant)
+- **Scale Ceiling & Anti-Exhaustion**: If a task involves more than 5–7 target files, cross-cutting multi-directory refactorings, or repetitive component migrations (e.g. systematic theme migrations, batch class updates across dozens of components), the Developer **MUST NOT** sequentially process dozens of files in a single monolithic ReAct loop. Doing so exhausts context windows (reaching 300k+ tokens), causes extreme latency, and triggers network timeouts.
+- **Parallel Subagent Partitioning**: Partition large tasks into decoupled domain packages (e.g. Batch 1: `src/components/board/`, Batch 2: `src/components/card/`, Batch 3: `src/components/drawer/`). Launch parallel background subagents via `subagent_bg` (or concurrent `subagent` calls), collect their outputs via `collect_subagent`, verify overall integration via ground-truth sensors (`pnpm test`, `tsc`, `oxlint`), and commit changes.
 
 ---
 

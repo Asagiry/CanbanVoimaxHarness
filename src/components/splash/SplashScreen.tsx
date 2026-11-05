@@ -156,7 +156,7 @@ export default function SplashScreen({
   return (
     <div
       data-tauri-drag-region
-      className={`fixed inset-0 z-9999 flex items-center justify-center bg-[#fafafa] dark:bg-[#07090e] text-[#171717] dark:text-[#f0f6fc] select-none transition-opacity duration-500 ease-out ${
+      className={`fixed inset-0 z-9999 flex items-center justify-center bg-[#fafafa] dark:bg-[#0b0b0e] text-[#171717] dark:text-[#f4f4f5] select-none transition-opacity duration-500 ease-out ${
         isFading ? 'opacity-0 pointer-events-none' : 'opacity-100'
       }`}
     >
@@ -168,13 +168,13 @@ export default function SplashScreen({
           }`}
         >
           <Logo size={64} variant="badge" className="drop-shadow-sm select-none" />
-          <div className="mt-5 h-[2px] w-44 bg-[#e1e4e8] dark:bg-[#21262d] rounded-full overflow-hidden">
+          <div className="mt-5 h-[2px] w-44 bg-[#e1e4e8] dark:bg-[#212126] rounded-full overflow-hidden">
             <div
-              className="h-full bg-[#171717] dark:bg-[#f0f6fc] rounded-full transition-all duration-200 ease-out"
+              className="h-full bg-[#171717] dark:bg-[#f4f4f5] rounded-full transition-all duration-200 ease-out"
               style={{ width: `${progress}%` }}
             />
           </div>
-          <span className="mt-2.5 font-mono text-[10px] text-[#57606a] dark:text-[#8b949e] tabular-nums">
+          <span className="mt-2.5 font-mono text-[10px] text-[#57606a] dark:text-[#71717a] tabular-nums">
             {progress}%
           </span>
         </div>
@@ -182,7 +182,7 @@ export default function SplashScreen({
         /* Tactical Obsidian Welcome & Project Picker Modal */
         <div
           data-tauri-drag-region
-          className="w-full max-w-md mx-4 p-7 rounded-xl bg-white dark:bg-[#0d1117] border border-[#d0d7de] dark:border-[#21262d] shadow-2xl flex flex-col items-center text-center animate-in fade-in zoom-in-95 duration-200"
+          className="w-full max-w-md mx-4 p-7 rounded-xl bg-white dark:bg-[#111114] border border-[#d0d7de] dark:border-[#212126] shadow-2xl flex flex-col items-center text-center animate-in fade-in zoom-in-95 duration-200"
         >
           {/* Logo Badge */}
           <div className="mb-3.5">
@@ -190,10 +190,10 @@ export default function SplashScreen({
           </div>
 
           {/* Heading & Subtitle */}
-          <h1 className="text-xl font-bold tracking-tight text-[#171717] dark:text-[#f0f6fc]">
+          <h1 className="text-xl font-bold tracking-tight text-[#171717] dark:text-[#f4f4f5]">
             {t('splash.welcome')}
           </h1>
-          <p className="mt-1 text-xs text-[#57606a] dark:text-[#8b949e] max-w-sm leading-relaxed">
+          <p className="mt-1 text-xs text-[#57606a] dark:text-[#71717a] max-w-sm leading-relaxed">
             {t('splash.selectProject')}
           </p>
 
@@ -235,7 +235,7 @@ export default function SplashScreen({
               type="button"
               onClick={handleSelectFolder}
               disabled={isOpeningFolder}
-              className={`w-full py-3 px-4 rounded-lg bg-[#f6f8fa] dark:bg-[#161b22] hover:bg-[#eaeef2] dark:hover:bg-[#21262d] active:bg-[#d0d7de] dark:active:bg-[#30363d] border border-[#d0d7de] dark:border-[#30363d] hover:border-[#58a6ff]/60 text-[#24292f] dark:text-[#f0f6fc] font-medium text-sm flex items-center justify-center gap-2.5 transition-all duration-150 shadow-sm cursor-pointer disabled:opacity-60 ${
+              className={`w-full py-3 px-4 rounded-lg bg-[#f6f8fa] dark:bg-[#17171b] hover:bg-[#eaeef2] dark:hover:bg-[#232328] active:bg-[#d0d7de] dark:active:bg-[#2c2c33] border border-[#d0d7de] dark:border-[#2c2c33] hover:border-[#58a6ff]/60 text-[#24292f] dark:text-[#f4f4f5] font-medium text-sm flex items-center justify-center gap-2.5 transition-all duration-150 shadow-sm cursor-pointer disabled:opacity-60 ${
                 !candidateProject ? 'py-3.5 shadow-md border-[#58a6ff]/40 bg-[#58a6ff]/5' : ''
               }`}
             >
@@ -252,11 +252,11 @@ export default function SplashScreen({
           {otherRecent.length > 0 && (
             <div className="w-full mt-5 flex flex-col gap-2 text-left">
               <div className="flex items-center gap-2 mb-0.5">
-                <div className="h-[1px] flex-1 bg-[#e1e4e8] dark:bg-[#21262d]" />
-                <span className="text-[10px] font-mono uppercase tracking-wider text-[#57606a] dark:text-[#8b949e]">
+                <div className="h-[1px] flex-1 bg-[#e1e4e8] dark:bg-[#212126]" />
+                <span className="text-[10px] font-mono uppercase tracking-wider text-[#57606a] dark:text-[#71717a]">
                   {t('splash.recentProjects')}
                 </span>
-                <div className="h-[1px] flex-1 bg-[#e1e4e8] dark:bg-[#21262d]" />
+                <div className="h-[1px] flex-1 bg-[#e1e4e8] dark:bg-[#212126]" />
               </div>
 
               <div className="max-h-44 overflow-y-auto flex flex-col gap-1.5 pr-0.5">
@@ -266,20 +266,20 @@ export default function SplashScreen({
                     type="button"
                     onClick={() => handleOpenRecent(p.rootPath)}
                     disabled={isOpeningFolder}
-                    className="group flex items-center justify-between p-2 rounded-lg bg-[#f6f8fa] dark:bg-[#07090e] hover:bg-[#eaeef2] dark:hover:bg-[#161b22] border border-[#e1e4e8] dark:border-[#21262d] hover:border-[#58a6ff]/40 text-left transition-all cursor-pointer disabled:opacity-60"
+                    className="group flex items-center justify-between p-2 rounded-lg bg-[#f6f8fa] dark:bg-[#0b0b0e] hover:bg-[#eaeef2] dark:hover:bg-[#17171b] border border-[#e1e4e8] dark:border-[#212126] hover:border-[#58a6ff]/40 text-left transition-all cursor-pointer disabled:opacity-60"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <FolderGit2 className="w-4 h-4 text-[#57606a] dark:text-[#8b949e] group-hover:text-[#58a6ff] shrink-0 transition-colors" />
+                      <FolderGit2 className="w-4 h-4 text-[#57606a] dark:text-[#71717a] group-hover:text-[#58a6ff] shrink-0 transition-colors" />
                       <div className="flex flex-col min-w-0">
-                        <span className="text-xs font-medium text-[#171717] dark:text-[#f0f6fc] truncate">
+                        <span className="text-xs font-medium text-[#171717] dark:text-[#f4f4f5] truncate">
                           {p.name}
                         </span>
-                        <span className="text-[10px] font-mono text-[#57606a] dark:text-[#8b949e] truncate max-w-[270px]">
+                        <span className="text-[10px] font-mono text-[#57606a] dark:text-[#71717a] truncate max-w-[270px]">
                           {p.rootPath}
                         </span>
                       </div>
                     </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-[#57606a] dark:text-[#484f58] group-hover:text-[#58a6ff] shrink-0 ml-2 transition-transform group-hover:translate-x-0.5" />
+                    <ArrowRight className="w-3.5 h-3.5 text-[#57606a] dark:text-[#3a3a44] group-hover:text-[#58a6ff] shrink-0 ml-2 transition-transform group-hover:translate-x-0.5" />
                   </button>
                 ))}
               </div>

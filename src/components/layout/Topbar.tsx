@@ -96,7 +96,7 @@ export default function Topbar() {
     <header
       data-tauri-drag-region
       onDoubleClick={handleHeaderDoubleClick}
-      className="h-10 w-full flex items-center justify-between pl-3 pr-0 border-b border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] select-none text-xs text-[#171717] dark:text-[#f0f6fc] shrink-0 z-40 transition-colors"
+      className="h-10 w-full flex items-center justify-between pl-3 pr-0 border-b border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] select-none text-xs text-[#171717] dark:text-[#f4f4f5] shrink-0 z-40 transition-colors"
     >
       {/* Hidden Web Directory Picker */}
       <input
@@ -120,10 +120,10 @@ export default function Topbar() {
           data-no-drag
           onMouseDown={(e) => e.stopPropagation()}
           onClick={handleOpenFolderClick}
-          className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#4d4d4d] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer font-sans text-xs shrink-0 btn-tactile"
+          className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#17171b] dark:hover:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] text-[#4d4d4d] hover:text-[#171717] dark:text-[#71717a] dark:hover:text-[#f4f4f5] transition cursor-pointer font-sans text-xs shrink-0 btn-tactile"
           aria-label={t('topbar.selectProjectFolder')}
         >
-          <FolderOpen className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e]" />
+          <FolderOpen className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a]" />
           <span>{t('topbar.openFolder')}</span>
         </button>
 
@@ -163,8 +163,8 @@ export default function Topbar() {
                   title={project.rootPath || project.name}
                   className={`group flex items-center space-x-1.5 px-2 py-1 rounded-md text-xs transition cursor-pointer select-none shrink-0 border ${
                     isActive
-                      ? 'bg-[#f4f4f5] dark:bg-[#21262d] border-[#d4d4d8] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] font-medium'
-                      : 'border-transparent text-[#666666] dark:text-[#8b949e] hover:bg-[#f9f9f9] dark:hover:bg-[#161b22] hover:border-[#ebebeb] dark:hover:border-[#21262d] hover:text-[#171717] dark:hover:text-[#f0f6fc]'
+                      ? 'bg-[#f4f4f5] dark:bg-[#232328] border-[#d4d4d8] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] font-medium'
+                      : 'border-transparent text-[#666666] dark:text-[#71717a] hover:bg-[#f9f9f9] dark:hover:bg-[#17171b] hover:border-[#ebebeb] dark:hover:border-[#212126] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
                   }`}
                 >
                   {isAgentRunningInProject && (
@@ -194,7 +194,7 @@ export default function Topbar() {
                       e.stopPropagation();
                       void removeProjectFromHistory(project.rootPath || project.id);
                     }}
-                    className="p-0.5 rounded text-[#8f8f8f] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] hover:bg-[#e4e4e7] dark:hover:bg-[#30363d] transition cursor-pointer flex items-center justify-center"
+                    className="p-0.5 rounded text-[#8f8f8f] hover:text-[#171717] dark:text-[#71717a] dark:hover:text-[#f4f4f5] hover:bg-[#e4e4e7] dark:hover:bg-[#2c2c33] transition cursor-pointer flex items-center justify-center"
                     aria-label={`Close ${folderName}`}
                   >
                     <X className="h-3 w-3" />
@@ -213,7 +213,7 @@ export default function Topbar() {
           <button
             onMouseDown={(e) => e.stopPropagation()}
             onClick={openToolPolicyModal}
-            className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#666666] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer btn-tactile"
+            className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#17171b] dark:hover:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] text-[#666666] hover:text-[#171717] dark:text-[#71717a] dark:hover:text-[#f4f4f5] transition cursor-pointer btn-tactile"
             aria-label={t('topbar.toolPolicyTitle')}
           >
             <Wrench className="h-3.5 w-3.5" />
@@ -221,7 +221,7 @@ export default function Topbar() {
           <button
             onMouseDown={(e) => e.stopPropagation()}
             onClick={openSettings}
-            className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#666666] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer btn-tactile"
+            className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#17171b] dark:hover:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] text-[#666666] hover:text-[#171717] dark:text-[#71717a] dark:hover:text-[#f4f4f5] transition cursor-pointer btn-tactile"
             aria-label={t('topbar.llmSettings')}
           >
             <Settings className="h-3.5 w-3.5" />
@@ -233,14 +233,14 @@ export default function Topbar() {
             type="button"
             onMouseDown={(e) => e.stopPropagation()}
             onClick={toggleLanguage}
-            className="px-2 py-1 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#666666] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer font-mono font-semibold text-[11px] select-none flex items-center space-x-1 btn-tactile"
+            className="px-2 py-1 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#17171b] dark:hover:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] text-[#666666] hover:text-[#171717] dark:text-[#71717a] dark:hover:text-[#f4f4f5] transition cursor-pointer font-mono font-semibold text-[11px] select-none flex items-center space-x-1 btn-tactile"
             aria-label={t('topbar.switchLanguage')}
           >
-            <span className={language === 'en' ? 'text-[#171717] dark:text-[#f0f6fc] font-bold' : 'text-[#8f8f8f] dark:text-[#6e7681]'}>
+            <span className={language === 'en' ? 'text-[#171717] dark:text-[#f4f4f5] font-bold' : 'text-[#8f8f8f] dark:text-[#52525b]'}>
               EN
             </span>
-            <span className="text-[#d4d4d8] dark:text-[#30363d]">/</span>
-            <span className={language === 'ru' ? 'text-[#171717] dark:text-[#f0f6fc] font-bold' : 'text-[#8f8f8f] dark:text-[#6e7681]'}>
+            <span className="text-[#d4d4d8] dark:text-[#2c2c33]">/</span>
+            <span className={language === 'ru' ? 'text-[#171717] dark:text-[#f4f4f5] font-bold' : 'text-[#8f8f8f] dark:text-[#52525b]'}>
               RU
             </span>
           </button>
@@ -250,7 +250,7 @@ export default function Topbar() {
             data-no-drag
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => toggleThemeWithAnimation(e)}
-            className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#666666] hover:text-[#171717] dark:text-[#8b949e] dark:hover:text-[#f0f6fc] transition cursor-pointer relative overflow-hidden group btn-tactile"
+            className="p-1.5 rounded-md bg-white hover:bg-[#f9f9f9] dark:bg-[#17171b] dark:hover:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] text-[#666666] hover:text-[#171717] dark:text-[#71717a] dark:hover:text-[#f4f4f5] transition cursor-pointer relative overflow-hidden group btn-tactile"
             aria-label={t('topbar.switchTheme')}
           >
             <div className="relative h-3.5 w-3.5 flex items-center justify-center">
@@ -273,7 +273,7 @@ export default function Topbar() {
         </div>
 
         {/* Vertical divider before window controls */}
-        <div className="h-4 w-px bg-[#ebebeb] dark:bg-[#21262d] mx-1" />
+        <div className="h-4 w-px bg-[#ebebeb] dark:bg-[#212126] mx-1" />
 
         {/* Shared Frameless Window Controls */}
         <WindowControls />

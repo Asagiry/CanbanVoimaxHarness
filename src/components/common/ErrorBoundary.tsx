@@ -44,19 +44,19 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
     const isModalOverlay = Boolean(isOverlay || scopeLabel === 'Консоль задачи');
     const containerClasses = isModalOverlay
       ? 'fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-xs'
-      : 'flex-1 flex items-center justify-center p-6 bg-[#fafafa] dark:bg-[#090a0f]';
+      : 'flex-1 flex items-center justify-center p-6 bg-[#fafafa] dark:bg-[#0b0b0e]';
     const zoomStyle = isModalOverlay ? getZoomOverlayStyle(useUiZoomStore.getState().zoom) : undefined;
 
     return (
       <div className={containerClasses} style={zoomStyle}>
-        <div className="max-w-md w-full rounded-lg border border-[#ebebeb] dark:border-[#21262d] bg-white dark:bg-[#0d1117] p-4 shadow-xs">
-          <div className="flex items-center space-x-2 pb-2 mb-2 border-b border-[#ebebeb] dark:border-[#21262d]">
+        <div className="max-w-md w-full rounded-lg border border-[#ebebeb] dark:border-[#212126] bg-white dark:bg-[#111114] p-4 shadow-xs">
+          <div className="flex items-center space-x-2 pb-2 mb-2 border-b border-[#ebebeb] dark:border-[#212126]">
             <AlertTriangle className="h-4 w-4 text-[#b91c1c] dark:text-[#ff7b72] shrink-0" />
-            <span className="text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] font-sans">
+            <span className="text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] font-sans">
               Что-то пошло не так{scopeLabel ? ` (${scopeLabel})` : ''}
             </span>
           </div>
-          <p className="text-xs text-[#666666] dark:text-[#8b949e] font-mono break-words select-text">
+          <p className="text-xs text-[#666666] dark:text-[#71717a] font-mono break-words select-text">
             {this.state.message || 'Ошибка отображения блока'}
           </p>
           <div className="mt-3 flex items-center space-x-2">
@@ -66,7 +66,7 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
                 this.handleReset();
                 onClose?.();
               }}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-white dark:bg-[#161b22] hover:bg-[#f9f9f9] dark:hover:bg-[#21262d] text-[#171717] dark:text-[#f0f6fc] border border-[#ebebeb] dark:border-[#30363d] transition font-sans text-xs font-medium cursor-pointer shadow-xs active:scale-[0.98]"
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-white dark:bg-[#17171b] hover:bg-[#f9f9f9] dark:hover:bg-[#232328] text-[#171717] dark:text-[#f4f4f5] border border-[#ebebeb] dark:border-[#2c2c33] transition font-sans text-xs font-medium cursor-pointer shadow-xs active:scale-[0.98]"
             >
               <X className="h-3.5 w-3.5" />
               <span>Закрыть</span>
@@ -74,7 +74,7 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
             <button
               type="button"
               onClick={this.handleReset}
-              className="px-3 py-1.5 rounded-md bg-[#f4f4f5] dark:bg-[#21262d] hover:bg-[#e4e4e7] dark:hover:bg-[#30363d] text-[#171717] dark:text-[#f0f6fc] border border-[#ebebeb] dark:border-[#30363d] transition font-sans text-xs font-medium cursor-pointer active:scale-[0.98]"
+              className="px-3 py-1.5 rounded-md bg-[#f4f4f5] dark:bg-[#232328] hover:bg-[#e4e4e7] dark:hover:bg-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] border border-[#ebebeb] dark:border-[#2c2c33] transition font-sans text-xs font-medium cursor-pointer active:scale-[0.98]"
             >
               Попробовать снова
             </button>

@@ -44,23 +44,23 @@ export default function SearchToolCard({ tool }: ToolCardProps) {
 
   return (
     <div
-      className={`group rounded-md border text-xs shadow-2xs hover:shadow-xs overflow-hidden my-1 animate-silk-entrance transition-colors bg-white dark:bg-[#161b22] ${
+      className={`group rounded-md border text-xs shadow-2xs hover:shadow-xs overflow-hidden my-1 animate-silk-entrance transition-colors bg-white dark:bg-[#17171b] ${
         isRunning
           ? 'border-amber-500/40 dark:border-amber-500/30 bg-amber-500/[0.02]'
-          : 'border-[#ebebeb] dark:border-[#21262d]'
+          : 'border-[#ebebeb] dark:border-[#212126]'
       } ${isSkipped ? 'opacity-70 dark:opacity-65' : ''}`}
     >
       {/* Header Strip */}
       <div
         onClick={() => setIsExpanded(!isExpanded)}
-        className={`flex items-center justify-between px-2.5 py-1.5 bg-[#f8f8f9] dark:bg-[#161b22] hover:bg-[#f2f2f3] dark:hover:bg-[#1c2128] transition-colors cursor-pointer select-none gap-2 text-xs min-h-[30px] ${
-          isExpanded ? 'border-b border-[#ebebeb] dark:border-[#21262d]' : ''
+        className={`flex items-center justify-between px-2.5 py-1.5 bg-[#f8f8f9] dark:bg-[#17171b] hover:bg-[#f2f2f3] dark:hover:bg-[#1e1e23] transition-colors cursor-pointer select-none gap-2 text-xs min-h-[30px] ${
+          isExpanded ? 'border-b border-[#ebebeb] dark:border-[#212126]' : ''
         }`}
       >
         <div className="flex items-center space-x-1.5 min-w-0 flex-1">
           <button
             type="button"
-            className="p-0.5 text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] rounded shrink-0 transition cursor-pointer"
+            className="p-0.5 text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] rounded shrink-0 transition cursor-pointer"
             onClick={(e) => {
               e.stopPropagation();
               setIsExpanded(!isExpanded);
@@ -69,7 +69,7 @@ export default function SearchToolCard({ tool }: ToolCardProps) {
           >
             <ChevronRight
               className={`h-3 w-3 transition-transform duration-150 ${
-                isExpanded ? 'rotate-90 text-[#171717] dark:text-[#f0f6fc]' : ''
+                isExpanded ? 'rotate-90 text-[#171717] dark:text-[#f4f4f5]' : ''
               }`}
             />
           </button>
@@ -82,14 +82,14 @@ export default function SearchToolCard({ tool }: ToolCardProps) {
             {toolName}
           </span>
 
-          <span className="font-mono text-[#52525b] dark:text-[#8b949e] truncate max-w-[260px] sm:max-w-[360px] md:max-w-[460px]">
+          <span className="font-mono text-[#52525b] dark:text-[#71717a] truncate max-w-[260px] sm:max-w-[360px] md:max-w-[460px]">
             {target}
           </span>
 
           {extraInfo && (
             <>
-              <span className="text-[#a1a1aa] dark:text-[#6e7681] select-none text-[10px]">•</span>
-              <span className="font-mono text-[#71717a] dark:text-[#8b949e] shrink-0 tabular-nums text-[11px]">
+              <span className="text-[#a1a1aa] dark:text-[#52525b] select-none text-[10px]">•</span>
+              <span className="font-mono text-[#71717a] dark:text-[#71717a] shrink-0 tabular-nums text-[11px]">
                 {extraInfo}
               </span>
             </>
@@ -97,8 +97,8 @@ export default function SearchToolCard({ tool }: ToolCardProps) {
 
           {durationText && (
             <>
-              <span className="text-[#a1a1aa] dark:text-[#6e7681] select-none text-[10px]">•</span>
-              <span className="font-mono text-[#71717a] dark:text-[#8b949e] shrink-0 tabular-nums text-[11px]">
+              <span className="text-[#a1a1aa] dark:text-[#52525b] select-none text-[10px]">•</span>
+              <span className="font-mono text-[#71717a] dark:text-[#71717a] shrink-0 tabular-nums text-[11px]">
                 {durationText}
               </span>
             </>
@@ -114,17 +114,17 @@ export default function SearchToolCard({ tool }: ToolCardProps) {
 
       {/* Expanded Details */}
       {isExpanded && (
-        <div className="bg-white dark:bg-[#0d1117] p-3 border-t border-[#ebebeb] dark:border-[#21262d] space-y-2.5 font-mono text-xs">
+        <div className="bg-white dark:bg-[#111114] p-3 border-t border-[#ebebeb] dark:border-[#212126] space-y-2.5 font-mono text-xs">
           {tool.params && Object.keys(tool.params).length > 0 && (
             <ToolParamsView params={params} />
           )}
 
           {tool.stdout && (
             <div>
-              <span className="text-[10px] text-[#666666] dark:text-[#8b949e] block mb-1">
+              <span className="text-[10px] text-[#666666] dark:text-[#71717a] block mb-1">
                 Результаты поиска
               </span>
-              <pre className="p-2.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#21262d] text-[11px] text-[#171717] dark:text-[#f0f6fc] overflow-x-auto leading-relaxed max-h-56 whitespace-pre select-text font-mono">
+              <pre className="p-2.5 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#212126] text-[11px] text-[#171717] dark:text-[#f4f4f5] overflow-x-auto leading-relaxed max-h-56 whitespace-pre select-text font-mono">
                 {tool.stdout}
               </pre>
             </div>
@@ -141,7 +141,7 @@ export default function SearchToolCard({ tool }: ToolCardProps) {
             </div>
           )}
 
-          <div className="flex items-center justify-between pt-1 border-t border-[#f4f4f5] dark:border-[#21262d] text-[10px] text-[#8f8f8f] dark:text-[#8b949e]">
+          <div className="flex items-center justify-between pt-1 border-t border-[#f4f4f5] dark:border-[#212126] text-[10px] text-[#8f8f8f] dark:text-[#71717a]">
             <span>Статус: {isFailed ? `failed (код ${tool.exitCode ?? 1})` : tool.status}</span>
           </div>
         </div>

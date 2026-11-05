@@ -47,7 +47,7 @@ export function StatusIndicator({ tool, isFailed }: { tool: ToolExecution; isFai
     return (
       <span
         data-testid="batch-queued-badge"
-        className="px-1.5 py-0.5 rounded text-[10px] font-mono text-[#8b949e] dark:text-[#6e7681] bg-[#f4f4f5]/60 dark:bg-[#161b22]/60 border border-[#e4e4e7] dark:border-[#30363d] flex items-center space-x-1 shrink-0 select-none"
+        className="px-1.5 py-0.5 rounded text-[10px] font-mono text-[#8b949e] dark:text-[#52525b] bg-[#f4f4f5]/60 dark:bg-[#17171b]/60 border border-[#e4e4e7] dark:border-[#2c2c33] flex items-center space-x-1 shrink-0 select-none"
       >
         <Clock className="h-2.5 w-2.5" />
         <span>{t('drawer.batchQueued')}</span>
@@ -136,7 +136,7 @@ export function CopyLogsButton({ tool, isExpanded }: { tool: ToolExecution; isEx
     <button
       type="button"
       onClick={handleCopyLogs}
-      className={`p-1 rounded text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-white dark:hover:bg-[#161b22] transition cursor-pointer ${
+      className={`p-1 rounded text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-white dark:hover:bg-[#17171b] transition cursor-pointer ${
         isExpanded ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
       }`}
       aria-label="Скопировать вывод"
@@ -156,7 +156,7 @@ export function ToolParamsView({ params }: { params: Record<string, unknown> }) 
 
   return (
     <div className="space-y-1.5">
-      <span className="text-[10px] text-[#666666] dark:text-[#8b949e] block font-mono">
+      <span className="text-[10px] text-[#666666] dark:text-[#71717a] block font-mono">
         Параметры вызова
       </span>
       <div className="space-y-2">
@@ -179,13 +179,13 @@ export function ToolParamsView({ params }: { params: Record<string, unknown> }) 
               const lineCount = value.split('\n').length;
               return (
                 <div key={key} className="space-y-1">
-                  <div className="flex items-center justify-between text-[10px] text-[#666666] dark:text-[#8b949e]">
-                    <span className="font-semibold text-[#171717] dark:text-[#f0f6fc] font-mono">{key}:</span>
-                    <span className="text-[#8f8f8f] dark:text-[#8b949e] tabular-nums font-mono text-[10px]">
+                  <div className="flex items-center justify-between text-[10px] text-[#666666] dark:text-[#71717a]">
+                    <span className="font-semibold text-[#171717] dark:text-[#f4f4f5] font-mono">{key}:</span>
+                    <span className="text-[#8f8f8f] dark:text-[#71717a] tabular-nums font-mono text-[10px]">
                       {lineCount > 1 ? `${lineCount} строк` : `${value.length} симв.`}
                     </span>
                   </div>
-                  <pre className="p-2.5 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#21262d] text-[11px] text-[#171717] dark:text-[#f0f6fc] overflow-x-auto leading-relaxed max-h-64 whitespace-pre select-text font-mono">
+                  <pre className="p-2.5 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#212126] text-[11px] text-[#171717] dark:text-[#f4f4f5] overflow-x-auto leading-relaxed max-h-64 whitespace-pre select-text font-mono">
                     {value}
                   </pre>
                 </div>
@@ -194,8 +194,8 @@ export function ToolParamsView({ params }: { params: Record<string, unknown> }) 
 
             return (
               <div key={key} className="flex items-baseline space-x-2 py-0.5 text-[11px] font-mono">
-                <span className="text-[#666666] dark:text-[#8b949e] font-semibold shrink-0">{key}:</span>
-                <span className="text-[#171717] dark:text-[#f0f6fc] select-text break-all">{value}</span>
+                <span className="text-[#666666] dark:text-[#71717a] font-semibold shrink-0">{key}:</span>
+                <span className="text-[#171717] dark:text-[#f4f4f5] select-text break-all">{value}</span>
               </div>
             );
           }
@@ -203,8 +203,8 @@ export function ToolParamsView({ params }: { params: Record<string, unknown> }) 
           if (typeof value === 'object' && value !== null) {
             return (
               <div key={key} className="space-y-1">
-                <span className="text-[10px] font-semibold text-[#171717] dark:text-[#f0f6fc] font-mono">{key}:</span>
-                <pre className="p-2 rounded-md bg-[#fafafa] dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#21262d] text-[11px] text-[#171717] dark:text-[#f0f6fc] overflow-x-auto leading-relaxed max-h-48 whitespace-pre-wrap select-text font-mono">
+                <span className="text-[10px] font-semibold text-[#171717] dark:text-[#f4f4f5] font-mono">{key}:</span>
+                <pre className="p-2 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#212126] text-[11px] text-[#171717] dark:text-[#f4f4f5] overflow-x-auto leading-relaxed max-h-48 whitespace-pre-wrap select-text font-mono">
                   {JSON.stringify(value, null, 2)}
                 </pre>
               </div>
@@ -213,8 +213,8 @@ export function ToolParamsView({ params }: { params: Record<string, unknown> }) 
 
           return (
             <div key={key} className="flex items-baseline space-x-2 py-0.5 text-[11px] font-mono">
-              <span className="text-[#666666] dark:text-[#8b949e] font-semibold shrink-0">{key}:</span>
-              <span className="text-[#171717] dark:text-[#f0f6fc] select-text">{String(value)}</span>
+              <span className="text-[#666666] dark:text-[#71717a] font-semibold shrink-0">{key}:</span>
+              <span className="text-[#171717] dark:text-[#f4f4f5] select-text">{String(value)}</span>
             </div>
           );
         })}

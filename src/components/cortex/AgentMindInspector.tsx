@@ -85,8 +85,8 @@ export function AgentMindInspector({
       onContextMenu={onContextMenu}
       className={`rounded-md transition-colors ${
         isFocused
-          ? 'bg-white dark:bg-[#161b22] border border-[#ebebeb] dark:border-[#30363d] shadow-xs'
-          : 'hover:bg-[#f4f4f5] dark:hover:bg-[#161b22]'
+          ? 'bg-white dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] shadow-xs'
+          : 'hover:bg-[#f4f4f5] dark:hover:bg-[#1e1e23]'
       }`}
     >
       {/* Agent Mind Header */}
@@ -98,9 +98,9 @@ export function AgentMindInspector({
         >
           <div className="flex items-center space-x-2 min-w-0">
             {stage.isExpanded ? (
-              <ChevronDown className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
+              <ChevronDown className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
             ) : (
-              <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
+              <ChevronRight className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
             )}
 
             {isBuiltin ? (
@@ -118,7 +118,7 @@ export function AgentMindInspector({
               />
             )}
 
-            <span className="font-sans text-xs font-semibold text-[#171717] dark:text-[#f0f6fc] truncate">
+            <span className="font-sans text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] truncate">
               {stage.stageTitle}
             </span>
 
@@ -134,7 +134,7 @@ export function AgentMindInspector({
           type="button"
           onClick={handleHeaderPlus}
           aria-label={t('cortex.newRule')}
-          className="p-1 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d] transition cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shrink-0"
+          className="p-1 rounded-md text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#ebebeb]/60 dark:hover:bg-[#232328] transition cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 shrink-0"
         >
           <Plus className="h-3.5 w-3.5" />
         </button>
@@ -152,7 +152,7 @@ export function AgentMindInspector({
 
       {/* Agent Mind Body */}
       {stage.isExpanded && (
-        <div className="pl-4 pr-1 py-0.5 space-y-0.5 border-l border-[#ebebeb] dark:border-[#21262d] ml-3 my-0.5">
+        <div className="pl-4 pr-1 py-0.5 space-y-0.5 border-l border-[#ebebeb] dark:border-[#212126] ml-3 my-0.5">
           {/* 1. Persona Prompt (persona.md) */}
           {personaFile && !personaIsMissing && (
             <TreeFileRow
@@ -184,12 +184,12 @@ export function AgentMindInspector({
                 <button
                   type="button"
                   onClick={() => setIsRulesOpen((prev) => !prev)}
-                  className="flex-1 min-w-0 flex items-center space-x-1.5 px-2 py-1 rounded-md text-left text-[#666666] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d] transition cursor-pointer"
+                  className="flex-1 min-w-0 flex items-center space-x-1.5 px-2 py-1 rounded-md text-left text-[#666666] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#ebebeb]/60 dark:hover:bg-[#232328] transition cursor-pointer"
                 >
                   {isRulesOpen ? (
-                    <FolderOpen className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
+                    <FolderOpen className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
                   ) : (
-                    <Folder className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
+                    <Folder className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
                   )}
                   <span className="text-xs font-mono">{t('cortex.rules')}</span>
                   <span className="text-[10px] font-mono text-[#8f8f8f]">rules/</span>
@@ -199,14 +199,14 @@ export function AgentMindInspector({
                   type="button"
                   onClick={handleRulesFolderPlus}
                   aria-label={t('cortex.newRule')}
-                  className="p-1 rounded-md text-[#8f8f8f] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d] transition cursor-pointer opacity-0 group-hover/folder:opacity-100 focus:opacity-100 focus-visible:opacity-100 shrink-0"
+                  className="p-1 rounded-md text-[#8f8f8f] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#ebebeb]/60 dark:hover:bg-[#232328] transition cursor-pointer opacity-0 group-hover/folder:opacity-100 focus:opacity-100 focus-visible:opacity-100 shrink-0"
                 >
                   <Plus className="h-3 w-3" />
                 </button>
               </div>
 
               {isRulesOpen && ruleFiles.length > 0 && (
-                <div className="pl-4 space-y-0.5 border-l border-[#ebebeb] dark:border-[#21262d] ml-2">
+                <div className="pl-4 space-y-0.5 border-l border-[#ebebeb] dark:border-[#212126] ml-2">
                   {ruleFiles.map((ruleFile) => {
                     const isRuntime = isRuntimeRule(ruleFile.name);
                     return (
@@ -218,7 +218,7 @@ export function AgentMindInspector({
                           isRuntime ? (
                             <RuntimeRuleIcon className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400 shrink-0" />
                           ) : (
-                            <FileText className="h-3.5 w-3.5 text-[#666666] dark:text-[#8b949e] shrink-0" />
+                            <FileText className="h-3.5 w-3.5 text-[#666666] dark:text-[#71717a] shrink-0" />
                           )
                         }
                         badge={
@@ -281,8 +281,8 @@ function TreeFileRow({ file, isActive, icon, badge, title, onSelect }: TreeFileR
       onClick={onSelect}
       className={`w-full flex items-center justify-between px-2 py-1 rounded-md text-left transition cursor-pointer ${
         isActive
-          ? 'bg-white dark:bg-[#21262d] border border-[#ebebeb] dark:border-[#30363d] text-[#171717] dark:text-[#f0f6fc] font-semibold shadow-xs'
-          : 'text-[#4d4d4d] dark:text-[#8b949e] hover:text-[#171717] dark:hover:text-[#f0f6fc] hover:bg-[#ebebeb]/60 dark:hover:bg-[#21262d]'
+          ? 'bg-white dark:bg-[#232328] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] font-semibold shadow-xs'
+          : 'text-[#4d4d4d] dark:text-[#71717a] hover:text-[#171717] dark:hover:text-[#f4f4f5] hover:bg-[#ebebeb]/60 dark:hover:bg-[#232328]'
       }`}
       title={title ?? file.path}
     >
@@ -290,7 +290,7 @@ function TreeFileRow({ file, isActive, icon, badge, title, onSelect }: TreeFileR
         {icon}
         <span className="text-xs font-mono truncate">{file.name}</span>
         {typeof badge === 'string' ? (
-          <span className="px-1 py-px rounded border border-[#ebebeb] dark:border-[#30363d] bg-[#f4f4f5] dark:bg-[#161b22] text-[10px] font-mono text-[#666666] dark:text-[#8b949e] shrink-0">
+          <span className="px-1 py-px rounded border border-[#ebebeb] dark:border-[#2c2c33] bg-[#f4f4f5] dark:bg-[#17171b] text-[10px] font-mono text-[#666666] dark:text-[#71717a] shrink-0">
             {badge}
           </span>
         ) : (
@@ -316,14 +316,14 @@ interface MissingTemplateBlockProps {
 
 function MissingTemplateBlock({ message, buttonLabel, onCreate }: MissingTemplateBlockProps) {
   return (
-    <div className="px-2 py-1.5 rounded-md border border-dashed border-[#d4d4d4] dark:border-[#30363d] bg-white dark:bg-[#161b22] space-y-1">
-      <div className="text-[11px] font-sans text-[#666666] dark:text-[#8b949e]">
+    <div className="px-2 py-1.5 rounded-md border border-dashed border-[#d4d4d4] dark:border-[#2c2c33] bg-white dark:bg-[#17171b] space-y-1">
+      <div className="text-[11px] font-sans text-[#666666] dark:text-[#71717a]">
         {message}
       </div>
       <button
         type="button"
         onClick={onCreate}
-        className="flex items-center space-x-1 px-2 py-1 rounded-md text-[11px] font-mono bg-[#171717] dark:bg-[#21262d] hover:bg-[#262626] dark:hover:bg-[#30363d] text-white dark:text-[#f0f6fc] transition cursor-pointer"
+        className="flex items-center space-x-1 px-2 py-1 rounded-md text-[11px] font-mono bg-[#171717] dark:bg-[#232328] hover:bg-[#262626] dark:hover:bg-[#2c2c33] text-white dark:text-[#f4f4f5] transition cursor-pointer"
       >
         <Plus className="h-3 w-3 shrink-0" />
         <span>{buttonLabel}</span>
