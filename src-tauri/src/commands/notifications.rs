@@ -1,72 +1,74 @@
 use std::path::{Path, PathBuf};
+use base64::Engine;
 use tauri_plugin_notification::NotificationExt;
 
-const APP_ICON_PNG: &[u8] = include_bytes!("../../icons/128x128.png");
+const APP_ICON_PNG: &[u8] = include_bytes!("../../icons/128x128@2x.png");
+const APP_ICON_ICO: &[u8] = include_bytes!("../../icons/icon.ico");
 
 /// Escapes XML special characters for safe inclusion in WinRT Toast XML templates.
 pub fn escape_xml(input: &str) -> String {
-    let mut escaped = String::with_capacity(input.len());
-    for c in input.chars() {
+    input.chars().fold(String::with_capacity(input.len()), |mut acc, c| {
         match c {
-            '&' => escaped.push_str("&amp;"),
-            '<' => escaped.push_str("&lt;"),
-            '>' => escaped.push_str("&gt;"),
-            '"' => escaped.push_str("&quot;"),
-            '\'' => escaped.push_str("&apos;"),
-            _ => escaped.push(c),
+            '&' => acc.push_str("&amp;"),
+            '<' => acc.push_str("&lt;"),
+            '>' => acc.push_str("&gt;"),
+            '"' => acc.push_str("&quot;"),
+            '\'' => acc.push_str("&apos;"),
+            _ => acc.push(c),
         }
-    }
-    escaped
+        acc
+    })
 }
 
 /// Encodes a UTF-8 script string into UTF-16LE Base64 format required by PowerShell's `-EncodedCommand`.
 pub fn encode_powershell_script(script: &str) -> String {
-    use base64::Engine;
-    let utf16_bytes: Vec<u8> = script
-        .encode_utf16()
-        .flat_map(|u| u.to_le_bytes())
-        .collect();
-    base64::engine::general_purpose::STANDARD.encode(&utf16_bytes)
+    let utf16: Vec<u8> = script.encode_utf16().flat_map(|u| u.to_le_bytes()).collect();
+    base64::engine::general_purpose::STANDARD.encode(&utf16)
 }
 
 /// Spawns a hidden PowerShell process with `-EncodedCommand` on Windows.
 #[cfg(target_os = "windows")]
 fn run_encoded_powershell(encoded: &str) -> std::io::Result<std::process::Output> {
     use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x08000000;
     std::process::Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded])
-        .creation_flags(CREATE_NO_WINDOW)
+        .creation_flags(0x08000000)
         .output()
 }
 
 /// Resolves the dedicated local cache directory for CVH notification assets.
 pub fn get_cache_directory() -> Option<PathBuf> {
-    let base = std::env::var("LOCALAPPDATA")
-        .ok()
-        .or_else(|| std::env::var("APPDATA").ok())
-        .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir);
+    let base = std::env::var("LOCALAPPDATA").or_else(|_| std::env::var("APPDATA"))
+        .map(PathBuf::from).unwrap_or_else(|_| std::env::temp_dir());
     let dir = base.join("com.voimax.cvh");
     let _ = std::fs::create_dir_all(&dir);
     Some(dir)
 }
 
-/// Ensures the application icon (128x128.png) is extracted and cached in the user's LocalAppData folder.
-pub fn ensure_cached_app_icon() -> Option<PathBuf> {
+fn ensure_cached_asset(name: &str, bytes: &[u8]) -> Option<PathBuf> {
     let dir = get_cache_directory()?;
-    let icon_path = dir.join("app_icon.png");
+    let icon_path = dir.join(name);
     let needs_write = match std::fs::metadata(&icon_path) {
-        Ok(meta) => meta.len() as usize != APP_ICON_PNG.len(),
+        Ok(meta) => meta.len() as usize != bytes.len(),
         Err(_) => true,
     };
     if needs_write {
-        if let Err(e) = std::fs::write(&icon_path, APP_ICON_PNG) {
-            eprintln!("[Notification] Failed to cache app_icon.png: {}", e);
+        if let Err(e) = std::fs::write(&icon_path, bytes) {
+            eprintln!("[Notification] Failed to cache {}: {}", name, e);
             return None;
         }
     }
     Some(icon_path)
+}
+
+/// Ensures the application icon (128x128@2x.png) is extracted and cached in the user's LocalAppData folder.
+pub fn ensure_cached_app_icon() -> Option<PathBuf> {
+    ensure_cached_asset("app_icon.png", APP_ICON_PNG)
+}
+
+/// Ensures the application Windows icon (icon.ico) is extracted and cached in the user's LocalAppData folder.
+pub fn ensure_cached_app_ico() -> Option<PathBuf> {
+    ensure_cached_asset("app_icon.ico", APP_ICON_ICO)
 }
 
 /// Returns the theme color and SVG inner paths for canonical board column icons.
@@ -99,13 +101,8 @@ pub fn ensure_cached_stage_icon(icon_name: &str) -> Option<PathBuf> {
     Some(icon_path)
 }
 
-/// Resolves the optimal icon path: stage SVG if matched, otherwise cached app icon PNG.
-pub fn resolve_toast_icon(icon_name: Option<&str>) -> Option<PathBuf> {
-    if let Some(name) = icon_name {
-        if let Some(path) = ensure_cached_stage_icon(name) {
-            return Some(path);
-        }
-    }
+/// Resolves the optimal icon path: returns cached app icon PNG (raster format supported by WinRT Toast engine).
+pub fn resolve_toast_icon(_icon_name: Option<&str>) -> Option<PathBuf> {
     ensure_cached_app_icon()
 }
 
@@ -124,23 +121,20 @@ pub fn build_windows_toast_script(
     let balloon_body = if unescaped_body.trim().is_empty() { " " } else { &unescaped_body };
 
     let image_el = match icon_path {
-        Some(p) => {
-            let p_esc = escape_xml(&p.to_string_lossy()).replace("'@", "' @");
-            format!(r#"      <image placement="appLogoOverride" src="{}" hint-crop="circle" />"#, p_esc)
-        }
+        Some(p) => format!(
+            r#"      <image placement="appLogoOverride" src="{}" hint-crop="circle" />"#,
+            escape_xml(&p.to_string_lossy()).replace("'@", "' @")
+        ),
         None => String::new(),
     };
 
     let actions_el = match task_id.filter(|t| !t.trim().is_empty()) {
-        Some(tid) => {
-            let tid_esc = escape_xml(tid).replace("'@", "' @");
-            format!(
-                r#"  <actions>
+        Some(tid) => format!(
+            r#"  <actions>
     <action content="Открыть задачу" arguments="open:{}" activationType="foreground"/>
   </actions>"#,
-                tid_esc
-            )
-        }
+            escape_xml(tid).replace("'@", "' @")
+        ),
         None => String::new(),
     };
 
@@ -179,8 +173,7 @@ if ($delivered) {{
     Start-Sleep -Milliseconds 1500
 }} else {{
     try {{
-        Add-Type -AssemblyName System.Windows.Forms
-        Add-Type -AssemblyName System.Drawing
+        Add-Type -AssemblyName System.Windows.Forms, System.Drawing
         $balloon = New-Object System.Windows.Forms.NotifyIcon
         $balloon.Icon = [System.Drawing.SystemIcons]::Information
         $balloon.BalloonTipTitle = @'
@@ -189,10 +182,8 @@ if ($delivered) {{
         $balloon.BalloonTipText = @'
 {5}
 '@
-        $balloon.Visible = $true
-        $balloon.ShowBalloonTip(3000)
-        Start-Sleep -Seconds 2
-        $balloon.Dispose()
+        $balloon.Visible = $true; $balloon.ShowBalloonTip(3000)
+        Start-Sleep -Seconds 2; $balloon.Dispose()
     }} catch {{}}
 }}"#,
         image_el, xml_title, xml_body, actions_el, raw_title, balloon_body
@@ -239,22 +230,87 @@ fn set_registry_val(key: &str, name: &str, reg_type: &str, val: &str) {
 }
 
 /// Registers AppUserModelID (`com.voimax.cvh`) in the Windows Current User Registry
-/// with cached icon URI so WinRT ToastNotificationManager can authorize desktop toast notifications.
+/// with cached icon URI and notification settings so WinRT ToastNotificationManager authorizes desktop toasts.
 #[cfg(target_os = "windows")]
 pub fn register_windows_aumid() {
-    let icon_uri = ensure_cached_app_icon()
+    let icon_uri = ensure_cached_app_ico()
+        .or_else(ensure_cached_app_icon)
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|| std::env::current_exe().map(|p| p.to_string_lossy().to_string()).unwrap_or_default());
     let key = r"HKCU\Software\Classes\AppUserModelId\com.voimax.cvh";
     set_registry_val(key, "DisplayName", "REG_SZ", "CanbanVoimaxHarness");
     set_registry_val(key, "IconUri", "REG_SZ", &icon_uri);
     set_registry_val(key, "ShowInSettings", "REG_DWORD", "1");
+
+    let notif_key = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\com.voimax.cvh";
+    set_registry_val(notif_key, "ShowInSettings", "REG_DWORD", "1");
+    set_registry_val(notif_key, "Enabled", "REG_DWORD", "1");
 }
 
 #[cfg(not(target_os = "windows"))]
 pub fn register_windows_aumid() {}
 
-/// Ensures a Start Menu shortcut exists on Windows, assigning the application icon location.
+/// Builds PowerShell script to create or update Start Menu shortcut with System.AppUserModel.ID property.
+pub fn build_windows_shortcut_script(
+    shortcut_path: &str,
+    target_path: &str,
+    work_dir: &str,
+    icon_path: &str,
+) -> String {
+    let sc = shortcut_path.replace('\'', "''");
+    let tg = target_path.replace('\'', "''");
+    let wd = work_dir.replace('\'', "''");
+    let ic = icon_path.replace('\'', "''");
+
+    format!(
+r#"$sc = '{0}'; $tg = '{1}'; $wd = '{2}'; $ic = '{3}'
+try {{
+    Add-Type -TypeDefinition @'
+using System; using System.Runtime.InteropServices; using System.Runtime.InteropServices.ComTypes;
+[ComImport, Guid("00021401-0000-0000-C000-000000000046")] class ShellLink {{}}
+[ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("000214F9-0000-0000-C000-000000000046")]
+interface IShellLinkW {{
+    void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder f, int c, IntPtr p, uint fl);
+    void GetIDList(out IntPtr p); void SetIDList(IntPtr p);
+    void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder d, int c); void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string d);
+    void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder d, int c); void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string d);
+    void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder a, int c); void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string a);
+    void GetHotkey(out short k); void SetHotkey(short k); void GetShowCmd(out int s); void SetShowCmd(int s);
+    void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder p, int c, out int i); void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string p, int i);
+    void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string p, uint r); void Resolve(IntPtr h, uint f); void SetPath([MarshalAs(UnmanagedType.LPWStr)] string p);
+}}
+[ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99")]
+interface IPropertyStore {{
+    void GetCount(out uint c); void GetAt(uint i, IntPtr k);
+    void GetValue(ref PROPERTYKEY k, [In, Out] PROPVARIANT pv);
+    void SetValue(ref PROPERTYKEY k, ref PROPVARIANT pv); void Commit();
+}}
+[StructLayout(LayoutKind.Sequential, Pack = 4)] struct PROPERTYKEY {{ public Guid fmtid; public uint pid; }}
+[StructLayout(LayoutKind.Explicit)] struct PROPVARIANT {{ [FieldOffset(0)] public ushort vt; [FieldOffset(8)] public IntPtr pwszVal; }}
+public class CvhShortcutManager {{
+    public static void CreateShortcut(string p, string t, string w, string ic, string a) {{
+        var l = (IShellLinkW)new ShellLink(); l.SetPath(t); l.SetWorkingDirectory(w);
+        if (!string.IsNullOrEmpty(ic)) l.SetIconLocation(ic, 0);
+        var s = (IPropertyStore)l;
+        var k = new PROPERTYKEY {{ fmtid = new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), pid = 5 }};
+        var v = new PROPVARIANT {{ vt = 31, pwszVal = Marshal.StringToCoTaskMemUni(a) }};
+        try {{ s.SetValue(ref k, ref v); s.Commit(); }} finally {{ Marshal.FreeCoTaskMem(v.pwszVal); }}
+        ((IPersistFile)l).Save(p, true);
+    }}
+}}
+'@
+    [CvhShortcutManager]::CreateShortcut($sc, $tg, $wd, $ic, 'com.voimax.cvh')
+}} catch {{
+    $ws = New-Object -ComObject WScript.Shell
+    $s = $ws.CreateShortcut($sc)
+    $s.TargetPath = $tg; $s.WorkingDirectory = $wd; $s.IconLocation = $ic
+    $s.Save()
+}}"#,
+        sc, tg, wd, ic
+    )
+}
+
+/// Ensures a Start Menu shortcut exists on Windows, assigning the application icon location and AUMID.
 #[cfg(target_os = "windows")]
 pub fn ensure_windows_start_menu_shortcut() {
     register_windows_aumid();
@@ -265,9 +321,6 @@ pub fn ensure_windows_start_menu_shortcut() {
         };
         let shortcut_path = PathBuf::from(app_data)
             .join(r"Microsoft\Windows\Start Menu\Programs\CanbanVoimaxHarness.lnk");
-        if shortcut_path.exists() {
-            return;
-        }
 
         let exe_path = match std::env::current_exe() {
             Ok(p) => p,
@@ -277,23 +330,12 @@ pub fn ensure_windows_start_menu_shortcut() {
         let exe_str = exe_path.to_string_lossy().to_string();
         let shortcut_str = shortcut_path.to_string_lossy().to_string();
         let parent_str = exe_path.parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
-        let icon_str = ensure_cached_app_icon()
+        let icon_str = ensure_cached_app_ico()
+            .or_else(ensure_cached_app_icon)
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|| exe_str.clone());
 
-        let ps_script = format!(
-            "$ws = New-Object -ComObject WScript.Shell; \
-             $s = $ws.CreateShortcut('{}'); \
-             $s.TargetPath = '{}'; \
-             $s.WorkingDirectory = '{}'; \
-             $s.IconLocation = '{}'; \
-             $s.Save();",
-            shortcut_str.replace('\'', "''"),
-            exe_str.replace('\'', "''"),
-            parent_str.replace('\'', "''"),
-            icon_str.replace('\'', "''"),
-        );
-
+        let ps_script = build_windows_shortcut_script(&shortcut_str, &exe_str, &parent_str, &icon_str);
         let encoded = encode_powershell_script(&ps_script);
         let _ = run_encoded_powershell(&encoded);
     });
@@ -381,34 +423,22 @@ mod tests {
     fn test_encode_powershell_script() {
         let script = "Write-Host 'Hello'";
         let encoded = encode_powershell_script(script);
-        use base64::Engine;
         let decoded = base64::engine::general_purpose::STANDARD.decode(&encoded).expect("Valid base64");
-        let u16_chars: Vec<u16> = decoded
-            .as_chunks::<2>()
-            .0
-            .iter()
-            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
-            .collect();
+        let u16_chars: Vec<u16> = decoded.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
         assert_eq!(String::from_utf16(&u16_chars).expect("Valid UTF-16"), script);
     }
 
     #[test]
     fn test_build_windows_toast_script_contains_aumid_and_styles() {
         let icon = Path::new("C:\\temp\\icon.png");
-        let script = build_windows_toast_script("Task CVH-042", Some("Review & test"), Some(icon), Some("CVH-042"));
-        assert!(script.contains("com.voimax.cvh"));
-        assert!(script.contains("Windows.SystemToast.BackgroundAccess"));
-        assert!(script.contains("Microsoft.Windows.Explorer"));
-        assert!(script.contains("{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}"));
-        assert!(script.contains("&amp;"));
-        assert!(script.contains("<text hint-style=\"title\">Task CVH-042</text>"));
-        assert!(script.contains("<text hint-style=\"body\" hint-wrap=\"true\">Review &amp; test</text>"));
-        assert!(script.contains("<text placement=\"attribution\">CanbanVoimaxHarness</text>"));
-        assert!(script.contains("appLogoOverride"));
-        assert!(script.contains("Открыть задачу"));
-        assert!(script.contains("open:CVH-042"));
-        assert!(script.contains("Start-Sleep -Milliseconds 1500"));
-        assert!(script.contains("System.Windows.Forms.NotifyIcon"));
+        let s = build_windows_toast_script("Task CVH-042", Some("Review & test"), Some(icon), Some("CVH-042"));
+        assert!(s.contains("com.voimax.cvh") && s.contains("Windows.SystemToast.BackgroundAccess"));
+        assert!(s.contains("Microsoft.Windows.Explorer") && s.contains("{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}"));
+        assert!(s.contains("&amp;") && s.contains("<text hint-style=\"title\">Task CVH-042</text>"));
+        assert!(s.contains("<text hint-style=\"body\" hint-wrap=\"true\">Review &amp; test</text>"));
+        assert!(s.contains("<text placement=\"attribution\">CanbanVoimaxHarness</text>"));
+        assert!(s.contains("appLogoOverride") && s.contains("Открыть задачу") && s.contains("open:CVH-042"));
+        assert!(s.contains("Start-Sleep -Milliseconds 1500") && s.contains("System.Windows.Forms.NotifyIcon"));
     }
 
     #[test]
@@ -428,12 +458,38 @@ mod tests {
     }
 
     #[test]
+    fn test_ensure_cached_app_ico() {
+        let p = ensure_cached_app_ico().expect("Cached ico path");
+        assert!(p.exists());
+        assert_eq!(p.file_name().and_then(|n| n.to_str()), Some("app_icon.ico"));
+    }
+
+    #[test]
+    fn test_resolve_toast_icon_returns_app_icon() {
+        let dev = resolve_toast_icon(Some("dev")).expect("Dev icon path");
+        assert!(dev.exists());
+        assert_eq!(dev.file_name().and_then(|n| n.to_str()), Some("app_icon.png"));
+
+        let none = resolve_toast_icon(None).expect("Default icon path");
+        assert!(none.exists());
+        assert_eq!(none.file_name().and_then(|n| n.to_str()), Some("app_icon.png"));
+    }
+
+    #[test]
+    fn test_build_windows_shortcut_script() {
+        let script = build_windows_shortcut_script("C:\\test.lnk", "C:\\test.exe", "C:\\", "C:\\icon.ico");
+        assert!(script.contains("CvhShortcutManager"));
+        assert!(script.contains("com.voimax.cvh"));
+        assert!(script.contains("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"));
+        assert!(script.contains("WScript.Shell"));
+    }
+
+    #[test]
     fn test_ensure_cached_stage_icon() {
         let dev_path = ensure_cached_stage_icon("dev").expect("Cached dev svg");
         assert!(dev_path.exists());
         let dev_svg = std::fs::read_to_string(dev_path).expect("Read SVG");
-        assert!(dev_svg.contains("<svg"));
-        assert!(dev_svg.contains("#3b82f6"));
+        assert!(dev_svg.contains("<svg") && dev_svg.contains("#3b82f6"));
 
         let rev_path = ensure_cached_stage_icon("review").expect("Cached review svg");
         assert!(rev_path.exists());
