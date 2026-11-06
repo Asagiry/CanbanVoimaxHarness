@@ -9,6 +9,7 @@ Task lifecycle and IDs are backend-authoritative. Card components use focused st
 | --- | --- |
 | `src/components/card/KanbanCard.tsx` | Card layout coordinator, memoized with `areCardPropsEqual`. |
 | `src/components/card/CardHookNode.tsx` | Stage stepper, stage switching and running state. |
+| `src/components/card/useCardHooks.ts` | Card hook node left/right routing (source vs target) and hook state selection. |
 | `src/components/card/CardTimerBadge.tsx` | Execution duration, active step timer, tabular-nums. |
 | `src/components/card/CardContextMenu.tsx` | Context actions, model selection, subtask deletion. |
 | `src/components/card/TaskContextMenu.tsx` | Backward-compatible alias for `CardContextMenu.tsx`. |

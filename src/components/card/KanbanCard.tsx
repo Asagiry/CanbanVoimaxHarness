@@ -10,7 +10,8 @@ import CardContextMenu from './CardContextMenu';
 import { CardTodoProgress } from './CardTodoProgress';
 import { CardTimerBadge, CardTimeFooter } from './CardTimerBadge';
 import { CardSubtaskBadge } from './CardSubtaskBadge';
-import { CardHookNode, useCardHooks } from './CardHookNode';
+import { CardHookNode } from './CardHookNode';
+import { useCardHooks } from './useCardHooks';
 import { areCardPropsEqual, KanbanCardProps } from './cardComparators';
 import { getDeterministicAgentColor } from '../../lib/agentPalette';
 import { useUiZoomStore, adjustDndTransformForZoom } from '../../hooks/useUiZoom';
@@ -208,7 +209,7 @@ function KanbanCard({ task, index }: KanbanCardProps) {
               {hookData.hasLeftHook && hookData.effectiveLeftHookName && (
                 <CardHookNode
                   side="left"
-                  hookType="on_enter"
+                  hookType={hookData.effectiveLeftHookType}
                   hookName={hookData.effectiveLeftHookName}
                   description={
                     hookData.isTransitionHookFromResult
@@ -224,15 +225,24 @@ function KanbanCard({ task, index }: KanbanCardProps) {
                 />
               )}
 
-              {/* Right Edge Hook Node (on_leave / exit) */}
+              {/* Right Edge Hook Node (on_leave / exit, or running on_enter into next column) */}
               {hookData.hasRightHook && hookData.effectiveRightHookName && (
                 <CardHookNode
                   side="right"
-                  hookType="on_leave"
+                  hookType={hookData.effectiveRightHookType}
                   hookName={hookData.effectiveRightHookName}
-                  description={hookData.leaveHookDescription}
+                  description={
+                    hookData.isEnterRunningTarget
+                      ? hookData.targetEnterHookDescription
+                      : hookData.leaveHookDescription
+                  }
                   state={hookData.effectiveRightState}
-                  stageTitle={taskColumn?.title || task.stageId}
+                  stageTitle={
+                    hookData.isEnterRunningTarget
+                      ? hookData.targetStageTitle || task.stageId
+                      : taskColumn?.title || task.stageId
+                  }
+                  isEnterRunningTarget={hookData.isEnterRunningTarget}
                   taskId={task.id}
                   isDragging={snapshot.isDragging}
                 />
