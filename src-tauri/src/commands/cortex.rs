@@ -126,6 +126,10 @@ pub async fn save_cortex_file(
         let _ = app.emit("cortex:rules_updated", serde_json::json!({ "path": &norm_path }));
     }
 
+    if norm_path.starts_with(".cvh/") || norm_path.contains("/.cvh/") {
+        crate::git::sync_cvh_to_all_worktrees(&root).await;
+    }
+
     Ok(())
 }
 
@@ -196,6 +200,17 @@ pub async fn delete_cortex_file_at(root: &Path, rel_path: &str) -> Result<(), St
     tokio::fs::remove_file(&target_canon)
         .await
         .map_err(|e| format!("Failed to delete cortex file {:?}: {}", target_canon, e))?;
+
+    if trimmed.starts_with(".cvh/") {
+        if let Ok(wts) = crate::git::list_worktrees(root).await {
+            for wt in wts {
+                let mirror = std::path::PathBuf::from(&wt.path).join(trimmed);
+                if mirror.exists() {
+                    let _ = tokio::fs::remove_file(&mirror).await;
+                }
+            }
+        }
+    }
 
     Ok(())
 }

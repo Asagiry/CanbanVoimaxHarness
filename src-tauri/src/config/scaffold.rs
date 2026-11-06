@@ -214,6 +214,9 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
 pub const CVH_GITIGNORE_HEADER: &str = "# CanbanVoimaxHarness Internal Runtime & Database";
 pub const CVH_GITIGNORE_LEGACY_HEADER: &str = "# CanbanVoimaxHarness Local Workspace";
 pub const CVH_GITIGNORE_ANCIENT_HEADER: &str = "# CanbanVoimaxHarness Local Runtime";
+// Invariant: .cvh/ config files ARE tracked; only runtime artifacts
+// (harness.db*, worktrees/, dialogs/, spill/, logs/, tasks/, tasks.json, llm.json) are ignored.
+// Never add a .cvh/ wildcard here — it would untrack committed rules/settings.
 pub const CVH_RUNTIME_GITIGNORE_ENTRIES: &[&str] = &[
     ".cvh/harness.db*",
     ".cvh/worktrees/",

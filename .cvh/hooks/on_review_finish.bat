@@ -35,9 +35,8 @@ if not errorlevel 1 (
 )
 
 echo [CVH Merge Hook] Checking out main...
-REM Discard uncommitted dual-write residue before checkout/pull/merge (§ 2.23)
-git restore --staged .cvh >nul 2>&1
-git restore .cvh >nul 2>&1
+REM Preserve live .cvh/ (canonical source, uncommitted) across checkout/pull/merge
+if exist ".cvh" (xcopy /E /I /Y ".cvh" "%TEMP%\cvh_backup_%CVH_TASK_ID%" >nul)
 
 git checkout main
 if errorlevel 1 (
@@ -45,16 +44,8 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Discard uncommitted dual-write residue on main before merge
-git restore --staged .cvh >nul 2>&1
-git restore .cvh >nul 2>&1
-
 echo [CVH Merge Hook] Pulling latest main from origin...
 git pull --rebase origin main >nul 2>&1
-
-REM Ensure clean state before merge
-git restore --staged .cvh >nul 2>&1
-git restore .cvh >nul 2>&1
 
 echo [CVH Merge Hook] Merging branch '%CVH_BRANCH%' into main...
 git merge --no-ff "%CVH_BRANCH%" -m "feat(%CVH_TASK_ID%): %CVH_TASK_TITLE% [approved]"
@@ -62,6 +53,10 @@ if errorlevel 1 (
     echo [CVH Merge Hook] ERROR: Git merge conflict while merging into main >&2
     exit /b 1
 )
+
+REM Unstage any .cvh/ introduced by merge, then restore live backup over .cvh/
+git restore --staged .cvh >nul 2>&1
+if exist "%TEMP%\cvh_backup_%CVH_TASK_ID%" (xcopy /E /I /Y "%TEMP%\cvh_backup_%CVH_TASK_ID%" ".cvh" >nul & rmdir /S /Q "%TEMP%\cvh_backup_%CVH_TASK_ID%")
 
 echo [CVH Merge Hook] Pushing to origin/main...
 git push origin main
