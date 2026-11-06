@@ -627,6 +627,138 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
       expect(useBoardStore.getState().activeQuestions['CVH-001']).toBeUndefined();
     });
 
+    it('clearActiveQuestion(parent) purges descendant questions', () => {
+      useBoardStore.getState().setActiveQuestion({
+        taskId: 'CVH-076.3',
+        questionId: 'q-3',
+        text: 'Reviewer question?',
+        timestamp: 1,
+      });
+      expect(useBoardStore.getState().activeQuestions['CVH-076.3']?.text).toBe('Reviewer question?');
+
+      useBoardStore.getState().clearActiveQuestion('CVH-076');
+      expect(useBoardStore.getState().activeQuestions['CVH-076.3']).toBeUndefined();
+      expect(useBoardStore.getState().activeQuestions).toEqual({});
+    });
+
+    it('clearActiveQuestion(descendant) purges ancestors and family', () => {
+      // recordQuestionAnswer path: answering .3 clears ancestor + siblings
+      useBoardStore.getState().setActiveQuestion({
+        taskId: 'CVH-076.3',
+        questionId: 'q-3',
+        text: 'Reviewer question?',
+        timestamp: 1,
+      });
+      // Manually inject ancestor key to simulate stale mirror
+      useBoardStore.setState({
+        activeQuestions: {
+          ...useBoardStore.getState().activeQuestions,
+          'CVH-076': { taskId: 'CVH-076', questionId: 'q-3', text: 'Reviewer question?', timestamp: 1 },
+        },
+      });
+      useBoardStore.getState().clearActiveQuestion('CVH-076.3');
+      expect(useBoardStore.getState().activeQuestions).toEqual({});
+    });
+
+    it('setActiveQuestion dedupes to single active per root family', () => {
+      useBoardStore.getState().setActiveQuestion({
+        taskId: 'CVH-076.1',
+        questionId: 'q-1',
+        text: 'Planner question?',
+        timestamp: 1,
+      });
+      useBoardStore.getState().setActiveQuestion({
+        taskId: 'CVH-076.3',
+        questionId: 'q-3',
+        text: 'Reviewer question?',
+        timestamp: 2,
+      });
+      const keys = Object.keys(useBoardStore.getState().activeQuestions);
+      expect(keys).toEqual(['CVH-076.3']);
+    });
+
+    it('setBackendTasks prunes questions for done/deleted subtasks', () => {
+      const parent = createSampleTask({ id: 'CVH-076', stageId: 'dev', status: 'idle' });
+      const sub = createSampleTask({ id: 'CVH-076.3', parentId: 'CVH-076', stageId: 'dev', status: 'running' });
+      useBoardStore.getState().setTasks([parent, sub]);
+      useBoardStore.getState().setActiveQuestion({
+        taskId: 'CVH-076.3',
+        questionId: 'q-3',
+        text: 'Reviewer question?',
+        timestamp: 1,
+      });
+      expect(useBoardStore.getState().activeQuestions['CVH-076.3']).toBeDefined();
+
+      // Hydrate with .3 done in ready
+      useBoardStore.getState().setBackendTasks([
+        { id: 'CVH-076', title: 'Parent', stageId: 'dev', status: 'idle', boardId: 'development' } as BackendTaskDTO,
+        { id: 'CVH-076.3', title: 'Reviewer', stageId: 'ready', status: 'done', boardId: 'development', parentId: 'CVH-076' } as BackendTaskDTO,
+      ]);
+      expect(useBoardStore.getState().activeQuestions).toEqual({});
+    });
+
+    it('setBackendTasks keeps question for live non-terminal subtask', () => {
+      useBoardStore.getState().setActiveQuestion({
+        taskId: 'CVH-076.3',
+        questionId: 'q-3',
+        text: 'Reviewer question?',
+        timestamp: 1,
+      });
+      useBoardStore.getState().setBackendTasks([
+        { id: 'CVH-076', title: 'Parent', stageId: 'dev', status: 'idle', boardId: 'development' } as BackendTaskDTO,
+        { id: 'CVH-076.3', title: 'Reviewer', stageId: 'dev', status: 'running', boardId: 'development', parentId: 'CVH-076' } as BackendTaskDTO,
+      ]);
+      expect(useBoardStore.getState().activeQuestions['CVH-076.3']?.text).toBe('Reviewer question?');
+    });
+
+    it('upsertBackendTask with done subtask does not set parent waitingForSubtaskId', () => {
+      const parent = createSampleTask({ id: 'CVH-076', stageId: 'dev', status: 'idle' });
+      useBoardStore.getState().setTasks([parent]);
+
+      useBoardStore.getState().upsertBackendTask({
+        id: 'CVH-076.3',
+        parentId: 'CVH-076',
+        title: 'Reviewer done',
+        stageId: 'ready',
+        status: 'done',
+      } as BackendTaskDTO);
+
+      const root = useBoardStore.getState().tasks.find((t) => t.id === 'CVH-076');
+      expect(root?.waitingForSubtaskId).toBeUndefined();
+    });
+
+    it('upsertBackendTask with non-running (paused) subtask does not set parent waitingForSubtaskId', () => {
+      const parent = createSampleTask({ id: 'CVH-076', stageId: 'dev', status: 'idle' });
+      useBoardStore.getState().setTasks([parent]);
+
+      useBoardStore.getState().upsertBackendTask({
+        id: 'CVH-076.3',
+        parentId: 'CVH-076',
+        title: 'Reviewer paused',
+        stageId: 'dev',
+        status: 'paused',
+      } as BackendTaskDTO);
+
+      const root = useBoardStore.getState().tasks.find((t) => t.id === 'CVH-076');
+      expect(root?.waitingForSubtaskId).toBeUndefined();
+    });
+
+    it('upsertBackendTask with running subtask sets parent waitingForSubtaskId', () => {
+      const parent = createSampleTask({ id: 'CVH-076', stageId: 'dev', status: 'idle' });
+      useBoardStore.getState().setTasks([parent]);
+
+      useBoardStore.getState().upsertBackendTask({
+        id: 'CVH-076.3',
+        parentId: 'CVH-076',
+        title: 'Reviewer running',
+        stageId: 'dev',
+        status: 'running',
+      } as BackendTaskDTO);
+
+      const root = useBoardStore.getState().tasks.find((t) => t.id === 'CVH-076');
+      expect(root?.waitingForSubtaskId).toBe('CVH-076.3');
+    });
+
     it('tracks hook lifecycle from start to finish', () => {
       const task = createSampleTask({ id: 'CVH-001' });
       useBoardStore.getState().setTasks([task]);

@@ -32,19 +32,30 @@ export const createTasksCrudSlice: StateCreator<
   activeQuestions: {},
 
   setActiveQuestion: (payload) => {
-    set((state) => ({
-      activeQuestions: {
-        ...state.activeQuestions,
-        [payload.taskId]: payload,
-      },
-    }));
+    set((state) => {
+      // Dedupe to single active per root family (CVH-076.* / CVH-076)
+      const root = payload.taskId.split('.')[0];
+      const next: Record<string, typeof payload> = {};
+      for (const [k, v] of Object.entries(state.activeQuestions)) {
+        if (k.split('.')[0] !== root) next[k] = v;
+      }
+      next[payload.taskId] = payload;
+      return { activeQuestions: next };
+    });
   },
 
   clearActiveQuestion: (taskId) => {
     set((state) => {
-      if (!state.activeQuestions[taskId]) return state;
+      const prefix = `${taskId}.`;
+      const keysToDelete = Object.keys(state.activeQuestions).filter(
+        (k) => k === taskId || k.startsWith(prefix)
+      );
+      // Also purge ancestors' keys when clearing a descendant (recordQuestionAnswer path)
+      const root = taskId.split('.')[0];
+      if (root !== taskId) keysToDelete.push(root, ...Object.keys(state.activeQuestions).filter((k) => k.startsWith(`${root}.`)));
+      if (keysToDelete.length === 0) return state;
       const next = { ...state.activeQuestions };
-      delete next[taskId];
+      for (const k of keysToDelete) delete next[k];
       return { activeQuestions: next };
     });
   },
@@ -212,8 +223,15 @@ export const createTasksCrudSlice: StateCreator<
           }
         }
         saveCachedHookStates(nextHookStates);
+        // Prune stale questions on hydration (see setBackendTasks)
+        const liveIds = new Set(mapped.filter((t) => t.status !== 'done' && t.stageId !== 'ready' && t.stageId !== 'done').map((t) => t.id));
+        const prevQuestions = get().activeQuestions;
+        const prunedQuestions: Record<string, (typeof prevQuestions)[string]> = {};
+        for (const [k, v] of Object.entries(prevQuestions)) {
+          if (liveIds.has(k)) prunedQuestions[k] = v;
+        }
         // Unconditional hard overwrite: never merge with stale tasks from prior projects!
-        set({ tasks: mapped, hookStates: nextHookStates, isTauriConnected: true, isLoadingTasks: false });
+        set({ tasks: mapped, hookStates: nextHookStates, activeQuestions: prunedQuestions, isTauriConnected: true, isLoadingTasks: false });
         return;
       }
     } catch (err) {
@@ -555,11 +573,13 @@ export const createTasksCrudSlice: StateCreator<
             if (t.id === mapped.parentId) {
               const mappedCol = columns.find((c) => c.id === mapped.stageId);
               const isSubDone = mapped.status === 'done' || mapped.stageId === 'ready' || mappedCol?.terminal === true;
-              return {
-                ...t,
-                waitingForSubtaskId: isSubDone ? undefined : mapped.id,
-                status: t.status === 'waiting_subtask' ? ('idle' as TaskStatus) : t.status,
-              };
+              // Only link parent when subtask is actually running/idle-with-autorun (mirror backend lifecycle rule)
+              const isActiveSub = mapped.status === 'running' || mapped.status === 'idle';
+              const parentStatus = t.status === 'waiting_subtask' ? ('idle' as TaskStatus) : t.status;
+              if (isSubDone || !isActiveSub) {
+                return { ...t, waitingForSubtaskId: undefined, status: parentStatus };
+              }
+              return { ...t, waitingForSubtaskId: mapped.id, status: parentStatus };
             }
             return t;
           })
@@ -656,7 +676,15 @@ export const createTasksCrudSlice: StateCreator<
     }
     saveCachedHookStates(nextHookStates);
 
-    set({ tasks: cleanedTasks.sort(sortTasksByPosition), hookStates: nextHookStates });
+    // Prune stale questions: keep only ids present in mapped with non-terminal status
+    const liveIds = new Set(cleanedTasks.filter((t) => t.status !== 'done' && t.stageId !== 'ready' && t.stageId !== 'done').map((t) => t.id));
+    const prevQuestions = get().activeQuestions;
+    const prunedQuestions: Record<string, (typeof prevQuestions)[string]> = {};
+    for (const [k, v] of Object.entries(prevQuestions)) {
+      if (liveIds.has(k)) prunedQuestions[k] = v;
+    }
+
+    set({ tasks: cleanedTasks.sort(sortTasksByPosition), hookStates: nextHookStates, activeQuestions: prunedQuestions });
   },
 
   addTask: async (input) => {

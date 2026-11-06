@@ -179,8 +179,10 @@ pub async fn execute_question(
 
     // 2. Persist activity item in SQLite dialog_items with type: "question"
     let timestamp_str = chrono::Utc::now().to_rfc3339();
+    let parent_task_id = task_id_str.split('.').next().unwrap_or(&task_id_str).to_string();
     let question_payload = serde_json::json!({
         "taskId": task_id_str,
+        "parentTaskId": parent_task_id,
         "questionId": question_id,
         "text": text,
         "options": options,
@@ -212,6 +214,7 @@ pub async fn execute_question(
             "agent:question",
             serde_json::json!({
                 "taskId": task_id_str,
+                "parentTaskId": parent_task_id,
                 "questionId": question_id,
                 "text": text,
                 "options": options,

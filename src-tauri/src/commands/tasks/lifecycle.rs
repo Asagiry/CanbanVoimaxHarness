@@ -850,8 +850,13 @@ pub async fn internal_create_subtask(
         }
     }
 
-    // Update parent task: mark waiting for subtask, keep parent pinned in current stage (§ 2.2)
-    tasks[parent_idx].waiting_for_subtask_id = Some(subtask_id.clone());
+    // Update parent task: mark waiting for subtask only when subtask is non-terminal
+    // Do not point parent at a terminal subtask (defense in depth against stale badges)
+    if target_col.terminal == Some(true) {
+        tasks[parent_idx].waiting_for_subtask_id = None;
+    } else {
+        tasks[parent_idx].waiting_for_subtask_id = Some(subtask_id.clone());
+    }
     tasks[parent_idx].status = Some("done".to_string());
     tasks[parent_idx].updated_at = now;
 
