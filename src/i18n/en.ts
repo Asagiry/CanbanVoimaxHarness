@@ -402,7 +402,7 @@ export const en = {
   'tools.question.label': 'Ask User',
   'tools.question.description': 'Ask clarifying question to the user and await response in the interface. Alias: ask_user.',
   'tools.advance_task.label': 'Advance Stage',
-  'tools.advance_task.description': 'Advance task to the next pipeline stage. CRITICAL: All TODO items must be fully completed before calling. Requires comprehensive summary of completed work and verification proof.',
+  'tools.advance_task.description': 'Advance task to the next pipeline stage. Unfinished TODO items will be auto-completed on advance; mark them completed via todo_write first for accurate progress. Requires comprehensive summary of completed work and verification proof.',
   'tools.reject_task.label': 'Reject Stage',
   'tools.reject_task.description': 'Return task to the previous pipeline stage specifying rejection reason and notes.',
   'tools.execute_command.label': 'Terminal Commands',

@@ -153,6 +153,36 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
       expect(updated?.stageDurations).toEqual({ backlog: 120 });
     });
 
+    it('upsertBackendTask merges auto-completed todos from task:updated payload', () => {
+      const initialTask = createSampleTask({
+        id: 'CVH-084',
+        title: 'cvh',
+        todos: [
+          { id: 'td-1', content: 'Plan', status: 'completed' },
+          { id: 'td-2', content: 'Implement', status: 'in_progress' },
+        ],
+      });
+      useBoardStore.getState().setTasks([initialTask]);
+
+      const dtoUpdate: BackendTaskDTO = {
+        id: 'CVH-084',
+        title: 'cvh',
+        stageId: 'dev',
+        todos: [
+          { id: 'td-1', content: 'Plan', status: 'completed' },
+          { id: 'td-2', content: 'Implement', status: 'completed' },
+        ],
+      };
+
+      useBoardStore.getState().upsertBackendTask(dtoUpdate);
+
+      const updated = useBoardStore.getState().tasks.find((t) => t.id === 'CVH-084');
+      expect(updated?.todos).toEqual([
+        { id: 'td-1', content: 'Plan', status: 'completed' },
+        { id: 'td-2', content: 'Implement', status: 'completed' },
+      ]);
+    });
+
     it('addTask calls backend create_task and prepends task to store', async () => {
       mockInvoke.mockImplementation(async (cmd, args) => {
         if (cmd === 'create_task') {

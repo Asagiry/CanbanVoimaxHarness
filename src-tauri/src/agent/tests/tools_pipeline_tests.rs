@@ -694,6 +694,69 @@ use std::sync::Arc;
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
 
+    #[tokio::test]
+    async fn test_advance_task_tool_auto_completes_todos_note() {
+        let base = std::path::PathBuf::from("target").join(format!("cvh_adv_todo_note_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(base.join(".cvh")).await.expect("test dirs");
+
+        let (boards_cfg, _) = make_test_board(&base);
+        crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
+
+        let mut task = make_test_task("CVH-070", "dev", "test-board");
+        let todos = vec![
+            crate::agent::TodoItem {
+                id: "todo-1".to_string(),
+                content: "Done item".to_string(),
+                status: "completed".to_string(),
+            },
+            crate::agent::TodoItem {
+                id: "todo-2".to_string(),
+                content: "Unfinished item".to_string(),
+                status: "in_progress".to_string(),
+            },
+        ];
+        task.todos = Some(todos.clone());
+        crate::commands::tasks::save_tasks_to_disk(&base, &[task]).await.expect("save task");
+        crate::db::db_save_todos(&base, "CVH-070", &todos).expect("save todos");
+
+        let flag = Arc::new(AtomicBool::new(false));
+        let policy = ToolPolicyConfig::default();
+        let tool_ctx = ToolContext {
+            repo_root: &base,
+            worktree_dir: &base,
+            stage_id: Some("dev"),
+            role: Some("developer"),
+            abort_handle: flag,
+            tool_policy: &policy,
+            task_id: Some("CVH-070"),
+            agent_allowed_tools: None,
+            app_handle: None,
+            base_url: None,
+            api_key: None,
+            model: None,
+            temperature: None,
+            reasoning_effort: None,
+            call_id: None,
+        };
+
+        let adv_res = execute_tool(&tool_ctx, "advance_task", &serde_json::json!({
+            "summary": "Completed work"
+        }))
+        .await
+        .expect("advance_task must succeed");
+
+        assert!(adv_res.contains("УСПЕШНО"));
+        assert!(adv_res.contains("auto-completed"), "result must contain auto-complete note: {}", adv_res);
+
+        let db_task = crate::db::db_get_task(&base, "CVH-070").expect("db_get_task").expect("task in db");
+        let db_todos = db_task.todos.as_ref().expect("db todos present");
+        assert_eq!(db_todos.len(), 2);
+        assert_eq!(db_todos[0].status, "completed");
+        assert_eq!(db_todos[1].status, "completed");
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
     // -------------------------------------------------------------------------
     // b) Subagents & Delegation: synchronous subagent, subagent_bg & collect
     // -------------------------------------------------------------------------

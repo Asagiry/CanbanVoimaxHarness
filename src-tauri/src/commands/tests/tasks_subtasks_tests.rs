@@ -1175,3 +1175,186 @@ use std::path::PathBuf;
 
         let _ = tokio::fs::remove_dir_all(&tmp).await;
     }
+
+    #[tokio::test]
+    async fn test_subtask_non_terminal_advance_auto_completes_todos() {
+        let base = PathBuf::from("target").join(format!("cvh_sub_todo_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        let cols = vec![
+            crate::config::PipelineColumn {
+                id: "backlog".to_string(),
+                title: "Backlog".to_string(),
+                color: None,
+                icon: None,
+                persona: None,
+                wip_limit: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                auto_run: None,
+                terminal: None,
+                is_intake: Some(true),
+            },
+            crate::config::PipelineColumn {
+                id: "dev".to_string(),
+                title: "Development".to_string(),
+                color: None,
+                icon: None,
+                persona: Some("developer".to_string()),
+                wip_limit: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                auto_run: Some(true),
+                terminal: None,
+                is_intake: None,
+            },
+            crate::config::PipelineColumn {
+                id: "review".to_string(),
+                title: "Review".to_string(),
+                color: None,
+                icon: None,
+                persona: Some("reviewer".to_string()),
+                wip_limit: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                auto_run: Some(true),
+                terminal: None,
+                is_intake: None,
+            },
+            crate::config::PipelineColumn {
+                id: "ready".to_string(),
+                title: "Ready".to_string(),
+                color: None,
+                icon: None,
+                persona: None,
+                wip_limit: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                auto_run: None,
+                terminal: Some(true),
+                is_intake: None,
+            },
+        ];
+
+        let boards_cfg = crate::config::BoardsConfig {
+            active_board_id: "sub-todo-board".to_string(),
+            boards: vec![crate::config::BoardDef {
+                id: "sub-todo-board".to_string(),
+                name: "Sub Todo Board".to_string(),
+                stages: cols,
+            }],
+        };
+        crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
+
+        let parent = Task {
+            id: "CVH-300".to_string(),
+            title: "Parent task".to_string(),
+            description: "Desc".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("sub-todo-board".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("running".to_string()),
+            model: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: Some(true),
+            created_at: 0,
+            updated_at: 0,
+            stage_entered_at: None,
+            completed_at: None,
+            handover_summary: None,
+            attachments: None,
+            cover_image: None,
+            position: None,
+            hook_states: None,
+            project_path: None,
+        stage_durations: None,
+        total_elapsed: None,
+        };
+        save_tasks_to_disk(&base, &[parent]).await.expect("save parent");
+
+        let adv_res = internal_advance_task(&base, "CVH-300", "Handover to review", None)
+            .await
+            .expect("advance to review subtask");
+        assert!(adv_res.contains("УСПЕШНО: Создана подзадача CVH-300.1"));
+
+        let sub_todos = vec![
+            crate::agent::TodoItem {
+                id: "todo-1".to_string(),
+                content: "Done item".to_string(),
+                status: "completed".to_string(),
+            },
+            crate::agent::TodoItem {
+                id: "todo-2".to_string(),
+                content: "Unfinished item".to_string(),
+                status: "in_progress".to_string(),
+            },
+        ];
+        crate::db::db_save_todos(&base, "CVH-300.1", &sub_todos).expect("save sub todos");
+        {
+            let mut tasks = load_tasks_from_disk(&base).await;
+            if let Some(sub) = tasks.iter_mut().find(|t| t.id == "CVH-300.1") {
+                sub.todos = Some(sub_todos.clone());
+                let _ = crate::db::db_upsert_task(&base, sub);
+            }
+            let _ = save_tasks_to_disk(&base, &tasks).await;
+        }
+
+        let adv_sub = internal_advance_task_to_stage(
+            &base,
+            "CVH-300.1",
+            Some("ready"),
+            "Subtask done",
+            None,
+        )
+        .await
+        .expect("advance subtask to ready");
+        assert!(adv_sub.contains("УСПЕШНО"));
+
+        let loaded = load_tasks_from_disk(&base).await;
+        let sub = loaded.iter().find(|t| t.id == "CVH-300.1").expect("subtask exists");
+        let disk_todos = sub.todos.as_ref().expect("disk todos present");
+        assert_eq!(disk_todos.len(), 2);
+        assert_eq!(disk_todos[0].status, "completed");
+        assert_eq!(disk_todos[1].status, "completed");
+
+        let db_task = crate::db::db_get_task(&base, "CVH-300.1").expect("db_get_task").expect("task in db");
+        let db_todos = db_task.todos.as_ref().expect("db todos present");
+        assert_eq!(db_todos.len(), 2);
+        assert_eq!(db_todos[0].status, "completed");
+        assert_eq!(db_todos[1].status, "completed");
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }

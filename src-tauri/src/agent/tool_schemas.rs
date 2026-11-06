@@ -192,7 +192,7 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "advance_task",
-            "Advance task to the next sequential pipeline stage or transition to a specific stage (stage_id / target_stage). CRITICAL: All TODO items must be fully completed before calling. Requires comprehensive summary of completed work and verification proof.",
+            "Advance task to the next sequential pipeline stage or transition to a specific stage (stage_id / target_stage). Unfinished TODO items will be auto-completed on advance; mark them completed via todo_write first for accurate progress. Requires comprehensive summary of completed work and verification proof.",
             serde_json::json!({
                 "type": "object",
                 "properties": {

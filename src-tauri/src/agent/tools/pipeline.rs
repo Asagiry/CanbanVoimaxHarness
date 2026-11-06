@@ -56,7 +56,11 @@ pub async fn execute_advance_task(
         }
     }
 
-    crate::commands::internal_advance_task_to_stage(
+    let unfinished_before = crate::db::db_get_todos(repo_root, task_id)
+        .map(|t| t.len())
+        .unwrap_or(0);
+
+    let result = crate::commands::internal_advance_task_to_stage(
         repo_root,
         task_id,
         target_stage,
@@ -64,7 +68,16 @@ pub async fn execute_advance_task(
         ctx.app_handle.as_ref(),
     )
     .await
-    .map_err(|e| anyhow::anyhow!("{}", e))
+    .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    if unfinished_before > 0 {
+        Ok(format!(
+            "{}\nNote: {} unfinished TODO item(s) were auto-completed.",
+            result, unfinished_before
+        ))
+    } else {
+        Ok(result)
+    }
 }
 
 pub async fn execute_reject_task(
