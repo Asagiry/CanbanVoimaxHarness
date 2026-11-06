@@ -1,8 +1,7 @@
-import { memo, useState, useRef, useEffect } from 'react';
+import { memo, useState, useEffect } from 'react';
 import { Paperclip } from 'lucide-react';
 import { KanbanTask, TaskStatus } from '../../types';
 import { useTranslation, Language } from '../../stores/languageStore';
-import { StageDurationsPopover } from './StageDurationsPopover';
 
 export function formatCardDate(ts?: number): string {
   if (!ts || !Number.isFinite(ts)) return '';
@@ -78,35 +77,6 @@ export const CardTimerBadge = memo(function CardTimerBadge({
   isDone = false,
 }: CardTimerBadgeProps) {
   const { t } = useTranslation();
-  const [isHovered, setIsHovered] = useState(false);
-  const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null);
-  const triggerRef = useRef<HTMLSpanElement>(null);
-  const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (hideTimeoutRef.current) {
-        clearTimeout(hideTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const handleMouseEnter = () => {
-    if (hideTimeoutRef.current) {
-      clearTimeout(hideTimeoutRef.current);
-      hideTimeoutRef.current = null;
-    }
-    if (triggerRef.current) {
-      setTriggerRect(triggerRef.current.getBoundingClientRect());
-    }
-    setIsHovered(true);
-  };
-
-  const handleMouseLeave = () => {
-    hideTimeoutRef.current = setTimeout(() => {
-      setIsHovered(false);
-    }, 150);
-  };
 
   const status: TaskStatus = task.status;
   const isRunning = status === 'running';
@@ -114,26 +84,12 @@ export const CardTimerBadge = memo(function CardTimerBadge({
 
   if (status === 'running') {
     return (
-      <>
-        <span
-          ref={triggerRef}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-          className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#17171b] border border-[#bbf7d0] dark:border-[#2c2c33] cursor-help"
-        >
-          <span className="h-1.5 w-1.5 rounded-full bg-[#15803d] dark:bg-[#4ade80]" />
-          <span>{t('status.running')} {formatTimerMMSS(currentStageDuration)}</span>
-        </span>
-        {isHovered && (
-          <StageDurationsPopover
-            task={task}
-            isOpen={isHovered}
-            triggerRect={triggerRect}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
-          />
-        )}
-      </>
+      <span
+        className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#17171b] border border-[#bbf7d0] dark:border-[#2c2c33]"
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-[#15803d] dark:bg-[#4ade80]" />
+        <span>{t('status.running')} {formatTimerMMSS(currentStageDuration)}</span>
+      </span>
     );
   }
 
@@ -152,25 +108,11 @@ export const CardTimerBadge = memo(function CardTimerBadge({
       : t('status.done');
 
     return (
-      <>
-        <span
-          ref={triggerRef}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-          className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#17171b] border border-[#bbf7d0] dark:border-[#2c2c33] cursor-help"
-        >
-          <span>{doneLabel}</span>
-        </span>
-        {isHovered && (
-          <StageDurationsPopover
-            task={task}
-            isOpen={isHovered}
-            triggerRect={triggerRect}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
-          />
-        )}
-      </>
+      <span
+        className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums text-[#15803d] dark:text-[#4ade80] bg-[#f0fdf4] dark:bg-[#17171b] border border-[#bbf7d0] dark:border-[#2c2c33]"
+      >
+        <span>{doneLabel}</span>
+      </span>
     );
   }
 

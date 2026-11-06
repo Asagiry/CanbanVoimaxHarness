@@ -150,8 +150,6 @@ export const en = {
   'card.created': 'created {date}',
   'card.elapsed': 'running {time}',
   'card.completedDuration': 'took {time}',
-  'card.stageDurationsTitle': 'Time in columns',
-  'card.totalActiveTime': 'Total active time',
   'card.completedSubtasks': 'Completed subtasks ({count})',
   'card.expandSubtasks': 'Expand list of completed stages and subtasks',
   'card.openSubtaskDialog': 'Open dialogue and thoughts of subtask {id}',

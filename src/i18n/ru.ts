@@ -152,8 +152,6 @@ export const ru = {
   'card.created': 'созд. {date}',
   'card.elapsed': 'идёт {time}',
   'card.completedDuration': 'за {time}',
-  'card.stageDurationsTitle': 'Время по колонкам',
-  'card.totalActiveTime': 'Всего активно',
   'card.completedSubtasks': 'Завершенные подзадачи ({count})',
   'card.expandSubtasks': 'Раскрыть список завершенных этапов и подзадач',
   'card.openSubtaskDialog': 'Открыть диалог и мысли подзадачи {id}',

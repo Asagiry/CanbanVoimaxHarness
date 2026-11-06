@@ -10,7 +10,6 @@ Task lifecycle and IDs are backend-authoritative. Card components use focused st
 | `src/components/card/KanbanCard.tsx` | Card layout coordinator, memoized with `areCardPropsEqual`. |
 | `src/components/card/CardHookNode.tsx` | Stage stepper, stage switching and running state. |
 | `src/components/card/CardTimerBadge.tsx` | Execution duration, active step timer, tabular-nums. |
-| `src/components/card/StageDurationsPopover.tsx` | Per-stage active duration breakdown, animated running indicator, total active time. |
 | `src/components/card/CardContextMenu.tsx` | Context actions, model selection, subtask deletion. |
 | `src/components/card/TaskContextMenu.tsx` | Backward-compatible alias for `CardContextMenu.tsx`. |
 | `src/components/card/CardSubtaskBadge.tsx` | Subtask counter, status indicator, auto-unlock indicator. |
@@ -23,7 +22,7 @@ Task lifecycle and IDs are backend-authoritative. Card components use focused st
 | `src/components/board/StageHookBadge.tsx` | Transition script and gatekeeper sensor status. |
 | `src/components/board/ColumnContextMenu.tsx` | Backward-compatible alias for `StageContextMenu.tsx`. |
 | `src/components/board/ColumnHookBadge.tsx` | Backward-compatible alias for `StageHookBadge.tsx`. |
-| `src/components/board/modals/CreateTaskModal.tsx` | Task creation modal with persona & model selection. |
+| `src/components/board/modals/CreateTaskModal.tsx` | Task creation modal with persona selection. |
 | `src/components/board/modals/CreateColumnModal.tsx` | Column creation modal with hook configuration. |
 | `src/components/board/CreateBoardModal.tsx` | Board creation modal with preset templates. |
 | `src/components/board/modals/ImageLightboxModal.tsx` | Full-screen image preview for board attachments. |
