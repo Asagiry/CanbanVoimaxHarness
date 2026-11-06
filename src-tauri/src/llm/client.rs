@@ -154,6 +154,13 @@ impl LlmClient {
         if let Some(tools) = &mut request.tools {
             tools.sort_by(|a, b| a.function.name.cmp(&b.function.name));
         }
+        let mut headers = super::cache::opencode_headers(base_url, &self.session);
+        let is_opencode = headers.contains_key("x-opencode-session");
+        if is_opencode {
+            for message in &mut request.messages {
+                message.cache_control = None;
+            }
+        }
         self.prefix.lock().map_err(|_| anyhow::anyhow!("Prompt cache tracker lock poisoned"))?
             .observe(&request)?;
 
@@ -165,7 +172,6 @@ impl LlmClient {
             format!("{}/chat/completions", base_url)
         };
 
-        let mut headers = super::cache::opencode_headers(base_url, &self.session);
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         if let Some(key) = api_key {
             if !key.trim().is_empty() {
@@ -176,7 +182,6 @@ impl LlmClient {
         }
 
         let mut attempt = 0;
-        let is_opencode = headers.contains_key("x-opencode-session");
         let max_reconnects = if is_opencode { 2 } else { 10 };
 
         let response = loop {
@@ -397,6 +402,87 @@ impl LlmClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn opencode_transport_omits_cache_markers_and_preserves_history() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let mut captured = Vec::new();
+            for _ in 0..3 {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut bytes = Vec::new();
+                let mut buffer = [0; 4096];
+                let (headers, body_start, length) = loop {
+                    let count = socket.read(&mut buffer).await.unwrap();
+                    assert_ne!(count, 0);
+                    bytes.extend_from_slice(&buffer[..count]);
+                    if let Some(end) = bytes.windows(4).position(|part| part == b"\r\n\r\n") {
+                        let headers = String::from_utf8(bytes[..end].to_vec()).unwrap().to_lowercase();
+                        let length: usize = headers.lines().find_map(|line| line.strip_prefix("content-length: "))
+                            .unwrap().parse().unwrap();
+                        break (headers, end + 4, length);
+                    }
+                };
+                while bytes.len() < body_start + length {
+                    let count = socket.read(&mut buffer).await.unwrap();
+                    assert_ne!(count, 0);
+                    bytes.extend_from_slice(&buffer[..count]);
+                }
+                let body: serde_json::Value = serde_json::from_slice(&bytes[body_start..body_start + length]).unwrap();
+                captured.push((headers, body));
+                let response = "data: [DONE]\n\n";
+                socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", response.len(), response).as_bytes()).await.unwrap();
+            }
+            captured
+        });
+        let client = LlmClient {
+            client: reqwest::Client::builder().no_proxy().resolve("opencode.ai", address).build().unwrap(),
+            ..LlmClient::new()
+        };
+        let messages = vec![
+            ChatMessage::system("system").with_cache_control(CacheControl::ephemeral()),
+            ChatMessage::user_with_images("image", vec!["data:image/png;base64,test".into()]).with_cache_control(CacheControl::ephemeral()),
+            ChatMessage::assistant(None, Some(vec![ToolCall {
+                id: "call-1".into(), call_type: "function".into(),
+                function: FunctionCall { name: "read_file".into(), arguments: "{}".into() },
+            }])).with_cache_control(CacheControl::ephemeral()),
+            ChatMessage::tool_response("call-1", "result").with_cache_control(CacheControl::ephemeral()),
+        ];
+        for index in 0..3 {
+            let mut request = OpenAIChatRequest {
+                model: "test-model".into(), messages: messages.clone(), temperature: Some(0.2),
+                stream: true, tools: None, reasoning_effort: Some("low".into()),
+                stream_options: Some(StreamOptions { include_usage: true }),
+            };
+            if index == 1 { request.messages.push(ChatMessage::user("continue")); }
+            let endpoint = if index < 2 {
+                format!("http://opencode.ai:{}/inference/go/openai/v1", address.port())
+            } else {
+                format!("http://{address}/v1")
+            };
+            let (tx, _rx) = tokio::sync::mpsc::channel(8);
+            tokio::time::timeout(std::time::Duration::from_secs(3), client.stream_openai(&endpoint, None, request, tx))
+                .await.unwrap().unwrap();
+        }
+        let captured = tokio::time::timeout(std::time::Duration::from_secs(3), server).await.unwrap().unwrap();
+        for (headers, body) in &captured[..2] {
+            assert!(headers.contains("x-opencode-session:"));
+            assert!(headers.contains("user-agent: canbanvoimaxharness/"));
+            assert!(body["messages"].as_array().unwrap().iter().all(|message| message.get("cache_control").is_none()));
+            assert_eq!(body["stream_options"]["include_usage"], true);
+            assert_eq!(body["reasoning_effort"], "low");
+        }
+        assert_eq!(captured[0].1["messages"].as_array().unwrap(), &captured[1].1["messages"].as_array().unwrap()[..messages.len()]);
+        let session = |index: usize| captured[index].0.lines().find(|line| line.starts_with("x-opencode-session:")).unwrap();
+        assert_eq!(session(0), session(1));
+        let mut expected = serde_json::to_value(&messages).unwrap();
+        for message in expected.as_array_mut().unwrap() { message.as_object_mut().unwrap().remove("cache_control"); }
+        assert_eq!(captured[0].1["messages"], expected);
+        assert_eq!(captured[2].1["messages"], serde_json::to_value(&messages).unwrap());
+        assert!(messages.iter().all(|message| message.cache_control.is_some()));
+    }
 
     #[test]
     fn cache_usage_normalizes_provider_accounting() {
