@@ -1,15 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, X, Loader2, Terminal } from 'lucide-react';
-import {
-  KanbanTask,
-  PipelineColumn,
-  HookExecutionState,
-  getHookScript,
-  getHookDescription,
-} from '../../types';
-import { useBoardStore } from '../../stores/boardStore';
-import { useShallow } from 'zustand/react/shallow';
+import { HookExecutionState } from '../../types';
 
 export interface CardHookNodeProps {
   side: 'left' | 'right';
@@ -20,117 +12,21 @@ export interface CardHookNodeProps {
   stageTitle?: string;
   sourceStageTitle?: string;
   isTransition?: boolean;
+  isEnterRunningTarget?: boolean;
   taskId: string;
   isDragging?: boolean;
 }
 
-export function useCardHooks(
-  task: KanbanTask,
-  taskColumn: PipelineColumn | undefined,
-  columns: PipelineColumn[]
-) {
-  const storeHooks = useBoardStore(useShallow((s) => s.hookStates[task.id]));
-  const parentHooks = useBoardStore(useShallow((s) => (task.parentId ? s.hookStates[task.parentId] : undefined)));
-  const taskHooks = storeHooks || task.hookStates || parentHooks;
-
-  const enterHookDef = taskColumn?.hooks?.['on_enter'];
-  const enterHookName = getHookScript(enterHookDef);
-  const enterHookDescription = getHookDescription(enterHookDef);
-  const rawEnterHookState = taskHooks?.on_enter;
-  const enterHookState =
-    rawEnterHookState && (!rawEnterHookState.stageId || rawEnterHookState.stageId === task.stageId)
-      ? rawEnterHookState
-      : undefined;
-
-  // While an on_enter hook is still running, the card is usually still in
-  // the source column (stageId not yet updated) — show the pulse on the
-  // left (transition) node too, instead of hiding it behind the strict
-  // stageId filter.
-  const isEnterRunningPending =
-    Boolean(rawEnterHookState?.status === 'running' && rawEnterHookState.stageId && rawEnterHookState.stageId !== task.stageId);
-  const enterRunningState = isEnterRunningPending ? rawEnterHookState : undefined;
-
-  const leaveHookDef =
-    taskColumn?.hooks?.['on_leave'] ||
-    taskColumn?.hooks?.['on_exit'] ||
-    taskColumn?.hooks?.['on_finish'];
-  const leaveHookName = getHookScript(leaveHookDef);
-  const leaveHookDescription = getHookDescription(leaveHookDef);
-  const leaveHookState = taskHooks?.on_leave;
-
-  // Check predecessor column in board order
-  const currentColIndex = columns.findIndex((c) => c.id === task.stageId);
-  const prevCol = currentColIndex > 0 ? columns[currentColIndex - 1] : null;
-
-  const stageEntryTime = task.stageEnteredAt || task.createdAt || 0;
-  const hookDuration = leaveHookState?.durationMs || 0;
-  const isRecentHook =
-    Boolean(leaveHookState?.startedAt) &&
-    stageEntryTime > 0 &&
-    (leaveHookState!.startedAt >= stageEntryTime - hookDuration - 10000 ||
-      Math.abs(stageEntryTime - leaveHookState!.startedAt) <= hookDuration + 10000);
-
-  const matchesPreviousStage = task.previousStageId
-    ? task.previousStageId === leaveHookState?.stageId
-    : Boolean(prevCol && prevCol.id === leaveHookState?.stageId);
-
-  const isTransitionHookFromResult = Boolean(
-    !enterHookState &&
-    leaveHookState &&
-    leaveHookState.stageId !== task.stageId &&
-    matchesPreviousStage &&
-    (isRecentHook || !stageEntryTime)
-  );
-
-  const effectiveLeftState = enterHookState || enterRunningState || (isTransitionHookFromResult ? leaveHookState : undefined);
-  const effectiveLeftHookName =
-    enterHookName ||
-    effectiveLeftState?.hookName ||
-    (isTransitionHookFromResult ? leaveHookState?.hookName : undefined);
-  const hasLeftHook = Boolean(enterHookName || effectiveLeftState || enterRunningState);
-
-  const sourceStageCol = effectiveLeftState?.stageId
-    ? columns.find((c) => c.id === effectiveLeftState.stageId)
-    : undefined;
-  const sourceStageTitle = sourceStageCol?.title || effectiveLeftState?.stageId;
-  const sourceLeaveDef =
-    sourceStageCol?.hooks?.['on_leave'] ||
-    sourceStageCol?.hooks?.['on_exit'] ||
-    sourceStageCol?.hooks?.['on_finish'];
-  const transitionHookDescription = getHookDescription(sourceLeaveDef);
-
-  // Right node: exit hook from this column
-  const hasRightHook = Boolean(
-    leaveHookName || (leaveHookState && leaveHookState.stageId === task.stageId)
-  );
-  const effectiveRightState =
-    leaveHookState && leaveHookState.stageId === task.stageId ? leaveHookState : undefined;
-  const effectiveRightHookName = leaveHookName || effectiveRightState?.hookName;
-
-  return {
-    hasLeftHook,
-    effectiveLeftHookName,
-    effectiveLeftState,
-    enterHookDescription,
-    transitionHookDescription,
-    isTransitionHookFromResult,
-    sourceStageTitle,
-    hasRightHook,
-    effectiveRightHookName,
-    effectiveRightState,
-    leaveHookDescription,
-  };
-}
-
 export const CardHookNode = memo(function CardHookNode({
   side,
-  hookType: _hookType,
+  hookType,
   hookName,
   description,
   state,
   stageTitle,
   sourceStageTitle,
   isTransition,
+  isEnterRunningTarget,
   isDragging,
 }: CardHookNodeProps) {
   const [isHovered, setIsHovered] = useState(false);
@@ -328,7 +224,7 @@ export const CardHookNode = memo(function CardHookNode({
         <div
           ref={triggerRef}
           className={`w-4 h-4 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-110 ${nodeColorClass}`}
-          aria-label={`${side === 'left' ? 'on_enter' : 'on_leave'}: ${hookName}`}
+          aria-label={`${hookType}: ${hookName}`}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
@@ -359,7 +255,7 @@ export const CardHookNode = memo(function CardHookNode({
             <span className="text-xs font-mono font-medium text-[#71717a] dark:text-[#71717a]">
               {isTransition
                 ? 'Хук перехода (on_leave)'
-                : side === 'left'
+                : hookType === 'on_enter'
                 ? 'Входной хук (on_enter)'
                 : 'Выходной хук (on_leave)'}
             </span>
@@ -445,8 +341,10 @@ export const CardHookNode = memo(function CardHookNode({
                   ? 'Выполняется скрипт жизненного цикла стадии...'
                   : isTransition
                   ? 'Скрипт перехода, выполненный при выходе из предыдущей стадии.'
-                  : side === 'left'
-                  ? 'Скрипт выполнится автоматически при входе в эту стадию.'
+                  : hookType === 'on_enter'
+                  ? isEnterRunningTarget
+                    ? 'Скрипт выполнится автоматически при входе в следующую стадию.'
+                    : 'Скрипт выполнится автоматически при входе в эту стадию.'
                   : 'Скрипт выполнится автоматически при выходе из этой стадии.'}
               </div>
             )
