@@ -492,11 +492,13 @@ pub async fn log_ui_error(message: String) -> Result<(), String> {
 pub async fn delete_dialog_item(
     task_id: String,
     item_id: String,
+    items: Option<Vec<ActivityItem>>,
     app_handle: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<String>, String> {
     let safe_id = sanitize_task_id(&task_id)?;
     let root = state.get_root();
+    let safe_id = crate::db::resolve_dialog_item_task_id(&root, &safe_id, &item_id)?;
     let parent_id = safe_id.split(":sub:").next().unwrap_or(&safe_id);
     let sessions = crate::agent::SUBAGENT_SESSIONS.lock().await;
     for session in sessions.values() {
@@ -513,6 +515,7 @@ pub async fn delete_dialog_item(
     if AppState::is_agent_active_in_map(&active, &root, parent_id) {
         return Err("Stop the agent before deleting messages".to_string());
     }
+    crate::db::append_dialog_items(&root, &safe_id, items.as_deref().unwrap_or(&[]))?;
     let deleted_ids = crate::db::delete_dialog_item(&root, &safe_id, &item_id)?;
     let mut contexts = state.agent_contexts.lock().map_err(|_| "Failed to lock agent contexts")?;
     contexts.remove(&AppState::agent_key(&root, &safe_id));
