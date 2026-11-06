@@ -294,6 +294,7 @@ export const en = {
   'settings.providers.invalidUrl': 'Enter a valid http(s) URL',
   'settings.providers.modelIdRequired': 'Model id is required',
   'settings.providers.deleteConfirm': 'Delete provider "{name}"?',
+  'settings.providers.deleteLastProvider': 'Cannot delete the last provider.',
   'settings.providers.openConfig': 'Open configuration file',
   'settings.providers.noModelsYet': 'No models yet',
   'settings.title': 'LLM Settings',

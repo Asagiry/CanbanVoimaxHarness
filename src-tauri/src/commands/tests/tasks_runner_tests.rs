@@ -62,6 +62,89 @@ use std::path::PathBuf;
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
 
+    #[tokio::test]
+    async fn test_resolve_model_maps_stale_sqlite_model_to_selected_provider() {
+        let base = PathBuf::from("target").join(format!("cvh_model_stale_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        // Active provider is OpenCode Go (second in list); the task still
+        // carries the old Antigravity model from SQLite. Dispatch must use
+        // the OpenCode Go catalog model, not the stale one.
+        let mut llm_settings = crate::config::LlmSettings::default();
+        llm_settings.providers = vec![
+            crate::config::Provider {
+                id: "antigravity proxy".to_string(),
+                name: "Antigravity Proxy".to_string(),
+                is_custom: false,
+                api_key: "sk-first".to_string(),
+                base_url: "http://127.0.0.1:8045/v1".to_string(),
+                protocol: crate::config::ProviderProtocol::Openai,
+                models: vec![crate::config::ProviderModel {
+                    id: "gemini-3.8-flash-high".to_string(),
+                    display_name: None,
+                }],
+            },
+            crate::config::Provider {
+                id: "opencode go".to_string(),
+                name: "OpenCode Go".to_string(),
+                is_custom: false,
+                api_key: "sk-go".to_string(),
+                base_url: "https://opencode.ai/inference/go/openai/v1".to_string(),
+                protocol: crate::config::ProviderProtocol::Openai,
+                models: vec![
+                    crate::config::ProviderModel { id: "beam-free".to_string(), display_name: None },
+                    crate::config::ProviderModel { id: "crouton-alpha-free".to_string(), display_name: None },
+                ],
+            },
+        ];
+        llm_settings.active_provider_id = Some("opencode go".to_string());
+        llm_settings.model = "gemini-3.8-flash-high".to_string();
+        llm_settings.ensure_providers();
+        assert_eq!(llm_settings.model, "beam-free");
+
+        let (base_url, api_key) = llm_settings.endpoint();
+        assert_eq!(base_url, "https://opencode.ai/inference/go/openai/v1");
+        assert_eq!(api_key.as_deref(), Some("sk-go"));
+
+        let task = Task {
+            id: "CVH-042".to_string(),
+            title: "Task".to_string(),
+            description: String::new(),
+            stage_id: "dev".to_string(),
+            board_id: None,
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: None,
+            model: Some("gemini-3.8-flash-high".to_string()),
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: None,
+            created_at: 0,
+            updated_at: 0,
+            stage_entered_at: None,
+            completed_at: None,
+            handover_summary: None,
+            attachments: None,
+            cover_image: None,
+            position: None,
+            hook_states: None,
+            project_path: None,
+            stage_durations: None,
+            total_elapsed: None,
+        };
+        let resolved = resolve_task_active_agent_model(&base, Some(&task), &llm_settings).await;
+        assert_eq!(resolved, "beam-free");
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }
+
     #[test]
     fn test_is_matching_subagent_key() {
         use crate::commands::tasks::is_matching_subagent_key;

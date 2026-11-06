@@ -304,6 +304,37 @@ impl Default for LlmSettings {
 }
 
 impl LlmSettings {
+    /// Active provider by id (trimmed, case-insensitive). Single source of
+    /// truth for dispatch: base_url/api_key/model must come from here, not
+    /// from providers[0] or stale flat fields.
+    pub fn active_provider(&self) -> Option<&crate::config::providers::Provider> {
+        let active_id = self.active_provider_id.as_deref()?.trim();
+        if active_id.is_empty() {
+            return None;
+        }
+        self.providers
+            .iter()
+            .find(|p| p.id.eq_ignore_ascii_case(active_id))
+    }
+
+    /// Dispatch endpoint for LLM requests: base_url + api_key of the selected
+    /// provider. Falls back to flat fields only when no active provider is
+    /// resolvable (never silently to providers[0]).
+    pub fn endpoint(&self) -> (String, Option<String>) {
+        if let Some(active) = self.active_provider() {
+            let key = active.api_key.trim().to_string();
+            return (
+                active.base_url.trim().to_string(),
+                if key.is_empty() { None } else { Some(key) },
+            );
+        }
+        let key = self.api_key.trim().to_string();
+        (
+            self.base_url.trim().to_string(),
+            if key.is_empty() { None } else { Some(key) },
+        )
+    }
+
     pub fn ensure_providers(&mut self) {
         if self.providers.is_empty() {
             self.providers.push(crate::config::providers::legacy_provider(
@@ -314,19 +345,13 @@ impl LlmSettings {
             ));
         }
         self.providers = crate::config::providers::normalize_providers(std::mem::take(&mut self.providers));
-        if self.active_provider_id.is_none() {
+        if self.active_provider().is_none() {
+            // No resolvable active id (missing, empty or stale): heal to the
+            // first provider so dispatch has a valid endpoint. With
+            // lowercased ids this is only hit on corrupt legacy data.
             self.active_provider_id = self.providers.first().map(|p| p.id.clone());
         }
-        if let Some(active_id) = &self.active_provider_id {
-            if !self.providers.iter().any(|p| &p.id == active_id) {
-                self.active_provider_id = self.providers.first().map(|p| p.id.clone());
-            }
-        }
-        if let Some(active) = self
-            .active_provider_id
-            .as_deref()
-            .and_then(|id| self.providers.iter().find(|p| p.id == id))
-        {
+        if let Some(active) = self.active_provider().cloned() {
             self.provider = active.name.clone();
             self.api_key = active.api_key.clone();
             self.base_url = active.base_url.clone();

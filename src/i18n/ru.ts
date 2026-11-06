@@ -296,6 +296,7 @@ export const ru = {
   'settings.providers.invalidUrl': 'Введите корректный http(s) URL',
   'settings.providers.modelIdRequired': 'ID модели обязателен',
   'settings.providers.deleteConfirm': 'Удалить поставщика «{name}»?',
+  'settings.providers.deleteLastProvider': 'Нельзя удалить последнего поставщика.',
   'settings.providers.openConfig': 'Открыть файл конфигурации',
   'settings.providers.noModelsYet': 'Моделей пока нет',
   'settings.title': 'Настройки LLM',
