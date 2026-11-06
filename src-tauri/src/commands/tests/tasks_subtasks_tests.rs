@@ -1382,3 +1382,153 @@ use std::path::PathBuf;
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
+
+    #[tokio::test]
+    async fn test_advance_propagates_on_enter_hook_states_to_new_subtask() {
+        let base = PathBuf::from("target").join(format!("cvh_hook_prop_{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&base).await.expect("test dir");
+
+        let mut review_col = crate::config::PipelineColumn {
+            id: "review".to_string(),
+            title: "Review".to_string(),
+            color: None,
+            icon: None,
+            persona: Some("reviewer".to_string()),
+            wip_limit: None,
+            on_enter_script: None,
+            context_window: None,
+            model_override: None,
+            reasoning_effort: None,
+            temperature: None,
+            gatekeeper_sensor: None,
+            allowed_tools: None,
+            hooks: HashMap::new(),
+            auto_run: Some(true),
+            terminal: None,
+            is_intake: None,
+        };
+        review_col.hooks.insert("on_enter".to_string(), "builtin:create_worktree".into());
+
+        let cols = vec![
+            crate::config::PipelineColumn {
+                id: "backlog".to_string(),
+                title: "Backlog".to_string(),
+                color: None,
+                icon: None,
+                persona: None,
+                wip_limit: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                auto_run: None,
+                terminal: None,
+                is_intake: Some(true),
+            },
+            crate::config::PipelineColumn {
+                id: "dev".to_string(),
+                title: "Development".to_string(),
+                color: None,
+                icon: None,
+                persona: Some("developer".to_string()),
+                wip_limit: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                auto_run: Some(true),
+                terminal: None,
+                is_intake: None,
+            },
+            review_col,
+            crate::config::PipelineColumn {
+                id: "ready".to_string(),
+                title: "Ready".to_string(),
+                color: None,
+                icon: None,
+                persona: None,
+                wip_limit: None,
+                on_enter_script: None,
+                context_window: None,
+                model_override: None,
+                reasoning_effort: None,
+                temperature: None,
+                gatekeeper_sensor: None,
+                allowed_tools: None,
+                hooks: HashMap::new(),
+                auto_run: None,
+                terminal: Some(true),
+                is_intake: None,
+            },
+        ];
+
+        let boards_cfg = crate::config::BoardsConfig {
+            active_board_id: "hook-prop-board".to_string(),
+            boards: vec![crate::config::BoardDef {
+                id: "hook-prop-board".to_string(),
+                name: "Hook Prop Board".to_string(),
+                stages: cols,
+            }],
+        };
+        crate::config::save_boards_config(&base, &boards_cfg).await.expect("save boards");
+
+        let parent = Task {
+            id: "CVH-400".to_string(),
+            title: "Parent task".to_string(),
+            description: "Desc".to_string(),
+            stage_id: "dev".to_string(),
+            board_id: Some("hook-prop-board".to_string()),
+            worktree_path: None,
+            branch: None,
+            verdict: None,
+            custom_flow: None,
+            status: Some("running".to_string()),
+            model: None,
+            provider_id: None,
+            reasoning_effort: None,
+            parent_id: None,
+            subtask_index: None,
+            waiting_for_subtask_id: None,
+            todos: None,
+            priority: None,
+            tags: None,
+            current_tokens: None,
+            skip_worktree: Some(false),
+            created_at: 0,
+            updated_at: 0,
+            stage_entered_at: None,
+            completed_at: None,
+            handover_summary: None,
+            attachments: None,
+            cover_image: None,
+            position: None,
+            hook_states: None,
+            project_path: None,
+            stage_durations: None,
+            total_elapsed: None,
+        };
+        save_tasks_to_disk(&base, &[parent]).await.expect("save parent");
+
+        let adv_res = internal_advance_task(&base, "CVH-400", "Handover to review", None)
+            .await
+            .expect("advance to review subtask");
+        assert!(adv_res.contains("УСПЕШНО: Создана подзадача CVH-400.1"));
+
+        let loaded = load_tasks_from_disk(&base).await;
+        let sub = loaded.iter().find(|t| t.id == "CVH-400.1").expect("subtask exists");
+        let states = sub.hook_states.as_ref().expect("subtask hook_states present");
+        let obj = states.as_object().expect("hook_states object");
+        let enter = obj.get("on_enter").expect("on_enter present");
+        assert_eq!(enter["status"], "success");
+        assert_eq!(enter["stageId"], "review");
+
+        let _ = tokio::fs::remove_dir_all(&base).await;
+    }

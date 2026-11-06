@@ -900,6 +900,29 @@ describe('tasksCrudSlice (Clean Deterministic Store Tests)', () => {
       expect(useBoardStore.getState().hookStates['CVH-001']?.on_enter?.status).toBe('running');
     });
 
+    it('upsertBackendTask preserves on_enter success for new subtask', () => {
+      useBoardStore.getState().upsertBackendTask({
+        id: 'CVH-048.2',
+        title: 'Subtask',
+        stageId: 'review',
+        parentId: 'CVH-048',
+        hookStates: {
+          on_enter: {
+            hookName: 'gatekeeper.bat',
+            stageId: 'review',
+            hookType: 'on_enter',
+            status: 'success',
+            startedAt: Date.now(),
+            durationMs: 10,
+          },
+        },
+      } as unknown as BackendTaskDTO);
+
+      expect(useBoardStore.getState().hookStates['CVH-048.2']?.on_enter?.status).toBe('success');
+      const task = useBoardStore.getState().tasks.find((t) => t.id === 'CVH-048.2');
+      expect(task?.hookStates?.on_enter?.status).toBe('success');
+    });
+
     it('sets search query and hovered/selected task IDs', () => {
       useBoardStore.getState().setSearchQuery('auth');
       expect(useBoardStore.getState().searchQuery).toBe('auth');

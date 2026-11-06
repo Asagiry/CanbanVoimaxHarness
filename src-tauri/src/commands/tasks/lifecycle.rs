@@ -742,6 +742,28 @@ pub async fn internal_create_subtask(
     handover_summary: Option<&str>,
     app_handle: Option<&AppHandle>,
 ) -> Result<Task, String> {
+    internal_create_subtask_with_hook_states(
+        root,
+        parent_id,
+        target_stage_id,
+        title,
+        handover_summary,
+        app_handle,
+        None,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn internal_create_subtask_with_hook_states(
+    root: &Path,
+    parent_id: &str,
+    target_stage_id: Option<&str>,
+    title: Option<&str>,
+    handover_summary: Option<&str>,
+    app_handle: Option<&AppHandle>,
+    hook_states_override: Option<serde_json::Value>,
+) -> Result<Task, String> {
     let root_resolved = resolve_actual_repo_root(root);
     let root = &root_resolved;
     let mut tasks = load_tasks_from_disk(root).await;
@@ -917,7 +939,7 @@ pub async fn internal_create_subtask(
         stage_entered_at: Some(now),
         completed_at: None,
         position: Some(next_subtask_pos),
-        hook_states: tasks[parent_idx].hook_states.clone(),
+        hook_states: hook_states_override.clone().or_else(|| tasks[parent_idx].hook_states.clone()),
         project_path: Some(root.to_string_lossy().to_string()),
         stage_durations: None,
         total_elapsed: None,
@@ -964,14 +986,31 @@ pub async fn internal_create_subtask(
             // of idle. No-op when parent had no on_enter state.
             if let Some(hook_states) = new_subtask.hook_states.clone() {
                 if let Some(enter) = hook_states.get("on_enter").cloned() {
-                    if enter.get("status").and_then(|s| s.as_str()) == Some("running") {
-                        let _ = app.emit("hook:start", serde_json::json!({
-                            "taskId": subtask_id,
-                            "stageId": target_col.id,
-                            "hookType": "on_enter",
-                            "hookName": enter.get("hookName").and_then(|v| v.as_str()).unwrap_or("on_enter"),
-                            "description": enter.get("description"),
-                        }));
+                    match enter.get("status").and_then(|s| s.as_str()) {
+                        Some("running") => {
+                            let _ = app.emit("hook:start", serde_json::json!({
+                                "taskId": subtask_id,
+                                "stageId": target_col.id,
+                                "hookType": "on_enter",
+                                "hookName": enter.get("hookName").and_then(|v| v.as_str()).unwrap_or("on_enter"),
+                                "description": enter.get("description"),
+                            }));
+                        }
+                        Some("success") | Some("failed") => {
+                            let success = enter.get("status").and_then(|s| s.as_str()) == Some("success");
+                            let _ = app.emit("hook:finish", serde_json::json!({
+                                "taskId": subtask_id,
+                                "stageId": target_col.id,
+                                "hookType": "on_enter",
+                                "success": success,
+                                "exitCode": enter.get("exitCode"),
+                                "stdout": enter.get("stdout").and_then(|v| v.as_str()).unwrap_or(""),
+                                "stderr": enter.get("stderr").and_then(|v| v.as_str()).unwrap_or(""),
+                                "error": enter.get("error"),
+                                "hookName": enter.get("hookName").and_then(|v| v.as_str()).unwrap_or("on_enter"),
+                            }));
+                        }
+                        _ => {}
                     }
                 }
             }

@@ -41,7 +41,14 @@ export function useCardHooks(
   const enterHookDescription = getHookDescription(enterHookDef);
   const rawEnterHookState = taskHooks?.on_enter;
   const enterHookState =
-    rawEnterHookState && (!rawEnterHookState.stageId || rawEnterHookState.stageId === task.stageId)
+    rawEnterHookState &&
+    (!rawEnterHookState.stageId ||
+      rawEnterHookState.stageId === task.stageId ||
+      rawEnterHookState.stageId === task.previousStageId ||
+      (rawEnterHookState.status !== 'running' &&
+        task.stageEnteredAt &&
+        rawEnterHookState.startedAt &&
+        Math.abs(task.stageEnteredAt - rawEnterHookState.startedAt) < 30000))
       ? rawEnterHookState
       : undefined;
 

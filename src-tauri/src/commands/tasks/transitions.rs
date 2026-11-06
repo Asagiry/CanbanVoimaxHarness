@@ -15,7 +15,7 @@ use crate::git::create_worktree;
 use crate::hooks::{execute_hook, HookContext};
 use super::healing::{stage_id_matches, task_id_matches};
 use super::lifecycle::{
-    internal_create_subtask, normalize_hook_type, record_task_hook_result,
+    internal_create_subtask_with_hook_states, normalize_hook_type, record_task_hook_result,
 };
 use super::runner::internal_abort_agent;
 use super::storage::{
@@ -232,6 +232,7 @@ pub struct ParentAdvanceResult {
     pub moved_events: Vec<serde_json::Value>,
     pub created_tasks: Vec<Task>,
     pub autorun_task_ids: Vec<String>,
+    pub hook_finish_events: Vec<serde_json::Value>,
 }
 
 /// Propagates advancement of completed/terminal subtasks up the hierarchy to parent tasks (§ 2.2 & § 2.7).
@@ -248,6 +249,7 @@ pub fn propagate_parent_subtask_advance(
     let mut moved_events = Vec::new();
     let mut created_tasks = Vec::new();
     let mut autorun_task_ids = Vec::new();
+    let mut hook_finish_events = Vec::new();
 
     let mut current_child_id = completed_subtask_id.to_string();
     let mut current_source_stage = subtask_source_stage.to_string();
@@ -429,6 +431,38 @@ pub fn propagate_parent_subtask_advance(
                 autorun_task_ids.push(new_subtask_id.clone());
             }
 
+            if let Some(hook_states) = tasks[parent_idx].hook_states.clone() {
+                if let Some(enter) = hook_states.get("on_enter").cloned() {
+                    match enter.get("status").and_then(|s| s.as_str()) {
+                        Some("success") | Some("failed") => {
+                            let success = enter.get("status").and_then(|s| s.as_str()) == Some("success");
+                            hook_finish_events.push(serde_json::json!({
+                                "taskId": new_subtask_id,
+                                "stageId": next_col.id,
+                                "hookType": "on_enter",
+                                "success": success,
+                                "exitCode": enter.get("exitCode"),
+                                "stdout": enter.get("stdout").and_then(|v| v.as_str()).unwrap_or(""),
+                                "stderr": enter.get("stderr").and_then(|v| v.as_str()).unwrap_or(""),
+                                "error": enter.get("error"),
+                                "hookName": enter.get("hookName").and_then(|v| v.as_str()).unwrap_or("on_enter"),
+                            }));
+                        }
+                        Some("running") => {
+                            hook_finish_events.push(serde_json::json!({
+                                "taskId": new_subtask_id,
+                                "stageId": next_col.id,
+                                "hookType": "on_enter",
+                                "hookName": enter.get("hookName").and_then(|v| v.as_str()).unwrap_or("on_enter"),
+                                "description": enter.get("description"),
+                                "_hookStart": true,
+                            }));
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
             let parent_clone = tasks[parent_idx].clone();
             moved_events.push(serde_json::json!({
                 "taskId": parent_id,
@@ -453,6 +487,7 @@ pub fn propagate_parent_subtask_advance(
         moved_events,
         created_tasks,
         autorun_task_ids,
+        hook_finish_events,
     }
 }
 
@@ -1411,6 +1446,7 @@ pub async fn internal_move_task_stage(
     let mut parent_moved_events: Vec<serde_json::Value> = Vec::new();
     let mut parent_created_tasks: Vec<Task> = Vec::new();
     let mut parent_autorun_ids: Vec<String> = Vec::new();
+    let mut parent_hook_events: Vec<serde_json::Value> = Vec::new();
 
     if verdict.as_deref() == Some("CHANGES_REQUESTED") {
         // 1. When CHANGES_REQUESTED is emitted by a subtask, unlock the parent task in its development stage:
@@ -1453,6 +1489,7 @@ pub async fn internal_move_task_stage(
         parent_moved_events = parent_res.moved_events;
         parent_created_tasks = parent_res.created_tasks;
         parent_autorun_ids = parent_res.autorun_task_ids;
+        parent_hook_events = parent_res.hook_finish_events;
 
         for t in tasks.iter_mut() {
             if t.status.as_deref() == Some("done") {
@@ -1536,6 +1573,13 @@ pub async fn internal_move_task_stage(
         }
         for auto_pid in parent_autorun_ids {
             let _ = app.emit("agent:autorun", serde_json::json!({ "taskId": auto_pid, "projectPath": &project_path_str }));
+        }
+        for hook_event in &parent_hook_events {
+            if hook_event.get("_hookStart").and_then(|v| v.as_bool()) == Some(true) {
+                let _ = app.emit("hook:start", hook_event);
+            } else {
+                let _ = app.emit("hook:finish", hook_event);
+            }
         }
     }
 
@@ -1927,6 +1971,7 @@ pub async fn internal_advance_task_to_stage(
         app_handle,
     );
     pipeline.execute(&mut current_task).await?;
+    let _ = crate::db::db_upsert_task(root, &current_task);
     auto_complete_task_todos(root, &mut current_task, app_handle);
 
     // Mirror internal_move_task_stage: run the legacy on_enter_script
@@ -2225,13 +2270,14 @@ pub async fn internal_advance_task_to_stage(
                 );
                 let _ = append_task_dialog_activity(root, &subtask_id, "summary", &sub_summary_content, app_handle).await;
 
-                let next_subtask = internal_create_subtask(
+                let next_subtask = internal_create_subtask_with_hook_states(
                     root,
                     &parent_id,
                     Some(&target_col.id),
                     Some(&format!("{} ({})", parent_task.title, target_col.title)),
                     Some(summary),
                     app_handle,
+                    current_task.hook_states.clone(),
                 )
                 .await?;
 
@@ -2404,13 +2450,14 @@ pub async fn internal_advance_task_to_stage(
         }
 
         auto_complete_task_todos(root, &mut current_task, app_handle);
-        let subtask = internal_create_subtask(
+        let subtask = internal_create_subtask_with_hook_states(
             root,
             task_id,
             Some(&target_col.id),
             Some(&format!("{} ({})", current_task.title, target_col.title)),
             Some(summary),
             app_handle,
+            current_task.hook_states.clone(),
         )
         .await?;
 
