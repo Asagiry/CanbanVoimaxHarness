@@ -3246,10 +3246,6 @@ where
             bail!("Agent execution aborted by user");
         }
 
-        if drain_pending_steers(&config, &mut messages, &mut context_cursor, false)?.1 {
-            completion_reminder_sent = false;
-        }
-
         event_sink(AgentEvent::TurnStart { turn });
 
         // Synchronize in-memory agent context state with AppState
@@ -3271,6 +3267,10 @@ where
                     }
                 }
             }
+        }
+
+        if drain_pending_steers(&config, &mut messages, &mut context_cursor, false)?.1 {
+            completion_reminder_sent = false;
         }
 
         // State-Preserving Dynamic Context Compactor:
