@@ -25,7 +25,11 @@ pub fn load_conversation_context(root: &Path, task_id: &str) -> Result<Option<Co
         "SELECT content FROM dialog_items WHERE task_id = ?1 AND type = 'context_snapshot'",
         params![task_id], |row| row.get(0),
     ).optional().map_err(|e| e.to_string())?;
-    json.map(|text| serde_json::from_str(&text).map_err(|e| e.to_string())).transpose()
+    match json {
+        Some(text) if text.trim().is_empty() => Ok(None),
+        Some(text) => serde_json::from_str(&text).map(Some).map_err(|e| e.to_string()),
+        None => Ok(None),
+    }
 }
 
 pub async fn save_conversation_context(

@@ -1,4 +1,4 @@
-﻿use super::*;
+use super::*;
 use crate::config::ToolPolicyConfig;
 use std::collections::HashMap;
 use std::sync::Arc;

@@ -1,4 +1,4 @@
-﻿use serde::{Serialize, Serializer};
+use serde::{Serialize, Serializer};
 use thiserror::Error;
 
 #[derive(Error, Debug)]

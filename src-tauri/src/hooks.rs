@@ -305,13 +305,13 @@ pub async fn execute_hook(
         let stdout_drain = async {
             let mut buf = Vec::new();
             let _ = stdout_pipe.read_to_end(&mut buf).await;
-            String::from_utf8_lossy(&buf).to_string()
+            crate::agent::decode_output_bytes(&buf)
         };
 
         let stderr_drain = async {
             let mut buf = Vec::new();
             let _ = stderr_pipe.read_to_end(&mut buf).await;
-            String::from_utf8_lossy(&buf).to_string()
+            crate::agent::decode_output_bytes(&buf)
         };
 
         let (stdout_str, stderr_str) = tokio::join!(stdout_drain, stderr_drain);
@@ -451,13 +451,13 @@ pub async fn execute_sensor_command(
         let stdout_drain = async {
             let mut buf = Vec::new();
             let _ = stdout_pipe.read_to_end(&mut buf).await;
-            String::from_utf8_lossy(&buf).to_string()
+            crate::agent::decode_output_bytes(&buf)
         };
 
         let stderr_drain = async {
             let mut buf = Vec::new();
             let _ = stderr_pipe.read_to_end(&mut buf).await;
-            String::from_utf8_lossy(&buf).to_string()
+            crate::agent::decode_output_bytes(&buf)
         };
 
         let (stdout_str, stderr_str) = tokio::join!(stdout_drain, stderr_drain);

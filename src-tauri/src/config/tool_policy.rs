@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use crate::config::io::atomic_write_file;
 use crate::config::models::normalize_tool_name;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolPolicyConfig {
     #[serde(default = "default_global_tools", rename = "globalEnabled")]
     pub global_enabled: HashMap<String, bool>,
@@ -245,6 +245,10 @@ async fn read_tool_policy_file(policy_path: &Path) -> Result<ToolPolicyConfig> {
     let content = tokio::fs::read_to_string(policy_path)
         .await
         .with_context(|| format!("Failed to read tool policy at {:?}", policy_path))?;
+
+    if content.trim().is_empty() {
+        return Ok(ToolPolicyConfig::default());
+    }
 
     let config: ToolPolicyConfig = serde_json::from_str(&content)
         .with_context(|| format!("Failed to parse tool policy JSON at {:?}", policy_path))?;

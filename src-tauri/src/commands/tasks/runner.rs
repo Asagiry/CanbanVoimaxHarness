@@ -628,8 +628,12 @@ async fn run_agent_inner(
                         }),
                     );
 
-                    let parsed_args = serde_json::from_str::<serde_json::Value>(&arguments)
-                        .unwrap_or_else(|_| serde_json::json!({ "raw": &arguments }));
+                    let parsed_args = if arguments.trim().is_empty() {
+                        serde_json::json!({})
+                    } else {
+                        serde_json::from_str::<serde_json::Value>(&arguments)
+                            .unwrap_or_else(|_| serde_json::json!({ "raw": &arguments }))
+                    };
                     let mut tool_obj = serde_json::json!({
                         "id": &id,
                         "toolName": &name,

@@ -624,6 +624,42 @@ fn handover_steer_dedup_on_repeated_insert() {
 }
 
 #[test]
+fn empty_context_snapshot_returns_none_not_eof() {
+    let root = PathBuf::from("target").join(format!("cvh_empty_snapshot_{}", uuid::Uuid::new_v4()));
+    let task = "EMPTY-1";
+    let conn = get_db_conn(&root).unwrap();
+    conn.execute(
+        "INSERT INTO dialog_items (id, task_id, type, content, created_at) VALUES (?1, ?2, 'context_snapshot', ?3, ?4)",
+        rusqlite::params![format!("context:{task}"), task, "", chrono::Utc::now().timestamp_millis()],
+    ).unwrap();
+    drop(conn);
+    assert!(load_conversation_context(&root, task).unwrap().is_none());
+    let conn = get_db_conn(&root).unwrap();
+    conn.execute(
+        "UPDATE dialog_items SET content = ?1 WHERE task_id = ?2 AND type = 'context_snapshot'",
+        rusqlite::params!["   ", task],
+    ).unwrap();
+    drop(conn);
+    assert!(load_conversation_context(&root, task).unwrap().is_none());
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn empty_tool_json_delete_succeeds() {
+    let root = PathBuf::from("target").join(format!("cvh_empty_tool_{}", uuid::Uuid::new_v4()));
+    let task = "EMPTY-2";
+    let conn = get_db_conn(&root).unwrap();
+    conn.execute(
+        "INSERT INTO dialog_items (id, task_id, type, tool_json, created_at) VALUES (?1, ?2, 'tool', ?3, ?4)",
+        rusqlite::params!["empty-tool", task, "", chrono::Utc::now().timestamp_millis()],
+    ).unwrap();
+    drop(conn);
+    let deleted = delete_dialog_item(&root, task, "empty-tool").unwrap();
+    assert_eq!(deleted, vec!["empty-tool".to_string()]);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn test_db_connection_pool_concurrent_access() {
     let root = PathBuf::from("target").join(format!("cvh_db_test_pool_{}", uuid::Uuid::new_v4()));
     let _ = std::fs::create_dir_all(&root);

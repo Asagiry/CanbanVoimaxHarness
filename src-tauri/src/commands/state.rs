@@ -292,6 +292,12 @@ mod tests {
         let journal_mode: String = conn.query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();
         assert_eq!(journal_mode.to_uppercase(), "WAL");
 
+        let encoding: String = conn.query_row("PRAGMA encoding", [], |r| r.get(0)).unwrap();
+        assert!(encoding.eq_ignore_ascii_case("UTF-8"), "unexpected encoding: {encoding}");
+
+        let integrity: String = conn.query_row("PRAGMA integrity_check", [], |r| r.get(0)).unwrap();
+        assert_eq!(integrity, "ok");
+
         drop(conn);
         let _ = std::fs::remove_dir_all(&temp_dir);
     }

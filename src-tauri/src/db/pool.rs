@@ -1,4 +1,4 @@
-﻿use crate::agent::Task;
+use crate::agent::Task;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, Connection, TransactionBehavior};
@@ -35,6 +35,16 @@ pub fn init_db(root: &Path) -> Result<Connection, rusqlite::Error> {
          PRAGMA synchronous = NORMAL;
          PRAGMA foreign_keys = ON;",
     )?;
+
+    let encoding: String = conn
+        .query_row("PRAGMA encoding", [], |row| row.get(0))
+        .unwrap_or_else(|_| "UTF-8".to_string());
+    if !encoding.eq_ignore_ascii_case("UTF-8") {
+        eprintln!(
+            "CVH [db]: WARN database encoding is '{}', expected 'UTF-8'. SQLite TEXT is stored as-is; changing encoding requires VACUUM INTO and is not done automatically.",
+            encoding
+        );
+    }
 
     // Verify whether essential tables exist; DDL must execute if tables are missing
     let tables_exist: bool = conn
@@ -454,7 +464,11 @@ fn auto_migrate_if_needed(conn: &mut Connection, root: &Path) {
         for p in &ledger_paths {
             if p.exists() {
                 if let Ok(c) = std::fs::read_to_string(p) {
-                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&c) {
+                    let trimmed = c.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(trimmed) {
                         if let Some(obj) = val.as_object() {
                             for (key, item) in obj {
                                 let task_id = item.get("taskId").and_then(|v| v.as_str()).unwrap_or(key).to_string();

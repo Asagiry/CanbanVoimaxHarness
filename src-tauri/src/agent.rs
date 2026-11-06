@@ -1,4 +1,4 @@
-﻿pub mod compactor;
+pub mod compactor;
 pub use compactor::*;
 pub mod tool_schemas;
 pub use tool_schemas::*;

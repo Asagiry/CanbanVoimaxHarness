@@ -546,6 +546,20 @@ use std::path::{Path, PathBuf};
         let _ = tokio::fs::remove_dir_all(&base_dir).await;
     }
 
+    #[tokio::test]
+    async fn test_empty_tool_policy_file_returns_default() {
+        let base_dir = std::path::PathBuf::from("target").join(format!("cvh_policy_empty_{}", uuid::Uuid::new_v4()));
+        let path = tool_policy_path(&base_dir);
+        tokio::fs::create_dir_all(path.parent().unwrap()).await.expect("test dir");
+        tokio::fs::write(&path, "").await.expect("write empty");
+        let loaded = load_tool_policies(&base_dir).await.expect("load empty policy");
+        assert_eq!(loaded, ToolPolicyConfig::default());
+        tokio::fs::write(&path, "   \n").await.expect("write whitespace");
+        let loaded = load_tool_policies(&base_dir).await.expect("load whitespace policy");
+        assert_eq!(loaded, ToolPolicyConfig::default());
+        let _ = tokio::fs::remove_dir_all(&base_dir).await;
+    }
+
     #[test]
     fn test_default_boards_config() {
         let cfg = default_boards_config();

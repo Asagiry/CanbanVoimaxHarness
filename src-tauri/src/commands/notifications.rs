@@ -223,7 +223,7 @@ pub fn show_windows_toast_fallback(
     let output = run_encoded_powershell(&encoded)
         .map_err(|e| format!("Failed to spawn PowerShell toast process: {}", e))?;
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stderr = crate::agent::decode_output_bytes(&output.stderr);
         return Err(format!("PowerShell toast execution error: {}", stderr));
     }
     Ok(())
