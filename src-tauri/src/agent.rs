@@ -3160,7 +3160,15 @@ where
     }
 
     if let Some(steer) = config.steer_prompt.as_deref().map(str::trim).filter(|text| !text.is_empty()) {
-        if let Some(item) = persist_steer_message(&config.repo_root, &config.task_id, steer, config.steer_images.clone(), None).map_err(anyhow::Error::msg)? {
+        let steer_message_id = if steer.contains("[ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]") {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            use std::hash::{Hash, Hasher};
+            steer.hash(&mut hasher);
+            Some(format!("handover:{}:{:x}", config.task_id, hasher.finish()))
+        } else {
+            None
+        };
+        if let Some(item) = persist_steer_message(&config.repo_root, &config.task_id, steer, config.steer_images.clone(), steer_message_id.as_deref()).map_err(anyhow::Error::msg)? {
             if let Some(app) = config.app_handle.as_ref() {
                 let payload = serde_json::json!({ "taskId": config.task_id, "item": item });
                 let _ = app.emit("task:activity", &payload);

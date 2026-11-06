@@ -610,6 +610,20 @@ fn test_auto_migration_from_json() {
 }
 
 #[test]
+fn handover_steer_dedup_on_repeated_insert() {
+    let root = PathBuf::from("target").join(format!("cvh_handover_dedup_{}", uuid::Uuid::new_v4()));
+    let task = "HANDOVER-1";
+    let content = "### [ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]\n\nЗамечания исправлены. Отчет исполнителя:\nSame summary";
+    let first = ActivityItem { id: "handover-1".into(), item_type: "steer".into(), content: Some(content.into()), ..Default::default() };
+    append_dialog_items(&root, task, std::slice::from_ref(&first)).unwrap();
+    let second = ActivityItem { id: "handover-2".into(), item_type: "steer".into(), content: Some(content.into()), ..Default::default() };
+    append_dialog_items(&root, task, std::slice::from_ref(&second)).unwrap();
+    let items = load_dialog_items(&root, task).unwrap();
+    assert_eq!(items.iter().filter(|i| i.item_type == "steer").count(), 1);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn test_db_connection_pool_concurrent_access() {
     let root = PathBuf::from("target").join(format!("cvh_db_test_pool_{}", uuid::Uuid::new_v4()));
     let _ = std::fs::create_dir_all(&root);

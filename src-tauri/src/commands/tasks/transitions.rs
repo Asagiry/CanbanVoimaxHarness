@@ -2144,7 +2144,9 @@ pub async fn internal_advance_task_to_stage(
                     "### [ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]\n\nЗамечания исправлены. Отчет исполнителя:\n{}",
                     summary
                 );
-                let _ = append_task_dialog_activity(root, &existing_sub.id, "steer", &handover_prompt, app_handle).await;
+                if !target_has_autorun {
+                    let _ = append_task_dialog_activity(root, &existing_sub.id, "steer", &handover_prompt, app_handle).await;
+                }
 
                 if let Some(app) = app_handle {
                     let project_path_str = root.to_string_lossy().to_string();
@@ -2365,7 +2367,9 @@ pub async fn internal_advance_task_to_stage(
                 "### [ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]\n\nЗамечания исправлены. Отчет исполнителя:\n{}",
                 summary
             );
-            let _ = append_task_dialog_activity(root, &existing_sub.id, "steer", &handover_prompt, app_handle).await;
+            if !target_has_autorun {
+                let _ = append_task_dialog_activity(root, &existing_sub.id, "steer", &handover_prompt, app_handle).await;
+            }
 
             if let Some(app) = app_handle {
                 let project_path_str = root.to_string_lossy().to_string();

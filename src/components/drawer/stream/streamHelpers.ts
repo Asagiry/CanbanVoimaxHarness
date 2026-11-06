@@ -156,8 +156,14 @@ export function filterDisplayActivities(
   }
 
   const seenQuestionIds = new Set<string>();
+  const seenHandoverSteers = new Set<string>();
 
   const filteredQuestions = list.filter((activity) => {
+    if (activity?.type === 'steer' && activity?.content?.includes('[ОТЧЕТ ОБ ИСПРАВЛЕНИЯХ / HANDOVER SUMMARY]')) {
+      const key = activity.content.trim();
+      if (seenHandoverSteers.has(key)) return false;
+      seenHandoverSteers.add(key);
+    }
     if (isRootTask && (activity?.type as string) === 'summary') {
       const content = activity?.content || '';
       if (
