@@ -29,20 +29,21 @@ pub fn focus_main_window(app: AppHandle) -> Result<(), String> {
 }
 
 /// Resolves the effective active agent model for a task, following the canonical priority hierarchy:
-/// 1. Stage persona agent settings (`agent_setting.model`)
-/// 2. Column model override (`col.model_override`)
-/// 3. Project default model (`proj_cfg.default_model`)
-/// 4. Hardcoded fallback ("crouton-alpha-free")
+/// 1. Explicit Provider / Model pair from the steer bar (`task.provider_id`
+///    + `task.model` — only when the provider option is set, so old rows
+///    without a pair never resurrect stale SQLite models)
+/// 2. Stage persona agent settings (`agent_setting.model`)
+/// 3. Column model override (`col.model_override`)
+/// 4. Project default model (`proj_cfg.default_model`)
+/// 5. Hardcoded fallback ("crouton-alpha-free")
 ///
-/// NOTE: `task.model` (SQLite stale) and `llm_settings.model` (global) are
-/// intentionally ignored — per-agent settings is the single source of
-/// truth. Changing planner.model takes effect immediately on Continue,
-/// without clearing SQLite.
+/// NOTE: `task.model` alone (without `provider_id`) and `llm_settings.model`
+/// (global) remain intentionally ignored — legacy rows may carry stale SQLite
+/// models, and the global setting is not per-task intent.
 ///
-/// The candidate is then validated against the SELECTED provider's catalog
-/// (when the catalog is non-empty): a model not in catalog (e.g. after
-/// switching provider) is replaced with the first catalog model so the
-/// request never hits "model not found" on the wrong endpoint.
+/// The candidate is then validated against ALL provider catalogs: a model
+/// listed nowhere is replaced with the first catalog model so the request
+/// never hits "model not found" on a wrong endpoint.
 pub async fn resolve_task_active_agent_model(
     root: &Path,
     task: Option<&Task>,
@@ -55,6 +56,15 @@ pub async fn resolve_task_active_agent_model(
     }
 
     let (col_override, agent_model) = if let Some(t) = task {
+        // Explicit pair chosen in the steer bar (provider + model) is the
+        // freshest user intent: it wins over persona/col/project defaults.
+        // Old rows without provider_id fall through — that keeps the
+        // stale-SQLite-model problem from the pre-pair era away.
+        let explicit_pair = non_empty_opt(&t.provider_id)
+            .and_then(|_| non_empty_opt(&t.model));
+        if let Some(pair_model) = explicit_pair {
+            return pair_model;
+        }
         let pipeline = load_pipeline_config(root)
             .await
             .unwrap_or_else(|_| crate::config::default_pipeline_config());

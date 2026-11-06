@@ -146,6 +146,15 @@ use std::path::PathBuf;
         assert_eq!(base_url, "https://opencode.ai/inference/go/openai/v1");
         assert_eq!(api_key.as_deref(), Some("sk-go"));
 
+        // The pair is the freshest user intent: when the provider option is
+        // set, the steer-bar model wins over persona/dir defaults.
+        task.model = Some("beam-free".to_string());
+        let resolved = resolve_task_active_agent_model(&base, Some(&task), &llm_settings).await;
+        assert_eq!(resolved, "beam-free");
+        // Without a provider option (legacy stale row) the pair is ignored:
+        // the default fallback path applies instead.
+        task.provider_id = None;
+        task.model = Some("gemini-3.8-flash-high".to_string());
         let resolved = resolve_task_active_agent_model(&base, Some(&task), &llm_settings).await;
         assert_eq!(resolved, "crouton-alpha-free");
 
