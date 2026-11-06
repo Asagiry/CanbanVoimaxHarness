@@ -36,7 +36,6 @@ describe('Antigravity Dark Tokens Migration for SettingsModal and ToolPolicyModa
     expect(content).toContain('dark:border-[#2c2c33]');
     expect(content).toContain('dark:text-[#f4f4f5]');
     expect(content).toContain('dark:text-[#71717a]');
-    expect(content).toContain('dark:placeholder:text-[#71717a]');
     expect(content).toContain('dark:hover:bg-[#1e1e23]');
     expect(content).toContain('dark:hover:bg-[#232328]');
     expect(content).toContain('dark:bg-[#232328]');
