@@ -5,6 +5,14 @@ import {
   getDeterministicAgentColor,
   getDeterministicAgentIcon,
 } from '../../lib/agentPalette';
+import { isRuntimeRule } from '../../components/common/RuntimeRuleIcon';
+
+export function compareGlobalRules(a: { name: string }, b: { name: string }): number {
+  const ra = isRuntimeRule(a.name);
+  const rb = isRuntimeRule(b.name);
+  if (ra !== rb) return ra ? -1 : 1;
+  return a.name.localeCompare(b.name);
+}
 
 // Каталог агента по новой схеме. Роль = persona колонки; фолбэк — stageId,
 // чтобы стадии без персоны тоже получали детерминированный путь.

@@ -488,6 +488,7 @@ describe('cortexStore (Clean Deterministic Store Tests)', () => {
           return [
             { name: 'backend.md', path: '.cvh/rules/backend.md', fileType: 'rule' },
             { name: 'frontend.md', path: '.cvh/rules/frontend.md', fileType: 'rule' },
+            { name: 'runtime.md', path: '.cvh/rules/runtime.md', fileType: 'rule' },
           ];
         }
         return null;
@@ -496,13 +497,37 @@ describe('cortexStore (Clean Deterministic Store Tests)', () => {
       await useCortexStore.getState().loadGlobalRules();
 
       const { globalRules } = useCortexStore.getState();
-      expect(globalRules).toHaveLength(2);
-      expect(globalRules[0].id).toBe('global-rule-backend.md');
-      expect(globalRules[0].name).toBe('backend.md');
+      expect(globalRules).toHaveLength(3);
+      expect(globalRules[0].id).toBe('global-rule-runtime.md');
+      expect(globalRules[0].name).toBe('runtime.md');
       expect(globalRules[0].stageId).toBe('global');
       expect(globalRules[0].type).toBe('rule');
-      expect(globalRules[0].path).toBe('.cvh/rules/backend.md');
-      expect(globalRules[1].id).toBe('global-rule-frontend.md');
+      expect(globalRules[0].path).toBe('.cvh/rules/runtime.md');
+      expect(globalRules[1].id).toBe('global-rule-backend.md');
+      expect(globalRules[1].name).toBe('backend.md');
+      expect(globalRules[2].id).toBe('global-rule-frontend.md');
+    });
+
+    it('createGlobalRule keeps runtime.md first', async () => {
+      mockInvoke.mockImplementation(async (cmd) => {
+        if (cmd === 'list_global_rules') {
+          return [
+            { name: 'backend.md', path: '.cvh/rules/backend.md', fileType: 'rule' },
+            { name: 'runtime.md', path: '.cvh/rules/runtime.md', fileType: 'rule' },
+          ];
+        }
+        return true;
+      });
+
+      await useCortexStore.getState().loadGlobalRules();
+      expect(useCortexStore.getState().globalRules[0].name).toBe('runtime.md');
+
+      await useCortexStore.getState().createGlobalRule('aaa');
+
+      const { globalRules } = useCortexStore.getState();
+      expect(globalRules[0].name).toBe('runtime.md');
+      expect(globalRules[1].name).toBe('aaa.md');
+      expect(globalRules[2].name).toBe('backend.md');
     });
 
     it('openFile opens global rule from globalRules via IPC read_cortex_file', async () => {

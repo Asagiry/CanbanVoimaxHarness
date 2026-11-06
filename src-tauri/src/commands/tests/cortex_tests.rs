@@ -522,17 +522,22 @@ Write code.
 
         tokio::fs::write(rules_dir.join("b_rule.md"), "# Rule B").await.expect("write b_rule.md");
         tokio::fs::write(rules_dir.join("a_rule.md"), "# Rule A").await.expect("write a_rule.md");
+        tokio::fs::write(rules_dir.join("runtime.md"), "# Runtime").await.expect("write runtime.md");
         tokio::fs::write(rules_dir.join("ignored.txt"), "not markdown").await.expect("write ignored.txt");
 
         let files = list_global_rules_in(&base).await.expect("list_global_rules_in");
-        assert_eq!(files.len(), 2);
-        assert_eq!(files[0].name, "a_rule.md");
-        assert_eq!(files[0].path, ".cvh/rules/a_rule.md");
+        assert_eq!(files.len(), 3);
+        assert_eq!(files[0].name, "runtime.md");
+        assert_eq!(files[0].path, ".cvh/rules/runtime.md");
         assert_eq!(files[0].file_type, "rule");
 
-        assert_eq!(files[1].name, "b_rule.md");
-        assert_eq!(files[1].path, ".cvh/rules/b_rule.md");
+        assert_eq!(files[1].name, "a_rule.md");
+        assert_eq!(files[1].path, ".cvh/rules/a_rule.md");
         assert_eq!(files[1].file_type, "rule");
+
+        assert_eq!(files[2].name, "b_rule.md");
+        assert_eq!(files[2].path, ".cvh/rules/b_rule.md");
+        assert_eq!(files[2].file_type, "rule");
 
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
