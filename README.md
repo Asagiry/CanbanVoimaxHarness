@@ -197,7 +197,7 @@ CVH equips agents with an industrial-grade tool suite compliant with SWE-bench s
 | | `write_file` | Full UTF-8 file creation and replacement. |
 | | `edit_file` *(alias `str_replace`)* | 5-tier progressive matching with whitespace-relaxed fallback. |
 | | `glob` | Rapid pattern-based file discovery in active worktree. |
-| | `grep` | Literal substring search across worktree files; batch separate calls for alternative terms. |
+| | `grep` | Line-by-line Rust regex search across worktree files, capped at 200 matching lines; supports alternatives, anchors, classes and inline flags. |
 | | `execute_command` *(alias `bash`)* | Shell execution with timeout enforcement and stdio capture. |
 | **Research & Web** | `web_search` | DuckDuckGo search integration with zero API key requirement. |
 | | `web_fetch` | Clean Markdown webpage content extraction. |

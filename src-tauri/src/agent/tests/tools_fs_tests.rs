@@ -328,6 +328,38 @@ line 2 again"
         assert!(grep_res.contains("main.rs:1:"), "got: {}", grep_res);
         assert!(grep_res.contains("HELLO_GREP_MARKER"), "got: {}", grep_res);
 
+        tokio::fs::write(base.join("src/regex.txt"),
+            "alpha42\nbeta7\nalphabet\nALPHA99\nconfig.toml\nconfigXtoml\nпривет5\na|b\n"
+        ).await.unwrap();
+        for path in ["src", "src/regex.txt"] {
+            let result = execute_tool(&tool_ctx, "grep", &serde_json::json!({
+                "pattern": r"^(alpha|beta)\d+$", "path": path
+            })).await.unwrap();
+            assert_eq!(result, "src/regex.txt:1: alpha42\nsrc/regex.txt:2: beta7");
+        }
+        for (pattern, expected) in [
+            (r"(?i)^alpha\d+$", "src/regex.txt:1: alpha42\nsrc/regex.txt:4: ALPHA99"),
+            (r"^config\.toml$", "src/regex.txt:5: config.toml"),
+            (r"^\p{Cyrillic}+\d+$", "src/regex.txt:7: привет5"),
+            (r"^a\|b$", "src/regex.txt:8: a|b"),
+            ("^missing$", "No matches found."),
+        ] {
+            let result = execute_tool(&tool_ctx, "grep", &serde_json::json!({
+                "pattern": pattern, "path": "src/regex.txt"
+            })).await.unwrap();
+            assert_eq!(result, expected, "pattern: {pattern}");
+        }
+        let error = execute_tool(&tool_ctx, "grep", &serde_json::json!({"pattern": "["}))
+            .await.expect_err("Malformed regex must fail, not claim no matches");
+        assert!(error.to_string().contains("Invalid regular expression"));
+        assert!(error.to_string().contains("unclosed character class"));
+        tokio::fs::write(base.join("many.txt"), "match\n".repeat(250)).await.unwrap();
+        let capped = execute_tool(&tool_ctx, "grep", &serde_json::json!({
+            "pattern": "^match$", "path": "many.txt"
+        })).await.unwrap();
+        assert_eq!(capped.lines().count(), 200);
+
+
         let _ = tokio::fs::remove_dir_all(&base).await;
     }
 
