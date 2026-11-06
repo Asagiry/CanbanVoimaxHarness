@@ -662,7 +662,18 @@ export default function AgentConsoleDrawer() {
                 isToolAllowed={isToolAllowed}
                 effectiveModel={effectiveModel}
                 selectableModels={selectableModels}
-                onSelectModel={(m) => updateTask(task.id, { model: m })}
+                onSelectModel={(m) => {
+                  updateTask(task.id, { model: m });
+                  syncTasksBackend(tasks.map((t) => (t.id === task.id ? { ...t, model: m } : t)));
+                  void (async () => {
+                    const settingsStore = useSettingsStore.getState();
+                    const inCatalog = settingsStore.providers.some((p) => p.models.some((model) => model.id === m));
+                    if (inCatalog) {
+                      settingsStore.setSettings({ model: m });
+                      await settingsStore.saveSettings();
+                    }
+                  })();
+                }}
               />
             </ErrorBoundary>
           </div>

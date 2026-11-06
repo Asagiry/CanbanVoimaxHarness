@@ -330,8 +330,15 @@ impl LlmSettings {
             self.provider = active.name.clone();
             self.api_key = active.api_key.clone();
             self.base_url = active.base_url.clone();
-            if let Some(first_model) = active.models.first() {
-                if self.model.trim().is_empty() {
+            let model_in_catalog = active.models.iter().any(|m| m.id == self.model);
+            if !model_in_catalog {
+                if let Some(first_model) = active.models.first() {
+                    if !self.model.trim().is_empty() {
+                        eprintln!(
+                            "LlmSettings: model '{}' not in active provider '{}' catalog, falling back to '{}'",
+                            self.model, active.id, first_model.id
+                        );
+                    }
                     self.model = first_model.id.clone();
                 }
             }

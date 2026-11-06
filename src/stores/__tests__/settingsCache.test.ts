@@ -66,6 +66,46 @@ describe('Provider selection and cache accounting', () => {
     expect(useSettingsStore.getState().providers.some((p) => p.id === 'tg')).toBe(true);
   });
 
+  it('loads OpenCode Go catalog on startup without openSettings', async () => {
+    invoke.mockResolvedValueOnce({
+      provider: 'OpenCode Go',
+      baseUrl: 'https://opencode.ai/inference/go/openai/v1',
+      apiKey: 'sk-go',
+      model: 'crouton-alpha-free',
+      compactorModel: 'inherit',
+      activeProviderId: 'opencode go',
+      providers: [{
+        id: 'opencode go',
+        name: 'OpenCode Go',
+        isCustom: false,
+        apiKey: 'sk-go',
+        baseUrl: 'https://opencode.ai/inference/go/openai/v1',
+        protocol: 'openai',
+        models: [
+          { id: 'beam-free' },
+          { id: 'crouton-alpha-free' },
+          { id: 'deepseek-v4.1-flash' },
+          { id: 'iceman-contributor-free' },
+        ],
+      }],
+    });
+    await useSettingsStore.getState().loadSettings();
+    const state = useSettingsStore.getState();
+    expect(state.providers[0].models.map((m) => m.id)).toEqual([
+      'beam-free',
+      'crouton-alpha-free',
+      'deepseek-v4.1-flash',
+      'iceman-contributor-free',
+    ]);
+    expect(state.settings.model).toBe('crouton-alpha-free');
+    expect(state.availableModels).toEqual([
+      'beam-free',
+      'crouton-alpha-free',
+      'deepseek-v4.1-flash',
+      'iceman-contributor-free',
+    ]);
+  });
+
   it('uses total input once and clears a stale cache percentage', () => {
     useDrawerStore.getState().updateTelemetry('CACHE-1', {
       inputTokens: 100000, cacheReadTokens: 99000, outputTokens: 200, cacheHitRate: 49.7,

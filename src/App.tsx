@@ -14,6 +14,7 @@ import { useDrawerStore } from './stores/drawerStore';
 import { useCortexStore } from './stores/cortexStore';
 import { useToolPolicyStore } from './stores/toolPolicyStore';
 import { useAgentSessionStore } from './stores/agentSessionStore';
+import { useSettingsStore } from './stores/settingsStore';
 import { useUiZoom } from './hooks/useUiZoom';
 import { initNotifications } from './services/notificationService';
 import { setupTauriEventGateway } from './services/tauriEventGateway';
@@ -75,6 +76,7 @@ export default function App() {
     const init = async () => {
       try {
         await loadProjects();
+        await useSettingsStore.getState().loadSettings();
         // Boards and columns first: task mapping (stageId fallback, persona, status) resolves via columns
         await loadBoards();
         await loadTasks();

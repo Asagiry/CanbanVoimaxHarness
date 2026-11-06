@@ -82,6 +82,33 @@ use std::path::{Path, PathBuf};
         assert!(serialized.contains("\"isCustom\":true"));
     }
 
+    #[test]
+    fn test_ensure_providers_preserves_catalog_model_and_falls_back_when_stale() {
+        let json = r#"{
+            "provider": "OpenCode Go",
+            "apiKey": "sk-go",
+            "baseUrl": "https://opencode.ai/inference/go/openai/v1",
+            "model": "crouton-alpha-free",
+            "activeProviderId": "opencode go",
+            "providers": [{
+                "id": "opencode go",
+                "name": "OpenCode Go",
+                "isCustom": false,
+                "apiKey": "sk-go",
+                "baseUrl": "https://opencode.ai/inference/go/openai/v1",
+                "protocol": "openai",
+                "models": [{"id": "beam-free"}, {"id": "crouton-alpha-free"}]
+            }]
+        }"#;
+        let mut settings: LlmSettings = serde_json::from_str(json).expect("catalog parses");
+        settings.ensure_providers();
+        assert_eq!(settings.model, "crouton-alpha-free");
+
+        settings.model = "gemini-3.8-flash-high".to_string();
+        settings.ensure_providers();
+        assert_eq!(settings.model, "beam-free");
+    }
+
     #[tokio::test]
     async fn test_scaffold_cvh_project_pure_empty_structure() {
         let base_dir = std::path::PathBuf::from("target").join(format!("cvh_test_{}", uuid::Uuid::new_v4()));

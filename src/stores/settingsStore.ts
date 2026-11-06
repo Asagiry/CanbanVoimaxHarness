@@ -66,16 +66,20 @@ const DEFAULT_SETTINGS: LlmSettingsState = {
 
 const DEFAULT_PROVIDERS = migrateFlatToProviders(DEFAULT_SETTINGS);
 
-function syncFlatFromProviders(providers: Provider[], activeProviderId: ProviderId, base: LlmSettingsState): LlmSettingsState {
+export function syncFlatFromProviders(providers: Provider[], activeProviderId: ProviderId, base: LlmSettingsState): LlmSettingsState {
   const active = providers.find((p) => p.id === activeProviderId) ?? providers[0];
   if (!active) return base;
+  const catalogIds = new Set(active.models.map((m) => m.id));
+  const model = base.model && catalogIds.has(base.model)
+    ? base.model
+    : active.models[0]?.id || base.model || '';
   return {
     ...base,
     provider: active.name,
     gatewayUrl: active.baseUrl || base.gatewayUrl,
     baseUrl: active.baseUrl || base.baseUrl,
     apiKey: active.apiKey,
-    model: base.model || active.models[0]?.id || '',
+    model,
     activeProviderId: active.id,
     providers,
   };
@@ -275,47 +279,51 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
 
   loadSettings: async () => {
     let loaded: LlmSettingsState | null = null;
+    let storedModels: string[] = [];
 
-    // 1. Load models from localStorage
+    // 1. Snapshot localStorage models (used only if backend has no catalog)
     try {
       const savedModels = localStorage.getItem('cvh_available_models');
       if (savedModels) {
         const parsed = JSON.parse(savedModels);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          set({ availableModels: Array.from(new Set(parsed)) });
+          storedModels = Array.from(new Set(parsed));
         }
       }
     } catch {
       // Ignore JSON error
     }
 
-    // 2. Try backend for settings
+    // 2. Try backend for settings (authoritative)
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const backendSettings = await invoke<any>('get_llm_settings');
       if (backendSettings) {
-        const gUrl = backendSettings.gatewayUrl || backendSettings.gateway_url || backendSettings.baseUrl || backendSettings.base_url || DEFAULT_SETTINGS.gatewayUrl;
-        const flat: LlmSettingsState = {
-          provider: backendSettings.provider || DEFAULT_SETTINGS.provider,
-          gatewayUrl: gUrl,
-          baseUrl: gUrl,
-          apiKey: backendSettings.apiKey || backendSettings.api_key || '',
-          model: backendSettings.model || DEFAULT_SETTINGS.model,
-          compactorModel: backendSettings.compactorModel || backendSettings.compactor_model || 'inherit',
-          activeProviderId: backendSettings.activeProviderId || backendSettings.active_provider_id,
-          providers: Array.isArray(backendSettings.providers) ? backendSettings.providers : undefined,
-        };
-        loaded = syncFlatFromProviders(
-          migrateFlatToProviders(flat).providers,
-          migrateFlatToProviders(flat).activeProviderId,
-          flat,
+        const backendProviders = Array.isArray(backendSettings.providers) ? backendSettings.providers : [];
+        const hasBackendCatalog = backendProviders.some(
+          (p: Provider) => Array.isArray(p.models) && p.models.length > 0,
         );
+        if (hasBackendCatalog || backendProviders.length === 0) {
+          const gUrl = backendSettings.gatewayUrl || backendSettings.gateway_url || backendSettings.baseUrl || backendSettings.base_url || DEFAULT_SETTINGS.gatewayUrl;
+          const flat: LlmSettingsState = {
+            provider: backendSettings.provider || DEFAULT_SETTINGS.provider,
+            gatewayUrl: gUrl,
+            baseUrl: gUrl,
+            apiKey: backendSettings.apiKey || backendSettings.api_key || '',
+            model: backendSettings.model || '',
+            compactorModel: backendSettings.compactorModel || backendSettings.compactor_model || 'inherit',
+            activeProviderId: backendSettings.activeProviderId || backendSettings.active_provider_id,
+            providers: backendProviders.length > 0 ? backendProviders : undefined,
+          };
+          const migrated = migrateFlatToProviders(flat);
+          loaded = syncFlatFromProviders(migrated.providers, migrated.activeProviderId, flat);
+        }
       }
     } catch {
       // Ignore Tauri invoke error in browser
     }
 
-    // 3. Try localStorage fallback if backend didn't provide
+    // 3. Try localStorage fallback if backend didn't provide a catalog
     if (!loaded) {
       try {
         const raw = localStorage.getItem('cvh_llm_settings');
@@ -346,13 +354,16 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
     if (loaded) {
       const providers = loaded.providers ?? get().providers;
       const activeProviderId = loaded.activeProviderId ?? get().activeProviderId;
+      const derived = availableModelIds(providers);
       set({
         settings: loaded,
         providers,
         activeProviderId,
-        availableModels: availableModelIds(providers).length > 0 ? availableModelIds(providers) : get().availableModels,
+        availableModels: derived.length > 0 ? derived : storedModels.length > 0 ? storedModels : get().availableModels,
         notificationSettings: loadStoredNotificationSettings(),
       });
+    } else if (storedModels.length > 0) {
+      set({ availableModels: storedModels, notificationSettings: loadStoredNotificationSettings() });
     } else {
       set({ notificationSettings: loadStoredNotificationSettings() });
     }
