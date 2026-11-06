@@ -10,7 +10,6 @@ pub const PROTECTED_CVH_PATHS: &[&str] = &[
     ".cvh/rules/",
     ".cvh/settings/tool-policy.json",
     ".cvh/boards.json",
-    ".cvh/pipeline.json",
     ".cvh/hooks/",
     ".cvh/tools/",
     ".cvh/skills/",
@@ -138,7 +137,7 @@ async fn copy_dir_recursive_filtered(src_dir: &Path, dst_dir: &Path) {
 /// Synchronizes the live runtime-state from `<root>/.cvh` into the fresh
 /// worktree's `<worktree>/.cvh`, overwriting the stale committed snapshot.
 ///
-/// Copies (if present in root): `pipeline.json`, `boards.json`,
+/// Copies (if present in root): `boards.json`,
 /// `settings/tool-policy.json`, `agents/*.md`, `tools/*.json`, `hooks/` and
 /// `skills/` (recursively, minus secrets).
 ///
@@ -161,7 +160,7 @@ pub async fn sync_cvh_runtime_state(repo_root: &Path, worktree_abs: &Path) {
     }
 
     // Single files (overwrite stale snapshot when root has a live copy).
-    for rel in ["pipeline.json", "boards.json"] {
+    for rel in ["boards.json"] {
         let src = src_cvh.join(rel);
         if tokio::fs::try_exists(&src).await.unwrap_or(false) {
             if let Some(name) = src.file_name().and_then(|n| n.to_str()) {

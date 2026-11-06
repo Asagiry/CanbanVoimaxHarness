@@ -269,8 +269,7 @@ CanbanVoimaxHarness/
 │
 ├── .cvh/                      # Project Harness Control Plane Configuration
 │   ├── harness.db             # High-performance SQLite database (R2D2 WAL mode)
-│   ├── boards.json            # Multi-board definitions & active board
-│   ├── pipeline.json          # Pipeline columns, routing, sensors, & hooks
+│   ├── boards.json            # Multi-board definitions & active board (single SSOT; pipeline.json deprecated)
 │   ├── rules/                 # Global architectural rules & navigation maps
 │   ├── agents/                # Modular persona definitions (<role>/persona.md, setting, rules/)
 │   ├── settings/              # Tool Policy Matrix (tool-policy.json) & sequence allocators

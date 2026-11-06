@@ -38,17 +38,18 @@ use std::path::PathBuf;
             PathBuf::from("target").join(format!("cvh_scaffold_git_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(with_git.join(".git")).await.expect("git dir");
         crate::config::scaffold_cvh_project(&with_git).await.expect("scaffold");
-        let raw = tokio::fs::read_to_string(with_git.join(".cvh").join("pipeline.json"))
+        assert!(!with_git.join(".cvh").join("pipeline.json").exists());
+        let raw = tokio::fs::read_to_string(with_git.join(".cvh").join("boards.json"))
             .await
-            .expect("read pipeline");
-        let pipe: crate::config::PipelineConfig =
-            serde_json::from_str(&raw).expect("parse pipeline");
-        let backlog = pipe.stages.iter().find(|c| c.id == "backlog").expect("backlog");
+            .expect("read boards");
+        let boards: crate::config::BoardsConfig =
+            serde_json::from_str(&raw).expect("parse boards");
+        let backlog = boards.boards[0].stages.iter().find(|c| c.id == "backlog").expect("backlog");
         assert!(backlog.hooks.is_empty());
 
-        // Repeated scaffold preserves existing pipeline.json
+        // Repeated scaffold preserves existing boards.json
         crate::config::scaffold_cvh_project(&with_git).await.expect("rescaffold");
-        let raw2 = tokio::fs::read_to_string(with_git.join(".cvh").join("pipeline.json"))
+        let raw2 = tokio::fs::read_to_string(with_git.join(".cvh").join("boards.json"))
             .await
             .expect("reread");
         assert_eq!(raw, raw2);
@@ -58,12 +59,12 @@ use std::path::PathBuf;
             PathBuf::from("target").join(format!("cvh_scaffold_nogit_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&no_git).await.expect("plain dir");
         crate::config::scaffold_cvh_project(&no_git).await.expect("scaffold");
-        let raw_n = tokio::fs::read_to_string(no_git.join(".cvh").join("pipeline.json"))
+        let raw_n = tokio::fs::read_to_string(no_git.join(".cvh").join("boards.json"))
             .await
-            .expect("read pipeline");
-        let pipe_n: crate::config::PipelineConfig =
-            serde_json::from_str(&raw_n).expect("parse pipeline");
-        let backlog_n = pipe_n.stages.iter().find(|c| c.id == "backlog").expect("backlog");
+            .expect("read boards");
+        let boards_n: crate::config::BoardsConfig =
+            serde_json::from_str(&raw_n).expect("parse boards");
+        let backlog_n = boards_n.boards[0].stages.iter().find(|c| c.id == "backlog").expect("backlog");
         assert!(backlog_n.hooks.is_empty());
 
         let _ = tokio::fs::remove_dir_all(&with_git).await;

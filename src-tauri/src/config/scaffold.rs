@@ -4,7 +4,7 @@ use anyhow::Result;
 use std::path::Path;
 
 use crate::config::discovery::{is_app_own_directory, is_binary_or_target_dir};
-use crate::config::io::{atomic_write_file, load_boards_config, load_pipeline_config};
+use crate::config::io::{atomic_write_file, load_boards_config};
 use crate::config::models::*;
 use crate::config::tool_policy::{tool_policy_path, ToolPolicyConfig};
 
@@ -140,14 +140,15 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
         atomic_write_file(&config_path, &serde_json::to_string_pretty(&default_config)?).await?;
     }
 
-    // 2. boards.json (primary source of truth for boards and stages)
+    // 2. boards.json (single source of truth for boards and stages)
     let boards_path = cvh_dir.join("boards.json");
-    let boards_cfg = if !boards_path.exists() {
+    if !boards_path.exists() {
         let initial_stages = if cvh_dir.join("pipeline.json").exists() {
-            load_pipeline_config(repo_root)
+            load_boards_config(repo_root)
                 .await
-                .map(|p| p.stages)
-                .unwrap_or_else(|_| get_canonical_board_stages())
+                .ok()
+                .and_then(|cfg| cfg.boards.into_iter().next().map(|b| b.stages))
+                .unwrap_or_else(get_canonical_board_stages)
         } else {
             get_canonical_board_stages()
         };
@@ -161,29 +162,6 @@ pub async fn scaffold_cvh_project(repo_root: &Path) -> Result<()> {
             boards: vec![default_board],
         };
         atomic_write_file(&boards_path, &serde_json::to_string_pretty(&cfg)?).await?;
-        cfg
-    } else {
-        load_boards_config(repo_root).await.unwrap_or_else(|_| default_boards_config())
-    };
-
-    // 2b. pipeline.json (mirrored from boards.json for backward compatibility)
-    let pipeline_path = cvh_dir.join("pipeline.json");
-    if !pipeline_path.exists() {
-        let active_board = boards_cfg
-            .boards
-            .iter()
-            .find(|b| b.id == boards_cfg.active_board_id)
-            .cloned()
-            .unwrap_or_else(default_board_def);
-        let pipeline = PipelineConfig {
-            id: "default-engineering".to_string(),
-            title: active_board.name,
-            tool_permissions: None,
-            stages: active_board.stages,
-            boards: Some(boards_cfg.boards),
-            active_board_id: Some(boards_cfg.active_board_id),
-        };
-        atomic_write_file(&pipeline_path, &serde_json::to_string_pretty(&pipeline)?).await?;
     }
 
     // Seed modular cvh-dev router persona, settings, and progressive disclosure rules

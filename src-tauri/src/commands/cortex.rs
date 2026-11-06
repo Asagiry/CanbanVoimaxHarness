@@ -108,6 +108,7 @@ pub async fn save_cortex_file(
             let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipe }));
         }
     } else if norm_path.ends_with("pipeline.json") {
+        // Legacy trigger: pipeline.json is no longer written by the backend (boards.json is the single SSOT).
         if let Ok(pipe) = load_pipeline_config(&root).await {
             let _ = app.emit("pipeline:updated", serde_json::json!({ "pipeline": &pipe }));
         }

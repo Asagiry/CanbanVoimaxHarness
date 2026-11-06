@@ -316,7 +316,6 @@ mod tests {
         let dst_cvh = worktree_abs.join(".cvh");
 
         // --- Live root state ---
-        write_file(&src_cvh.join("pipeline.json"), r#"{"live":true}"#);
         write_file(&src_cvh.join("boards.json"), r#"{"boards":[]}"#);
         write_file(&src_cvh.join("tasks.json"), r#"[]"#);
         write_file(
@@ -357,7 +356,6 @@ mod tests {
         write_file(&src_cvh.join("skills").join(".env.local"), "nope");
 
         // --- Stale worktree snapshot (must be overwritten) ---
-        write_file(&dst_cvh.join("pipeline.json"), r#"{"live":false}"#);
         write_file(&dst_cvh.join("boards.json"), r#"{"stale":true}"#);
 
         (tmp, root, worktree_abs)
@@ -371,7 +369,6 @@ mod tests {
         sync_cvh_runtime_state(&root, &worktree_abs).await;
 
         // Overwritten stale files carry the live content now.
-        assert_eq!(read_str(&dst_cvh.join("pipeline.json")), r#"{"live":true}"#);
         assert_eq!(read_str(&dst_cvh.join("boards.json")), r#"{"boards":[]}"#);
         assert!(!dst_cvh.join("tasks.json").exists(), "tasks.json must not be synced to worktrees");
         assert_eq!(
@@ -444,12 +441,12 @@ mod tests {
         let dst_cvh = worktree_abs.join(".cvh");
 
         sync_cvh_runtime_state(&root, &worktree_abs).await;
-        let first = read_str(&dst_cvh.join("pipeline.json"));
+        let first = read_str(&dst_cvh.join("boards.json"));
         // Second run must not fail and must leave identical content.
         sync_cvh_runtime_state(&root, &worktree_abs).await;
-        let second = read_str(&dst_cvh.join("pipeline.json"));
+        let second = read_str(&dst_cvh.join("boards.json"));
 
-        assert_eq!(first, r#"{"live":true}"#);
+        assert_eq!(first, r#"{"boards":[]}"#);
         assert_eq!(first, second);
         assert_eq!(
             read_str(&dst_cvh.join("settings").join("tool-policy.json")),

@@ -31,7 +31,7 @@ pub fn focus_main_window(app: AppHandle) -> Result<(), String> {
 /// Resolves the effective active agent model for a task, following the canonical priority hierarchy:
 /// 1. Explicit Provider / Model pair from the steer bar (`task.provider_id`
 ///    + `task.model` — only when the provider option is set, so old rows
-///    without a pair never resurrect stale SQLite models)
+///      without a pair never resurrect stale SQLite models)
 /// 2. Stage persona agent settings (`agent_setting.model`)
 /// 3. Column model override (`col.model_override`)
 /// 4. Project default model (`proj_cfg.default_model`)

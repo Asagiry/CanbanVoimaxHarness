@@ -253,7 +253,7 @@ use std::path::{Path, PathBuf};
 
     #[tokio::test]
     async fn test_scaffold_minimal_backlog_ready_only() {
-        // Fresh scaffold: pipeline.json holds exactly 3 columns:
+        // Fresh scaffold: boards.json holds exactly 3 columns:
         // backlog (no persona, first), dev (cvh-dev persona), ready (terminal, last).
         let base_dir = std::path::PathBuf::from("target").join(format!("cvh_min_{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&base_dir).await.expect("test dir");
@@ -261,10 +261,8 @@ use std::path::{Path, PathBuf};
         scaffold_cvh_project(&base_dir).await.expect("Scaffold failed");
 
         let cvh = base_dir.join(".cvh");
-        let pipe_raw = tokio::fs::read_to_string(cvh.join("pipeline.json"))
-            .await
-            .expect("pipeline.json missing");
-        let pipe: PipelineConfig = serde_json::from_str(&pipe_raw).expect("pipeline parse");
+        assert!(!cvh.join("pipeline.json").exists(), "pipeline.json must not be created");
+        let pipe = load_pipeline_config(&base_dir).await.expect("load pipeline");
         assert_eq!(pipe.stages.len(), 3, "minimal scaffold must have exactly 3 columns");
         assert_eq!(pipe.stages[0].id, "backlog");
         assert_eq!(pipe.stages[0].title, "Backlog");
@@ -608,7 +606,8 @@ use std::path::{Path, PathBuf};
 
         // Verify boards.json exists
         assert!(base_dir.join(".cvh").join("boards.json").exists());
-        // Verify pipeline.json synchronized with active board (normalized with mandatory backlog and ready)
+        assert!(!base_dir.join(".cvh").join("pipeline.json").exists(), "pipeline.json must not be created");
+        // Verify load_pipeline returns active board (normalized with mandatory backlog and ready)
         let pipe = load_pipeline_config(&base_dir).await.expect("load pipeline");
         assert_eq!(pipe.title, "3D Моделирование");
         assert_eq!(pipe.stages.len(), 4);
@@ -622,9 +621,9 @@ use std::path::{Path, PathBuf};
     }
 
     #[tokio::test]
-    async fn test_boards_config_fallback_to_pipeline() {
-        // boards.json missing → single-board config derived from pipeline.json
-        // columns (kept fallback, not a migration: no files are moved).
+    async fn test_boards_config_migrates_from_legacy_pipeline() {
+        // boards.json missing → single-board config derived from legacy pipeline.json
+        // columns (one-time migration: no files are moved or deleted).
         let base_dir = std::path::PathBuf::from("target").join(format!("cvh_test_boards_fb_{}", uuid::Uuid::new_v4()));
         let cvh = base_dir.join(".cvh");
         tokio::fs::create_dir_all(&cvh).await.expect("test dir");
@@ -789,7 +788,8 @@ use std::path::{Path, PathBuf};
         assert!(cvh.is_dir());
         assert!(cvh.join("agents").is_dir());
         assert!(cvh.join("config.json").is_file());
-        assert!(cvh.join("pipeline.json").is_file());
+        assert!(cvh.join("boards.json").is_file());
+        assert!(!cvh.join("pipeline.json").exists());
 
         let _ = tokio::fs::remove_dir_all(&base_dir).await;
     }

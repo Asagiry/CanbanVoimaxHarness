@@ -784,7 +784,7 @@ color: #6366f1
 ---
 # Role: CVH-DEV (Project Configuration & Environment Specialist)
 You are EXCLUSIVELY responsible for configuring and maintaining CanbanVoimaxHarness project infrastructure (.cvh/):
-- Configure boards (.cvh/boards.json) and execution pipelines (.cvh/pipeline.json).
+- Configure boards (.cvh/boards.json, the single SSOT; pipeline is a virtual view of the active board).
 - Author and maintain agent personas, roles, and modular rules (.cvh/agents/<role>/persona.md, rules/*.md).
 - Author project-specific navigation maps (.cvh/rules/*.md): dispatch subagents (`subagent`) to explore target codebase topology and author accurate project maps. NEVER copy CVH internal paths into external projects.
 - Configure tool policies (.cvh/settings/tool-policy.json) and stage transition hooks (.cvh/hooks/).
@@ -803,7 +803,7 @@ You are EXCLUSIVELY responsible for configuring and maintaining CanbanVoimaxHarn
 - Strict Role Boundary on Task Cards (§ 2.8, § 2.16): cvh-dev is strictly forbidden from calling `create_task`, `create_tasks`, or `complete_task`. You configure infrastructure and advance stages via `advance_task` / `move_task` or `reject_task`. Task card creation and completion are strictly reserved for Root Orchestrators and human operators.
 - Ironclad Completion Rule: Before calling `advance_task`, you MUST mark all TODO items as completed via `todo_write` (unfinished items are auto-completed by the backend as a fallback). After completing all planned tasks, you MUST cease tool calls and provide a terminal findings report, OR invoke `advance_task(summary)` to transition the task to the next stage. NEVER re-publish completed items in `todo_write` or enter recursive planning loops!
 - Backlog-to-Ready Invariant: Always maintain `backlog` at index 0 and `ready` (`terminal: true`) at the final index across all boards.
-- Board Reconfiguration Invariant: When creating, renaming, or modifying boards in `.cvh/boards.json` or `.cvh/pipeline.json`, NEVER delete the board or column where your current task is running.
+- Board Reconfiguration Invariant: When creating, renaming, or modifying boards in `.cvh/boards.json`, NEVER delete the board or column where your current task is running.
 "##;
 
 pub const DEFAULT_RULE_ROLE_DEVELOPER_MD: &str = r##"---
@@ -932,7 +932,7 @@ description: Multi-board layout configuration, pipeline column schemas, board pr
 ---
 # Guide: Boards and Pipelines Configuration (boards.md)
 
-Authoritative rules for `.cvh/boards.json` and `.cvh/pipeline.json`.
+Authoritative rules for `.cvh/boards.json` (the single SSOT).
 
 ---
 
@@ -951,7 +951,7 @@ The ONLY structural invariants across all boards:
 2. **Delivery Anchor**: Final column (e.g. `ready`), `persona: null`, `terminal: true`. Tasks entering this column are finalized deliverables.
 3. **Intermediate Execution Stages**: Completely arbitrary and defined by project requirements (any personas, models, tools, gatekeeper sensors, and lifecycle hooks).
 
-Boards are configured in `.cvh/boards.json` and mirrored in `.cvh/pipeline.json`.
+Boards are configured in `.cvh/boards.json` (the single SSOT; pipeline is a virtual view of the active board).
 
 ---
 
@@ -1075,7 +1075,7 @@ Authoritative rules for `.cvh/hooks/` and column lifecycle scripts.
 ---
 
 ## 1. Hook Configuration Schema & Invocation Triggers
-Columns declare transition hooks in configuration (`boards.json` and `pipeline.json`) within the `hooks` object:
+Columns declare transition hooks in configuration (`boards.json`) within the `hooks` object:
 - `hooks.on_enter`: Executes when a task enters the stage.
 - `hooks.on_leave`: Executes when a task exits the stage.
 
@@ -1259,8 +1259,7 @@ When the operator approves a pipeline topology, `cvh-dev` generates:
 
 ```text
 .cvh/
-├── boards.json              # Board definitions matching user choice
-├── pipeline.json            # Pipeline routing, columns, and hooks
+├── boards.json              # Board definitions matching user choice (single SSOT; pipeline is a virtual view)
 ├── settings/
 │   └── tool-policy.json     # Two-level tool permissions matrix
 ├── hooks/

@@ -209,7 +209,7 @@ use std::sync::Arc;
         assert!(cvh_dev.contains("cvh-dev"));
         assert!(cvh_dev.contains("Columns = Agents"));
         assert!(cvh_dev.contains("boards.json"));
-        assert!(cvh_dev.contains("pipeline.json"));
+        assert!(cvh_dev.contains("single SSOT"));
         assert!(cvh_dev.contains("APPROVED_WITH_CAVEATS"));
         assert!(cvh_dev.contains("Instructions for Empty & New Projects"));
         // Lean-router invariants (≤150 lines, frontmatter, paths, skeletons, guards).
@@ -225,7 +225,7 @@ use std::sync::Arc;
             "scope:",
             "activation:",
             ".cvh/boards.json {activeBoardId",
-            ".cvh/pipeline.json {id,title,columns[",
+            "Pipeline is a virtual view of the active board",
             ".cvh/settings/tool-policy.json {globalEnabled, stageOverrides}",
             ".cvh/agents/<role>.md",
             ".cvh/tools/<tool>.json",

@@ -62,15 +62,6 @@ pub async fn save_boards_config(root_path: impl AsRef<Path>, config: &BoardsConf
         .context("Failed to serialize BoardsConfig")?;
     atomic_write_file(&boards_file, &serialized_boards).await?;
 
-    let mut pipeline = load_pipeline_config(root).await.unwrap_or_else(|_| default_pipeline_config());
-    pipeline.boards = Some(normalized_config.boards.clone());
-    pipeline.active_board_id = Some(normalized_config.active_board_id.clone());
-    if let Some(active_board) = normalized_config.boards.iter().find(|b| b.id == normalized_config.active_board_id) {
-        pipeline.stages = active_board.stages.clone();
-        pipeline.title = active_board.name.clone();
-    }
-    save_pipeline_config(root, &pipeline).await?;
-
     Ok(())
 }
 
@@ -240,26 +231,44 @@ pub async fn load_project_config(root_path: impl AsRef<Path>) -> Result<ProjectC
 }
 
 pub async fn load_pipeline_config(root_path: impl AsRef<Path>) -> Result<PipelineConfig> {
-    let pipeline_path = root_path.as_ref().join(".cvh").join("pipeline.json");
-    if !pipeline_path.exists() {
+    let root = root_path.as_ref();
+    let boards_file = root.join(".cvh").join("boards.json");
+    if !boards_file.exists() {
         return Ok(default_pipeline_config());
     }
-
-    match tokio::fs::read_to_string(&pipeline_path).await {
-        Ok(content) => match serde_json::from_str::<PipelineConfig>(&content) {
-            Ok(pipeline) => Ok(pipeline),
+    match tokio::fs::read_to_string(&boards_file).await {
+        Ok(content) => match serde_json::from_str::<BoardsConfig>(&content) {
+            Ok(boards_cfg) => {
+                if boards_cfg.boards.is_empty() {
+                    return Ok(default_pipeline_config());
+                }
+                let active = boards_cfg
+                    .boards
+                    .iter()
+                    .find(|b| b.id == boards_cfg.active_board_id)
+                    .cloned()
+                    .unwrap_or_else(|| boards_cfg.boards[0].clone());
+                Ok(PipelineConfig {
+                    id: "default-engineering".to_string(),
+                    title: active.name.clone(),
+                    tool_permissions: None,
+                    stages: active.stages.clone(),
+                    boards: Some(boards_cfg.boards.clone()),
+                    active_board_id: Some(boards_cfg.active_board_id.clone()),
+                })
+            }
             Err(e) => {
                 eprintln!(
-                    "CVH [load_pipeline_config]: Failed to parse pipeline JSON at {:?}: {}. Falling back to default 5-stage pipeline.",
-                    pipeline_path, e
+                    "CVH [load_pipeline_config]: Failed to parse boards JSON at {:?}: {}. Falling back to default 5-stage pipeline.",
+                    boards_file, e
                 );
                 Ok(default_pipeline_config())
             }
         },
         Err(e) => {
             eprintln!(
-                "CVH [load_pipeline_config]: Failed to read pipeline file at {:?}: {}. Falling back to default 5-stage pipeline.",
-                pipeline_path, e
+                "CVH [load_pipeline_config]: Failed to read boards file at {:?}: {}. Falling back to default 5-stage pipeline.",
+                boards_file, e
             );
             Ok(default_pipeline_config())
         }
@@ -277,29 +286,26 @@ pub async fn save_pipeline_config(root_path: impl AsRef<Path>, config: &Pipeline
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
         }
     }
-    let pipeline_path = root.join(".cvh").join("pipeline.json");
-    let serialized = serde_json::to_string_pretty(&normalized)
-        .context("Failed to serialize PipelineConfig to JSON")?;
-    atomic_write_file(&pipeline_path, &serialized).await?;
-
-    let boards_file = root.join(".cvh").join("boards.json");
-    if let Some(ref boards) = normalized.boards {
-        let boards_cfg = BoardsConfig {
-            active_board_id: normalized.active_board_id.clone().unwrap_or_else(default_board_id),
-            boards: boards.clone(),
-        };
-        if let Ok(serialized_boards) = serde_json::to_string_pretty(&boards_cfg) {
-            let _ = atomic_write_file(&boards_file, &serialized_boards).await;
+    let mut boards_cfg = load_boards_config(root).await.unwrap_or_else(|_| default_boards_config());
+    if let Some(boards) = normalized.boards.clone() {
+        if !boards.is_empty() {
+            boards_cfg.boards = boards;
+            boards_cfg.active_board_id = normalized
+                .active_board_id
+                .clone()
+                .unwrap_or_else(default_board_id);
         }
-    } else if let Ok(mut boards_cfg) = load_boards_config(root).await {
-        if let Some(active_board) = boards_cfg.boards.iter_mut().find(|b| b.id == boards_cfg.active_board_id) {
-            active_board.stages = normalized.stages.clone();
-            if let Ok(serialized_boards) = serde_json::to_string_pretty(&boards_cfg) {
-                let _ = atomic_write_file(&boards_file, &serialized_boards).await;
-            }
+    } else if let Some(active_board) = boards_cfg
+        .boards
+        .iter_mut()
+        .find(|b| b.id == boards_cfg.active_board_id)
+    {
+        active_board.stages = normalized.stages.clone();
+        if !normalized.title.trim().is_empty() {
+            active_board.name = normalized.title.clone();
         }
     }
-    Ok(())
+    save_boards_config(root, &boards_cfg).await
 }
 
 

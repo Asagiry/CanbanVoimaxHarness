@@ -443,7 +443,7 @@ pub async fn internal_create_task(
     }
 
     // Check pipeline config for stage hooks (board-aware: first check columns
-    // of effective_board_id, then fallback to pipeline.json).
+    // of effective_board_id, then fallback to pipeline view of boards.json).
     // If skip_backlog_hook / skip_worktree is set, do NOT run on_enter hooks and do NOT provision builtin worktree.
     let skip = new_task.skip_worktree.unwrap_or(false);
     if !skip {
