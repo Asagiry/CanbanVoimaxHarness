@@ -55,3 +55,4 @@ mod tasks_id_tests;
 mod tasks_lifecycle_tests;
 mod tasks_subtasks_tests;
 mod tasks_runner_tests;
+mod tasks_hooks_tests;

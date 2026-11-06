@@ -255,6 +255,18 @@ pub async fn create_task(
     .await
 }
 
+/// Normalizes legacy hook moments to the canonical frontend contract:
+/// source-column exit hooks (`on_finish` / `on_exit`) are surfaced as
+/// `on_leave` so `CardHookNode`/`TaskHookStates` (which only know
+/// `on_enter` | `on_leave`) can render the running/success state.
+pub fn normalize_hook_type(hook_type: &str) -> &'static str {
+    match hook_type {
+        "on_finish" | "on_exit" => "on_leave",
+        "on_enter" => "on_enter",
+        _ => "on_leave",
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn record_task_hook_result(
     task: &mut Task,
@@ -269,6 +281,7 @@ pub fn record_task_hook_result(
     stderr: &str,
     error: Option<&str>,
 ) {
+    let hook_type = normalize_hook_type(hook_type);
     let mut map: serde_json::Map<String, serde_json::Value> = task
         .hook_states
         .as_ref()
@@ -447,7 +460,7 @@ pub async fn internal_create_task(
                 .and_then(|p| p.stages.into_iter().find(|c| c.id == stage_id)),
         };
         if let Some(col) = col_opt {
-            trigger_column_on_enter_script(&col, &new_task, &stage_id, None, root).await;
+            trigger_column_on_enter_script(&col, &mut new_task, &stage_id, None, root, app_handle).await;
             let is_builtin = col.hooks.get("on_enter").map(|cfg| {
                 let s = cfg.script();
                 s == "builtin:create_worktree" || s.starts_with("builtin:create_worktree")
@@ -935,12 +948,31 @@ pub async fn internal_create_subtask(
         let _ = app.emit("tasks:updated", serde_json::json!({ "tasks": &tasks, "projectPath": &project_path_str }));
 
         if target_col.auto_run == Some(true) || target_col.persona.is_some() {
+            // New subtask already carries parent hook_states (incl. any
+            // `running` on_enter recorded by the preceding pipeline run)
+            // for the target stage — re-emit it for the new id so
+            // CardHookNode on the fresh card shows amber running instead
+            // of idle. No-op when parent had no on_enter state.
+            if let Some(hook_states) = new_subtask.hook_states.clone() {
+                if let Some(enter) = hook_states.get("on_enter").cloned() {
+                    if enter.get("status").and_then(|s| s.as_str()) == Some("running") {
+                        let _ = app.emit("hook:start", serde_json::json!({
+                            "taskId": subtask_id,
+                            "stageId": target_col.id,
+                            "hookType": "on_enter",
+                            "hookName": enter.get("hookName").and_then(|v| v.as_str()).unwrap_or("on_enter"),
+                            "description": enter.get("description"),
+                        }));
+                    }
+                }
+            }
             trigger_column_on_enter_script(
                 &target_col,
-                &new_subtask,
+                &mut new_subtask.clone(),
                 &target_col.id,
                 None,
                 root,
+                app_handle,
             )
             .await;
             let _ = app.emit("agent:autorun", serde_json::json!({ "taskId": &subtask_id, "projectPath": &project_path_str }));
