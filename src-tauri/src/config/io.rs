@@ -84,7 +84,8 @@ pub async fn load_llm_settings(repo_root: &Path) -> Result<LlmSettings> {
     let settings_dir_path = repo_root.join(".cvh").join("settings").join("llm.json");
     if settings_dir_path.exists() {
         if let Ok(content) = tokio::fs::read_to_string(&settings_dir_path).await {
-            if let Ok(settings) = serde_json::from_str::<LlmSettings>(&content) {
+            if let Ok(mut settings) = serde_json::from_str::<LlmSettings>(&content) {
+                settings.ensure_providers();
                 return Ok(settings);
             }
         }
@@ -93,7 +94,8 @@ pub async fn load_llm_settings(repo_root: &Path) -> Result<LlmSettings> {
     let local_path = repo_root.join(".cvh").join("llm.json");
     if local_path.exists() {
         if let Ok(content) = tokio::fs::read_to_string(&local_path).await {
-            if let Ok(settings) = serde_json::from_str::<LlmSettings>(&content) {
+            if let Ok(mut settings) = serde_json::from_str::<LlmSettings>(&content) {
+                settings.ensure_providers();
                 return Ok(settings);
             }
         }
@@ -103,18 +105,23 @@ pub async fn load_llm_settings(repo_root: &Path) -> Result<LlmSettings> {
     let global_path = get_app_llm_settings_path();
     if global_path.exists() {
         if let Ok(content) = tokio::fs::read_to_string(&global_path).await {
-            if let Ok(settings) = serde_json::from_str::<LlmSettings>(&content) {
+            if let Ok(mut settings) = serde_json::from_str::<LlmSettings>(&content) {
+                settings.ensure_providers();
                 return Ok(settings);
             }
         }
     }
 
     // 3. Fallback to default
-    Ok(LlmSettings::default())
+    let mut default_settings = LlmSettings::default();
+    default_settings.ensure_providers();
+    Ok(default_settings)
 }
 
 pub async fn save_llm_settings_to_disk(repo_root: &Path, settings: &LlmSettings) -> Result<()> {
-    let serialized = serde_json::to_string_pretty(settings)
+    let mut normalized = settings.clone();
+    normalized.ensure_providers();
+    let serialized = serde_json::to_string_pretty(&normalized)
         .context("Failed to serialize LlmSettings to JSON")?;
 
     // Always persist to global app config directory (%LOCALAPPDATA%\com.voimax.cvh\llm.json)

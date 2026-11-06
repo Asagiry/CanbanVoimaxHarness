@@ -32,7 +32,9 @@ export default function AgentConsoleDrawer() {
   } = useDrawerStore();
 
   const { tasks, updateTask, columns } = useBoardStore();
-  const { settings, availableModels, openSettings } = useSettingsStore();
+  const settings = useSettingsStore((s) => s.settings);
+  const providers = useSettingsStore((s) => s.providers);
+  const openSettings = useSettingsStore((s) => s.openSettings);
   const isToolAllowed = useToolPolicyStore((s) => s.isToolAllowed);
   const openToolPolicyModal = useToolPolicyStore((s) => s.openModal);
 
@@ -357,11 +359,14 @@ export default function AgentConsoleDrawer() {
 
   const effectiveModel = task?.model || settings.model || 'gemini-3.8-flash-high';
   const selectableModels = useMemo(() => {
-    const userModels = (availableModels && availableModels.length > 0)
-      ? availableModels
-      : [settings.model || 'gemini-3.8-flash-high'];
-    return Array.from(new Set([effectiveModel, ...userModels]));
-  }, [effectiveModel, availableModels, settings.model]);
+    const seen = new Set<string>([effectiveModel]);
+    const catalogIds = providers.flatMap((p) => p.models.map((m) => m.id));
+    const fallback = catalogIds.length > 0 ? catalogIds : [settings.model || 'gemini-3.8-flash-high'];
+    for (const id of fallback) {
+      if (id) seen.add(id);
+    }
+    return Array.from(seen);
+  }, [effectiveModel, providers, settings.model]);
 
   const turns = useMemo(() => {
     if (!task) return 0;

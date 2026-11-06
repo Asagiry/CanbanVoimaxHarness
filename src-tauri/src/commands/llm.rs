@@ -1,5 +1,7 @@
 use crate::commands::state::AppState;
-use crate::config::{load_llm_settings, save_llm_settings_to_disk, LlmSettings};
+use crate::config::{
+    load_llm_settings, save_llm_settings_to_disk, upsert_provider, LlmSettings, Provider,
+};
 use tauri::State;
 
 #[tauri::command]
@@ -19,6 +21,59 @@ pub async fn save_llm_settings(
     save_llm_settings_to_disk(&root, &settings)
         .await
         .map_err(|e| format!("Failed to save LLM settings: {}", e))
+}
+
+#[tauri::command]
+pub async fn list_providers(state: State<'_, AppState>) -> Result<Vec<Provider>, String> {
+    let root = state.get_root();
+    let settings = load_llm_settings(&root)
+        .await
+        .map_err(|e| format!("Failed to load LLM settings: {}", e))?;
+    Ok(settings.providers)
+}
+
+#[tauri::command]
+pub async fn upsert_provider_command(
+    provider: Provider,
+    state: State<'_, AppState>,
+) -> Result<Vec<Provider>, String> {
+    provider
+        .validate()
+        .map_err(|e| format!("Invalid provider: {}", e))?;
+    let root = state.get_root();
+    let mut settings = load_llm_settings(&root)
+        .await
+        .map_err(|e| format!("Failed to load LLM settings: {}", e))?;
+    upsert_provider(&mut settings.providers, provider);
+    settings.ensure_providers();
+    save_llm_settings_to_disk(&root, &settings)
+        .await
+        .map_err(|e| format!("Failed to save LLM settings: {}", e))?;
+    Ok(settings.providers)
+}
+
+#[tauri::command]
+pub async fn delete_provider(
+    provider_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<Provider>, String> {
+    let provider_id = provider_id.trim();
+    if provider_id.is_empty() {
+        return Err("provider_id cannot be empty".to_string());
+    }
+    let root = state.get_root();
+    let mut settings = load_llm_settings(&root)
+        .await
+        .map_err(|e| format!("Failed to load LLM settings: {}", e))?;
+    settings.providers.retain(|p| p.id != provider_id);
+    if settings.active_provider_id.as_deref() == Some(provider_id) {
+        settings.active_provider_id = settings.providers.first().map(|p| p.id.clone());
+    }
+    settings.ensure_providers();
+    save_llm_settings_to_disk(&root, &settings)
+        .await
+        .map_err(|e| format!("Failed to save LLM settings: {}", e))?;
+    Ok(settings.providers)
 }
 
 #[tauri::command]

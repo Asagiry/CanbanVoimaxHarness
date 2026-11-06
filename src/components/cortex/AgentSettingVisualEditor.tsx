@@ -187,7 +187,7 @@ export default function AgentSettingVisualEditor({
   onSwitchToCode,
 }: AgentSettingVisualEditorProps) {
   const { t } = useTranslation();
-  const availableModels = useSettingsStore((s) => s.availableModels);
+  const providers = useSettingsStore((s) => s.providers);
   const settingsModel = useSettingsStore((s) => s.settings.model);
   const agentPersonas = useCortexStore((s) => s.agentPersonas);
 
@@ -338,33 +338,30 @@ export default function AgentSettingVisualEditor({
     emitChanges(model, temperature, contextWindow, maxTokens, icon, newColor, rawExtra);
   };
 
-  // Динамический список моделей: строго 'inherit', затем settings.model и availableModels
-  const dynamicModels = useMemo(() => {
-    const list: string[] = ['inherit'];
+  // Dynamic model list: 'inherit', then settings.model, then provider catalog (displayName ?? id)
+  const dynamicModelOptions = useMemo(() => {
+    const options: Array<{ id: string; label: string }> = [{ id: 'inherit', label: 'inherit' }];
     const seen = new Set<string>(['inherit']);
-
+    const push = (id: string, label: string) => {
+      const trimmed = id.trim();
+      if (!trimmed || seen.has(trimmed)) return;
+      seen.add(trimmed);
+      options.push({ id: trimmed, label: label.trim() || trimmed });
+    };
     if (settingsModel && typeof settingsModel === 'string') {
-      const trimmed = settingsModel.trim();
-      if (trimmed && !seen.has(trimmed)) {
-        list.push(trimmed);
-        seen.add(trimmed);
+      push(settingsModel, settingsModel);
+    }
+    for (const provider of providers) {
+      for (const catalogModel of provider.models) {
+        push(catalogModel.id, catalogModel.displayName ?? catalogModel.id);
       }
     }
-
-    if (Array.isArray(availableModels)) {
-      for (const m of availableModels) {
-        if (typeof m === 'string') {
-          const trimmed = m.trim();
-          if (trimmed && !seen.has(trimmed)) {
-            list.push(trimmed);
-            seen.add(trimmed);
-          }
-        }
-      }
-    }
-
-    return list;
-  }, [availableModels, settingsModel]);
+    return options;
+  }, [providers, settingsModel]);
+  const dynamicModels = useMemo(
+    () => dynamicModelOptions.map((option) => option.id),
+    [dynamicModelOptions],
+  );
 
   if (parseError) {
     return (
@@ -552,23 +549,24 @@ export default function AgentSettingVisualEditor({
 
           {/* Быстрые бейджи модели */}
           <div className="flex flex-wrap gap-1.5 pt-1">
-            {dynamicModels.map((item) => {
+            {dynamicModelOptions.map((option) => {
               const isSelected =
-                item === 'inherit'
+                option.id === 'inherit'
                   ? isModelInherit
-                  : model.toLowerCase() === item.toLowerCase();
+                  : model.toLowerCase() === option.id.toLowerCase();
               return (
                 <button
-                  key={item}
+                  key={option.id}
                   type="button"
-                  onClick={() => handleModelChange(item)}
+                  onClick={() => handleModelChange(option.id)}
+                  title={option.id}
                   className={`px-2.5 py-1 rounded text-xs font-mono transition cursor-pointer flex items-center space-x-1 border ${
                     isSelected
                       ? 'border-[#6366f1] bg-[#6366f1]/10 text-[#6366f1] dark:text-[#818cf8] font-semibold'
                       : 'border-[#ebebeb] dark:border-[#2c2c33] bg-white dark:bg-[#111114] text-[#666666] dark:text-[#71717a] hover:border-[#d4d4d8] dark:hover:border-[#3a3a44] hover:text-[#171717] dark:hover:text-[#f4f4f5]'
                   }`}
                 >
-                  <span>{item}</span>
+                  <span>{option.label}</span>
                 </button>
               );
             })}

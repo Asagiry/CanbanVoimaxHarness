@@ -36,6 +36,52 @@ use std::path::{Path, PathBuf};
         assert_eq!(s2.temperature, None);
     }
 
+    #[test]
+    fn test_llm_settings_flat_json_migrates_to_providers() {
+        let json = r#"{
+            "provider": "antigravity",
+            "apiKey": "sk-local-abc",
+            "baseUrl": "http://127.0.0.1:8045/v1",
+            "model": "gemini-3.8-flash-high"
+        }"#;
+        let mut settings: LlmSettings = serde_json::from_str(json).expect("flat parses");
+        assert!(settings.providers.is_empty());
+        settings.ensure_providers();
+        assert_eq!(settings.providers.len(), 1);
+        assert_eq!(settings.providers[0].api_key, "sk-local-abc");
+        assert_eq!(settings.providers[0].models.len(), 1);
+        assert_eq!(settings.providers[0].models[0].id, "gemini-3.8-flash-high");
+        assert_eq!(settings.active_provider_id.as_deref(), Some(settings.providers[0].id.as_str()));
+    }
+
+    #[test]
+    fn test_llm_settings_providers_roundtrip() {
+        let json = r#"{
+            "provider": "tg",
+            "apiKey": "",
+            "baseUrl": "http://127.0.0.1:8045/v1",
+            "model": "gemini-3.8-flash-high",
+            "activeProviderId": "tg",
+            "providers": [{
+                "id": "tg",
+                "name": "tg",
+                "isCustom": true,
+                "apiKey": "sk-1",
+                "baseUrl": "http://127.0.0.1:8045/v1",
+                "protocol": "openai",
+                "models": [{"id": "m1", "displayName": "M One"}]
+            }]
+        }"#;
+        let mut settings: LlmSettings = serde_json::from_str(json).expect("providers parse");
+        assert_eq!(settings.providers.len(), 1);
+        assert_eq!(settings.providers[0].models[0].display_name.as_deref(), Some("M One"));
+        settings.ensure_providers();
+        assert_eq!(settings.api_key, "sk-1");
+        let serialized = serde_json::to_string(&settings).expect("serialize");
+        assert!(serialized.contains("\"activeProviderId\":\"tg\""));
+        assert!(serialized.contains("\"isCustom\":true"));
+    }
+
     #[tokio::test]
     async fn test_scaffold_cvh_project_pure_empty_structure() {
         let base_dir = std::path::PathBuf::from("target").join(format!("cvh_test_{}", uuid::Uuid::new_v4()));
