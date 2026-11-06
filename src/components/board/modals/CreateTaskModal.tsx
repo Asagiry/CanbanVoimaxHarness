@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ImagePlus, Paperclip, ZoomIn } from 'lucide-react';
 import { useBoardStore } from '../../../stores/boardStore';
-import { useSettingsStore } from '../../../stores/settingsStore';
 import { useTranslation } from '../../../stores/languageStore';
 import { compressImageFile } from '../../../lib/imageCompression';
 import { PipelineStage, PipelineColumn } from '../../../types';
@@ -29,8 +28,6 @@ export default function CreateTaskModal({
   defaultColumnId,
 }: CreateTaskModalProps) {
   const { addTask, activeBoardId } = useBoardStore();
-  const providers = useSettingsStore((s) => s.providers);
-  const settings = useSettingsStore((s) => s.settings);
   const { t } = useTranslation();
   const { zoom } = useUiZoom();
   const effectiveStages = stages ?? columns;
@@ -39,7 +36,6 @@ export default function CreateTaskModal({
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newAttachments, setNewAttachments] = useState<{ id: string; name: string; dataUrl: string }[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>(settings.model || 'gemini-3.8-flash-high');
   const [selectedColumnId, setSelectedColumnId] = useState<string>('');
   const [previewLightbox, setPreviewLightbox] = useState<{ src: string; alt?: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -52,8 +48,6 @@ export default function CreateTaskModal({
       setNewTitle('');
       setNewDescription('');
       setNewAttachments([]);
-      const firstAvailable = providers.flatMap((p) => p.models.map((m) => m.id))[0] ?? '';
-      setSelectedModel(settings.model || firstAvailable || 'gemini-3.8-flash-high');
       const intakeCol = effectiveStages?.find((c) => c.isIntake);
       const fallbackId =
         intakeCol?.id ||
@@ -62,7 +56,7 @@ export default function CreateTaskModal({
       setPreviewLightbox(null);
       setIsSubmitting(false);
     }
-  }, [isOpen, initialStage, effectiveStages, settings.model, providers]);
+  }, [isOpen, initialStage, effectiveStages]);
 
   // Global Escape key listener (only when lightbox is not active)
   useEffect(() => {
@@ -203,7 +197,6 @@ export default function CreateTaskModal({
         description: newDescription.trim() || undefined,
         stageId: targetColumnId,
         boardId: activeBoardId || 'development',
-        model: selectedModel,
         attachments: newAttachments.map((a) => a.dataUrl),
       });
       if (created) {
@@ -372,26 +365,6 @@ export default function CreateTaskModal({
                   </span>
                 </div>
               )}
-            </div>
-
-            <div>
-              <label className="block font-mono text-[#4d4d4d] dark:text-[#a1a1aa] font-medium mb-1">
-                {t('newTask.modelLabel')}
-              </label>
-              <select
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-md bg-[#fafafa] dark:bg-[#17171b] border border-[#ebebeb] dark:border-[#2c2c33] text-[#171717] dark:text-[#f4f4f5] focus:outline-hidden focus:border-[#171717] dark:focus:border-[#f4f4f5] focus:bg-white dark:focus:bg-[#111114] font-mono text-xs cursor-pointer transition"
-              >
-                {Array.from(new Set([selectedModel, ...providers.flatMap((p) => p.models.map((m) => m.id))])).map((m) => {
-                  const label = providers.flatMap((p) => p.models).find((model) => model.id === m)?.displayName ?? m;
-                  return (
-                    <option key={m} value={m} className="dark:bg-[#17171b] dark:text-[#f4f4f5]">
-                      {label}
-                    </option>
-                  );
-                })}
-              </select>
             </div>
 
             <div className="flex items-center justify-end space-x-2 pt-3 border-t border-[#ebebeb] dark:border-[#212126] shrink-0">

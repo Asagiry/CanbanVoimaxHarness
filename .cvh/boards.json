@@ -138,7 +138,6 @@
               "description": "Сливает утвержденную feature-ветку в main, отправляет в origin/main и удаляет изолированный worktree"
             }
           },
-
           "autoRun": true,
           "terminal": null,
           "isIntake": null
