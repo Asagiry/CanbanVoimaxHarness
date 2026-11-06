@@ -178,6 +178,16 @@ pub fn persist_compacted_dialog(
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
+    let source_ids = serde_json::to_string(ids_to_archive).map_err(|e| e.to_string())?;
+    let source_deleted: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM dialog_items WHERE task_id = ?1 AND type = 'deleted'
+         AND (id IN (SELECT value FROM json_each(?2)) OR id = ?3))",
+        params![task_id, source_ids, tool_item.map(|item| &item.id)], |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    if source_deleted {
+        return Err("Dialogue changed during compaction; retry using the remaining messages".to_string());
+    }
+
     // 1. Mark intermediate items as compacted_archived
     tx.execute("DELETE FROM dialog_items WHERE task_id = ?1 AND type = 'context_snapshot'", params![task_id])
         .map_err(|e| format!("Failed to invalidate conversation context: {e}"))?;
@@ -259,6 +269,20 @@ pub fn persist_compacted_dialog(
         .map_err(|e| format!("Failed to commit transaction: {}", e))?;
 
     Ok(())
+}
+
+pub fn resolve_dialog_item_task_id(root: &Path, task_id: &str, item_id: &str) -> Result<String, String> {
+    let conn = get_db_conn(root).map_err(|e| e.to_string())?;
+    let owner: Option<String> = conn.query_row(
+        "SELECT task_id FROM dialog_items WHERE id = ?1", params![item_id], |row| row.get(0),
+    ).optional().map_err(|e| e.to_string())?;
+    let Some(owner) = owner else { return Ok(task_id.to_string()); };
+    if owner.eq_ignore_ascii_case(task_id) || task_id.split_once(":sub:").is_some_and(|(parent, _)| {
+        owner.to_lowercase().starts_with(&format!("{}:sub:", parent.to_lowercase()))
+    }) {
+        return Ok(owner);
+    }
+    Err("Dialog item belongs to another task".to_string())
 }
 
 /// Deletes a specific dialog item for a task by ID.

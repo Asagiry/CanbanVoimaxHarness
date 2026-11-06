@@ -65,13 +65,14 @@ describe('Dialog Persistence & Stream Unification (CVH-051)', () => {
   it('refuses deletion while running and uses the subagent dialogue when stopped', async () => {
     useDrawerStore.setState({
       activeTaskId: 'PARENT', toolIdToSubagentId: { alias: 'child' }, activeAgentTaskIds: { child: true },
-      activityFeed: { alias: [{ id: 'out-1', type: 'output', timestamp: '', content: 'answer' }] },
+      activityFeed: { child: [], alias: [{ id: 'out-1', type: 'output', timestamp: '', content: 'answer' }] },
     });
-    await expect(useDrawerStore.getState().deleteDialogItem!('alias', 'out-1')).rejects.toThrow('Stop the agent');
+    await expect(useDrawerStore.getState().deleteDialogItem!('child', 'out-1')).rejects.toThrow('Stop the agent');
     expect(mockInvoke).not.toHaveBeenCalled();
     useDrawerStore.setState({ activeAgentTaskIds: {} });
-    await useDrawerStore.getState().deleteDialogItem!('alias', 'out-1');
-    expect(mockInvoke).toHaveBeenCalledWith('delete_dialog_item', { taskId: 'PARENT:sub:child', itemId: 'out-1' });
+    const items = useDrawerStore.getState().activityFeed.alias;
+    await useDrawerStore.getState().deleteDialogItem!('child', 'out-1');
+    expect(mockInvoke).toHaveBeenCalledWith('delete_dialog_item', { taskId: 'PARENT:sub:child', itemId: 'out-1', items });
     expect(useDrawerStore.getState().activityFeed.alias).toEqual([]);
   });
 

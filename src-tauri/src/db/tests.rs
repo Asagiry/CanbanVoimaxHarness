@@ -80,6 +80,30 @@ fn deleting_question_removes_its_tool_record_without_touching_other_calls() {
     assert_eq!(remaining[0].id, "keep");
 }
 
+#[test]
+fn deletion_resolves_subagent_alias_to_the_persisted_dialogue() {
+    let root = PathBuf::from("target").join(format!("cvh_delete_alias_{}", uuid::Uuid::new_v4()));
+    let item = ActivityItem { id: "answer-id".into(), item_type: "output".into(), content: Some("answer".into()), ..Default::default() };
+    append_dialog_items(&root, "PARENT:sub:PARENT.sub-call", std::slice::from_ref(&item)).unwrap();
+    let canonical = resolve_dialog_item_task_id(&root, "PARENT:sub:call", &item.id).unwrap();
+    assert_eq!(canonical, "PARENT:sub:PARENT.sub-call");
+    assert!(resolve_dialog_item_task_id(&root, "OTHER:sub:call", &item.id).is_err());
+    append_dialog_items(&root, &canonical, std::slice::from_ref(&item)).unwrap();
+    delete_dialog_item(&root, &canonical, &item.id).unwrap();
+    assert!(load_dialog_items(&root, &canonical).unwrap().is_empty());
+}
+
+#[test]
+fn compaction_cannot_restore_a_message_deleted_during_its_request() {
+    let root = PathBuf::from("target").join(format!("cvh_delete_compact_{}", uuid::Uuid::new_v4()));
+    let item = ActivityItem { id: "source".into(), item_type: "output".into(), content: Some("remove me".into()), ..Default::default() };
+    append_dialog_items(&root, "DELETE-5", std::slice::from_ref(&item)).unwrap();
+    let summary = ActivityItem { id: "summary".into(), item_type: "compacted".into(), content: item.content.clone(), ..Default::default() };
+    delete_dialog_item(&root, "DELETE-5", &item.id).unwrap();
+    assert!(persist_compacted_dialog(&root, "DELETE-5", &summary, None, &[item.id]).is_err());
+    assert!(load_dialog_items(&root, "DELETE-5").unwrap().is_empty());
+}
+
 #[tokio::test]
 async fn cache_snapshot_preserves_batch_messages_and_pending_steer() {
     use crate::llm::{CacheControl, ChatMessage, FunctionCall, ToolCall};

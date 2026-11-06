@@ -122,7 +122,7 @@ CVH adapts to project scope through first-class multi-board topologies defined i
 CVH delivers deep observability into agent execution velocity and token economics:
 - **Active Generation TPS (Tokens Per Second)**: Measured strictly during active token generation, completely decoupled from pre-generation network setup or Time-To-First-Token (TTFT).
 - **Non-Decaying TPS Invariant**: Generation speed freezes instantaneously upon turn completion—metrics never "melt" towards zero.
-- **Safe Prompt Cache Hit Rate**: Division-by-zero guarded calculation tracking provider prompt cache efficiency (**consistently >90%** via deterministic alphabetical tool serialization).
+- **Prompt Cache Hit Rate**: Provider-reported cached input tokens divided by total input tokens, with a division-by-zero guard. Stable tool serialization helps preserve the prefix; the actual hit rate depends on the provider and workload.
 - **RPM (Cadence Rate)**: Real-time tracking of agent steps-per-minute with monospace numerals (`tabular-nums`).
 - **Dynamic Context Gauge**: Multi-segment visual ring breakdown (System Prompt, Tools, Dialogue Messages) with a strict **100% Compaction Ceiling**.
 
@@ -147,13 +147,26 @@ effective(tool, stage) = stage_override[stage][tool] ?? global_enabled[tool] ?? 
 - **Level A (Global Switches)**: Defined in `.cvh/settings/tool-policy.json` as global defaults.
 - **Level B (Stage Overrides)**: Single Authoritative Layer per pipeline column (e.g. Code Review stage disables code-mutation tools; explicit stage configuration takes precedence).
 - **Direct JSON Schema Editor (`toolCustomSchemas`)**: The Global Registry in `.cvh/settings/tool-policy.json` supports direct customization of tool schemas (`toolCustomSchemas`). Architects and developers can tailor parameter descriptions, add domain-specific constraints, or specialize instructions without modifying core Rust engine code.
-- **English-Only Schemas & BPE Token Compression**: All tool names, descriptions, and parameter definitions sent to LLMs are authoritatively maintained in English. Byte-Pair Encoding (BPE) tokenizers (used across Claude, Gemini, DeepSeek, and OpenAI) process English tokens with **~70% denser compression** than Cyrillic UTF-8 multi-byte sequences, saving thousands of prompt tokens per step and driving prompt cache hit rates above 90%.
+- **English Tool Schemas**: Tool names, descriptions, and parameter definitions use English. Token counts depend on the model's tokenizer; schema language alone does not guarantee a cache hit rate.
 - **Zero-Trust Request Schema Stripping**: Disabled tools are completely purged from the JSON tool schema sent to the LLM. This saves **~2,400+ prompt tokens per inference step** and completely eliminates tool hallucination vectors.
 
-### State-Preserving Dynamic Context Compactor
-Long-running sessions naturally accumulate stale terminal logs and bulky file dumps:
-- **Zero-LLM Fast Evaporation**: Tool outputs older than the last 2 turns exceeding 500 characters are automatically evaporated into concise head/tail summaries without spending a single API token.
-- Reclaims up to **80% of token context** while preserving critical architectural decisions.
+### Prompt Caching and Context Compaction
+
+- **Spill on arrival**: Oversized tool results are written to `.cvh/spill/` before entering the conversation. The model receives a bounded head/tail preview and a path to the full log. This happens once per result.
+- **Stable history between compactions**: Ordinary agent steps append messages. There is no rolling rule that rewrites a tool result when it becomes two turns old. Saved conversation snapshots preserve message boundaries across restarts.
+- **Compaction at the context limit**: Automatic compaction starts when estimated conversation tokens reach the configured context window (128,000 by default), targeting 75% of that window. A separate request-size guard can compact earlier when the full request reaches its ceiling. Compaction rewrites an older batch and resets the affected cache prefix. The two-turn retention rule belongs to this compaction pass, not to every agent step. There is no fixed 15-step schedule.
+- **Manual history edits**: Stop the agent, delete a message or tool card, then resume. The saved context is rebuilt without the deleted entries; a tool's call and result are removed together. Deletion does not undo filesystem changes or remove references already present in other messages. Manual compaction and history edits can reduce cache reuse on the next request.
+- **OpenCode routing**: Requests use CVH's own User-Agent and a stable `x-opencode-session` value per conversation. Models are fetched from the provider catalog and selected in settings. API errors are kept out of assistant messages; retry notices remain in diagnostic logs.
+
+Spilling starts when either limit is exceeded:
+
+| Tool group | Line limit | Byte limit | Head / tail preview |
+| :--- | ---: | ---: | :--- |
+| Standard tools, including `execute_command` | 500 | 64 KiB | Up to 20 lines and 4 KiB per end |
+| `read_file` | 2,000 | 128 KiB | Up to 20 lines and 4 KiB per end |
+| Subagent tools, `load_rule`, `get_task_history` | 5,000 | 256 KiB | Up to 50 lines and 8 KiB per end |
+
+These measures preserve cache reuse where possible; they do not guarantee 99% hits or a monthly spending limit. Monitor actual cached/uncached input, output tokens, and the provider's allowance. For OpenCode Go, disable Extra Usage in the Console if requests must stop when the included allowance runs out.
 
 ---
 
@@ -193,7 +206,7 @@ Background child agents (`subagent_bg`) execute independently without blocking t
 - **Distinct Visual Execution Badges**: The UI and drawer streams clearly distinguish synchronous oneshot subagents (**⚡ СИНХР**) from asynchronous background delegations (**🗂️ ФОН**).
 - **Elevated Spilling Threshold**: Subagent terminal reports benefit from an elevated spilling ceiling of **5,000 lines / 256 KB** (vs standard 500 lines / 64 KB for shell commands), ensuring rich multi-file audit syntheses reach parent models without premature truncation.
 
-*Note: Large outputs exceeding 500 lines or 64 KB for shell commands (`execute_command`), or 2,000 lines / 128 KB for `read_file`, automatically spill to disk at `.cvh/spill/<timestamp>-<tool>.log`, returning only the head (20 lines) and tail (20 lines) to preserve LLM context.*
+*For spill thresholds and preview limits, see [Prompt Caching and Context Compaction](#prompt-caching-and-context-compaction). Full logs use `.cvh/spill/<timestamp>-<tool>-<uuid>.log`.*
 
 ---
 

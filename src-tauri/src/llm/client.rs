@@ -221,7 +221,6 @@ impl LlmClient {
                             err_msg, attempt, max_reconnects, delay_secs
                         );
                         eprintln!("CVH [llm_client]: {}", notice);
-                        let _ = tx.send(StreamChunk::Output(notice)).await;
                         tokio::select! {
                             _ = tx.closed() => return Ok(()),
                             _ = tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs as u64)) => {},
@@ -247,7 +246,6 @@ impl LlmClient {
                             err_msg, attempt, max_reconnects, delay_secs
                         );
                         eprintln!("CVH [llm_client]: {}", notice);
-                        let _ = tx.send(StreamChunk::Output(notice)).await;
                         tokio::select! {
                             _ = tx.closed() => return Ok(()),
                             _ = tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs as u64)) => {},

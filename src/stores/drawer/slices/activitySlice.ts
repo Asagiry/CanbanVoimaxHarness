@@ -425,11 +425,10 @@ export const createActivitySlice: StateCreator<
       throw new Error('Stop the agent before deleting messages');
     }
     for (const id of aliases) cancelActivitySave(id);
-    const feed = current.activityFeed[taskId] || current.activityFeed[resolvedId] || [];
+    const feed = [...aliases].map((id) => current.activityFeed[id]).find((items) => items?.some((item) => item.id === itemId)) || [];
     const toolId = feed.find((item) => item.id === itemId)?.tool?.id || itemId;
     const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('save_task_activity', { taskId: targetDbTaskId, items: feed });
-    const deletedIds = new Set(await invoke<string[]>('delete_dialog_item', { taskId: targetDbTaskId, itemId }));
+    const deletedIds = new Set(await invoke<string[]>('delete_dialog_item', { taskId: targetDbTaskId, itemId, items: feed }));
     deletedIds.add(itemId);
     deletedIds.add(toolId);
     set((state) => {
