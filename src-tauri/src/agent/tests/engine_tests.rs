@@ -866,6 +866,45 @@ data: [DONE]
         assert!(regular_text.contains("Done!"));
     }
 
+    #[test]
+    fn test_thinking_parser_thought_reasoning_tags() {
+        let mut parser = ThinkingStreamParser::new();
+        let input = "<thought>deep thought</thought>Answer A <reasoning>reasoning body</reasoning>Answer B";
+        let outputs = parser.push(input);
+        let mut flushed = parser.flush();
+        let mut all = outputs;
+        all.append(&mut flushed);
+        let thoughts: String = all.iter().filter(|(th, _)| *th).map(|(_, t)| t.clone()).collect();
+        let regular: String = all.iter().filter(|(th, _)| !*th).map(|(_, t)| t.clone()).collect();
+        assert_eq!(thoughts, "deep thoughtreasoning body");
+        assert_eq!(regular, "Answer A Answer B");
+    }
+
+    #[test]
+    fn test_thinking_parser_split_closing_tag() {
+        let mut parser = ThinkingStreamParser::new();
+        let mut all = Vec::new();
+        for chunk in ["<thinking>internal", "</thi", "nk>final"] {
+            all.extend(parser.push(chunk));
+        }
+        all.extend(parser.flush());
+        let thoughts: String = all.iter().filter(|(th, _)| *th).map(|(_, t)| t.clone()).collect();
+        let regular: String = all.iter().filter(|(th, _)| !*th).map(|(_, t)| t.clone()).collect();
+        assert_eq!(thoughts, "internal");
+        assert_eq!(regular, "final");
+    }
+
+    #[test]
+    fn test_thinking_parser_unclosed_flush() {
+        let mut parser = ThinkingStreamParser::new();
+        let mut all = parser.push("<thinking>unclosed tail");
+        all.extend(parser.flush());
+        let thoughts: String = all.iter().filter(|(th, _)| *th).map(|(_, t)| t.clone()).collect();
+        let regular: String = all.iter().filter(|(th, _)| !*th).map(|(_, t)| t.clone()).collect();
+        assert_eq!(thoughts, "unclosed tail");
+        assert_eq!(regular, "");
+    }
+
     #[tokio::test]
     async fn test_system_prompt_primed_runtime_mandate_and_exclusion() {
         let base = std::path::PathBuf::from("target").join(format!("cvh_runtime_test_{}", uuid::Uuid::new_v4()));

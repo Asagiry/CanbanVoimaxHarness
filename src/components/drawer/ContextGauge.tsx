@@ -173,6 +173,7 @@ export default function ContextGauge({
           systemPromptTokens={metrics.systemPromptTokens}
           toolDefTokens={metrics.toolDefTokens}
           messageTokens={metrics.messageTokens}
+          isEstimate={metrics.isEstimate}
           isCompacting={metrics.isCompacting}
           savingsBadge={metrics.savingsBadge}
           onCompactClick={metrics.handleCompactClick}

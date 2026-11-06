@@ -8,6 +8,7 @@ export interface ContextPopoverProps {
   systemPromptTokens: number;
   toolDefTokens: number;
   messageTokens: number;
+  isEstimate?: boolean;
   isCompacting: boolean;
   savingsBadge: string | null;
   onCompactClick: () => void;
@@ -23,6 +24,7 @@ export function ContextPopover({
   systemPromptTokens,
   toolDefTokens,
   messageTokens,
+  isEstimate,
   isCompacting,
   savingsBadge,
   onCompactClick,
@@ -40,7 +42,7 @@ export function ContextPopover({
             <span className="text-xs text-[#666666] dark:text-[#71717a]">заполнено</span>
           </div>
           <span className="font-mono text-xs text-[#666666] dark:text-[#71717a] tabular-nums">
-            ~{usedTokensK}K / {maxTokensK}K
+            {isEstimate ? 'оценка: ' : ''}~{usedTokensK}K / {maxTokensK}K
           </span>
         </div>
 

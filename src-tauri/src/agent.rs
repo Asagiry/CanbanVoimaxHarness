@@ -1646,12 +1646,22 @@ Task Title: {}
         // Log raw request for complete transparency & debugging (§ llm_debug.log)
         {
             let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
+            let req_tokens_est = compactor::estimate_request_tokens(&sub_messages, req_tools.as_deref());
+            let req_chars: usize = sub_messages.iter().map(|m| m.content.as_ref().map(|c| match c {
+                crate::llm::MessageContent::Text(t) => t.len(),
+                crate::llm::MessageContent::Parts(parts) => parts.iter().map(|p| match p {
+                    crate::llm::ContentPart::Text { text } => text.len(),
+                    _ => 0,
+                }).sum(),
+            }).unwrap_or(0)).sum();
             let mut req_log = format!(
                 "[{}] [{}] Subagent Turn {} Request:
 Model: {}
 Messages count: {}
+Req tokens (est): {}
+Req chars: {}
 ",
-                ts, subagent_id, sub_turn, model, sub_messages.len()
+                ts, subagent_id, sub_turn, model, sub_messages.len(), req_tokens_est, req_chars
             );
             if let Some(first) = sub_messages.first() {
                 if first.role == Role::System {
@@ -2678,6 +2688,30 @@ pub fn is_valid_closing_tag(buffer: &str, pos: usize, tag_len: usize) -> bool {
     true
 }
 
+/// Helper to check if a potential partial closing tag prefix at `pos` could be a valid closing tag
+pub fn is_valid_partial_closing_tag(buffer: &str, pos: usize) -> bool {
+    if !buffer.is_char_boundary(pos) || pos > buffer.len() {
+        return false;
+    }
+    if pos > 0 {
+        if let Some(prev_char) = buffer.get(..pos).and_then(|s| s.chars().next_back()) {
+            if prev_char == '`' {
+                return false;
+            }
+        }
+    }
+    if let Some(before) = buffer.get(..pos) {
+        let line_start = before.rfind('\n').map(|p| p + 1).unwrap_or(0);
+        if let Some(line_before) = before.get(line_start..) {
+            let backticks_before = line_before.chars().filter(|&c| c == '`').count();
+            if backticks_before % 2 == 1 {
+                return false;
+            }
+        }
+    }
+    true
+}
+
 /// Helper to check if a potential partial tag prefix at `pos` could be a valid opening tag
 pub fn is_valid_partial_opening_tag(buffer: &str, pos: usize) -> bool {
     if !buffer.is_char_boundary(pos) || pos > buffer.len() {
@@ -2735,19 +2769,23 @@ impl ThinkingStreamParser {
                     };
                     let open_thinking = sub.find("<thinking>").map(|p| search_pos + p);
                     let open_think = sub.find("<think>").map(|p| search_pos + p);
+                    let open_thought = sub.find("<thought>").map(|p| search_pos + p);
+                    let open_reasoning = sub.find("<reasoning>").map(|p| search_pos + p);
 
-                    let next_cand = match (open_thinking, open_think) {
-                        (Some(pos1), Some(pos2)) => {
-                            if pos1 <= pos2 {
-                                Some((pos1, "<thinking>".len()))
-                            } else {
-                                Some((pos2, "<think>".len()))
-                            }
-                        }
-                        (Some(pos), None) => Some((pos, "<thinking>".len())),
-                        (None, Some(pos)) => Some((pos, "<think>".len())),
-                        (None, None) => None,
-                    };
+                    let mut cands: Vec<(usize, usize)> = Vec::new();
+                    if let Some(p) = open_thinking {
+                        cands.push((p, "<thinking>".len()));
+                    }
+                    if let Some(p) = open_think {
+                        cands.push((p, "<think>".len()));
+                    }
+                    if let Some(p) = open_thought {
+                        cands.push((p, "<thought>".len()));
+                    }
+                    if let Some(p) = open_reasoning {
+                        cands.push((p, "<reasoning>".len()));
+                    }
+                    let next_cand = cands.into_iter().min_by_key(|c| c.0);
 
                     match next_cand {
                         Some((pos, tag_len)) => {
@@ -2785,7 +2823,7 @@ impl ThinkingStreamParser {
                 // If not found, check if end of buffer could be a partial opening tag
                 let mut partial_len = 0;
                 if !self.in_backtick {
-                    for tag in &["<thinking>", "<think>"] {
+                    for tag in &["<thinking>", "<think>", "<thought>", "<reasoning>"] {
                         for len in 1..tag.len() {
                             if self.buffer.ends_with(&tag[..len]) && len > partial_len {
                                 let pos = self.buffer.len() - len;
@@ -2835,19 +2873,23 @@ impl ThinkingStreamParser {
                     };
                     let close_thinking = sub.find("</thinking>").map(|p| search_pos + p);
                     let close_think = sub.find("</think>").map(|p| search_pos + p);
+                    let close_thought = sub.find("</thought>").map(|p| search_pos + p);
+                    let close_reasoning = sub.find("</reasoning>").map(|p| search_pos + p);
 
-                    let next_cand = match (close_thinking, close_think) {
-                        (Some(pos1), Some(pos2)) => {
-                            if pos1 <= pos2 {
-                                Some((pos1, "</thinking>".len()))
-                            } else {
-                                Some((pos2, "</think>".len()))
-                            }
-                        }
-                        (Some(pos), None) => Some((pos, "</thinking>".len())),
-                        (None, Some(pos)) => Some((pos, "</think>".len())),
-                        (None, None) => None,
-                    };
+                    let mut cands: Vec<(usize, usize)> = Vec::new();
+                    if let Some(p) = close_thinking {
+                        cands.push((p, "</thinking>".len()));
+                    }
+                    if let Some(p) = close_think {
+                        cands.push((p, "</think>".len()));
+                    }
+                    if let Some(p) = close_thought {
+                        cands.push((p, "</thought>".len()));
+                    }
+                    if let Some(p) = close_reasoning {
+                        cands.push((p, "</reasoning>".len()));
+                    }
+                    let next_cand = cands.into_iter().min_by_key(|c| c.0);
 
                     match next_cand {
                         Some((pos, tag_len)) => {
@@ -2876,11 +2918,11 @@ impl ThinkingStreamParser {
 
                 // If not found, check if end of buffer could be a partial closing tag
                 let mut partial_len = 0;
-                for tag in &["</thinking>", "</think>"] {
+                for tag in &["</thinking>", "</think>", "</thought>", "</reasoning>"] {
                     for len in 1..tag.len() {
                         if self.buffer.ends_with(&tag[..len]) && len > partial_len {
                             let pos = self.buffer.len() - len;
-                            if is_valid_partial_opening_tag(&self.buffer, pos) {
+                            if is_valid_partial_closing_tag(&self.buffer, pos) {
                                 partial_len = len;
                             }
                         }
@@ -3462,12 +3504,22 @@ where
         // Log raw request for complete transparency & debugging (§ llm_debug.log)
         {
             let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
+            let req_tokens_est = compactor::estimate_request_tokens(&messages, tools.as_deref());
+            let req_chars: usize = messages.iter().map(|m| m.content.as_ref().map(|c| match c {
+                crate::llm::MessageContent::Text(t) => t.len(),
+                crate::llm::MessageContent::Parts(parts) => parts.iter().map(|p| match p {
+                    crate::llm::ContentPart::Text { text } => text.len(),
+                    _ => 0,
+                }).sum(),
+            }).unwrap_or(0)).sum();
             let mut req_log = format!(
                 "[{}] [{}] Turn {} Request:
 Model: {}
 Messages count: {}
+Req tokens (est): {}
+Req chars: {}
 ",
-                ts, config.task_id, turn, config.model, messages.len()
+                ts, config.task_id, turn, config.model, messages.len(), req_tokens_est, req_chars
             );
             if let Some(first) = messages.first() {
                 if first.role == Role::System {
