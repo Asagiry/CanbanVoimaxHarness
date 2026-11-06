@@ -101,7 +101,6 @@ export function buildSettingTemplate(role: string, stageTitle: string): string {
     `{\n` +
     `  "_comment": "Настройки агента ${role} (${stageTitle})",\n` +
     `  "model": null,\n` +
-    `  "temperature": 0.2,\n` +
     `  "context_window": 128000,\n` +
     `  "icon": "${icon}",\n` +
     `  "color": "${color}"\n` +
