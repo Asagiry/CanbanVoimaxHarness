@@ -20,7 +20,8 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 | **Dialogue Items & Streaming Chunks** | `src-tauri/src/db/dialog_repo.rs` | Atomic upsert, tool JSON persistence; deletion tombstones reject stale saves and invalidate context snapshots. |
 | **Exact Conversation Checkpoints** | `src-tauri/src/db/context_repo.rs` | Hidden SQLite snapshots preserve message boundaries and pending user input across restarts. |
 | **Token Usage & TPS Telemetry Repo** | `src-tauri/src/db/telemetry_repo.rs` | Aggregated tokens, non-decaying TPS metrics. |
-| **Config Facade & Module Exports** | `src-tauri/src/config/mod.rs` | Submodule re-exports (`models`, `tool_policy`, `discovery`, `scaffold`, `io`). |
+| **Config Facade & Module Exports** | `src-tauri/src/config/mod.rs` | Submodule re-exports (`models`, `providers`, `tool_policy`, `discovery`, `scaffold`, `io`). |
+| **LLM Provider Catalog & Migration** | `src-tauri/src/config/providers.rs` | `Provider`/`ProviderModel`/`ProviderProtocol`; `normalize_providers`, `legacy_provider`, `upsert_provider`; flat `LlmSettings` migration. ≤500 lines, zero production unwrap. |
 | **Pipeline & Board Data Models** | `src-tauri/src/config/models.rs` | `BoardDef`, `PipelineConfig`, embedded rules. |
 | **Tool Policy Matrix & Authorization** | `src-tauri/src/config/tool_policy.rs` | Single Authoritative Layer: `stage_override ?? global_enabled ?? true`. |
 | **Workspace Root Discovery** | `src-tauri/src/config/discovery.rs` | Multi-tier root discovery, `%LOCALAPPDATA%`. |
@@ -38,7 +39,7 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 | **Boards & Pipeline IPC** | `src-tauri/src/commands/boards.rs` | Multi-board CRUD, column settings, pipeline sync. |
 | **Dialogs History & Stream IPC** | `src-tauri/src/commands/dialogs.rs` | Dialogue history retrieval, steer persistence. |
 | **Git Worktree & Branch IPC** | `src-tauri/src/commands/git.rs` | Worktree lifecycle, branch diffs, commit queries. |
-| **LLM Settings & Test IPC** | `src-tauri/src/commands/llm.rs` | Endpoint config, model verification, test calls. |
+| **LLM Settings & Test IPC** | `src-tauri/src/commands/llm.rs` | Endpoint config, model verification, test calls; provider CRUD (`list_providers`, `upsert_provider_command`, `delete_provider`). |
 | **Project Workspace Switching IPC** | `src-tauri/src/commands/projects.rs` | Workspace root switching, recent projects list. |
 | **Tool Policy IPC** | `src-tauri/src/commands/tools.rs` | Tool policy inspection, stage overrides & matrix updates. |
 | **Desktop Notifications & Windows Fallback** | `src-tauri/src/commands/notifications.rs` | Native WinRT toasts with PowerShell fallback, AUMID registration. |
@@ -87,6 +88,7 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 - **`discovery.rs`**: Four-tier workspace root discovery traversing ancestors, inspecting `.cvh` / `.git`, and persisting active projects to `%LOCALAPPDATA%/com.voimax.cvh/active_project.txt`.
 - **`scaffold.rs`**: Initial project initialization (`scaffold_cvh_project`, `ensure_cvh_dev_scaffold`). Enforces auto-gitignore entries (`.cvh/llm.json`, `.cvh/worktrees/`), seeds initial 3-column boards (`boards.json` primary), and seeds builtin `runtime.md` contract.
 - **`io.rs`**: Atomic disk operations. `atomic_write_file` writes via transient temp files and renames to prevent partial corruption.
+- **`providers.rs`**: LLM provider catalog. `Provider` (`id`, `name`, `is_custom`, `api_key`, `base_url`, `protocol: ProviderProtocol`, `models: Vec<ProviderModel{id, display_name?}>`); `Provider::validate()` boundary guard; `normalize_providers` dedups providers/models; `legacy_provider` migrates flat `LlmSettings` into a single provider. `LlmSettings` (`models.rs`) carries `providers` + `active_provider_id` with `#[serde(default)]` and `ensure_providers()` on load/save.
 
 ### 2.3 Task Pipeline & Command Subsystem (`src-tauri/src/commands/`)
 - **`mod.rs`**: IPC command handler facades and module re-exports.
@@ -101,7 +103,7 @@ Authoritative directory topology, file mapping table, and subsystem architecture
 - **`boards.rs`**: Multi-board CRUD (`.cvh/boards.json`), active board switching, and pipeline column management.
 - **`dialogs.rs`**: Dialogue item retrieval, paginated history loading, and steer event storage.
 - **`git.rs`**: Git worktree manager, branch listings, unified diff calculations, and working tree checks.
-- **`llm.rs`**: LLM configuration management (`.cvh/llm.json`), live connectivity ping, and model catalogs.
+- **`llm.rs`**: LLM configuration management (`.cvh/llm.json`), live connectivity ping, and model catalogs. Provider CRUD commands (`list_providers`, `upsert_provider_command`, `delete_provider`) persist via `config/io.rs` (`atomic_write_file`); `fetch_available_models` signature unchanged.
 - **`projects.rs`**: Project workspace root switching, recent projects history, and environment inspection.
 - **`tools.rs`**: Two-level tool policy matrix queries and persistent updates (`.cvh/settings/tool-policy.json`).
 - **`notifications.rs`**: Multi-tier desktop notifications (`show_system_notification`), native WinRT via `NotificationExt`, headless PowerShell toast fallback, and Start Menu AUMID shortcut registration (`ensure_windows_start_menu_shortcut`).

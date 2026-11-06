@@ -32,11 +32,11 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Stage Hook & Sensor Badges** | `src/components/board/StageHookBadge.tsx` | Transition script and gatekeeper sensor status. |
 | **Column Context Menu Alias** | `src/components/board/ColumnContextMenu.tsx` | Backward-compatible alias for `StageContextMenu.tsx`. |
 | **Column Hook Badge Alias** | `src/components/board/ColumnHookBadge.tsx` | Backward-compatible alias for `StageHookBadge.tsx`. |
-| **Create Task Modal** | `src/components/board/modals/CreateTaskModal.tsx` | Task creation modal with persona & model selection. |
+| **Create Task Modal** | `src/components/board/modals/CreateTaskModal.tsx` | Task creation modal with persona & model selection (model options from provider catalog, displayName labels). |
 | **Create Column Modal** | `src/components/board/modals/CreateColumnModal.tsx` | Column creation modal with hook configuration. |
 | **Create Board Modal** | `src/components/board/CreateBoardModal.tsx` | Board creation modal with preset templates. |
 | **Board Image Lightbox Modal** | `src/components/board/modals/ImageLightboxModal.tsx` | Full-screen image preview for board attachments. |
-| **Agent Console Drawer (Root Container)**| `src/components/drawer/AgentConsoleDrawer.tsx` | Hoisted fixed overlay, flex bounded (`min-h-0 min-w-0`). |
+| **Agent Console Drawer (Root Container)**| `src/components/drawer/AgentConsoleDrawer.tsx` | Hoisted fixed overlay, flex bounded (`min-h-0 min-w-0`); chat model selector unified on provider catalog. |
 | **Drawer Header & Action Stepper** | `src/components/drawer/DrawerHeader.tsx` | Task title, tactile stage stepper, abort/run controls. |
 | **Drawer Stage Stepper Helpers** | `src/components/drawer/stageStepperHelpers.ts` | Stage duration, running status, and task resolution logic. |
 | **Activity Stream & Comment Cards** | `src/components/drawer/DrawerActivityStream.tsx` | Step commentary vs prominent terminal response card. |
@@ -81,7 +81,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Web Research Tool Card** | `src/components/drawer/tools/WebToolCard.tsx` | Web search and web fetch status card. |
 | **Shared Tool Styles & Components** | `src/components/drawer/tools/shared.tsx` | Tool card frame, headers, and status icons. |
 | **Cortex Explorer Tree** | `src/components/cortex/CortexExplorer.tsx` | File navigation tree for personas, rules, and hooks. |
-| **Agent Persona Visual Editor** | `src/components/cortex/AgentSettingVisualEditor.tsx` | Persona prompt editor, settings, icon/color selectors. |
+| **Agent Persona Visual Editor** | `src/components/cortex/AgentSettingVisualEditor.tsx` | Persona prompt editor, settings, icon/color selectors; model selector unified on provider catalog (displayName ?? id). |
 | **Agent Mind Inspector** | `src/components/cortex/AgentMindInspector.tsx` | Real-time agent state, current prompt and tools viewer. |
 | **Column Stage Config Card** | `src/components/cortex/ColumnStageCard.tsx` | Pipeline stage configuration card in Cortex view. |
 | **Create Agent Persona Modal** | `src/components/cortex/CreateAgentModal.tsx` | Modal dialog for creating new agent personas. |
@@ -99,7 +99,13 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Baked-in Runtime Rule Icon** | `src/components/common/RuntimeRuleIcon.tsx` | Dedicated SVG prompt-chip icon and `isRuntimeRule` helper. |
 | **Hook Moment Icon** | `src/components/common/HookIcon.tsx` | Visual icon resolver for on_enter (ArrowRightToLine) vs on_leave/on_finish (ArrowRightFromLine) hooks. |
 | **Two-Level Tool Policy Modal** | `src/components/settings/ToolPolicyModal.tsx` | Interactive policy matrix: global switches & overrides. |
-| **Global Settings Modal** | `src/components/settings/SettingsModal.tsx` | LLM endpoints, active model, and app settings. |
+| **Global Settings Modal** | `src/components/settings/SettingsModal.tsx` | Notification settings + provider list/editor shell (LLM tab delegates to `providers/*`). |
+| **Provider List (Cards)** | `src/components/settings/providers/ProviderList.tsx` | Provider cards: status dot, «Пользовательский» badge, Edit/Delete, «+ Добавить поставщика». ≤350 lines. |
+| **Provider Editor** | `src/components/settings/providers/ProviderEditor.tsx` | Detail editor: API key (empty = keep stored), Advanced settings (display name, base URL, protocol), model catalog, Fetch/Restore defaults, Cancel/Apply. |
+| **Provider Model Row** | `src/components/settings/providers/ProviderModelRow.tsx` | Single catalog row: model id + displayName inputs, drag handle, delete. |
+| **Provider Model Picker** | `src/components/settings/providers/ProviderModelPicker.tsx` | Fetch-models picker modal (search, select-all, already-added badge, add selected). |
+| **Provider Store Helpers** | `src/stores/settings/providers.ts` | `Provider`/`ProviderModel` types, flat `LlmSettings` migration, `catalogModelOptions`/`catalogModelLabel` (displayName ?? id), normalize/validate. |
+| **Provider Helpers Tests** | `src/stores/__tests__/providers.test.ts` | Vitest suite: migration, normalization, validation, upsert/delete fallback. |
 | **UI Zoom Controller Hook** | `src/hooks/useUiZoom.ts` | Ctrl+Plus/Minus/Wheel viewport scaling. |
 | **UI Zoom Controller Unit Tests** | `src/hooks/__tests__/useUiZoom.test.ts` | Vitest suite for UI zoom scaling, modal overlays, and wheel listeners. |
 | **Hook Moment Icon Unit Tests** | `src/components/common/__tests__/HookIcon.test.tsx` | Vitest suite for hook moment resolution and visual icon rendering. |
@@ -110,7 +116,7 @@ Authoritative directory topology, component mapping table, and modular store arc
 | **Typed Tauri Event Gateway** | `src/services/tauriEventGateway.ts` | 150ms micro-batching, typed events (zero `listen<any>`).|
 | **Project Management Store** | `src/stores/projectStore.ts` | Multi-project workspace switching, active project persistence. |
 | **Agent Session Status Store** | `src/stores/agentSessionStore.ts` | Authoritative background agent execution tracker. |
-| **Settings Store** | `src/stores/settingsStore.ts` | LLM configuration, endpoints, temperature settings. |
+| **Settings Store** | `src/stores/settingsStore.ts` | LLM configuration, endpoints, temperature settings; provider CRUD + `fetchProviderModels`; `availableModels` retained as derived cache. |
 | **Provider Selection & Cache Accounting Tests** | `src/stores/__tests__/settingsCache.test.ts` | Provider presets, explicit model selection, and total-input cache ratios. |
 | **Theme Management Store** | `src/stores/themeStore.ts` | Obsidian tactile theme configuration. |
 | **Tool Policy Matrix Store** | `src/stores/toolPolicyStore.ts` | Frontend cache for tool policy permissions. |
@@ -172,7 +178,15 @@ Authoritative directory topology, component mapping table, and modular store arc
 - **`useContextGaugeMetrics.ts`**: Custom hook encapsulating token caching, capacity resolution, telemetry calculation, and compaction listeners.
 - **`diff/ImageDiffViewer.tsx`**: Interactive image diffing component with side-by-side, swipe-slider, and opacity-blend modes.
 
-### 2.3 Store Slices & State Hygiene (`src/stores/`)
+### 2.3 Settings Providers Subsystem (`src/components/settings/providers/` + `src/stores/settings/`)
+- **`ProviderList.tsx`**: Provider cards (name, status dot, «Пользовательский» badge, Edit/Delete, «+ Добавить поставщика»). Selection syncs the active provider in `settingsStore`.
+- **`ProviderEditor.tsx`**: Detail editor (API key with «Оставьте поле пустым…» placeholder — empty keeps the stored key; Advanced settings: display name, base URL, API protocol; model catalog; «Получить доступные модели» via `fetchProviderModels`; «Восстановить по умолчанию»; Cancel/Apply with URL/protocol/model validation).
+- **`ProviderModelRow.tsx`**: Single catalog row (id + displayName inputs, drag handle, delete).
+- **`ProviderModelPicker.tsx`**: Fetch-models picker modal (search, select-all, «добавлена» badge, add-selected) — narrow adapter over the legacy choose-models dialog.
+- **`stores/settings/providers.ts`**: Provider types, `migrateFlatToProviders` (flat `LlmSettings` → single provider), `catalogModelOptions`/`catalogModelLabel` (label = `displayName ?? id`, value stays model id), normalization and boundary validation.
+- **Unified model selectors**: `AgentSettingVisualEditor` (agent settings), `AgentConsoleDrawer` (chat), and `CreateTaskModal` build their model options from the provider catalog via `catalogModelOptions` — always showing `displayName ?? id`. `availableModels: string[]` remains only as a derived localStorage cache in `settingsStore`.
+
+### 2.4 Store Slices & State Hygiene (`src/stores/`)
 - **Backend-Authoritative Lifecycle**: Zustand state mutations occur strictly after Tauri IPC backend confirmation. No optimistic card position updates or client-generated task IDs.
 - **`tasksCrudSlice.ts`**: Pure CRUD operations. Auto-unlocks parent tasks when subtasks are deleted or completed.
 - **`taskTimersSlice.ts`**: Active task execution durations and stopwatch timers.
@@ -181,12 +195,12 @@ Authoritative directory topology, component mapping table, and modular store arc
 - **`draftsSlice.ts`**: Preserves per-task draft text input for the steer drawer bar across switches.
 - **`cortexStoreSlice.ts`**: Unified state slice for Cortex rule files, agent personas, and pipeline stage synchronization.
 
-### 2.4 Typed IPC Event Gateway (`src/services/tauriEventGateway.ts`)
+### 2.5 Typed IPC Event Gateway (`src/services/tauriEventGateway.ts`)
 - **Zero Raw `listen<any>`**: Direct invocations of Tauri `listen` in components or stores are strictly prohibited.
 - **150ms Micro-Batching**: High-frequency streaming events (`agent:thought`, `agent:stream`) are buffered in a 150ms window before flushing to reactive stores, eliminating UI thread locking during high-speed LLM generation (>100 tok/s).
 - **Strongly Typed Payloads**: Emits typed domain events (`AgentThoughtPayload`, `AgentToolCallPayload`, `TaskUpdatedPayload`).
 
-### 2.5 Desktop Notifications Subsystem (`src/services/`)
+### 2.6 Desktop Notifications Subsystem (`src/services/`)
 - **`notificationService.ts`**: Coordinates native desktop notifications and Windows fallback toasts on background transitions, question prompts, and rejections. Handles focus and drawer routing on click.
 - **`notificationFormatter.ts`**: Normalizes raw markdown summaries into clean plain-text typography with Unicode bullets and vertical code/quote bars, smart word-boundary truncation (up to 320 chars), and clean titles without emojis.
 
