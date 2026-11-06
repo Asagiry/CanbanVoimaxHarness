@@ -8,6 +8,7 @@ export interface TokenUsagePopoverProps {
   cachedInput: number;
   outputTokens: number;
   totalTokens: number;
+  turnCount?: number;
 }
 
 export function TokenUsagePopover({
@@ -16,6 +17,7 @@ export function TokenUsagePopover({
   cachedInput,
   outputTokens,
   totalTokens,
+  turnCount,
 }: TokenUsagePopoverProps) {
   const cacheHitFormatted = `${Math.round(Math.max(0, Math.min(100, cacheHitRate)))}%`;
 
@@ -32,6 +34,11 @@ export function TokenUsagePopover({
           <span className="font-mono text-xs font-semibold text-[#171717] dark:text-[#f4f4f5] tabular-nums">
             {formatTokensWithUnit(totalTokens)}
           </span>
+        </div>
+
+        <div className="text-[10px] text-[#8f8f8f] dark:text-[#71717a] mb-2">
+          {t('telemetry.tokenUsageCumulative')}
+          {typeof turnCount === 'number' && turnCount > 0 ? ` · ${turnCount}` : ''}
         </div>
 
         <div className="border-b border-[#ebebeb] dark:border-[#212126] mb-2.5" />

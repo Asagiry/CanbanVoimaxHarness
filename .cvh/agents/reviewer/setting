@@ -1,8 +1,9 @@
 {
-  "model": "gemini-3.8-flash-high",
+  "model": "crouton-alpha-free",
   "temperature": 0.1,
   "contextWindow": 384000,
   "maxTokens": 8192,
   "icon": "ShieldCheck",
-  "color": "#f59e0b"
+  "color": "#f59e0b",
+  "reasoningEffort": "medium"
 }

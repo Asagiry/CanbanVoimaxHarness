@@ -1,8 +1,9 @@
 {
-  "model": "gemini-3.8-flash-high",
+  "model": "crouton-alpha-free",
   "temperature": 0.2,
   "contextWindow": 384000,
   "maxTokens": 8192,
   "icon": "Compass",
-  "color": "#3b82f6"
+  "color": "#3b82f6",
+  "reasoningEffort": "medium"
 }
