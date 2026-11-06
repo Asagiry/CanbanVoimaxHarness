@@ -196,10 +196,16 @@ export function deleteProviderLocal(
   activeProviderId: ProviderId,
   providerId: ProviderId,
 ): { providers: Provider[]; activeProviderId: ProviderId } {
+  if (providers.length <= 1) {
+    throw new Error('Cannot delete the last provider');
+  }
   const next = providers.filter((p) => p.id !== providerId);
-  const fallback = next[0] ?? providers.find((p) => p.id === providerId);
+  // Deleting the first/builtin provider is allowed when others remain.
+  // Active falls back to the first remaining provider (never to the
+  // deleted one).
+  const fallback = next[0];
   const active = next.some((p) => p.id === activeProviderId)
     ? activeProviderId
-    : (fallback?.id as ProviderId);
+    : (fallback.id as ProviderId);
   return { providers: next, activeProviderId: active };
 }

@@ -86,7 +86,10 @@ impl Provider {
 pub fn normalize_providers(providers: Vec<Provider>) -> Vec<Provider> {
     let mut result: Vec<Provider> = Vec::new();
     for mut provider in providers {
-        provider.id = provider.id.trim().to_string();
+        // Frontend ids are lowercased (toProviderId); normalize here too so
+        // activeProviderId lookups never miss on case and dispatch never
+        // silently falls back to providers[0].
+        provider.id = provider.id.trim().to_lowercase();
         provider.name = provider.name.trim().to_string();
         provider.base_url = provider.base_url.trim().to_string();
         if provider.id.is_empty() || provider.name.is_empty() {
@@ -226,5 +229,14 @@ mod unit_tests {
         upsert_provider(&mut providers, Provider::new("a", "A2"));
         assert_eq!(providers.len(), 2);
         assert_eq!(providers[0].name, "A2");
+    }
+
+    #[test]
+    fn normalize_lowercases_ids_so_active_lookup_matches() {
+        let mut provider = Provider::new(" OpenCode Go ", "OpenCode Go");
+        provider.base_url = " https://opencode.ai/inference/go/openai/v1 ".to_string();
+        let normalized = normalize_providers(vec![provider]);
+        assert_eq!(normalized[0].id, "opencode go");
+        assert_eq!(normalized[0].base_url, "https://opencode.ai/inference/go/openai/v1");
     }
 }

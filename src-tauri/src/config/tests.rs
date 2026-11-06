@@ -109,6 +109,47 @@ use std::path::{Path, PathBuf};
         assert_eq!(settings.model, "beam-free");
     }
 
+    #[test]
+    fn test_endpoint_resolves_by_provider_id_not_first() {
+        let json = r#"{
+            "provider": "Antigravity Proxy",
+            "apiKey": "sk-first",
+            "baseUrl": "http://127.0.0.1:8045/v1",
+            "model": "gemini-3.8-flash-high",
+            "activeProviderId": "opencode go",
+            "providers": [
+                {
+                    "id": "antigravity proxy",
+                    "name": "Antigravity Proxy",
+                    "isCustom": false,
+                    "apiKey": "sk-first",
+                    "baseUrl": "http://127.0.0.1:8045/v1",
+                    "protocol": "openai",
+                    "models": [{"id": "gemini-3.8-flash-high"}]
+                },
+                {
+                    "id": "opencode go",
+                    "name": "OpenCode Go",
+                    "isCustom": false,
+                    "apiKey": "sk-go",
+                    "baseUrl": "https://opencode.ai/inference/go/openai/v1",
+                    "protocol": "openai",
+                    "models": [{"id": "beam-free"}, {"id": "crouton-alpha-free"}]
+                }
+            ]
+        }"#;
+        let mut settings: LlmSettings = serde_json::from_str(json).expect("two providers parse");
+        settings.ensure_providers();
+        // Flat fields must sync from the SELECTED provider, not from [0].
+        assert_eq!(settings.provider, "OpenCode Go");
+        assert_eq!(settings.base_url, "https://opencode.ai/inference/go/openai/v1");
+        assert_eq!(settings.api_key, "sk-go");
+        assert_eq!(settings.model, "beam-free");
+        let (base_url, api_key) = settings.endpoint();
+        assert_eq!(base_url, "https://opencode.ai/inference/go/openai/v1");
+        assert_eq!(api_key.as_deref(), Some("sk-go"));
+    }
+
     #[tokio::test]
     async fn test_scaffold_cvh_project_pure_empty_structure() {
         let base_dir = std::path::PathBuf::from("target").join(format!("cvh_test_{}", uuid::Uuid::new_v4()));

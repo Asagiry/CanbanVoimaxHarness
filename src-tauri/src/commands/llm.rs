@@ -65,6 +65,12 @@ pub async fn delete_provider(
     let mut settings = load_llm_settings(&root)
         .await
         .map_err(|e| format!("Failed to load LLM settings: {}", e))?;
+    if !settings.providers.iter().any(|p| p.id == provider_id) {
+        return Err(format!("Provider not found: {}", provider_id));
+    }
+    if settings.providers.len() <= 1 {
+        return Err("Cannot delete the last provider".to_string());
+    }
     settings.providers.retain(|p| p.id != provider_id);
     if settings.active_provider_id.as_deref() == Some(provider_id) {
         settings.active_provider_id = settings.providers.first().map(|p| p.id.clone());

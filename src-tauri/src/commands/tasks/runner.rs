@@ -35,6 +35,12 @@ pub fn focus_main_window(app: AppHandle) -> Result<(), String> {
 /// 4. Column model override (`col.model_override`)
 /// 5. Project default model (`proj_cfg.default_model`)
 /// 6. Hardcoded fallback ("gemini-3.8-flash-high")
+///
+/// The candidate is then validated against the SELECTED provider's catalog
+/// (when the catalog is non-empty): a stale model persisted in SQLite from a
+/// previous provider (e.g. task.model from Antigravity after switching to
+/// OpenCode Go) is replaced with the first catalog model so the request
+/// never hits "model not found" on the wrong endpoint.
 pub async fn resolve_task_active_agent_model(
     root: &Path,
     task: Option<&Task>,
@@ -46,9 +52,7 @@ pub async fn resolve_task_active_agent_model(
             .filter(|s| !s.is_empty())
     }
 
-    if let Some(m) = task.and_then(|t| non_empty_opt(&t.model)) {
-        return m;
-    }
+    let task_model = task.and_then(|t| non_empty_opt(&t.model));
 
     let llm_model = {
         let m = llm_settings.model.trim();
@@ -88,11 +92,27 @@ pub async fn resolve_task_active_agent_model(
     let proj_cfg = load_project_config(root).await.ok();
     let proj_default = proj_cfg.and_then(|p| non_empty_opt(&p.default_model));
 
-    llm_model
+    let candidate = task_model
+        .or(llm_model)
         .or(agent_model)
         .or(col_override)
         .or(proj_default)
-        .unwrap_or_else(|| "gemini-3.8-flash-high".to_string())
+        .unwrap_or_else(|| "gemini-3.8-flash-high".to_string());
+
+    // Validate against the SELECTED provider's catalog (SQLite-stale models
+    // from a previous provider must not be dispatched to the new endpoint).
+    if let Some(active) = llm_settings.active_provider() {
+        if !active.models.is_empty() && !active.models.iter().any(|m| m.id == candidate) {
+            if let Some(first) = active.models.first() {
+                eprintln!(
+                    "CVH [resolve_model]: model '{}' not in active provider '{}' catalog, using '{}'",
+                    candidate, active.id, first.id
+                );
+                return first.id.clone();
+            }
+        }
+    }
+    candidate
 }
 
 pub fn cleanup_active_agent_reservation(app_handle: &AppHandle, root: &std::path::Path, task_id: &str) {
@@ -364,8 +384,11 @@ async fn run_agent_inner(
 
     let model = resolve_task_active_agent_model(&root, Some(&task), &llm_settings).await;
 
-    let mut base_url = if !llm_settings.base_url.trim().is_empty() {
-        llm_settings.base_url.trim().to_string()
+    // Dispatch endpoint comes from the SELECTED provider (not flat fields /
+    // providers[0]): OpenCode Go must hit its own URL with its own key.
+    let (provider_base_url, api_key) = llm_settings.endpoint();
+    let mut base_url = if !provider_base_url.trim().is_empty() {
+        provider_base_url
     } else {
         proj_cfg
             .api_base_url
@@ -376,12 +399,6 @@ async fn run_agent_inner(
     if base_url.trim().is_empty() {
         base_url = "http://127.0.0.1:8045/v1".to_string();
     }
-
-    let api_key = if !llm_settings.api_key.trim().is_empty() {
-        Some(llm_settings.api_key.trim().to_string())
-    } else {
-        None
-    };
 
     eprintln!(
         "CVH [run_agent]: task_id={}, model={}, base_url={}, api_key_present={}",
@@ -1428,16 +1445,11 @@ pub async fn compact_context(
         &active_agent_model,
     );
 
-    let base_url = if !llm_settings.base_url.trim().is_empty() {
-        llm_settings.base_url.trim().to_string()
+    let (provider_base_url, api_key) = llm_settings.endpoint();
+    let base_url = if !provider_base_url.trim().is_empty() {
+        provider_base_url
     } else {
         "http://127.0.0.1:8045/v1".to_string()
-    };
-
-    let api_key = if !llm_settings.api_key.trim().is_empty() {
-        Some(llm_settings.api_key.trim())
-    } else {
-        None
     };
 
     // 3. Load dialogue items from SQLite
@@ -1553,7 +1565,7 @@ pub async fn compact_context(
         &messages_to_condense,
         &compactor_model,
         &base_url,
-        api_key,
+        api_key.as_deref(),
         Some(&task_title),
         Some(&task_desc),
     )

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useSettingsStore } from '../../../stores/settingsStore';
 import { useTranslation } from '../../../stores/languageStore';
@@ -15,10 +16,16 @@ export default function ProviderList({ onEdit, onAdd }: ProviderListProps) {
   const deleteProvider = useSettingsStore((s) => s.deleteProvider);
   const setActiveProvider = useSettingsStore((s) => s.setActiveProvider);
   const { t } = useTranslation();
+  const [error, setError] = useState<string | null>(null);
 
   const handleDelete = async (provider: Provider) => {
     if (!window.confirm(t('settings.providers.deleteConfirm', { name: provider.name }))) return;
-    await deleteProvider(provider.id);
+    setError(null);
+    try {
+      await deleteProvider(provider.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
   };
 
   const handleSelect = (providerId: ProviderId) => {
@@ -70,11 +77,20 @@ export default function ProviderList({ onEdit, onAdd }: ProviderListProps) {
                 >
                   {t('settings.providers.edit')}
                 </button>
-                {provider.isCustom && (
+                {providers.length > 1 ? (
                   <button
                     type="button"
                     onClick={() => void handleDelete(provider)}
                     className="px-1.5 py-1 text-[11px] text-red-600 dark:text-red-400 font-sans cursor-pointer hover:underline"
+                  >
+                    {t('settings.providers.delete')}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    title={t('settings.providers.deleteLastProvider')}
+                    className="px-1.5 py-1 text-[11px] text-[#a1a1aa] font-sans cursor-not-allowed"
                   >
                     {t('settings.providers.delete')}
                   </button>
@@ -93,6 +109,8 @@ export default function ProviderList({ onEdit, onAdd }: ProviderListProps) {
         <Plus className="h-3.5 w-3.5" />
         {t('settings.providers.add')}
       </button>
+
+      {error && <p className="text-xs text-red-600 dark:text-red-400 font-sans">{error}</p>}
     </div>
   );
 }
