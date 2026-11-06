@@ -1178,6 +1178,15 @@ pub struct ExecutedSubagentCall {
     pub result: String,
 }
 
+pub fn are_questions_duplicate(q1: &str, q2: &str) -> bool {
+    let ws1: String = q1.split_whitespace().collect::<Vec<_>>().join(" ");
+    let ws2: String = q2.split_whitespace().collect::<Vec<_>>().join(" ");
+    if ws1.is_empty() || ws2.is_empty() {
+        return false;
+    }
+    ws1 == ws2 || are_subagent_prompts_duplicate(q1, q2)
+}
+
 
 /// Robust subagent prompt similarity check for single-turn deduplication.
 pub fn are_subagent_prompts_duplicate(p1: &str, p2: &str) -> bool {
@@ -1795,6 +1804,7 @@ Messages count: {}
 
         // Execute subagent tool calls
         let mut batch_aborted_by_error: Option<String> = None;
+        let mut executed_questions_in_turn: Vec<(String, String, String)> = Vec::new();
         let total_in_batch = turn_tool_calls.len();
         if total_in_batch > 1 {
             for (batch_idx, tc) in turn_tool_calls.iter().enumerate() {
@@ -1880,6 +1890,56 @@ Messages count: {}
 
             let parsed_args: serde_json::Value =
                 serde_json::from_str(&tc.function.arguments).unwrap_or_else(|_| serde_json::json!({}));
+
+            if canonical_tool_name(&tc.function.name) == "question" {
+                let qtext = parsed_args
+                    .get("text")
+                    .or_else(|| parsed_args.get("question"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .trim();
+                if !qtext.is_empty() {
+                    if let Some((prev_id, _, prev_result)) = executed_questions_in_turn
+                        .iter()
+                        .find(|(_, prev_text, _)| are_questions_duplicate(prev_text, qtext))
+                    {
+                        eprintln!(
+                            "CVH [agent]: Deduplicated question call '{}' (subagent turn) in turn {} (matches earlier call '{}')",
+                            tc.id, sub_turn, prev_id
+                        );
+                        let tool_item_id = format!("sub-tool-{}", tc.id);
+                        let dedup_done = serde_json::json!({
+                            "id": &tc.id,
+                            "toolName": &tc.function.name,
+                            "timestamp": chrono::Utc::now().to_rfc3339(),
+                            "durationMs": 0,
+                            "status": "success",
+                            "params": &parsed_args,
+                            "stdout": prev_result,
+                            "batch": &batch_info,
+                        });
+                        let dedup_act = ActivityItem {
+                            id: tool_item_id,
+                            item_type: "tool".to_string(),
+                            timestamp: chrono::Utc::now().to_rfc3339(),
+                            content: None,
+                            tool: Some(dedup_done),
+                            duration_ms: Some(0.0),
+                            images: None,
+                        };
+                        let _ = crate::db::append_dialog_items(&ctx.repo_root, &subagent_dialog_id, std::slice::from_ref(&dedup_act));
+                        if let Some(ref app) = ctx.app_handle {
+                            let _ = app.emit("subagent:activity", serde_json::json!({
+                                "parentTaskId": &parent_id,
+                                "subagentId": &subagent_id,
+                                "activity": &dedup_act,
+                            }));
+                        }
+                        sub_messages.push(ChatMessage::tool_response(tc.id.clone(), prev_result.clone()));
+                        continue;
+                    }
+                }
+            }
 
             let tool_item_id = format!("sub-tool-{}", tc.id);
             let start_time = chrono::Utc::now().timestamp_millis();
@@ -1998,6 +2058,19 @@ Messages count: {}
 
             if should_abort_tool_batch(&tc.function.name, is_success, &res_str) {
                 batch_aborted_by_error = Some(tc.function.name.clone());
+            }
+
+            if canonical_tool_name(&tc.function.name) == "question" && is_success {
+                let qtext = parsed_args
+                    .get("text")
+                    .or_else(|| parsed_args.get("question"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
+                if !qtext.is_empty() {
+                    executed_questions_in_turn.push((tc.id.clone(), qtext, res_str.clone()));
+                }
             }
 
             sub_messages.push(ChatMessage::tool_response(tc.id.clone(), res_str));
@@ -3635,6 +3708,7 @@ Messages count: {}
         };
 
         let mut executed_subagents_in_turn: Vec<ExecutedSubagentCall> = Vec::new();
+        let mut executed_questions_in_turn: Vec<(String, String, String)> = Vec::new();
         let mut batch_aborted_by_error: Option<String> = None;
         let total_in_batch = turn_tool_calls.len();
         if total_in_batch > 1 {
@@ -3702,6 +3776,36 @@ Messages count: {}
 
             let norm_name = canonical_tool_name(&tc.function.name);
             let is_sub = norm_name == "subagent" || norm_name == "subagent_bg";
+
+            if norm_name == "question" {
+                let qtext = parsed_args
+                    .get("text")
+                    .or_else(|| parsed_args.get("question"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .trim();
+                if !qtext.is_empty() {
+                    if let Some((prev_id, _, prev_result)) = executed_questions_in_turn
+                        .iter()
+                        .find(|(_, prev_text, _)| are_questions_duplicate(prev_text, qtext))
+                    {
+                        eprintln!(
+                            "CVH [agent]: Deduplicated question call '{}' in turn {} (matches earlier call '{}')",
+                            tc.id, turn, prev_id
+                        );
+                        event_sink(AgentEvent::ToolResult {
+                            id: tc.id.clone(),
+                            name: tc.function.name.clone(),
+                            result: prev_result.clone(),
+                            success: true,
+                            duration_ms: Some(0.0),
+                            batch: batch_info.clone(),
+                        });
+                        messages.push(ChatMessage::tool_response(tc.id.clone(), prev_result.clone()));
+                        continue;
+                    }
+                }
+            }
 
             // In-turn Subagent Deduplication (§ Directive 4):
             // If the model in a single turn emits multiple subagent calls with identical/virtually identical
@@ -3831,6 +3935,19 @@ Messages count: {}
                     prompt,
                     result: result_str.clone(),
                 });
+            }
+
+            if norm_name == "question" && success {
+                let qtext = parsed_args
+                    .get("text")
+                    .or_else(|| parsed_args.get("question"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
+                if !qtext.is_empty() {
+                    executed_questions_in_turn.push((tc.id.clone(), qtext, result_str.clone()));
+                }
             }
 
             event_sink(AgentEvent::ToolResult {

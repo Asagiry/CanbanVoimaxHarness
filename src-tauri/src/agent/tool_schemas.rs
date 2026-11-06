@@ -214,11 +214,12 @@ pub fn get_standard_tools() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::function(
             "question",
-            "Ask an interactive clarifying question to the human user and suspend agent execution until answered (Human-in-the-Loop). Alias: 'ask_user'.",
+            "Ask an interactive clarifying question to the human user and suspend agent execution until answered (Human-in-the-Loop). Alias: 'ask_user'. 'question' is accepted as an alias for 'text'. If the user has already answered this question in this task, do not call question again with the same text — use the recorded answer.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
                     "text": { "type": "string", "description": "The specific question to ask the user." },
+                    "question": { "type": "string", "description": "Alias for 'text' — the specific question to ask the user." },
                     "options": {
                         "type": "array",
                         "description": "Predefined choices for the user. If recommended, append '(Recommended)' to label.",
